@@ -14,14 +14,6 @@ extension MeeshyComposerHost {
         ComposerHistoryService.servesHistory(on: mountedComposerView)
     }
 
-    /// **Les jetons de l'objet sélectionné — un site unique.** Trois
-    /// consommateurs les lisent (la rangée, le jeton encadré, le geste), et
-    /// trois résolutions du même jeu peuvent diverger.
-    var sceneObjectChips: [ComposerObjectChips.Chip] {
-        ComposerObjectChips.chips(forSelected: selectedSceneItemId,
-                                  in: viewModel.currentSlide)
-    }
-
     /// **Les bandes qu'on peut OUVRIR à cet instant** — un site unique.
     ///
     /// Elle servait deux consommateurs par deux appels séparés : la bande
@@ -39,6 +31,12 @@ extension MeeshyComposerHost {
     /// scène, couverte, n'a alors rien à montrer.
     var sceneTextEditing: Bool {
         viewModel.textEditingMode.activeTextId != nil && editedObject == nil
+    }
+
+    /// **On écrit SUR la scène** (#13839, L4) : la barre collée au clavier porte
+    /// les réglages, la colonne de droite se tait.
+    var sceneTypesInline: Bool {
+        sceneTextEditing && mountedComposerView == .scene
     }
 
     /// **Les portes servies sur la scène.** La porte « Fond » peint une

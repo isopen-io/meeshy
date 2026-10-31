@@ -425,18 +425,14 @@ extension MeeshyComposerHost {
             // reste le juge unique de « cet écran sert-il l'historique ? » — et
             // seule la place change. `nil` quand il n'y a rien à défaire :
             // absent, jamais grisé.
-            onUndo: composerServesHistory && viewModel.canUndoGlobal
-                ? { performHistoryUndo() } : nil,
-            onRedo: composerServesHistory && viewModel.canRedoGlobal
-                ? { performHistoryRedo() } : nil,
+            onUndo: sceneUndo,
+            onRedo: sceneRedo,
             // **Une sélection SILENCIEUSE** (directive porteur 2026-09-27 :
             // « il ne faut plus l'entourer sur la scène ni afficher sa
             // configuration par des détails en bas »). Ni contour, ni badge, ni
             // rangée de jetons : l'appui long montre ses actions, le double-tap
             // ouvre son édition. Le meuble garde l'id sélectionné pour ces deux
             // gestes, il ne le PEINT plus.
-            objectChips: [],
-            onObjectChip: { id in handleObjectChip(id) },
             selectedItemId: nil,
             selectionBadge: nil,
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
@@ -530,9 +526,7 @@ extension MeeshyComposerHost {
             //
             // L'écriture du TEXTE, elle, passe ici : une écriture idempotente
             // sur le modèle.
-            onInlineTextChanged: { id, texte in
-                viewModel.updateTextContent(id: id, text: texte)
-            },
+            onInlineTextChanged: { id, texte in sceneInlineTextChanged(id: id, text: texte) },
             // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
             // ce qu'il advient d'une coquille vide — il la supprime.
             //
@@ -550,10 +544,8 @@ extension MeeshyComposerHost {
             // > l'événement DIT, mais sur qui possède l'édition à cet instant :
             // > tant que l'écran plein est monté, c'est lui, et la surface du
             // > dessous n'a pas à conclure quoi que ce soit.
-            onInlineTextEditEnded: { _ in
-                guard editedObject == nil else { return }
-                viewModel.exitTextEditingMode()
-            },
+            onInlineTextEditEnded: { _ in sceneInlineTextEnded() },
+            inlineEditInputLink: sceneTypesInline ? keyboardDock.link : nil,
             descriptionPanel: sceneDescriptionPanel.map { volet in
                 AnyView(volet.opacity(sceneLegendIsVisible ? 1 : 0)
                     .allowsHitTesting(sceneLegendIsVisible)

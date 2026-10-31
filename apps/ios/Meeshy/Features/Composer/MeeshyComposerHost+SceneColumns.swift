@@ -56,7 +56,22 @@ extension MeeshyComposerHost {
             railMode: sceneRailMode,
             selection: sceneSelectionInventory,
             effects: sceneEffects,
-            openEffect: activeSceneEffect)
+            openEffect: activeSceneEffect,
+            typing: sceneTypesInline)
+    }
+
+    /// ↶ de la scène : `nil` quand il n'y a rien à défaire, ou quand le pied
+    /// du focus ne le porte pas — la frappe n'en sert pas (#13839, L4).
+    var sceneUndo: (() -> Void)? {
+        guard composerServesHistory, viewModel.canUndoGlobal,
+              ComposerTrailingColumn.servesHistory(.undo, for: sceneTrailingFocus) else { return nil }
+        return { performHistoryUndo() }
+    }
+
+    var sceneRedo: (() -> Void)? {
+        guard composerServesHistory, viewModel.canRedoGlobal,
+              ComposerTrailingColumn.servesHistory(.redo, for: sceneTrailingFocus) else { return nil }
+        return { performHistoryRedo() }
     }
 
     var sceneTrailingOptions: [ComposerTrailingColumn.Entry] {

@@ -167,17 +167,9 @@ struct ComposerSceneSurface: View {
     var onUndo: (() -> Void)?
     var onRedo: (() -> Void)?
 
-    // MARK: - L'inspecteur de l'objet sélectionné (vue `1c`)
-
-    /// Les jetons SERVIS — déjà résolus par `ComposerObjectChips.chips(forSelected:in:)`.
-    /// Vide ⇒ aucun objet sélectionné, donc aucune rangée : cette vue ne
-    /// re-filtre rien, exactement comme pour les deux rails et la bande.
-    ///
-    /// **Ils vivent EN BAS, et c'est la sémantique de placement du porteur** :
-    /// les contrôles à gauche, le document et les slides à
-    /// droite, et le bas pour ce qui règle l'OUTIL ou l'OBJET du moment. Un
-    /// objet sélectionné n'est aucune des deux premières places.
-    var objectChips: [ComposerObjectChips.Chip] = []
+    // **Aucune rangée de jetons d'état sous la scène** (#13839, L4) : une
+    // sélection est silencieuse (directive porteur), et la frappe
+    // porte ses réglages dans la barre collée au clavier.
 
     /// Un outil est-il ouvert ? Lu sur `railMode`, la seule source qui le
     /// SAIT — voir `ComposerObjectChips.isServed`.
@@ -185,11 +177,6 @@ struct ComposerSceneSurface: View {
         ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool, editsInline: editsInline)
     }
 
-    /// **Pas d'`activeObjectChipId`** : un jeton ouvrirait une
-    /// bande montée SOUS la scène, donc visible en même temps que lui — d'où un
-    /// état encadré. Il ouvre l'éditeur plein écran, qui couvre cette
-    /// surface : aucun jeton n'est visible en même temps que ce qu'il a ouvert.
-    var onObjectChip: ((String) -> Void)?
 
     /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (vue `1c`).
     ///
@@ -280,6 +267,8 @@ struct ComposerSceneSurface: View {
     var editingTextId: String?
     var onInlineTextChanged: ((String, String) -> Void)?
     var onInlineTextEditEnded: ((String) -> Void)?
+    /// La barre collée au clavier et le panneau qui le remplace (#13839, L4).
+    var inlineEditInputLink: StoryInlineEditInputLink?
 
     /// **La bande de mention du texte de SCÈNE n'est pas sur cette surface.**
     ///
@@ -598,6 +587,9 @@ struct ComposerSceneSurface: View {
     }
 
     @State private var floorHash: String?
+    /// Le haut du clavier (repère global) et le mouvement qui l'y amène.
+    @State private var keyboardTop: CGFloat?
+    @State private var keyboardTiming: ComposerKeyboardMotion.Timing?
 
     /// **La scène est le plus grand 9:16 de la zone** (#13839) : ni carte ni
     /// couloir, et elle descend sous le socle, qui se pose dessus. Un panneau
@@ -614,11 +606,36 @@ struct ComposerSceneSurface: View {
                 .scaleEffect(lift.scale,
                              anchor: UnitPoint(x: 0.5, y: geo.size.height > 0 ? scene.minY / geo.size.height : 0))
                 .offset(y: lift.offsetY)
-                .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.88), value: lift)
+                .animation(liftAnimation, value: lift)
         }
         .ignoresSafeArea(.container, edges: .bottom)
         .ignoresSafeArea(.keyboard)
         .allowsHitTesting(timelinePanel == nil)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {
+            keyboardMoved($0)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) {
+            keyboardMoved($0, hidden: true)
+        }
+    }
+
+    /// **La scène se réduit DANS le mouvement du clavier** (#13839, L4) : la
+    /// durée et la courbe de la notification, sinon son propre ressort.
+    private var liftAnimation: Animation? {
+        guard !reduceMotion else { return nil }
+        guard let timing = keyboardTiming, ComposerKeyboardMotion.drivesLift(timing, now: Date()) else {
+            return .spring(response: 0.32, dampingFraction: 0.88)
+        }
+        return ComposerKeyboardMotion.animation(timing)
+    }
+
+    private func keyboardMoved(_ note: Notification, hidden: Bool = false) {
+        let duree = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double
+        let fin = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+        keyboardTiming = ComposerKeyboardMotion.timing(duration: duree, at: Date())
+        keyboardTop = hidden ? nil : fin.flatMap {
+            ComposerKeyboardMotion.keyboardTop(endFrame: $0, windowFrame: WindowMetrics.activeWindowFrameInScreen)
+        }
     }
 
     /// Le bas visible de la scène, dans son propre repère : le haut des étages
@@ -627,9 +644,12 @@ struct ComposerSceneSurface: View {
     /// haut des deux obstacles gagne (`ComposerSceneFraming`).
     private func visibleBottom(in geo: GeometryProxy) -> CGFloat {
         let panneau: CGFloat? = sceneLiftInset > 0 && !freeZoneFrame.isNull ? freeZoneFrame.maxY : nil
+        // La barre et le clavier — ou le panneau qui le remplace, de la même
+        // hauteur — bornent la scène pendant qu'on écrit SUR elle.
+        let clavier: CGFloat? = editingTextId != nil ? keyboardTop : nil
         return ComposerSceneFraming.visibleBottom(zoneHeight: geo.size.height,
                                                   zoneMinY: geo.frame(in: .global).minY,
-                                                  obstructionTops: [panneau, anchoredSheetTop])
+                                                  obstructionTops: [panneau, anchoredSheetTop, clavier])
     }
 
     private var sceneCanvas: some View {
@@ -670,7 +690,8 @@ struct ComposerSceneSurface: View {
             timelineBridge: timelineBridge,
             onItemTrimRequested: onItemTrim,
             onItemMenuRequested: onItemMenu,
-            localMediaAliases: sceneLocalMediaAliases
+            localMediaAliases: sceneLocalMediaAliases,
+            inlineEditInputLink: inlineEditInputLink
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay {
@@ -776,12 +797,6 @@ struct ComposerSceneSurface: View {
                 if !isRoomy { bandView(ouverte) }
             case .nothing:
                 EmptyView()
-            }
-            // L'inspecteur de l'objet sélectionné — un outil ouvert
-            // lui prend la place, par le MODE DU RAIL.
-            if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
-                ComposerObjectChipsRow(chips: objectChips,
-                                       onSelect: onObjectChip)
             }
             // **La rangée basse — une PLACE permanente, un contenu qui change** :
             // outil ouvert, ses contrôleurs ; sinon, les portes

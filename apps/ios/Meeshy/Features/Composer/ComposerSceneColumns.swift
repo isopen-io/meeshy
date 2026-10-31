@@ -85,6 +85,9 @@ nonisolated enum ComposerTrailingColumn {
         case object(sections: [ComposerObjectEditorSection],
                     open: ComposerObjectEditorSection?,
                     actions: [StoryCanvasContextAction])
+        /// On écrit (#13839, L4) : la barre collée au clavier porte les
+        /// réglages et OK ; la colonne se tait.
+        case typing
     }
 
     enum Entry: Equatable, Identifiable {
@@ -138,7 +141,9 @@ nonisolated enum ComposerTrailingColumn {
                                   open: ComposerObjectEditorSection?,
                                   actions: [StoryCanvasContextAction])?,
                       effects: [ComposerSceneEffect] = [],
-                      openEffect: ComposerSceneEffect? = nil) -> Focus {
+                      openEffect: ComposerSceneEffect? = nil,
+                      typing: Bool = false) -> Focus {
+        if typing { return .typing }
         if case .tool(let controls) = railMode { return .tool(controls) }
         guard let selection else {
             return .scene(effects: effects, open: openEffect.flatMap { effects.contains($0) ? $0 : nil })
@@ -167,6 +172,8 @@ nonisolated enum ComposerTrailingColumn {
                 + sections.map { Entry.editorSection($0, isOpen: $0 == open) }
                 + reste.map(Entry.objectAction)
                 + [.exitObject]
+        case .typing:
+            return []
         }
     }
 
@@ -174,9 +181,17 @@ nonisolated enum ComposerTrailingColumn {
         switch focus {
         case .tool, .object:
             return [.undo, .redo]
+        case .typing:
+            return []
         case .scene:
             return (timeServed ? [.time] : []) + [.undo, .redo]
         }
+    }
+
+    /// **L'historique n'est servi que si le pied du focus le porte** (#13839,
+    /// L4) : la frappe n'a ni ↶ ni ↷ au bord de la scène.
+    static func servesHistory(_ entry: Foot, for focus: Focus) -> Bool {
+        foot(for: focus, timeServed: false).contains(entry)
     }
 
     /// **Le pied suit les sous-outils, sans ressort, pendant une édition en
@@ -186,8 +201,8 @@ nonisolated enum ComposerTrailingColumn {
     /// la scène, et aucun panneau ne voisine sa colonne.
     static func footFollowsOptions(for focus: Focus) -> Bool {
         switch focus {
-        case .object:        return true
-        case .tool, .scene:  return false
+        case .object:                 return true
+        case .tool, .scene, .typing:  return false
         }
     }
 

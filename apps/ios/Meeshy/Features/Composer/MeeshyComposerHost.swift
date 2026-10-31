@@ -446,6 +446,8 @@ struct MeeshyComposerHost: View {
     /// `@` demande. Le canvas n'a aucune raison de connaître les amis de
     /// l'auteur.
     @StateObject var sceneMentionBox = ComposerMentionControllerBox()
+    /// La barre collée au clavier du texte de scène et son panneau (#13839, L4).
+    @StateObject var keyboardDock = ComposerKeyboardDock.live()
 
     @State var presentedPortal: ComposerPortal?
     /// Le haut de la feuille ancrée (global) et la question de fermeture (#13839).
@@ -887,7 +889,12 @@ struct MeeshyComposerHost: View {
         // son fichier temporaire avec. `AVAssetWriter` n'observe pas
         // l'annulation, c'est tout ce qu'on peut faire — et c'est assez pour
         // qu'aucun MP4 orphelin ne reste derrière.
-        .onDisappear { sceneExport.cancel() }
+        // La session de la barre collée au clavier retient le modèle et le
+        // rappel « OK » : un meuble fermé pendant la frappe la relâche.
+        .onDisappear {
+            sceneExport.cancel()
+            keyboardDock.end()
+        }
         // `initial: true` couvre la graine SYNCHRONE (la republication, connue
         // dès la construction) ; le changement couvre la graine ASYNCHRONE (la
         // reprise hors-ligne, qui arrive quand la file a répondu). Un seul

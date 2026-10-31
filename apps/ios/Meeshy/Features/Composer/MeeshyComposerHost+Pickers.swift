@@ -66,7 +66,7 @@ extension MeeshyComposerHost {
             presentedPortal = .language
             HapticFeedback.light()
         } label: {
-            Text(ComposerLanguageFlag.label(for: documentLanguage))
+            Text(ComposerLanguageFlag.writingLabel(for: documentLanguage))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundStyle(MeeshyColors.indigo400)
                 .padding(.horizontal, MeeshySpacing.smPlus)

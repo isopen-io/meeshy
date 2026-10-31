@@ -632,6 +632,15 @@ public final class StoryCanvasUIView: UIView {
     public var onInlineTextChanged: ((String, String) -> Void)?
     /// Notifié quand l'édition se termine (textId).
     public var onInlineTextEditEnded: ((String) -> Void)?
+    /// La barre collée au clavier et le panneau qui peut le remplacer (#13839, L4).
+    public var inlineEditInputLink: StoryInlineEditInputLink? {
+        didSet {
+            guard oldValue !== inlineEditInputLink else { return }
+            oldValue?.detach()
+            guard inlineEditingTextId != nil, let editor = inlineEditor else { return }
+            inlineEditInputLink?.attach(to: editor)
+        }
+    }
 
     /// Y (coordonnées ÉCRAN) du bord supérieur des contrôleurs de l'outil
     /// texte — chips flottantes, panneau déplié, clavier. Le texte en cours

@@ -85,14 +85,20 @@ final class ComposerProgressiveDisclosureGuardTests: XCTestCase {
         // la vue à un OPTIONNEL au contrat — `nil` ⇒ aucun bouton. C'est le même
         // patron que `onAddSlide`, et il est meilleur : la question est posée UNE
         // fois par le meuble au lieu d'être reposée par la vue.
+        //
+        // Depuis #13839 (L4), la condition vit dans `sceneUndo` / `sceneRedo`,
+        // qui ajoutent le pied du focus (`servesHistory`) : la frappe n'en sert
+        // pas. Le rail les reçoit tels quels.
         XCTAssertTrue(
-            surfaces.contains("onUndo: composerServesHistory && viewModel.canUndoGlobal"),
+            surfaces.contains("guard composerServesHistory, viewModel.canUndoGlobal"),
             "l'historique ne paraît que s'il y a un geste à défaire"
         )
         XCTAssertTrue(
-            surfaces.contains("onRedo: composerServesHistory && viewModel.canRedoGlobal"),
+            surfaces.contains("guard composerServesHistory, viewModel.canRedoGlobal"),
             "…et un geste à refaire, séparément"
         )
+        XCTAssertTrue(surfaces.contains("onUndo: sceneUndo") && surfaces.contains("onRedo: sceneRedo"),
+                      "le rail de la scène reçoit l'historique déjà conditionné")
         // **Les options d'outil — pas de dessin en cours, pas de panneau.**
         //
         // Cette assertion épinglait `canTrimSelection: trimmableSelection != nil`,

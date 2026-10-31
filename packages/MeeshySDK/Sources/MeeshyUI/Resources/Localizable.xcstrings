@@ -66904,43 +66904,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نيون"
+            "value": "مضيء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neon"
+            "value": "Leuchtend"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neon"
+            "value": "Luminous"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neón"
+            "value": "Luminoso"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Néon"
+            "value": "Lumière"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neon"
+            "value": "Luminoso"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Néon"
+            "value": "Luminoso"
           }
         }
       }

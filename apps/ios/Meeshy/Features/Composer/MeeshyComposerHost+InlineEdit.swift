@@ -90,6 +90,7 @@ extension MeeshyComposerHost {
     /// vide (il la supprime).
     func leaveInlineEdit() {
         if viewModel.textEditingMode.activeTextId != nil {
+            keyboardDock.end()
             dismissTextEditing()
             viewModel.exitTextEditingMode()
         }
@@ -107,6 +108,8 @@ extension MeeshyComposerHost {
     /// colonne de droite (`ComposerTrailingColumn.focus`).
     var sceneInlinePanel: AnyView? {
         if viewModel.isDrawingActive { return sceneDrawingOptionsPanel }
+        // Pendant la frappe, les options remplacent le CLAVIER (#13839, L4).
+        guard !sceneTypesInline else { return nil }
         guard let edition = activeInlineEdit, let section = edition.openSection else { return nil }
         let porteUnMedia: Bool
         switch edition.family {
