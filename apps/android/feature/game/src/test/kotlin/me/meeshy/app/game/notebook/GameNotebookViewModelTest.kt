@@ -14,11 +14,16 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.app.game.photo.FakePhotoNotebook
+import me.meeshy.app.game.photo.KeptPhoto
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.engagement.EngagementProgressRepository
 import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.PhotoCatchUpStanding
+import me.meeshy.sdk.model.game.PhotoStepEmblem
 import me.meeshy.sdk.model.game.engagement.ApiEngagementProgress
+import me.meeshy.sdk.model.game.photo.GamePhotoMoment
+import me.meeshy.sdk.model.game.photo.PhotoMode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -39,13 +44,16 @@ class GameNotebookViewModelTest {
 
     private val syncErrors = mutableListOf<(Throwable) -> Unit>()
 
-    private fun viewModel(source: Flow<CacheResult<ApiEngagementProgress>>): GameNotebookViewModel {
+    private fun viewModel(
+        source: Flow<CacheResult<ApiEngagementProgress>>,
+        notebook: FakePhotoNotebook = FakePhotoNotebook(),
+    ): GameNotebookViewModel {
         val repository = mockk<EngagementProgressRepository>()
         every { repository.progress(any()) } answers {
             syncErrors += firstArg<(Throwable) -> Unit>()
             source
         }
-        return GameNotebookViewModel(repository, defaultDispatcher = testDispatcher)
+        return GameNotebookViewModel(repository, notebook, testDispatcher, thumbnail = { null })
     }
 
     @Test
@@ -88,5 +96,48 @@ class GameNotebookViewModelTest {
         assertThat(state.catchUp.filter { it.isOpen }.map { it.id }).containsExactly("start", "rank:murmure:4", "meesh:1")
         assertThat(state.catchUp.last().blockedBy).isEqualTo("meesh:1")
         assertThat(state.isEmpty).isFalse()
+    }
+
+    @Test
+    fun `une photo gardee quitte le rattrapage et rejoint les photos gardees`() {
+        val notebook = FakePhotoNotebook()
+        kotlinx.coroutines.runBlocking { notebook.keep(GamePhotoMoment("start", PhotoStepEmblem.Start), KeptPhoto(byteArrayOf(1), PhotoMode.Card)) }
+        val shelf = NotebookShelf(kotlinx.coroutines.runBlocking { notebook.list() })
+
+        val state = GameNotebookUiState.ready(PhotoCatchUpStanding(rank = GloryRank.Murmure, division = 4, minted = 0), shelf)
+
+        assertThat(state.kept.map { it.momentId }).containsExactly("start")
+        assertThat(state.catchUp.map { it.id }).doesNotContain("start")
+    }
+
+    @Test
+    fun `la chronique lit le carnet de l appareil et retire une photo`() = runTest {
+        val notebook = FakePhotoNotebook()
+        notebook.keep(GamePhotoMoment("trophy:spring", PhotoStepEmblem.Start), KeptPhoto(byteArrayOf(1), PhotoMode.Card))
+        notebook.postpone(GamePhotoMoment("league:gold", PhotoStepEmblem.Start))
+        val vm = viewModel(flowOf(CacheResult.Stale(ApiEngagementProgress.empty, ageMillis = 1)), notebook)
+
+        val read = vm.state.first { it.kept.isNotEmpty() }
+        assertThat(read.pending.map { it.momentId }).containsExactly("league:gold")
+        assertThat(read.shelf.occupiedBytes).isEqualTo(2_048L)
+
+        vm.remove(read.kept.single())
+
+        val after = vm.state.first { it.kept.isEmpty() }
+        assertThat(after.shelf.removalFailed).isFalse()
+        assertThat(after.pending).hasSize(1)
+    }
+
+    @Test
+    fun `un retrait refuse se dit sans rien perdre`() = runTest {
+        val notebook = FakePhotoNotebook(removeSucceeds = false)
+        notebook.keep(GamePhotoMoment("trophy:spring", PhotoStepEmblem.Start), KeptPhoto(byteArrayOf(1), PhotoMode.Card))
+        val vm = viewModel(flowOf(CacheResult.Stale(ApiEngagementProgress.empty, ageMillis = 1)), notebook)
+        val read = vm.state.first { it.kept.isNotEmpty() }
+
+        vm.remove(read.kept.single())
+
+        val after = vm.state.first { it.shelf.removalFailed }
+        assertThat(after.kept).hasSize(1)
     }
 }

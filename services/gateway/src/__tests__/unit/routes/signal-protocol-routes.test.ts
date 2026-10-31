@@ -148,6 +148,7 @@ function makePrisma(opts: {
     friendRequest: {
       findFirst: jest.fn().mockResolvedValue(areFriends),
     },
+    userRelation: { findUnique: jest.fn().mockResolvedValue(null) },
   };
 }
 

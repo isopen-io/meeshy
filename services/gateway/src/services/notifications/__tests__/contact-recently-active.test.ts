@@ -106,6 +106,7 @@ function monde(options: Monde = {}) {
         return accounts.filter((account) => ids.includes(account.id));
       }),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn(async () => (options.friends ?? []).map((id) => ({ senderId: MARIE, receiverId: id }))),
     },

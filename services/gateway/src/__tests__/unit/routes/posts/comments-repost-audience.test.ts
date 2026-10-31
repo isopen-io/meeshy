@@ -75,6 +75,7 @@ function makePrisma(graph: Graph) {
       findUnique: jest.fn(async ({ where }: any) => rows[where.id] ?? null),
     },
     postComment: { findFirst: jest.fn<any>().mockResolvedValue(null), findUnique: jest.fn<any>().mockResolvedValue(null) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findFirst: jest.fn(async ({ where }: any) => {
         const [first] = where.OR as Array<{ senderId: string; receiverId: string }>;
