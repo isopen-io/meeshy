@@ -1,7 +1,8 @@
 /**
  * LES MESSAGES COMPTENT POUR LA PAIRE (#13932) — dans une conversation directe,
  * et pour les réponses et mentions visant l'autre en groupe. L'audio compte par
- * le `messageType` déclaré (D-2), jamais par le contenu.
+ * sa piste audio, et par le seul `messageType` déclaré en conversation chiffrée de
+ * bout en bout (D-2) — jamais par le contenu.
  *
  * @jest-environment node
  */
@@ -23,7 +24,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 const run = async (store: ReturnType<typeof setup>, over: Partial<Parameters<typeof noteMessageInteractions>[1]> = {}) => {
   noteMessageInteractions(store.prisma, {
-    conversationId: 'cv1', senderUserId: ME, messageSource: 'user', messageType: 'text', replyToAuthorUserId: null, mentionedUserIds: [], at: AT, ...over,
+    conversationId: 'cv1', senderUserId: ME, messageSource: 'user', messageType: 'text', replyToAuthorUserId: null, mentionedUserIds: [], encryptionMode: null, attachmentMimeTypes: [], at: AT, ...over,
   });
   await settle();
   await settle();
@@ -38,7 +39,7 @@ describe('noteMessageInteractions', () => {
   });
 
   it('un vocal compte en AUDIO seulement, jamais en plus en message', async () => {
-    const days = await run(setup({ type: 'direct', participants: participants(ME, PEER) }), { messageType: 'audio' });
+    const days = await run(setup({ type: 'direct', participants: participants(ME, PEER) }), { messageType: 'audio', attachmentMimeTypes: ['audio/mp4'] });
     expect(days[0]).toMatchObject({ byLowAudio: 1 });
     expect(days[0].byLowMessage).toBeUndefined();
   });
@@ -46,15 +47,25 @@ describe('noteMessageInteractions', () => {
   it('une réponse à une story ou un mood compte en storyReply, un vocal en réponse reste un audio', async () => {
     const direct = { type: 'direct', participants: participants(ME, PEER) };
     expect((await run(setup(direct), { isStoryReply: true }))[0]).toMatchObject({ byLowStoryReply: 1 });
-    const voice = await run(setup(direct), { isStoryReply: true, messageType: 'audio' });
+    const voice = await run(setup(direct), { isStoryReply: true, messageType: 'audio', attachmentMimeTypes: ['audio/mp4'] });
     expect(voice[0]).toMatchObject({ byLowAudio: 1 });
     expect(voice[0].byLowStoryReply).toBeUndefined();
   });
 
   it('compte le type DÉCLARÉ d’une conversation chiffrée sans jamais lire le contenu (D-2)', async () => {
-    const days = await run(setup({ type: 'direct', participants: participants(ME, PEER) }), { messageType: 'audio', content: 'secret' } as never);
+    const days = await run(setup({ type: 'direct', participants: participants(ME, PEER) }), { messageType: 'audio', encryptionMode: 'e2ee', content: 'secret' } as never);
     expect(JSON.stringify(days)).not.toContain('secret');
     expect(days[0].byLowAudio).toBe(1);
+  });
+
+  it('hors E2EE, un « vocal » déclaré sans piste audio compte en message : le serveur voit les pièces et le vérifie', async () => {
+    const direct = { type: 'direct', participants: participants(ME, PEER) };
+    const bare = await run(setup(direct), { messageType: 'audio' });
+    expect(bare[0]).toMatchObject({ byLowMessage: 1 });
+    expect(bare[0].byLowAudio).toBeUndefined();
+    const image = await run(setup(direct), { messageType: 'audio', encryptionMode: 'server', attachmentMimeTypes: ['image/jpeg'] });
+    expect(image[0]).toMatchObject({ byLowMessage: 1 });
+    expect(image[0].byLowAudio).toBeUndefined();
   });
 
   it('en groupe, un message ordinaire ne compte pour personne', async () => {

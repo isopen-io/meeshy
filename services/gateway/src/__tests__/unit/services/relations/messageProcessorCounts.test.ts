@@ -38,8 +38,9 @@ describe('MessageProcessor — les messages comptent pour la paire', () => {
     expect(await run({ id: 'm6', messageType: 'text', sender: { userId: ME } })).toHaveLength(0);
   });
 
-  it('un vocal déclaré compte en audio, une réponse à une story en storyReply', async () => {
-    expect((await run({ id: 'm2', messageType: 'audio', messageSource: 'user', sender: { userId: ME } }))[0]).toMatchObject({ byLowAudio: 1 });
+  it('un vocal porté par sa piste audio, ou déclaré en conversation chiffrée de bout en bout (D-2), compte en audio ; une réponse à une story en storyReply', async () => {
+    expect((await run({ id: 'm2', messageType: 'audio', messageSource: 'user', attachments: [{ mimeType: 'audio/mp4' }], sender: { userId: ME } }))[0]).toMatchObject({ byLowAudio: 1 });
+    expect((await run({ id: 'm8', messageType: 'audio', messageSource: 'user', isEncrypted: true, encryptionMode: 'e2ee', attachments: [], sender: { userId: ME } }))[0]).toMatchObject({ byLowAudio: 1 });
     expect((await run({ id: 'm3', messageType: 'text', messageSource: 'user', storyReplyToId: 's1', sender: { userId: ME } }))[0]).toMatchObject({ byLowStoryReply: 1 });
   });
 

@@ -2,9 +2,11 @@
  * Ce qu'un message compte pour la paire (#13932, RG-04).
  *
  * - **Conversation directe** (deux participants) : le message compte envers
- *   l'autre. `audio` si le type DÉCLARÉ du message l'est (D-2 : en E2EE, seul
- *   `Message.messageType`, déclaré par le client, dit « vocal » ; on le compte
- *   en le sachant déclaratif) ; `message` sinon. Un vocal ne compte QUE comme
+ *   l'autre. `audio` quand le message est un vocal ; `message` sinon. Hors E2EE,
+ *   le serveur voit les pièces jointes : un vocal porte une piste `audio/*`, et
+ *   un type « audio » DÉCLARÉ sans elle n'est qu'un message. En E2EE (D-2), seul
+ *   `Message.messageType`, déclaré par le client, dit « vocal » : on le compte en
+ *   le sachant déclaratif. Un vocal ne compte QUE comme
  *   audio : « au moins un message » et « au moins un audio » sont deux
  *   exigences distinctes. Une réponse à une story ou un mood compte en
  *   `storyReply` (une seule nature par message, l'audio d'abord).
@@ -23,6 +25,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { isEndToEndMode } from '../conversations/encryptionRegime.js';
 import { notePairInteraction, type PairInteractionDb } from './pairInteractionRecorder.js';
 
 const logger = enhancedLogger.child({ module: 'MessageInteractions' });
@@ -33,6 +36,10 @@ export type MessageInteraction = {
   /** `Message.messageSource` : `user`, `agent`, `system`… Seul `user` compte. */
   readonly messageSource: string | null | undefined;
   readonly messageType: string;
+  /** `Message.encryptionMode` : seul `e2ee` admet le type « audio » sur la foi du client (D-2). */
+  readonly encryptionMode: string | null | undefined;
+  /** Les MIME des pièces jointes FINALES du message (vides en E2EE : le serveur ne les lit pas). */
+  readonly attachmentMimeTypes: ReadonlyArray<string | null | undefined>;
   readonly replyToAuthorUserId: string | null;
   /** Le message répond à une story ou un mood (`storyReplyToId`) : il compte en `storyReply`. */
   readonly isStoryReply?: boolean;
@@ -46,13 +53,17 @@ type MessageInteractionDb = PairInteractionDb & {
   };
 };
 
+const isVoiceMessage = (interaction: MessageInteraction): boolean =>
+  interaction.messageType === 'audio' &&
+  (isEndToEndMode(interaction.encryptionMode) || interaction.attachmentMimeTypes.some((mime) => mime?.startsWith('audio/') === true));
+
 const recipients = (
   interaction: MessageInteraction,
   conversation: { type: string; participants: ReadonlyArray<{ userId: string | null }> },
   sender: string,
 ): ReadonlyArray<{ otherId: string; nature: 'message' | 'audio' | 'storyReply' | 'mention' }> => {
   const nature: 'message' | 'audio' | 'storyReply' =
-    interaction.messageType === 'audio' ? 'audio' : interaction.isStoryReply ? 'storyReply' : 'message';
+    isVoiceMessage(interaction) ? 'audio' : interaction.isStoryReply ? 'storyReply' : 'message';
   if (conversation.type === 'direct') {
     return conversation.participants
       .map((p) => p.userId)

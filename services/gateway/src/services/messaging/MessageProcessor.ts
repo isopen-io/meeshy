@@ -963,12 +963,15 @@ export class MessageProcessor {
       const counted = message as Message & {
         sender?: { userId?: string | null } | null;
         replyTo?: { sender?: { userId?: string | null } | null } | null;
+        attachments?: ReadonlyArray<{ mimeType?: string | null }> | null;
       };
       noteMessageInteractions(this.prisma, {
         conversationId: data.conversationId,
         senderUserId: counted.sender?.userId ?? null,
         messageSource: message.messageSource,
         messageType: message.messageType,
+        encryptionMode: message.encryptionMode,
+        attachmentMimeTypes: (counted.attachments ?? []).map((attachment) => attachment.mimeType),
         replyToAuthorUserId: counted.replyTo?.sender?.userId ?? null,
         isStoryReply: Boolean(message.storyReplyToId),
         mentionedUserIds: validatedMentionUserIds,
