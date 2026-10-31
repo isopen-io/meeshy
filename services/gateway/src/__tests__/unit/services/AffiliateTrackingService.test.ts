@@ -17,6 +17,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { AffiliateTrackingService } from '../../../services/AffiliateTrackingService';
+import { relationStore } from '../../helpers/user-relation-store';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -472,5 +473,39 @@ describe('cleanupExpiredVisitSessions (H-9)', () => {
     const prisma = makePrisma();
     (prisma.affiliateVisitSession.deleteMany as jest.Mock<any>).mockRejectedValue(new Error('down'));
     expect((await AffiliateTrackingService.cleanupExpiredVisitSessions(prisma)).success).toBe(false);
+  });
+});
+
+describe('convertAffiliateVisit — le lien entre le parrain et le filleul (#13926)', () => {
+  const withRelations = (overrides: Parameters<typeof makePrisma>[0] = {}) => {
+    const store = relationStore();
+    return { prisma: { ...makePrisma(overrides), userRelation: store.prisma.userRelation }, store };
+  };
+
+  it('écrit la ligne FRIEND/FRIEND quand l’affiliation crée la demande acceptée', async () => {
+    const { prisma, store } = withRelations();
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(store.relations()).toHaveLength(1);
+    expect(store.relations()[0]).toMatchObject({
+      userLowId: 'user-affiliate', userHighId: 'user-new', grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND', origin: 'request',
+    });
+  });
+
+  it('l’écrit aussi quand la demande préexistante passe à acceptée', async () => {
+    const { prisma, store } = withRelations({
+      existingFriendRequest: { id: 'fr-0', senderId: 'user-new', receiverId: 'user-affiliate', status: 'pending' },
+    });
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(store.relations()).toHaveLength(1);
+  });
+
+  it('ne fait pas échouer la conversion si l’écriture du lien échoue', async () => {
+    const { prisma } = withRelations();
+    (prisma as unknown as { userRelation: unknown }).userRelation = { findUnique: jest.fn<any>().mockRejectedValue(new Error('mongo down')) };
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(result.success).toBe(true);
   });
 });
