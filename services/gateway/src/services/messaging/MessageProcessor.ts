@@ -967,6 +967,7 @@ export class MessageProcessor {
       noteMessageInteractions(this.prisma, {
         conversationId: data.conversationId,
         senderUserId: counted.sender?.userId ?? null,
+        messageSource: message.messageSource,
         messageType: message.messageType,
         replyToAuthorUserId: counted.replyTo?.sender?.userId ?? null,
         isStoryReply: Boolean(message.storyReplyToId),

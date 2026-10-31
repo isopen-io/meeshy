@@ -28,12 +28,18 @@ const run = async (message: Record<string, unknown>) => {
 
 describe('MessageProcessor — les messages comptent pour la paire', () => {
   it('un message texte d’une conversation directe compte envers l’autre', async () => {
-    const days = await run({ id: 'm1', messageType: 'text', sender: { userId: ME } });
+    const days = await run({ id: 'm1', messageType: 'text', messageSource: 'user', sender: { userId: ME } });
     expect(days[0]).toMatchObject({ userLowId: ME, userHighId: PEER, byLowMessage: 1 });
   });
 
+  it('un message écrit par un AGENT au nom de quelqu’un, ou par le système, n’est pas un échange de cette personne', async () => {
+    expect(await run({ id: 'm4', messageType: 'text', messageSource: 'agent', sender: { userId: ME } })).toHaveLength(0);
+    expect(await run({ id: 'm5', messageType: 'audio', messageSource: 'system', sender: { userId: ME } })).toHaveLength(0);
+    expect(await run({ id: 'm6', messageType: 'text', sender: { userId: ME } })).toHaveLength(0);
+  });
+
   it('un vocal déclaré compte en audio, une réponse à une story en storyReply', async () => {
-    expect((await run({ id: 'm2', messageType: 'audio', sender: { userId: ME } }))[0]).toMatchObject({ byLowAudio: 1 });
-    expect((await run({ id: 'm3', messageType: 'text', storyReplyToId: 's1', sender: { userId: ME } }))[0]).toMatchObject({ byLowStoryReply: 1 });
+    expect((await run({ id: 'm2', messageType: 'audio', messageSource: 'user', sender: { userId: ME } }))[0]).toMatchObject({ byLowAudio: 1 });
+    expect((await run({ id: 'm3', messageType: 'text', messageSource: 'user', storyReplyToId: 's1', sender: { userId: ME } }))[0]).toMatchObject({ byLowStoryReply: 1 });
   });
 });

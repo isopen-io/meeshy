@@ -23,7 +23,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 const run = async (store: ReturnType<typeof setup>, over: Partial<Parameters<typeof noteMessageInteractions>[1]> = {}) => {
   noteMessageInteractions(store.prisma, {
-    conversationId: 'cv1', senderUserId: ME, messageType: 'text', replyToAuthorUserId: null, mentionedUserIds: [], at: AT, ...over,
+    conversationId: 'cv1', senderUserId: ME, messageSource: 'user', messageType: 'text', replyToAuthorUserId: null, mentionedUserIds: [], at: AT, ...over,
   });
   await settle();
   await settle();
@@ -84,6 +84,12 @@ describe('noteMessageInteractions', () => {
     const days = await run(setup({ type: 'direct', participants: participants(ME, PEER) }), { mentionedUserIds: [PEER] });
     expect(days[0].byLowMention).toBeUndefined();
     expect(days[0].byLowMessage).toBe(1);
+  });
+
+  it('seul un message écrit par la personne compte : ni un agent à son nom, ni le système', async () => {
+    const direct = { type: 'direct', participants: participants(ME, PEER) };
+    expect(await run(setup(direct), { messageSource: 'agent' })).toHaveLength(0);
+    expect(await run(setup(direct), { messageSource: 'system' })).toHaveLength(0);
   });
 
   it('un expéditeur anonyme (sans utilisateur) ne compte pour personne', async () => {

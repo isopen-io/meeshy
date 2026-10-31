@@ -13,6 +13,12 @@
  *   `mention` envers lui — sauf s'il est déjà compté par la réponse, ou si la
  *   conversation est directe (le message le compte déjà).
  *
+ * - **Seul ce que la personne a écrit compte** (`messageSource === 'user'`) : un
+ *   message qu'un AGENT écrit à son nom (`agent-response-bridge`) ou que le
+ *   système pose n'est pas un échange d'elle — sinon un automate tiendrait la
+ *   série qui distingue un proche d'une connaissance neuve. Fail-closed : une
+ *   source absente ne compte pas.
+ *
  * Le contenu n'entre jamais ici : la signature ne le porte pas.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -24,6 +30,8 @@ const logger = enhancedLogger.child({ module: 'MessageInteractions' });
 export type MessageInteraction = {
   readonly conversationId: string;
   readonly senderUserId: string | null;
+  /** `Message.messageSource` : `user`, `agent`, `system`… Seul `user` compte. */
+  readonly messageSource: string | null | undefined;
   readonly messageType: string;
   readonly replyToAuthorUserId: string | null;
   /** Le message répond à une story ou un mood (`storyReplyToId`) : il compte en `storyReply`. */
@@ -61,7 +69,7 @@ const recipients = (
 
 export function noteMessageInteractions(prisma: MessageInteractionDb | PrismaClient, interaction: MessageInteraction): void {
   const sender = interaction.senderUserId;
-  if (!sender) return;
+  if (!sender || interaction.messageSource !== 'user') return;
   const db = prisma as MessageInteractionDb;
   const at = interaction.at ?? new Date();
 
