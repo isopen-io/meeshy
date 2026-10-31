@@ -296,6 +296,7 @@ data class StoryComposerDraftSnapshot(
     val format: String? = null,
     /** Les pièces téléversées que la scène porte, avec leur type et leur durée : ce qui qualifie un réel au retour. */
     val media: List<UploadedMedia> = emptyList(),
+    val formats: List<String> = emptyList(),
 ) {
     /** Whether a publish of this draft is still owed a server confirmation (see [awaitingPublication]). */
     val isAwaitingPublication: Boolean
@@ -331,6 +332,7 @@ data class StoryComposerDraftSnapshot(
             annotations == other.annotations &&
             postText == other.postText &&
             format == other.format &&
+            formats == other.formats &&
             media == other.media
 
     companion object {

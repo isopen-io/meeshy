@@ -160,7 +160,7 @@ class StoryComposerScenePostTest {
 
         val state = vm.state.value
         assertThat(state.postText).isEqualTo("ancien texte")
-        assertThat(state.restoredFormat).isEqualTo(ComposerFormat.POST)
+        assertThat(state.restoredFormats).containsExactly(ComposerFormat.POST)
         assertThat(state.deck.slides.first().backgroundMediaId).isEqualTo("p1")
         assertThat(state.attachments.map { it.id }).containsExactly("p1")
         assertThat(postDrafts.loadEditing()).isNull()
@@ -190,7 +190,7 @@ class StoryComposerScenePostTest {
         assertThat(slide.elements).isNotEmpty()
         assertThat(slide.strokes).hasSize(1)
         assertThat(reopened.state.value.postText).isEqualTo("à reprendre")
-        assertThat(reopened.state.value.restoredFormat).isEqualTo(ComposerFormat.POST)
+        assertThat(reopened.state.value.restoredFormats).containsExactly(ComposerFormat.POST)
     }
 
     @Test

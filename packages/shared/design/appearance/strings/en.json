@@ -26,15 +26,15 @@
     },
     "animes": {
       "name": "Animated",
-      "description": "Wallpapers that breathe softly."
+      "description": "Mist that breathes, bubbles that rise, petals that fall."
     },
     "bannieres-animees": {
       "name": "Animated banners",
-      "description": "A subtle glint sweeps across the banner."
+      "description": "An aurora, a tide, embers: your banner comes alive."
     },
     "contours-animes": {
       "name": "Animated rings",
-      "description": "A golden arc travels around the avatar."
+      "description": "A golden halo, a turning prism, a pulsing ripple."
     },
     "contours-haussmannien": {
       "name": "Haussmann ring",
@@ -109,7 +109,11 @@
     "horizon": "Horizon",
     "baobab": "Baobab",
     "brume-vivante": "Living mist",
-    "aurore-vive": "Vivid aurora"
+    "aurore-vive": "Vivid aurora",
+    "bulles-legeres": "Light bubbles",
+    "pluie-de-petales": "Petal rain",
+    "maree": "Tide",
+    "braises": "Embers"
   },
   "rings": {
     "filet": "Hairline",
@@ -132,7 +136,9 @@
     "rituel": "African ritual",
     "rituel-anime": "African ritual, animated",
     "celte": "Celtic",
-    "celte-anime": "Celtic, animated"
+    "celte-anime": "Celtic, animated",
+    "prisme-vivant": "Living prism",
+    "onde": "Ripple"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",

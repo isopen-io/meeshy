@@ -6,7 +6,6 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.DUPLICATE
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.EDIT
-import me.meeshy.sdk.model.composer.ComposerSelectionAction.ORDER
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.REMOVE
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.TIME
 import me.meeshy.sdk.model.composer.ComposerSelectionActions
@@ -88,11 +87,10 @@ class StoryComposerSelectionBarTest {
     }
 
     @Test
-    fun `stickers sharing the plane are ordered, and Order opens its four moves`() {
+    fun `stickers sharing the plane serve no Order, touching one brought it to the front`() {
         val bar = StoryComposerStickerReducer.selected(withStickers("s1", "s2"), "s1").selectionBar!!
 
-        assertThat(bar.actions).containsExactly(EDIT, ORDER, DUPLICATE, TIME, REMOVE).inOrder()
-        assertThat(bar.orderChoices).containsExactly(Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK).inOrder()
+        assertThat(bar.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
     }
 
     @Test

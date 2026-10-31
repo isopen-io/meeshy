@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_as_storyAndPost">Publish story and post</string>
+    <string name="composer_publish_as_postAndReel">Publish post and reel</string>
+    <string name="composer_publish_as_storyPostAndReel">Publish story, post and reel</string>
+    <string name="composer_publish_failed_story">The story didn\'t go out</string>
+    <string name="composer_publish_failed_post">The post didn\'t go out</string>
+    <string name="composer_publish_failed_reel">The reel didn\'t go out</string>
+</resources>

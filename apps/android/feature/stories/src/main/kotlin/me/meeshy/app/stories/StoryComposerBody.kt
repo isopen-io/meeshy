@@ -123,7 +123,6 @@ private fun SceneFirstFrame(
                 ComposerSelectionActionBar(
                     bar = bar,
                     onAction = { action -> onSelectionAction(bar, action) },
-                    onOrder = { choice -> viewModel.onObjectController(bar.ref, choice) },
                 )
             }
             if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen) { onMorePanel(StoryMorePanel.POST_TEXT) }
@@ -243,7 +242,6 @@ private fun storySceneRails(
                 history = SceneHistory(state.canUndo, state.canRedo)
                     .takeIf { chrome && ComposerSceneTools.showsHistory(state.canUndo, state.canRedo) },
                 onAction = { action -> selection?.let { onSelectionAction(it, action) } },
-                onOrder = { choice -> selection?.let { viewModel.onObjectController(it.ref, choice) } },
                 onUndo = viewModel::onUndo,
                 onRedo = viewModel::onRedo,
             )
@@ -404,7 +402,7 @@ private fun StoryPublish(
     formatChevron: (@Composable () -> Unit)?,
     onPostText: () -> Unit,
 ) {
-    if (state.variant.writesPostText) PostTextPill(state.postText, onPostText)
+    if (state.writesPostText) PostTextPill(state.postText, onPostText)
     val visibility = state.draft.visibility
     val count = state.draft.visibilityUserIds.size
     val label = stringResource(visibility.labelRes())

@@ -43,7 +43,7 @@ class ComposerStageLayoutTest {
                         element = StoryTextElement(id = "t", text = "Bonjour"),
                         onStyle = {}, onColor = {}, onAlign = {}, onBackground = {},
                         onCycleSize = {}, onCycleOutline = {}, onCycleFadeIn = {}, onCycleFadeOut = {},
-                        onCycleStart = {}, onCycleDuration = {}, onDuplicate = {}, onReorder = {},
+                        onCycleStart = {}, onCycleDuration = {}, onDuplicate = {},
                         modifier = Modifier.testTag(TOOLBAR),
                     )
                 }

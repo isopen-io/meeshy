@@ -20,14 +20,13 @@ data class SceneObjectRef(val kind: ComposerObjectKind, val id: String)
 data class SceneObjectContextMenu(val ref: SceneObjectRef, val actions: List<SceneObjectMenu.Action>)
 
 /**
- * La barre d'actions de l'objet sélectionné (#13836) : ses actions libellées, ce que son Ordre ouvre, et ce que la feuille
- * de son Modifier range en plus de ses sections (faire le fond, le remplacer).
+ * La barre d'actions de l'objet sélectionné (#13836) : ses actions libellées, et ce que la feuille de son Modifier range en
+ * plus de ses sections (faire le fond, le remplacer). Aucun Ordre : toucher l'objet l'a déjà fait passer devant (#13917).
  */
 @Immutable
 data class SceneSelectionBar(
     val ref: SceneObjectRef,
     val actions: List<ComposerSelectionAction>,
-    val orderChoices: List<SceneObjectMenu.Action>,
     val sheetActions: List<SceneObjectMenu.Action>,
 )
 
@@ -118,47 +117,37 @@ private fun StoryPlacedMedia.toFriseObject(video: Boolean) = StoryMediaObject(
 val StoryComposerUiState.sceneEditableTrackIds: Set<String>
     get() = StorySceneStack.order(deck.selectedSlide).map { it.id }.toSet()
 
-/**
- * L'objet [ref] est sur la pile de la scène avec au moins un autre, de quelque famille qu'il soit (#13852) : l'Ordre a un
- * effet. Le fond et le son d'ambiance ne sont pas sur la pile.
- */
-private fun StoryComposerUiState.stacksWithAnother(ref: SceneObjectRef): Boolean =
-    StorySceneStack.order(deck.selectedSlide).let { ref in it && it.size > 1 }
-
 private fun StoryComposerUiState.textSubject(id: String) = SceneObjectMenu.Subject(
-    sharesPlaneWithAnother = stacksWithAnother(SceneObjectRef(ComposerObjectKind.TEXT, id)),
     hasEditor = true,
     canDuplicate = deck.selectedCanAddTextElement,
 )
 
 private fun StoryComposerUiState.stickerSubject(id: String) = SceneObjectMenu.Subject(
-    sharesPlaneWithAnother = stacksWithAnother(SceneObjectRef(ComposerObjectKind.STICKER, id)),
     canDuplicate = deck.selectedCanAddSticker,
 )
 
 /**
  * Un média se fait fond de la scène (ou le REMPLACE), et se retire ; POSÉ, il se duplique (la copie nomme le même fichier,
- * #13902) et s'ordonne. Le fond ne se duplique pas : il deviendrait un second fond.
+ * #13902). Le fond ne se duplique pas : il deviendrait un second fond.
  */
-private val mediaActions = listOf(SceneObjectMenu.Action.DUPLICATE) + SceneObjectMenu.ORDER + listOf(
-    SceneObjectMenu.Action.SET_AS_BACKGROUND, SceneObjectMenu.Action.REPLACE_BACKGROUND, SceneObjectMenu.Action.DELETE,
+private val mediaActions = listOf(
+    SceneObjectMenu.Action.DUPLICATE, SceneObjectMenu.Action.SET_AS_BACKGROUND, SceneObjectMenu.Action.REPLACE_BACKGROUND, SceneObjectMenu.Action.DELETE,
 )
 
 private fun StoryComposerUiState.mediaSubject(id: String) = SceneObjectMenu.Subject(
     isBackground = deck.selectedSlideBackgroundMediaId == id,
-    sharesPlaneWithAnother = stacksWithAnother(SceneObjectRef(ComposerObjectKind.MEDIA, id)),
     canBecomeBackground = true,
     sceneHasBackground = deck.selectedSlideBackgroundMediaId != null,
     canDuplicate = canDuplicate(SceneObjectRef(ComposerObjectKind.MEDIA, id)),
 )
 
-private val controllerActions = listOf(SceneObjectMenu.Action.DUPLICATE) + SceneObjectMenu.ORDER + SceneObjectMenu.Action.DELETE
+private val controllerActions = listOf(SceneObjectMenu.Action.DUPLICATE, SceneObjectMenu.Action.DELETE)
 
-/** Un lieu, une pastille de son : ils se dupliquent (#13902), s'ordonnent et se retirent ; le son d'ambiance ne se duplique pas. */
+/** Un lieu, une pastille de son : ils se dupliquent (#13902) et se retirent ; le son d'ambiance ne se duplique pas. */
 private val pinActions = controllerActions
 
 /**
- * Les contrôleurs de l'objet SÉLECTIONNÉ (empilement, dupliquer, supprimer) : ce que la loi [SceneObjectMenu] lui sert,
+ * Les contrôleurs de l'objet SÉLECTIONNÉ (dupliquer, supprimer) : ce que la loi [SceneObjectMenu] lui sert,
  * restreint aux actions de dimension — éditer et rogner ont leurs propres chemins. Ils vivent dans la colonne de droite
  * du plateau (iOS `ComposerTrailingRail`), jamais sur la scène.
  */
@@ -169,7 +158,7 @@ val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
             ComposerObjectKind.TEXT -> textSubject(ref.id) to controllerActions
             ComposerObjectKind.MEDIA -> mediaSubject(ref.id) to mediaActions
             ComposerObjectKind.AUDIO, ComposerObjectKind.PLACE ->
-                SceneObjectMenu.Subject(sharesPlaneWithAnother = stacksWithAnother(ref), canDuplicate = canDuplicate(ref)) to pinActions
+                SceneObjectMenu.Subject(canDuplicate = canDuplicate(ref)) to pinActions
             else -> stickerSubject(ref.id) to controllerActions
         }
         return SceneObjectContextMenu(ref, SceneObjectMenu.offered(subject).filter { it in served })
@@ -200,7 +189,6 @@ val StoryComposerUiState.selectionBar: SceneSelectionBar?
                     timed = controllers.ref in StorySceneStack.order(deck.selectedSlide),
                 ),
             ),
-            orderChoices = ComposerSelectionActions.orderChoices(offered),
             sheetActions = ComposerSelectionActions.editSheetActions(offered),
         )
     }

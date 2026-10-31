@@ -34,12 +34,12 @@ describe('registres d’apparence générés', () => {
     expect(wallpapers.every((pack) => pack.origin === 'builtin' && pack.price === undefined)).toBe(true);
   });
 
-  it('porte 15 modèles de fonds, 7 bannières, 21 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
+  it('porte 17 modèles de fonds, 9 bannières, 23 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
     const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring' | 'banner-frame') => index.entries(domain).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
 
-    expect(count('wallpaper')).toBe(15);
-    expect(count('banner')).toBe(7);
-    expect(count('avatar-ring')).toBe(21);
+    expect(count('wallpaper')).toBe(17);
+    expect(count('banner')).toBe(9);
+    expect(count('avatar-ring')).toBe(23);
     expect(count('banner-frame')).toBe(14);
     expect(index.itemKeys(index.entries('wallpaper')[0])).toEqual(['monogramme', 'chevrons', 'aurore', 'maille']);
   });
@@ -93,7 +93,7 @@ describe('registres d’apparence générés', () => {
       return [...(contract.designs ?? []), ...(contract.rings ?? [])].flatMap((item) => (item.lottie ? [item.lottie] : []));
     });
 
-    expect(lottieRefs.map((ref) => ref.src).sort()).toEqual(['5aff839c02a1cfcb.json', 'b19ebab0f4cfeed8.json', 'ec52a7f12af8a193.json']);
+    expect(lottieRefs.map((ref) => ref.src).sort()).toEqual(['039a32b2874b1119.json', '3e282f6c9c6c6064.json', '57404ed57c27976e.json', '5aff839c02a1cfcb.json', '6ba39ccae139a4bb.json', '9eeb258fda7680b6.json', 'b19ebab0f4cfeed8.json', 'b91b4b2e5d828890.json', 'ec52a7f12af8a193.json']);
     lottieRefs.forEach((ref) => {
       const path = join(ASSETS, ref.src);
       expect(createHash('sha256').update(readFileSync(path)).digest('hex')).toBe(ref.sha256);
@@ -106,6 +106,19 @@ describe('registres d’apparence générés', () => {
       expect(existsSync(join(ASSETS, src))).toBe(true);
       expect(index.isServedAsset(src)).toBe(true);
     });
+  });
+
+  it('les trois packs animés enrichis (#13950) gardent servis leur contrat et leurs noms d’avant : un client qui les a embarqués les lit encore', () => {
+    ['05cbde79f9e17a45.json', '9803b7afd2cc715a.json', 'b9b7392e7d283e2a.json', 'e1c17dc55b522cef.json'].forEach((src) => {
+      expect(existsSync(join(ASSETS, src))).toBe(true);
+      expect(index.isServedAsset(src)).toBe(true);
+    });
+  });
+
+  it('les packs animés installés d’office portent chacun trois couches animées (#13950)', () => {
+    expect(index.itemKeys(index.entries('wallpaper').find((pack) => pack.slug === 'animes')!)).toEqual(['brume-vivante', 'bulles-legeres', 'pluie-de-petales']);
+    expect(index.itemKeys(index.entries('banner').find((pack) => pack.slug === 'bannieres-animees')!)).toEqual(['aurore-vive', 'maree', 'braises']);
+    expect(index.itemKeys(index.entries('avatar-ring').find((pack) => pack.slug === 'contours-animes')!)).toEqual(['halo-or', 'prisme-vivant', 'onde']);
   });
 
   it('le contrat servi de chaque pack de bannières EST le pack du catalogue partagé, dessin pour dessin', () => {

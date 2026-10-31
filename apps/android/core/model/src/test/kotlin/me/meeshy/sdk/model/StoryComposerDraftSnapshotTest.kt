@@ -231,6 +231,12 @@ class StoryComposerDraftSnapshotTest {
     }
 
     @Test
+    fun `a changed set of checked formats is different content`() {
+        val a = sample().copy(format = "POST", formats = listOf("POST", "STORY"))
+        assertThat(a.sameContentAs(a.copy(formats = listOf("POST", "STORY", "REEL")))).isFalse()
+    }
+
+    @Test
     fun `a changed visibility is different content`() {
         val a = sample()
         assertThat(a.sameContentAs(a.copy(visibility = "PUBLIC"))).isFalse()

@@ -26,15 +26,15 @@
     },
     "animes": {
       "name": "Animés",
-      "description": "Des fonds qui respirent doucement."
+      "description": "La brume respire, des bulles montent, des pétales tombent."
     },
     "bannieres-animees": {
       "name": "Bannières animées",
-      "description": "Un reflet discret traverse la bannière."
+      "description": "Une aurore, une marée, des braises : la bannière s’anime."
     },
     "contours-animes": {
       "name": "Contours animés",
-      "description": "Un arc doré fait le tour de l’avatar."
+      "description": "Un halo doré, un prisme qui tourne, une onde qui bat."
     },
     "contours-haussmannien": {
       "name": "Contour haussmannien",
@@ -109,7 +109,11 @@
     "horizon": "Horizon",
     "baobab": "Baobab",
     "brume-vivante": "Brume vivante",
-    "aurore-vive": "Aurore vive"
+    "aurore-vive": "Aurore vive",
+    "bulles-legeres": "Bulles légères",
+    "pluie-de-petales": "Pluie de pétales",
+    "maree": "Marée",
+    "braises": "Braises"
   },
   "rings": {
     "filet": "Filet",
@@ -132,7 +136,9 @@
     "rituel": "Africain rituel",
     "rituel-anime": "Africain rituel animé",
     "celte": "Celte",
-    "celte-anime": "Celte animé"
+    "celte-anime": "Celte animé",
+    "prisme-vivant": "Prisme vivant",
+    "onde": "Onde"
   },
   "gamut": {
     "indigo": "Indigo Meeshy",

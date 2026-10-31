@@ -76,8 +76,8 @@ class AppearanceCatalogLoaderTest {
         assertThat(catalog.bannerPacks).hasSize(2)
         assertThat(catalog.ringPacks).hasSize(9)
         assertThat(catalog.bannerFramePacks).hasSize(7)
-        assertThat(catalog.wallpaperPacks.sumOf { it.designs.size }).isEqualTo(15)
-        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(21)
+        assertThat(catalog.wallpaperPacks.sumOf { it.designs.size }).isEqualTo(17)
+        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(23)
         assertThat(catalog.bannerFramePacks.sumOf { it.frames.size }).isEqualTo(14)
         assertThat(spy.errors).isEmpty()
     }

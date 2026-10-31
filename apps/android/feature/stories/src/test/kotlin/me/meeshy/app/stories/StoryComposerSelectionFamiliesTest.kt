@@ -21,7 +21,6 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.DUPLICATE
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.EDIT
-import me.meeshy.sdk.model.composer.ComposerSelectionAction.ORDER
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.REMOVE
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.TIME
 import me.meeshy.sdk.model.scene.StoryElementTiming
@@ -96,15 +95,15 @@ class StoryComposerSelectionFamiliesTest {
     }
 
     @Test
-    fun `Order joins the bar only once another object shares the scene`() {
+    fun `no Order joins the bar, alone or sharing the scene`() {
         val alone = StoryComposerSelectionReducer.mediaSelected(withPlacedPhoto(), "m1")
         val shared = StoryComposerReferencesReducer.selected(
             withPlace().let { it.copy(deck = it.deck.addPlaceToSelected(StoryLocationObject(id = "l2", place = paris))) },
             "l1",
         )
 
-        assertThat(alone.selectionBar!!.actions).doesNotContain(ORDER)
-        assertThat(shared.selectionBar!!.actions).containsExactly(EDIT, ORDER, DUPLICATE, TIME, REMOVE).inOrder()
+        assertThat(alone.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
+        assertThat(shared.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
     }
 
     @Test

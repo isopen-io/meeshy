@@ -2,7 +2,6 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -13,16 +12,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,7 +37,6 @@ import me.meeshy.sdk.model.composer.ComposerMoreEntry
 import me.meeshy.sdk.model.composer.ComposerSceneTool
 import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.sdk.model.composer.ComposerSelectionAction
-import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshyPalette
@@ -136,7 +129,6 @@ internal fun ColumnScope.StoryTrailingRail(
     bar: SceneSelectionBar?,
     history: SceneHistory?,
     onAction: (ComposerSelectionAction) -> Unit,
-    onOrder: (SceneObjectMenu.Action) -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 ) {
@@ -154,13 +146,7 @@ internal fun ColumnScope.StoryTrailingRail(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.xs).semantics { heading() },
             )
-            it.actions.forEach { action ->
-                if (action == ComposerSelectionAction.ORDER) {
-                    RailOrderItem(it.orderChoices, onOrder)
-                } else {
-                    RailActionItem(action) { onAction(action) }
-                }
-            }
+            it.actions.forEach { action -> RailActionItem(action) { onAction(action) } }
         }
     }
     history?.let {
@@ -179,26 +165,6 @@ private fun RailActionItem(action: ComposerSelectionAction, onClick: () -> Unit)
         onClick = onClick,
         tint = if (action.isDestructive) MeeshyPalette.ErrorSoft else Color.White,
     )
-}
-
-@Composable
-private fun RailOrderItem(choices: List<SceneObjectMenu.Action>, onOrder: (SceneObjectMenu.Action) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        RailActionItem(ComposerSelectionAction.ORDER) { open = true }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            choices.forEach { choice ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(choice.labelRes())) },
-                    leadingIcon = { Icon(choice.icon(), contentDescription = null) },
-                    onClick = {
-                        open = false
-                        onOrder(choice)
-                    },
-                )
-            }
-        }
-    }
 }
 
 /**

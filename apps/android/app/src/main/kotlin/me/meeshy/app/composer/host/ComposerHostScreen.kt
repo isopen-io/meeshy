@@ -42,9 +42,9 @@ fun ComposerHostScreen(
     val shared = feedOwner ?: checkNotNull(LocalViewModelStoreOwner.current)
     val formatChevron: @Composable () -> Unit = {
         ComposerFormatChevron(
-            selected = state.selectedFormat,
+            checked = state.publishedFormats,
             verdicts = state.verdicts,
-            onChoose = viewModel::choose,
+            onToggle = viewModel::toggle,
             layouts = state.layoutChoices,
             armedLayout = state.layout,
             onChooseLayout = viewModel::chooseLayout,
@@ -54,7 +54,7 @@ fun ComposerHostScreen(
     CompositionLocalProvider(LocalHostedSelection provides hostedSelection, LocalOnComposerPlateau provides true) {
         if (ComposerFormatVariant.of(state.selectedFormat).composesOnScene) {
             StoryComposerContent(
-                format = state.selectedFormat,
+                formats = state.publishedFormats,
                 layout = state.layout,
                 onFacts = viewModel::onSceneFacts,
                 onClose = onClose,
@@ -63,7 +63,7 @@ fun ComposerHostScreen(
                 seedText = state.text,
                 seededByDoor = viewModel.seededByDoor,
                 onSeedApplied = viewModel::onSeedApplied,
-                onFormatRestored = viewModel::choose,
+                onFormatRestored = viewModel::restore,
                 raisePostText = keyboardOwed,
                 onPostTextRaised = viewModel::onKeyboardRaised,
                 opening = viewModel.opening,

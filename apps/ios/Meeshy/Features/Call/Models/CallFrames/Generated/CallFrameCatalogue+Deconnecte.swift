@@ -280,6 +280,105 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#3B2F2A", place: .bottom, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "deconnecte.lagon.duo",
+            motif: "deconnecte.lagon",
+            mood: .deconnecte,
+            name: "Lagon",
+            bucket: .duo,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
+                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
+                background: .linear(colors: ["#5EEAD4", "#22D3EE", "#0E7490"], angle: 180.0),
+                pattern: CallFramePattern(kind: .waves, color: "#FFFFFF", opacity: 0.14),
+                border: nil,
+                ornaments: [
+                    CallFrameOrnament(kind: .rays, color: "#FEF3C7", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bubbles, color: "#FFFFFFAA", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#A7F3D066", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bubbles, color: "#E0F2FE", density: .low, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#FFFFFF", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .name, style: .tag, font: .note, color: "#0E7490", fill: "#FFFFFFE6"),
+                title: CallFrameTitle(source: .names, font: .brush, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
+                subtitle: CallFrameTitle(source: .date, font: .handwriting, color: "#ECFEFF", place: .top, size: .s, effect: nil, letterCase: nil)
+            ),
+            surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "deconnecte.lagon.comite",
+            motif: "deconnecte.lagon",
+            mood: .deconnecte,
+            name: "Lagon",
+            bucket: .comite,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .scatter, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
+                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
+                background: .linear(colors: ["#5EEAD4", "#22D3EE", "#0E7490"], angle: 180.0),
+                pattern: CallFramePattern(kind: .waves, color: "#FFFFFF", opacity: 0.14),
+                border: nil,
+                ornaments: [
+                    CallFrameOrnament(kind: .rays, color: "#FEF3C7", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bubbles, color: "#FFFFFFAA", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#A7F3D066", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bubbles, color: "#E0F2FE", density: .low, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#FFFFFF", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .name, style: .tag, font: .note, color: "#0E7490", fill: "#FFFFFFE6"),
+                title: CallFrameTitle(source: .group, font: .brush, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
+                subtitle: nil
+            ),
+            surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "deconnecte.lagon.groupe",
+            motif: "deconnecte.lagon",
+            mood: .deconnecte,
+            name: "Lagon",
+            bucket: .groupe,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .mosaic, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.1),
+                slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.012), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil),
+                background: .linear(colors: ["#5EEAD4", "#22D3EE", "#0E7490"], angle: 180.0),
+                pattern: CallFramePattern(kind: .waves, color: "#FFFFFF", opacity: 0.14),
+                border: nil,
+                ornaments: [
+                    CallFrameOrnament(kind: .rays, color: "#FEF3C7", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bubbles, color: "#FFFFFFAA", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#A7F3D066", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bubbles, color: "#E0F2FE", density: .low, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#FFFFFF", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .name, style: .tag, font: .note, color: "#0E7490", fill: "#FFFFFFE6"),
+                title: CallFrameTitle(source: .group, font: .brush, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
+                subtitle: nil
+            ),
+            surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "deconnecte.lagon.tablee",
+            motif: "deconnecte.lagon",
+            mood: .deconnecte,
+            name: "Lagon",
+            bucket: .tablee,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.13, bottom: 0.09),
+                slot: CallFrameSlotStyle(shape: .round, radius: 0.14, stroke: CallFrameStroke(color: "#FFFFFF", width: 0.01), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .warm, duotone: nil),
+                background: .linear(colors: ["#5EEAD4", "#22D3EE", "#0E7490"], angle: 180.0),
+                pattern: CallFramePattern(kind: .waves, color: "#FFFFFF", opacity: 0.14),
+                border: nil,
+                ornaments: [
+                    CallFrameOrnament(kind: .rays, color: "#FEF3C7", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bubbles, color: "#FFFFFFAA", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#A7F3D066", density: .low, layer: .back, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .wordmark, place: .bottom, color: "#FFFFFF", size: .m, font: StoryTextStyle.handwriting),
+                names: CallFrameNames(show: .none, style: .tag, font: .note, color: "#0E7490", fill: "#FFFFFFE6"),
+                title: CallFrameTitle(source: .group, font: .brush, color: "#FFFFFF", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: nil),
+                subtitle: nil
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

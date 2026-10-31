@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerMosaicChoice
 import me.meeshy.sdk.model.composer.ComposerPostTextPolicy
 import me.meeshy.sdk.model.composer.ComposerSceneReferences
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
@@ -84,8 +85,28 @@ internal val StorySlide.composesPostScene: Boolean
 internal val StoryComposerUiState.postSceneSlides: List<StorySlide>
     get() = deck.slides.filter { it.composesPostScene }
 
+/**
+ * Les scènes que le post publie, chacune avec son FOND (#13921, miroir du document qu'iOS publie, `post-photo-scenes-2`) :
+ * là où la disposition voyage, le média que le plateau peint en fond d'une scène part comme son fond désigné. Sans cela, une
+ * scène faite d'une seule photo ne porte aucun objet, le post repart en galerie et la disposition choisie se perd.
+ */
+internal fun StoryComposerUiState.postScenesWithBackdrops(): List<StorySlide> {
+    val slides = postSceneSlides
+    if (ComposerMosaicChoice.offered(slides.size, format).isEmpty()) return slides
+    val known = attachments.mapTo(mutableSetOf()) { it.id } + pendingUploads.map { it.cmid }
+    return slides.map { slide -> slide.withBackdropDesignated(known) }
+}
+
+private fun StorySlide.withBackdropDesignated(known: Set<String>): StorySlide {
+    if (backgroundMediaId != null) return this
+    val posed = placedMedia.mapTo(mutableSetOf()) { it.mediaId }
+    val backdrop = mediaIds.firstOrNull { it !in posed && it in known } ?: return this
+    return copy(backgroundMediaId = backdrop)
+}
+
 /** Une scène vierge, dans le format que l'hôte compose : abandonner ou publier ne change pas de format. */
-internal fun StoryComposerUiState.blankKeepingFormat(): StoryComposerUiState = StoryComposerUiState(format = format, postLayout = postLayout)
+internal fun StoryComposerUiState.blankKeepingFormat(): StoryComposerUiState =
+    StoryComposerUiState(format = format, checkedFormats = checkedFormats, postLayout = postLayout)
 
 /** Les médias de la scène, téléversés ou encore en attente (sous leur `cmid`), dans l'ordre des diapos. */
 internal fun StoryComposerUiState.sceneMedia(): List<UploadedMedia> {
@@ -107,29 +128,38 @@ private const val MILLIS = 1000f
 
 /** Ce que l'hôte pose sur la scène : le format, la disposition armée, et le texte du post qu'on écrit. */
 internal object StoryComposerFormatReducer {
-    fun formatted(state: StoryComposerUiState, format: ComposerFormat, layout: MosaicLayoutMode?): StoryComposerUiState =
-        state.copy(format = format, postLayout = layout)
+    /** Les formats cochés que l'hôte pose (#13919) : la scène suit le premier, la publication les prend tous. */
+    fun formatted(state: StoryComposerUiState, formats: List<ComposerFormat>, layout: MosaicLayoutMode?): StoryComposerUiState {
+        val format = formats.firstOrNull() ?: return state
+        return state.copy(format = format, checkedFormats = formats.drop(1), postLayout = layout)
+    }
 
     fun postTyped(state: StoryComposerUiState, text: String): StoryComposerUiState =
         state.copy(postText = ComposerPostTextPolicy.truncate(text))
 
-    /** Le brouillon rouvert rend son texte du post, son format (à l'hôte de le choisir) et ses médias connus. */
+    /** Le brouillon rouvert rend son texte du post, ses formats cochés (à l'hôte de les poser) et ses médias connus. */
     fun restored(state: StoryComposerUiState, snapshot: StoryComposerDraftSnapshot): StoryComposerUiState {
         val onDeck = state.deck.slides.flatMap { it.mediaIds + listOfNotNull(it.backgroundMediaId) }.toSet()
         val known = state.attachments.map { it.id }.toSet()
         return state.copy(
             postText = snapshot.postText,
-            restoredFormat = snapshot.format?.let { name -> ComposerFormat.entries.firstOrNull { it.name == name } },
+            restoredFormats = (snapshot.formats.ifEmpty { listOfNotNull(snapshot.format) })
+                .mapNotNull { name -> ComposerFormat.entries.firstOrNull { it.name == name } }
+                .takeIf { it.isNotEmpty() },
             attachments = state.attachments + snapshot.media.filter { it.id in onDeck && it.id !in known && it.url.isNotBlank() },
         )
     }
 }
 
-/** Ce que le brouillon garde du format (#13863) : le texte du post, le format, et les médias connus de la scène. */
+/**
+ * Ce que le brouillon garde du format (#13863, #13919) : le texte du post, le format que la scène suit — seul champ qu'un
+ * client d'avant lit —, tous les formats cochés dès qu'il y en a plusieurs, et les médias connus de la scène.
+ */
 internal fun StoryComposerUiState.formatDraft(): StoryDraftFormat = StoryDraftFormat(
     postText = postText,
     format = format.name.takeIf { format != ComposerFormat.STORY },
     media = sceneMedia().filter { it.url.isNotBlank() },
+    formats = publishedFormats.takeIf { it.size > 1 }?.map { it.name }.orEmpty(),
 )
 
 /**

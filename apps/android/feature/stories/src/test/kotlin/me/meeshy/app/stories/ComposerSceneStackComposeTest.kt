@@ -37,8 +37,6 @@ import coil.intercept.Interceptor
 import coil.request.ErrorResult
 import coil.request.ImageResult
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.sdk.model.composer.SceneObjectMenu
-import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import io.mockk.every
 import io.mockk.mockk
@@ -138,7 +136,7 @@ class ComposerSceneStackComposeTest {
         }
 
     @Test
-    fun `a text written after a sticker paints above it, and raising the sticker paints it above the text`() {
+    fun `a text written after a sticker paints above it, and touching the sticker paints it above the text`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onAddTextElement()
@@ -149,7 +147,7 @@ class ComposerSceneStackComposeTest {
         assertThat(painted()).containsExactly("😀", "Bonjour").inOrder()
 
         val sticker = vm.state.value.deck.selectedSlide.stickers.single().id
-        vm.onObjectController(SceneObjectRef(ComposerObjectKind.STICKER, sticker), SceneObjectMenu.Action.BRING_TO_FRONT)
+        vm.onSelectSticker(sticker)
         compose.waitForIdle()
 
         assertThat(painted()).containsExactly("Bonjour", "😀").inOrder()
@@ -166,8 +164,8 @@ class ComposerSceneStackComposeTest {
         compose.onNodeWithContentDescription("Sound on the scene").performClick()
 
         assertThat(vm.state.value.selectedSoundId).isEqualTo("voice")
-        compose.onNodeWithText("Order").performClick()
-        listOf("Bring to front", "Bring forward", "Send backward", "Send to back").forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("Order").assertDoesNotExist()
+        listOf("Edit", "Duplicate", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
     }
 
     @Test

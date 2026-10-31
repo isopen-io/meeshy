@@ -220,6 +220,39 @@
             "bytes": 867,
             "sha256": "ec52a7f12af8a193ac26a882cbd360a657da52a19d5d98a58c74a7fc1f45d902"
           }
+        },
+        {
+          "key": "prisme-vivant",
+          "stroke": {
+            "style": "gradient",
+            "width": 0.03,
+            "colors": [
+              "#6366F1",
+              "#EC4899",
+              "#F59E0B",
+              "#10B981"
+            ]
+          },
+          "lottie": {
+            "src": "6ba39ccae139a4bb.json",
+            "bytes": 3551,
+            "sha256": "6ba39ccae139a4bb4f851fb1e2295653df0848ef49e3ea120dfa9c07cec346dc"
+          }
+        },
+        {
+          "key": "onde",
+          "stroke": {
+            "style": "solid",
+            "width": 0.03,
+            "colors": [
+              "#6366F1"
+            ]
+          },
+          "lottie": {
+            "src": "9eeb258fda7680b6.json",
+            "bytes": 1872,
+            "sha256": "9eeb258fda7680b6db8644b8f79b341bc5521d4c51681b9242a4d198ab709470"
+          }
         }
       ]
     },

@@ -29,7 +29,7 @@ public nonisolated struct ComposerFormatWording: Equatable, Sendable {
 
     /// La première étape de VoiceOver sur une scène non vide :
     /// « Post, 3 objets : Texte « Bonjour », Image, Sticker ».
-    public func compositionSummary(count: String, objects: String) -> String {
+    @MainActor public func compositionSummary(count: String, objects: String) -> String {
         switch noun {
         case .story:
             return String(localized: "story.composer.a11y.composition",
@@ -43,7 +43,7 @@ public nonisolated struct ComposerFormatWording: Equatable, Sendable {
         }
     }
 
-    public var addPlace: String {
+    @MainActor public var addPlace: String {
         switch noun {
         case .story:
             return String(localized: "story.location.add.a11y",
@@ -57,7 +57,7 @@ public nonisolated struct ComposerFormatWording: Equatable, Sendable {
         }
     }
 
-    public var mention: String {
+    @MainActor public var mention: String {
         switch noun {
         case .story:
             return String(localized: "story.mention.add.a11y",
@@ -71,7 +71,7 @@ public nonisolated struct ComposerFormatWording: Equatable, Sendable {
         }
     }
 
-    public var draftResumeTitle: String {
+    @MainActor public var draftResumeTitle: String {
         switch noun {
         case .story:
             return String(localized: "story.draft.resume.title",
@@ -85,7 +85,7 @@ public nonisolated struct ComposerFormatWording: Equatable, Sendable {
         }
     }
 
-    public func draftResumeAccessibility(slideCount: Int) -> String {
+    @MainActor public func draftResumeAccessibility(slideCount: Int) -> String {
         switch noun {
         case .story:
             return String(localized: "story.draft.resume.a11y",
@@ -101,7 +101,7 @@ public nonisolated struct ComposerFormatWording: Equatable, Sendable {
 
     /// « Mes sons » vide : un son se capte depuis toute publication qui porte
     /// un audio original, story, post ou réel (`PostService.createPost`).
-    public var soundLibraryEmptyMine: String {
+    @MainActor public var soundLibraryEmptyMine: String {
         switch noun {
         case .story:
             return String(localized: "story.sound.library.emptyMine",
@@ -119,7 +119,7 @@ public nonisolated struct ComposerFormatWording: Equatable, Sendable {
     }
 
     /// Ce que VoiceOver entend au geste Publier (#8522).
-    public var publishStarted: String {
+    @MainActor public var publishStarted: String {
         switch noun {
         case .story:
             return String(localized: "story.composer.a11y.publishStarted",

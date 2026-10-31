@@ -3,10 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import { BUILTIN_BANNER_FRAME_PACKS, BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS, appearanceNames, builtinBannerDesign, builtinBannerFrameDesign, builtinRingDesign } from './catalog';
 
 describe('le catalogue embarqué du décor de profil', () => {
-  test('vingt et un contours et sept bannières, tous lisibles par le contrat partagé', () => {
-    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items.map((item) => item.key)).slice(0, 7)).toEqual(['filet', 'double-filet', 'perle', 'aurore', 'deco', 'laurier', 'halo-or']);
-    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items)).toHaveLength(21);
-    expect(BUILTIN_BANNER_PACKS.flatMap((pack) => pack.items.map((item) => item.key))).toEqual(['aurore', 'maille', 'constellation', 'art-deco', 'bogolan', 'topographie', 'aurore-vive']);
+  test('vingt-trois contours et neuf bannières, tous lisibles par le contrat partagé', () => {
+    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items.map((item) => item.key)).slice(0, 9)).toEqual(['filet', 'double-filet', 'perle', 'aurore', 'deco', 'laurier', 'halo-or', 'prisme-vivant', 'onde']);
+    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items)).toHaveLength(23);
+    expect(BUILTIN_BANNER_PACKS.flatMap((pack) => pack.items.map((item) => item.key))).toEqual(['aurore', 'maille', 'constellation', 'art-deco', 'bogolan', 'topographie', 'aurore-vive', 'maree', 'braises']);
   });
 
   test('les 14 cadres de bannière des sept styles (#10936), fixe et animé, lisibles en entier', () => {

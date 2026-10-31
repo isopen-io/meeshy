@@ -1746,48 +1746,6 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `onReorderTextElement sends the edited element to the back and keeps it selected`() = runTest {
-        val vm = viewModel()
-        vm.addWrittenText("un")
-        val first = vm.state.value.selectedTextElement!!.id
-        vm.addWrittenText("deux")
-        val second = vm.state.value.selectedTextElement!!.id
-
-        vm.onReorderTextElement(second, StoryZOrder.TO_BACK)
-
-        assertThat(vm.state.value.selectedSlideTextElements.map { it.id })
-            .containsExactly(second, first).inOrder()
-        assertThat(vm.state.value.selectedTextElementId).isEqualTo(second)
-        assertThat(vm.state.value.isEditingTextElement).isTrue()
-    }
-
-    @Test
-    fun `onReorderTextElement brings the edited element to the front`() = runTest {
-        val vm = viewModel()
-        vm.addWrittenText("un")
-        val first = vm.state.value.selectedTextElement!!.id
-        vm.addWrittenText("deux")
-        val second = vm.state.value.selectedTextElement!!.id
-
-        vm.onReorderTextElement(first, StoryZOrder.TO_FRONT)
-
-        assertThat(vm.state.value.selectedSlideTextElements.map { it.id })
-            .containsExactly(second, first).inOrder()
-    }
-
-    @Test
-    fun `onReorderTextElement on an unknown id leaves the state unchanged`() = runTest {
-        val vm = viewModel()
-        vm.onAddTextElement()
-        vm.onAddTextElement()
-        val before = vm.state.value
-
-        vm.onReorderTextElement("ghost", StoryZOrder.TO_FRONT)
-
-        assertThat(vm.state.value).isSameInstanceAs(before)
-    }
-
-    @Test
     fun `switching slides ends element editing and the field follows the new caption`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
@@ -2743,45 +2701,15 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `onElementMenuAction BRING_FORWARD moves the element one step forward, as iOS, and closes the menu`() = runTest {
-        val vm = viewModel()
-        vm.addWrittenText("un")
-        val back = vm.state.value.selectedTextElement!!.id
-        vm.addWrittenText("deux")
-        vm.addWrittenText("trois")
-        vm.onOpenElementMenu(back)
-
-        vm.onSceneMenuAction(SceneObjectMenu.Action.BRING_FORWARD)
-
-        assertThat(vm.state.value.selectedSlideTextElements.map { it.id }.indexOf(back)).isEqualTo(1)
-        assertThat(vm.state.value.sceneContextMenu).isNull()
-    }
-
-    @Test
-    fun `onSceneMenuAction SEND_BACKWARD moves a sticker one step back, as iOS`() = runTest {
-        val vm = viewModel()
-        vm.onAddSticker("🔥")
-        vm.onAddSticker("🌙")
-        vm.onAddSticker("⭐")
-        val front = vm.state.value.selectedSlideStickers.last().id
-        vm.onOpenStickerMenu(front)
-
-        vm.onSceneMenuAction(SceneObjectMenu.Action.SEND_BACKWARD)
-
-        assertThat(vm.state.value.selectedSlideStickers.map { it.id }.indexOf(front)).isEqualTo(1)
-        assertThat(vm.state.value.sceneContextMenu).isNull()
-    }
-
-    @Test
     fun `onElementMenuAction on a disabled action leaves the deck untouched but closes the menu`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
         val only = vm.state.value.selectedTextElement!!.id
         vm.onOpenElementMenu(only)
-        // A single-element slide: SEND_TO_BACK is a disabled row (already at the back).
+        // A single-element slide: TRIM is never offered to a text.
         val before = vm.state.value.deck
 
-        vm.onSceneMenuAction(SceneObjectMenu.Action.SEND_BACKWARD)
+        vm.onSceneMenuAction(SceneObjectMenu.Action.TRIM)
 
         assertThat(vm.state.value.deck).isSameInstanceAs(before)
         assertThat(vm.state.value.sceneContextMenu).isNull()

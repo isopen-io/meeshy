@@ -14,13 +14,14 @@ import me.meeshy.sdk.model.composer.ComposerOpening
 
 /**
  * The scene of the ONE composer (#13863 R1): story, post and reel are all composed here, mounted as a CONTENT of the host
- * (the ViewModel belongs to the host's back-stack entry). The host pushes the [format] it governs and the [layout] it armed;
- * a format switch changes them and nothing else — the scene stays where it is, nothing is carried. [onFacts] reports what
- * the offer breathes with (text, media, scene, scene count), and [onFormatRestored] the format of a reopened draft.
+ * (the ViewModel belongs to the host's back-stack entry). The host pushes the [formats] the author checked — the scene follows
+ * the first, one gesture publishes them all (#13919) — and the [layout] it armed; a format switch changes them and nothing
+ * else — the scene stays where it is, nothing is carried. [onFacts] reports what the offer breathes with (text, media, scene,
+ * scene count), and [onFormatRestored] the formats of a reopened draft, or those a partial failure left to publish again.
  */
 @Composable
 fun StoryComposerContent(
-    format: ComposerFormat,
+    formats: List<ComposerFormat>,
     layout: MosaicLayoutMode?,
     onFacts: (StoryComposerFacts) -> Unit,
     onClose: () -> Unit,
@@ -31,7 +32,7 @@ fun StoryComposerContent(
     seedText: String = "",
     seededByDoor: Boolean = false,
     onSeedApplied: () -> Unit = {},
-    onFormatRestored: (ComposerFormat) -> Unit = {},
+    onFormatRestored: (List<ComposerFormat>) -> Unit = {},
     raisePostText: Boolean = false,
     onPostTextRaised: () -> Unit = {},
     /** Ce que la porte promet au geste sur la scène vide : le viseur photo et vidéo, ou vidéo seulement (#13849). */
@@ -39,7 +40,7 @@ fun StoryComposerContent(
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(format, layout) { viewModel.onFormat(format, layout) }
+    LaunchedEffect(formats, layout) { viewModel.onFormats(formats, layout) }
     StoryComposerScreen(
         onClose = onClose,
         seededByDoor = seededByDoor,
@@ -57,18 +58,18 @@ fun StoryComposerContent(
     // The host's text is the latest the author typed, under any format (the mood included); an empty one, or the scene's own
     // words handed back after a rotation, never clobbers what the scene holds.
     LaunchedEffect(Unit) {
-        val writesPostText = ComposerFormatVariant.of(format).writesPostText
+        val writesPostText = formats.any { ComposerFormatVariant.of(it).writesPostText }
         val own = if (writesPostText) state.postText else state.editorText
         if (seedText.isBlank() || seedText == own) return@LaunchedEffect
         if (writesPostText) viewModel.onPostTextChange(seedText) else viewModel.onTextChange(seedText)
     }
-    LaunchedEffect(state.restoredFormat) {
-        val restored = state.restoredFormat ?: return@LaunchedEffect
+    LaunchedEffect(state.restoredFormats) {
+        val restored = state.restoredFormats ?: return@LaunchedEffect
         onFormatRestored(restored)
         viewModel.onFormatRestoredApplied()
     }
     val facts = StoryComposerFacts(
-        text = if (state.variant.writesPostText) state.postText else state.editorText,
+        text = if (state.writesPostText) state.postText else state.editorText,
         hasScene = state.postSceneSlides.isNotEmpty(),
         media = state.sceneMediaKinds(),
         sceneCount = state.postSceneSlides.size,

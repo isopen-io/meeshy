@@ -2,7 +2,6 @@ package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.UploadedMedia
-import me.meeshy.sdk.model.composer.ComposerObjectKind
 import org.junit.Test
 
 /**
@@ -38,7 +37,7 @@ class SlideThumbnailSceneTest {
     fun `a posed media is in the tile, at its place in the scene's order`() {
         val posed = StoryComposerPlacedMediaReducer.placed(withPhoto, "photo")
         val hidden = StoryComposerTextReducer.typed(StoryComposerTextReducer.added(posed, "t"), "Salut")
-        val covered = StoryComposerSceneReducer.restacked(hidden, SceneObjectRef(ComposerObjectKind.MEDIA, "photo"), StoryZOrder.TO_FRONT)
+        val covered = StoryComposerSelectionReducer.mediaSelected(hidden, "photo")
 
         val layers = spec(covered).layers
 

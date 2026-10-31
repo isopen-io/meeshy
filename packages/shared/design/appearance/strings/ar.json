@@ -26,15 +26,15 @@
     },
     "animes": {
       "name": "متحركة",
-      "description": "خلفيات تتنفس بهدوء."
+      "description": "ضباب يتنفس، وفقاعات تصعد، وبتلات تتساقط."
     },
     "bannieres-animees": {
       "name": "لافتات متحركة",
-      "description": "وميض خفيف يعبر اللافتة."
+      "description": "شفق ومدّ وجمرات: لافتتك تنبض بالحياة."
     },
     "contours-animes": {
       "name": "إطارات متحركة",
-      "description": "قوس ذهبي يدور حول الصورة الرمزية."
+      "description": "هالة ذهبية، ومنشور يدور، وتموّج ينبض."
     },
     "contours-haussmannien": {
       "name": "إطار هوسماني",
@@ -109,7 +109,11 @@
     "horizon": "أفق",
     "baobab": "باوباب",
     "brume-vivante": "ضباب حي",
-    "aurore-vive": "شفق نابض"
+    "aurore-vive": "شفق نابض",
+    "bulles-legeres": "فقاعات خفيفة",
+    "pluie-de-petales": "مطر البتلات",
+    "maree": "مدّ وجزر",
+    "braises": "جمرات"
   },
   "rings": {
     "filet": "خط رفيع",
@@ -132,7 +136,9 @@
     "rituel": "أفريقي طقسي",
     "rituel-anime": "أفريقي طقسي متحرك",
     "celte": "سلتي",
-    "celte-anime": "سلتي متحرك"
+    "celte-anime": "سلتي متحرك",
+    "prisme-vivant": "منشور حيّ",
+    "onde": "تموّج"
   },
   "gamut": {
     "indigo": "نيلي ميشي",

@@ -133,10 +133,30 @@ data class StoryComposerUiState(
     val postText: String = "",
     /** La disposition des scènes que l'hôte a armée pour le post. */
     val postLayout: MosaicLayoutMode? = null,
-    /** Le format d'un brouillon rouvert, à rendre à l'hôte une fois. */
-    val restoredFormat: ComposerFormat? = null,
+    /**
+     * Les formats cochés que l'hôte pose avec [format] (#13919), dans l'ordre du menu : un seul geste les publie tous. [format]
+     * reste le premier — celui que la scène suit — et ne se répète pas ici.
+     */
+    val checkedFormats: List<ComposerFormat> = emptyList(),
+    /** Les formats d'un brouillon rouvert, ou ceux qu'un échec partiel laisse à republier : à rendre à l'hôte une fois. */
+    val restoredFormats: List<ComposerFormat>? = null,
+    /** Les formats qu'un geste de publication n'a pas fait partir (#13919) : la scène dit lesquels. */
+    val publishFailedFormats: List<ComposerFormat> = emptyList(),
 ) {
     internal val variant: ComposerFormatVariant get() = ComposerFormatVariant.of(format)
+
+    /** Ce qui part d'un seul geste : [format] d'abord, puis les autres formats cochés. */
+    val publishedFormats: List<ComposerFormat> get() = listOf(format) + checkedFormats.filter { it != format }
+
+    private val publishedVariants: List<ComposerFormatVariant> get() = publishedFormats.map(ComposerFormatVariant::of)
+
+    /** « Texte du post » s'écrit dès qu'un post ou un réel est coché, même derrière une story. */
+    val writesPostText: Boolean get() = publishedVariants.any { it.writesPostText }
+
+    private val captionsSlides: Boolean get() = publishedVariants.any { it.captionsSlides }
+
+    /** Les plafonds de la story tiennent dès qu'une story est cochée, même derrière un post. */
+    private val keepsStoryLimits: Boolean get() = publishedVariants.any { it.keepsStoryLimits }
 
     /**
      * Publishable when some slide carries text, media **or** a publishable text
@@ -146,7 +166,7 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (variant.writesPostText && postText.isNotBlank() || deck.hasText && variant.captionsSlides || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
+        get() = (writesPostText && postText.isNotBlank() || deck.hasText && captionsSlides || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
             publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
@@ -156,15 +176,15 @@ data class StoryComposerUiState(
     /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
     internal val publishBlock: StoryPublishBlock?
         get() = deck.publishBlock(StoryComposerDraft.MAX_CHARS, isRepost = !draft.repostOfId.isNullOrBlank())
-            ?.takeUnless { !variant.keepsStoryLimits && it in StoryPublishBlock.storyOnly }
+            ?.takeUnless { !keepsStoryLimits && it in StoryPublishBlock.storyOnly }
 
     /** Les hashtags de la publication — DÉRIVÉS du texte de toutes les slides (du post, en post), jamais déclarés à côté. */
     val hashtags: List<String>
         get() = ComposerHashtags.tags(if (variant.writesPostText) postText else deck.slides.joinToString(" ") { it.text })
 
-    /** Ce que le bouton de publication nomme : la story, le nombre de stories (une par slide), le post ou le réel. */
+    /** Ce que le bouton de publication nomme : la story, le nombre de stories (une par slide), le post, le réel, ou chaque format coché. */
     val publishTitle: StoryPublishTitle
-        get() = variant.publishTitle(slideCount = deck.publishableSlides.size, editing = editing)
+        get() = StoryPublishTitle.of(publishedFormats, slideCount = deck.publishableSlides.size, editing = editing)
 
     /** Une story publiée tient UNE slide : en édition l'ajout est fermé d'avance, plutôt que refusé à l'enregistrement. */
     val canAddSlide: Boolean get() = !editing && deck.canAddSlide

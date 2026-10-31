@@ -551,6 +551,203 @@
       "variants": {
         "duo": {}
       }
+    },
+    {
+      "id": "deconnecte.lagon",
+      "mood": "deconnecte",
+      "name": "Lagon",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
+      "base": {
+        "layout": {
+          "arrangement": "scatter",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.16,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "blob",
+          "stroke": {
+            "color": "#FFFFFF",
+            "width": 0.014
+          },
+          "shadow": true,
+          "tilt": "gentle",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#5EEAD4",
+            "#22D3EE",
+            "#0E7490"
+          ],
+          "angle": 180
+        },
+        "pattern": {
+          "kind": "waves",
+          "color": "#FFFFFF",
+          "opacity": 0.14
+        },
+        "ornaments": [
+          {
+            "kind": "rays",
+            "color": "#FEF3C7",
+            "density": "low",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "bubbles",
+            "color": "#FFFFFFAA",
+            "density": "mid",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "bokeh",
+            "color": "#A7F3D066",
+            "density": "low",
+            "layer": "back",
+            "motion": "loop"
+          },
+          {
+            "kind": "bubbles",
+            "color": "#E0F2FE",
+            "density": "low",
+            "layer": "front",
+            "motion": "loop"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom",
+          "color": "#FFFFFF",
+          "size": "m",
+          "font": "handwriting"
+        },
+        "names": {
+          "show": "name",
+          "style": "tag",
+          "font": "note",
+          "color": "#0E7490",
+          "fill": "#FFFFFFE6"
+        },
+        "title": {
+          "source": "group",
+          "font": "brush",
+          "color": "#FFFFFF",
+          "place": "top",
+          "size": "l",
+          "effect": "shadow"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "title": {
+            "source": "names",
+            "font": "brush",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "l",
+            "effect": "shadow"
+          },
+          "subtitle": {
+            "source": "date",
+            "font": "handwriting",
+            "color": "#ECFEFF",
+            "place": "top",
+            "size": "s"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "mosaic",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "blob",
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.012
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "warm"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.02,
+            "top": 0.13,
+            "bottom": 0.09
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.14,
+            "stroke": {
+              "color": "#FFFFFF",
+              "width": 0.01
+            },
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "ornaments": [
+            {
+              "kind": "rays",
+              "color": "#FEF3C7",
+              "density": "low",
+              "layer": "back",
+              "motion": "loop"
+            },
+            {
+              "kind": "bubbles",
+              "color": "#FFFFFFAA",
+              "density": "mid",
+              "layer": "back",
+              "motion": "loop"
+            },
+            {
+              "kind": "bokeh",
+              "color": "#A7F3D066",
+              "density": "low",
+              "layer": "back",
+              "motion": "loop"
+            }
+          ],
+          "names": {
+            "show": "none",
+            "style": "tag",
+            "font": "note",
+            "color": "#0E7490",
+            "fill": "#FFFFFFE6"
+          },
+          "title": {
+            "source": "group",
+            "font": "brush",
+            "color": "#FFFFFF",
+            "place": "top",
+            "size": "m",
+            "effect": "shadow"
+          }
+        }
+      }
     }
   ]
 }

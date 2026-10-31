@@ -115,9 +115,9 @@ fun ProgressionConceptScreen(
                 // L'HÉRITAGE puis le cadre de la frappe, EN TÊTE (iOS `GameHeritageHeadView` + `GameMintPreviewView`) ;
                 // sans bloc de jeu, le portefeuille et sa frappe (iOS `ProgressionMeeshDetail`).
                 fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Meesh -> snapshot.game?.let { game ->
+                    val acting by gestures.state.collectAsStateWithLifecycle()
                     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                        HeritagePiece(ProgressionHeritagePiece.served(snapshot.progress, game), game.treasury)
-                        ConceptGestures(concept, game, gestures)
+                        HeritageAndMint(ProgressionHeritagePiece.served(snapshot.progress, game), game, acting, onMint = { gestures.mint(game.mint) })
                     }
                 } ?: snapshot.progress.meesh?.let { meesh ->
                     MeeshDetailWithoutGame(ProgressionMeeshDetail.of(meesh), gestures)

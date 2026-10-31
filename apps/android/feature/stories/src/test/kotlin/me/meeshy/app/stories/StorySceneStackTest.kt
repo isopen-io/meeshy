@@ -4,7 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.composer.ComposerObjectKind
-import me.meeshy.sdk.model.composer.SceneObjectMenu
 import org.junit.Test
 
 /**
@@ -15,6 +14,9 @@ import org.junit.Test
 class StorySceneStackTest {
 
     private fun state(slide: StorySlide) = StoryComposerUiState(deck = StorySlideDeck(listOf(slide), slide.id))
+
+    private fun restacked(state: StoryComposerUiState, ref: SceneObjectRef, op: StoryZOrder) =
+        state.deck.restacked(ref, op).let { if (it === state.deck) state else state.copy(deck = it) }
 
     private fun ids(state: StoryComposerUiState) = StorySceneStack.order(state.deck.selectedSlide).map { it.id }
 
@@ -63,35 +65,21 @@ class StorySceneStackTest {
         val scene = StoryComposerStickerReducer.added(StoryComposerTextReducer.added(placed, "t"), "🔥", "k")
         val photo = SceneObjectRef(ComposerObjectKind.MEDIA, "photo")
 
-        assertThat(ids(StoryComposerSceneReducer.restacked(scene, photo, StoryZOrder.FORWARD))).containsExactly("t", "photo", "k").inOrder()
-        assertThat(ids(StoryComposerSceneReducer.restacked(scene, photo, StoryZOrder.TO_FRONT))).containsExactly("t", "k", "photo").inOrder()
+        assertThat(ids(restacked(scene, photo, StoryZOrder.FORWARD))).containsExactly("t", "photo", "k").inOrder()
+        assertThat(ids(restacked(scene, photo, StoryZOrder.TO_FRONT))).containsExactly("t", "k", "photo").inOrder()
         val sticker = SceneObjectRef(ComposerObjectKind.STICKER, "k")
-        assertThat(ids(StoryComposerSceneReducer.restacked(scene, sticker, StoryZOrder.TO_BACK))).containsExactly("k", "photo", "t").inOrder()
-        assertThat(StoryComposerSceneReducer.restacked(scene, photo, StoryZOrder.TO_BACK)).isSameInstanceAs(scene)
+        assertThat(ids(restacked(scene, sticker, StoryZOrder.TO_BACK))).containsExactly("k", "photo", "t").inOrder()
+        assertThat(restacked(scene, photo, StoryZOrder.TO_BACK)).isSameInstanceAs(scene)
     }
 
     @Test
-    fun `order is offered to a lone text as soon as an object of another family shares the scene`() {
-        val placed = StoryComposerPlacedMediaReducer.placed(withPhoto, "photo")
-        val written = StoryComposerTextReducer.added(placed, "t").copy(framedTextElementId = "t")
-
-        val choices = written.selectionBar?.orderChoices
-
-        assertThat(choices).containsExactly(
-            SceneObjectMenu.Action.BRING_TO_FRONT, SceneObjectMenu.Action.BRING_FORWARD,
-            SceneObjectMenu.Action.SEND_BACKWARD, SceneObjectMenu.Action.SEND_TO_BACK,
-        ).inOrder()
-    }
-
-    @Test
-    fun `a placed media, a place and a voice are ordered too, the background never`() {
+    fun `a placed media is on the stack, the background never`() {
         val placed = StoryComposerPlacedMediaReducer.placed(withPhoto, "photo")
         val written = StoryComposerTextReducer.added(placed, "t")
-        val media = StoryComposerSelectionReducer.mediaSelected(written, "photo")
-        val background = StoryComposerSelectionReducer.mediaSelected(written.copy(deck = written.deck.toggleSelectedBackgroundMedia("bg")), "bg")
+        val withBackground = written.copy(deck = written.deck.toggleSelectedBackgroundMedia("bg"))
 
-        assertThat(media.selectionBar?.orderChoices).isNotEmpty()
-        assertThat(background.selectionBar?.orderChoices.orEmpty()).isEmpty()
+        assertThat(ids(written)).contains("photo")
+        assertThat(ids(withBackground)).doesNotContain("bg")
     }
 
     @Test
@@ -101,7 +89,7 @@ class StorySceneStackTest {
             "photo",
         )
         val scene = StoryComposerStickerReducer.added(StoryComposerTextReducer.typed(StoryComposerTextReducer.added(placed, "t"), "Salut"), "🔥", "k")
-        val raised = StoryComposerSceneReducer.restacked(scene, SceneObjectRef(ComposerObjectKind.MEDIA, "photo"), StoryZOrder.TO_FRONT)
+        val raised = restacked(scene, SceneObjectRef(ComposerObjectKind.MEDIA, "photo"), StoryZOrder.TO_FRONT)
 
         val effects = publishPlans(raised, "fr").single().request.storyEffects!!
 
@@ -115,7 +103,7 @@ class StorySceneStackTest {
     fun `a saved draft reopens with the same order`() {
         val placed = StoryComposerPlacedMediaReducer.placed(withPhoto, "photo")
         val scene = StoryComposerStickerReducer.added(StoryComposerTextReducer.typed(StoryComposerTextReducer.added(placed, "t"), "Salut"), "🔥", "k")
-        val raised = StoryComposerSceneReducer.restacked(scene, SceneObjectRef(ComposerObjectKind.MEDIA, "photo"), StoryZOrder.TO_FRONT)
+        val raised = restacked(scene, SceneObjectRef(ComposerObjectKind.MEDIA, "photo"), StoryZOrder.TO_FRONT)
 
         val reopened = raised.deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, "2026-10-31T00:00:00Z").toDeck()!!
 

@@ -97,6 +97,12 @@ class ComposerHostViewModel @Inject constructor(
 
     fun choose(format: ComposerFormat) = _state.update { it.choose(format) }
 
+    /** Coche ou décoche un format au chevron de « Publier » (#13919) : jamais zéro, la scène suit le premier coché. */
+    fun toggle(format: ComposerFormat) = _state.update { it.toggle(format) }
+
+    /** Les formats d'un brouillon rouvert, ou ceux qu'un échec partiel laisse à republier. */
+    fun restore(formats: List<ComposerFormat>) = _state.update { it.restore(formats) }
+
     fun chooseLayout(mode: MosaicLayoutMode) = _state.update { it.chooseLayout(mode) }
 
     fun onSceneFacts(facts: StoryComposerFacts) = _state.update {

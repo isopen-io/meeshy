@@ -26,15 +26,15 @@
     },
     "animes": {
       "name": "Animiert",
-      "description": "Hintergründe, die sanft atmen."
+      "description": "Nebel, der atmet, Blasen, die steigen, Blüten, die fallen."
     },
     "bannieres-animees": {
       "name": "Animierte Banner",
-      "description": "Ein dezenter Glanz zieht über das Banner."
+      "description": "Polarlicht, Gezeiten, Glut: Dein Banner wird lebendig."
     },
     "contours-animes": {
       "name": "Animierte Konturen",
-      "description": "Ein goldener Bogen umkreist den Avatar."
+      "description": "Ein goldener Halo, ein kreisendes Prisma, eine pulsierende Welle."
     },
     "contours-haussmannien": {
       "name": "Rahmen Haussmann",
@@ -109,7 +109,11 @@
     "horizon": "Horizont",
     "baobab": "Baobab",
     "brume-vivante": "Lebendiger Nebel",
-    "aurore-vive": "Lebhafte Aurora"
+    "aurore-vive": "Lebhafte Aurora",
+    "bulles-legeres": "Leichte Blasen",
+    "pluie-de-petales": "Blütenregen",
+    "maree": "Gezeiten",
+    "braises": "Glut"
   },
   "rings": {
     "filet": "Haarlinie",
@@ -132,7 +136,9 @@
     "rituel": "Afrikanisch, Ritual",
     "rituel-anime": "Afrikanisch, Ritual, animiert",
     "celte": "Keltisch",
-    "celte-anime": "Keltisch, animiert"
+    "celte-anime": "Keltisch, animiert",
+    "prisme-vivant": "Lebendiges Prisma",
+    "onde": "Welle"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",

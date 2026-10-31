@@ -51,7 +51,7 @@ internal fun rememberStoryTyping(
 ): StoryTypingSlot? {
     val edited = state.selectedTextElement?.takeIf { state.isEditingTextElement && !state.isDrawingActive }
     val caption = morePanel == StoryMorePanel.CAPTION && edited == null && !state.isDrawingActive
-    val postText = morePanel == StoryMorePanel.POST_TEXT && edited == null && !state.isDrawingActive && state.variant.writesPostText
+    val postText = morePanel == StoryMorePanel.POST_TEXT && edited == null && !state.isDrawingActive && state.writesPostText
     var surface by remember(edited?.id, caption) { mutableStateOf(ComposerKeyboardOrOptions.initial) }
     val controller = LocalSoftwareKeyboardController.current
     return when {

@@ -165,6 +165,7 @@ data class StoryDraftFormat(
     val postText: String = "",
     val format: String? = null,
     val media: List<UploadedMedia> = emptyList(),
+    val formats: List<String> = emptyList(),
 )
 
 /** Projects the deck's persistable fields onto a durable snapshot stamped [nowIso]. */
@@ -213,6 +214,7 @@ fun StorySlideDeck.toDraftSnapshot(
     postText = format.postText,
     format = format.format,
     media = format.media,
+    formats = format.formats,
 )
 
 /**

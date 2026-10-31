@@ -34,4 +34,23 @@ class ComposerHostStateLayoutTest {
         val again = alone.withSceneCount(3)
         assertThat(ComposerMosaicChoice.published(again.layout, again.sceneCount, again.selectedFormat)).isEqualTo(MosaicLayoutMode.WAVE)
     }
+
+    @Test
+    fun `a post checked behind a story still offers its layouts, and the story alone has none`() {
+        val tray = ComposerHostState.open(ComposerIntent(ComposerOrigin.StoryTray)).withSceneCount(2)
+        val both = tray.toggle(ComposerFormat.POST)
+
+        assertThat(tray.layoutChoices).isEmpty()
+        assertThat(both.selectedFormat).isEqualTo(ComposerFormat.STORY)
+        assertThat(both.layoutChoices).isEqualTo(ComposerMosaicChoice.ordered)
+        assertThat(both.chooseLayout(MosaicLayoutMode.HERO).layout).isEqualTo(MosaicLayoutMode.HERO)
+    }
+
+    @Test
+    fun `unchecking the post withdraws its layouts`() {
+        val both = post(2).toggle(ComposerFormat.STORY)
+
+        assertThat(both.layoutChoices).isEqualTo(ComposerMosaicChoice.ordered)
+        assertThat(both.toggle(ComposerFormat.POST).layoutChoices).isEmpty()
+    }
 }
