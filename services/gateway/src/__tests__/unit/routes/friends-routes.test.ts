@@ -133,6 +133,7 @@ function makePrisma(opts: PrismaOpts = {}) {
   return {
     user: {
       findUnique: mockFn(opt(opts.userFindUnique, DB_USER)), findMany: jest.fn(async () => []), // #13298 blocage
+      findFirst: jest.fn(async () => null), // #13933 blocage relu avant d'accepter
     },
     friendRequest: {
       findFirst: mockFn(opt(opts.friendRequestFindFirst, null)),

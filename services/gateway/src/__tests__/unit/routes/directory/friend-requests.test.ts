@@ -89,6 +89,9 @@ function prismaDouble(opts: Options = {}) {
     user: {
       // #13298 — « qui a bloqué l'acteur ? », lu par la clause des listes.
       findMany: jest.fn<any>(async () => []),
+      // #13933 — « l'un a-t-il bloqué l'autre ? », relu avant d'accepter (`isBlockedBetween`).
+      findFirst: jest.fn<any>(async () => null),
+
       findUnique: jest.fn<any>(async (args: any) => {
         if (args?.where?.id === MOI) return { blockedUserIds: opts.emetteurBloque ?? [], displayName: 'Moi', username: 'moi' };
         if (opts.receveur === null) return null;

@@ -10,6 +10,7 @@ import { judgeRelationRequest, thresholdsNow } from '../../services/relations/re
 import { emitRelationLevelRaised, relationIoOf } from '../../socketio/relationEvents';
 import { parseRequestLevel, type RelationRequestLevel } from '@meeshy/shared/types/relation';
 import { forgetFriends } from '../../services/relations/relationCaches';
+import { isBlockedBetween } from '../../utils/blocking';
 import { INCLUDE_PARTIES, servirParties, type Resultat } from './friend-request-parties';
 
 export const isRecordNotFound = (error: unknown): boolean =>
@@ -28,6 +29,34 @@ export const niveauVise = (demande: Pick<DemandeARepondre, 'targetLevel'>): Rela
 
 type Statut = 'accepted' | 'rejected';
 
+const dejaTranchee = (): Error => Object.assign(new Error('friend request already settled'), { code: 'P2025' });
+
+const lireAvecParties = (fastify: FastifyInstance, id: string) =>
+  fastify.prisma.friendRequest.findUnique({ where: { id }, include: INCLUDE_PARTIES });
+
+type LigneAvecParties = NonNullable<Awaited<ReturnType<typeof lireAvecParties>>>;
+
+/** Une réponse passe par le journal des mutations ; une demande tranchée entre-temps rend `null`. */
+async function journaliserReponse(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  acteurId: string,
+  op: () => Promise<LigneAvecParties>
+) {
+  return withMutationLog({
+    request,
+    fastify,
+    userId: acteurId,
+    kind: 'respondFriendRequest',
+    replayCost: 'converges',
+    op,
+    onDuplicate: (resultId) => lireAvecParties(fastify, resultId),
+  }).catch((error: unknown) => {
+    if (isRecordNotFound(error)) return null;
+    throw error;
+  });
+}
+
 /** L'écriture CONDITIONNELLE d'une réponse : une demande tranchée entre-temps dans l'AUTRE sens ne se réécrit pas. */
 async function ecrireReponse(
   fastify: FastifyInstance,
@@ -39,26 +68,50 @@ async function ecrireReponse(
   // `respondedAt` date la réponse : le rattrapage du lien s'y fie, jamais à
   // `updatedAt` que toute réécriture ultérieure déplace. Le statut visé reste
   // admis, pour que le rejeu d'une même réponse converge (`replayCost`).
-  return withMutationLog({
-    request,
-    fastify,
-    userId: acteurId,
-    kind: 'respondFriendRequest',
-    replayCost: 'converges',
-    op: () => fastify.prisma.friendRequest.update({
-      where: { id: demande.id, status: { in: ['pending', statut] } },
-      data: { status: statut, respondedAt: new Date() },
-      include: INCLUDE_PARTIES,
-    }),
-    onDuplicate: (resultId) => fastify.prisma.friendRequest.findUnique({
-      where: { id: resultId },
-      include: INCLUDE_PARTIES,
-    }),
-  }).catch((error: unknown) => {
-    if (isRecordNotFound(error)) return null;
-    throw error;
+  return journaliserReponse(fastify, request, acteurId, () => fastify.prisma.friendRequest.update({
+    where: { id: demande.id, status: { in: ['pending', statut] } },
+    data: { status: statut, respondedAt: new Date() },
+    include: INCLUDE_PARTIES,
+  }));
+}
+
+/**
+ * Une demande de Connaissance acceptée ne passe JAMAIS par `accepted` (#13933) : les
+ * lecteurs historiques de `FriendRequest` et le rattrapage lisent toute demande
+ * acceptée comme une amitié. Elle est CONSOMMÉE — supprimée sous la condition
+ * qu'elle attende encore — et c'est le lien seul qui dit la Connaissance. La ligne
+ * lue avant sert la réponse et, si le lien ne s'écrit pas, la restaure.
+ */
+async function consommerConnaissance(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  demande: DemandeARepondre,
+  acteurId: string
+) {
+  return journaliserReponse(fastify, request, acteurId, async () => {
+    const ligne = await lireAvecParties(fastify, demande.id);
+    if (!ligne || ligne.status !== 'pending') throw dejaTranchee();
+    const { count } = await fastify.prisma.friendRequest.deleteMany({ where: { id: demande.id, status: 'pending' } });
+    if (count === 0) throw dejaTranchee();
+    return { ...ligne, status: 'accepted', respondedAt: new Date() };
   });
 }
+
+type LigneConsommee = Pick<LigneAvecParties, 'id' | 'senderId' | 'receiverId' | 'message' | 'targetLevel' | 'createdAt' | 'updatedAt'>;
+
+const restaurerDemande = (fastify: FastifyInstance, ligne: LigneConsommee) =>
+  fastify.prisma.friendRequest.create({
+    data: {
+      id: ligne.id,
+      senderId: ligne.senderId,
+      receiverId: ligne.receiverId,
+      message: ligne.message ?? undefined,
+      targetLevel: ligne.targetLevel ?? undefined,
+      respondedAt: null,
+      createdAt: ligne.createdAt,
+      updatedAt: ligne.updatedAt,
+    },
+  });
 
 /**
  * REFUSER sans un bruit (RG-07, RG-08, #13933) : le statut passe à `rejected`, et
@@ -122,9 +175,9 @@ function crediterAmitie(fastify: FastifyInstance, demande: DemandeARepondre): vo
  * alors en attente et le refus se dit (409). Un Sang ne s'accepte pas ici : le
  * rituel synchronisé est son seul chemin.
  *
- * Une demande de Connaissance acceptée est SUPPRIMÉE une fois le lien écrit : les
- * lecteurs historiques de `FriendRequest` lisent toute demande `accepted` comme
- * une amitié, et une Connaissance n'en est pas une.
+ * Une demande de Connaissance acceptée est CONSOMMÉE, jamais écrite `accepted`
+ * (`consommerConnaissance`) : une étape qui échoue après le lien ne peut pas
+ * laisser une ligne que les lecteurs historiques liraient comme une amitié.
  */
 async function accepterAuNiveau(
   fastify: FastifyInstance,
@@ -137,19 +190,24 @@ async function accepterAuNiveau(
     return { refus: { code: 409, message: 'Le Sang passe par le rituel', codeMetier: 'RELATION_RITUAL_REQUIRED' } };
   }
 
-  // Une demande SANS niveau précède la loi des crans : l'envoi écrit désormais
-  // toujours le sien, aucune nouvelle ligne ne naît sans. Celles qui attendent
-  // encore (envoyées avant le déploiement) s'acceptent comme l'ancien contrat, en
-  // Ami — l'unique reste de l'ancienne loi, qui se vide à mesure qu'on y répond.
-  const heritee = demande.targetLevel === null || demande.targetLevel === undefined;
-  const jugement = heritee ? null : await judgeRelationRequest(fastify.prisma, {
+  // Le blocage, dans un sens ou dans l'autre, coupe l'acceptation avant toute
+  // écriture — et se tait derrière le refus générique d'une demande déjà partie.
+  if (await isBlockedBetween(fastify.prisma, demande.senderId, demande.receiverId)) {
+    return { refus: { code: 404, message: 'Demande d\'ami non trouvee ou deja traitee' } };
+  }
+
+  // Une demande SANS niveau (antérieure aux cercles) vise Ami, et suit la même loi
+  // que toutes : aucune exception, aucun saut de cran (D-5).
+  const jugement = await judgeRelationRequest(fastify.prisma, {
     requesterId: demande.senderId, otherId: demande.receiverId, targetLevel: niveau, now: new Date(), ignoreCooldown: true,
   });
-  if (jugement && jugement.allowed === false) {
+  if (jugement.allowed === false) {
     return { refus: { code: 409, message: 'La demande ne tient plus', codeMetier: jugement.code } };
   }
 
-  const misAJour = await ecrireReponse(fastify, request, demande, acteurId, 'accepted');
+  const misAJour = niveau === 'ACQUAINTANCE'
+    ? await consommerConnaissance(fastify, request, demande, acteurId)
+    : await ecrireReponse(fastify, request, demande, acteurId, 'accepted');
   if (!misAJour) return { refus: { code: 404, message: 'Demande d\'ami non trouvee ou deja traitee' } };
 
   const notifications = fastify.notificationService;
@@ -168,11 +226,15 @@ async function accepterAuNiveau(
   const ecrit = await ecriture.catch((error: unknown) => {
     // La demande ACCEPTÉE reste la vérité de repli pour Ami (#13926) : le lien se
     // rattrape. Ailleurs, rien ne le rattrape — au-dessus d'Ami le rattrapage ne relève
-    // qu'à Ami, et une Connaissance acceptée perd sa demande plus bas : on défait
+    // qu'à Ami, et une Connaissance consommée n'a plus de demande : on défait
     // l'acceptation, sans quoi elle disparaîtrait en silence.
     logError(fastify.log, 'Error recording user relation after friend request acceptance:', error);
     return null;
   });
+  if (ecrit === null && niveau === 'ACQUAINTANCE') {
+    await restaurerDemande(fastify, misAJour).catch(() => undefined);
+    throw new Error('relation write failed');
+  }
   if (ecrit === null && niveau !== 'FRIEND') {
     await fastify.prisma.friendRequest.update({ where: { id: demande.id }, data: { status: 'pending', respondedAt: null } }).catch(() => undefined);
     throw new Error('relation write failed');
@@ -205,10 +267,6 @@ async function accepterAuNiveau(
   // et rend la présence du nouvel ami, sans cas particulier ici. `conversation`
   // est servie dans les DEUX cas — créée ou déjà existante.
   const [acceptee] = await servirParties(fastify, request, [misAJour as unknown as Record<string, unknown>]);
-
-  if (niveau === 'ACQUAINTANCE') {
-    await fastify.prisma.friendRequest.deleteMany({ where: { id: demande.id } });
-  }
 
   return { valeur: { ...acceptee, conversation } };
 }

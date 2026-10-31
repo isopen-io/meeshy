@@ -1,7 +1,8 @@
 /**
  * #13926 — le lien entre deux personnes suit la demande d'amitié.
  *
- * - accepter écrit la ligne `UserRelation` FRIEND/FRIEND ;
+ * - accepter écrit la ligne `UserRelation` FRIEND/FRIEND (depuis Connaissance : aucun
+ *   saut de cran, même pour une demande sans niveau, #13933) ;
  * - supprimer une demande ACCEPTÉE (`dismiss`/`cancel` y mènent) est la
  *   rupture : les deux accords reviennent à PUBLIC, sans notification de plus ;
  * - supprimer une demande EN ATTENTE ne touche pas au lien ;
@@ -72,7 +73,7 @@ async function repondre(params: {
     emitFriendRequestAccepted: jest.fn(),
   };
   const prisma = {
-    user: { findUnique: jest.fn(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })) },
+    user: { findUnique: jest.fn(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })), findFirst: jest.fn(async () => null) },
     friendRequest: {
       ...store.prisma.friendRequest,
       ...(params.lectureDemande ? { findUnique: jest.fn(async () => params.lectureDemande) } : {}),
@@ -108,7 +109,7 @@ async function repondre(params: {
 
 describe('#13926 — accepter une demande écrit le lien FRIEND/FRIEND', () => {
   it('crée la ligne de la paire, origine « request »', async () => {
-    const { status, store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')] });
+    const { status, store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE')] });
 
     expect(status).toBe(200);
     expect(store.relations()).toHaveLength(1);
@@ -121,14 +122,18 @@ describe('#13926 — accepter une demande écrit le lien FRIEND/FRIEND', () => {
     mockFeedCacheDel.mockClear();
     const socialEvents = { invalidateFriendsCache: jest.fn((_userId: string) => undefined) };
 
-    await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], socialEvents });
+    await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE')], socialEvents });
 
     expect(socialEvents.invalidateFriendsCache.mock.calls.map(([id]) => id).sort()).toEqual([MOI, AUTRE].sort());
     expect(mockFeedCacheDel.mock.calls.map(([key]) => key).sort()).toEqual([`feed:friends:${MOI}`, `feed:friends:${AUTRE}`].sort());
   });
 
   it('ne fait pas échouer l’acceptation quand l’écriture du lien échoue — la demande acceptée reste la vérité de repli', async () => {
-    const down = { ...relationStore().prisma.userRelation, create: jest.fn(async () => { throw new Error('mongo down'); }) };
+    const down = {
+      ...relationStore({ relations: [lien('ACQUAINTANCE', 'ACQUAINTANCE')] }).prisma.userRelation,
+      create: jest.fn(async () => { throw new Error('mongo down'); }),
+      updateMany: jest.fn(async () => { throw new Error('mongo down'); }),
+    };
 
     const { status } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], userRelation: down });
 
@@ -216,11 +221,12 @@ describe('[audit #13926] une amitié ne survit jamais à sa demande', () => {
       action: 'accept',
       demandes: [demande(FR_ID, 'rejected')],
       lectureDemande: demande(FR_ID, 'pending'),
+      liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE')],
     });
 
     expect(status).toBe(404);
     expect(store.friendRequests()[0]).toMatchObject({ status: 'rejected' });
-    expect(store.relations()).toHaveLength(0);
+    expect(store.relations()).toEqual([expect.objectContaining({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' })]);
   });
 
   it('rupture dont l’écriture du lien échoue : la suppression échoue aussi, rien n’est supprimé', async () => {
@@ -235,7 +241,7 @@ describe('[audit #13926] une amitié ne survit jamais à sa demande', () => {
   });
 
   it('accepter grave respondedAt : la date d’acceptation du rattrapage ne repose pas sur updatedAt', async () => {
-    const { store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')] });
+    const { store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE')] });
 
     expect(store.friendRequests()[0].respondedAt).toBeInstanceOf(Date);
   });
