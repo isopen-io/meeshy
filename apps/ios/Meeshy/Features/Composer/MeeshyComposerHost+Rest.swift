@@ -20,7 +20,6 @@ extension MeeshyComposerHost {
             addsSlides: intent.origin.addsSlides,
             backgroundMedia: sceneEffectBackground,
             offeredDoors: sceneDoors,
-            offersPostBody: socleServesPostText,
             overflow: documentOverflowEntries))
     }
 
@@ -54,7 +53,7 @@ extension MeeshyComposerHost {
         case .share: perform(.share)
         case .clearAll: sceneClearAllAsked = true
         case .slideDuration: presentedPortal = .slideDuration
-        case .animation, .writePost, .mention, .hashtags, .place: break
+        case .animation, .mention, .hashtags, .place: break
         }
     }
 

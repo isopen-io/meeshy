@@ -102,7 +102,7 @@ extension MeeshyComposerHost {
         guard ComposerReelOfferRule.offers(choice: choice,
                                            menuEntries: publishMenuEntries,
                                            origin: intent.origin,
-                                           formatChosenByAuthor: armedPublishChoice != nil,
+                                           formatChosenByAuthor: reelAutoSwitch.authorChose || reelAutoSwitch.autoArmed,
                                            media: media) else {
             performSoclePublish(choice)
             return

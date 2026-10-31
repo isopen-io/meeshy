@@ -167,14 +167,15 @@ struct MeeshyComposerHost: View {
     /// c'est aussi ce qui rend le repli sur valeur inconnue explicite.
     @AppStorage("composer.plateau.tint") var storedTint: String = PlateauTint.defaultTint.rawValue
 
-    /// Le format d'OUVERTURE — la surface se route dessus. Il s'ouvre
-    /// sur `initialFormat` de la porte, ou sur le format qu'un geste a nommé,
-    /// et rien ne le réécrit. Le format PUBLIÉ se choisit au geste, sur la flèche
-    /// (`ComposerPublishMenuRule`), et voyage en paramètre jusqu'au brouillon.
-    ///
-    /// Ce qui gouverne est `selectedFormat`, qui le ramène dans l'offre quand
-    /// celle-ci se referme.
-    @State var currentFormat: ComposerFormat
+    /// **L'unique état de format** (#13864, R1) : la porte le sème, le chevron
+    /// de « Publier » le réécrit, et la vue, les rails, la garde et le libellé le
+    /// lisent tous par `selectedFormat` / `armedChoice`. La disposition des
+    /// scènes et le réel d'accompagnement voyagent avec lui.
+    @State var formatState: ComposerFormatState
+
+    /// Le format que la PORTE a ouvert, gardé pour la bascule automatique vers
+    /// le réel : désarmée, elle rend la porte (`ComposerReelAutoSwitch`).
+    @State var doorFormat: ComposerFormat
 
     /// Le texte des surfaces SANS canvas — le document ET le mood. Il vit dans
     /// le meuble et non dans la surface : c'est le meuble qui le remettra au
@@ -210,10 +211,6 @@ struct MeeshyComposerHost: View {
     /// (`init`), et jamais réappliquée ensuite : relire la mémoire à chaque
     /// apparition d'un contrôle écraserait, au premier changement de format,
     /// l'audience que l'auteur vient de choisir sur l'autre surface.
-    /// Le choix que le chevron a ARMÉ, `nil` tant qu'il n'a rien touché ⇒ la
-    /// capsule publie le format de la porte. Le chevron choisit ; seul Publier
-    /// envoie (maquette plein écran). Lu par `armedChoice`.
-    @State var armedPublishChoice: ComposerPublishChoice?
     /// La bascule post → réel : armée par la scène, verrouillée par
     /// l'auteur. Lue et écrite par `applyReelAutoSwitch` / `chooseArmedPublish`.
     @State var reelAutoSwitch = ComposerReelAutoSwitch.State()
@@ -519,6 +516,10 @@ struct MeeshyComposerHost: View {
     /// partirait en autant de pièces jointes.
     @State var seedIngestedIntoDocument = false
 
+    /// La porte du fil ouvre « Texte du post » UNE fois (#13864) : un retour de
+    /// feuille rejoue `onAppear`, et rouvrir le champ surprendrait l'auteur.
+    @State var postTextOpenedAtDoor = false
+
     /// **La couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
     /// (`viewModel.applyBackground(hex:)`) pour que la scène l'affiche une fois
@@ -781,7 +782,8 @@ struct MeeshyComposerHost: View {
         let ouverture = intent.openingFormat(
             compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
         )
-        _currentFormat = State(initialValue: ouverture)
+        _formatState = State(initialValue: .opening(ouverture))
+        _doorFormat = State(initialValue: ouverture)
 
         // La mémoire d'audience s'applique ICI, et une seule fois — loi 10 sur
         // le format que la porte OUVRE. La poser dans un `.onAppear` aurait
@@ -919,7 +921,10 @@ struct MeeshyComposerHost: View {
         // est un `let` de l'init, elle ne change jamais — et
         // `StoryComposerSeed` n'est pas Equatable (elle porte un `UIImage`),
         // donc il n'y a rien à observer. Le loquet tient la répétition.
-        .onAppear { ingestSeedIntoDocumentIfNeeded() }
+        .onAppear {
+            ingestSeedIntoDocumentIfNeeded()
+            openPostTextAtDoorIfDue()
+        }
         // **La caméra se prépare à l'ouverture** : un format qui filme
         // configure sa session sans la lancer — l'armement n'a plus qu'à démarrer.
         .adaptiveOnChange(of: ComposerSceneCamera.initialMode(for: selectedFormat) != nil, initial: true) { _, filme in

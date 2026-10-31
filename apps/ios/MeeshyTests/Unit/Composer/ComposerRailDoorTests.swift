@@ -248,21 +248,16 @@ final class ComposerRailDoorTests: XCTestCase {
         }
     }
 
-    /// **Le POST offre TOUT ; le RÉEL tout sauf le corps** (#4890). Les deux
-    /// formats portent une scène, mais un réel n'a pas de `content` distinct de
-    /// ses canvas — le texte de sa slide EST le contenu. Le témoin les sépare
-    /// plutôt que de relâcher son égalité en inclusion : c'est l'égalité qui
-    /// attrape une porte ajoutée au mauvais format.
+    /// **Le POST et le RÉEL offrent TOUT** (#4890, #13864) : depuis la vue
+    /// unique, le réel porte « Texte du post » comme le post (règle R2, même
+    /// table qu'Android `ComposerFormatVariant`).
     func test_dansLesTroisFormatsAScene_lesPortesDObjet_sontOffertes() {
-        XCTAssertEqual(
-            ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
-                                     format: .post, allowsCapture: true),
-            ComposerRailDoor.canonicalRail)
-        XCTAssertEqual(
-            ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
-                                     format: .reel, allowsCapture: true),
-            ComposerRailDoor.canonicalRail.filter { $0 != .content },
-            "Un réel n'a pas de corps distinct de ses canvas — le texte de sa slide EST le contenu.")
+        for format in [ComposerFormat.post, .reel] {
+            XCTAssertEqual(
+                ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
+                                         format: format, allowsCapture: true),
+                ComposerRailDoor.canonicalRail, "\(format)")
+        }
     }
 
     /// **La STORY offre tout SAUF le paragraphe** (#4893) — elle est le seul
@@ -331,17 +326,16 @@ final class ComposerRailDoorTests: XCTestCase {
 
     // MARK: - #4890 — la porte CONTENU, le corps du post
 
-    /// **Elle n'existe QU'EN POST.** Ailleurs le texte de la slide EST le
-    /// contenu de la publication : lui offrir une porte distincte ouvrirait un
-    /// second champ pour un seul texte — la faute symétrique de celle que
-    /// `.description` évite en Story.
-    func test_laPorteContenu_nExisteQuEnPost() {
+    /// **Elle n'existe qu'en POST et en RÉEL** (#13864). En story le texte de
+    /// la slide EST le contenu de la publication : lui offrir une porte
+    /// distincte ouvrirait un second champ pour un seul texte.
+    func test_laPorteContenu_nExisteQuEnPostEtEnReel() {
         for format in [ComposerFormat.post, .story, .reel, .status] {
             let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                   format: format,
                                                   allowsCapture: true)
-            XCTAssertEqual(portes.contains(.content), format == .post,
-                           "\(format) : la porte CONTENU doit exister en Post et NULLE PART ailleurs.")
+            XCTAssertEqual(portes.contains(.content), format == .post || format == .reel,
+                           "\(format) : la porte CONTENU doit exister en Post et en Réel, nulle part ailleurs.")
         }
     }
 
@@ -1066,7 +1060,6 @@ final class ComposerHistoryServiceTests: XCTestCase {
     func test_seuleLaScene_sertLHistorique() {
         XCTAssertTrue(ComposerHistoryService.servesHistory(on: .scene))
         XCTAssertTrue(ComposerHistoryService.servesHistory(on: .atelier))
-        XCTAssertFalse(ComposerHistoryService.servesHistory(on: .document))
         XCTAssertFalse(ComposerHistoryService.servesHistory(on: .mood))
     }
 
@@ -1083,20 +1076,12 @@ final class ComposerHistoryServiceTests: XCTestCase {
     /// > niveaux différents, et le compilateur ne peut pas dire laquelle on
     /// > voulait. Un test qui part de l'ÉTAT traverse la traduction ; un test
     /// > qui part de la VALEUR la présuppose.
-    func test_unDocumentAvecUneScene_sertLHistorique() {
-        let vue = ComposerMountedView.mounted(surface: .document, hasScene: true)
-        XCTAssertEqual(vue, .scene, "La scène incrustée est un document QUI A une scène.")
+    func test_unDocument_seComposeSurLaScene_etSertLHistorique() {
+        let vue = ComposerMountedView.mounted(surface: .document)
+        XCTAssertEqual(vue, .scene, "Un post se compose sur la scène (#13864).")
         XCTAssertTrue(ComposerHistoryService.servesHistory(on: vue),
                       "C'est l'écran où poser un sticker, avancer un objet et changer le fond "
                         + "ne se défont par rien d'autre.")
-    }
-
-    /// Et le document NU ne le sert toujours pas — le contrepoids du témoin
-    /// précédent, sans lequel « tout servir » le rendrait vert.
-    func test_unDocumentSansScene_neSertPasLHistorique() {
-        let vue = ComposerMountedView.mounted(surface: .document, hasScene: false)
-        XCTAssertEqual(vue, .document)
-        XCTAssertFalse(ComposerHistoryService.servesHistory(on: vue))
     }
 
     /// Les deux libellés existent et se distinguent — VoiceOver lit le VERBE.

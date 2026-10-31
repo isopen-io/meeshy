@@ -1761,13 +1761,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         var atteintLeSocle = false
         for format in profil.offeredFormats {
             let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format)
-            // La vue réellement montée, `hasScene: false` — l'état d'une
-            // composition que l'auteur vient d'ouvrir sans rien y poser.
-            let montee = ComposerMountedView.mounted(
-                surface: surface,
-                hasScene: ComposerStoryCanvas.showsCanvas(format: format, documentHasScene: false)
-            )
-            if montee == .document { atteintLeSocle = true }
+            // La vue réellement montée : un post se compose sur la SCÈNE
+            // (#13864), qui publie par le socle comme le document le faisait.
+            if surface == .document, ComposerMountedView.mounted(surface: surface) == .scene {
+                atteintLeSocle = true
+            }
 
             XCTAssertTrue(
                 ComposerChromeOwnership.socleZones(for: surface).contains(.publish),
@@ -1798,31 +1796,6 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     }
 
     // MARK: - Aucune UI morte : rien à l'écran sans raison (loi 4)
-
-    /// Spec §D du lot C. Une affordance montée puis désactivée est une promesse
-    /// non tenue. La capture suit donc le profil : une porte qui la refuse ne
-    /// voit pas l'outil grisé, elle ne le voit pas du tout.
-    ///
-    /// **Garde RE-VISÉE le 2026-08-24.** Elle cherchait `profile.allowsCapture`
-    /// dans le FICHIER, du temps où le plateau peignait un pictogramme de
-    /// caméra. Ce pictogramme n'était pas un `Button` — le tap ne faisait rien —
-    /// et il est parti. Laissée telle quelle, la garde serait restée VERTE sur
-    /// le seul lecteur survivant sans plus rien dire de la capture : le mode
-    /// d'extinction silencieuse que ce fichier se donne pour mission de fuir.
-    /// Elle nomme donc le bloc qui gouverne réellement la capture aujourd'hui,
-    /// la rangée d'outils de la surface document.
-    func test_host_gatesCaptureOnTheProfile() throws {
-        guard let corps = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
-            return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
-        }
-        let compacte = compact(corps)
-
-        XCTAssertTrue(compacte.contains(compact("ComposerDocumentSurface(")), "Le bloc lu n'est pas celui de la surface document.")
-        XCTAssertTrue(
-            compacte.contains(compact("allowsCapture: profile.allowsCapture")),
-            "La rangée d'outils doit tenir sa capacité de capture DU PROFIL — sinon la politique la déciderait seule, et la table de C1 ne gouvernerait plus la capture."
-        )
-    }
 
     /// C1 a posé `routesToLegacy` : une porte qui route vers un composer
     /// historique n'ouvre PAS le host. Le host doit honorer ce routage, sinon
@@ -2004,7 +1977,6 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "tableau qu'il faut corriger — pas cette assertion qu'il faut retirer."
         )
 
-        let sertLaRangee = try leMeubleSertLaRangeeDuDocument()
         let saisieAUneIssue = try laSaisieDuDocumentAUneIssue()
         let publieurAtteignable = try leDocumentAUnPublieurAtteignable()
 
@@ -2021,15 +1993,6 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
         let ou = sites.map { "\($0.porte) dans \($0.fichier)" }.joined(separator: ", ")
 
-        XCTAssertTrue(
-            sertLaRangee,
-            "\(ou) monte le meuble sur une surface document dont la rangée d'outils est INCOMPLÈTE : elle "
-                + "sert \(ComposerDocumentTool.servedRow.map(\.rawValue)) là où la feuille absorbée en "
-                + "offrait \(ComposerDocumentTool.canonicalRow.map(\.rawValue)). Ce qui manque, l'auteur le "
-                + "perd d'un coup sur la porte la plus utilisée de l'app : c'est la deuxième capacité du DoD "
-                + "du lot 2 (spec v2 §E). Un outil n'entre dans la rangée qu'en gagnant un "
-                + "`ComposerDocumentTool.effect`, donc une destination réelle — jamais en étant peint inerte."
-        )
         XCTAssertTrue(
             saisieAUneIssue,
             "\(ou) monte le meuble sur une surface document dont le texte n'a AUCUNE issue : `documentText` "
@@ -2115,20 +2078,6 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             let contenu = try String(contentsOf: url, encoding: .utf8)
             return monteUnePorteDocument(contenu).map { (fichier: url.lastPathComponent, porte: $0) }
         }
-    }
-
-    /// Ce que le meuble SERT au document, lu sur la forme littérale du vide.
-    ///
-    /// Ce qu'elle mesure exactement : `servedDocumentTools` rend un tableau vide
-    /// ÉCRIT COMME TEL. Une rangée servie sous condition compterait pour servie,
-    /// et c'est assumé — le jour où le meuble a une matière à servir, la
-    /// question devient celle du câblage, pas celle de cette garde.
-    private func leMeubleSertLaRangeeDuDocument() throws -> Bool {
-        guard declarationBody(startingAt: "var servedDocumentTools", in: try hostCode()) != nil else {
-            XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN")
-            return true
-        }
-        return ComposerDocumentTool.servedRow == ComposerDocumentTool.canonicalRow
     }
 
     /// Le texte du document a-t-il une ISSUE ? Il en a une dès que quelqu'un le
@@ -2299,9 +2248,9 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "L'éventail du haut est revenu : deux sélecteurs pour un même choix, dont un avant que l'auteur "
                 + "sache ce qu'il publie."
         )
-        XCTAssertEqual(
-            occurrences(of: compact("ComposerFormatFanPolicy.resolvedSelection("), in: code), 1,
-            "…et le format d'ouverture est toujours ramené dans l'offre par la règle de repli."
+        XCTAssertTrue(
+            code.contains(compact("formatState.selectedFormat(offered: profile.offeredFormats)")),
+            "…et le format est toujours ramené dans l'offre par la règle de repli (`ComposerFormatState`)."
         )
     }
 
@@ -2590,106 +2539,17 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "Le choix de surface passe par `ComposerSurfaceRouting` — la règle est éprouvée là, une seule fois."
         )
         XCTAssertTrue(
+            code.contains("ComposerSceneSurface("),
+            "Le meuble monte la scène pour le post comme pour la story (#13864)."
+        )
+        XCTAssertFalse(
             code.contains("ComposerDocumentSurface("),
-            "Le meuble monte la surface document — sans elle, recâbler `.feedComposer` serait une régression."
+            "La surface document est revenue : deux vues pour un même compositeur (#13864, R1)."
         )
         XCTAssertTrue(
             code.contains("StoryComposerView("),
             "… et il garde l'atelier du SDK pour la scène."
         )
-    }
-
-    /// La surface document ne monte pas le plateau **ELLE-MÊME** — un seul site
-    /// de montage, et il est dans le `body`.
-    ///
-    /// **Le NOM et la raison de cette garde ont changé le 2026-08-25, son
-    /// assertion non.** Elle s'appelait `…_neCoiffePasLeDocument` et disait « le
-    /// plateau outille la scène » : depuis que l'éventail descend (lot 4.7), le
-    /// plateau COIFFE les trois surfaces, document compris, sous
-    /// `ComposerFormatFanPlacement.mounts`. Le test restait vert parce qu'il est
-    /// ancré sur le BLOC `documentSurface`, qui n'a jamais monté le plateau —
-    /// c'est-à-dire qu'il gardait toujours son objet en ayant perdu sa phrase.
-    /// Une garde dont le nom affirme l'inverse du produit est la loi que lira la
-    /// session suivante, et celle-ci lui aurait fait croire que le chip « Post »
-    /// n'atteint aucun écran.
-    ///
-    /// Ce qu'elle mesure, et qui vaut toujours : le montage du plateau reste
-    /// UNIQUE. Un second, posé dans une surface, échapperait à la règle de
-    /// placement et peindrait deux sélecteurs sur le même écran. Le compte
-    /// d'occurrences (`plateauTools == 2`, dans `ComposerDocumentSurfaceTests`)
-    /// en est le verrou ; celle-ci nomme le site interdit le plus tentant.
-    func test_host_laSurfaceDocument_neMontePasELLE_MEME_lePlateau() throws {
-        guard let corps = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
-            return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
-        }
-
-        XCTAssertTrue(corps.contains("ComposerDocumentSurface("), "Le bloc lu n'est pas celui de la surface document.")
-        XCTAssertFalse(
-            corps.contains("plateauTools"),
-            "La surface document monte le plateau elle-même : un SECOND site de montage, qui échapperait à "
-                + "`ComposerFormatFanPlacement` et peindrait deux sélecteurs sur le même écran."
-        )
-    }
-
-    /// **LA SORTIE** — le correctif bloquant de la vague 2 bis.
-    ///
-    /// `onDismiss` n'était atteignable que sous la SCÈNE, où l'atelier du SDK
-    /// le reçoit et peint la croix. Le document n'a pas d'atelier : la surface
-    /// était un écran SANS ISSUE, et V3 devait la brancher sur `.feedComposer`,
-    /// la porte la plus utilisée de l'app. On aurait livré le cul-de-sac à
-    /// l'endroit le plus fréquenté.
-    ///
-    /// Garde ancrée sur le BLOC `documentSurface` — `onDismiss` apparaît aussi
-    /// dans la propriété du host, dans son `init` et sous la scène : une garde
-    /// de FICHIER aurait été verte sans que le document reçoive quoi que ce
-    /// soit. Elle compte un symbole nommé plutôt que le littéral
-    /// `onClose: onDismiss`, qu'un retour à la ligne suffirait à contourner.
-    func test_host_donneSaSortie_aLaSurfaceDocument() throws {
-        guard let corps = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
-            return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
-        }
-        let compacte = compact(corps)
-
-        XCTAssertTrue(compacte.contains(compact("ComposerDocumentSurface(")), "Le bloc lu n'est pas celui de la surface document.")
-        XCTAssertTrue(
-            compacte.contains("onClose"),
-            "La surface document doit recevoir une fermeture — sans elle, c'est un écran dont on ne sort pas."
-        )
-        // #13839 (L3) : la sortie passe par la QUESTION « Fermer le brouillon ? »,
-        // qui aboutit à la fermeture du MEUBLE — jamais une seconde sortie.
-        XCTAssertTrue(
-            compacte.contains("requestComposerClose()"),
-            "Et cette fermeture est celle du MEUBLE, gardée par `requestComposerClose` (#13839)."
-        )
-        let garde = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Composer/MeeshyComposerHost+AnchoredSheet.swift")))
-        XCTAssertTrue(garde.contains("funcrequestComposerClose(){"), "La garde de fermeture est nommée.")
-        XCTAssertTrue(garde.contains("onDismiss()"), "Elle aboutit à `onDismiss`, la sortie du meuble.")
-    }
-
-    /// Garde NÉGATIVE — l'interdit de publication, ÉTENDU au bloc de la surface
-    /// document.
-    ///
-    /// `test_host_opensNoSecondPublicationPath` couvre le fichier entier ;
-    /// celle-ci nomme le bloc, parce que c'est là que la tentation naîtra :
-    /// une surface de texte avec un bouton « Publier » est le raccourci évident
-    /// pour recâbler `.feedComposer`, et c'est exactement le second chemin
-    /// d'envoi que la doctrine, C2 et V7 interdisent tous les trois. Elle
-    /// rougirait sur des symboles que la garde de fichier ne connaît pas
-    /// (`documentText`, le rappel de publication du host).
-    func test_host_laSurfaceDocument_nOuvreAucunCheminDePublication() throws {
-        guard let corps = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
-            return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
-        }
-        let compacte = compact(corps)
-
-        for interdit in ["onPublishAllInBackground", "ComposerDocumentSendRouting", "PostService",
-                         "StoryPublishService", "TusUploadManager", "OutboxFlusher", "APIClient"] {
-            XCTAssertFalse(
-                compacte.contains(compact(interdit)),
-                "La surface document touche « \(interdit) » : c'est le SECOND chemin de publication."
-            )
-        }
     }
 
     /// Ancre une garde sur un BLOC et non sur le fichier : `plateauTools` vit
@@ -2712,28 +2572,27 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         return nil
     }
 
-    /// **Garde RETOURNÉE au #6502 — le format d'ouverture n'a plus AUCUN
-    /// écrivain.**
+    /// **Garde RETOURNÉE au #13864 — le chevron ÉCRIT l'unique format.**
     ///
-    /// Elle en exigeait exactement un : la liaison que le host donnait à
-    /// l'éventail. L'éventail est parti ; le format PUBLIÉ se choisit au geste et
-    /// voyage en paramètre (`ComposerPublishChoice`) jusqu'au brouillon. Un
-    /// écrivain qui renaîtrait referait bouger la SURFACE sous les doigts de
-    /// l'auteur — ce que la directive retire.
-    func test_host_neReaffectePlusLeFormatDOuverture() throws {
+    /// Au #6502 le format d'ouverture n'avait plus aucun écrivain, et le format
+    /// publié voyageait à côté (`armedPublishChoice`) : choisir « Story » au
+    /// chevron d'un post ne changeait ni la vue, ni les rails, ni la garde. La
+    /// règle R1 en fait UN état, `formatState`, écrit par deux gestes et deux
+    /// seulement : le chevron (`chooseArmedPublish`) et la bascule automatique
+    /// vers le réel (`applyReelAutoSwitch`). La PORTE (`doorFormat`) ne bouge
+    /// plus après la construction — c'est elle que la bascule retrouve.
+    func test_host_leChevronEstLeSeulEcrivainDuFormat() throws {
         let code = try hostCompact()
 
-        let affectations = occurrences(of: "currentFormat=", in: code)
-            - occurrences(of: "_currentFormat=", in: code)
-
-        XCTAssertTrue(
-            code.contains("_currentFormat=State(initialValue:"),
-            "Le format d'ouverture doit être initialisé une fois, à la construction — la garde ne mesurerait rien sinon."
-        )
-        XCTAssertEqual(affectations, 0,
-                       "Le format d'ouverture a retrouvé un écrivain : la surface bougerait avec le choix de publication.")
-        XCTAssertFalse(code.contains(compact("set: { self.currentFormat = $0 }")),
-                       "Plus aucune liaison n'écrit le format d'ouverture.")
+        XCTAssertTrue(code.contains("_formatState=State(initialValue:.opening(ouverture))"),
+                      "Le format s'initialise une fois, depuis la porte — la garde ne mesurerait rien sinon.")
+        XCTAssertTrue(code.contains("_doorFormat=State(initialValue:ouverture)"))
+        XCTAssertEqual(occurrences(of: "formatState=", in: code) - occurrences(of: "_formatState=", in: code), 2,
+                       "Le format a gagné ou perdu un écrivain : seuls le chevron et la bascule du réel l'écrivent.")
+        XCTAssertEqual(occurrences(of: "doorFormat=", in: code) - occurrences(of: "_doorFormat=", in: code), 0,
+                       "Le format de la PORTE a retrouvé un écrivain.")
+        XCTAssertFalse(code.contains("armedPublishChoice"),
+                       "Le second format, celui que seul le libellé lisait, est revenu.")
     }
 
     // MARK: - V1 — ce que le gate lit vraiment de la composition
@@ -2954,52 +2813,6 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
     // MARK: - La rangée d'outils : servie, câblée, et d'un seul geste
 
-    /// **Loi 4, côté MONTAGE.** La règle pure dit qu'un outil servi a un effet
-    /// (`ComposerDocumentTool.effect`, éprouvée dans
-    /// `ComposerDocumentSurfaceTests`). Elle ne dit rien de ce que le meuble en
-    /// fait : il pouvait servir la rangée et ne pas brancher `onTool`, ce qui
-    /// aurait peint une icône dont le tap ne déclenche RIEN — l'affordance sans
-    /// effet, arrivée par l'autre bout.
-    ///
-    /// Deux faits, donc, qu'aucune valeur ne peut dire : la surface reçoit un
-    /// `onTool`, et ce que ce rappel déclenche existe.
-    func test_leMeuble_cableLaRangeeQuIlSert_sansQuoiLIconeSeraitInerte() throws {
-        guard let surface = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
-            return XCTFail("`documentSurface` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
-        }
-        XCTAssertTrue(
-            compact(surface).contains("onTool:"),
-            "Le meuble sert une rangée d'outils sans brancher `onTool` : chaque icône peinte serait un "
-                + "bouton dont le tap ne fait rien (loi 4)."
-        )
-        XCTAssertNotNil(
-            declarationBody(startingAt: "func handleDocumentTool", in: try hostCode()),
-            "Le rappel `onTool` ne mène à aucun geste nommé dans le meuble."
-        )
-    }
-
-    /// La liste servie est une PROJECTION de la règle, jamais une seconde
-    /// liste écrite ici. Le jour où un outil gagnera son chemin, il suffira de
-    /// lui donner un `effect` ; une énumération recopiée dans le meuble aurait
-    /// exigé de penser aux DEUX endroits, et le second est celui qu'on oublie.
-    func test_laListeServie_projetteLaRegle_elleNeLaRecopiePas() throws {
-        guard let bloc = declarationBody(startingAt: "var servedDocumentTools", in: try hostCode()) else {
-            return XCTFail("`servedDocumentTools` est introuvable — la garde ne mesurerait RIEN.")
-        }
-        let corps = compact(bloc)
-        XCTAssertTrue(
-            corps.contains("ComposerDocumentTool.servedRow"),
-            "Le meuble n'énumère pas les outils : il sert ce que la règle déclare servi."
-        )
-        for outilEcritEnDur in [".photo", ".camera", ".emoji", ".document", ".place", ".microphone"] {
-            XCTAssertFalse(
-                corps.contains(outilEcritEnDur),
-                "Un outil (« \(outilEcritEnDur) ») est écrit en dur dans le meuble : c'est une seconde liste, "
-                    + "et elle divergera de `ComposerDocumentTool.effect` sans que rien ne le dise."
-            )
-        }
-    }
-
     /// **Ce que l'emoji ÉCRIT, et où.** Le seul effet servi aujourd'hui insère
     /// dans `documentText` — l'état que le brouillon emporte — et surtout PAS
     /// dans `moodEmoji`, qui est la matière DÉFINISSANTE d'un mood
@@ -3163,18 +2976,4 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// La surface doit continuer d'ÉCOUTER le texte : c'est l'autre porte, et
-    /// la retirer ferait de la frappe `@` un caractère ordinaire.
-    func test_laSurface_relaieChaqueFrappeAuControleurDeMention() throws {
-        let code = AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
-
-        XCTAssertTrue(
-            code.contains("mentionBox.controller.handleQuery(in: newText)"),
-            "la surface doit relayer chaque frappe au contrôleur — c'est ce qui ouvre la requête"
-        )
-        XCTAssertTrue(
-            code.contains("ComposerMentionStrip("),
-            "la bande de suggestions doit rester montée : c'est la réponse visible à la requête"
-        )
-    }
 }

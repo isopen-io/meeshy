@@ -739,6 +739,8 @@ extension MeeshyComposerHost {
             // points chez l'hôte, qui décollerait la scène de la zone.
             collapsedLineLimit: 10
         )
+        // Le plafond du serveur, compteur dès 4 000 (#13824, #13864).
+        .modifier(ComposerPostTextCap(text: $documentText))
     }
 
     /// **La description appartient à la SLIDE** (rappel porteur 2026-08-30,

@@ -83,7 +83,7 @@ extension MeeshyComposerHost {
     /// Seul le choix de l'AUTEUR voyage dans le brouillon : la bascule
     /// post → réel (#8793) se recalcule depuis la scène relue.
     var authorPublishChoice: ComposerPublishChoice? {
-        reelAutoSwitch.authorChose ? armedPublishChoice : nil
+        reelAutoSwitch.authorChose ? formatState.choice : nil
     }
 
     /// Le compte ET l'environnement courants : un brouillon n'est jamais relu

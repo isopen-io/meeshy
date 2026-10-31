@@ -135,19 +135,14 @@ final class ComposerDescriptionLayerTests: XCTestCase {
                         + "ferait une seconde, avec sa propre mémoire à faire diverger.")
     }
 
-    /// **Le meuble sert la MÊME capsule aux deux surfaces.** Deux sélecteurs
-    /// pour une seule `documentLanguage` auraient deux mémoires ; c'est la
-    /// dérive que #4621 a déjà payée sur la clé de son titre.
-    func test_leMeuble_sertLaMemeCapsule_ALaScene_etAuDocument() throws {
+    /// **Le meuble sert la MÊME capsule aux deux textes de la scène** — la
+    /// légende et « Texte du post » (#13864). Deux sélecteurs pour une seule
+    /// `documentLanguage` auraient deux mémoires ; c'est la dérive que #4621 a
+    /// déjà payée sur la clé de son titre.
+    func test_leMeuble_sertLaMemeCapsule_ALaLegende_etAuTexteDuPost() throws {
         let meuble = compact(try composer("MeeshyComposerHost.swift"))
-        // **La virgule est le DISCRIMINANT.** Sans elle, l'assertion serait un
-        // préfixe de `contentLanguageAccessory:AnyView(documentLanguageCapsule)`
-        // et passerait au vert alors que le site de la SCÈNE aurait disparu :
-        // une garde qui mesure l'autre moitié de ce qu'elle croit mesurer.
-        XCTAssertTrue(meuble.contains(",languageAccessory:AnyView(documentLanguageCapsule)"),
-                      "L'éditeur de description de la scène doit recevoir la capsule.")
-        XCTAssertTrue(meuble.contains("contentLanguageAccessory:AnyView(documentLanguageCapsule)"),
-                      "Le champ de contenu du document doit recevoir la MÊME capsule.")
+        XCTAssertEqual(meuble.components(separatedBy: ",languageAccessory:AnyView(documentLanguageCapsule)").count - 1, 2,
+                       "La légende et « Texte du post » doivent recevoir la MÊME capsule.")
     }
 
     /// **Le fusible.** Sans lui, les gardes NÉGATIVES qui suivent seraient vertes

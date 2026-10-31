@@ -135,8 +135,6 @@ nonisolated enum ComposerLabeledRailCopy {
             return String(localized: "composer.rail.title.slideDuration", defaultValue: "Durée", bundle: .main)
         case .legend:
             return String(localized: "composer.rail.title.legend", defaultValue: "Légende", bundle: .main)
-        case .writePost:
-            return String(localized: "composer.rail.title.writePost", defaultValue: "Post", bundle: .main)
         case .preview:
             return String(localized: "composer.rail.title.preview", defaultValue: "Aperçu", bundle: .main)
         case .pickBackground:

@@ -20,22 +20,22 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors, format: format, allowsCapture: true)
     }
 
-    private func portesAuRepos(_ format: ComposerFormat) -> (colonne: [ComposerRailDoor], plus: [ComposerRailDoor]) {
+    private func portesAuRepos(_ format: ComposerFormat)
+        -> (colonne: [ComposerRailDoor], plus: [ComposerRailDoor], socle: [ComposerRailDoor]) {
         let portes = offertes(format)
         let colonne = ComposerRestChrome.tools(offered: portes).compactMap(\.door)
         let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
-                                                        offeredDoors: portes,
-                                                        offersPostBody: portes.contains(.content),
-                                                        overflow: []))
+                                                        offeredDoors: portes, overflow: []))
         let parPlus = plus.compactMap(\.door) + (plus.contains(.background) ? [.background] : [])
-        return (colonne, parPlus)
+        let socle: [ComposerRailDoor] = ComposerPostTextPill.shows(format: format, sceneMounted: true) ? [.content] : []
+        return (colonne, parPlus, socle)
     }
 
     func test_chaquePorteOfferte_aUnChemin_surChaqueFormat() {
         for format in ComposerFormat.allComposable {
-            let (colonne, plus) = portesAuRepos(format)
+            let (colonne, plus, socle) = portesAuRepos(format)
             for porte in offertes(format) where porte != .description {
-                XCTAssertTrue(colonne.contains(porte) || plus.contains(porte),
+                XCTAssertTrue(colonne.contains(porte) || plus.contains(porte) || socle.contains(porte),
                               "\(format) : \(porte.rawValue) n'a plus aucun chemin au repos")
             }
         }
@@ -43,8 +43,9 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
 
     func test_aucunePorte_nADeuxChemins() {
         for format in ComposerFormat.allComposable {
-            let (colonne, plus) = portesAuRepos(format)
+            let (colonne, plus, socle) = portesAuRepos(format)
             XCTAssertTrue(Set(colonne).isDisjoint(with: Set(plus)), "\(format)")
+            XCTAssertTrue(Set(colonne + plus).isDisjoint(with: Set(socle)), "\(format)")
         }
     }
 
@@ -52,20 +53,23 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     /// s'ouvre par « ⋯ › Légende », servie en toute circonstance.
     func test_laLegende_estToujoursDansPlus() {
         let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: false, backgroundMedia: nil,
-                                                        offeredDoors: [], offersPostBody: false, overflow: []))
+                                                        offeredDoors: [], overflow: []))
         XCTAssertTrue(plus.contains(.legend))
     }
 
     func test_ceQuiSePose_estDansLaColonne_ceQuiQualifie_dansPlus() {
-        let (colonne, plus) = portesAuRepos(.story)
+        let (colonne, plus, _) = portesAuRepos(.story)
         XCTAssertEqual(colonne, [.text, .media, .sticker, .sound, .drawing])
         XCTAssertEqual(Set(plus), [.background, .mention, .hashtag, .place])
     }
 
-    func test_leCorpsDuPost_passeParPlus_enPost() {
-        let (colonne, plus) = portesAuRepos(.post)
-        XCTAssertFalse(colonne.contains(.content))
-        XCTAssertTrue(plus.contains(.content), "« ⋯ › Écrire le post » remplace le bouton du socle")
+    func test_leTexteDuPost_passeParLeSocle_enPostEtEnReel() {
+        for format in [ComposerFormat.post, .reel] {
+            let (colonne, plus, socle) = portesAuRepos(format)
+            XCTAssertFalse(colonne.contains(.content))
+            XCTAssertFalse(plus.contains(.content), "« Texte du post » vit au socle (#13864), plus dans ⋯")
+            XCTAssertEqual(socle, [.content])
+        }
     }
 
     func test_sansScene_aucunBoutonDePose() {

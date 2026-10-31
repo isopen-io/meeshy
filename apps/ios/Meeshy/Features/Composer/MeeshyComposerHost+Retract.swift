@@ -14,8 +14,8 @@ import MeeshyUI
 // depuis #4696 ». C'était faux, et mesurable : cette porte nettoyait DEUX
 // porteurs sur huit (`documentLocalMedia`, `documentTranscriptions`) et
 // n'appelait jamais `preUploads.forget(url:)` — le manque exact sur lequel ce
-// lot fonde un témoin entier. Sa jumelle `deleteForegroundSound(_:)` faisait de
-// même. Les deux passent désormais par le point d'entrée ci-dessous.
+// lot fonde un témoin entier. Elle passe désormais par le point d'entrée
+// ci-dessous.
 //
 // > **Un précédent cité de mémoire est une garde imaginaire.** La phrase
 // > rassurait sur la porte la plus proche du défaut, donc sur la seule qu'il
@@ -26,11 +26,10 @@ extension MeeshyComposerHost {
 
     /// **Le point d'entrée UNIQUE du retrait d'un média.**
     ///
-    /// Les CINQ gestes de suppression y arrivent : le rail trailing de la scène
+    /// Les gestes de suppression y arrivent : le rail trailing de la scène
     /// (`handleTrailingRailAction(.delete)`), le menu d'appui long sur un fond
     /// (`applyBackgroundMenu(.delete)`, #5041), la corbeille du rail de scènes
-    /// (`retractScene(at:)`) et les deux portes du SON (`deleteEditedSound()`,
-    /// `deleteForegroundSound(_:)`). Cinq sites qui retirent seraient cinq
+    /// (`retractScene(at:)`) et la porte du SON (`deleteEditedSound()`). Cinq sites qui retirent seraient cinq
     /// inventaires à tenir d'accord, donc un oubli à venir — c'est exactement la
     /// forme du défaut qu'on ferme ici, et deux des cinq gestes ne figuraient
     /// déjà plus dans l'inventaire qu'on en avait fait.

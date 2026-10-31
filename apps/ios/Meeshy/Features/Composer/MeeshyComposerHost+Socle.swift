@@ -35,12 +35,20 @@ extension MeeshyComposerHost {
     }
 
     var socle: some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
-            if paintedSocleZones.contains(.audience) { audienceChip }
-            Spacer()
-            // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
-            // qu'il n'y a rien à publier, et son toucher dit pourquoi.
-            if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
+        VStack(spacing: MeeshySpacing.xs) {
+            // **« Texte du post » au socle, au-dessus de l'envoi** (#13864, R2).
+            if socleServesPostText && !editsPostContent {
+                ComposerPostTextPillView(text: documentText, tint: tint.color) {
+                    handleRailDoor(.content)
+                }
+            }
+            HStack(spacing: MeeshySpacing.smPlus) {
+                if paintedSocleZones.contains(.audience) { audienceChip }
+                Spacer()
+                // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
+                // qu'il n'y a rien à publier, et son toucher dit pourquoi.
+                if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
+            }
         }
         .padding(.horizontal, ComposerSceneArrangementRelay(host: self).socleHorizontalPadding)
         // **Plus bas, sous la scène** : il
@@ -49,15 +57,10 @@ extension MeeshyComposerHost {
         .padding(.bottom, MeeshySpacing.xxs)
     }
 
-    /// **« ⋯ › Écrire le post »** (#13839) : la porte `.content`, servie sous la
-    /// scène d'un post. Le format lu est celui que la flèche PUBLIERA
-    /// (`armedChoice`) : une story armée « Post » doit offrir d'en écrire le corps.
+    /// **« Texte du post »** (#13864) : servi au socle d'un post et d'un réel
+    /// composés sur la scène — le format lu est celui que la flèche PUBLIERA.
     var socleServesPostText: Bool {
-        mountedComposerView == .scene
-            && ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
-                                        format: armedChoice.format,
-                                        allowsCapture: profile.allowsCapture)
-                .contains(.content)
+        ComposerPostTextPill.shows(format: armedChoice.format, sceneMounted: mountedComposerView == .scene)
     }
 
     // **La pastille de son n'est pas au socle.**
@@ -439,7 +442,7 @@ extension MeeshyComposerHost {
             if socleShowsLabels {
                 // La partie principale NOMME le format qui partira si
                 // l'auteur ne touche pas au chevron ; le mood garde « Publier ».
-                if let titre = ComposerPublishMenuCopy.publishTitle(for: armedChoice) {
+                if let titre = armedPublishTitle {
                     Text(titre)
                         .lineLimit(1)
                 } else {
@@ -577,7 +580,7 @@ extension MeeshyComposerHost {
                 publishCapsuleLabel
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(for: armedChoice)
+            .accessibilityLabel(armedPublishTitle
                                 ?? String(localized: "composer.socle.publish", bundle: .main)),
             chevron: publishMenuEntries.map { entries in
                 ComposerPublishChevron(entries: entries, armed: armedChoice,
@@ -590,10 +593,15 @@ extension MeeshyComposerHost {
     /// **Ce que la partie principale publie** — la lecture de
     /// `ComposerPublishMenuRule.armed`, jamais une condition écrite dans le corps.
     var armedChoice: ComposerPublishChoice {
-        ComposerPublishMenuRule.armed(chosen: armedPublishChoice,
-                                      defaultFormat: selectedFormat,
-                                      entries: publishMenuEntries,
-                                      companionReelOffered: companionReelOffered)
+        formatState.armedChoice(offered: profile.offeredFormats,
+                                entries: publishMenuEntries,
+                                companionReelOffered: companionReelOffered)
+    }
+
+    /// « Publier la story / le post / le réel » — le libellé que porte la table
+    /// unique des variantes (`ComposerFormatVariant`, #13864).
+    var armedPublishTitle: String? {
+        ComposerFormatVariant.of(armedChoice.format).publishTitle(alsoAsReel: armedChoice.alsoAsReel)
     }
 
     /// **La story peut-elle partir AUSSI en réel ?** — la lecture de

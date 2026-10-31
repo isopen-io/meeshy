@@ -54,8 +54,7 @@ final class ComposerBackgroundDoorTests: XCTestCase {
             let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                   format: format, allowsCapture: true)
             let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
-                                                            offeredDoors: portes, offersPostBody: false,
-                                                            overflow: []))
+                                                            offeredDoors: portes, overflow: []))
             XCTAssertTrue(plus.contains(.background),
                           "#13839 : le fond s'ouvre par « ⋯ › Fond », sur tout format qui a une scène")
         }

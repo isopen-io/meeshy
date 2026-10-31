@@ -70,17 +70,16 @@ nonisolated enum ComposerReelAutoSwitch {
         return .keep
     }
 
-    static func applying(_ decision: Decision,
-                         to state: State,
-                         armed: ComposerPublishChoice?) -> (armed: ComposerPublishChoice?, state: State) {
+    static func applying(_ decision: Decision, to state: State, format: ComposerFormatState,
+                         door: ComposerFormat) -> (format: ComposerFormatState, state: State) {
         switch decision {
         case .keep:
-            return (armed, state)
+            return (format, state)
         case .armReel:
-            return (ComposerPublishChoice(format: .reel, layout: nil),
+            return (format.choosing(ComposerPublishChoice(format: .reel, layout: nil)),
                     State(authorChose: state.authorChose, autoArmed: true))
         case .disarm:
-            return (nil, State(authorChose: state.authorChose, autoArmed: false))
+            return (.opening(door), State(authorChose: state.authorChose, autoArmed: false))
         }
     }
 
@@ -112,13 +111,13 @@ extension MeeshyComposerHost {
     /// l'annonce VoiceOver le disent à qui ne la regarde pas.
     func applyReelAutoSwitch(_ input: ComposerReelAutoSwitch.Input) {
         let decision = ComposerReelAutoSwitch.decide(demands: input.demands,
-                                                     defaultFormat: selectedFormat,
+                                                     defaultFormat: doorFormat,
                                                      state: reelAutoSwitch,
                                                      reelChoosable: input.reelChoosable)
         guard decision != .keep else { return }
-        let (choix, etat) = ComposerReelAutoSwitch.applying(decision, to: reelAutoSwitch,
-                                                           armed: armedPublishChoice)
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { armedPublishChoice = choix }
+        let (format, etat) = ComposerReelAutoSwitch.applying(decision, to: reelAutoSwitch,
+                                                            format: formatState, door: doorFormat)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { formatState = format }
         reelAutoSwitch = etat
         guard decision == .armReel else { return }
         HapticFeedback.medium()
@@ -128,7 +127,7 @@ extension MeeshyComposerHost {
     /// **Le choix de l'auteur au chevron** : il arme ce qu'il a choisi ET
     /// verrouille la composition contre toute bascule automatique.
     func chooseArmedPublish(_ choice: ComposerPublishChoice) {
-        armedPublishChoice = choice
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { formatState = formatState.choosing(choice) }
         reelAutoSwitch = ComposerReelAutoSwitch.authorChose(reelAutoSwitch)
     }
 }

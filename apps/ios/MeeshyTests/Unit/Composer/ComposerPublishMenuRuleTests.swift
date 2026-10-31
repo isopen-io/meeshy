@@ -210,9 +210,10 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
         XCTAssertTrue(fleche.contains("onChoose:{chooseArmedPublish($0)}"),
                       "Le chevron RETIENT le choix ; il ne publie pas.")
         // #8793 : retenir le choix, c'est l'ARMER et verrouiller la bascule
-        // automatique vers le réel — jamais le publier.
+        // automatique vers le réel — jamais le publier. #13864 : armer, c'est
+        // ÉCRIRE l'unique format, que la vue, les rails et la garde lisent.
         let choix = compact(try XCTUnwrap(bloc("func chooseArmedPublish(", dans: try hostCode())))
-        XCTAssertTrue(choix.contains("armedPublishChoice=choice"))
+        XCTAssertTrue(choix.contains("formatState=formatState.choosing(choice)"))
         XCTAssertFalse(choix.contains("Publish(choice)"), "Choisir ne publie pas.")
         XCTAssertFalse(fleche.contains("onPublish:"), "Le chevron ne publie plus.")
         XCTAssertTrue(fleche.contains("requestSoclePublish(armedChoice)"),

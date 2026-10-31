@@ -109,8 +109,7 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
             let portes = ComposerRailDoor.offered(served: Set(ComposerRailDoor.canonicalRail),
                                                   format: format, allowsCapture: true)
             let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
-                                                            offeredDoors: portes, offersPostBody: false,
-                                                            overflow: []))
+                                                            offeredDoors: portes, overflow: []))
                 .compactMap(\.door)
             for porte in outilsMobiles where portes.contains(porte) {
                 XCTAssertTrue(plus.contains(porte), "\(format) : \(porte.rawValue) manque à ⋯")

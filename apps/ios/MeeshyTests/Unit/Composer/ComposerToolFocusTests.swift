@@ -209,13 +209,6 @@ final class ComposerToolFocusTests: XCTestCase {
         XCTAssertFalse(editeur.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de disque dans l'éditeur d'objet")
         XCTAssertTrue(editeur.contains(".foregroundStyle(ComposerFloatingRailInk.floating(active:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)))"))
         XCTAssertTrue(editeur.contains(".frame(width:44,height:44)"))
-
-        let document = try source("Meeshy/Features/Composer/ComposerDocumentSurface.swift")
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(document.contains("privatefunctoolButton("), "la tuile d'outil du document est introuvable")
-        XCTAssertFalse(document.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de cercle dans la rangée du document")
-        XCTAssertTrue(document.contains(".foregroundColor(ComposerFloatingRailInk.floating(active:showColorPalette))"),
-                      "la palette ouverte passe au jaune")
     }
 
     private func source(_ chemin: String) throws -> String {

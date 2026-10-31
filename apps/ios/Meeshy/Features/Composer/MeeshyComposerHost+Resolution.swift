@@ -31,7 +31,6 @@ import MeeshyUI
 /// DANS l'unité que `AppSourceGuard.composerHostSource()` lit, donc les gardes
 /// qui ancrent sur `var reelGate`, `var mountedSurface`,
 /// `ComposerChromeOwnership.owner(for: mountedSurface)` ou
-/// `Binding(get: { self.selectedFormat }, set: { self.currentFormat = $0 })`
 /// restent vivantes sans qu'aucune n'ait à être repointée. Rien n'est
 /// `private` ici, et rien ne l'était avant : ces membres étaient déjà lus
 /// depuis `+Surfaces`, `+Socle`, `+Audience` et `+Intake`.
@@ -85,17 +84,14 @@ extension MeeshyComposerHost {
     // MARK: - Le format qui gouverne, et la surface qu'il monte
     /// Le format qui GOUVERNE — surface montée et type publié.
     ///
-    /// Il n'est pas `currentFormat` : l'offre respire (le réel n'est offert que
+    /// Il n'est pas `formatState.format` brut : l'offre respire (le réel n'est offert que
     /// tant que la composition qualifie), et retirer une image sous une
     /// sélection `.reel` laisserait le meuble sur un format que la porte
     /// n'offre plus. `resolvedSelection` le ramène au premier format offert,
     /// qui est toujours celui de la porte (invariant de C1). C'est la règle
     /// écrite avec l'éventail, et jusqu'ici jamais exercée hors de son test.
     var selectedFormat: ComposerFormat {
-        ComposerFormatFanPolicy.resolvedSelection(
-            current: currentFormat,
-            offeredFormats: profile.offeredFormats
-        )
+        formatState.selectedFormat(offered: profile.offeredFormats)
     }
 
     /// La surface MONTÉE — l'unique lecture de la règle de routage dans ce

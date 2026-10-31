@@ -645,7 +645,23 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: documentFormat == .story ? nil : .editPostSheet
             )
 
-        case .draft, .share:
+        // **Le partage pose déjà son média : il s'ouvre comme une porte SEMÉE**
+        // (#13864, R1). `.resume` le montait sur l'atelier du SDK, une autre vue
+        // que la scène du meuble ; sa graine (`ShareComposeDoor` → `mediaSeed`)
+        // entre désormais par `ComposerSeedIngestion`, comme le média d'une
+        // conversation.
+        case .share:
+            return ComposerProfile(
+                initialFormat: .post,
+                offeredFormats: plusReel([.post, .story]),
+                showsSlides: true,
+                showsTimeline: true,
+                opensWith: .mediaSeeded,
+                allowsCapture: true,
+                routesToLegacy: nil
+            )
+
+        case .draft:
             // **Deux portes DÉCLARÉES SANS APPELANT** — dites ici pour qu'aucune
             // session ne les monte en croyant qu'elles sont servies :
             //
@@ -664,8 +680,8 @@ nonisolated extension ComposerProfile {
             //
             // `.post` est un état TRANSITOIRE — la table reste une fonction de
             // l'origine, elle n'ouvre pas le document pour le deviner. Le host ne
-            // rebascule pas au format du document une fois celui-ci chargé : rien
-            // ne réaffecte `currentFormat` après la construction du host, et un
+            // rebascule pas au format du document une fois celui-ci chargé : seul
+            // le chevron de « Publier » réécrit `formatState` (#13864), et un
             // commentaire qui énoncerait un invariant que le code ne tient pas
             // deviendrait la loi que lirait la session suivante.
             //

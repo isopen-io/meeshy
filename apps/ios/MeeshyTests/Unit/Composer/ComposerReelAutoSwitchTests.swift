@@ -115,24 +115,26 @@ final class ComposerReelAutoSwitchTests: XCTestCase {
     // MARK: - Ce que le geste fait de l'état
 
     func test_applying_armReel_armeLeReelEtLeNote() {
-        let (choix, etat) = ComposerReelAutoSwitch.applying(.armReel, to: .init(), armed: nil)
-        XCTAssertEqual(choix, ComposerPublishChoice(format: .reel, layout: nil))
+        let (format, etat) = ComposerReelAutoSwitch.applying(.armReel, to: .init(),
+                                                              format: .opening(.post), door: .post)
+        XCTAssertEqual(format.choice, ComposerPublishChoice(format: .reel, layout: nil))
         XCTAssertEqual(etat, .init(authorChose: false, autoArmed: true))
     }
 
-    func test_applying_disarm_rendLeChoixDeLaPorte() {
-        let (choix, etat) = ComposerReelAutoSwitch.applying(
+    func test_applying_disarm_rendLeFormatDeLaPorte() {
+        let (format, etat) = ComposerReelAutoSwitch.applying(
             .disarm, to: .init(authorChose: false, autoArmed: true),
-            armed: ComposerPublishChoice(format: .reel, layout: nil))
-        XCTAssertNil(choix)
+            format: ComposerFormatState.opening(.post).choosing(ComposerPublishChoice(format: .reel, layout: nil)),
+            door: .post)
+        XCTAssertEqual(format, .opening(.post))
         XCTAssertEqual(etat, .init())
     }
 
-    func test_applying_keep_neTouchePasAuChoix() {
-        let arme = ComposerPublishChoice(format: .post, layout: nil)
-        let (choix, etat) = ComposerReelAutoSwitch.applying(.keep, to: .init(authorChose: true, autoArmed: true),
-                                                             armed: arme)
-        XCTAssertEqual(choix, arme)
+    func test_applying_keep_neTouchePasAuFormat() {
+        let choisi = ComposerFormatState.opening(.story).choosing(ComposerPublishChoice(format: .post, layout: nil))
+        let (format, etat) = ComposerReelAutoSwitch.applying(.keep, to: .init(authorChose: true, autoArmed: true),
+                                                              format: choisi, door: .story)
+        XCTAssertEqual(format, choisi)
         XCTAssertEqual(etat, .init(authorChose: true, autoArmed: true))
     }
 

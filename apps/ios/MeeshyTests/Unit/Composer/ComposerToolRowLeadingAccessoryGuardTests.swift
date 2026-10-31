@@ -15,153 +15,17 @@ import XCTest
 /// stacker par-dessus : deux enfants d'un `HStack` ne se superposent jamais,
 /// par construction, quelle que soit la taille — c'est la rangée elle-même
 /// qui garantit l'absence de chevauchement, pas une mesure de frame au cas
-/// par cas. Cette garde le prouve par la SOURCE (même patron que
-/// `FocalDynamicTypeTests` : suite tournée sans UIKit réel, R5/R15) plutôt que
-/// par une capture d'écran.
+/// par cas. La rangée et sa surface sont parties au #13864 (un post se compose
+/// sur la scène) ; la garde garde ce qui reste vrai : le lieu a UN site.
 final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
-
-    private func surfaceSource() throws -> String {
-        AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
-    }
 
     private func hostSource() throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
-    private func surfaceURL() -> URL {
-        composerRoot().appendingPathComponent("ComposerDocumentSurface.swift")
-    }
-
-
-    private func composerRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Composer")
-    }
-
-    /// Le corps d'une déclaration par appariement d'accolades — même patron que
-    /// `ComposerDocumentSurfaceTests.corpsDeDeclaration`. `nil` quand l'ancre a
-    /// disparu : l'appelant fait alors rougir, jamais passer en silence.
-    private func body(of anchor: String, in code: String) -> String? {
-        guard let start = code.range(of: anchor) else { return nil }
-        var depth = 0
-        var result = ""
-        for character in code[start.lowerBound...] {
-            result.append(character)
-            if character == "{" { depth += 1 }
-            if character == "}" {
-                depth -= 1
-                if depth == 0 { return result }
-            }
-        }
-        return nil
-    }
-
-    // MARK: - `ComposerDocumentSurface` expose un slot de tête nommé
-
-    func test_composerDocumentSurface_declaresATypedLeadingAccessoryProperty() throws {
-        let source = try surfaceSource()
-        XCTAssertTrue(
-            source.contains("var toolRowLeadingAccessory: AnyView? = nil"),
-            "`ComposerDocumentSurface` doit déclarer `toolRowLeadingAccessory` comme propriété stockée "
-                + "(`AnyView?`, défaut `nil`) — un slot nommé qu'une assertion peut cibler, pas une condition "
-                + "écrite en ligne dans `toolRow` qu'aucun test ne pourrait viser."
-        )
-    }
-
-    // MARK: - `toolRow` rend le slot DANS le même HStack que les icônes
-
-    func test_toolRow_rendersLeadingAccessoryInsideItsHStack_aheadOfTheTrailingOne() throws {
-        let source = try surfaceSource()
-        guard let toolRow = body(of: "private var toolRow: some View {", in: source) else {
-            return XCTFail("`toolRow` introuvable — la garde ne mesurerait rien.")
-        }
-        XCTAssertTrue(
-            toolRow.contains("toolRowLeadingAccessory"),
-            "`toolRow` ne rend plus `toolRowLeadingAccessory` : le chip de tête (lieu, ou tout autre état actif) "
-                + "n'aurait plus de place réservée dans la rangée, et redeviendrait un overlay séparé — la "
-                + "source même du chevauchement #3903."
-        )
-        // `accessoryRange` est cherché APRÈS `hstackRange` (revue Opus
-        // 2026-08-27) : la condition qui montre `toolRow` cite désormais
-        // `toolRowLeadingAccessory != nil` (pour ne pas cacher le chip quand
-        // `tools` est vide) — une première occurrence LÉGITIME avant le
-        // `HStack`, que `range(of:)` sans borne aurait prise pour LE slot.
-        // **Les OUTILS ont quitté cette rangée** (2026-09-06). Le repère de fin
-        // était `ForEach(tools` ; les icônes vivent désormais dans `toolRail`,
-        // une COLONNE verticale, et les deux accessoires sont restés en bas près
-        // du socle. Ce n'est pas une perte : la puce de lieu et la capsule de
-        // langue disent d'où l'on publie et dans quelle langue — des métadonnées
-        // de la PUBLICATION, pas des outils de composition. C'est la répartition
-        // par NIVEAU du `CLAUDE.md` iOS (§ « les trois zones du plateau »).
-        //
-        // > Le repère qui disait « slot de TÊTE » a déménagé ; la TÊTE, elle,
-        // > existe toujours. Ce qui la définit est désormais la symétrie avec le
-        // > slot de QUEUE, dans le même `HStack` — et cette symétrie survit au
-        // > départ des icônes, alors qu'un repère posé sur elles ne le pouvait
-        // > pas.
-        guard let hstackRange = toolRow.range(of: "HStack(spacing: 16) {"),
-              let accessoryRange = toolRow.range(
-                of: "toolRowLeadingAccessory", range: hstackRange.upperBound..<toolRow.endIndex
-              ),
-              let trailingRange = toolRow.range(
-                of: "toolRowTrailingAccessory", range: hstackRange.upperBound..<toolRow.endIndex
-              ) else {
-            return XCTFail("Structure de `toolRow` inattendue — HStack ou l'un des deux accessoires introuvable.")
-        }
-        XCTAssertTrue(
-            hstackRange.lowerBound < accessoryRange.lowerBound,
-            "`toolRowLeadingAccessory` doit être rendu À L'INTÉRIEUR du `HStack` de `toolRow`, pas avant lui — "
-                + "sinon il resterait hors de la disposition qui garantit l'absence de chevauchement."
-        )
-        XCTAssertTrue(
-            accessoryRange.lowerBound < trailingRange.lowerBound,
-            "`toolRowLeadingAccessory` doit précéder `toolRowTrailingAccessory` : c'est le slot de TÊTE de la "
-                + "rangée, symétrique de la place qu'occupait l'ancien overlay `.bottomLeading`. Les deux dans "
-                + "le désordre remettraient la puce de lieu là où la capsule de langue est attendue."
-        )
-    }
-
-    // MARK: - Le meuble ne stacke plus le chip de lieu par-dessus toute la surface
-
-    func test_host_documentSurface_noLongerOverlaysTheLocationTileOnTheWholeSurface() throws {
-        let source = try hostSource()
-        guard let block = body(of: "var documentSurface: some View {", in: source) else {
-            return XCTFail("`documentSurface` introuvable dans le meuble — la garde ne mesurerait rien.")
-        }
-        XCTAssertFalse(
-            block.contains(".overlay(alignment: .bottomLeading)"),
-            "`documentSurface` pose encore un `.overlay(alignment: .bottomLeading)` — c'est exactement la "
-                + "cause du chevauchement #3903 (même z-niveau que la première icône de `toolRow`). Le chip de "
-                + "lieu doit désormais voyager par l'argument `toolRowLeadingAccessory:` de `ComposerDocumentSurface(`."
-        )
-        XCTAssertTrue(
-            block.contains("toolRowLeadingAccessory:"),
-            "`documentSurface` doit passer `toolRowLeadingAccessory:` à `ComposerDocumentSurface(` — sans cela "
-                + "le chip de lieu n'est plus affiché du tout."
-        )
-        // **#4034 a retiré la tuile de la rangée**, et l'assertion qui exigeait
-        // `documentLocationTile` a suivi son objet. Ce que #3903 protège — le
-        // lieu ne se STACKE plus par-dessus la surface — reste tenu par
-        // l'assertion négative ci-dessus ; ce que la tuile portait (le nom, le
-        // retrait) est désormais gardé par
-        // `NearbyDiscoverabilityControlFoldGuardTests`, à son nouveau site.
-        XCTAssertFalse(
-            block.contains("documentLocationTile"),
-            "La tuile de lieu de la rangée d'outils a été RETIRÉE au #4034 : le nom du lieu, son réglage et "
-                + "sa croix vivent dans l'entête du composant Position. La reconstruire ici remettrait la même "
-                + "information à deux endroits de l'écran."
-        )
-    }
-
-    /// **Le lieu a un site, et un seul (#4034).**
-    ///
-    /// La garde ci-dessus est NÉGATIVE : elle interdit l'ancien site sans rien
-    /// exiger du nouveau, et passerait au vert le jour où le lieu ne serait
-    /// peint NULLE PART. Celle-ci est sa moitié positive.
+    /// **Le lieu a un site, et un seul (#4034).** La rangée d'outils du
+    /// document est partie avec sa surface (#13864) ; reste la moitié positive :
+    /// le lieu est peint, et une seule fois.
     func test_host_paintsTheLocationExactlyOnce_inTheLocationCard() throws {
         let source = try hostSource()
         XCTAssertFalse(source.isEmpty, "Source du meuble vide — la garde serait verte par omission.")

@@ -250,16 +250,6 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// Ce que le meuble sert — une PROJECTION de la règle, jamais une liste
-    /// écrite ici. Le jour où un outil gagnera sa destination, il suffira de lui
-    /// donner un `effect` : une énumération recopiée ici aurait exigé de penser
-    /// aux DEUX endroits, et le second est celui qu'on oublie.
-    /// La rangée SERVIE dépend du format : une story n'a pas de champ de
-    /// contenu à outiller (`ComposerDocumentTool.servedRow(for:)`).
-    var servedDocumentTools: [ComposerDocumentTool] {
-        ComposerDocumentTool.servedRow(for: selectedFormat)
-    }
-
     /// **Semer la première unité d'histoire.** Appelé au changement de format
     /// et au montage ; la règle décide, pas ce corps — c'est elle qui porte la
     /// raison de ne pas se fier à l'initialisation d'un autre module.
@@ -769,6 +759,16 @@ extension MeeshyComposerHost {
     /// parce que `documentLocalMedia` déclenche `syncPostMediaIntoSlides` par
     /// `adaptiveOnChange` — écrire la liste d'abord ferait courir la mécanique
     /// sur des cartes vides.
+    /// La porte du fil promet qu'on écrit d'emblée : sur la scène d'un post,
+    /// c'est « Texte du post » qui s'ouvre, clavier levé (#13864).
+    func openPostTextAtDoorIfDue() {
+        guard !postTextOpenedAtDoor,
+              ComposerPostTextPill.opensOnAppear(opening: profile.opensWith, format: selectedFormat) else { return }
+        postTextOpenedAtDoor = true
+        editsSceneDescription = false
+        editsPostContent = true
+    }
+
     func ingestSeedIntoDocumentIfNeeded() {
         guard !seedIngestedIntoDocument,
               let plan = ComposerSeedIngestion.plan(for: mediaSeed) else { return }

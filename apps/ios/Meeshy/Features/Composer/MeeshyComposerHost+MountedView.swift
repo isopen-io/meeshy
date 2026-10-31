@@ -28,7 +28,7 @@ extension MeeshyComposerHost {
     ///
     /// Le socle, lui, ne dépend d'aucune des trois : il reste sous toutes
     /// (loi 5 — le socle ne bouge jamais).
-    /// **Quatre vues, une par contexte** (#4070). La règle est PURE
+    /// **Trois vues** (#4070, #13864). La règle est PURE
     /// (`ComposerMountedView`) et séparée du routage : celui-ci dit quelle
     /// SURFACE le format appelle, celle-là quelle VUE cette surface monte une
     /// fois qu'on sait s'il y a une scène.
@@ -70,21 +70,16 @@ extension MeeshyComposerHost {
                                         documentHasScene: documentHasScene)
     }
 
+    /// **La scène part-elle avec la publication ?** (#13864, R3) — distincte de
+    /// `sceneIsPresent` : un post texte seul MONTRE sa scène et part comme le
+    /// post texte d'avant.
+    var scenePublishes: Bool {
+        ComposerStoryCanvas.publishesScene(format: selectedFormat,
+                                           documentHasScene: documentHasScene)
+    }
+
     var mountedComposerView: ComposerMountedView {
-        ComposerMountedView.mounted(
-            surface: mountedSurface,
-            // **Une story a toujours son canvas** (directive porteur
-            // 2026-09-01). `documentHasScene` demande « y a-t-il de la matière
-            // à cadrer ? », la bonne question pour un post dont la scène est
-            // une incrustation optionnelle. Une story EST ses canvas : lui
-            // poser le prédicat du post la laisserait sur l'écran document tant
-            // qu'elle est vide — au moment précis où elle en a besoin.
-            //
-            // La substitution se fait ICI et pas dans `documentHasScene`, dont
-            // le MOOD est l'autre lecteur : y injecter le format ferait décider
-            // l'offre de formats par le format déjà choisi.
-            hasScene: sceneIsPresent
-        )
+        ComposerMountedView.mounted(surface: mountedSurface)
     }
 
     @ViewBuilder
@@ -94,8 +89,6 @@ extension MeeshyComposerHost {
             composerSurface
         case .scene:
             sceneSurface
-        case .document:
-            documentSurface
         case .mood:
             moodSurface
         }

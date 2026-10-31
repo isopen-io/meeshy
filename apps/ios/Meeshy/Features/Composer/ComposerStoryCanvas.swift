@@ -31,22 +31,29 @@ import MeeshySDK
 /// correctif futur aurait fait diverger sans qu'aucun témoin ne tombe.
 nonisolated enum ComposerStoryCanvas {
 
-    /// **La story montre TOUJOURS son canvas.**
+    /// **La story, le post et le réel montrent TOUJOURS leur scène** (#13864, R1).
     ///
-    /// `documentHasScene` répond « y a-t-il de la matière à cadrer ? » — un fond
-    /// choisi, un média monté en slide. C'est la bonne question pour un POST,
-    /// dont la scène est une INCRUSTATION optionnelle dans un document. Ce n'en
-    /// est pas une pour une story, qui n'est rien d'autre que ses canvas : lui
-    /// appliquer le prédicat du post la laisserait sur l'écran document tant
-    /// qu'elle est vide, c'est-à-dire exactement au moment où l'auteur en a
-    /// besoin.
+    /// Le post n'a plus d'écran document à côté de la scène : un post vide ouvert
+    /// depuis le fil se compose sur la scène, comme la story. `documentHasScene`
+    /// ne décide plus de ce qu'on MONTRE ; il reste la question de ce qui PART
+    /// (`publishesScene`).
     ///
     /// **La question du MOOD reste posée à `documentHasScene`**, volontairement.
     /// `ComposerMoodGate` demande si la composition ressemble à un mood ; y
-    /// injecter « et c'est une story » ferait décider l'OFFRE de formats par le
-    /// format déjà choisi — une boucle, et l'éventail se refermerait sous les
-    /// doigts de l'auteur.
+    /// injecter le format ferait décider l'OFFRE de formats par le format déjà
+    /// choisi — une boucle, et l'éventail se refermerait sous les doigts de
+    /// l'auteur.
     static func showsCanvas(format: ComposerFormat, documentHasScene: Bool) -> Bool {
+        ComposerFormatVariant.of(format).composesOnScene || documentHasScene
+    }
+
+    /// **La scène PART-elle avec la publication ?** (#13864, R3.)
+    ///
+    /// Montrer la scène d'un post ne veut pas dire la publier : un post qui ne
+    /// porte que son texte, sans fond ni objet, part comme le post texte d'avant,
+    /// charge inchangée. Dès qu'un fond, un média ou un objet existe, il part en
+    /// scène. Une story EST ses canvas : elle part toujours avec eux.
+    static func publishesScene(format: ComposerFormat, documentHasScene: Bool) -> Bool {
         format == .story || documentHasScene
     }
 

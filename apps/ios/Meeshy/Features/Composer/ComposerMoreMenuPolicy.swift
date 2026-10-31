@@ -16,7 +16,6 @@ nonisolated enum ComposerMoreMenuEntry: String, CaseIterable, Equatable, Sendabl
     case animation
     case slideDuration
     case legend
-    case writePost
     case mention
     case hashtags
     case place
@@ -44,7 +43,6 @@ nonisolated enum ComposerMoreMenuEntry: String, CaseIterable, Equatable, Sendabl
     /// rail ouvrait, par le même `handleRailDoor`.
     var door: ComposerRailDoor? {
         switch self {
-        case .writePost: return .content
         case .mention: return .mention
         case .hashtags: return .hashtag
         case .place: return .place
@@ -63,7 +61,6 @@ nonisolated enum ComposerMoreMenuPolicy {
         var addsSlides: Bool
         var backgroundMedia: ComposerSceneEffects.Background?
         var offeredDoors: [ComposerRailDoor]
-        var offersPostBody: Bool
         var overflow: [ComposerOverflowEntry]
     }
 
@@ -72,7 +69,6 @@ nonisolated enum ComposerMoreMenuPolicy {
         let scene: [ComposerMoreMenuEntry] = (context.addsSlides ? [.addSlide] : [])
             + background(context.backgroundMedia, offersPalette: doors.contains(.background))
             + [.animation, .slideDuration, .legend]
-            + (context.offersPostBody ? [.writePost] : [])
         let publication = [ComposerMoreMenuEntry.mention, .hashtags, .place]
             .filter { entree in entree.door.map(doors.contains) ?? false }
         let export = context.overflow.map(ComposerMoreMenuEntry.init)
@@ -144,7 +140,7 @@ nonisolated enum ComposerMoreMenuCopy {
             return String(localized: "composer.more.pickBackground", defaultValue: "Choisir un fond", bundle: .main)
         case .preview, .clearAll:
             return ComposerOverflowCopy.label(entry == .preview ? .preview : .clearAll)
-        case .writePost, .mention, .hashtags, .place:
+        case .mention, .hashtags, .place:
             return ""
         }
     }
@@ -166,7 +162,7 @@ nonisolated enum ComposerMoreMenuCopy {
         case .saveToPhotos: return ComposerOverflowCopy.icon(.saveToPhotos)
         case .share: return ComposerOverflowCopy.icon(.share)
         case .clearAll: return ComposerOverflowCopy.icon(.clearAll)
-        case .writePost, .mention, .hashtags, .place: return ""
+        case .mention, .hashtags, .place: return ""
         }
     }
 

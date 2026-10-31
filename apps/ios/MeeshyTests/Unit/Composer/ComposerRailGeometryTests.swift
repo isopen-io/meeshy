@@ -163,40 +163,8 @@ final class ComposerRailGeometryTests: XCTestCase {
 
     // MARK: - La garde de SOURCE : la règle est-elle CONSOMMÉE ?
 
-    private func surfaceSource() throws -> String {
-        return AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
-    }
-
     private func compact(_ text: String) -> String {
         text.components(separatedBy: .whitespacesAndNewlines).joined()
-    }
-
-    /// **Le fusible.** Sans lui, les deux gardes ci-dessous seraient vertes par
-    /// OMISSION le jour où le chemin du fichier change.
-    func test_laSourceDeLaSurface_estLisibleEtNonVide() throws {
-        let source = try surfaceSource()
-        XCTAssertGreaterThan(source.count, 5_000,
-                             "Source introuvable ou vide : les gardes qui suivent ne prouveraient rien.")
-        XCTAssertTrue(source.contains("EmbeddedSceneCanvas"),
-                      "Ce n'est pas le bon fichier.")
-    }
-
-    /// Une règle que personne n'applique ne règle rien : la surface doit
-    /// DEMANDER son encastrement à `ComposerRailGeometry`.
-    func test_laSurface_demandeSonEncastrementALaRegle() throws {
-        XCTAssertTrue(
-            compact(try surfaceSource()).contains("ComposerRailGeometry.sceneInset(railsShown:"),
-            "La scène doit lire son encastrement de la règle, jamais d'un littéral.")
-    }
-
-    /// **La garde NÉGATIVE, et c'est elle qui a de la valeur.** Elle rougit le
-    /// jour où quelqu'un recode 14 pt en dur sur la scène — le geste exact que
-    /// ce lot existe pour rendre impossible, et que rien d'autre ne
-    /// signalerait : le rendu serait « juste un peu plus large ».
-    func test_lEncastrementDeLaScene_nEstPlusUnLitteral() throws {
-        XCTAssertFalse(
-            compact(try surfaceSource()).contains(".padding(.horizontal,14)"),
-            "L'encastrement de la scène est revenu à un littéral : la raison qui le produit a disparu avec.")
     }
 
     // MARK: - Le volet de description DÉGAGE les rails flottants (#8388)

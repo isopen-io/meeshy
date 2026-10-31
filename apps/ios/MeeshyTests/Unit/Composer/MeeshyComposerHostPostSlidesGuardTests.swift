@@ -343,7 +343,8 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         let reposDeScene = try source("ComposerSceneOverlayChrome.swift")
         XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: reposDeScene), 0,
                        "le chrome du repos redéclare un rail de slides au lieu de relayer le slot")
-        for surface in ["ComposerDocumentSurface.swift", "ComposerSceneSurface.swift"] {
+        // #13864 : la surface document est partie — seule la scène relaie le slot.
+        for surface in ["ComposerSceneSurface.swift"] {
             let code = try source(surface)
             let monteLeSlot = surface == "ComposerSceneSurface.swift"
                 ? code.contains("slideRow: slideRailSlot") : code.contains("ComposerTopBar(")
@@ -404,9 +405,8 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         XCTAssertTrue(compacted.contains("ComposerOverflowPolicy.entries("),
             "Les entrées doivent venir de la RÈGLE, lue une seule fois.")
         XCTAssertTrue(
-            compacted.contains("overflowMenu:documentOverflowEntries.isEmpty?nil:AnyView(overflowMenu)"),
-            "Aucune entrée ⇒ AUCUN bouton. Monter le menu quand même donnerait un `⋯` qui s'ouvre sur "
-                + "le vide."
+            compacted.contains("overflow:documentOverflowEntries"),
+            "Le ⋯ de la scène lit les entrées de la RÈGLE — jamais une liste écrite ici."
         )
     }
 

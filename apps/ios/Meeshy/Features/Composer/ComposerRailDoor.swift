@@ -265,7 +265,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         case .description:
             return .slide
         // Le CORPS du post vise la publication entière, dans tous les formats
-        // où il existe — c'est-à-dire le Post seul. Aucune bascule : il n'a rien
+        // où il existe — le post et le réel. Aucune bascule : il n'a rien
         // à poser, donc rien qui puisse devenir un objet.
         case .content:
             return .publication
@@ -426,17 +426,14 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// même bascule que `level(for:)`, vue depuis la présence plutôt que
     /// depuis le niveau.
     ///
-    /// **Le CORPS (`.content`) n'existe QU'EN POST**. Ailleurs, le texte
-    /// de la slide EST le contenu de la publication — lui offrir une porte
-    /// distincte ouvrirait, là aussi, un second champ pour un seul texte : la
-    /// faute symétrique de celle que `.description` évite en Story.
-    ///
-    /// Le prédicat est écrit `format != .post`, jamais une liste des trois
-    /// autres : un cinquième format sera exclu par défaut, ce qui est le sens
-    /// de la règle — seul le Post a un contenu SÉPARÉ de ses canvas.
+    /// **Le CORPS (`.content`) — « Texte du post » — existe en post ET en réel**
+    /// (#13864, R2) : c'est `ComposerFormatVariant.writesPostText` qui le dit,
+    /// la table unique des variantes. Une story n'a pas de texte hors de ses
+    /// scènes ; le réel, lui, porte un texte de publication (sa légende de scène
+    /// ne sert que de repli, `ReelPublishedContent`).
     private static func removedFromFormat(_ format: ComposerFormat) -> Set<ComposerRailDoor> {
         var retirees: Set<ComposerRailDoor> = format == .story ? [.description] : []
-        if format != .post { retirees.insert(.content) }
+        if !ComposerFormatVariant.of(format).writesPostText { retirees.insert(.content) }
         return retirees
     }
 

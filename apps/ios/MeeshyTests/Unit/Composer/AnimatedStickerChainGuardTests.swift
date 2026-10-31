@@ -94,13 +94,12 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
                       "le canvas du composer doit recevoir les octets animés du modèle de vue.")
     }
 
-    /// Les trois surfaces du meuble montent la MÊME scène embarquée. Une seule
-    /// non câblée ferait animer le sticker dans une surface et le figerait dans
-    /// la voisine — l'écart le plus difficile à nommer pour un utilisateur.
-    func test_lesTroisSurfacesDuMeuble_passentLesOctets() throws {
+    /// Les surfaces du meuble montent la MÊME scène embarquée. Une seule non
+    /// câblée ferait animer le sticker dans une surface et le figerait dans la
+    /// voisine — l'écart le plus difficile à nommer pour un utilisateur.
+    func test_lesSurfacesDuMeuble_passentLesOctets() throws {
         for chemin in [
             "Meeshy/Features/Composer/ComposerSceneSurface.swift",
-            "Meeshy/Features/Composer/ComposerDocumentSurface.swift",
             "Meeshy/Features/Composer/ComposerObjectEditorView.swift"
         ] {
             let source = try appSource(chemin)

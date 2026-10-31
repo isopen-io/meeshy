@@ -242,7 +242,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
             .deletingLastPathComponent()   // .../apps
             .deletingLastPathComponent()   // racine du dépôt
         return [
-            racine.appendingPathComponent("apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface.swift"),
+            racine.appendingPathComponent("apps/ios/Meeshy/Features/Composer/ComposerSceneSurface.swift"),
             racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneCanvas.swift"),
             racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneInspector.swift")
         ]

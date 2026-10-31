@@ -94,7 +94,6 @@ final class PresenceManagerTests: XCTestCase {
     private static let avatarsWithoutPresence: [String: String] = [
         "Auth/LinkSignInConfirmationSheet.swift": "soi — l'avatar du compte connecté",
         "Auth/Signup/SignupView+Card.swift": "soi — l'avatar du compte connecté",
-        "Composer/ComposerDocumentSurface.swift": "soi — l'avatar du compte connecté",
         "Auth/Views/AccountSwitcherSheet.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedView+Composer.swift": "soi — l'avatar du compte connecté",
         "Auth/Views/LoginView.swift": "soi — l'avatar du compte connecté",

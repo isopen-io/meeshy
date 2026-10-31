@@ -72,44 +72,6 @@ extension MeeshyComposerHost {
     /// ses témoins les épinglent. Ce qui change est le FAIT qu'on lui rapporte.
     var backgroundPaletteIsReachable: Bool { true }
 
-    /// **Le `⋯` de la barre haute (#4047).** Il ne peint QUE les entrées que la
-    /// règle sert — une entrée absente, jamais grisée.
-    ///
-    /// Le verre est le même que celui du `✕` et du chip de format, et pour la
-    /// même raison qu'eux le premier plan reste `textPrimary(isDark: true)` :
-    /// `glassControlForeground()` rendrait `indigo950` en thème clair, sur un
-    /// plateau qui est sombre en permanence.
-    ///
-    /// Il se monte par `ComposerTopBarMenu` (#10542), qui décide si ce visage
-    /// est le libellé du `Menu` ou se peint hors de lui : c'est ce qui le tient
-    /// sur l'axe de la croix et du `(+)` sous iOS 16 → 25.
-    var overflowMenu: some View {
-        ComposerTopBarMenu(label: ComposerOverflowCopy.menu) {
-            ForEach(Array(documentOverflowEntries.enumerated()), id: \.offset) { entry in
-                let item = entry.element
-                Button(role: item == .clearAll ? .destructive : nil) {
-                    if item.asksConfirmation { sceneClearAllAsked = true } else { perform(item) }
-                } label: {
-                    Label(ComposerOverflowCopy.label(item),
-                          systemImage: ComposerOverflowCopy.icon(item))
-                }
-            }
-        } face: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
-                .frame(width: ComposerControlMetrics.visualDiameter,
-                       height: ComposerControlMetrics.visualDiameter)
-                // Teinté du plateau, comme la croix qu'il encadre (#8370).
-                .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
-        }
-        .confirmationDialog(ComposerMoreMenuCopy.clearAllConfirm, isPresented: $sceneClearAllAsked,
-                            titleVisibility: .visible) {
-            Button(ComposerOverflowCopy.label(.clearAll), role: .destructive) { perform(.clearAll) }
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-        }
-    }
-
     /// **Ce que chaque entrée FAIT.** Séparé de ce qui les OFFRE : la règle dit
     /// lesquelles servir, cette fonction ce qu'elles emportent — et les deux se
     /// lisent sans monter une vue.

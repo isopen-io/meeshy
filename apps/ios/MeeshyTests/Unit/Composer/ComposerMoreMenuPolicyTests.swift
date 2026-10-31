@@ -14,12 +14,10 @@ final class ComposerMoreMenuPolicyTests: XCTestCase {
     private func contexte(addsSlides: Bool = true,
                           backgroundMedia: ComposerSceneEffects.Background? = nil,
                           doors: [ComposerRailDoor] = [.mention, .hashtag, .place, .background],
-                          offersPostBody: Bool = false,
                           overflow: [ComposerOverflowEntry] = []) -> ComposerMoreMenuPolicy.Context {
         ComposerMoreMenuPolicy.Context(addsSlides: addsSlides,
                                        backgroundMedia: backgroundMedia,
                                        offeredDoors: doors,
-                                       offersPostBody: offersPostBody,
                                        overflow: overflow)
     }
 
@@ -48,14 +46,6 @@ final class ComposerMoreMenuPolicyTests: XCTestCase {
     /// Republier et modifier une story publiée n'ajoutent pas de diapo.
     func test_entries_routeSansDiapo_pasDAjout() {
         XCTAssertFalse(ComposerMoreMenuPolicy.entries(contexte(addsSlides: false)).contains(.addSlide))
-    }
-
-    func test_entries_enPost_offreEcrireLePost_apresLaLegende() {
-        let entrees = ComposerMoreMenuPolicy.entries(contexte(offersPostBody: true))
-        let legende = try? XCTUnwrap(entrees.firstIndex(of: .legend))
-        let corps = try? XCTUnwrap(entrees.firstIndex(of: .writePost))
-        XCTAssertNotNil(corps)
-        XCTAssertEqual(corps, legende.map { $0 + 1 })
     }
 
     func test_entries_unePorteNonOfferte_nAPasDEntree() {
@@ -88,7 +78,7 @@ final class ComposerMoreMenuPolicyTests: XCTestCase {
         let debordement = ComposerOverflowPolicy.entries(hasBackground: true, hasMedia: true, hasText: true,
                                                          hasLocation: true, hasScene: true,
                                                          backgroundPickerIsReachable: false)
-        let entrees = ComposerMoreMenuPolicy.entries(contexte(backgroundMedia: .image, offersPostBody: true,
+        let entrees = ComposerMoreMenuPolicy.entries(contexte(backgroundMedia: .image,
                                                               overflow: debordement))
         XCTAssertEqual(entrees.count, Set(entrees).count)
     }
@@ -148,13 +138,4 @@ final class ComposerMoreMenuPolicyTests: XCTestCase {
         }
     }
 
-    func test_leMenuDuDocument_confirmeToutEffacer() throws {
-        let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Composer/MeeshyComposerHost+Overflow.swift"))
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("ifitem.asksConfirmation{sceneClearAllAsked=true}else{perform(item)}"),
-                      "le ⋯ du document efface encore tout sans demander")
-        XCTAssertTrue(code.contains(".confirmationDialog(ComposerMoreMenuCopy.clearAllConfirm"),
-                      "la confirmation n'est montée nulle part sur le ⋯ du document")
-    }
 }

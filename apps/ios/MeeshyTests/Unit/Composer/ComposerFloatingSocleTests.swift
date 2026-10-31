@@ -138,8 +138,6 @@ final class ComposerFloatingSocleTests: XCTestCase {
         XCTAssertTrue(code.contains("varsocle:someView"), "Source du socle introuvable — la garde ne mesurerait rien.")
         XCTAssertTrue(code.contains(".adaptiveLiquidGlass(in:Capsule(),tint:tint.color.opacity(0.55),interactive:true)"),
                       "L'audience doit porter un verre teinté du plateau.")
-        XCTAssertTrue(code.contains(".adaptiveLiquidGlass(in:Circle(),tint:tint.color.opacity(0.55),interactive:true)"),
-                      "L'œil doit porter un verre teinté du plateau.")
         XCTAssertFalse(code.contains(".adaptiveGlass(in:Capsule())"),
                        "Un verre nu dans le socle choisit seul sa luminance, et le libellé blanc s'y perd.")
     }
@@ -187,11 +185,4 @@ final class ComposerFloatingSocleTests: XCTestCase {
                       "Avec le verre natif, le visage reste le libellé du menu.")
     }
 
-    /// Le `⋯` du meuble passe par ce menu : un `Menu` nu y ramènerait le défaut.
-    func test_leDebordementDuMeuble_passeParLeMenuDeLaBarreHaute() throws {
-        let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(hote.contains("varoverflowMenu:someView{ComposerTopBarMenu(label:ComposerOverflowCopy.menu){"),
-                      "Le `⋯` doit se monter par `ComposerTopBarMenu`, jamais par un `Menu` nu.")
-    }
 }

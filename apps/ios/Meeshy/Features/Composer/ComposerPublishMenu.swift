@@ -89,9 +89,8 @@ nonisolated enum ComposerPublishMenuRule {
         ComposerFormatAvailability.verdicts(candidates: candidates, offered: offered,
                                             carriesMoreThanText: carriesMoreThanText)
             .map { verdict in
-                let deplie = verdict.format == .post
-                    && layoutsTravel
-                    && ComposerMosaicChoice.isServed(slideCount: slideCount, format: verdict.format)
+                let deplie = layoutsTravel
+                    && ComposerFormatVariant.of(verdict.format).offersLayouts(sceneCount: slideCount)
                 return Entry(format: verdict.format,
                              isChoosable: verdict.isChoosable,
                              reason: verdict.reason,

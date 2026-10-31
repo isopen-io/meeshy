@@ -167,7 +167,9 @@ final class ComposerMediaRetractionTests: XCTestCase {
             + "laissé seize témoins verts sur huit no-op.")
     }
 
-    /// **Les deux portes du SON passent par le point d'entrée unique** (#6577).
+    /// **La porte du SON passe par le point d'entrée unique** (#6577). Sa
+    /// jumelle, la carte de contenu du document, est partie avec la surface
+    /// document (#13864).
     ///
     /// Le premier lot affirmait que `deleteEditedSound()` « fait les deux
     /// moitiés depuis #4696 ». Mesuré : elle nettoyait DEUX porteurs sur huit et
@@ -178,9 +180,9 @@ final class ComposerMediaRetractionTests: XCTestCase {
     /// > Un précédent cité de mémoire est une garde imaginaire : la phrase
     /// > rassurait sur la porte la plus proche du défaut, donc sur la seule
     /// > qu'il fallait relire.
-    func test_lesDeuxPortesDuSon_passentParLePointUnique() throws {
+    func test_laPorteDuSon_passeParLePointUnique() throws {
         let source = try hostSource()
-        for porte in ["func deleteEditedSound(", "func deleteForegroundSound("] {
+        for porte in ["func deleteEditedSound("] {
             guard let corps = body(after: porte, in: source).map(compact) else {
                 return XCTFail("`\(porte)` introuvable — la garde ne mesurerait rien")
             }

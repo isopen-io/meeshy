@@ -27,12 +27,11 @@ final class ComposerSoundDestinationTests: XCTestCase {
         XCTAssertEqual(ComposerSoundDestination.forForeground(on: .atelier), .sceneChip)
     }
 
-    /// **Un document sans scène reçoit une CARTE.** L'objet de scène n'y serait
-    /// rendu par rien — le symétrique exact du défaut ci-dessus, et celui que
-    /// le chemin FICHIER produisait : il posait un objet de scène quoi qu'il
-    /// arrive.
-    func test_unDocumentSansScene_recoitUneCarte() {
-        XCTAssertEqual(ComposerSoundDestination.forForeground(on: .document), .contentCard)
+    /// **Un post se compose sur la scène (#13864) : son premier plan y devient
+    /// une PUCE**, comme celui d'une story — plus de carte sous un texte, il
+    /// n'y a plus de colonne de texte.
+    func test_unPost_surLaScene_recoitUnePuce() {
+        XCTAssertEqual(ComposerSoundDestination.forForeground(on: .scene), .sceneChip)
     }
 
     /// **Le mood prend la carte, et c'est un REPLI, pas un choix.** Une humeur

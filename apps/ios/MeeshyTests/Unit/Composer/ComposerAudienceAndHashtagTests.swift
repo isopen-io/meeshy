@@ -169,8 +169,7 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
         XCTAssertEqual(ComposerRailDoor.hashtag.level(for: .post), .publication)
         XCTAssertFalse(ComposerRailDoor.hashtag.level(for: .post).appearsOnCanvas)
         XCTAssertTrue(ComposerMoreMenuPolicy.entries(.init(addsSlides: false, backgroundMedia: nil,
-                                                           offeredDoors: [.hashtag], offersPostBody: false,
-                                                           overflow: [])).contains(.hashtags))
+                                                           offeredDoors: [.hashtag], overflow: [])).contains(.hashtags))
         XCTAssertEqual(ComposerRestChrome.tools(offered: [.hashtag]), [.more])
     }
 
