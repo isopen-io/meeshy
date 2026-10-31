@@ -293,7 +293,7 @@ private fun FlatStandardBody(
 private fun FlatBadges(content: BubbleContent) {
     val showsPin = content.pinnedAtIso != null
     val showsForward = content.isForwarded
-    val showsEphemeral = content.expiresAtIso != null
+    val showsEphemeral = content.expiresAtIso != null && !content.isAfterRead
     if (!showsPin && !showsForward && !showsEphemeral) return
     Row(
         verticalAlignment = Alignment.CenterVertically,

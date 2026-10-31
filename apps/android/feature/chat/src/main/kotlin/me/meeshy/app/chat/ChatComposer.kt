@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.SlowModeState
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
@@ -95,6 +96,7 @@ internal fun ChatComposer(
     effects: MessageEffects = MessageEffects(),
     onToggleEffect: (Long) -> Unit = {},
     onSelectEphemeralDuration: (EphemeralDuration) -> Unit = {},
+    onSelectEphemeralChoice: (EphemeralChoice?) -> Unit = {},
     quickEmojis: List<String> = ComposerToolbarLaw.QUICK_EMOJI_DEFAULTS,
     onQuickEmoji: ((String) -> Unit)? = null,
     pendingSlot: (@Composable () -> Unit)? = null,
@@ -318,13 +320,11 @@ internal fun ChatComposer(
                 val inputAvailable = !voice.isRecording && !isEndToEnd && !affordances.isReadOnly
                 if (inputAvailable && !isEditing && ephemeralRailOpen) {
                     ComposerEphemeralRail(
-                        selected = EphemeralDuration.fromSeconds(effects.ephemeralDuration)
-                            ?.takeIf { MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL) },
-                        onPick = { duration ->
-                            if (!MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL)) {
-                                onToggleEffect(MessageEffectFlags.EPHEMERAL)
-                            }
-                            onSelectEphemeralDuration(duration)
+                        selected = EphemeralChoice.of(effects),
+                        accentColor = accentColor,
+                        onPick = { choice ->
+                            haptics.light()
+                            onSelectEphemeralChoice(choice)
                             ephemeralRailOpen = false
                         },
                     )
@@ -353,7 +353,7 @@ internal fun ChatComposer(
                             interact()
                             haptics.light()
                             if (MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL)) {
-                                onToggleEffect(MessageEffectFlags.EPHEMERAL)
+                                onSelectEphemeralChoice(null)
                                 ephemeralRailOpen = false
                             } else {
                                 effectsPanelOpen = false

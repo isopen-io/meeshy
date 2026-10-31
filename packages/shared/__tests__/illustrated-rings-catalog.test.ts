@@ -39,11 +39,11 @@ const filmOf = (ref: Ref): { readonly film: Film; readonly bytes: Buffer } => {
 describe('la vitrine des cadres illustrés (#13960)', () => {
   const pack = packs.find((candidate) => candidate.slug === 'cadres-illustres');
 
-  it('un pack installé d’office et retirable, après tous les autres, qui porte six cadres que le contrat lit tous', () => {
+  it('un pack installé d’office et retirable, après tous les contours, qui porte six cadres que le contrat lit tous', () => {
     expect(pack?.rings.map((ring) => ring.key)).toEqual([...VITRINE]);
     expect(pack?.installedByDefault).toBe(true);
     expect(pack?.removable).toBe(true);
-    expect(pack?.order).toBe(Math.max(...packs.map((candidate) => candidate.order)));
+    expect(pack?.order).toBe(Math.max(...packs.filter((candidate) => candidate.slug.startsWith('contours-')).map((candidate) => candidate.order)) + 1);
     expect(parseAvatarRingPackContract({ domain: 'avatar-ring', rings: pack?.rings })?.rings).toHaveLength(VITRINE.length);
   });
 

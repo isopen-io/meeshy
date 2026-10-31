@@ -30,7 +30,7 @@ class MessageEffectsEditorTest {
     fun ephemeralDuration_entriesAreOrderedShortestToLongest() {
         // The picker renders the chips in this order — parity with iOS allCases.
         assertThat(EphemeralDuration.entries.map { it.seconds })
-            .containsExactly(30, 60, 300, 3600, 86400)
+            .containsExactly(15, 30, 60, 300, 3600, 86400)
             .inOrder()
     }
 

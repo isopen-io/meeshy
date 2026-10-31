@@ -192,7 +192,7 @@ extension MeeshyComposerHost {
         // énumérer — cinq, dont une née d'un GESTE et absente de tout
         // inventaire. Ici, une sixième porte hérite de la
         // pré-montée sans que personne n'ait à y penser.
-        if let poseeParLeRail { sceneSelectionRelay.selectSceneItem(poseeParLeRail) }
+        if let poseeParLeRail, !replaceBackgroundIfPending(with: poseeParLeRail) { sceneSelectionRelay.selectSceneItem(poseeParLeRail) }
         startPendingPreUploads()
     }
 
@@ -689,6 +689,7 @@ extension MeeshyComposerHost {
     /// corps VIDE, et refermer la photothèque ne produit aucun signal.
     func abandonRailPosing() {
         railPosesNextMedia = false
+        backgroundReplacementId = nil
     }
 
     /// **LE site unique où une porte d'ingestion écrit dans

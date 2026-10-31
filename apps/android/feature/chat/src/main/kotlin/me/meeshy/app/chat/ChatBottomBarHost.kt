@@ -157,6 +157,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
             effects = state.pendingEffects,
             onToggleEffect = actions.toggleEffect,
             onSelectEphemeralDuration = actions.selectEphemeralDuration,
+            onSelectEphemeralChoice = actions.selectEphemeralChoice,
             quickEmojis = ComposerToolbarLaw.quickEmojis(state.quickReactions),
             onQuickEmoji = { emoji ->
                 actions.onDraftChange(emoji)

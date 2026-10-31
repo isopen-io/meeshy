@@ -386,8 +386,6 @@
     "POST /api/v1/conversations/:conversationId/restore-for-me",
     "POST /api/v1/conversations/:id/invite",
     "POST /api/v1/conversations/:id/mark-read",
-    "POST /api/v1/conversations/:id/messages/:messageId/consume",
-    "POST /api/v1/conversations/:id/messages/after-read/consume",
     "POST /api/v1/conversations/:id/messages/capture",
     "POST /api/v1/conversations/:id/new-link",
     "POST /api/v1/e2ee/conversations/:conversationId/signals",

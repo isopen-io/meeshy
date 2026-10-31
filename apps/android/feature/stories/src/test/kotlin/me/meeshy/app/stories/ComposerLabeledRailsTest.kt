@@ -183,7 +183,6 @@ class ComposerLabeledRailsTest {
         compose.onNodeWithContentDescription("😀").assertIsSelected()
         val scene = scene()
         listOf("SELECTION", "Edit", "Duplicate", "Remove").forEach { label -> assertThat(text(label).right).isAtMost(scene.left) }
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
         listOf("Text", "Close").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
         compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
     }

@@ -57,4 +57,24 @@ final class AvatarRingDecorDecodingTests: XCTestCase {
             XCTAssertNotNil(AvatarRingCatalog.shared.ringName(ring.key, language: "ar"), ring.key)
         }
     }
+
+    /// #13962–#13970 — les familles culturelles de cadres illustrés : un pack installé d'office par
+    /// famille, après la vitrine, de trois à quatre cadres qui portent chacun leurs deux films, nommés en arabe.
+    static let culturalFamilies: [String] = ["cadres-asiatiques", "cadres-africains", "cadres-celtes", "cadres-nordiques", "cadres-egyptiens", "cadres-mayas", "cadres-indiens", "cadres-amerindiens", "cadres-australs"]
+
+    func test_catalog_embedsTheCulturalFamilies_eachInstalledByDefault_withBothFilmsPerFrame() throws {
+        let slugs = AvatarRingCatalog.shared.packs.map(\.slug).filter { $0.hasPrefix("cadres-") && $0 != "cadres-illustres" }
+        XCTAssertEqual(slugs, Self.culturalFamilies)
+        for slug in slugs {
+            let pack = try XCTUnwrap(AvatarRingCatalog.shared.packs.first { $0.slug == slug })
+            XCTAssertTrue(pack.installedByDefault, slug)
+            XCTAssertTrue((3...4).contains(pack.rings.count), slug)
+            for ring in pack.rings {
+                XCTAssertEqual(ring.decor?.reach, 1.4, ring.key)
+                XCTAssertNotNil(ring.decor?.back, ring.key)
+                XCTAssertNotNil(ring.decor?.front, ring.key)
+                XCTAssertNotNil(AvatarRingCatalog.shared.ringName(ring.key, language: "ar"), ring.key)
+            }
+        }
+    }
 }

@@ -55,14 +55,19 @@ class SceneExportCoordinatorTest {
         }
     }
 
-    private fun TestScope.coordinator(runner: SceneTransformRunner, gallery: CaptureGallery = FakeGallery()) =
+    private fun TestScope.coordinator(
+        runner: SceneTransformRunner,
+        gallery: CaptureGallery = FakeGallery(),
+        report: (Throwable) -> Unit = {},
+    ) =
         SceneExportCoordinator(
             runner = runner,
             gallery = gallery,
-            tempDirectory = folder.newFolder("exports"),
+            tempDirectory = folder.newFolder(),
             scope = this,
             dispatcher = StandardTestDispatcher(testScheduler),
             nowMillis = { 1_700_000_000_000L },
+            report = report,
         )
 
     private fun job(output: File, still: File? = null, release: () -> Unit = {}) = SceneExportJob(
@@ -150,6 +155,43 @@ class SceneExportCoordinatorTest {
         c.export(SceneExportDestination.SHARE) { _, _ -> error("fond introuvable") }
         advanceUntilIdle()
         assertThat(c.state.value).isEqualTo(SceneExportState.Failed)
+    }
+
+    @Test
+    fun `un echec de preparation est journalise avec sa cause au lieu d etre avale`() = runTest {
+        val reported = mutableListOf<Throwable>()
+        val cause = java.io.IOException("statut 404")
+        val c = coordinator(FakeRunner(), report = { reported += it })
+        c.export(SceneExportDestination.GALLERY) { _, _ -> throw cause }
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Failed)
+        assertThat(reported).containsExactly(cause)
+    }
+
+    @Test
+    fun `un echec du moteur et un refus de la galerie sont journalises`() = runTest {
+        val reported = mutableListOf<Throwable>()
+        val codec = IllegalStateException("codec")
+        coordinator(FakeRunner(failure = codec), report = { reported += it })
+            .export(SceneExportDestination.SHARE) { out, _ -> job(out) }
+        advanceUntilIdle()
+        coordinator(FakeRunner(), FakeGallery(accepts = false), report = { reported += it })
+            .export(SceneExportDestination.GALLERY) { out, _ -> job(out) }
+        advanceUntilIdle()
+        assertThat(reported.first()).isSameInstanceAs(codec)
+        assertThat(reported.last().message).contains("galerie")
+        assertThat(reported).hasSize(2)
+    }
+
+    @Test
+    fun `une annulation n est pas un echec et ne se journalise pas`() = runTest {
+        val reported = mutableListOf<Throwable>()
+        val c = coordinator(FakeRunner(gate = CompletableDeferred()), report = { reported += it })
+        c.export(SceneExportDestination.SHARE) { out, _ -> job(out) }
+        runCurrent()
+        c.cancel()
+        advanceUntilIdle()
+        assertThat(reported).isEmpty()
     }
 
     @Test

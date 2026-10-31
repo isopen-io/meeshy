@@ -29,6 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import me.meeshy.sdk.media.scene.SceneExportLog
 import me.meeshy.ui.theme.hexColor
 
 /**
@@ -68,6 +69,7 @@ internal fun StoryExportPainter(request: StoryExportPaintRequest, onPainted: (Li
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
+            SceneExportLog.warn("calques non peints (${request.frames.size} images, ${request.directory.name})", failure)
             null
         }
         onPainted(files)

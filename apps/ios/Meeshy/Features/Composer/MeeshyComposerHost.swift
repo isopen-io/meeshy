@@ -323,13 +323,14 @@ struct MeeshyComposerHost: View {
     /// le viseur suivant dans un état que rien à l'écran n'annonce.
     @State var sceneCameraSize: ComposerSceneCameraSize = .card
 
-    /// **Le fond dont le menu est ouvert**, `nil` quand aucun ne l'est.
-    ///
-    /// Un identifiant plutôt qu'un booléen : le menu agit sur UN objet, et un
-    /// booléen aurait obligé à garder l'identifiant ailleurs — donc deux états
-    /// à tenir d'accord, dont la divergence se serait vue le jour où l'auteur
-    /// ouvre le menu d'un fond, le remplace, puis valide.
-    @State var backgroundMenuObjectId: String?
+    /// **Le fond dont le retrait attend sa confirmation** (N0 « Fond › Retirer »,
+    /// #13974), `nil` quand aucun ne l'attend.
+    @State var backgroundRemovalId: String?
+    /// La feuille basse des sources de « Fond › Remplacer » est-elle ouverte ?
+    @State var backgroundSourcesAreOpen = false
+    /// Le fond que le prochain média posé par une source de « Remplacer »
+    /// REMPLACE — consommé à la pose, oublié quand la sélection part.
+    @State var backgroundReplacementId: String?
 
     /// **Le registre des pré-montées** (vue `4c`). `@StateObject` parce
     /// que le meuble le POSSÈDE : sa durée de vie est celle de la composition,
@@ -571,8 +572,8 @@ struct MeeshyComposerHost: View {
     @State var placeRepointId: String?
     /// L'image dont la scène montre l'ORIGINAL, le temps d'un appui sur « Comparer ».
     @State var comparingLookObjectId: String?
-    /// Le menu d'appui long d'un OBJET, peint en verre par le meuble.
-    /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
+    /// Le menu d'appui long d'un OBJET, peint en verre par le meuble. Le fond
+    /// n'en a plus : son appui long le sélectionne (#13974).
     @State var sceneObjectMenu: ComposerSceneMenuRequest?
     @State var sceneMenuSize: CGSize = .zero
     /// Le fond que la prochaine prise du viseur REMPLACE — posé par
@@ -897,7 +898,7 @@ struct MeeshyComposerHost: View {
         // SwiftUI n'honore qu'UNE présentation par vue, et la racine porte déjà
         // la feuille de partage. Une seconde y serait silencieusement
         // avalée — le mode de panne qui ne rougit nulle part.
-        withComposerAutosave(withSceneCameraViewfinder(backgroundMenuPresented(composerStackNode)))
+        withComposerAutosave(withSceneCameraViewfinder(sceneMenuPresented(composerStackNode)))
         .background(tint.color.ignoresSafeArea())
     }
 

@@ -704,12 +704,11 @@ public final class StoryCanvasUIView: UIView {
     /// > construction — un booléen de configuration ne l'aurait pas fait.
     public var onBackgroundLongPressed: (() -> Void)?
 
-    /// **L'appui long sur un média DE FOND demande son menu.**
+    /// **L'appui long sur un média DE FOND le sélectionne** (#13974).
     ///
     /// Distinct de `onBackgroundLongPressed`, qui appartient au viseur : la
-    /// scène qui porte un fond n'est pas vide, et le geste y ouvre supprimer /
-    /// ramener en avant / éditer — les mêmes verbes que le menu contextuel d'un
-    /// objet de premier plan, pour que le geste ait un seul sens.
+    /// scène qui porte un fond n'est pas vide, et le geste y fait ce que fait
+    /// le toucher — l'hôte pose le niveau « Fond » dans son rail.
     ///
     /// **Sa présence est un FAIT que la règle lit** : tant que l'hôte ne le
     /// branche pas, `StoryCanvasBackgroundLongPress` retombe sur le viseur

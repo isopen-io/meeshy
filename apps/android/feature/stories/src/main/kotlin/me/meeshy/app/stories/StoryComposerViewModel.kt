@@ -649,9 +649,10 @@ class StoryComposerViewModel @Inject constructor(
     /**
      * Uploads freshly-picked media onto the selected slide (appended; [asBackground]: the first becomes its background, #13845).
      * A failed or refused upload is queued **durably** ([StoryComposerMediaPick]) behind a [PendingMediaUpload] placeholder the outbox
-     * grafts once online; a second pick while an upload is in flight is ignored, and nothing usable comes back as a said error.
+     * grafts once online; a second pick in flight is ignored; [replacing] (« Fond › Remplacer », #13973) leaves once the new one lands.
      */
-    fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false) = mediaPick.pick(items, asBackground)
+    fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false, replacing: String? = null) =
+        mediaPick.pick(items, asBackground, replacing)
 
     /** ✕ sur l'espace réservé (R5 de #13863) : l'ajout s'annule, et l'écran se libère dans la même image. */
     fun onCancelMediaPick() = mediaPick.cancel()

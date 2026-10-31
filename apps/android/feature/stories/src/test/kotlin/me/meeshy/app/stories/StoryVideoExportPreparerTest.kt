@@ -65,6 +65,7 @@ class StoryVideoExportPreparerTest {
         var painted: StoryExportPaintRequest? = null
         val paints = mutableListOf<StoryExportPaintRequest>()
         val frames = mutableListOf<Pair<String, Long>>()
+        val warned = mutableListOf<Pair<String, Throwable>>()
     }
 
     private fun preparer(
@@ -88,6 +89,7 @@ class StoryVideoExportPreparerTest {
             recorder.paints += request
             if (!paints) null else request.frames.mapIndexed { i, _ -> File(request.directory, "calque-$i.png").also { it.writeText("png") } }
         },
+        warn = { step, failure -> recorder.warned += step to failure },
     )
 
     private fun subject(withVideo: Boolean = true, audio: List<StoryAudioPlayerObject>? = null) =
@@ -141,6 +143,22 @@ class StoryVideoExportPreparerTest {
     @Test fun `un son qui ne se rapatrie pas tombe, l export continue`() = runTest {
         val job = preparer(Recorder(), failing = setOf("voc.m4a")).prepare(StoryExportMode.SAVE, subject(), slide(), folder.newFile("o.mp4"), folder.newFolder("w"))
         assertThat(job.plan.sounds.map { it.role }).containsExactly(StoryExportSoundRole.BACKGROUND_VIDEO)
+    }
+
+    @Test fun `un son laisse de cote est journalise avec son chemin et sa cause, jamais tu`() = runTest {
+        val recorder = Recorder()
+        preparer(recorder, failing = setOf("voc.m4a")).prepare(StoryExportMode.SAVE, subject(), slide(), folder.newFile("o.mp4"), folder.newFolder("w"))
+        val (step, failure) = recorder.warned.single()
+        assertThat(step).contains("/api/v1/attachments/file/voc.m4a")
+        assertThat(step).doesNotContain("gate.meeshy.me")
+        assertThat(failure).hasMessageThat().isEqualTo("refus")
+    }
+
+    @Test fun `des calques qui ne se peignent pas nomment leur scene`() = runTest {
+        val failure = runCatching {
+            preparer(Recorder(), paints = false).prepare(StoryExportMode.SAVE, subject(), slide(), folder.newFile("o.mp4"), folder.newFolder("w"))
+        }.exceptionOrNull()
+        assertThat(failure).hasMessageThat().contains("scène 0")
     }
 
     @Test(expected = java.io.IOException::class)

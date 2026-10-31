@@ -10,22 +10,20 @@
  * rien. Toute valeur absente, inconnue ou réservée (ATOM, hors MVP) ⇒ `null` :
  * le logo se ferme sur le doute.
  *
- * Le seuil est porté par la TABLE (seuls Proche et Sang y ont une icône) et
- * non par une comparaison de niveaux : comparer deux niveaux est le domaine
- * exclusif de la loi (`relation-access.ts`) et de `friendship.ts`.
- *
  * Icônes : spec cercles § 1.1. Miroirs Swift et Kotlin : ils rejouent
  * `fixtures/relation-export-badge.vectors.json`.
  */
 
-import type { RelationLevel } from '../types/relation.js';
+import { relationLevelIfAtLeast, type RelationLevel } from '../types/relation.js';
 
 export const RELATION_EXPORT_BADGE_MIN_LEVEL: RelationLevel = 'CLOSE';
 
-const RELATION_EXPORT_BADGES: ReadonlyMap<string, string> = new Map([
-  ['CLOSE', '🔥'],
-  ['BLOOD', '🩸'],
-] satisfies readonly (readonly [RelationLevel, string])[]);
+const RELATION_EXPORT_BADGES: Readonly<Partial<Record<RelationLevel, string>>> = {
+  CLOSE: '🔥',
+  BLOOD: '🩸',
+};
 
-export const relationExportBadge = (served: unknown): string | null =>
-  typeof served === 'string' ? (RELATION_EXPORT_BADGES.get(served) ?? null) : null;
+export const relationExportBadge = (served: unknown): string | null => {
+  const level = relationLevelIfAtLeast(served, RELATION_EXPORT_BADGE_MIN_LEVEL);
+  return level ? RELATION_EXPORT_BADGES[level] ?? null : null;
+};

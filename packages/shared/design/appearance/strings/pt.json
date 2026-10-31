@@ -95,6 +95,42 @@
     "cadres-illustres": {
       "name": "Molduras ilustradas",
       "description": "Seis molduras que transbordam do teu avatar: uma máscara de olhos que ficam vermelhos, uma teia e a sua aranha, asas de anjo, um círculo rúnico, garras de osso e asas de demônio."
+    },
+    "cadres-asiatiques": {
+      "name": "Molduras da Ásia",
+      "description": "Três molduras inspiradas na Ásia: um dragão de jade que ondula à volta do teu avatar, nuvens de seda à deriva e lanternas de papel que balançam."
+    },
+    "cadres-africains": {
+      "name": "Molduras de África",
+      "description": "Três molduras inspiradas em África: uma máscara de ébano cujos olhos se iluminam diante de um sol de savana, faixas tecidas que ondulam e um colar de contas que gira."
+    },
+    "cadres-celtes": {
+      "name": "Molduras celtas",
+      "description": "Três molduras inspiradas nos entrelaçados celtas: um nó que se apaga e se volta a traçar, uma espiral tripla que gira e uma hera esmeralda de folhas que estremecem."
+    },
+    "cadres-nordiques": {
+      "name": "Molduras nórdicas",
+      "description": "Quatro molduras do grande Norte: corvos que rodopiam, uma aurora boreal que ondula, um anel de pedra gravada que se acende e uma proa esculpida sobre as ondas."
+    },
+    "cadres-egyptiens": {
+      "name": "Molduras egípcias",
+      "description": "Quatro molduras de ouro e lápis-lazúli: uma naja que se ergue, um escaravelho que abre as asas, um sol do deserto com grande colar e lótus do Nilo que se abrem."
+    },
+    "cadres-mayas": {
+      "name": "Molduras maias",
+      "description": "Quatro molduras de pedra e jade: uma serpente de jade com crista de penas, cartuchos de glifos que se acendem, um friso em degraus sob um sol nascente e um jaguar escondido na selva."
+    },
+    "cadres-indiens": {
+      "name": "Molduras indianas",
+      "description": "Três molduras inspiradas nos motivos da Índia: uma mandala floral que se abre, um pavão que abre a cauda e uma grinalda de cravos-de-defunto e jasmim que balança."
+    },
+    "cadres-amerindiens": {
+      "name": "Molduras ameríndias",
+      "description": "Três molduras inspiradas na tecelagem e no trabalho de miçangas: um aro tecido com penas estilizadas que balançam, uma faixa de losangos de miçangas que gira e um sol em degraus sobre montanhas e o seu rio."
+    },
+    "cadres-australs": {
+      "name": "Molduras austrais",
+      "description": "Três molduras inspiradas na pintura de pontos e no céu austral: círculos de pontos que cintilam, uma tartaruga marinha que nada à volta do avatar e o Cruzeiro do Sul a brilhar."
     }
   },
   "designs": {
@@ -148,7 +184,37 @@
     "ailes-ange": "Asas de anjo",
     "cercle-runique": "Círculo rúnico",
     "griffes-os": "Garras de osso",
-    "ailes-demon": "Asas de demônio"
+    "ailes-demon": "Asas de demônio",
+    "dragon-jade": "Dragão de jade",
+    "nuages-soie": "Nuvens de seda",
+    "lanternes-papier": "Lanternas de papel",
+    "masque-ebene": "Máscara de ébano",
+    "bandes-tissees": "Faixas tecidas",
+    "collier-perles": "Colar de contas",
+    "noeud-entrelace": "Nó entrelaçado",
+    "spirale-triple": "Espiral tripla",
+    "lierre-emeraude": "Hera esmeralda",
+    "corbeaux-tournoyants": "Corvos em círculo",
+    "aurore-boreale": "Aurora boreal",
+    "anneau-pierre-gravee": "Anel de pedra gravada",
+    "proue-sculptee": "Proa esculpida",
+    "cobra-dore": "Naja dourada",
+    "scarabee-aile": "Escaravelho alado",
+    "soleil-du-desert": "Sol do deserto",
+    "lotus-du-nil": "Lótus do Nilo",
+    "serpent-de-jade": "Serpente de jade",
+    "cartouches-de-glyphes": "Cartuchos de glifos",
+    "frise-a-gradins": "Friso em degraus",
+    "jaguar-de-jungle": "Jaguar da selva",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Pavão em leque",
+    "guirlande-soucis": "Grinalda de cravos",
+    "cercle-tisse": "Aro tecido com penas",
+    "perlage-losanges": "Losangos de miçangas",
+    "soleil-montagnes": "Sol sobre as montanhas",
+    "cercles-points": "Círculos de pontos",
+    "tortue-marine": "Tartaruga marinha",
+    "croix-du-sud": "Cruzeiro do Sul"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
