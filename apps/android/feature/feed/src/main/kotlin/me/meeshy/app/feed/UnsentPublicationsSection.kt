@@ -55,7 +55,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @Composable
 internal fun UnsentPublicationsEntry(
-    onReopen: (FeedComposerDraft) -> Unit,
+    onReopen: () -> Unit,
     onReopenStory: () -> Unit = {},
     viewModel: UnsentPublicationsViewModel = hiltViewModel(),
 ) {
@@ -63,9 +63,9 @@ internal fun UnsentPublicationsEntry(
     val offline by viewModel.offline.collectAsStateWithLifecycle()
     var showList by remember { mutableStateOf(false) }
     LaunchedEffect(viewModel) {
-        viewModel.reopened.collect { draft ->
+        viewModel.reopened.collect {
             showList = false
-            onReopen(draft)
+            onReopen()
         }
     }
     LaunchedEffect(viewModel) {

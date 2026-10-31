@@ -54,10 +54,10 @@ internal data class SceneHistory(val canUndo: Boolean, val canRedo: Boolean)
 /** La pastille d'audience : le libellé du mode (« Public ») et son glyphe. */
 internal data class SceneAudience(val label: String, val icon: ImageVector)
 
-private val SCENE_TARGET = 48.dp
+internal val SCENE_TARGET = 48.dp
 private val SCENE_DISC = 40.dp
 private val SCENE_VEIL = Color.Black.copy(alpha = 0.38f)
-private val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
+internal val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
 
 /**
  * Un bouton rond posé sur la scène (#13834) : un disque translucide de 40 dp dans une cible de 48 dp, nommé pour TalkBack.

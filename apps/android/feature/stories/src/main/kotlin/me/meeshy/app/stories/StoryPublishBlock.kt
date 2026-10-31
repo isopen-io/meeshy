@@ -4,7 +4,14 @@ package me.meeshy.app.stories
  * Pourquoi une publication est bloquée par un plafond (#13590) : l'auteur LIT la raison, un bouton grisé seul ne
  * dit rien. L'ordre est celui dans lequel la raison se corrige le plus naturellement : le texte d'abord.
  */
-internal enum class StoryPublishBlock { CAPTION_TOO_LONG, TEXT_TOO_LONG, TOO_MANY_TEXTS, TOO_MANY_STICKERS, TOO_MANY_MEDIA, TOO_MANY_SOUNDS, DURATION_TOO_LONG }
+internal enum class StoryPublishBlock {
+    CAPTION_TOO_LONG, TEXT_TOO_LONG, TOO_MANY_TEXTS, TOO_MANY_STICKERS, TOO_MANY_MEDIA, TOO_MANY_SOUNDS, DURATION_TOO_LONG;
+
+    companion object {
+        /** Les plafonds propres à la story (#13863) : la légende de chaque diapo et la durée totale ne disent rien d'un post. */
+        val storyOnly: Set<StoryPublishBlock> = setOf(CAPTION_TOO_LONG, DURATION_TOO_LONG)
+    }
+}
 
 /**
  * La première raison de blocage d'un deck. [isRepost] : une republication recopie le texte STOCKÉ de sa source, que

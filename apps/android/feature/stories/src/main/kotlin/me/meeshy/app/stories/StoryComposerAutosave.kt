@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftStickerElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
+import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryElementTiming
@@ -100,9 +101,10 @@ object StoryComposerAutosave {
         visibilityUserIds: List<String> = emptyList(),
         annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
         mayOverwriteStored: Boolean = true,
+        format: StoryDraftFormat = StoryDraftFormat(),
     ): StoryDraftPersist {
         if (!mayOverwriteStored && previous != null) return StoryDraftPersist.None
-        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds, annotations)
+        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds, annotations, format)
         if (!snapshot.isWorthRestoring) {
             val hasUnrepresentableContent = deck.slides.any { it.strokes.isNotEmpty() }
             return if (hasUnrepresentableContent) StoryDraftPersist.None else purgeOrNone(previous)
@@ -173,6 +175,13 @@ object StoryComposerAutosave {
         if (previous != null && !previous.isAwaitingPublication) StoryDraftPersist.Clear else StoryDraftPersist.None
 }
 
+/** Ce que le brouillon garde du format où la scène se compose (#13863) : le texte du post, le format, les médias connus. */
+data class StoryDraftFormat(
+    val postText: String = "",
+    val format: String? = null,
+    val media: List<UploadedMedia> = emptyList(),
+)
+
 /** Projects the deck's persistable fields onto a durable snapshot stamped [nowIso]. */
 fun StorySlideDeck.toDraftSnapshot(
     visibility: StoryVisibility,
@@ -180,6 +189,7 @@ fun StorySlideDeck.toDraftSnapshot(
     nowIso: String,
     visibilityUserIds: List<String> = emptyList(),
     annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
+    format: StoryDraftFormat = StoryDraftFormat(),
 ): StoryComposerDraftSnapshot = StoryComposerDraftSnapshot(
     slides = slides.map {
         StoryDraftSlideSnapshot(
@@ -214,6 +224,9 @@ fun StorySlideDeck.toDraftSnapshot(
     visibilityUserIds = visibilityUserIds,
     annotations = annotations,
     updatedAt = nowIso,
+    postText = format.postText,
+    format = format.format,
+    media = format.media,
 )
 
 /**

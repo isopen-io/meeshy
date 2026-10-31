@@ -33,7 +33,9 @@ import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.AudienceCandidate
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
-import me.meeshy.sdk.model.composer.ComposerCarry
+import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerPublishChannel
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
@@ -49,6 +51,8 @@ import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.outbox.OutboxIds
+import me.meeshy.sdk.post.PostComposerDraftStore
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
@@ -86,6 +90,8 @@ class StoryComposerViewModel @Inject constructor(
     private val config: MeeshyConfig = MeeshyConfig(),
     private val accountFence: AccountFence? = null,
     private val lookOven: StoryLookOven? = null,
+    private val publications: PublicationOutbox? = null,
+    private val postDrafts: PostComposerDraftStore? = null,
 ) : ViewModel() {
 
     /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
@@ -128,13 +134,12 @@ class StoryComposerViewModel @Inject constructor(
     /** « Composer » depuis une story vue (#13849) : la scène semée devient la composition, son historique repart d'elle. */
     internal fun onRecomposed(done: StoryRecomposed) { _state.update { StoryRecomposition.applied(it, done.plan, done.uploaded) }; resetHistory() }
 
-    /** A format switch hands over the post's media: laid on the RESTORED deck, never beneath a late restore. */
-    fun onCarry(carry: ComposerCarry, onApplied: (lost: Int) -> Unit) = viewModelScope.launch {
-        restoring?.join()
-        _state.update { StoryComposerCarryReducer.applied(it, carry) }
-        record()
-        onApplied(StoryComposerCarryReducer.lost(_state.value, carry))
-    }
+    /** L'hôte pose le format et la disposition armée (#13863) : la scène reste la même, seule la table des variantes change. */
+    fun onFormat(format: ComposerFormat, layout: MosaicLayoutMode?) = _state.update { StoryComposerFormatReducer.formatted(it, format, layout) }
+
+    fun onPostTextChange(text: String) = _state.update { StoryComposerFormatReducer.postTyped(it, text) }
+
+    fun onFormatRestoredApplied() = _state.update { it.copy(restoredFormat = null) }
 
     /**
      * Restores a persisted draft when the screen opens — iOS `onAppear` + `StoryDraftStore.load`.
@@ -146,7 +151,7 @@ class StoryComposerViewModel @Inject constructor(
         initialVisibility?.let { audience -> _state.update { it.copy(draft = it.draft.withVisibility(audience)) } }
         restoring = viewModelScope.launch {
             draftConfirmation.settle()
-            val stored = draftStore.load()
+            val stored = draftStore.load().let { if (seededByDoor) it else StoryPostDraftAdoption.adopted(it, postDrafts) { s -> underOpeningAccount { draftStore.save(s) } } }
             val restored = StoryComposerAutosave.restore(
                 stored = stored,
                 deckIsPristine = StoryComposerAutosave.deckIsPristine(_state.value.deck),
@@ -182,7 +187,7 @@ class StoryComposerViewModel @Inject constructor(
                             ),
                         ),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
-                ).audiencePurged().mirrorDraftToSelection()
+                ).audiencePurged().mirrorDraftToSelection().let { s -> StoryComposerFormatReducer.restored(s, reconciled.snapshot) }
             }
             resetHistory()
         }
@@ -199,7 +204,7 @@ class StoryComposerViewModel @Inject constructor(
     /** « Abandonner » (#13838) : le composeur repart vierge — [persistDraft] purge alors son brouillon, jamais celui d'une porte — et ses envois en cours sont annulés. */
     fun onDiscardDraft() {
         if (editMode != null) return
-        _state.value.also { _state.value = StoryComposerUiState() }.pendingUploads.forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
+        _state.value.also { _state.value = it.blankKeepingFormat() }.pendingUploads.forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
         resetHistory()
     }
 
@@ -219,6 +224,7 @@ class StoryComposerViewModel @Inject constructor(
                     visibilityUserIds = current.draft.visibilityUserIds,
                     annotations = current.draft.annotations(),
                     mayOverwriteStored = !seededByDoor || ownsStoredDraft,
+                    format = current.formatDraft(),
                 )
                 when (action) {
                     is StoryDraftPersist.Save -> {
@@ -416,9 +422,7 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onDrawUndo() = reduce { StoryComposerDrawingReducer.undone(it) }
 
-    fun onVisibilityChange(visibility: StoryVisibility) {
-        _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
-    }
+    fun onVisibilityChange(visibility: StoryVisibility) = _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
 
     /** La liste « visible par » / « sauf » : l'appelant l'a déjà bornée aux personnes proposées. */
     fun onAudienceUserIdsChange(ids: List<String>) {
@@ -453,12 +457,11 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(draft = it.draft.copy(mediaCaption = MediaDescriptionLaw.with(it.draft.mediaCaption, mediaId, text))) }
     }
 
-    fun onAllowSoundExtractionChange(allowed: Boolean) {
-        _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
-    }
+    fun onAllowSoundExtractionChange(allowed: Boolean) = _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
 
-    /** Retire [tag] du texte de TOUTES les slides : la balise EST dans la phrase, il n'y a pas de liste à côté. */
+    /** Retire [tag] du texte de TOUTES les slides (du post, en post) : la balise EST dans la phrase, il n'y a pas de liste à côté. */
     fun onRemoveHashtag(tag: String) = reduce { current ->
+        if (current.variant.writesPostText) return@reduce current.copy(postText = ComposerHashtags.removing(tag, current.postText))
         current.withDeckTransform { deck -> deck.mapSlideTexts { ComposerHashtags.removing(tag, it) } }
     }
 
@@ -472,29 +475,19 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /** Tap on a tool of the row: opens, switches to or closes its panel per [ComposerBandState.tapTool]. */
-    fun onBandToolTap(tool: StoryToolMode) {
-        _state.update { it.copy(band = it.band.tapTool(tool)) }
-    }
+    fun onBandToolTap(tool: StoryToolMode) = _state.update { it.copy(band = it.band.tapTool(tool)) }
 
     /** Swipe up on a tool: forces its panel open. */
-    fun onBandToolSwipeUp(tool: StoryToolMode) {
-        _state.update { it.copy(band = it.band.swipeUpOnTool(tool)) }
-    }
+    fun onBandToolSwipeUp(tool: StoryToolMode) = _state.update { it.copy(band = it.band.swipeUpOnTool(tool)) }
 
     /** Swipe down on the row: closes an open panel, otherwise hides the chrome (bare canvas). */
-    fun onBandSwipeDown() {
-        _state.update { it.copy(band = if (it.band.isPanelOpen) it.band.closeAnyPanel() else it.band.hideChrome()) }
-    }
+    fun onBandSwipeDown() = _state.update { it.copy(band = if (it.band.isPanelOpen) it.band.closeAnyPanel() else it.band.hideChrome()) }
 
     /** Gives the chrome back after a voluntary hiding (ghost handle tap). */
-    fun onBandShowChrome() {
-        _state.update { it.copy(band = it.band.showChrome()) }
-    }
+    fun onBandShowChrome() = _state.update { it.copy(band = it.band.showChrome()) }
 
     /** Closes the open panel (handle pulled under its minimum) and gives the row back. */
-    fun onBandDismiss() {
-        _state.update { it.copy(band = it.band.closeAnyPanel()) }
-    }
+    fun onBandDismiss() = _state.update { it.copy(band = it.band.closeAnyPanel()) }
 
     /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap). */
     fun onAddSlide() = applyDeck { if (_state.value.editing) it else it.addSlide(newSlideId()) }
@@ -718,13 +711,16 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                val queued = publishPlans(lookOven?.queued(current) ?: current, resolvePublishLanguage()).mapNotNull { plan ->
-                    storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn)
-                }
+                val baked = lookOven?.queued(current) ?: current
+                val document = current.variant.channel == ComposerPublishChannel.DOCUMENT
+                val plans = if (document) publishPlans(baked, resolvePublishLanguage(), baked.postSceneSlides) else publishPlans(baked, resolvePublishLanguage())
+                val queued = if (document) {
+                    checkNotNull(publications).enqueueScene(baked, plans, resolvePublishLanguage()).let { emptyList<String>() }
+                } else plans.mapNotNull { plan -> storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn) }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 releasedByDraft = releasedByDraft - current.deck.slides.flatMap { it.mediaIds + listOfNotNull(it.backgroundMediaId) }.toSet()
                 keepDraftUntilConfirmed(current, queued)
-                _state.update { StoryComposerUiState() }
+                _state.update { it.blankKeepingFormat() }
                 resetHistory()
                 _published.tryEmit(Unit)
             } catch (e: CancellationException) {
@@ -752,6 +748,7 @@ class StoryComposerViewModel @Inject constructor(
             nowIso = Instant.now().toString(),
             visibilityUserIds = published.draft.visibilityUserIds,
             annotations = published.draft.annotations(),
+            format = published.formatDraft(),
         )
         underOpeningAccount { draftStore.save(snapshot.copy(awaitingPublication = queued)) }
     }

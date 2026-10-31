@@ -69,6 +69,9 @@ fun StoryComposerScreen(
     opening: ComposerOpening = ComposerOpening.CAMERA_READY,
     /** La story VUE dont « Composer » sème la scène entière (#13849) : ses médias rapatriés et téléversés à nouveau. */
     recomposeStoryId: String? = null,
+    /** La porte a promis qu'on écrirait d'emblée (#13863) : en post ou en réel, « Texte du post » s'ouvre une fois, clavier levé. */
+    raisePostText: Boolean = false,
+    onPostTextRaised: () -> Unit = {},
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -117,6 +120,11 @@ fun StoryComposerScreen(
         },
     )
     var morePanel by rememberSaveable { mutableStateOf<StoryMorePanel?>(null) }
+    LaunchedEffect(raisePostText, state.variant.writesPostText) {
+        if (!raisePostText || !state.variant.writesPostText) return@LaunchedEffect
+        morePanel = StoryMorePanel.POST_TEXT
+        onPostTextRaised()
+    }
     ComposerBackHandlers(
         close = close,
         onClosePanel = when (state.scenePanel(morePanel)) {

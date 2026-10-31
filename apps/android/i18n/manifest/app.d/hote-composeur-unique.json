@@ -20,8 +20,7 @@
         { "catalog": "app", "iosKey": "composer.mosaic.reel", "androidName": "composer_mosaic_reel", "status": "adopted" },
         { "catalog": "app", "iosKey": "composer.mosaic.hero", "androidName": "composer_mosaic_hero", "status": "adopted" },
         { "catalog": "app", "iosKey": "composer.mosaic.wave", "androidName": "composer_mosaic_wave", "status": "adopted" },
-        { "catalog": "app", "iosKey": "composer.mosaic.sine", "androidName": "composer_mosaic_sine", "status": "adopted" },
-        { "androidName": "composer_format_media_stay_behind", "status": "android-only" }
+        { "catalog": "app", "iosKey": "composer.mosaic.sine", "androidName": "composer_mosaic_sine", "status": "adopted" }
       ]
     }
   }

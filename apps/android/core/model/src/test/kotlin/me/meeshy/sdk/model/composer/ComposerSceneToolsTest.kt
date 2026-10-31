@@ -171,4 +171,14 @@ class ComposerSceneToolsTest {
         assertThat(ComposerSceneTools.showsSceneChrome(drawing = false)).isTrue()
         assertThat(ComposerSceneTools.showsSceneChrome(drawing = true)).isFalse()
     }
+
+    @Test
+    fun `a post or a reel writes one text beside the scene, so its slides offer no caption of their own`() {
+        val base = ComposerSceneTools.MoreInput(
+            editsSlides = true, hasBackgroundMedia = false, animated = false, sceneEffects = emptyList(), exports = emptyList(),
+        )
+
+        assertThat(ComposerSceneTools.moreEntries(base)).contains(ComposerMoreEntry.CAPTION)
+        assertThat(ComposerSceneTools.moreEntries(base.copy(captionsSlides = false))).doesNotContain(ComposerMoreEntry.CAPTION)
+    }
 }

@@ -120,7 +120,7 @@ internal fun StoryComposerSceneFirst(
                     onOrder = { choice -> viewModel.onObjectController(bar.ref, choice) },
                 )
             }
-            if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen)
+            if (chrome) StorySocle(state, viewModel, doors, formatChevron, sheet.onOpen) { onMorePanel(StoryMorePanel.POST_TEXT) }
         },
         sheet = openSheet,
         onSheetDismiss = sheet.onDismiss,
@@ -238,7 +238,7 @@ private fun storySceneRails(
             )
         },
         socle = { if (chrome) StorySocleNotice(state) },
-        below = { if (chrome) StoryPublish(state, viewModel, doors, formatChevron) },
+        below = { if (chrome) StoryPublish(state, viewModel, doors, formatChevron) { more.onMorePanel(StoryMorePanel.POST_TEXT) } },
     )
 }
 
@@ -293,6 +293,7 @@ private fun moreEntriesOf(state: StoryComposerUiState, sceneExport: SceneExportH
             hasBackground = StoryComposerEraseReducer.hasBackground(state),
             canPickBackground = StoryComposerEraseReducer.canPickBackground(state),
             hasSomethingToErase = StoryComposerEraseReducer.hasSomethingToErase(state),
+            captionsSlides = state.variant.captionsSlides,
         ),
     )
 
@@ -365,6 +366,7 @@ private fun StorySocle(
     doors: StoryComposerDoors,
     formatChevron: (@Composable () -> Unit)?,
     onOpenSheet: (StoryComposerSheet) -> Unit,
+    onPostText: () -> Unit,
 ) {
     ComposerSceneReferenceFooter(
         hashtags = state.hashtags,
@@ -373,7 +375,7 @@ private fun StorySocle(
         onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
     )
     StorySocleNotice(state)
-    StoryPublish(state, viewModel, doors, formatChevron)
+    StoryPublish(state, viewModel, doors, formatChevron, onPostText)
 }
 
 @Composable
@@ -393,14 +395,16 @@ private fun StorySocleNotice(state: StoryComposerUiState) {
     }
 }
 
-/** La pastille d'audience et « Publier la story ▾ » : posés sur la scène au petit écran, sous elle au grand. */
+/** « Texte du post » en post et en réel, puis la pastille d'audience et « Publier … ▾ » : posés sur la scène au petit écran, sous elle au grand. */
 @Composable
 private fun StoryPublish(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
     doors: StoryComposerDoors,
     formatChevron: (@Composable () -> Unit)?,
+    onPostText: () -> Unit,
 ) {
+    if (state.variant.writesPostText) PostTextPill(state.postText, onPostText)
     val visibility = state.draft.visibility
     val count = state.draft.visibilityUserIds.size
     val label = stringResource(visibility.labelRes())

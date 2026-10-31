@@ -5,6 +5,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.TusUploadRepository
+import me.meeshy.sdk.model.MAX_POST_MEDIA
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.NetworkResult
@@ -45,7 +46,7 @@ data class CommentAttachmentTray(val pieces: List<CommentPendingPiece> = emptyLi
 
     companion object {
         /** Le plafond des médias d'un commentaire est celui d'un post (`MAX_POST_MEDIA`, #6578). */
-        const val MAX_PIECES: Int = FeedComposerDraft.MAX_MEDIA
+        const val MAX_PIECES: Int = MAX_POST_MEDIA
     }
 }
 

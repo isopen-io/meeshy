@@ -56,10 +56,10 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Le choix du format, posé dans le couloir du haut (jamais sur la scène) : une pastille qui nomme le
- * format qui GOUVERNE, et — quand la porte en offre plusieurs — un menu dont chaque entrée refusée est
- * GRISÉE AVEC SA RAISON (#4030). Une porte à un seul format n'a pas de chevron : une affordance sans choix
- * n'existe pas (loi 4).
+ * Le choix du format de l'HUMEUR, seule à garder sa feuille (#13863) : posé dans son couloir du haut (jamais sur la scène),
+ * une pastille qui nomme le format qui GOUVERNE, et — quand la porte en offre plusieurs — un menu dont chaque entrée refusée
+ * est GRISÉE AVEC SA RAISON (#4030). La story, le post et le réel choisissent le leur au chevron de « Publier ▾ ». Une porte
+ * à un seul format n'a pas de chevron : une affordance sans choix n'existe pas (loi 4).
  */
 @Composable
 fun ComposerFormatMenu(
@@ -67,12 +67,9 @@ fun ComposerFormatMenu(
     verdicts: List<FormatVerdict>,
     onChoose: (ComposerFormat) -> Unit,
     modifier: Modifier = Modifier,
-    layouts: List<MosaicLayoutMode> = emptyList(),
-    armedLayout: MosaicLayoutMode? = null,
-    onChooseLayout: (MosaicLayoutMode) -> Unit = {},
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val hasMenu = ComposerSceneTools.showsFormatChevron(formats = verdicts.size, layouts = layouts.size)
+    val hasMenu = ComposerSceneTools.showsFormatChevron(formats = verdicts.size, layouts = 0)
     val hint = stringResource(R.string.composer_publish_menu_a11y_hint)
     val onPlateau = LocalOnComposerPlateau.current
     val ink = if (onPlateau) ComposerPlateauInk.primary else MeeshyTheme.tokens.textPrimary
@@ -93,14 +90,14 @@ fun ComposerFormatMenu(
         )
         if (hasMenu) Icon(MeeshyIcons.ChevronDown, contentDescription = null, tint = chevronInk)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            FormatMenuItems(selected, verdicts, onChoose, layouts, armedLayout, onChooseLayout) { open = false }
+            FormatMenuItems(selected, verdicts, onChoose, emptyList(), null, {}) { open = false }
         }
     }
 }
 
 /**
- * Le même choix, posé en CHEVRON au bout de « Publier la story ▾ » (#13834) : la story ne nomme plus son format en haut,
- * elle le choisit là où elle publie. Une cible de 48 dp nommée « Publier comme » ; sans autre format ni disposition, le
+ * Le même choix, posé en CHEVRON au bout de « Publier ▾ » (#13834, #13863) : la story, le post et le réel ne nomment plus
+ * leur format en haut, ils le choisissent là où ils publient — avec, en post de deux scènes ou plus, leur disposition. Une cible de 48 dp nommée « Publier comme » ; sans autre format ni disposition, le
  * chevron n'existe pas (loi 4, route autonome comprise).
  */
 @Composable

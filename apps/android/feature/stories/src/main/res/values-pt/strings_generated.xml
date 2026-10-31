@@ -71,6 +71,8 @@
     <string name="composer_object_editor_adjust_vignette">Vinheta</string>
     <string name="composer_object_editor_effects_bloom">Brilho</string>
     <string name="composer_object_editor_effects_grain">Granulação</string>
+    <string name="composer_publish_as_post">Publicar post</string>
+    <string name="composer_publish_as_reel">Publicar reel</string>
     <string name="composer_publish_as_story">Publicar story</string>
     <string name="composer_publish_as_storyAndReel">Publicar story e reel</string>
     <string name="composer_rail_object_exit">Sair do objeto</string>

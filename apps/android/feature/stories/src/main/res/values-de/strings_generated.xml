@@ -71,6 +71,8 @@
     <string name="composer_object_editor_adjust_vignette">Vignette</string>
     <string name="composer_object_editor_effects_bloom">Bloom</string>
     <string name="composer_object_editor_effects_grain">Körnung</string>
+    <string name="composer_publish_as_post">Beitrag veröffentlichen</string>
+    <string name="composer_publish_as_reel">Reel veröffentlichen</string>
     <string name="composer_publish_as_story">Story veröffentlichen</string>
     <string name="composer_publish_as_storyAndReel">Story und Reel veröffentlichen</string>
     <string name="composer_rail_object_exit">Objekt verlassen</string>

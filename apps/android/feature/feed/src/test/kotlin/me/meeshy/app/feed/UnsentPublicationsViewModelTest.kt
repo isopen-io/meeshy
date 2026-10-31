@@ -94,17 +94,16 @@ class UnsentPublicationsViewModelTest {
     }
 
     @Test
-    fun `reopening a failed post hands the composer its draft`() = runTest(dispatcher) {
+    fun `reopening a failed post opens the composer, whose scene takes the draft the outbox put back in the post slot`() = runTest(dispatcher) {
         coEvery { publications.reopenPost("cmid_p") } returns
             PostComposerDraftSnapshot(text = "mes photos", visibility = "FRIENDS")
         val vm = viewModel()
 
         vm.reopened.test {
             vm.reopen("cmid_p")
-            val draft = awaitItem()
-            assertThat(draft.text).isEqualTo("mes photos")
-            assertThat(draft.visibility).isEqualTo(FeedPostVisibility.FRIENDS)
+            assertThat(awaitItem()).isEqualTo(Unit)
         }
+        coVerify(exactly = 1) { publications.reopenPost("cmid_p") }
     }
 
     @Test

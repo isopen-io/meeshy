@@ -31,6 +31,7 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions
 import me.meeshy.sdk.model.composer.ComposerKeyboardOrOptions.Surface as TypingSurface
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
+import me.meeshy.sdk.model.composer.ComposerPostTextPolicy
 import me.meeshy.ui.component.composer.rememberHostedTextField
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -49,6 +50,7 @@ internal fun rememberStoryTyping(
 ): StoryTypingSlot? {
     val edited = state.selectedTextElement?.takeIf { state.isEditingTextElement && !state.isDrawingActive }
     val caption = morePanel == StoryMorePanel.CAPTION && edited == null && !state.isDrawingActive
+    val postText = morePanel == StoryMorePanel.POST_TEXT && edited == null && !state.isDrawingActive && state.variant.writesPostText
     var surface by remember(edited?.id, caption) { mutableStateOf(ComposerKeyboardOrOptions.initial) }
     val controller = LocalSoftwareKeyboardController.current
     return when {
@@ -75,6 +77,13 @@ internal fun rememberStoryTyping(
             onKeyboardRaised = {},
             keyboard = keyboard,
         )
+        postText -> StoryTypingSlot(
+            surface = TypingSurface.Keyboard,
+            bar = { PostTextTypingBar(state.postText, viewModel::onPostTextChange, onDone = { onMorePanel(null) }) },
+            options = {},
+            onKeyboardRaised = {},
+            keyboard = keyboard,
+        )
         else -> null
     }
 }
@@ -86,14 +95,10 @@ internal fun rememberStoryTyping(
  */
 @Composable
 private fun CaptionTypingBar(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
-    val caption = rememberHostedTextField(state.editorText, viewModel::onTextChange)
     val used = state.editorText.length
     val notice = ComposerLimitNotice.visibleAt(used, StoryComposerDraft.MAX_CHARS)
-    val label = stringResource(R.string.stories_composer_text_caption)
-    val focus = remember { FocusRequester() }
-    val controller = LocalSoftwareKeyboardController.current
     LimitReachedHaptic(used, StoryComposerDraft.MAX_CHARS)
-    Column(Modifier.fillMaxWidth()) {
+    HostedTypingBar(state.editorText, viewModel::onTextChange, stringResource(R.string.stories_composer_text_caption), onDone) {
         notice?.let { kind ->
             Text(
                 text = stringResource(kind.captionRes()),
@@ -105,6 +110,30 @@ private fun CaptionTypingBar(state: StoryComposerUiState, viewModel: StoryCompos
                     .semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
+    }
+}
+
+/** « Texte du post » (#13863) collé au clavier : tronqué au plafond du serveur, son compteur n'apparaît qu'à l'approche. */
+@Composable
+private fun PostTextTypingBar(text: String, onTextChange: (String) -> Unit, onDone: () -> Unit) {
+    LimitReachedHaptic(ComposerPostTextPolicy.length(text), ComposerPostTextPolicy.CONTENT_LIMIT)
+    HostedTypingBar(text, onTextChange, stringResource(R.string.composer_post_text), onDone) { PostTextCounter(text) }
+}
+
+/** Le champ collé au clavier et OK, sous ce que [header] a à dire ; le clavier monte dès que la fenêtre a rendu le focus. */
+@Composable
+private fun HostedTypingBar(
+    text: String,
+    onTextChange: (String) -> Unit,
+    label: String,
+    onDone: () -> Unit,
+    header: @Composable () -> Unit,
+) {
+    val caption = rememberHostedTextField(text, onTextChange)
+    val focus = remember { FocusRequester() }
+    val controller = LocalSoftwareKeyboardController.current
+    Column(Modifier.fillMaxWidth()) {
+        header()
         TypingBarFrame(onDone) {
             Box(Modifier.weight(1f).padding(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.xs)) {
                 if (caption.value.text.isEmpty()) {

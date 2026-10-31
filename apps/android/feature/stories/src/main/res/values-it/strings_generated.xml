@@ -71,6 +71,8 @@
     <string name="composer_object_editor_adjust_vignette">Vignettatura</string>
     <string name="composer_object_editor_effects_bloom">Bagliore</string>
     <string name="composer_object_editor_effects_grain">Grana</string>
+    <string name="composer_publish_as_post">Pubblica post</string>
+    <string name="composer_publish_as_reel">Pubblica reel</string>
     <string name="composer_publish_as_story">Pubblica storia</string>
     <string name="composer_publish_as_storyAndReel">Pubblica storia e reel</string>
     <string name="composer_rail_object_exit">Esci dall\'oggetto</string>

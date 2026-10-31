@@ -67,6 +67,8 @@ object ComposerSceneTools {
         val hasBackground: Boolean = false,
         val canPickBackground: Boolean = false,
         val hasSomethingToErase: Boolean = false,
+        /** Une story légende chaque diapo ; un post ou un réel écrit son texte hors de la scène (#13863). */
+        val captionsSlides: Boolean = true,
     )
 
     fun moreEntries(input: MoreInput): List<ComposerMoreEntry> = ComposerMoreEntry.entries.filter { entry ->
@@ -78,8 +80,9 @@ object ComposerSceneTools {
             ComposerMoreEntry.VISUAL_EFFECT -> ComposerSceneEffect.VISUAL in input.sceneEffects
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE -> entry.export in input.exports
             ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
-            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION,
+            ComposerMoreEntry.ANIMATION,
             ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE -> true
+            ComposerMoreEntry.CAPTION -> input.captionsSlides
             ComposerMoreEntry.PREVIEW -> input.hasContent
             ComposerMoreEntry.PICK_BACKGROUND -> input.canPickBackground
             ComposerMoreEntry.REMOVE_BACKGROUND -> input.hasBackground

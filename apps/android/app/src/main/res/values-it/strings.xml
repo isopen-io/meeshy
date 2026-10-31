@@ -88,5 +88,4 @@
     <string name="widget_quick_reply_ok">OK</string>
     <string name="widget_quick_reply_thanks">Grazie!</string>
     <string name="widget_quick_reply_call_me">Chiamami</string>
-    <string name="composer_format_media_stay_behind">I tuoi contenuti multimediali restano nel formato precedente: tornaci per ritrovarli.</string>
 </resources>

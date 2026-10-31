@@ -71,6 +71,8 @@
     <string name="composer_object_editor_adjust_vignette">التظليل الجانبي</string>
     <string name="composer_object_editor_effects_bloom">توهج</string>
     <string name="composer_object_editor_effects_grain">حبيبات</string>
+    <string name="composer_publish_as_post">نشر المنشور</string>
+    <string name="composer_publish_as_reel">نشر الريل</string>
     <string name="composer_publish_as_story">نشر القصة</string>
     <string name="composer_publish_as_storyAndReel">نشر القصة والريل</string>
     <string name="composer_rail_object_exit">مغادرة العنصر</string>

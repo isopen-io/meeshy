@@ -71,6 +71,8 @@
     <string name="composer_object_editor_adjust_vignette">Viñeta</string>
     <string name="composer_object_editor_effects_bloom">Resplandor</string>
     <string name="composer_object_editor_effects_grain">Grano</string>
+    <string name="composer_publish_as_post">Publicar publicación</string>
+    <string name="composer_publish_as_reel">Publicar reel</string>
     <string name="composer_publish_as_story">Publicar historia</string>
     <string name="composer_publish_as_storyAndReel">Publicar historia y reel</string>
     <string name="composer_rail_object_exit">Salir del objeto</string>

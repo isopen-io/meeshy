@@ -277,6 +277,12 @@ data class StoryComposerDraftSnapshot(
     /** Mentions, textes alternatifs, légendes et extraction du son (#13451) ; vide pour un blob d'avant. */
     val annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
     val awaitingPublication: List<String> = emptyList(),
+    /** Le texte du post ou du réel (#13863), hors de la scène ; vide pour une story et pour un blob d'avant. */
+    val postText: String = "",
+    /** Le format où la scène était composée (nom de [me.meeshy.sdk.model.composer.ComposerFormat]) ; `null` : une story. */
+    val format: String? = null,
+    /** Les pièces téléversées que la scène porte, avec leur type et leur durée : ce qui qualifie un réel au retour. */
+    val media: List<UploadedMedia> = emptyList(),
 ) {
     /** Whether a publish of this draft is still owed a server confirmation (see [awaitingPublication]). */
     val isAwaitingPublication: Boolean
@@ -296,7 +302,7 @@ data class StoryComposerDraftSnapshot(
      * (a single blank slide) restores nothing, so it never clobbers a freshly opened composer.
      */
     val isWorthRestoring: Boolean
-        get() = isStructurallyValid && slides.any { it.hasContent }
+        get() = isStructurallyValid && (slides.any { it.hasContent } || postText.isNotBlank())
 
     /**
      * Content equality that ignores [updatedAt]: two snapshots are the same *draft* when
@@ -309,7 +315,10 @@ data class StoryComposerDraftSnapshot(
             visibility == other.visibility &&
             repostOfId == other.repostOfId &&
             visibilityUserIds == other.visibilityUserIds &&
-            annotations == other.annotations
+            annotations == other.annotations &&
+            postText == other.postText &&
+            format == other.format &&
+            media == other.media
 
     companion object {
         /** The audience a fresh draft defaults to — parity with the composer's `StoryVisibility.PUBLIC`. */

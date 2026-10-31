@@ -8,7 +8,10 @@ import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
+import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerFormatVariant
 import me.meeshy.sdk.model.composer.scene.ComposerSceneBackground
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
@@ -117,7 +120,17 @@ data class StoryComposerUiState(
     val isFrameOpen: Boolean = false,
     /** La pastille de lieu touchée sur la scène (#13846). */
     val selectedPlaceId: String? = null,
+    /** Le format que l'hôte compose sur cette scène (#13863) : la story, le post ou le réel. */
+    val format: ComposerFormat = ComposerFormat.STORY,
+    /** « Texte du post » : le texte du post ou du réel, hors de la scène. */
+    val postText: String = "",
+    /** La disposition des scènes que l'hôte a armée pour le post. */
+    val postLayout: MosaicLayoutMode? = null,
+    /** Le format d'un brouillon rouvert, à rendre à l'hôte une fois. */
+    val restoredFormat: ComposerFormat? = null,
 ) {
+    internal val variant: ComposerFormatVariant get() = ComposerFormatVariant.of(format)
+
     /**
      * Publishable when some slide carries text, media **or** a publishable text
      * element, every slide is within the character cap, the per-slide media and
@@ -126,7 +139,7 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
+        get() = (variant.writesPostText && postText.isNotBlank() || deck.hasText && variant.captionsSlides || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing || deck.hasAudio || deck.hasPlaces) &&
             publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
@@ -136,14 +149,15 @@ data class StoryComposerUiState(
     /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
     internal val publishBlock: StoryPublishBlock?
         get() = deck.publishBlock(StoryComposerDraft.MAX_CHARS, isRepost = !draft.repostOfId.isNullOrBlank())
+            ?.takeUnless { !variant.keepsStoryLimits && it in StoryPublishBlock.storyOnly }
 
-    /** Les hashtags de la publication — DÉRIVÉS du texte de toutes les slides, jamais déclarés à côté. */
+    /** Les hashtags de la publication — DÉRIVÉS du texte de toutes les slides (du post, en post), jamais déclarés à côté. */
     val hashtags: List<String>
-        get() = ComposerHashtags.tags(deck.slides.joinToString(" ") { it.text })
+        get() = ComposerHashtags.tags(if (variant.writesPostText) postText else deck.slides.joinToString(" ") { it.text })
 
-    /** Ce que le bouton de publication nomme : la story, ou le nombre de stories (une par slide). */
+    /** Ce que le bouton de publication nomme : la story, le nombre de stories (une par slide), le post ou le réel. */
     val publishTitle: StoryPublishTitle
-        get() = if (editing) StoryPublishTitle.Save else StoryPublishTitle.of(slideCount = deck.publishableSlides.size, alsoAsReel = false)
+        get() = variant.publishTitle(slideCount = deck.publishableSlides.size, editing = editing)
 
     /** Une story publiée tient UNE slide : en édition l'ajout est fermé d'avance, plutôt que refusé à l'enregistrement. */
     val canAddSlide: Boolean get() = !editing && deck.canAddSlide

@@ -53,7 +53,7 @@ class DraftResumeViewModelTest {
         val stories = InMemoryStoryComposerDraftStore(story())
         val vm = DraftResumeViewModel(posts, stories)
 
-        vm.discard(DraftResumeKind.POST)
+        vm.discard(DraftResumeSource.POST_SLOT)
 
         assertThat(posts.loadEditing()).isNull()
         assertThat(stories.load()).isNotNull()
@@ -64,7 +64,7 @@ class DraftResumeViewModelTest {
         val stories = InMemoryStoryComposerDraftStore(story())
         val vm = DraftResumeViewModel(InMemoryPostComposerDraftStore(), stories)
 
-        vm.discard(DraftResumeKind.STORY)
+        vm.discard(DraftResumeSource.SCENE)
 
         assertThat(stories.load()).isNull()
     }
@@ -74,7 +74,7 @@ class DraftResumeViewModelTest {
         val stories = InMemoryStoryComposerDraftStore(story(awaiting = listOf("cmid_1")))
         val vm = DraftResumeViewModel(InMemoryPostComposerDraftStore(), stories)
 
-        vm.discard(DraftResumeKind.STORY)
+        vm.discard(DraftResumeSource.SCENE)
 
         assertThat(stories.load()?.isAwaitingPublication).isTrue()
     }
@@ -90,9 +90,21 @@ class DraftResumeViewModelTest {
 
         vm.entries.test {
             assertThat(awaitItem().single().kind).isEqualTo(DraftResumeKind.REEL)
-            vm.discard(DraftResumeKind.REEL)
+            vm.discard(DraftResumeSource.POST_SLOT)
             assertThat(awaitItem()).isEmpty()
         }
         assertThat(posts.loadEditing()).isNull()
+    }
+
+    @Test
+    fun `discarding a post composed on the scene erases the scene draft it lives in, never the post slot`() = runTest {
+        val posts = InMemoryPostComposerDraftStore(editing = post)
+        val stories = InMemoryStoryComposerDraftStore(story().copy(format = "POST", postText = "mon post"))
+        val vm = DraftResumeViewModel(posts, stories)
+
+        vm.discard(DraftResumeSource.SCENE)
+
+        assertThat(stories.load()).isNull()
+        assertThat(posts.loadEditing()).isEqualTo(post)
     }
 }
