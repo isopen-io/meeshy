@@ -645,26 +645,13 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: documentFormat == .story ? nil : .editPostSheet
             )
 
-        // **Le partage pose déjà son média : il s'ouvre comme une porte SEMÉE**
-        // (#13864, R1). `.resume` le montait sur l'atelier du SDK, une autre vue
-        // que la scène du meuble ; sa graine (`ShareComposeDoor` → `mediaSeed`)
-        // entre désormais par `ComposerSeedIngestion`, comme le média d'une
-        // conversation.
+        // Le partage pose déjà son média (`ShareComposeDoor` → `mediaSeed`) : il s'ouvre comme une porte SEMÉE, sur la scène (#13864, R1).
         case .share:
-            return ComposerProfile(
-                initialFormat: .post,
-                offeredFormats: plusReel([.post, .story]),
-                showsSlides: true,
-                showsTimeline: true,
-                opensWith: .mediaSeeded,
-                allowsCapture: true,
-                routesToLegacy: nil
-            )
+            return ComposerProfile(initialFormat: .post, offeredFormats: plusReel([.post, .story]), showsSlides: true,
+                                   showsTimeline: true, opensWith: .mediaSeeded, allowsCapture: true, routesToLegacy: nil)
 
         case .draft:
-            // **Deux portes DÉCLARÉES SANS APPELANT** — dites ici pour qu'aucune
-            // session ne les monte en croyant qu'elles sont servies :
-            //
+            // **Une porte DÉCLARÉE SANS APPELANT**, dite pour qu'aucune session ne la monte en la croyant servie :
             // - `.draft` : la reprise VIVANTE marche, et elle traverse bien le
             //   meuble — `openComposer(resumingDraftId:)` pose `pendingDraftId`,
             //   `StoryTrayActions` le remet en PARAMÈTRE (`draftId:`), le meuble
@@ -672,9 +659,6 @@ nonisolated extension ComposerProfile {
             //   intention, et c'est elle qui n'a pas d'appelant. Son `id` est lu
             //   en repli du paramètre (`ComposerOrigin.resumedDraftId`) : la
             //   monter marcherait, elle ne perd pas ce qu'on lui confie.
-            // - `.share` : l'extension de partage ne fait que router vers des
-            //   conversations. Publier une pièce reçue est la vue `2a` de la
-            //   planche.
             //
             // Inventaire gardé : `ComposerDoorInventoryGuardTests`.
             //

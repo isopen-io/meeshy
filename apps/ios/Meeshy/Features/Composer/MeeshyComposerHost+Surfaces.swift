@@ -414,14 +414,13 @@ extension MeeshyComposerHost {
             // absent, jamais grisé.
             onUndo: sceneUndo,
             onRedo: sceneRedo,
-            // **La sélection se VOIT** (#13839, L5, maquette validée, qui
-            // remplace la sélection silencieuse) : un cadre pointillé blanc,
-            // peint par le canvas hors de l'export.
-            // Ni badge, ni rangée de jetons : la barre dit le reste. Pendant
-            // la frappe, le curseur suffit.
+            // **La sélection se VOIT** (#13839, L5) : un cadre pointillé peint hors de l'export ; la barre dit le reste.
+            // Le badge ne parle que du pré-envoi de l'objet (« Envoi 40 % », #13864, R5), qui ne retient rien.
             selectedItemId: sceneTypesInline ? nil : selectedSceneItemId,
-            selectionBadge: nil,
+            selectionBadge: ComposerSceneIntakeCopy.sendingBadge(for: selectedSceneItemPreUpload),
             selectionBar: sceneSelectionRelay.bar,
+            intakeBlocks: sceneIntakeBlocks,
+            intakeGhost: sceneIntakeGhost,
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -933,6 +932,7 @@ extension MeeshyComposerHost {
                 .opacity(servi ? 1 : 0)
                 .allowsHitTesting(servi)
                 .accessibilityHidden(!servi)
+                .modifier(ComposerIntakeVeil(veiled: sceneIntakeBlocks))
                 .animation(ComposerToolFocus.transition(reduceMotion: UIAccessibility.isReduceMotionEnabled),
                            value: servi)
         }

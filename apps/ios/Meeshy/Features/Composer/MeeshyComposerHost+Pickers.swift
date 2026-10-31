@@ -199,15 +199,24 @@ extension MeeshyComposerHost {
     /// scène le reçoit dès qu'ils sont là.
     /// Le sticker posé est SÉLECTIONNÉ (#13839, L5) : sa barre paraît, rien ne
     /// s'ouvre d'office. Choisi depuis « Modifier », il remplace l'ancien.
+    /// L'image d'un sticker de pack qui arrive se montre en espace réservé et retient l'écran (#13864, R5).
     func poseStickerChoice(_ choice: StickerSheetChoice, replacing ancien: String? = nil) {
+        guard sceneIntakeAllowsAnother else { return }
         if let id = SceneStickerPose.pose(choice, on: viewModel) {
             if !sceneSelectionRelay.replaceModifiedSticker(ancien, with: id) { sceneSelectionRelay.selectSceneItem(id) }
             HapticFeedback.light()
             return
         }
-        guard case .packItem(_, let item) = choice else { return }
-        Task { @MainActor in
-            guard let loaded = await StickerPackItemImages.load(item), let id = SceneStickerPose.posePackSticker(loaded, on: viewModel) else { return }
+        guard case .packItem(_, let item) = choice,
+              let ajout = beginSceneIntake(.sticker, total: 1, foundsScene: false,
+                                           retry: { poseStickerChoice(choice, replacing: ancien) }) else { return }
+        sceneIntakeTask = Task { @MainActor in
+            let loaded = await StickerPackItemImages.load(item)
+            guard sceneIntakeIsCurrent(ajout) else { return }
+            guard let loaded, let id = SceneStickerPose.posePackSticker(loaded, on: viewModel) else {
+                return failSceneIntake(ajout)
+            }
+            finishSceneIntake(ajout)
             if !sceneSelectionRelay.replaceModifiedSticker(ancien, with: id) { sceneSelectionRelay.selectSceneItem(id) }
             HapticFeedback.light()
         }

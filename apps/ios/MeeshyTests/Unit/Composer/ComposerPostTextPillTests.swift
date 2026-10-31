@@ -33,6 +33,11 @@ final class ComposerPostTextPillTests: XCTestCase {
         XCTAssertFalse(ComposerPostTextPill.opensOnAppear(opening: .resume, format: .post))
     }
 
+    func test_opensOnAppear_laPhotothequeDOffice_passeAvantLeTexte() {
+        XCTAssertFalse(ComposerPostTextPill.opensOnAppear(opening: .keyboardOnContent, format: .post, picksFirst: true),
+                       "la photothèque ouverte à la création d'un post ne se double pas d'un clavier levé")
+    }
+
     func test_lePlusMenu_neDoublePlusLeTexteDuPost() {
         XCTAssertFalse(ComposerMoreMenuEntry.allCases.compactMap(\.door).contains(.content),
                        "« Texte du post » vit au socle ; le ⋯ ne l'ouvre plus")

@@ -190,6 +190,12 @@ struct ComposerSceneSurface: View {
     /// `nil` ⇒ rien de sélectionné, la colonne des outils reparaît.
     var selectionBar: ComposerSelectionBar?
 
+    // MARK: - L'élément qui entre (#13864, R5)
+
+    /// Un ajout retient l'écran sous un voile ; seul l'espace réservé, posé SUR la carte, reste touchable (son ✕).
+    var intakeBlocks: Bool = false
+    var intakeGhost: AnyView?
+
     // MARK: - La bande contextuelle
 
     /// La bande OUVERTE — déjà résolue par `ComposerSceneBand.opened`. `nil` ⇒
@@ -548,8 +554,12 @@ struct ComposerSceneSurface: View {
         ZStack {
             sceneLetterbox
             sceneLayer
-            chromeLayer
-            if arrangement == .rails { railsLayer } else { restChrome }
+            chromeLayer.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
+            if arrangement == .rails {
+                railsLayer.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
+            } else {
+                restChrome.modifier(ComposerIntakeVeil(veiled: intakeBlocks))
+            }
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
@@ -611,6 +621,7 @@ struct ComposerSceneSurface: View {
             .contentShape(Rectangle())
             .onTapGesture { onBackgroundTapped?() }
             .allowsHitTesting(drawingSurface == nil && timelinePanel == nil)
+            .modifier(ComposerIntakeVeil(veiled: intakeBlocks, dims: false))
             .task(id: ComposerSceneFloorRules.key(slide: slide, imagesVersion: sceneImagesVersion)) {
                 // Anti-rebond : un geste de cadrage change la clé à chaque image,
                 // et le sol n'a pas à suivre le doigt — il suit la COMPOSITION.
@@ -731,6 +742,7 @@ struct ComposerSceneSurface: View {
             inlineEditInputLink: inlineEditInputLink
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .modifier(ComposerIntakeLayer(ghost: intakeGhost, blocks: intakeBlocks, aspectRatio: aspectRatio))
         .overlay {
             if let quickCaptureHint { ComposerSceneQuickCaptureHint(hint: quickCaptureHint) }
         }

@@ -693,7 +693,9 @@ extension MeeshyComposerHost {
     /// publier en post une composition ouverte en story, et une story compte un
     /// fond choisi comme matière là où un post exige un objet.
     func canPublishDocument(as format: ComposerFormat) -> Bool {
-        ComposerDocumentPublishGate.canPublish(
+        // Un ajout en préparation retient « Publier » (#13864, R5).
+        guard !ComposerSceneIntake.holdsPublication(sceneIntake) else { return false }
+        return ComposerDocumentPublishGate.canPublish(
             surface: mountedSurface,
             emoji: moodEmoji,
             text: documentText,
@@ -768,7 +770,7 @@ extension MeeshyComposerHost {
     /// audience incomplète, elle, garde la capsule et son indice : rien d'autre
     /// à l'écran ne la signale.
     var socleHasNothingToPublish: Bool {
-        !canPublishDocument && !isPublishingDocument
+        !canPublishDocument && !isPublishingDocument && !ComposerSceneIntake.holdsPublication(sceneIntake)
             && ComposerDocumentPublishGate.audienceIsComplete(composerVisibility,
                                                               userIds: composerVisibilityUserIds)
     }

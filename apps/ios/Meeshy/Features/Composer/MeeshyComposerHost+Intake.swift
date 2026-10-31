@@ -759,11 +759,13 @@ extension MeeshyComposerHost {
     /// parce que `documentLocalMedia` déclenche `syncPostMediaIntoSlides` par
     /// `adaptiveOnChange` — écrire la liste d'abord ferait courir la mécanique
     /// sur des cartes vides.
-    /// La porte du fil promet qu'on écrit d'emblée : sur la scène d'un post,
-    /// c'est « Texte du post » qui s'ouvre, clavier levé (#13864).
+    /// La porte du fil ouvre « Texte du post », clavier levé (#13864).
     func openPostTextAtDoorIfDue() {
         guard !postTextOpenedAtDoor,
-              ComposerPostTextPill.opensOnAppear(opening: profile.opensWith, format: selectedFormat) else { return }
+              ComposerPostTextPill.opensOnAppear(
+                  opening: profile.opensWith, format: selectedFormat,
+                  picksFirst: ComposerScenePicking.opensOnPicker(origin: intent.origin, compositionIsEmpty: compositionIsEmpty))
+        else { return }
         postTextOpenedAtDoor = true
         editsSceneDescription = false
         editsPostContent = true

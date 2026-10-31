@@ -520,6 +520,11 @@ struct MeeshyComposerHost: View {
     /// feuille rejoue `onAppear`, et rouvrir le champ surprendrait l'auteur.
     @State var postTextOpenedAtDoor = false
 
+    /// L'élément qui ENTRE dans la scène, sa tâche et son « Réessayer » (#13864, R5).
+    @State var sceneIntake: ComposerSceneIntake?
+    @State var sceneIntakeTask: Task<Void, Never>?
+    @State var sceneIntakeRetry: (@MainActor () -> Void)?
+
     /// **La couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
     /// (`viewModel.applyBackground(hex:)`) pour que la scène l'affiche une fois
@@ -774,11 +779,9 @@ struct MeeshyComposerHost: View {
         if let repris { composer.adoptDraft(id: repris) }
         _viewModel = StateObject(wrappedValue: ComposerLimitFeedback.attached(to: composer))
 
-        // `openingFormat` est la table, SAUF si un geste a nommé un
-        // format qu'elle offre (« Éditer et republier en post »). La borne
-        // — un format hors éventail est ignoré — vit chez l'intention, pas
-        // ici : la refaire ici en ferait une seconde écriture, et c'est celle
-        // du meuble qu'on oublierait de tenir à jour.
+        // `openingFormat` est la table, SAUF si un geste a nommé un format qu'elle offre (« Éditer et
+        // republier en post »). La borne — un format hors éventail est ignoré — vit chez l'intention :
+        // la refaire ici en ferait une seconde écriture, celle du meuble qu'on oublierait de tenir à jour.
         let ouverture = intent.openingFormat(
             compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
         )

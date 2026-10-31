@@ -266,7 +266,7 @@ extension MeeshyComposerHost {
             guard !items.isEmpty else { return }
             let picked = items
             pickedPhotoLibraryItems = []
-            Task { await ingestPhotoLibraryItems(picked) }
+            startPhotoLibraryIntake(picked)
         }
         .fileImporter(
             isPresented: $showsFileImporter,
@@ -277,7 +277,7 @@ extension MeeshyComposerHost {
             allowedContentTypes: fileImportIntent.contentTypes,
             allowsMultipleSelection: fileImportIntent.allowsMultipleSelection
         ) { result in
-            Task { await ingestFileImporterResult(result) }
+            startFileImportIntake(result)
         }
         // **Le choix de l'appui long sur la photothèque** (#10357) : prendre
         // une photo, ou un fichier. Monté au-dessus de l'aiguillage comme les

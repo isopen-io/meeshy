@@ -213,7 +213,7 @@ final class ComposerRailGeometryTests: XCTestCase {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
             "Meeshy/Features/Composer/ComposerSceneSurface.swift")))
         XCTAssertTrue(surface.contains(
-            "varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayerifarrangement==.rails{railsLayer}else{restChrome}}"),
+            "varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))ifarrangement==.rails{railsLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}else{restChrome.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}}"),
                       "Le letterbox, la scène, le chrome et le repos — ou, sur grand écran, les rails libellés (#13839, L6) — sont quatre calques empilés, dans cet ordre.")
         XCTAssertTrue(surface.contains("SceneBackdropView(backdrop:.thumbHash,thumbHash:floorHash)"),
                       "Ce que la carte laisse est le SOL de la scène : le thumbhash de son résultat, comme le lecteur.")
