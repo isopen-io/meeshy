@@ -20,7 +20,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Le lecteur en direct du compositeur (#13973, lot A-E3) : UN lecteur pour le média sélectionné, jamais recréé pendant le
+ * Le lecteur en direct du compositeur (#13863, #13973) : UN lecteur par média de la scène, jamais recréé pendant le
  * geste de Couper ; chaque image du geste déplace sa tête, le volume suit à chaud, et il se tait quand la scène ne joue pas.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -98,7 +98,19 @@ class ComposerLivePlayerTest {
     }
 
     @Test
-    fun `while the player waits for its data, the scene says it is loading`() {
+    fun `the wait ends at the first rendered frame and a later buffering does not bring the ring back`() {
+        val watch = ComposerLiveFirstFrame()
+        watch.onPlaybackStateChanged(Player.STATE_READY)
+        assertThat(watch.waiting.value).isTrue()
+
+        watch.onRenderedFirstFrame()
+        watch.onPlaybackStateChanged(Player.STATE_BUFFERING)
+
+        assertThat(watch.waiting.value).isFalse()
+    }
+
+    @Test
+    fun `while the player waits for its first frame, the scene says it is loading`() {
         val waiting = mutableStateOf(true)
         compose.setContent {
             val state = androidx.compose.runtime.remember {

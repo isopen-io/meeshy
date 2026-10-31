@@ -1,7 +1,6 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.remember
-import me.meeshy.sdk.media.previewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,7 +65,7 @@ internal fun MediaPreviewRow(
         items(attachments, key = { it.id }) { media ->
             val isBackground = media.id == backgroundMediaId
             MediaThumbnail(
-                model = ComposerMediaAddress.preview(media, mediaBaseUrl),
+                model = ComposerPicture.of(media, mediaBaseUrl),
                 isPending = false,
                 isBackground = isBackground,
                 selected = media.id == selectedMediaId,
@@ -80,7 +79,7 @@ internal fun MediaPreviewRow(
         items(pending, key = { it.cmid }) { upload ->
             val phase = pendingPhase(upload.cmid)
             MediaThumbnail(
-                model = remember(upload.cmid) { upload.item.previewModel },
+                model = remember(upload.cmid) { ComposerPicture.of(upload.item) },
                 isPending = true,
                 pendingPhase = phase,
                 onRemove = { onRemove(upload.cmid) },
@@ -112,7 +111,7 @@ internal fun MediaThumbnail(
     val selectLabel = if (isPending) pendingPhase.label() else stringResource(R.string.composer_column_media_select)
     Box {
         AsyncImage(
-            model = model,
+            model = rememberComposerPicture(model),
             contentDescription = if (onSelect != null) selectLabel else null,
             contentScale = ContentScale.Crop,
             modifier = Modifier

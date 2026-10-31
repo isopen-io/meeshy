@@ -5,54 +5,49 @@ import me.meeshy.sdk.model.media.MediaTrimBounds
 import org.junit.Test
 
 /**
- * La lecture en direct du compositeur (grammaire d'édition, lot A-E3, #13973) : la sélection fait jouer SON média, dans
- * SA fenêtre, à SON volume, et chaque image du geste de Couper déplace la tête là où l'on regarde.
+ * La scène du compositeur joue en continu (#13863, loi 6 : le player est l'aperçu) : chaque vidéo et chaque son de la diapo,
+ * dans SA fenêtre, à SON volume, sélectionné ou non ; la sélection ne fait que désigner ce qu'on édite, et chaque image du
+ * geste de Couper déplace la tête là où l'on regarde.
  */
 class ComposerLivePlaybackTest {
 
-    private fun selection(
-        backgroundVideoId: String? = null,
-        mediaId: String? = null,
-        mediaIsVideo: Boolean = false,
-        soundId: String? = null,
-        soundPlayable: Boolean = true,
-    ) = ComposerLivePlayback.Selection(backgroundVideoId, mediaId, mediaIsVideo, soundId, soundPlayable)
+    private fun video(id: String, background: Boolean = false) = ComposerLiveSubject(id, ComposerLiveKind.VIDEO, background)
+
+    private fun sound(id: String) = ComposerLiveSubject(id, ComposerLiveKind.AUDIO, background = false)
 
     @Test
-    fun `nothing selected plays nothing`() {
-        assertThat(ComposerLivePlayback.subject(selection())).isNull()
+    fun `the scene plays every video and every sound of the slide, selected or not`() {
+        val slide = listOf(video("bg", background = true), video("p1"), sound("s1"), sound("s2"))
+
+        assertThat(ComposerLivePlayback.playing(slide, selectedId = null)).isEqualTo(slide)
     }
 
     @Test
-    fun `the selected background video plays as the background`() {
-        val subject = ComposerLivePlayback.subject(selection(backgroundVideoId = "v1", mediaId = "v1", mediaIsVideo = true))
-
-        assertThat(subject).isEqualTo(ComposerLiveSubject("v1", ComposerLiveKind.VIDEO, background = true))
+    fun `an empty slide plays nothing`() {
+        assertThat(ComposerLivePlayback.playing(emptyList(), selectedId = "p1")).isEmpty()
     }
 
     @Test
-    fun `a selected placed video plays on the scene, not as the background`() {
-        val subject = ComposerLivePlayback.subject(selection(backgroundVideoId = "v1", mediaId = "p2", mediaIsVideo = true))
+    fun `beyond the decoders a device holds, the background and then the order of placing keep their reading`() {
+        val slide = listOf(video("bg", background = true), video("p1"), video("p2"), video("p3"), sound("s1"))
 
-        assertThat(subject).isEqualTo(ComposerLiveSubject("p2", ComposerLiveKind.VIDEO, background = false))
+        assertThat(ComposerLivePlayback.playing(slide, selectedId = null))
+            .containsExactly(video("bg", background = true), video("p1"), video("p2"), sound("s1")).inOrder()
     }
 
     @Test
-    fun `a selected image has no player`() {
-        assertThat(ComposerLivePlayback.subject(selection(mediaId = "i1", mediaIsVideo = false))).isNull()
+    fun `the video being edited always plays, even beyond the decoders`() {
+        val slide = listOf(video("p1"), video("p2"), video("p3"), video("bg", background = true))
+
+        assertThat(ComposerLivePlayback.playing(slide, selectedId = "p3"))
+            .containsExactly(video("p1"), video("p3"), video("bg", background = true)).inOrder()
     }
 
     @Test
-    fun `a selected sound plays as audio, and a sound without address plays nothing`() {
-        assertThat(ComposerLivePlayback.subject(selection(soundId = "s1"))).isEqualTo(ComposerLiveSubject("s1", ComposerLiveKind.AUDIO, background = false))
-        assertThat(ComposerLivePlayback.subject(selection(soundId = "s1", soundPlayable = false))).isNull()
-    }
+    fun `sounds are never held back by the video cap`() {
+        val slide = List(4) { video("v$it") } + List(5) { sound("s$it") }
 
-    @Test
-    fun `the background sound yields to a selected sound, one reading at a time`() {
-        assertThat(ComposerLivePlayback.backgroundSoundYields(ComposerLiveSubject("s1", ComposerLiveKind.AUDIO, background = false))).isTrue()
-        assertThat(ComposerLivePlayback.backgroundSoundYields(ComposerLiveSubject("v1", ComposerLiveKind.VIDEO, background = true))).isFalse()
-        assertThat(ComposerLivePlayback.backgroundSoundYields(null)).isFalse()
+        assertThat(ComposerLivePlayback.playing(slide, selectedId = null).count { it.kind == ComposerLiveKind.AUDIO }).isEqualTo(5)
     }
 
     @Test
@@ -117,12 +112,9 @@ class ComposerLivePlaybackTest {
     }
 
     @Test
-    fun `it plays only while the screen is in front and no sheet covers the reading`() {
-        val subject = ComposerLiveSubject("v1", ComposerLiveKind.VIDEO, background = true)
-
-        assertThat(ComposerLivePlayback.plays(subject, screenResumed = true, shelfOpen = false)).isTrue()
-        assertThat(ComposerLivePlayback.plays(subject, screenResumed = false, shelfOpen = false)).isFalse()
-        assertThat(ComposerLivePlayback.plays(subject, screenResumed = true, shelfOpen = true)).isFalse()
-        assertThat(ComposerLivePlayback.plays(null, screenResumed = true, shelfOpen = false)).isFalse()
+    fun `the scene plays while the screen is in front and the sound shelf closed, whatever is selected`() {
+        assertThat(ComposerLivePlayback.plays(screenResumed = true, shelfOpen = false)).isTrue()
+        assertThat(ComposerLivePlayback.plays(screenResumed = false, shelfOpen = false)).isFalse()
+        assertThat(ComposerLivePlayback.plays(screenResumed = true, shelfOpen = true)).isFalse()
     }
 }

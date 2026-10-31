@@ -45,15 +45,29 @@ private val LIVE_AUDIO_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
     .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
     .build()
 
-/** Le lecteur vivant du compositeur, et s'il attend encore ses données (la scène le dit). */
+/** Le lecteur vivant du compositeur, et s'il attend encore sa première image (la scène le dit). */
 @Stable
-class ComposerLivePlayerState internal constructor(val player: ExoPlayer, buffering: State<Boolean>) {
-    val buffering: Boolean by buffering
+class ComposerLivePlayerState internal constructor(val player: ExoPlayer, waiting: State<Boolean>) {
+    val waiting: Boolean by waiting
 }
 
 /**
- * Le lecteur en direct du compositeur (#13973, lot A-E3) : UN lecteur Media3 par média, jamais recréé pendant le geste de
- * Couper. La fenêtre est tenue sur la source entière — un message posé à sa fin ramène la tête au début, une boucle de la
+ * L'attente d'un lecteur vivant : elle dure jusqu'à la PREMIÈRE IMAGE rendue, jamais au-delà — une recherche du Couper ou
+ * une boucle qui remet le lecteur en mémoire tampon ne rallume pas l'anneau par-dessus une vidéo qui joue (recette S8 du
+ * 2026-10-31 : l'anneau restait au-dessus de la lecture).
+ */
+internal class ComposerLiveFirstFrame : Player.Listener {
+    val waiting = mutableStateOf(true)
+
+    override fun onRenderedFirstFrame() {
+        waiting.value = false
+    }
+}
+
+/**
+ * Le lecteur en direct du compositeur (#13863, #13973) : UN lecteur Media3 par média de la scène, jamais recréé pendant le
+ * geste de Couper. Plusieurs jouent ensemble (fond, vidéos posées, sons) : aucun ne prend le focus audio, qui ferait taire
+ * les autres — la scène se tait, elle, hors premier plan. La fenêtre est tenue sur la source entière — un message posé à sa fin ramène la tête au début, une boucle de la
  * source aussi ([ComposerLivePlayback.rewindTo]) — et chaque fenêtre nouvelle déplace la tête là où l'auteur regarde
  * ([ComposerLivePlayback.seekOnChange]). Le volume suit à chaud ; [playing] faux le fige sans rembobiner.
  */
@@ -73,13 +87,13 @@ fun rememberComposerLivePlayer(
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaCache.mediaSourceFactory(category, mediaUrl))
             .build().apply {
-                setAudioAttributes(LIVE_AUDIO_ATTRIBUTES, true)
+                setAudioAttributes(LIVE_AUDIO_ATTRIBUTES, false)
                 setMediaItem(MediaItem.fromUri(mediaUrl))
                 repeatMode = Player.REPEAT_MODE_ALL
                 prepare()
             }
     }
-    val buffering = remember(player) { mutableStateOf(player.playbackState == Player.STATE_BUFFERING) }
+    val firstFrame = remember(player) { ComposerLiveFirstFrame() }
     val live = remember(player) { ComposerLiveHead(player) }
     LaunchedEffect(live, window) { live.follow(window) }
     LaunchedEffect(player, volume) { player.volume = volume }
@@ -87,23 +101,21 @@ fun rememberComposerLivePlayer(
     DisposableEffect(player) {
         val releaseLease = mediaCache.lease(mediaUrl)
         val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                buffering.value = playbackState == Player.STATE_BUFFERING
-            }
-
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
                 if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) live.rewind()
             }
         }
         player.addListener(listener)
+        player.addListener(firstFrame)
         onDispose {
+            player.removeListener(firstFrame)
             player.removeListener(listener)
             live.close()
             releaseLease()
             player.release()
         }
     }
-    return remember(player) { ComposerLivePlayerState(player, buffering) }
+    return remember(player) { ComposerLivePlayerState(player, firstFrame.waiting) }
 }
 
 /** La tête du lecteur vivant : elle suit la fenêtre courante et reboucle sur son début. */
@@ -139,7 +151,7 @@ private class ComposerLiveHead(private val player: ExoPlayer) {
 /**
  * L'image du lecteur vivant, posée sur l'affiche du média (aucun obturateur noir : l'affiche reste jusqu'à la première
  * image). Une TextureView, jamais une SurfaceView : l'image suit la pose de l'objet (échelle, rotation) et le look peint
- * par-dessus. Tant que le lecteur attend ses données, un indicateur le dit, annoncé au lecteur d'écran.
+ * par-dessus. Tant que le lecteur attend sa première image, un indicateur le dit, annoncé au lecteur d'écran.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -154,7 +166,7 @@ fun ComposerLiveVideo(state: ComposerLivePlayerState, fit: Boolean, modifier: Mo
             },
             onRelease = { view -> view.player = null },
         )
-        if (state.buffering) ComposerLiveLoading()
+        if (state.waiting) ComposerLiveLoading()
     }
 }
 

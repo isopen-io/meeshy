@@ -110,7 +110,7 @@ internal fun StoryCanvasSurface(
     selectedMediaId: String? = null,
     stack: List<SceneObjectRef>,
     pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
-    live: ComposerLiveSlot? = null,
+    live: ComposerLiveStage? = null,
 ) {
     val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
@@ -168,8 +168,8 @@ internal fun StoryCanvasSurface(
                     },
                 ),
         ) {
+            val filled = StoryFitMode.rendersFilled(fitMode)
             if (backgroundModel != null) {
-                val filled = StoryFitMode.rendersFilled(fitMode)
                 if (!filled) SceneBackdropLayer(backdrop, backgroundModel)
                 AsyncImage(
                     model = backgroundModel,
@@ -185,8 +185,9 @@ internal fun StoryCanvasSurface(
                         }
                         .sceneLook(look),
                 )
-                live?.takeIf { it.subject.background }?.let { slot -> LiveBackground(slot, transform, look, fit = !filled) }
             }
+            // La vidéo de fond joue en continu sur la scène (#13863), même avant que son affiche soit décodée.
+            live?.background?.let { slot -> LiveBackground(slot, transform, look, fit = !filled) }
             if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
@@ -272,7 +273,7 @@ internal fun StoryCanvasSurface(
                             PlacedMediaLayer(
                                 frame, canvasWidthPx, canvasHeightPx, placedMediaGestures,
                                 selected = frame.key == selectedMediaId,
-                                live = live?.takeIf { !it.subject.background && it.subject.id == frame.key },
+                                live = live?.placed(frame.key),
                             )
                         }
                         ComposerObjectKind.STICKER -> stickerById[ref.id]?.let { sticker ->

@@ -9,16 +9,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import me.meeshy.sdk.model.composer.live.ComposerLivePlayback
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.produceState
-import kotlinx.coroutines.delay
-import me.meeshy.sdk.model.StorySourceWindow
 import me.meeshy.sdk.model.StoryVisibility
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -29,19 +24,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.composer.ComposerOpening
-import me.meeshy.sdk.model.composer.sound.ComposerSoundPlacement
-import me.meeshy.ui.component.audio.AudioTrackSurface
 import me.meeshy.ui.theme.MeeshyTheme
-
-/** Le délai après lequel la fenêtre d'un son rogné est reprise par le lecteur du composeur. */
-private const val SOUND_WINDOW_SETTLE_MS: Long = 300L
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -114,8 +103,8 @@ fun StoryComposerScreen(
     val pickers = rememberStoryMediaPickers(state.mediaPickMode, viewModel)
 
     var sheet by rememberSaveable { mutableStateOf<StoryComposerSheet?>(null) }
+    // La scène joue en continu ses vidéos et ses sons, fond compris (#13863, loi 6) ; l'étagère des sons, qui fait écouter les siens, la tait.
     val live = rememberComposerLive(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND)
-    StoryComposerBackgroundSound(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND)
 
     val close = rememberConfirmedComposerClose(
         hasContent = state.hasDraftContent,
@@ -216,41 +205,6 @@ private fun StoryComposerSheetBody(
             StoryReferenceSheet(open, state, viewModel, onDone)
         StoryComposerSheet.OBJECT_EDIT, StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP, StoryComposerSheet.PLACE_REPOINT,
         StoryComposerSheet.BACKGROUND_SOURCE, StoryComposerSheet.BACKGROUND_DESCRIPTION -> Unit
-    }
-}
-
-/** Le son de FOND de la diapo, joué en composant (en boucle, dans sa fenêtre propre) tant que l'écran est au premier plan et l'étagère fermée. */
-@Composable
-private fun StoryComposerBackgroundSound(state: StoryComposerUiState, viewModel: StoryComposerViewModel, shelfOpen: Boolean) {
-    val screenState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    val backgroundSound = state.selectedSlideBackgroundSound
-    // Une seule lecture à la fois : un son sélectionné joue dans le lecteur vivant (#13973, lot A-E3), le fond se tait.
-    val soundPlays = ComposerSoundPlacement.playsWhileComposing(
-        track = backgroundSound,
-        screenResumed = screenState.isAtLeast(Lifecycle.State.RESUMED),
-        shelfOpen = shelfOpen,
-    ) && !ComposerLivePlayback.backgroundSoundYields(state.liveSubject)
-    // La fenêtre propre du son (#13601) se joue aussi en composant ; pendant le geste d'une poignée elle n'est reprise qu'une
-    // fois posée (un lecteur neuf par image du geste coûterait cher).
-    val liveWindow = StorySourceWindow.clippingMs(backgroundSound?.sourceStart, backgroundSound?.sourceEnd)
-        ?.takeIf { it.endMs != null }
-    val soundWindow by produceState(liveWindow, liveWindow) {
-        delay(SOUND_WINDOW_SETTLE_MS)
-        value = liveWindow
-    }
-    backgroundSound?.let(viewModel::playableSoundUrl)?.let { url ->
-        key(url) {
-            AudioTrackSurface(
-                mediaUrl = url,
-                isActive = soundPlays,
-                rewindWhenInactive = false,
-                loop = true,
-                volume = backgroundSound.volume,
-                sourceStartMs = soundWindow?.startMs,
-                sourceEndMs = soundWindow?.endMs,
-                handleAudioFocus = true,
-            )
-        }
     }
 }
 

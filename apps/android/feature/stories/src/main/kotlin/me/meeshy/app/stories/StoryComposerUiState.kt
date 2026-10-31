@@ -3,7 +3,6 @@ package me.meeshy.app.stories
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.media.MediaUploadProgress
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryFilter
@@ -234,10 +233,11 @@ data class StoryComposerUiState(
     val selectedSlideBackdropIsPending: Boolean
         get() = selectedSlideBackdropMediaId?.let { id -> selectedSlidePending.any { it.cmid == id } } == true
 
+    /** L'affiche du fond : sa vignette, l'image elle-même, ou pour une vidéo sans vignette l'image de son début ([ComposerVideoFrame]). */
     fun selectedSlideBackdropModel(mediaBaseUrl: String?): Any? {
         val id = selectedSlideBackdropMediaId ?: return null
-        selectedSlideAttachments.firstOrNull { it.id == id }?.let { return ComposerMediaAddress.preview(it, mediaBaseUrl) }
-        return selectedSlidePending.firstOrNull { it.cmid == id }?.item?.previewModel
+        selectedSlideAttachments.firstOrNull { it.id == id }?.let { return ComposerPicture.of(it, mediaBaseUrl) }
+        return selectedSlidePending.firstOrNull { it.cmid == id }?.item?.let { ComposerPicture.of(it) }
     }
 
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */

@@ -42,7 +42,6 @@ import coil.size.Size
 import kotlin.math.min
 import kotlin.math.roundToInt
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaLook
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
@@ -92,7 +91,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                 val isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true)
                 PlacedMediaFrame(
                     placed = placed,
-                    model = if (isVideo) uploaded.thumbnailUrl?.let { ComposerMediaAddress.of(it, mediaBaseUrl) } else ComposerMediaAddress.preview(uploaded, mediaBaseUrl),
+                    model = ComposerPicture.of(uploaded, mediaBaseUrl, atMs = posterAtMs(placed.id)),
                     aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height)
                         ?.let { measured -> StoryMediaCrop.effectiveRatio(measured, placed.crop.takeUnless { isVideo }) },
                     isVideo = isVideo,
@@ -103,7 +102,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                 val isVideo = pending.item.mimeType.startsWith("video", ignoreCase = true)
                 PlacedMediaFrame(
                     placed = placed,
-                    model = if (isVideo) null else pending.item.previewModel,
+                    model = ComposerPicture.of(pending.item, atMs = posterAtMs(placed.id)),
                     isVideo = isVideo,
                     pendingItem = pending.item.takeUnless { isVideo },
                     pendingPhase = pendingPhase(pending.cmid),
@@ -114,6 +113,11 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
         }
     }
 }
+
+/** L'instant de l'affiche d'une vidéo posée : le début de sa fenêtre coupée (#13863), le début de la source sinon. */
+private fun StoryComposerUiState.posterAtMs(id: String): Long = placedTrimOf(id)?.let { (it.start * MILLIS_PER_SECOND).toLong() } ?: 0L
+
+private const val MILLIS_PER_SECOND = 1_000
 
 /** Les gestes d'un média posé, par identifiant : glisser (fractions du canevas), fin de geste, pincer / tourner, toucher pour le sélectionner (#13836). */
 internal class PlacedMediaGestures(
@@ -160,10 +164,11 @@ internal fun PlacedMediaLayer(
     val heightPx = base.height.toFloat()
     val crop = placed.crop.takeUnless { frame.isVideo }
     val author = LocalComposerLookAuthor.current
-    val request = remember(frame.model, widthPx, heightPx, crop, frame.mediaLook, author) {
+    val picture = rememberComposerPicture(frame.model)
+    val request = remember(picture, widthPx, heightPx, crop, frame.mediaLook, author) {
         val (decodeWidth, decodeHeight) = croppedDecodeSize(widthPx, heightPx, crop)
         ImageRequest.Builder(context)
-            .data(frame.model)
+            .data(picture)
             .size(Size(decodeWidth, decodeHeight))
             .crossfade(false)
             .storyMediaLook(frame.mediaLook.takeUnless { frame.isVideo }, author)
@@ -212,7 +217,7 @@ internal fun PlacedMediaLayer(
         val frameModifier = Modifier
             .size(with(density) { widthPx.toDp() }, with(density) { heightPx.toDp() })
             .clip(RoundedCornerShape(corner))
-        if (frame.model == null && frame.isVideo) {
+        if (picture == null && frame.isVideo) {
             VideoFramePlaceholder(frameModifier)
         } else {
             Box(frameModifier) {
@@ -224,13 +229,13 @@ internal fun PlacedMediaLayer(
                 )
             }
         }
-        // La vidéo posée sélectionnée joue dans son cadre, sous son look (#13973, A-E3).
+        // La vidéo posée joue en continu dans son cadre, sous son look (#13863), sur l'image de son début.
         live?.let { slot -> Box(frameModifier) { slot.Picture(fit = false, modifier = Modifier.matchParentSize().sceneLook(frame.look)) } }
         frame.pendingPhase?.let { phase -> IncomingWaitingBadge(phase, Modifier.align(Alignment.BottomStart).padding(WAITING_INSET)) }
     }
 }
 
-/** Une vidéo dont on n'a aucune image à décoder : un cadre à la forme de la vidéo, jamais un calque vide qu'on ne saisit pas. */
+/** Une vidéo dont l'image n'est pas (encore) extraite : un cadre à la forme de la vidéo, jamais un calque vide qu'on ne saisit pas. */
 @Composable
 private fun VideoFramePlaceholder(modifier: Modifier) {
     Box(
