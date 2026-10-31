@@ -27,7 +27,7 @@ const USER_ID = '507f1f77bcf86cd799439099';
 // ---------------------------------------------------------------------------
 
 const mockGetSuggestionsForConversation = jest.fn<(contextId: string, userId: string, query: string) => Promise<MentionSuggestion[]>>();
-const mockGetSuggestionsForPost = jest.fn<(postId: string, userId: string, query: string) => Promise<MentionSuggestion[]>>();
+const mockGetSuggestionsForPost = jest.fn<(postId: string, userId: string, query: string, viewerRole?: string | null) => Promise<MentionSuggestion[]>>();
 
 jest.mock('../../../services/MentionService', () => ({
   MentionService: jest.fn().mockImplementation(() => ({
