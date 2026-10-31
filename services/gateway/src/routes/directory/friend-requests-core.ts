@@ -101,15 +101,17 @@ export async function envoyerDemande(
     return { refus: { code: 409, message: 'Une demande d\'ami existe deja entre vous' } };
   }
 
-  // Seule une demande EN ATTENTE retient la suivante : une demande acceptée est
-  // l'histoire d'un cran déjà franchi (la loi des crans dit le reste), une demande
-  // refusée est remplacée plus bas quand le cool-down le permet.
+  // Une demande EN ATTENTE retient la suivante — et, pour son ÉMETTEUR, une demande
+  // REFUSÉE aussi, avec la MÊME réponse : il la lit « en attente » (`servirParties`),
+  // une réponse différente dirait le refus (RG-07, audit #13933). Il la retire
+  // lui-même (`cancel`) pour redemander, et le cool-down juge alors. Une demande
+  // acceptée est l'histoire d'un cran déjà franchi : la loi des crans dit le reste.
   const existante = await fastify.prisma.friendRequest.findFirst({
     where: {
-      status: 'pending',
       OR: [
-        { senderId: emetteurId, receiverId: receveurId },
-        { senderId: receveurId, receiverId: emetteurId },
+        { status: 'pending', senderId: emetteurId, receiverId: receveurId },
+        { status: 'pending', senderId: receveurId, receiverId: emetteurId },
+        { status: 'rejected', senderId: emetteurId, receiverId: receveurId },
       ],
     },
     select: { id: true },
@@ -125,10 +127,6 @@ export async function envoyerDemande(
   if (jugement.allowed === false) {
     return { refus: { code: 409, message: 'Cette demande n\'est pas possible maintenant', codeMetier: jugement.code } };
   }
-
-  await fastify.prisma.friendRequest.deleteMany({
-    where: { senderId: emetteurId, receiverId: receveurId, status: 'rejected' },
-  });
 
   const demande = await withMutationLog({
     request,

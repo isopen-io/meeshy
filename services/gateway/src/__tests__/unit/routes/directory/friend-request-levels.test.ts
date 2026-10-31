@@ -183,16 +183,14 @@ describe('#13933 — le cool-down de 30 jours', () => {
     expect(status).toBe(201);
   });
 
-  it('un cool-down échu laisse passer, et la demande refusée d’avant est REMPLACÉE par la nouvelle', async () => {
+  it('un cool-down échu ne fait pas lire le refus : la demande refusée retient la nouvelle comme une demande en attente, l’émetteur la retire pour redemander (audit #13933)', async () => {
     const ancienne = demande('cccccccccccccccccccccccc', 'rejected', MOI, AUTRE, { targetLevel: 'FRIEND' });
     const { status, store } = await envoyer({ targetLevel: 'FRIEND' }, {
       liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE', cooldown(new Date(NOW.getTime() - DAY)))], demandes: [ancienne],
     });
 
-    expect(status).toBe(201);
-    expect(store.friendRequests()).toHaveLength(1);
-    expect(store.friendRequests()[0]).toMatchObject({ status: 'pending' });
-    expect(store.friendRequests()[0].id).not.toBe('cccccccccccccccccccccccc');
+    expect(status).toBe(409);
+    expect(store.friendRequests()).toEqual([expect.objectContaining({ id: 'cccccccccccccccccccccccc', status: 'rejected' })]);
   });
 });
 
