@@ -15,13 +15,14 @@ import { judgeRelationRequest } from '../../services/relations/relationRequestGa
 import {
   INCLUDE_PARTIES,
   clauseHorsBlocage,
+  filtreStatut,
   servirParties,
   type Resultat,
 } from './friend-request-parties';
 import { trancherDemande } from './friend-request-answer';
 import { retirerDemande } from './friend-request-withdraw';
 
-export { INCLUDE_PARTIES, clauseHorsBlocage, servirParties } from './friend-request-parties';
+export { INCLUDE_PARTIES, clauseHorsBlocage, filtreStatut, servirParties } from './friend-request-parties';
 export type { ClauseHorsBlocage, Refus, Resultat } from './friend-request-parties';
 
 /** Le plafond d'une page de demandes. */
@@ -328,19 +329,6 @@ function repriseDepuis(cursor: string): Reprise | null {
   const horodatage = new Date(cursor);
   if (Number.isNaN(horodatage.getTime())) return null;
   return { ordre: ORDRE_HISTORIQUE, position: { createdAt: horodatage.toISOString() } };
-}
-
-/**
- * Le filtre de statut, tel que CHACUN lit son rang : un refus ne se voit pas
- * (RG-07), l'émetteur continue de compter sa demande refusée « en attente »
- * (`servirParties` la lui sert ainsi) — le filtre le suit, sans quoi le statut
- * servi et le statut filtré se contrediraient.
- */
-function filtreStatut(status: string | undefined, acteurId: string): Record<string, unknown> {
-  if (status === undefined) return {};
-  if (status === 'pending') return { OR: [{ status: 'pending' }, { status: 'rejected', senderId: acteurId }] };
-  if (status === 'rejected') return { status: 'rejected', receiverId: acteurId };
-  return { status };
 }
 
 /**

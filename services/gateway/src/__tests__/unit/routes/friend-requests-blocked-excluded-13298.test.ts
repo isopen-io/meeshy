@@ -173,3 +173,28 @@ describe('#13298 — les listes d’amitié ne servent jamais une personne bloqu
     await app.close();
   });
 });
+
+describe('#13933 — le filtre de statut de l’annuaire suit le refus silencieux, comme celui de directory', () => {
+  const REFUSEE = 'aaaaaaaaaaaaaaaaaaaaaa07';
+  const refusee: Monde = { users: monde().users.map((u) => ({ ...u, blockedUserIds: [] })), demandes: [demande(REFUSEE, MOI, AMIE, 'rejected', 7)] };
+
+  it.each([
+    '/users/friend-requests?status=pending',
+    '/directory/friend-requests?direction=sent&status=pending',
+  ])('%s : l’émetteur compte sa demande refusée « en attente », et la lit ainsi', async (url) => {
+    const app = await monter(refusee);
+    const res = await app.inject({ method: 'GET', url, headers: AUTH });
+    await app.close();
+
+    expect(res.json().data.map((l: { id: string; status: string }) => [l.id, l.status])).toEqual([[REFUSEE, 'pending']]);
+  });
+
+  it('/users/friend-requests?status=rejected ne sert pas à l’émetteur la demande qu’on lui a refusée', async () => {
+    const app = await monter(refusee);
+    const res = await app.inject({ method: 'GET', url: '/users/friend-requests?status=rejected', headers: AUTH });
+    await app.close();
+
+    expect(res.json().data).toEqual([]);
+    expect(res.json().pagination.total).toBe(0);
+  });
+});

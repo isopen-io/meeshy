@@ -523,6 +523,13 @@ describe('`relationRequestId` — l’identifiant de la demande en cours (#7122)
     expect(data.relationRequestId).toBe(ENVOYEE.id);
   });
 
+  it('une demande ENVOYÉE puis REFUSÉE se lit encore « en attente » chez son émetteur : le refus ne se voit pas sur la fiche (RG-07, #13933)', async () => {
+    const data = await relationDe(TIERS, [{ ...ENVOYEE, status: 'rejected' }]);
+
+    expect(data.relation).toBe('pending_sent');
+    expect(data.relationRequestId).toBe(ENVOYEE.id);
+  });
+
   it('`friend` ne sert AUCUN identifiant — il n’y a plus rien à accepter', async () => {
     const data = await relationDe(TIERS, [AMITIE]);
 

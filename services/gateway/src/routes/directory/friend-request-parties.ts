@@ -121,6 +121,20 @@ export async function servirParties<T extends Record<string, unknown>>(
   });
 }
 
+/**
+ * Le filtre de statut, tel que CHACUN lit son rang : un refus ne se voit pas
+ * (RG-07), l'émetteur continue de compter sa demande refusée « en attente »
+ * (`servirParties` la lui sert ainsi) — le filtre le suit, sans quoi le statut
+ * servi et le statut filtré se contrediraient. UNE loi pour les listes qui filtrent
+ * par statut (`listerDemandes` et `GET /users/friend-requests`).
+ */
+export function filtreStatut(status: string | undefined, acteurId: string): Record<string, unknown> {
+  if (status === undefined) return {};
+  if (status === 'pending') return { OR: [{ status: 'pending' }, { status: 'rejected', senderId: acteurId }] };
+  if (status === 'rejected') return { status: 'rejected', receiverId: acteurId };
+  return { status };
+}
+
 export type ClauseHorsBlocage = {
   readonly senderId?: { notIn: string[] };
   readonly receiverId?: { notIn: string[] };
