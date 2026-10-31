@@ -129,6 +129,17 @@ describe('plancher de version — admission de session REST et routes de cercles
       expect([at.statusCode, absent.statusCode, web.statusCode]).toEqual([200, 200, 200]);
     });
 
+    it('le relevé de session (X-Meeshy-*) ne juge qu’une plateforme native : le web qui le pose sans plateforme passe, X-App-Version seul garde le plancher global', async () => {
+      process.env.MIN_APP_VERSION = '9.0.0';
+      const app = await authProbe({ requireAuth: true });
+      const webDeclaration = await app.inject({ method: 'GET', url: '/probe', headers: { ...bearer(), 'x-meeshy-version': '2.0.4' } });
+      const iosDeclaration = await app.inject({ method: 'GET', url: '/probe', headers: { ...bearer(), 'x-meeshy-version': '1.1.4', 'x-meeshy-platform': 'ios' } });
+      const nativeHeaderAlone = await app.inject({ method: 'GET', url: '/probe', headers: { ...bearer(), 'x-app-version': '1.1.4' } });
+      await app.close();
+
+      expect([webDeclaration.statusCode, iosDeclaration.statusCode, nativeHeaderAlone.statusCode]).toEqual([200, 426, 426]);
+    });
+
     it('plancher vide (défaut) ⇒ même une version antique passe', async () => {
       KEYS.forEach((key) => delete process.env[key]);
       const app = await authProbe({ requireAuth: true });

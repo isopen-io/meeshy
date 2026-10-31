@@ -93,6 +93,18 @@ describe('AuthHandler — le handshake socket applique le plancher de version (#
     expect(connectedUsers.size).toBe(0);
   });
 
+  it('le web déclare sa version sans plateforme native (navigateur, coque hors Android) ⇒ jamais jugé, même sous plancher global', async () => {
+    process.env.MIN_APP_VERSION = '9.0.0';
+    for (const client of [{ appVersion: '2.0.4' }, { appVersion: '2.0.4', platform: 'web' }, { appVersion: '2.0.4', platform: 'android-shell' }]) {
+      const socket = createSocket({ token: 'jwt', client });
+
+      await buildHandler().handleTokenAuthentication(socket);
+
+      expect(socket.disconnect).not.toHaveBeenCalled();
+      expect(connectedUsers.size).toBe(1);
+    }
+  });
+
   it('au plancher, web (pwa) et handshake sans relevé ⇒ connectés, aucune erreur', async () => {
     for (const client of [{ appVersion: '1.2.0', platform: 'ios' }, { appVersion: '0.0.1', platform: 'pwa' }, undefined]) {
       const socket = createSocket(client === undefined ? { token: 'jwt' } : { token: 'jwt', client });

@@ -11,7 +11,9 @@ import { getAppStoreUrl, getAppVersionFloorFor, getShellLatestVersion } from '..
 export async function appRoutes(fastify: FastifyInstance) {
   fastify.get('/app/min-version', async (request: FastifyRequest, reply: FastifyReply) => {
     const { platform } = request.query as { readonly platform?: unknown };
-    return sendSuccess(reply, { minVersion: getAppVersionFloorFor(typeof platform === 'string' ? platform : undefined) });
+    const declared = request.headers['x-app-platform'];
+    const asked = typeof platform === 'string' ? platform : typeof declared === 'string' ? declared : undefined;
+    return sendSuccess(reply, { minVersion: getAppVersionFloorFor(asked) });
   });
 
   /**

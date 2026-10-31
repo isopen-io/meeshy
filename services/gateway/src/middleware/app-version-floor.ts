@@ -37,25 +37,41 @@ const text = (raw: unknown): string | undefined => {
 
 type Headers = Readonly<Record<string, string | readonly string[] | undefined>>;
 
-/** `X-App-Version` / `X-App-Platform` (iOS, Android), repli sur `X-Meeshy-*` (relevé de session). */
+const NATIVE_PLATFORMS: ReadonlySet<string> = new Set(['ios', 'android']);
+
+/**
+ * Le relevé de session (`X-Meeshy-*`, `handshake.auth.client`) est AUSSI posé
+ * par le web, qui y déclare sa version 2.0.x — parfois sans plateforme (coque
+ * hors Android). Il ne juge donc qu'une plateforme NATIVE déclarée : sans elle,
+ * la version est tue et le web n'est jamais bloqué, même sous plancher global.
+ */
+const nativeOnly = (claim: ClientVersionClaim): ClientVersionClaim =>
+  NATIVE_PLATFORMS.has(claim.platform?.toLowerCase() ?? '') ? claim : { version: undefined, platform: claim.platform };
+
+/**
+ * `X-App-Version` / `X-App-Platform` (posés par les seuls binaires natifs ;
+ * sans plateforme, le plancher global juge, comme la porte des stories), repli
+ * sur le relevé de session `X-Meeshy-*`, natif seulement.
+ */
 export function readRestVersionClaim(headers: Headers): ClientVersionClaim {
-  return {
-    version: text(headers['x-app-version']) ?? text(headers['x-meeshy-version']),
-    platform: text(headers['x-app-platform']) ?? text(headers['x-meeshy-platform']),
-  };
+  const platform = text(headers['x-app-platform']) ?? text(headers['x-meeshy-platform']);
+  const appVersion = text(headers['x-app-version']);
+  return appVersion !== undefined
+    ? { version: appVersion, platform }
+    : nativeOnly({ version: text(headers['x-meeshy-version']), platform });
 }
 
 /**
  * `handshake.auth.client` — la plateforme est lue BRUTE : `readClientSessionAuth`
  * écarte `android` (hors `CLIENT_PLATFORMS`, réservé à la coque), ce qui ferait
- * juger l'application native sur le plancher global.
+ * juger l'application native sur le plancher global. Natif seulement.
  */
 export function readSocketVersionClaim(auth: unknown): ClientVersionClaim {
   const declared = auth !== null && typeof auth === 'object' ? (auth as Record<string, unknown>).client : undefined;
   const fields = declared !== null && typeof declared === 'object' && !Array.isArray(declared)
     ? (declared as Record<string, unknown>)
     : {};
-  return { version: text(fields.appVersion), platform: text(fields.platform) };
+  return nativeOnly({ version: text(fields.appVersion), platform: text(fields.platform) });
 }
 
 export function upgradeRequirementFor(claim: ClientVersionClaim): UpgradeRequirement | null {
