@@ -87,8 +87,10 @@ class RouteManifestRatchetTest {
          * catalogue généré (`ApiRoutesStickerPacks`, `ApiRoutesConversations`) : le scanner ne lisait que les chemins
          * écrits en littéral et les croyait donc « à porter ». Il résout désormais `ApiRoutesX.NOM` (#13998, qui
          * branche `RelationsApi` par `ApiRoutesRelations.BY_USER_ID`).
+         * 198 : moins `GET /mentions/suggestions` (#14053 : la liste « @ » fait remonter les personnes du
+         * contexte d'une conversation ou d'un post), que porte `MentionsApi.suggestions`.
          */
-        const val TO_PORT_CEILING = 199
+        const val TO_PORT_CEILING = 198
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

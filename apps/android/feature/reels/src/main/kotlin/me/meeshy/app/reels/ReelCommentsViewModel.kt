@@ -14,6 +14,12 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.mention.MentionAutocomplete
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionContacts
+import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.post.UnsentCommentStore
@@ -61,10 +67,21 @@ class ReelCommentsViewModel @Inject constructor(
     private val socialSocket: SocialSocketManager,
     private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     private val unsentComments: UnsentCommentStore? = null,
+    mentionSearch: MentionSearch = MentionSearch.None,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReelCommentsUiState())
     val state: StateFlow<ReelCommentsUiState> = _state.asStateFlow()
+
+    /** The « @ » list of the field (#14053): cached contacts at once, the reel's own suggestions (`contextType=post`) by the law. */
+    private val mentions = MentionAutocomplete(
+        scope = viewModelScope,
+        search = mentionSearch,
+        contacts = mentionContacts,
+        selfId = { sessionRepository.currentUser.value?.id },
+    )
+    val mention: StateFlow<MentionAutocompleteState> = mentions.state
 
     private var reelId: String? = null
     private var loadingReelId: String? = null
@@ -91,6 +108,7 @@ class ReelCommentsViewModel @Inject constructor(
             return
         }
         loadingReelId = reelId
+        mentions.bind(MentionContext.post(reelId))
         restoreUnsentComment(reelId)
         observeIncoming()
         val hadData = _state.value.comments.isNotEmpty()
@@ -126,6 +144,13 @@ class ReelCommentsViewModel @Inject constructor(
 
     /** The comment field's text lives here so a refused banner comment can come back into it. */
     fun setDraft(text: String) {
+        _state.update { it.copy(draft = text) }
+        mentions.onTextChange(text)
+    }
+
+    /** Puts the picked person's handle in place of the `@fragment` being typed, and closes the list. */
+    fun onMentionSelected(candidate: MentionCandidate) {
+        val text = mentions.select(candidate, _state.value.draft)
         _state.update { it.copy(draft = text) }
     }
 
@@ -193,6 +218,7 @@ class ReelCommentsViewModel @Inject constructor(
             status = ReelCommentStatus.Pending,
         )
         _state.update { it.copy(comments = ReelCommentsReducer.posting(it.comments, optimistic), draft = "") }
+        mentions.reset()
         send(reel, clientId, trimmed)
     }
 

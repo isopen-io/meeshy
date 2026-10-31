@@ -1,7 +1,10 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.layout.PaddingValues
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -73,6 +76,8 @@ fun StoryReplySheet(
     viewModel: StoryReplyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mention by viewModel.mention.collectAsStateWithLifecycle()
+    LaunchedEffect(quote.storyId) { viewModel.attachStory(quote.storyId) }
     val context = LocalContext.current
     val sentMessage = stringResource(R.string.stories_reply_sent)
     LaunchedEffect(state.phase) {
@@ -113,7 +118,9 @@ fun StoryReplySheet(
                 accentHex = quote.accentHex,
                 isSending = state.phase == StoryReplyPhase.SENDING,
                 canSend = StoryReplyRules.canSend(canReply = true, isSending = state.phase == StoryReplyPhase.SENDING, text = state.text),
+                mention = mention,
                 onChange = viewModel::onTextChange,
+                onMentionSelected = viewModel::onMentionSelected,
                 onSend = { viewModel.send(quote.storyId, quote.authorId) },
             )
         }
@@ -167,7 +174,9 @@ private fun ReplyField(
     accentHex: String,
     isSending: Boolean,
     canSend: Boolean,
+    mention: MentionAutocompleteState,
     onChange: (String) -> Unit,
+    onMentionSelected: (MentionCandidate) -> Unit,
     onSend: () -> Unit,
 ) {
     val accent = hexColor(accentHex)
@@ -182,5 +191,6 @@ private fun ReplyField(
         accentColor = accent,
         secondaryColor = accent.copy(alpha = 0.75f),
         contentPadding = PaddingValues(0.dp),
+        topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected, accentColor = accent) },
     )
 }
