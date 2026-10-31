@@ -57,7 +57,7 @@ export type UserRelationRow = {
   readonly levelSince?: Date | null;
   readonly cooldownLowUntil?: Date | null;
   readonly cooldownHighUntil?: Date | null;
-  readonly transitions?: ReadonlyArray<{ readonly from: string; readonly to: string; readonly at?: Date | null }> | null;
+  readonly transitions?: ReadonlyArray<{ readonly actorId?: string; readonly from: string; readonly to: string; readonly at?: Date | null }> | null;
 };
 
 type NewUserRelation = RelationPairKey & {
@@ -103,6 +103,15 @@ const grantsOf = (row: UserRelationRow): Grants => ({
 });
 
 const effectiveLevel = (grants: Grants): RelationLevel => minRelationLevel(grants.low, grants.high);
+
+/** Le niveau EFFECTIF d'une ligne : le minimum des deux accords, tout illisible lu PUBLIC. */
+export const effectiveLevelOfRow = (row: UserRelationRow): RelationLevel => effectiveLevel(grantsOf(row));
+
+/** Ce que `userId` accorde dans cette ligne. */
+export const grantedByUser = (row: UserRelationRow, userId: string): RelationLevel => {
+  const grants = grantsOf(row);
+  return row.userLowId === userId ? grants.low : grants.high;
+};
 
 const passagesBetween = (pair: RelationPairKey, from: Grants, to: Grants, at: Date): RelationTransition[] =>
   ([

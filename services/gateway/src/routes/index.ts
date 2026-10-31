@@ -156,6 +156,7 @@ import { directoryPersonRoutes } from './directory/person';
 import { directoryPresenceRoutes } from './directory/presence';
 import { directoryBlocksRoutes } from './directory/blocks';
 import { directoryFriendRequestsRoutes } from './directory/friend-requests';
+import { relationsRoutes } from './relations';
 import { directoryContactsRoutes } from './directory/contacts';
 import { contactsResolveRoutes } from './contacts/resolve';
 import { pushTokenRoutes } from './push-tokens';
@@ -391,6 +392,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'directory-presence', prefix: `${API_PREFIX}/directory`, module: directoryPresenceRoutes },
   { name: 'directory-blocks', prefix: `${API_PREFIX}/directory`, module: directoryBlocksRoutes },
   { name: 'directory-friend-requests', prefix: `${API_PREFIX}/directory`, module: directoryFriendRequestsRoutes },
+  { name: 'relations', prefix: `${API_PREFIX}/relations`, module: relationsRoutes },
   { name: 'directory-contacts', prefix: `${API_PREFIX}/directory`, module: directoryContactsRoutes },
   // La carte de visite partagée (#8101) — vCard → profils publics. Montage
   // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).

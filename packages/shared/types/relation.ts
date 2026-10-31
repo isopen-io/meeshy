@@ -151,3 +151,21 @@ export const visibleRelationTransitions = (transitions: ReadonlyArray<RelationTr
     return [{ ...t, from: ceiling }];
   });
 };
+
+/**
+ * Depuis quand la paire est-elle au niveau `level` au moins — lu dans les seules
+ * MONTÉES visibles (#13933). `levelSince` bouge aussi à une baisse : il ne se sert
+ * jamais brut (une baisse est silencieuse, RG-07). Chaque acteur compte à son
+ * premier passage visible vers `level` ou au-dessus ; le niveau effectif n'est
+ * atteint que quand les DEUX y sont, d'où le plus tardif. `null` quand rien de
+ * lisible ne le dit.
+ */
+export const relationEntryDate = (transitions: ReadonlyArray<RelationTransition>, level: RelationLevel): Date | null => {
+  const reaching = visibleRelationTransitions(transitions).filter((t) => RANK[t.to] >= RANK[level]);
+  const firstByActor = new Map<string, Date>();
+  reaching.forEach((t) => {
+    if (!firstByActor.has(t.actorId)) firstByActor.set(t.actorId, t.at);
+  });
+  const dates = [...firstByActor.values()].map((d) => d.getTime());
+  return dates.length === 0 ? null : new Date(Math.max(...dates));
+};

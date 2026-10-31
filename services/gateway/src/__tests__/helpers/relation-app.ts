@@ -97,6 +97,10 @@ export async function buildRelationApp(
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
       findMany: jest.fn(async () => []),
+      findFirst: jest.fn(async (args: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
+        args.where.OR.map((branch) => users.get(branch.id)).find((u, i) =>
+          u !== undefined && ((u.blockedUserIds as string[]) ?? []).includes(args.where.OR[i].blockedUserIds.has),
+        ) ?? null),
     },
     friendRequest: {
       ...store.prisma.friendRequest,

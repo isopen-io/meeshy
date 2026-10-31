@@ -56,3 +56,47 @@ export async function loadRelationProgress(
     acquaintance: acquaintanceProgress({ days, now: params.now, thresholds }),
   };
 }
+
+export type RelationProgressTarget = {
+  readonly otherId: string;
+  readonly level: RelationLevel;
+  readonly levelSince: Date | null;
+};
+
+/**
+ * Le progrès de TOUS les liens d'une personne en UN balayage (#13933) : la liste
+ * « Mes cercles » ne paie pas une requête par lien. Même calcul que
+ * {@link loadRelationProgress}, sur les lignes de l'agrégat groupées par partenaire.
+ */
+export async function loadProgressByPartner(
+  prisma: Pick<PrismaClient, 'pairInteractionDay'>,
+  params: { userId: string; targets: ReadonlyArray<RelationProgressTarget>; now: Date; thresholds?: RelationThresholds },
+): Promise<ReadonlyMap<string, RelationProgress>> {
+  if (params.targets.length === 0) return new Map();
+  const thresholds = params.thresholds ?? relationThresholdsFor(process.env.DEPLOY_ENV ?? process.env.NODE_ENV);
+  const rows = await prisma.pairInteractionDay.findMany({
+    where: {
+      OR: [{ userLowId: params.userId }, { userHighId: params.userId }],
+      day: { gte: addUtcDays(isoWeekStart(params.now), -7 * PROGRESS_LOOKBACK_WEEKS) },
+    },
+  });
+  const partnerOf = (row: Record<string, unknown>): string =>
+    String(row.userLowId === params.userId ? row.userHighId : row.userLowId);
+  const byPartner = rows.reduce((groups, row) => {
+    const partner = partnerOf(row as Record<string, unknown>);
+    return groups.set(partner, [...(groups.get(partner) ?? []), pairDayFromRow(row as Record<string, unknown>)]);
+  }, new Map<string, ReturnType<typeof pairDayFromRow>[]>());
+
+  return new Map(
+    params.targets.map(({ otherId, level, levelSince }) => {
+      const days = byPartner.get(otherId) ?? [];
+      return [
+        otherId,
+        {
+          series: relationSeriesProgress({ days, now: params.now, level, levelSince, thresholds }),
+          acquaintance: acquaintanceProgress({ days, now: params.now, thresholds }),
+        },
+      ] as const;
+    }),
+  );
+}
