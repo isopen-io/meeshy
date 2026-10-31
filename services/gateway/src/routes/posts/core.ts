@@ -41,7 +41,7 @@ import { protectedPreview, maskedAttachment } from '../../services/notifications
 import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { mayServePostToAnonymous } from './anonymousPostGate';
-import { notifyRepostedAuthor, readRepostedSource, repostedAuthorToNotify } from './repostedAuthorNotification';
+import { noteRepostInteraction, notifyRepostedAuthor, readRepostedSource, repostedAuthorToNotify } from './repostedAuthorNotification';
 import { audienceChangeVerdict, mayRepostSource } from '../../services/posts/moderationHold';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
@@ -556,6 +556,7 @@ export function registerCoreRoutes(
       });
 
       if (sourcePostId) {
+        noteRepostInteraction(fastify.prisma, { actorId: authorId, source: repostedSource });
         notifyRepostedAuthor(fastify.notificationService, {
           actorId: authorId,
           source: repostedSource,

@@ -450,6 +450,15 @@ describe('contact_recently_active — « X était sur Meeshy récemment » (#828
     expect(buildNotificationDisplay('en', { type: 'contact_recently_active', actorName: 'Mum' }).title).toBe('Mum was on Meeshy recently');
   });
 
+  it('la Connaissance née toute seule se dit dans les huit langues, jamais par la clé (#13932)', () => {
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      for (const key of ['contact.acquaintanceAction', 'contact.acquaintanceBody'] as const) {
+        expect(notificationString(lang, key).length).toBeGreaterThan(0);
+        expect(notificationString(lang, key)).not.toContain('contact.');
+      }
+    }
+  });
+
   it('les huit langues portent le titre et une invitation à écrire, jamais la clé', () => {
     for (const lang of NOTIFICATION_LANGUAGES) {
       for (const key of ['contact.recentlyActiveAction', 'contact.recentlyActiveBody'] as const) {

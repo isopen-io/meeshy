@@ -43,7 +43,8 @@ const recipients = (
   conversation: { type: string; participants: ReadonlyArray<{ userId: string | null }> },
   sender: string,
 ): ReadonlyArray<{ otherId: string; nature: 'message' | 'audio' | 'storyReply' | 'mention' }> => {
-  const nature = interaction.messageType === 'audio' ? 'audio' : interaction.isStoryReply ? 'storyReply' : 'message';
+  const nature: 'message' | 'audio' | 'storyReply' =
+    interaction.messageType === 'audio' ? 'audio' : interaction.isStoryReply ? 'storyReply' : 'message';
   if (conversation.type === 'direct') {
     return conversation.participants
       .map((p) => p.userId)
