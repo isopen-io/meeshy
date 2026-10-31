@@ -125,7 +125,7 @@ import me.meeshy.ui.theme.hexColor
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 
 /** L'arrondi d'un média de premier plan, en fraction de son petit côté — `StoryMediaLayer.cornerRadiusFraction` (iOS). */
-private const val FOREGROUND_CORNER_FRACTION = 0.06f
+internal const val FOREGROUND_CORNER_FRACTION = 0.06f
 
 /**
  * A foreground video/image layer positioned at [StoryForegroundMediaView.x]/[y]

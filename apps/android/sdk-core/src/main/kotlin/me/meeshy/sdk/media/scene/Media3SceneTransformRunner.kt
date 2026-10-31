@@ -40,7 +40,7 @@ internal class Media3SceneTransformRunner(
                 val finished = CompletableDeferred<Unit>()
                 val transformer = transformer(job, finished)
                 val planned = SceneCompositionPlanner.of(job)
-                SceneExportLog.info(planned.describe(job.overlays.size))
+                SceneExportLog.info(planned.describe(job.overlays.size, job.placedVideos))
                 transformer.start(Media3SceneComposition.of(job, planned), job.output.absolutePath)
                 val ticker = launch {
                     val holder = ProgressHolder()
