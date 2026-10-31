@@ -35,6 +35,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { invalidateAllSessions } from '../../services/SessionService';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
+import { revisitAutoAcquaintancesOnAgeDeclared } from '../../services/relations/autoAcquaintance';
 
 const logger = enhancedLogger.child({ module: 'MeBirthDate' });
 
@@ -45,6 +46,12 @@ export type MeBirthDateRoutesOptions = {
    * déclaration donne moins de 13 ans. Injectable pour les tests.
    */
   readonly revokeAllSessions?: (userId: string) => Promise<void>;
+  /**
+   * Les cercles (#13932) : un âge déclaré après coup peut séparer deux personnes
+   * liées par une Connaissance automatique née entre deux âges inconnus. Relance
+   * leur évaluation sans attendre (rien qui jette). Injectable pour les tests.
+   */
+  readonly onAgeDeclared?: (userId: string) => void;
 };
 
 const revokeEverywhere = (fastify: FastifyInstance) => async (userId: string): Promise<void> => {
@@ -96,6 +103,8 @@ const INVALID_BIRTH_DATE = 'La date de naissance doit être un jour passé, au f
 export async function meBirthDateRoutes(fastify: FastifyInstance, options: MeBirthDateRoutesOptions = {}) {
   const now = options.now ?? (() => new Date());
   const revokeAllSessions = options.revokeAllSessions ?? revokeEverywhere(fastify);
+  const onAgeDeclared =
+    options.onAgeDeclared ?? ((userId: string) => revisitAutoAcquaintancesOnAgeDeclared(fastify.prisma, { userId }));
   const service = new OnboardingService(fastify.prisma);
 
   fastify.put(
@@ -132,6 +141,7 @@ export async function meBirthDateRoutes(fastify: FastifyInstance, options: MeBir
       if (!birthDate) return sendBadRequest(reply, INVALID_BIRTH_DATE, { code: 'VALIDATION_ERROR' });
       try {
         const outcome = await service.declareBirthDate(userId, birthDate, now());
+        if (outcome.kind === 'declared' || outcome.kind === 'below-minimum') onAgeDeclared(userId);
         switch (outcome.kind) {
           case 'declared':
             logger.info('birth date declared', { userId, ageClass: outcome.ageClass });

@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
-import { evaluateAutoAcquaintance } from '../../../../services/relations/autoAcquaintance';
+import { evaluateAutoAcquaintance, revisitAutoAcquaintancesOnAgeDeclared } from '../../../../services/relations/autoAcquaintance';
 import { runRelationCatchUp } from '../../../../services/relations/relationCatchUp';
 import { pairInteractionStore } from '../../../helpers/pair-interaction-store';
 
@@ -41,6 +41,29 @@ describe('audit — la Connaissance automatique ne survit pas à un âge déclar
     await evaluateAutoAcquaintance({ prisma: store.prisma, now: () => NOW }, { userA: LOW, userB: HIGH });
 
     expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
+
+  it('la déclaration de date relit les Connaissances automatiques du déclarant, même sans échange récent, et épargne une demande acceptée', async () => {
+    const FRIEND_ID = '5f0000000000000000000003';
+    const store = pairInteractionStore({
+      users: [
+        { id: LOW, birthDate: MINOR, blockedUserIds: [] },
+        { id: HIGH, birthDate: ADULT, blockedUserIds: [] },
+        { id: FRIEND_ID, birthDate: ADULT, blockedUserIds: [] },
+      ],
+      relations: [
+        autoAcquaintance,
+        { ...autoAcquaintance, id: 'aa0000000000000000000098', userHighId: FRIEND_ID, grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND', origin: 'request' },
+      ],
+    });
+
+    revisitAutoAcquaintancesOnAgeDeclared(store.prisma, { userId: LOW, now: () => NOW });
+    for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
+
+    expect(store.relations().map((r) => [r.userHighId, r.grantedByLow, r.grantedByHigh])).toEqual([
+      [HIGH, 'PUBLIC', 'PUBLIC'],
+      [FRIEND_ID, 'FRIEND', 'FRIEND'],
+    ]);
   });
 });
 

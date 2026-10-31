@@ -10,7 +10,9 @@
  *
  * - un blocage, dans un sens ou dans l'autre : rien ne naît, et une Connaissance
  *   née toute seule, restée telle quelle, est défaite EN SILENCE (RG-07) ;
- * - un mineur déclaré face à un non-mineur ou à un âge inconnu (fail-closed) ;
+ * - un mineur déclaré face à un non-mineur ou à un âge inconnu (fail-closed) : la
+ *   Connaissance née toute seule entre deux âges inconnus est défaite EN SILENCE
+ *   dès qu'un âge déclaré après coup les sépare ;
  * - une baisse gravée dans l'historique : la sortie volontaire n'est pas défaite
  *   par la poursuite des échanges (porté par l'écrivain).
  *
@@ -73,9 +75,14 @@ async function loadWindow(deps: AutoAcquaintanceDeps, pair: { userLowId: string;
 const isOwnAcquaintance = (row: { origin?: string | null; grantedByLow?: string | null; grantedByHigh?: string | null } | null): boolean =>
   row?.origin === 'auto-acquaintance' && row.grantedByLow === 'ACQUAINTANCE' && row.grantedByHigh === 'ACQUAINTANCE';
 
-async function cancelIfAutomatic(deps: AutoAcquaintanceDeps, pair: ReturnType<typeof relationPairKey>, now: Date) {
+async function cancelIfAutomatic<R extends 'blocked' | 'minor'>(
+  deps: AutoAcquaintanceDeps,
+  pair: ReturnType<typeof relationPairKey>,
+  now: Date,
+  refusal: R,
+): Promise<R | 'cancelled'> {
   const row = await deps.prisma.userRelation.findUnique({ where: { userLowId_userHighId: pair } });
-  if (!isOwnAcquaintance(row)) return 'blocked' as const;
+  if (!isOwnAcquaintance(row)) return refusal;
   await resetFriendship(deps.prisma as unknown as UserRelationDb, { userA: pair.userLowId, userB: pair.userHighId, at: now });
   return 'cancelled' as const;
 }
@@ -120,8 +127,8 @@ export async function evaluateAutoAcquaintance(
     targetMinor: declaredAgeClass(high.birthDate, now),
     feature: 'acquaintance.auto',
   });
-  if (verdict.reason === 'blocked') return cancelIfAutomatic(deps, pair, now);
-  if (!verdict.allowed) return 'minor';
+  if (verdict.reason === 'blocked') return cancelIfAutomatic(deps, pair, now, 'blocked');
+  if (!verdict.allowed) return cancelIfAutomatic(deps, pair, now, 'minor');
 
   const days = await loadWindow(deps, pair, now);
   if (!acquaintanceProgress({ days, now, thresholds: deps.thresholds ?? environmentThresholds() }).met) return 'insufficient';
@@ -148,4 +155,31 @@ export function cancelAutoAcquaintanceOnBlock(
   evaluateAutoAcquaintance({ prisma }, { userA: params.blockerId, userB: params.blockedId }).catch((error: unknown) =>
     logger.warn('acquaintance not cancelled after block', { error }),
   );
+}
+
+/** Plafond des liens relus pour un déclarant : une Connaissance automatique par paire, jamais une collection entière. */
+const AGE_REVISIT_LIMIT = 5000;
+
+/**
+ * Une date de naissance vient d'être déclarée (#13932) : chaque Connaissance née
+ * toute seule du déclarant est réévaluée TOUT DE SUITE, et défaite en silence si
+ * les deux âges sont désormais séparés (`'minor'`). Le rattrapage ne relit que
+ * les paires de la semaine glissante : sans ce site, un lien sans échange récent
+ * survivrait à l'âge déclaré. Un lien monté par une demande n'est pas relu.
+ */
+export function revisitAutoAcquaintancesOnAgeDeclared(
+  prisma: AutoAcquaintanceDeps['prisma'],
+  params: { userId: string; now?: () => Date },
+): void {
+  const revisit = async () => {
+    const rows = await prisma.userRelation.findMany({
+      where: { origin: 'auto-acquaintance', OR: [{ userLowId: params.userId }, { userHighId: params.userId }] },
+      select: { userLowId: true, userHighId: true },
+      take: AGE_REVISIT_LIMIT,
+    });
+    for (const row of rows) {
+      await evaluateAutoAcquaintance({ prisma, now: params.now }, { userA: row.userLowId, userB: row.userHighId });
+    }
+  };
+  revisit().catch((error: unknown) => logger.warn('acquaintances not revisited after age declaration', { error }));
 }
