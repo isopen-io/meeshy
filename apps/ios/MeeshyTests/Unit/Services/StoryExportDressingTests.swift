@@ -206,8 +206,7 @@ final class StoryExportAuthorIdentityTests: XCTestCase {
 
 /// **Présence servie et logo de cercle de l'auteur, de l'app jusqu'à l'intro** (#13997).
 /// La présence est la projection de ce que le serveur a servi (rien servi, rien peint) ; le
-/// niveau vient d'un fournisseur INJECTÉ — la route serveur n'existe pas encore, son défaut
-/// rend `nil`.
+/// niveau vient d'un fournisseur INJECTÉ, dont l'implémentation réelle lit `GET /relations/:userId`.
 @MainActor
 final class StoryExportRelationBadgeTests: XCTestCase {
 
@@ -326,10 +325,69 @@ final class StoryExportRelationBadgeTests: XCTestCase {
         }
     }
 
-    func test_servedLevel_defaultProvider_servesNothing() async {
-        let level = await StoryExportAuthorIdentity.servedLevel(of: grace(), levels: RelationLevelProvider.shared)
+    func test_servedLevel_realProvider_servesTheEffectiveLevelOfTheServer() async {
+        let api = MockAPIClientForApp()
+        let served: APIResponse<ServedRelationLevel> = JSONStub.decode("""
+        {"success":true,"data":{"userId":"u-grace","effectiveLevel":"CLOSE"}}
+        """)
+        api.stub("/relations/u-grace", result: served)
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: grace(), levels: RelationLevelProvider(api: api))
+
+        XCTAssertEqual(level, "CLOSE")
+        XCTAssertEqual(api.requestEndpoints, ["/relations/u-grace"])
+        XCTAssertEqual(api.requestMethods, ["GET"])
+    }
+
+    func test_servedLevel_realProvider_publicIsServedAsIs_andPaintsNothing() async {
+        let api = MockAPIClientForApp()
+        let served: APIResponse<ServedRelationLevel> = JSONStub.decode("""
+        {"success":true,"data":{"userId":"u-grace","effectiveLevel":"PUBLIC"}}
+        """)
+        api.stub("/relations/u-grace", result: served)
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: grace(), levels: RelationLevelProvider(api: api))
+        let content = StoryExportIntroFactory.unresolvedContent(
+            for: StoryExportAuthorIdentity.source(for: grace(), profile: nil, servedLevel: level))
+
+        XCTAssertEqual(level, "PUBLIC")
+        XCTAssertNil(content.relationLogo)
+    }
+
+    func test_servedLevel_realProvider_serverError_servesNothing() async {
+        let api = MockAPIClientForApp()
+        api.errorToThrow = URLError(.badServerResponse)
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: grace(), levels: RelationLevelProvider(api: api))
 
         XCTAssertNil(level)
+        XCTAssertEqual(api.requestCount, 1)
+    }
+
+    func test_servedLevel_realProvider_unsuccessfulEnvelope_servesNothing() async {
+        let api = MockAPIClientForApp()
+        let served: APIResponse<ServedRelationLevel> = JSONStub.decode("""
+        {"success":false,"data":{"userId":"u-grace","effectiveLevel":"BLOOD"}}
+        """)
+        api.stub("/relations/u-grace", result: served)
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: grace(), levels: RelationLevelProvider(api: api))
+
+        XCTAssertNil(level)
+    }
+
+    func test_servedLevel_realProvider_authorWithoutIdentifier_makesNoRequest() async {
+        let api = MockAPIClientForApp()
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: StoryExportAuthor(userId: nil, name: "grace"), levels: RelationLevelProvider(api: api))
+
+        XCTAssertNil(level)
+        XCTAssertEqual(api.requestCount, 0)
     }
 
     func test_servedLevel_authorWithoutIdentifier_isNeverAsked() async {

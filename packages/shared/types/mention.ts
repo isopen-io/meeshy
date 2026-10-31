@@ -20,6 +20,13 @@ export interface MentionedUser {
 }
 
 /**
+ * D'où vient une suggestion (#14052) : la passerelle range ses suggestions dans
+ * cet ordre — connaissances, personnes du contexte (intervenants d'un post,
+ * membres d'une conversation), contacts de tout cercle, annuaire.
+ */
+export type MentionSuggestionGroup = 'known' | 'context' | 'contact' | 'directory';
+
+/**
  * Suggestion d'utilisateur pour l'autocomplete de mention
  */
 export interface MentionSuggestion {
@@ -32,6 +39,8 @@ export interface MentionSuggestion {
   readonly isFriend: boolean;
   /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
   readonly profileDecor?: PersonProfileDecor;
+  /** Le groupe de la suggestion (#14052) ; absent d'une passerelle antérieure. */
+  readonly group?: MentionSuggestionGroup;
 }
 
 /**
@@ -91,7 +100,11 @@ export interface MentionValidationResult {
  * Requête pour obtenir des suggestions de mentions
  */
 export interface MentionSuggestionsRequest {
-  readonly conversationId: string;
+  /** Le contexte de la mention : une conversation, ou un post (story, réel et mood compris). */
+  readonly contextId?: string;
+  readonly contextType?: 'conversation' | 'post';
+  /** @deprecated forme historique, équivalente à `contextId` + `contextType: 'conversation'`. */
+  readonly conversationId?: string;
   readonly query?: string;
 }
 

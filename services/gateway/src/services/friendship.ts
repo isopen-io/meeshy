@@ -124,6 +124,25 @@ export async function niveauEffectif(prisma: RelationLevelDb, a: string, b: stri
   return servedLevel(ligne, a, b, await acceptationEntre(prisma, a, b));
 }
 
+/**
+ * {@link niveauEffectif}, lu de façon UNIFORME : la ligne et la demande acceptée
+ * sont lues ensemble, quel que soit le lien. Pour une porte dont le LECTEUR
+ * choisit la cible (`GET /relations/:userId`) : le nombre de lectures ne dit
+ * rien du lien, et un bloqué ne se distingue pas d'un inconnu par le temps.
+ * Même loi (`servedLevel` rend le minimum d'une ligne déjà ≥ Ami), une lecture
+ * de plus pour un ami — en parallèle, donc sans attente de plus.
+ */
+export async function niveauEffectifUniforme(prisma: RelationLevelDb, a: string, b: string): Promise<RelationLevel> {
+  if (!a || !b || a === b) return 'PUBLIC';
+
+  const [ligne, acceptee]: [UserRelationRow | null, AcceptedAt] = await Promise.all([
+    prisma.userRelation.findUnique({ where: { userLowId_userHighId: relationPairKey(a, b) }, select: LINK_SELECT }),
+    acceptationEntre(prisma, a, b),
+  ]);
+
+  return servedLevel(ligne, a, b, acceptee);
+}
+
 async function lignesParmi(
   prisma: Pick<PrismaClient, 'userRelation'>,
   sujet: string,
@@ -264,4 +283,64 @@ export async function amisAcceptes(
 
   const tous = lastSeenPerId([...viaLignes, ...recuperes]).sort(newestFirst);
   return tous.slice(0, options.limit).map((f) => f.id);
+}
+
+/** Un compte lié à `sujet`, et le NIVEAU EFFECTIF de ce lien. */
+export type CompteLie = { readonly id: string; readonly niveau: RelationLevel };
+
+const COMPTES_LIES_PLAFOND = 500;
+
+/**
+ * TOUS les comptes liés à `sujet` par un lien au-dessus de `PUBLIC` — la connaissance
+ * comprise —, du plus PROCHE au plus lointain (`BLOOD` → `COMMUNITY`), et à niveau
+ * égal les plus récemment touchés d'abord. Lignes `UserRelation` de tout niveau, et
+ * demandes acceptées sans ligne ; chaque niveau passe par {@link niveauxParmi}, la
+ * même loi que partout (#14052, la mention). Borné à `limit` par source. Le blocage
+ * appartient à l'appelant.
+ */
+export async function comptesLies(
+  prisma: RelationLevelDb,
+  sujet: string,
+  options: { readonly limit?: number } = {}
+): Promise<CompteLie[]> {
+  if (!sujet) return [];
+  const take = options.limit ?? COMPTES_LIES_PLAFOND;
+
+  const [lignes, demandes] = await Promise.all([
+    prisma.userRelation.findMany({
+      where: { OR: [{ userLowId: sujet }, { userHighId: sujet }] },
+      select: { userLowId: true, userHighId: true },
+      orderBy: { updatedAt: 'desc' },
+      take,
+    }),
+    prisma.friendRequest.findMany({
+      where: { status: 'accepted', OR: [{ senderId: sujet }, { receiverId: sujet }] },
+      select: { senderId: true, receiverId: true },
+      orderBy: { updatedAt: 'desc' },
+      take,
+    }),
+  ]);
+
+  const ordre = [
+    ...new Set([...lignes.map((l) => otherSide(l, sujet)), ...demandes.map((d) => otherParty(d, sujet))]),
+  ].filter((id) => id && id !== sujet);
+  const niveaux = await niveauxParmi(prisma, sujet, ordre);
+
+  return ordre
+    .map((id, rang) => ({ id, niveau: niveaux.get(id) ?? 'PUBLIC', rang }))
+    .filter((lien) => lien.niveau !== 'PUBLIC')
+    .sort((a, b) => compareRelationLevel(b.niveau, a.niveau) || a.rang - b.rang)
+    .map(({ id, niveau }) => ({ id, niveau }));
+}
+
+/**
+ * Range `ids` du lien le plus PROCHE au plus lointain selon `niveaux`, sans défaire
+ * l'ordre d'entrée à niveau égal (un id absent vaut `PUBLIC`). Le tri des niveaux
+ * reste ici, au site de la loi (garde `relation-access-single-site-guard`).
+ */
+export function plusProchesDabord(ids: ReadonlyArray<string>, niveaux: ReadonlyMap<string, RelationLevel>): string[] {
+  return ids
+    .map((id, rang) => ({ id, rang, niveau: niveaux.get(id) ?? 'PUBLIC' }))
+    .sort((a, b) => compareRelationLevel(b.niveau, a.niveau) || a.rang - b.rang)
+    .map(({ id }) => id);
 }

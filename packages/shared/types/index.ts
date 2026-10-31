@@ -796,6 +796,7 @@ export * from './reading-modes.js';
 export * from './conversation-bridge.js';
 export * from './contact-card.js';
 export * from './relation.js';
+export * from './relation-level-response.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';

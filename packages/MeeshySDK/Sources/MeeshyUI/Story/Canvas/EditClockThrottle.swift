@@ -66,20 +66,22 @@ enum EditClockThrottle {
     }
 }
 
-/// **Ce que le repos de l'horloge d'édition suspend : l'image, jamais le son (#10362).**
+/// **Ce que le repos de l'horloge d'édition suspend : ni l'image, ni le son.**
 ///
-/// Le repos (#3906) existe pour laisser refroidir l'appareil : le lien à
-/// 60–120 Hz et le décodage vidéo en boucle chauffent. Il suspendait aussi le
-/// mixer audio — et le son de la scène s'arrêtait quatre secondes après la
-/// dernière touche, à chaque pause entre deux gestes : la musique qu'on pose
-/// pour l'écouter pendant qu'on compose se taisait dès qu'on l'écoutait. Le
-/// rendu audio ne coûte presque rien ; il continue.
+/// Le repos (#3906) laisse refroidir l'appareil en arrêtant le lien des gestes
+/// à 60–120 Hz. Il suspendait aussi le son (jusqu'à #10362), puis la vidéo :
+/// la scène se figeait quatre secondes après la dernière touche. Or la scène du
+/// compositeur EST le player (loi 6, `meeshy-reader-modele.md`) : la vidéo de
+/// fond, les vidéos posées et les sons jouent en continu dans leur fenêtre
+/// coupée, sans attendre une touche (directive porteur du 2026-10-31, #13864).
+/// Les players bouclent d'eux-mêmes (`AVPlayerLooper`, l'observateur de fin
+/// de la couche) ; le lien des gestes n'y est pour rien.
 nonisolated enum EditIdleSuspension: Equatable, Sendable {
     case video
     case audio
 
     static func suspended(playsVideo: Bool, playsAudio: Bool) -> Set<EditIdleSuspension> {
-        playsVideo ? [.video] : []
+        []
     }
 }
 
