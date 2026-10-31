@@ -201,6 +201,9 @@ data class StoryDraftSlideSnapshot(
     val soundTranscriptions: Map<String, MobileTranscriptionPayload> = emptyMap(),
     /** Les vidéos s'atténuent sous le son de fond ; un blob d'avant se lit « oui ». */
     val videosDuckUnderSound: Boolean = true,
+    /** Le look de chaque média de la diapo (#13841, format v1 d'iOS), posé ou de fond ; un blob d'avant ou illisible se lit « aucun ». */
+    @Serializable(with = StoryMediaLooksSerializer::class)
+    val mediaLooks: Map<String, StoryMediaLook> = emptyMap(),
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a

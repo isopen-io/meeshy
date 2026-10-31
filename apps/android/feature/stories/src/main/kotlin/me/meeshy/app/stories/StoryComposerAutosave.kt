@@ -20,6 +20,13 @@ import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextFrame
 import me.meeshy.sdk.model.scene.StoryTextOutline
 
+/**
+ * Ce qu'une écriture de brouillon a cessé de nommer, et ce qu'elle nomme. Un média retiré puis enregistré sans lui
+ * (changement de format, recréation de l'activité : l'écran se démonte, le composeur vit) peut revenir par annuler :
+ * son envoi attend dans `releasedByDraft` du composeur tant que l'historique le montre, et n'est annulé qu'ensuite (#13621).
+ */
+internal data class DraftRelease(val released: Set<String>, val named: Set<String>)
+
 /** The persistence action a composer change implies for its single durable draft. */
 sealed interface StoryDraftPersist {
     /** Write [snapshot] to the durable store (the composer holds restorable content). */
@@ -198,6 +205,7 @@ fun StorySlideDeck.toDraftSnapshot(
             places = it.places,
             soundTranscriptions = it.soundTranscriptions,
             videosDuckUnderSound = it.videosDuckUnderSound,
+            mediaLooks = it.mediaLooks.filterKeys { id -> id in it.mediaIds },
         )
     },
     selectedId = selectedId,
@@ -244,6 +252,7 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 places = it.places,
                 soundTranscriptions = SoundTranscriptions.pruned(it.soundTranscriptions, it.audio),
                 videosDuckUnderSound = it.videosDuckUnderSound,
+                mediaLooks = it.mediaLooks.filterKeys { id -> id in it.mediaIds },
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,

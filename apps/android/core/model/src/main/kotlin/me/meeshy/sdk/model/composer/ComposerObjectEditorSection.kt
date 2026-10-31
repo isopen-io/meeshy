@@ -13,13 +13,16 @@ enum class TextEditTool(val raw: String) {
     }
 }
 
-/** Outils d'un média (miroir de `MediaEditTool`). */
+/**
+ * Outils d'un média (miroir de `MediaEditTool`). [LOOK] — les filtres, effets et cadres de l'appel (#13841) — est un
+ * RÉGLAGE du média, peint en direct et cuit à la publication seulement ; il ouvre la liste, comme iOS.
+ */
 enum class MediaEditTool(val raw: String) {
-    TRIM("trim"), ACTIONS("actions"), CROP("crop"), SPLIT("split"),
+    LOOK("look"), TRIM("trim"), ACTIONS("actions"), CROP("crop"), SPLIT("split"),
     FILTER("filter"), ADJUST("adjust"), EFFECTS("effects"), ALT_TEXT("altText");
 
     companion object {
-        val served: List<MediaEditTool> = listOf(FILTER, ADJUST, EFFECTS, TRIM, ACTIONS, ALT_TEXT)
+        val served: List<MediaEditTool> = listOf(LOOK, FILTER, ADJUST, EFFECTS, TRIM, ACTIONS, ALT_TEXT)
     }
 }
 

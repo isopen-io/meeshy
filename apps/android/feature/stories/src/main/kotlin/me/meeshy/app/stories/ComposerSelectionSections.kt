@@ -35,6 +35,7 @@ import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
 import me.meeshy.ui.component.media.MediaTrimContent
+import me.meeshy.ui.component.retouch.ComposerMediaLookPanel
 import me.meeshy.ui.component.media.MediaTrimStrip
 import me.meeshy.ui.component.composer.rememberHostedTextField
 
@@ -53,6 +54,10 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
         label = "media-section",
     ) { open ->
         when (open) {
+            ComposerObjectEditorSection.Media(MediaEditTool.LOOK) -> ComposerMediaLookPanel(
+                look = state.mediaLookOf(mediaId),
+                onChoose = { item -> viewModel.onSceneReduce { StoryComposerLookReducer.chosen(it, mediaId, item) } },
+            )
             ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT) -> MediaAltField(
                 alt = state.draft.mediaAlt[mediaId].orEmpty(),
                 onChange = { viewModel.onMediaAltChange(mediaId, it.take(MediaDescriptionLaw.MAX_LENGTH)) },

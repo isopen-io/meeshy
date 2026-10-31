@@ -167,6 +167,7 @@ internal fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
     }
     ComposerObjectEditorSection.Timing -> MeeshyIcons.ScheduleFilled
     is ComposerObjectEditorSection.Media -> when (tool) {
+        MediaEditTool.LOOK -> MeeshyIcons.Wallpaper
         MediaEditTool.FILTER -> MeeshyIcons.PhotoFilter
         MediaEditTool.ADJUST -> MeeshyIcons.Tune
         MediaEditTool.EFFECTS -> MeeshyIcons.Sparkles
@@ -192,6 +193,7 @@ internal fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
     ComposerObjectEditorSection.Timing -> R.string.composer_column_text_timing
     ComposerObjectEditorSection.Plan -> R.string.composer_column_text_plan
     is ComposerObjectEditorSection.Media -> when (tool) {
+        MediaEditTool.LOOK -> R.string.composer_column_media_look
         MediaEditTool.FILTER -> R.string.composer_column_media_filter
         MediaEditTool.ADJUST -> R.string.composer_column_media_adjust
         MediaEditTool.EFFECTS -> R.string.stories_composer_band_effets

@@ -57,6 +57,7 @@ internal class StoryEditor @Inject constructor(
     private val posts: PostRepository,
     private val stories: StoryRepository,
     private val session: SessionRepository,
+    private val lookOven: StoryLookOven? = null,
 ) {
     /** La story à rouvrir, ou `null` : elle n'existe plus, n'est pas une story de l'utilisateur, ou n'est joignable nulle part. */
     suspend fun open(storyId: String): StoryEditOpening? {
@@ -72,8 +73,11 @@ internal class StoryEditor @Inject constructor(
      */
     suspend fun save(opening: StoryEditOpening, state: StoryComposerUiState, language: String): String? {
         if (!opening.post.isMine()) return StoryEditErrors.UNAVAILABLE
-        val first = StoryEditMerge.plan(opening, state, language)
-        val plan = if (first == StoryEditPlan.Refused(StoryEditErrors.BASE_UNKNOWN)) rebased(opening, state, language) else first
+        val unbaked = StoryEditMerge.plan(opening, state, language)
+        if (unbaked is StoryEditPlan.Refused && unbaked.reason != StoryEditErrors.BASE_UNKNOWN) return unbaked.reason
+        val sent = baked(state) ?: return StoryEditErrors.FAILED
+        val first = if (sent === state) unbaked else StoryEditMerge.plan(opening, sent, language)
+        val plan = if (first == StoryEditPlan.Refused(StoryEditErrors.BASE_UNKNOWN)) rebased(opening, sent, language) else first
         if (plan !is StoryEditPlan.Ready) return (plan as StoryEditPlan.Refused).reason
         val before = stories.cachedStories().firstOrNull { it.id == opening.postId }
         if (before != null) stories.adoptPublished(plan.optimistic)
@@ -88,6 +92,9 @@ internal class StoryEditor @Inject constructor(
             }
         }
     }
+
+    /** Les images réglées pendant l'édition partent cuites, avant l'écriture (#13841) ; `null` si une copie ne part pas. */
+    private suspend fun baked(state: StoryComposerUiState): StoryComposerUiState? = lookOven?.uploaded(state) ?: state.takeIf { lookOven == null }
 
     private suspend fun rebased(opening: StoryEditOpening, state: StoryComposerUiState, language: String): StoryEditPlan {
         val served = reader.read(opening.postId)?.takeIf { it.post.type == STORY && it.post.isMine() }

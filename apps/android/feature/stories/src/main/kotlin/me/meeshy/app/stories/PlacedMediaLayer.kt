@@ -43,9 +43,12 @@ import kotlin.math.roundToInt
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.StoryMediaCrop
+import me.meeshy.sdk.model.StoryMediaLook
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.ui.component.imageedit.sceneLook
+import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
+import me.meeshy.ui.component.retouch.storyMediaLook
 
 /**
  * Un média posé et de quoi le peindre : sa pose, le modèle d'image (vignette téléversée, ou aperçu local en attente)
@@ -58,6 +61,8 @@ internal data class PlacedMediaFrame(
     val aspectRatio: Double? = null,
     val isVideo: Boolean = false,
     val pendingItem: MediaUploadItem? = null,
+    /** Son filtre, son effet et son cadre de l'appel (#13841), peints AVANT son filtre de story ; `null` : aucun. */
+    val mediaLook: StoryMediaLook? = null,
 ) {
     val key: String get() = placed.mediaId
 
@@ -68,9 +73,11 @@ internal data class PlacedMediaFrame(
 /** Les médias posés de la slide choisie, dans l'ordre de pose ; un média que la slide ne porte plus, ou son fond, n'est pas peint. */
 internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, comparing: String? = null): List<PlacedMediaFrame> {
     val background = deck.selectedSlide.backgroundMediaId
+    val looks = deck.selectedSlide.mediaLooks
     return deck.selectedSlide.placedMedia.filter { it.mediaId != background }.map { placed ->
         if (placed.mediaId == comparing) placed.copy(filter = null, adjustments = null) else placed
     }.mapNotNull { placed ->
+        val look = looks[placed.mediaId].takeUnless { placed.mediaId == comparing }
         val uploaded = selectedSlideAttachments.firstOrNull { it.id == placed.mediaId }
         val pending = selectedSlidePending.firstOrNull { it.cmid == placed.mediaId }
         when {
@@ -82,6 +89,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                     aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height)
                         ?.let { measured -> StoryMediaCrop.effectiveRatio(measured, placed.crop.takeUnless { isVideo }) },
                     isVideo = isVideo,
+                    mediaLook = look,
                 )
             }
             pending != null -> {
@@ -91,6 +99,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                     model = if (isVideo) null else pending.item.previewModel,
                     isVideo = isVideo,
                     pendingItem = pending.item.takeUnless { isVideo },
+                    mediaLook = look,
                 )
             }
             else -> null
@@ -141,12 +150,14 @@ internal fun PlacedMediaLayer(
     val widthPx = base.width.toFloat()
     val heightPx = base.height.toFloat()
     val crop = placed.crop.takeUnless { frame.isVideo }
-    val request = remember(frame.model, widthPx, heightPx, crop) {
+    val author = LocalComposerLookAuthor.current
+    val request = remember(frame.model, widthPx, heightPx, crop, frame.mediaLook, author) {
         val (decodeWidth, decodeHeight) = croppedDecodeSize(widthPx, heightPx, crop)
         ImageRequest.Builder(context)
             .data(frame.model)
             .size(Size(decodeWidth, decodeHeight))
             .crossfade(false)
+            .storyMediaLook(frame.mediaLook.takeUnless { frame.isVideo }, author)
             .build()
     }
     val corner = with(density) { (min(widthPx, heightPx) * CORNER_FRACTION).toDp() }

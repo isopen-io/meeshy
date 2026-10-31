@@ -23,6 +23,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -255,6 +257,36 @@ class ComposerSelectionActionBarTest {
         compose.runOnIdle { vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") } }
 
         compose.onNodeWithTag(SELECTION_BAR_TAG).assertExists()
+    }
+
+    @Test
+    fun `Modifier on a placed photo offers filters and frames, and a touched filter and frame become its look`() {
+        val vm = viewModel()
+        val photo = PendingMediaUpload("p", MediaUploadItem(ByteArray(4), "p.jpg", "image/jpeg"))
+        vm.onSceneReduce { state ->
+            val slide = state.deck.selectedSlide
+            state.copy(
+                deck = state.deck.copy(slides = state.deck.slides.map { if (it.id == slide.id) it.copy(mediaIds = listOf("p"), placedMedia = listOf(StoryPlacedMedia("p"))) else it }),
+                pendingUploads = listOf(photo),
+            )
+        }
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+        show(vm)
+        compose.onNodeWithText("Edit").performClick()
+
+        tapInSheet("Filters & frames")
+        tapInSheet("Warm")
+        tapInSheet("Frames")
+        tapInSheet("Polaroid")
+
+        assertThat(vm.state.value.mediaLookOf("p")).isEqualTo(me.meeshy.sdk.model.StoryMediaLook(filterPreset = "warm", frameId = "classic:polaroid"))
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).containsExactly("p")
+    }
+
+    /** La feuille de sélection vit dans sa propre fenêtre : sous Robolectric, un toucher par coordonnées tombe sur la scène. */
+    private fun tapInSheet(text: String) {
+        compose.onNodeWithText(text).performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
     }
 
     private fun withPlacedClip(vm: StoryComposerViewModel) {

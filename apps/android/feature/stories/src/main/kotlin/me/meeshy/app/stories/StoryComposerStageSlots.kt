@@ -16,11 +16,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
+import me.meeshy.ui.component.retouch.rememberComposerLookAuthor
+import me.meeshy.ui.component.retouch.rememberStoryMediaLookModel
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -52,10 +56,11 @@ internal fun StoryComposerScene(
 ) {
     var backgroundMenuOpen by remember { mutableStateOf(false) }
     val armsCapture = capture?.takeIf { captureOffered }
+    CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
-                backgroundModel = state.selectedSlideBackdropModel(viewModel.mediaBaseUrl),
+                backgroundModel = rememberStoryMediaLookModel(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl), state.backgroundMediaLook(comparison.mediaId)),
                 sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
                     StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
                 },
@@ -135,6 +140,7 @@ internal fun StoryComposerScene(
             )
             armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
             capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
+    }
     }
 }
 

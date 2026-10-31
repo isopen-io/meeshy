@@ -62,6 +62,8 @@ data class StorySlide(
     val soundTranscriptions: Map<String, me.meeshy.sdk.model.MobileTranscriptionPayload> = emptyMap(),
     /** Les vidéos s'atténuent sous le son de fond (iOS `isDuckingDisabled`, réglé ici pour la diapo entière). */
     val videosDuckUnderSound: Boolean = true,
+    /** Le look de chaque média de la diapo (#13841), posé ou de fond : un RÉGLAGE peint en direct, cuit à la publication seulement. */
+    val mediaLooks: Map<String, me.meeshy.sdk.model.StoryMediaLook> = emptyMap(),
 )
 
 /**
@@ -214,6 +216,7 @@ data class StorySlideDeck(
                     backgroundMediaId = slide.backgroundMediaId.takeIf { !clearsBackground },
                     backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
                     backgroundAdjustments = slide.backgroundAdjustments.takeIf { !clearsBackground },
+                    mediaLooks = slide.mediaLooks - mediaId,
                 )
             } else {
                 slide

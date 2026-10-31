@@ -27,11 +27,12 @@ internal val ServedMediaSections: List<ComposerObjectEditorSection> = ComposerOb
     .filter { it in setOf(ComposerObjectEditorSection.Media(MediaEditTool.FILTER), ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT), ComposerObjectEditorSection.Plan) }
 
 /**
- * Les sections d'un média POSÉ sur la scène (#13599) : le rail de la famille sans actions — rognage (d'une vidéo dont
- * la durée est connue seulement), filtre propre, Réglages, Effets, description, plan. Les Effets (bloom, grain) sont ceux d'une IMAGE : aucune vidéo ne les peint.
+ * Les sections d'un média POSÉ sur la scène (#13599) : le rail de la famille sans actions — filtres et cadres de l'appel
+ * (une image seulement, #13841), rognage (d'une vidéo dont la durée est connue seulement), filtre propre, Réglages, Effets, description, plan. Les Effets (bloom, grain) sont ceux d'une IMAGE : aucune vidéo ne les peint.
  */
 internal val ServedPlacedMediaSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(
+        ComposerObjectEditorSection.Media(MediaEditTool.LOOK),
         ComposerObjectEditorSection.Media(MediaEditTool.TRIM),
         ComposerObjectEditorSection.Media(MediaEditTool.FILTER),
         ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
@@ -41,12 +42,14 @@ internal val ServedPlacedMediaSections: List<ComposerObjectEditorSection> = Comp
     ) }
 
 /**
- * Les sections du média de FOND (#13652) : le filtre de la scène, ses Réglages et ses Effets (iOS `ComposerObjectEditorRail`
+ * Les sections du média de FOND (#13652) : les filtres et cadres de l'appel (une image seulement, #13841), le filtre de la
+ * scène, ses Réglages et ses Effets (iOS `ComposerObjectEditorRail`
  * donne au fond, image ou vidéo, ce que la chaîne `StoryBackgroundLook` peint), la description et le plan. Pas de rognage ni
  * d'actions : le fond n'est pas posé.
  */
 internal val ServedBackgroundSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(
+        ComposerObjectEditorSection.Media(MediaEditTool.LOOK),
         ComposerObjectEditorSection.Media(MediaEditTool.FILTER),
         ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
         ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS),
@@ -84,7 +87,10 @@ internal val StoryComposerUiState.selectedSound: StoryAudioPlayerObject?
  * ni peint ni publié comme objet tant qu'il n'est pas POSÉ sur la scène : un filtre sur lui serait perdu, il n'est pas proposé.
  * Un média posé (#13630) est un objet de la scène : il offre SON filtre (#13603), à côté de celui de la scène.
  */
-internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> {
+internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> =
+    servedMediaSectionsOf(id).filter { it != ComposerObjectEditorSection.Media(MediaEditTool.LOOK) || offersLook(id) }
+
+private fun StoryComposerUiState.servedMediaSectionsOf(id: String): List<ComposerObjectEditorSection> {
     if (deck.selectedSlide.placedMedia.any { it.mediaId == id }) {
         val trim = ComposerObjectEditorSection.Media(MediaEditTool.TRIM)
         return when {

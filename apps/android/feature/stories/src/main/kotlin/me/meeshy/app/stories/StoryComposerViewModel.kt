@@ -36,6 +36,7 @@ import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerCarry
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
@@ -84,6 +85,7 @@ class StoryComposerViewModel @Inject constructor(
     private val blocks: BlockCache = BlockCache(),
     private val config: MeeshyConfig = MeeshyConfig(),
     private val accountFence: AccountFence? = null,
+    private val lookOven: StoryLookOven? = null,
 ) : ViewModel() {
 
     /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
@@ -99,6 +101,7 @@ class StoryComposerViewModel @Inject constructor(
     val mediaBaseUrl: String? get() = config.apiBaseUrl
 
     /** The author colour the reader paints a background-less slide with (#12314). */
+    val lookPerson: ComposerLookPerson get() = sessionRepository.lookPerson()
     val authorAccentHex: String get() = StorySceneFill.authorAccentHex(sessionRepository.currentUser.value)
 
     /** One-shot signal that a story was queued — the screen dismisses on it. */
@@ -238,13 +241,6 @@ class StoryComposerViewModel @Inject constructor(
             lost.forEach { cancelDurableUpload(it) }
         }
     }
-
-    /**
-     * Ce qu'une écriture de brouillon a cessé de nommer, et ce qu'elle nomme. Un média retiré puis enregistré sans lui
-     * (changement de format, recréation de l'activité : l'écran se démonte, le composeur vit) peut revenir par annuler :
-     * son envoi attend dans [releasedByDraft] tant que l'historique le montre, et n'est annulé qu'ensuite (#13621).
-     */
-    private data class DraftRelease(val released: Set<String>, val named: Set<String>)
 
     private var releasedByDraft: Set<String> = emptySet()
 
@@ -722,7 +718,7 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                val queued = publishPlans(current, resolvePublishLanguage()).mapNotNull { plan ->
+                val queued = publishPlans(lookOven?.queued(current) ?: current, resolvePublishLanguage()).mapNotNull { plan ->
                     storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn)
                 }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
