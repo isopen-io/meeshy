@@ -71,13 +71,33 @@ export type RelationTransition = {
 export const isRelationDrop = (transition: Pick<RelationTransition, 'from' | 'to'>): boolean =>
   compareRelationLevel(transition.to, transition.from) < 0;
 
+const isLegible = (t: RelationTransition): boolean => isRelationLevel(t.from) && isRelationLevel(t.to);
+
 /**
- * Ce qu'un client a le droit de lire de l'historique : les MONTÉES seulement.
- * Une baisse, une sortie ou un refus sont silencieux (RG-07) ; un passage dont
- * un niveau est illisible est écarté plutôt que servi.
+ * Ce qu'un client a le droit de lire de l'historique : une suite de MONTÉES,
+ * CONTINUE par acteur (le `to` d'un passage est le `from` du suivant).
+ *
+ * Une baisse, une sortie ou un refus sont silencieux (RG-07). Les écarter ne
+ * suffit pas : une remontée garderait son `from` réel, et la discontinuité
+ * (« CLOSE » puis « ACQUAINTANCE>FRIEND ») trahirait la baisse. La suite est
+ * donc RECALCULÉE : chaque acteur part de son premier niveau lu, et un passage
+ * n'est servi que s'il dépasse le plus haut niveau déjà servi, depuis ce
+ * niveau. Une remontée sous ce plafond, comme la baisse qui la précède, ne se
+ * voit pas. Un passage dont un niveau est illisible est écarté.
+ *
+ * `UserRelation.levelSince` bouge aussi à une baisse : il ne se sert jamais
+ * brut, pour la même raison.
  */
-export const visibleRelationTransitions = (transitions: ReadonlyArray<RelationTransition>): RelationTransition[] =>
-  transitions
-    .filter((t) => isRelationLevel(t.from) && isRelationLevel(t.to) && !isRelationDrop(t))
-    .slice()
-    .sort((a, b) => a.at.getTime() - b.at.getTime());
+export const visibleRelationTransitions = (transitions: ReadonlyArray<RelationTransition>): RelationTransition[] => {
+  const ordered = transitions.filter(isLegible).slice().sort((a, b) => a.at.getTime() - b.at.getTime());
+  const ceilings = new Map<string, RelationLevel>();
+  return ordered.flatMap((t) => {
+    const ceiling = ceilings.get(t.actorId) ?? t.from;
+    if (compareRelationLevel(t.to, ceiling) <= 0) {
+      ceilings.set(t.actorId, ceiling);
+      return [];
+    }
+    ceilings.set(t.actorId, t.to);
+    return [{ ...t, from: ceiling }];
+  });
+};

@@ -109,4 +109,16 @@ describe('[audit #13926] l’historique servi ne trahit pas une baisse par sa di
     const breaks = served.slice(1).filter((t, i) => t.actorId === served[i].actorId && t.from !== served[i].to);
     expect(breaks).toEqual([]);
   });
+
+  it('une remontée qui dépasse le plafond servi part de ce plafond, jamais du niveau d’après la baisse', () => {
+    const served = visibleRelationTransitions([
+      transition({ from: 'PUBLIC', to: 'FRIEND', at: new Date('2026-10-01T00:00:00Z') }),
+      transition({ from: 'FRIEND', to: 'ACQUAINTANCE', at: new Date('2026-11-01T00:00:00Z') }),
+      transition({ from: 'ACQUAINTANCE', to: 'CLOSE', at: new Date('2026-12-01T00:00:00Z') }),
+      transition({ actorId: HIGH, from: 'PUBLIC', to: 'FRIEND', at: new Date('2026-10-01T00:00:00Z') }),
+    ]);
+    expect(served.map((t) => `${t.actorId === LOW ? 'low' : 'high'}:${t.from}>${t.to}`)).toEqual([
+      'low:PUBLIC>FRIEND', 'high:PUBLIC>FRIEND', 'low:FRIEND>CLOSE',
+    ]);
+  });
 });
