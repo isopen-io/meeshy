@@ -3,8 +3,8 @@ import { saveToGallery } from '@/lib/gallery/save-to-gallery';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 
-import { prepareSceneExport, type PreparedSceneExport } from './scene-export-assets';
-import { BRANDING_BUDGET_MS, prepareBranding, withBranding } from './scene-export-branding';
+import { prepareSceneExport } from './scene-export-assets';
+import { BRANDING_BUDGET_MS, brandPreparedScene } from './scene-export-branding';
 import { noRelationLevel, type RelationLevelProvider } from './scene-export-branding-level';
 import type { ImagerLengthChoice, ImagerQuarter } from './scene-export-length';
 import type { ExportPalette } from './scene-export-paint';
@@ -80,22 +80,6 @@ async function deliverFile(params: {
   return sceneDeliveryOf(portal === null ? 'unavailable' : await portal.deliver(params.blob, params.fileName, params.mimeType));
 }
 
-async function brandedScene(params: {
-  readonly prepared: PreparedSceneExport;
-  readonly branding: NonNullable<SceneExportSubject['branding']>;
-  readonly relationLevel: RelationLevelProvider;
-  readonly signal: AbortSignal;
-}): Promise<PreparedSceneExport | 'cancelled'> {
-  const branding = await prepareBranding({
-    author: params.branding.author,
-    signal: params.signal,
-    deps: { loadImage: brandingImage, relationLevel: params.relationLevel, now: () => Date.now(), budgetMs: BRANDING_BUDGET_MS },
-  });
-  if (!params.signal.aborted) return withBranding(params.prepared, branding);
-  params.prepared.dispose();
-  return 'cancelled';
-}
-
 export async function startSceneExport(params: {
   readonly subject: SceneExportSubject;
   readonly mode: SceneExportMode;
@@ -150,7 +134,13 @@ export async function startSceneExport(params: {
               decodeAudio: audioContext === null ? null : (data) => audioContext.decodeAudioData(data),
             },
           });
-          return subject.branding === undefined || prepared === 'cancelled' ? prepared : brandedScene({ prepared, branding: subject.branding, relationLevel: params.relationLevel ?? noRelationLevel, signal });
+          if (subject.branding === undefined || prepared === 'cancelled') return prepared;
+          return brandPreparedScene({
+            prepared,
+            author: subject.branding.author,
+            signal,
+            deps: { loadImage: brandingImage, relationLevel: params.relationLevel ?? noRelationLevel, now: () => Date.now(), budgetMs: BRANDING_BUDGET_MS },
+          });
         },
         render: ({ prepared, lengthMs, signal, onProgress }) =>
           renderSceneExport({

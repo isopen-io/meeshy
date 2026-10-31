@@ -76,3 +76,36 @@ export function withBranding(prepared: PreparedSceneExport, branding: PreparedBr
     branding: { timeline, identity: branding.identity, images: branding.images },
   };
 }
+
+const closeImage = (image: CanvasImageSource | null): void => {
+  if (image !== null && 'close' in image && typeof image.close === 'function') image.close();
+};
+
+/**
+ * Prépare l'emballage d'une story DÉJÀ préparée et l'y pose. Les images
+ * décodées pour l'emballage sont libérées avec la scène ; un export annulé
+ * pendant la préparation libère tout et se dit annulé.
+ */
+export async function brandPreparedScene(params: {
+  readonly prepared: PreparedSceneExport;
+  readonly author: BrandingAuthor | null;
+  readonly deps: BrandingDeps;
+  readonly signal: AbortSignal;
+}): Promise<PreparedSceneExport | 'cancelled'> {
+  const { prepared, signal } = params;
+  const branding = await prepareBranding({ author: params.author, deps: params.deps, signal });
+  const release = () => {
+    closeImage(branding.images.avatar);
+    closeImage(branding.images.banner);
+  };
+  if (signal.aborted) {
+    release();
+    prepared.dispose();
+    return 'cancelled';
+  }
+  const dispose = () => {
+    release();
+    prepared.dispose();
+  };
+  return { ...withBranding(prepared, branding), dispose };
+}
