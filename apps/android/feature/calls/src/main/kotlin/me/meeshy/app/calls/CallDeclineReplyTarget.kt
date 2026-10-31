@@ -7,8 +7,9 @@ package me.meeshy.app.calls
  * l'envoi.
  *
  * L'invitation du socket et le push d'appel arrivent par `CallRoute.incoming`, qui transporte la
- * conversation mais pas l'identifiant de l'appelant : exiger ce dernier retirait la capsule
- * « Message » de tout appel entrant nominal. `null` = aucune destination, ou un appel sortant.
+ * conversation et, depuis #13875, l'appelant quand il est connu — un push d'une passerelle
+ * antérieure ne le porte pas : exiger ce dernier retirait la capsule « Message » de tels appels.
+ * `null` = aucune destination, ou un appel sortant.
  */
 data class CallDeclineReplyTarget(val peerId: String, val conversationId: String) {
     companion object {

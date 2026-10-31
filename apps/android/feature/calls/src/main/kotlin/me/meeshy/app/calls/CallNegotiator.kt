@@ -178,8 +178,8 @@ internal class CallNegotiator(
         when (signal.type) {
             "offer" -> {
                 val sdp = signal.sdp ?: return
-                // The offer's sender is our reply target. An incoming call carries no
-                // peerId through the ring/route (CallConfig.peerId is blank), so the
+                // The offer's sender is our reply target. An incoming call may carry no
+                // peerId through the ring/route (an older push without its caller), so the
                 // answer + ICE candidates would otherwise be sent with a blank `to`
                 // and the gateway rejects the whole signal ("to field is required").
                 signal.from?.takeIf { it.isNotBlank() }?.let { peerId = it }

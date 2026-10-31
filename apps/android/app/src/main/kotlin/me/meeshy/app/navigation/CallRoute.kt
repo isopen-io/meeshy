@@ -29,15 +29,17 @@ object CallRoute {
     const val CALL_ID_ARG: String = "callId"
     const val INCOMING_ARG: String = "incoming"
     const val ANSWER_ARG: String = "answer"
+    const val PEER_ID_ARG: String = "peerId"
 
-    /** The `NavHost` route pattern: a static path with six optional query placeholders. */
+    /** The `NavHost` route pattern: a static path with seven optional query placeholders. */
     const val PATTERN: String =
         "call?$CONVERSATION_ID_ARG={$CONVERSATION_ID_ARG}" +
             "&$PEER_NAME_ARG={$PEER_NAME_ARG}" +
             "&$VIDEO_ARG={$VIDEO_ARG}" +
             "&$CALL_ID_ARG={$CALL_ID_ARG}" +
             "&$INCOMING_ARG={$INCOMING_ARG}" +
-            "&$ANSWER_ARG={$ANSWER_ARG}"
+            "&$ANSWER_ARG={$ANSWER_ARG}" +
+            "&$PEER_ID_ARG={$PEER_ID_ARG}"
 
     /** Une route qui mène à l'écran d'appel, quels que soient ses arguments. */
     fun isCallRoute(route: String?): Boolean = route == CALL_PATH || route?.startsWith("$CALL_PATH?") == true
@@ -61,6 +63,10 @@ object CallRoute {
      * through [config] yields a non-outgoing [CallConfig] that already carries the
      * real id, so the call screen answers the existing call rather than initiating
      * a new one.
+     *
+     * [callerId] is the ringing user (the `call:initiated` initiator, or the push `callerUserId`), the iOS
+     * `remoteUserId` (#13875): it names the caller to Telecom and seeds the peer the screen negotiates with. A ring
+     * that does not know it (an older push) omits the argument, so its route is exactly the one it always was.
      */
     fun incoming(
         callId: String,
@@ -68,11 +74,13 @@ object CallRoute {
         callerName: String,
         isVideo: Boolean,
         autoAnswer: Boolean = false,
+        callerId: String = "",
     ): String =
         "${path(conversationId, callerName, isVideo)}" +
             "&$CALL_ID_ARG=${Uri.encode(callId)}" +
             "&$INCOMING_ARG=true" +
-            "&$ANSWER_ARG=$autoAnswer"
+            "&$ANSWER_ARG=$autoAnswer" +
+            callerId.takeIf { it.isNotBlank() }?.let { "&$PEER_ID_ARG=${Uri.encode(it)}" }.orEmpty()
 
     /**
      * Map already-decoded navigation arguments into the [CallConfig] the call
@@ -88,9 +96,10 @@ object CallRoute {
         isVideo: Boolean?,
         callId: String? = null,
         incoming: Boolean = false,
+        peerId: String? = null,
     ): CallConfig =
         CallConfig(
-            peerId = "",
+            peerId = peerId.orEmpty(),
             peerName = peerName.orEmpty(),
             isVideo = isVideo ?: false,
             isOutgoing = !incoming,
@@ -119,6 +128,7 @@ object CallRoute {
                 conversationId = config.conversationId,
                 callerName = config.peerName,
                 isVideo = config.isVideo,
+                callerId = config.peerId,
             )
         }
 

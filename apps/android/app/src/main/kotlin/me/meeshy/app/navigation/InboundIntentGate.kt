@@ -36,6 +36,7 @@ internal object InboundIntentGate {
     private const val NAV_CONTROLLER_EXTRA_PREFIX = "android-support-nav:controller:"
     private val CALL_EXTRAS = listOf(
         MeeshyFcmService.EXTRA_CALL_ID,
+        MeeshyFcmService.EXTRA_CALLER_ID,
         MeeshyFcmService.EXTRA_CALLER_NAME,
         MeeshyFcmService.EXTRA_IS_VIDEO,
         MeeshyFcmService.EXTRA_AUTO_ANSWER,

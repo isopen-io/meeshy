@@ -13,13 +13,14 @@ import me.meeshy.app.navigation.graph.GameRoutes
  * platform glue) and hands them to the pure [LaunchRouter], which owns the decision.
  *
  * Keys mirror the extras [me.meeshy.app.push.MeeshyFcmService] sets:
- *  - a **call** full-screen intent carries [callId] / [conversationId] / [callerName] / [isVideo]
+ *  - a **call** full-screen intent carries [callId] / [conversationId] / [callerId] / [callerName] / [isVideo]
  *  - a **message** notification tap carries only [conversationId]
  *  - a cold/normal launch carries none.
  */
 data class LaunchExtras(
     val callId: String? = null,
     val conversationId: String? = null,
+    val callerId: String? = null,
     val callerName: String? = null,
     val isVideo: Boolean = false,
     /** Bouton « Répondre » de la notification CallStyle : décrocher directement. */
@@ -56,6 +57,7 @@ object LaunchRouter {
             callerName = extras.callerName.orEmpty(),
             isVideo = extras.isVideo,
             autoAnswer = extras.autoAnswer,
+            callerId = extras.callerId.orEmpty(),
         )
         else -> tapRoute(extras) ?: sharedMediaRoute(extras)
     }
@@ -105,6 +107,7 @@ object LaunchRouter {
                 LaunchExtras(
                     callId = offer.callId,
                     conversationId = offer.conversationId,
+                    callerId = offer.callerId,
                     callerName = offer.callerName,
                     isVideo = offer.isVideo,
                 ),
