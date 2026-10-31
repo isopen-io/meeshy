@@ -110,7 +110,7 @@ fun ProgressionConceptScreen(
             }
             // « Où j'en suis » ne redit rien : la section disparaît quand elle n'a rien à ajouter (iOS #11180).
             if (fiche != null && fiche.hasWhere) {
-                FicheSection(stringResource(R.string.game_fiche_where)) { ConceptWhereContent(fiche) }
+                FicheSection(stringResource(R.string.game_fiche_where)) { ConceptWhereContent(fiche, concept) }
             }
             FicheSection(stringResource(R.string.game_fiche_earn)) {
                 Sentence(stringResource(ConceptCopy.tip1(concept)))

@@ -2,6 +2,7 @@ package me.meeshy.app.game.progression
 
 import android.content.res.Resources
 import java.util.Locale
+import me.meeshy.app.game.GameCopy
 import me.meeshy.app.game.reveal.RevealCopy
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.GameNumberFormat
@@ -37,7 +38,8 @@ internal data class GameElementTexts(
     val whatTitle: String,
     val what: String,
     val howTitle: String,
-    val how: String,
+    /** La seconde phrase ; une donnée n'en a qu'une (iOS `how == nil`). */
+    val how: String?,
     val reason: String?,
     val stars: String?,
     val starsSpoken: String?,
@@ -61,6 +63,19 @@ internal data class GameElementTexts(
                     starsSpoken = null,
                     ladder = emptyList(),
                     facts = listOf(GameFactText(res.getString(R.string.game_concept_defis_name), RevealCopy.sectionName(res, detail.entry.section))),
+                )
+                is GameElementDetail.Fact -> GameElementTexts(
+                    name = GameCopy.resolve(res, detail.label, locale),
+                    status = status,
+                    whatTitle = res.getString(R.string.game_fiche_what),
+                    what = res.getString(detail.key?.let(GameDetailFactCopy::sentence) ?: ConceptCopy.why(detail.concept)),
+                    howTitle = res.getString(R.string.game_detail_obtain_label),
+                    how = null,
+                    reason = null,
+                    stars = null,
+                    starsSpoken = null,
+                    ladder = emptyList(),
+                    facts = emptyList(),
                 )
             }
         }
@@ -94,6 +109,7 @@ internal data class GameElementTexts(
                 val locked = res.getString(R.string.game_detail_locked)
                 status.missing?.let { "$locked · ${missing(res, locale, it)}" } ?: locked
             }
+            is GameElementStatus.Value -> GameCopy.resolve(res, status.value, locale)
         }
 
         private fun missing(res: Resources, locale: Locale, missing: GameElementMissing): String = when (missing) {

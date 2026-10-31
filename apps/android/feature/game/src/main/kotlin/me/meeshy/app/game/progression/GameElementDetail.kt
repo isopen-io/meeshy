@@ -1,5 +1,6 @@
 package me.meeshy.app.game.progression
 
+import me.meeshy.sdk.model.game.GameText
 import me.meeshy.sdk.model.game.engagement.AchievementEntry
 import me.meeshy.sdk.model.game.engagement.BadgeGuide
 import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
@@ -7,6 +8,8 @@ import me.meeshy.sdk.model.game.engagement.BadgeMaterialKey
 import me.meeshy.sdk.model.game.engagement.EngagementAxisKey
 import me.meeshy.sdk.model.game.engagement.EngagementAxisProgress
 import me.meeshy.sdk.model.game.engagement.GameBadgeTiers
+import me.meeshy.sdk.model.game.progression.FicheFact
+import me.meeshy.sdk.model.game.progression.GameDetailFactKey
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 
 /** Ce qu'il manque à un élément verrouillé, dit avec SA cible (iOS `GameDetailText.badgeMissing`, `GameBadgeGuideText.imprint`). */
@@ -25,11 +28,14 @@ sealed interface GameElementStatus {
 
     /** Verrouillé : ce qu'il manque et la part parcourue, quand ils se savent. */
     data class Locked(val missing: GameElementMissing?, val progress: Double?) : GameElementStatus
+
+    /** Une donnée : ni obtenue ni verrouillée, sa valeur se dit (iOS `.value`). */
+    data class Value(val value: GameText) : GameElementStatus
 }
 
 /**
- * LES PRÉCISIONS D'UN ÉLÉMENT DU JEU (miroir de `GameElementDetail`, iOS) pour les deux familles que la Progression
- * Android ouvre en feuille : la médaille et le défi. Une DONNÉE sans un mot : la feuille la fait parler.
+ * LES PRÉCISIONS D'UN ÉLÉMENT DU JEU (miroir de `GameElementDetail`, iOS) pour les familles que la Progression Android
+ * ouvre en feuille : la médaille, le défi et la ligne de donnée. Une DONNÉE sans un mot : la feuille la fait parler.
  */
 sealed interface GameElementDetail {
     val id: String
@@ -62,6 +68,20 @@ sealed interface GameElementDetail {
     data class Challenge(val entry: AchievementEntry, override val status: GameElementStatus) : GameElementDetail {
         override val id: String get() = "defi:${entry.key}"
         override val concept: ProgressionConcept get() = ProgressionConcept.Defis
+    }
+
+    /**
+     * Une ligne « Où j'en suis » (iOS `GameElementDetails.fact`) : son libellé en titre, sa valeur pour état, et la
+     * phrase de SA donnée ([key]) — ou, faute d'en avoir une, celle de son concept.
+     */
+    data class Fact(
+        override val concept: ProgressionConcept,
+        val label: GameText,
+        val value: GameText,
+        val key: GameDetailFactKey?,
+    ) : GameElementDetail {
+        override val id: String get() = "fact:${concept.name}.$label"
+        override val status: GameElementStatus get() = GameElementStatus.Value(value)
     }
 }
 
@@ -101,6 +121,10 @@ object GameElementDetails {
             key = "${axis.axis.wire}:next",
         )
     }
+
+    /** Une ligne de donnée d'une fiche, dans SON concept : ce que son toucher ouvre. */
+    fun fact(fact: FicheFact, concept: ProgressionConcept): GameElementDetail.Fact =
+        GameElementDetail.Fact(concept = concept, label = fact.label, value = fact.value, key = fact.detail)
 
     /** Un palier de défi, obtenu à sa date ou verrouillé : la grammaire ne sert ni manque ni jauge. */
     fun challenge(entry: AchievementEntry): GameElementDetail.Challenge = GameElementDetail.Challenge(
