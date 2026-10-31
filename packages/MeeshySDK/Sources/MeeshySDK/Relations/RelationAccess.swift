@@ -40,7 +40,7 @@ public enum RelationLevel: String, CaseIterable, Sendable, Comparable {
 /// Les actions que la loi d'accès gouverne — miroir de `RELATION_FEATURES` et
 /// des tables de `packages/shared/utils/relation-levels.ts`, que
 /// `RelationAccessCasesTests` relit ligne à ligne.
-public enum RelationFeature: String, CaseIterable, Sendable, Decodable {
+public enum RelationFeature: String, CaseIterable, Sendable {
     case presenceOnline = "presence.online"
     case presenceDetailed = "presence.detailed"
     case gameBasic = "game.basic"
@@ -60,6 +60,14 @@ public enum RelationFeature: String, CaseIterable, Sendable, Decodable {
     case locationHistory = "location.history"
     case locationProximity = "location.proximity"
     case acquaintanceAuto = "acquaintance.auto"
+
+    /// `isRelationFeature` : une feature qu'un serveur plus récent ajoute n'est
+    /// AUCUN cas (`nil`) — elle ne se propose pas, et rien ne casse le décodage
+    /// de la charge qui la porte.
+    public init?(wire: String?) {
+        guard let wire, let feature = RelationFeature(rawValue: wire) else { return nil }
+        self = feature
+    }
 
     /// Niveau EFFECTIF minimal (`RELATION_FEATURE_MIN_LEVEL`). La Connaissance
     /// automatique CRÉE le premier lien : sa seule garde est l'âge déclaré.
@@ -101,13 +109,24 @@ public enum RelationFeature: String, CaseIterable, Sendable, Decodable {
 }
 
 /// Âge DÉCLARÉ (`DeclaredAgeClass`) : `unknown` n'est jamais traité en majeur.
-public enum RelationAgeClass: String, Sendable, Decodable {
+public enum RelationAgeClass: String, CaseIterable, Sendable {
     case minor, adult, unknown
+
+    /// Une valeur absente ou illisible se lit `unknown`, jamais `adult`.
+    public init(wire: String?) {
+        self = wire.flatMap(RelationAgeClass.init(rawValue:)) ?? .unknown
+    }
 }
 
 /// Consentement résolu par le serveur ; absent se lit `unknown` (fermé).
-public enum RelationConsent: String, Sendable, Decodable {
+public enum RelationConsent: String, CaseIterable, Sendable {
     case granted, refused, unknown
+
+    /// Seul `granted` ouvre : une valeur absente ou illisible se lit `unknown`,
+    /// comme `input.consent === 'granted'` côté TypeScript.
+    public init(wire: String?) {
+        self = wire.flatMap(RelationConsent.init(rawValue:)) ?? .unknown
+    }
 }
 
 public enum RelationAccessReason: String, CaseIterable, Sendable {

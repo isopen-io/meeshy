@@ -29,25 +29,26 @@ struct RelationAccessCasesTests {
         let grantedByTarget: String
         let sharesCommunity: Bool
         let blockedEitherWay: Bool
-        let viewerMinor: RelationAgeClass
-        let targetMinor: RelationAgeClass
+        let viewerMinor: String
+        let targetMinor: String
         let viewerRole: String?
-        let feature: RelationFeature
-        let consent: RelationConsent?
+        let feature: String
+        let consent: String?
 
-        var lawInput: RelationAccessInput {
-            RelationAccessInput(
+        func lawInput() throws -> RelationAccessInput {
+            let lawFeature = try #require(RelationFeature(wire: feature), "feature inconnue du miroir : \(feature)")
+            return RelationAccessInput(
                 viewerId: viewerId,
                 targetId: targetId,
                 grantedByViewer: RelationLevel(wire: grantedByViewer),
                 grantedByTarget: RelationLevel(wire: grantedByTarget),
                 sharesCommunity: sharesCommunity,
                 blockedEitherWay: blockedEitherWay,
-                viewerMinor: viewerMinor,
-                targetMinor: targetMinor,
+                viewerMinor: RelationAgeClass(wire: viewerMinor),
+                targetMinor: RelationAgeClass(wire: targetMinor),
                 viewerRole: PlatformRole(caseFolding: viewerRole),
-                feature: feature,
-                consent: consent
+                feature: lawFeature,
+                consent: consent.map { RelationConsent(wire: $0) }
             )
         }
     }
@@ -81,14 +82,14 @@ struct RelationAccessCasesTests {
 
     @Test func everySharedCaseGivesTheSameVerdict() throws {
         for sharedCase in try cases() {
-            let actual = Self.project(RelationAccess.resolve(sharedCase.input.lawInput))
+            let actual = Self.project(RelationAccess.resolve(try sharedCase.input.lawInput()))
             #expect(actual == sharedCase.expected, "\(sharedCase.id)")
         }
     }
 
     @Test func theSharedCasesCoverEveryFeatureAndEveryVerdictReason() throws {
         let played = try cases()
-        let features = Set(played.map { $0.input.feature })
+        let features = Set(try played.map { try $0.input.lawInput().feature })
         #expect(features == Set(RelationFeature.allCases))
         let reasons = Set(played.map { $0.expected.reason })
         #expect(reasons == Set(RelationAccessReason.allCases.map(\.rawValue)))
@@ -185,5 +186,52 @@ struct RelationAccessCasesTests {
         )
         let access = RelationAccess.resolve(input)
         #expect(access.allowed == false && access.reason == .consent && access.requiresConsent)
+    }
+
+    // MARK: - Un ancien client contre un serveur plus récent
+
+    @Test func aFeatureTheMirrorDoesNotKnowIsNoCase_neverACrash() {
+        #expect(RelationFeature(wire: "relay.everywhere") == nil)
+        #expect(RelationFeature(wire: nil) == nil)
+        #expect(RelationFeature(wire: "location.live") == .locationLive)
+    }
+
+    @Test func anUnreadableAgeIsAnUnknownOne_neverAnAdult() {
+        #expect(RelationAgeClass(wire: "teen") == .unknown)
+        #expect(RelationAgeClass(wire: nil) == .unknown)
+        #expect(RelationAgeClass(wire: "minor") == .minor)
+    }
+
+    @Test func anUnreadableConsentKeepsTheFeatureClosed() {
+        let input = RelationAccessInput(
+            viewerId: "a", targetId: "b",
+            grantedByViewer: .blood, grantedByTarget: .blood,
+            sharesCommunity: false, blockedEitherWay: false,
+            viewerMinor: .adult, targetMinor: .adult,
+            viewerRole: .user, feature: .locationLive,
+            consent: RelationConsent(wire: "GRANTED")
+        )
+        let access = RelationAccess.resolve(input)
+        #expect(access.allowed == false && access.reason == .consent && access.requiresConsent)
+        #expect(RelationConsent(wire: "granted") == .granted)
+    }
+
+    @Test func aMinorAndAnUnknownAgeNeverMeetAutomatically_butBloodStaysOpenBehindConsent() {
+        let base = RelationAccessInput(
+            viewerId: "a", targetId: "b",
+            grantedByViewer: .blood, grantedByTarget: .blood,
+            sharesCommunity: false, blockedEitherWay: false,
+            viewerMinor: .minor, targetMinor: RelationAgeClass(wire: "teen"),
+            viewerRole: .user, feature: .acquaintanceAuto, consent: nil
+        )
+        #expect(RelationAccess.resolve(base).reason == .minor)
+        let location = RelationAccessInput(
+            viewerId: "a", targetId: "b",
+            grantedByViewer: .blood, grantedByTarget: .blood,
+            sharesCommunity: false, blockedEitherWay: false,
+            viewerMinor: .minor, targetMinor: .adult,
+            viewerRole: .user, feature: .locationLive, consent: .granted
+        )
+        #expect(RelationAccess.resolve(location).allowed)
     }
 }
