@@ -122,6 +122,14 @@ describe('activeWeekStreak — des semaines actives d’affilée', () => {
     expect(activeWeekStreak({ days: split, now: NOW })).toBe(1);
   });
 
+  it('une vue de post n’est pas un échange (RG-04) : une semaine de seules vues n’est pas active', () => {
+    const viewsOnly = { postView: 5 };
+    expect(activeWeekStreak({ days: [dayAt(1, viewsOnly, viewsOnly), weekDay(1)], now: NOW })).toBe(1);
+    expect(activeWeekStreak({ days: [dayAt(1, viewsOnly, both), weekDay(1)], now: NOW })).toBe(1);
+    const audioAndCall = [dayAt(1, { audio: 1 }, { call: 1 }), weekDay(1)];
+    expect(activeWeekStreak({ days: audioAndCall, now: NOW })).toBe(2);
+  });
+
   it('additionne les jours d’une même semaine ISO : chacun peut avoir agi un jour différent', () => {
     expect(activeWeekStreak({ days: [dayAt(6, both, {}), dayAt(1, {}, both)], now: NOW })).toBe(0);
     expect(activeWeekStreak({ days: [dayAt(5, both, {}), dayAt(1, {}, both)], now: NOW })).toBe(1);

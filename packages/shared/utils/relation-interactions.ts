@@ -12,10 +12,10 @@
  *   `acquaintance.minInteractions` interactions dont au moins un message, une
  *   réaction (like compris), une vue de post sur le contenu de l'autre et un
  *   message audio. Aucun accès à sens unique.
- * - **Semaine active** : une semaine ISO UTC où chacun a interagi au moins une
- *   fois avec l'autre (toutes natures). La semaine EN COURS ne casse jamais la
- *   série : elle n'est pas finie. Une semaine finie sans les deux côtés la remet
- *   à zéro.
+ * - **Semaine active** : une semaine ISO UTC où chacun a ÉCHANGÉ au moins une
+ *   fois avec l'autre (`ACTIVE_WEEK_NATURES`, RG-04 : la vue de post n'y entre
+ *   pas). La semaine EN COURS ne casse jamais la série : elle n'est pas
+ *   finie. Une semaine finie sans les deux côtés la remet à zéro.
  * - **Proche** : `close.activeWeeks` semaines actives d'affilée, depuis Ami.
  *   **Sang** : `blood.activeWeeks` semaines actives d'affilée, comptées en
  *   semaines ENTIÈRES postérieures à l'entrée en Proche (la continuité est le
@@ -48,6 +48,16 @@ export type PairInteractionNature = (typeof PAIR_INTERACTION_NATURES)[number];
 /** Les natures sans lesquelles la Connaissance automatique ne naît pas (RG-02). */
 export const ACQUAINTANCE_REQUIRED_NATURES = ['message', 'reaction', 'postView', 'audio'] as const satisfies readonly PairInteractionNature[];
 
+/**
+ * Les natures qui rendent une semaine ACTIVE (RG-04) : des ÉCHANGES. La vue de
+ * post n'en est pas une — défiler le fil de l'autre ne tient pas une série, et
+ * c'est la continuité des échanges qui distingue un proche d'une connaissance
+ * neuve. Elle ne sert qu'à la Connaissance automatique (RG-02).
+ */
+export const ACTIVE_WEEK_NATURES = PAIR_INTERACTION_NATURES.filter(
+  (nature): nature is Exclude<PairInteractionNature, 'postView'> => nature !== 'postView',
+);
+
 export type SideCounts = Readonly<Record<PairInteractionNature, number>>;
 
 export type PairInteractionSide = 'low' | 'high';
@@ -75,6 +85,8 @@ export const pairDayFromRow = (row: Readonly<Record<string, unknown>>): PairDay 
 });
 
 const total = (counts: SideCounts): number => PAIR_INTERACTION_NATURES.reduce((sum, nature) => sum + counts[nature], 0);
+
+const exchanges = (counts: SideCounts): number => ACTIVE_WEEK_NATURES.reduce((sum, nature) => sum + counts[nature], 0);
 
 const sum = (parts: readonly SideCounts[]): SideCounts =>
   Object.fromEntries(
@@ -128,7 +140,7 @@ const weeksOf = (days: readonly PairDay[], now: Date): Map<number, WeekTally> =>
     .reduce((weeks, d) => {
       const start = isoWeekStart(new Date(`${d.day}T00:00:00Z`)).getTime();
       const tally = weeks.get(start) ?? { low: 0, high: 0 };
-      weeks.set(start, { low: tally.low + total(d.low), high: tally.high + total(d.high) });
+      weeks.set(start, { low: tally.low + exchanges(d.low), high: tally.high + exchanges(d.high) });
       return weeks;
     }, new Map<number, WeekTally>());
 };
