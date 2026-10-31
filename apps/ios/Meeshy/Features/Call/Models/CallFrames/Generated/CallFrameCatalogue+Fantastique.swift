@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.tarot",
             mood: .fantastique,
             name: "Tarot",
+            localizedNames: ["fr": "Tarot", "en": "Tarot", "es": "Tarot", "pt": "Tarô", "de": "Tarot", "it": "Tarocchi", "ar": "تاروت"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .cascade, margin: 0.08, gap: 0.03, top: 0.2, bottom: 0.1),
@@ -34,6 +35,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.tarot",
             mood: .fantastique,
             name: "Tarot",
+            localizedNames: ["fr": "Tarot", "en": "Tarot", "es": "Tarot", "pt": "Tarô", "de": "Tarot", "it": "Tarocchi", "ar": "تاروت"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .arch, margin: 0.07, gap: 0.03, top: 0.2, bottom: 0.12),
@@ -57,6 +59,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.tarot",
             mood: .fantastique,
             name: "Tarot",
+            localizedNames: ["fr": "Tarot", "en": "Tarot", "es": "Tarot", "pt": "Tarô", "de": "Tarot", "it": "Tarocchi", "ar": "تاروت"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.02, top: 0.18, bottom: 0.1),
@@ -80,6 +83,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.tarot",
             mood: .fantastique,
             name: "Tarot",
+            localizedNames: ["fr": "Tarot", "en": "Tarot", "es": "Tarot", "pt": "Tarô", "de": "Tarot", "it": "Tarocchi", "ar": "تاروت"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.015, top: 0.14, bottom: 0.08),
@@ -102,6 +106,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.grimoire",
             mood: .fantastique,
             name: "Grimoire",
+            localizedNames: ["fr": "Grimoire", "en": "Grimoire", "es": "Grimorio", "pt": "Grimório", "de": "Zauberbuch", "it": "Grimorio", "ar": "كتاب السحر"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.09, gap: 0.04, top: 0.2, bottom: 0.12),
@@ -126,6 +131,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.grimoire",
             mood: .fantastique,
             name: "Grimoire",
+            localizedNames: ["fr": "Grimoire", "en": "Grimoire", "es": "Grimorio", "pt": "Grimório", "de": "Zauberbuch", "it": "Grimorio", "ar": "كتاب السحر"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.08, gap: 0.03, top: 0.2, bottom: 0.12),
@@ -150,6 +156,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.grimoire",
             mood: .fantastique,
             name: "Grimoire",
+            localizedNames: ["fr": "Grimoire", "en": "Grimoire", "es": "Grimorio", "pt": "Grimório", "de": "Zauberbuch", "it": "Grimorio", "ar": "كتاب السحر"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.025, top: 0.18, bottom: 0.16),
@@ -174,6 +181,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.portail",
             mood: .fantastique,
             name: "Portail",
+            localizedNames: ["fr": "Portail", "en": "Portal", "es": "Portal", "pt": "Portal", "de": "Portal", "it": "Portale", "ar": "بوابة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -198,6 +206,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.portail",
             mood: .fantastique,
             name: "Portail",
+            localizedNames: ["fr": "Portail", "en": "Portal", "es": "Portal", "pt": "Portal", "de": "Portal", "it": "Portale", "ar": "بوابة"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .orbit, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -222,6 +231,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.portail",
             mood: .fantastique,
             name: "Portail",
+            localizedNames: ["fr": "Portail", "en": "Portal", "es": "Portal", "pt": "Portal", "de": "Portal", "it": "Portale", "ar": "بوابة"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.06, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -246,6 +256,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.portail",
             mood: .fantastique,
             name: "Portail",
+            localizedNames: ["fr": "Portail", "en": "Portal", "es": "Portal", "pt": "Portal", "de": "Portal", "it": "Portale", "ar": "بوابة"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.08),
@@ -270,6 +281,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "fantastique.pacte",
             mood: .fantastique,
             name: "Pacte",
+            localizedNames: ["fr": "Pacte", "en": "Pact", "es": "Pacto", "pt": "Pacto", "de": "Pakt", "it": "Patto", "ar": "ميثاق"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .column, margin: 0.08, gap: 0.05, top: 0.22, bottom: 0.14),

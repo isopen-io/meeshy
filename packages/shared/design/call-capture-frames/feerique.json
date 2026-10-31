@@ -5,6 +5,15 @@
       "id": "feerique.conte",
       "mood": "feerique",
       "name": "Conte",
+      "localizedNames": {
+        "fr": "Conte",
+        "en": "Fairy Tale",
+        "es": "Cuento",
+        "pt": "Conto de fadas",
+        "de": "Märchen",
+        "it": "Fiaba",
+        "ar": "حكاية"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -187,6 +196,15 @@
       "id": "feerique.lucioles",
       "mood": "feerique",
       "name": "Lucioles",
+      "localizedNames": {
+        "fr": "Lucioles",
+        "en": "Fireflies",
+        "es": "Luciérnagas",
+        "pt": "Vaga-lumes",
+        "de": "Glühwürmchen",
+        "it": "Lucciole",
+        "ar": "يراعات"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -350,6 +368,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "radial",
@@ -412,6 +439,15 @@
       "id": "feerique.clair-de-lune",
       "mood": "feerique",
       "name": "Clair de lune",
+      "localizedNames": {
+        "fr": "Clair de lune",
+        "en": "Moonlight",
+        "es": "Claro de luna",
+        "pt": "Luar",
+        "de": "Mondschein",
+        "it": "Chiaro di luna",
+        "ar": "ضوء القمر"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -575,6 +611,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "linear",
@@ -632,6 +677,15 @@
       "id": "feerique.coeur-de-rose",
       "mood": "feerique",
       "name": "Cœur de rose",
+      "localizedNames": {
+        "fr": "Cœur de rose",
+        "en": "Rose Heart",
+        "es": "Corazón de rosa",
+        "pt": "Coração de rosa",
+        "de": "Rosenherz",
+        "it": "Cuore di rosa",
+        "ar": "قلب الوردة"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -728,6 +782,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "solid",

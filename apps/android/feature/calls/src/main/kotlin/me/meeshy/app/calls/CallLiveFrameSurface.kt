@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -105,7 +106,7 @@ internal fun CallLiveFrameSurface(
             val fit = CallLiveFrameGeometry.fit(current.stage.width.toDouble(), current.stage.height.toDouble(), widthPx.toDouble(), heightPx.toDouble())
             CallLiveFrameGeometry.placements(current.stage.boxes, current.stage.look.slot.card, fit)
         }
-        val description = stringResource(R.string.call_live_frame_surface, design.name)
+        val description = stringResource(R.string.call_live_frame_surface, design.displayName(LocalConfiguration.current.locales[0]?.language))
         Box(Modifier.fillMaxSize().semantics { contentDescription = description }) {
             Image(backdrop, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             if (eglContext != null) {

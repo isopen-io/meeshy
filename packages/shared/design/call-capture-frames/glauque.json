@@ -5,6 +5,15 @@
       "id": "glauque.vhs",
       "mood": "glauque",
       "name": "VHS",
+      "localizedNames": {
+        "fr": "VHS",
+        "en": "VHS",
+        "es": "VHS",
+        "pt": "VHS",
+        "de": "VHS",
+        "it": "VHS",
+        "ar": "VHS"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -123,6 +132,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "solid",
@@ -185,6 +203,15 @@
       "id": "glauque.videosurveillance",
       "mood": "glauque",
       "name": "Vidéosurveillance",
+      "localizedNames": {
+        "fr": "Vidéosurveillance",
+        "en": "CCTV",
+        "es": "Videovigilancia",
+        "pt": "Videovigilância",
+        "de": "Videoüberwachung",
+        "it": "Videosorveglianza",
+        "ar": "كاميرا مراقبة"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -354,6 +381,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "solid",
@@ -420,6 +456,15 @@
       "id": "glauque.sous-sol",
       "mood": "glauque",
       "name": "Sous-sol",
+      "localizedNames": {
+        "fr": "Sous-sol",
+        "en": "Basement",
+        "es": "Sótano",
+        "pt": "Porão",
+        "de": "Keller",
+        "it": "Seminterrato",
+        "ar": "قبو"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -552,6 +597,15 @@
       "id": "glauque.disparus",
       "mood": "glauque",
       "name": "Disparus",
+      "localizedNames": {
+        "fr": "Disparus",
+        "en": "The Missing",
+        "es": "Desaparecidos",
+        "pt": "Desaparecidos",
+        "de": "Vermisst",
+        "it": "Scomparsi",
+        "ar": "المفقودون"
+      },
       "surfaces": [
         "capture"
       ],
@@ -662,6 +716,15 @@
       "id": "glauque.prison",
       "mood": "glauque",
       "name": "Prison",
+      "localizedNames": {
+        "fr": "Prison",
+        "en": "Prison",
+        "es": "Prisión",
+        "pt": "Prisão",
+        "de": "Gefängnis",
+        "it": "Prigione",
+        "ar": "سجن"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -805,6 +868,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "linear",

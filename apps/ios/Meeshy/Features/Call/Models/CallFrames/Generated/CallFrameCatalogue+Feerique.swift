@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "feerique.conte",
             mood: .feerique,
             name: "Conte",
+            localizedNames: ["fr": "Conte", "en": "Fairy Tale", "es": "Cuento", "pt": "Conto de fadas", "de": "Märchen", "it": "Fiaba", "ar": "حكاية"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .cascade, margin: 0.08, gap: 0.03, top: 0.19, bottom: 0.13),
@@ -35,6 +36,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "feerique.conte",
             mood: .feerique,
             name: "Conte",
+            localizedNames: ["fr": "Conte", "en": "Fairy Tale", "es": "Cuento", "pt": "Conto de fadas", "de": "Märchen", "it": "Fiaba", "ar": "حكاية"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .arch, margin: 0.08, gap: 0.035, top: 0.19, bottom: 0.13),
@@ -59,6 +61,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "feerique.conte",
             mood: .feerique,
             name: "Conte",
+            localizedNames: ["fr": "Conte", "en": "Fairy Tale", "es": "Cuento", "pt": "Conto de fadas", "de": "Märchen", "it": "Fiaba", "ar": "حكاية"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.07, gap: 0.025, top: 0.17, bottom: 0.12),
@@ -83,6 +86,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "feerique.lucioles",
             mood: .feerique,
             name: "Lucioles",
+            localizedNames: ["fr": "Lucioles", "en": "Fireflies", "es": "Luciérnagas", "pt": "Vaga-lumes", "de": "Glühwürmchen", "it": "Lucciole", "ar": "يراعات"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -102,13 +106,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#C9FF6A66", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .radial(colors: ["#143B2A", "#050F0A"]), ornaments: [CallFrameOrnament(kind: .fireflies, color: "#C9FF6A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#F4FFB0", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .handwriting, color: "#F4FFB0", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_lucioles_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_lucioles_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#C9FF6A66", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .radial(colors: ["#143B2A", "#050F0A"]), ornaments: [CallFrameOrnament(kind: .fireflies, color: "#C9FF6A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#F4FFB0", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .handwriting, color: "#F4FFB0", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_lucioles_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_lucioles_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "feerique.lucioles.comite",
             motif: "feerique.lucioles",
             mood: .feerique,
             name: "Lucioles",
+            localizedNames: ["fr": "Lucioles", "en": "Fireflies", "es": "Luciérnagas", "pt": "Vaga-lumes", "de": "Glühwürmchen", "it": "Lucciole", "ar": "يراعات"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -128,13 +133,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#C9FF6A66", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .radial(colors: ["#143B2A", "#050F0A"]), ornaments: [CallFrameOrnament(kind: .fireflies, color: "#C9FF6A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#F4FFB0", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .handwriting, color: "#F4FFB0", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_lucioles_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_lucioles_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#C9FF6A66", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .radial(colors: ["#143B2A", "#050F0A"]), ornaments: [CallFrameOrnament(kind: .fireflies, color: "#C9FF6A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#F4FFB0", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .handwriting, color: "#F4FFB0", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_lucioles_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_lucioles_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "feerique.lucioles.groupe",
             motif: "feerique.lucioles",
             mood: .feerique,
             name: "Lucioles",
+            localizedNames: ["fr": "Lucioles", "en": "Fireflies", "es": "Luciérnagas", "pt": "Vaga-lumes", "de": "Glühwürmchen", "it": "Lucciole", "ar": "يراعات"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.02, top: 0.15, bottom: 0.1),
@@ -153,13 +159,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#C9FF6A66", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .radial(colors: ["#143B2A", "#050F0A"]), ornaments: [CallFrameOrnament(kind: .fireflies, color: "#C9FF6A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#F4FFB0", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .handwriting, color: "#F4FFB0", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_lucioles_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_lucioles_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#C9FF6A66", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .radial(colors: ["#143B2A", "#050F0A"]), ornaments: [CallFrameOrnament(kind: .fireflies, color: "#C9FF6A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#F4FFB0", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .handwriting, color: "#F4FFB0", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_lucioles_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_lucioles_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "feerique.lucioles.tablee",
             motif: "feerique.lucioles",
             mood: .feerique,
             name: "Lucioles",
+            localizedNames: ["fr": "Lucioles", "en": "Fireflies", "es": "Luciérnagas", "pt": "Vaga-lumes", "de": "Glühwürmchen", "it": "Lucciole", "ar": "يراعات"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.13, bottom: 0.1),
@@ -179,13 +186,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#C9FF6A66", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .radial(colors: ["#143B2A", "#050F0A"]), ornaments: [CallFrameOrnament(kind: .fireflies, color: "#C9FF6A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#F4FFB0", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .handwriting, color: "#F4FFB0", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_lucioles_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_lucioles_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .blob, radius: nil, stroke: nil, double: false, glow: "#C9FF6A66", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .radial(colors: ["#143B2A", "#050F0A"]), ornaments: [CallFrameOrnament(kind: .fireflies, color: "#C9FF6A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#F4FFB0", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .handwriting, color: "#F4FFB0", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_lucioles_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_lucioles_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "feerique.clair-de-lune.duo",
             motif: "feerique.clair-de-lune",
             mood: .feerique,
             name: "Clair de lune",
+            localizedNames: ["fr": "Clair de lune", "en": "Moonlight", "es": "Claro de luna", "pt": "Luar", "de": "Mondschein", "it": "Chiaro di luna", "ar": "ضوء القمر"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.05, top: 0.17, bottom: 0.11),
@@ -205,13 +213,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .calligraphy, color: "#F3E8FF", place: .top, size: .m, effect: nil, letterCase: nil)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#0B1030", "#2A2150"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .elegant, color: "#F3F0FF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_clair-de-lune_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_clair-de-lune_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#0B1030", "#2A2150"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .elegant, color: "#F3F0FF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_clair-de-lune_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_clair-de-lune_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "feerique.clair-de-lune.comite",
             motif: "feerique.clair-de-lune",
             mood: .feerique,
             name: "Clair de lune",
+            localizedNames: ["fr": "Clair de lune", "en": "Moonlight", "es": "Claro de luna", "pt": "Luar", "de": "Mondschein", "it": "Chiaro di luna", "ar": "ضوء القمر"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .orbit, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.1),
@@ -231,13 +240,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#0B1030", "#2A2150"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .elegant, color: "#F3F0FF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_clair-de-lune_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_clair-de-lune_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#0B1030", "#2A2150"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .elegant, color: "#F3F0FF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_clair-de-lune_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_clair-de-lune_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "feerique.clair-de-lune.groupe",
             motif: "feerique.clair-de-lune",
             mood: .feerique,
             name: "Clair de lune",
+            localizedNames: ["fr": "Clair de lune", "en": "Moonlight", "es": "Claro de luna", "pt": "Luar", "de": "Mondschein", "it": "Chiaro di luna", "ar": "ضوء القمر"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -257,13 +267,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#0B1030", "#2A2150"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .elegant, color: "#F3F0FF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_clair-de-lune_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_clair-de-lune_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#0B1030", "#2A2150"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .elegant, color: "#F3F0FF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_clair-de-lune_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_clair-de-lune_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "feerique.clair-de-lune.tablee",
             motif: "feerique.clair-de-lune",
             mood: .feerique,
             name: "Clair de lune",
+            localizedNames: ["fr": "Clair de lune", "en": "Moonlight", "es": "Claro de luna", "pt": "Luar", "de": "Mondschein", "it": "Chiaro di luna", "ar": "ضوء القمر"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.11),
@@ -283,13 +294,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#0B1030", "#2A2150"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .elegant, color: "#F3F0FF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_clair-de-lune_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_clair-de-lune_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#0B1030", "#2A2150"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .stars, color: "#FFF6D6", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .elegant, color: "#F3F0FF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_clair-de-lune_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_clair-de-lune_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "feerique.coeur-de-rose.duo",
             motif: "feerique.coeur-de-rose",
             mood: .feerique,
             name: "Cœur de rose",
+            localizedNames: ["fr": "Cœur de rose", "en": "Rose Heart", "es": "Corazón de rosa", "pt": "Coração de rosa", "de": "Rosenherz", "it": "Cuore di rosa", "ar": "قلب الوردة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.04, top: 0.16, bottom: 0.12),
@@ -309,7 +321,7 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .heart, radius: nil, stroke: CallFrameStroke(color: "#FFE3D6", width: 0.014), double: false, glow: "#FFB3C6AA", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .solid(color: "#E0527E"), ornaments: [CallFrameOrnament(kind: .petals, color: "#FFD0DC", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .hearts, color: "#FFE3D6", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .both, style: .ribbon, font: .bubble, color: "#7A1F3F", fill: "#FFE3D6"), title: CallFrameTitle(source: .names, font: .handwriting, color: "#FFF1EC", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_coeur-de-rose_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_coeur-de-rose_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .heart, radius: nil, stroke: CallFrameStroke(color: "#FFE3D6", width: 0.014), double: false, glow: "#FFB3C6AA", shadow: true, card: nil, tilt: .gentle, tone: .warm, duotone: nil), background: .solid(color: "#E0527E"), ornaments: [CallFrameOrnament(kind: .petals, color: "#FFD0DC", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .hearts, color: "#FFE3D6", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .both, style: .ribbon, font: .bubble, color: "#7A1F3F", fill: "#FFE3D6"), title: CallFrameTitle(source: .names, font: .handwriting, color: "#FFF1EC", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/feerique_coeur-de-rose_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/feerique_coeur-de-rose_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         )
     ]
 }

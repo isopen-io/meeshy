@@ -5,7 +5,27 @@ package me.meeshy.sdk.model.call.frames
  * tranche, autre habillage — par exemple sa version « Relief ». [look] est l'apparence déjà composée : celle
  * du cadre, dont seules les clés que la déclinaison déclare ont été remplacées.
  */
-public data class CallFrameStyle(val id: String, val name: String, val look: CallFrameLook)
+public data class CallFrameStyle(
+    val id: String,
+    val name: String,
+    val look: CallFrameLook,
+    /** #13953 — le nom de la déclinaison dans chaque langue ; [name] en est le repli. */
+    val localizedNames: Map<String, String> = emptyMap(),
+) {
+    public fun displayName(language: String?): String = CallFrameNaming.name(name, localizedNames, language)
+}
+
+/**
+ * **LE NOM D'UN CADRE DANS LA LANGUE D'INTERFACE** (#13953), miroir de `frameDisplayName`
+ * (`packages/shared/types/frame-name.ts`) et d'iOS `CallFrameNaming` : le nom de la langue (code court,
+ * `pt-BR` ⇒ `pt`), sinon [fallback] — le français, que portait chaque cadre d'avant.
+ */
+public object CallFrameNaming {
+    public fun name(fallback: String, localized: Map<String, String>, language: String?): String {
+        val code = language?.lowercase()?.split('-', '_')?.firstOrNull() ?: return fallback
+        return localized[code]?.takeIf { it.isNotBlank() } ?: fallback
+    }
+}
 
 /**
  * **LES DÉCLINAISONS D'UN CADRE** (#12685), en fonctions pures — miroir de iOS `CallFrameStyleRule`. Une

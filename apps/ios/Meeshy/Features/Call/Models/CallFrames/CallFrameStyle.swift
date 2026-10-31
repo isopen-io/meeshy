@@ -25,7 +25,27 @@ nonisolated struct CallFrameLookOverride: Equatable, Sendable {
 nonisolated struct CallFrameStyle: Equatable, Sendable {
     let id: String
     let name: String
+    /// #13953 — le nom de la déclinaison dans chaque langue ; `name` en est le repli.
+    var localizedNames: [String: String] = [:]
     let look: CallFrameLookOverride
+
+    func displayName(language: String? = Bundle.main.preferredLocalizations.first) -> String {
+        CallFrameNaming.name(name, localized: localizedNames, language: language)
+    }
+}
+
+/// **LE NOM D'UN CADRE DANS LA LANGUE D'INTERFACE** (#13953), miroir de `frameDisplayName`
+/// (`packages/shared/types/capture-frames.ts`) : le nom de la langue (code court, `pt-BR` ⇒ `pt`),
+/// sinon `name` — le français, que portait chaque cadre d'avant.
+nonisolated enum CallFrameNaming {
+    static func name(_ fallback: String, localized: [String: String], language: String?) -> String {
+        guard let language,
+              let code = language.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first,
+              let named = localized[String(code)],
+              !named.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return fallback }
+        return named
+    }
 }
 
 nonisolated extension CallFrameLook {
@@ -47,7 +67,8 @@ nonisolated enum CallFrameStyleRule {
     /// Le cadre `design` sous la déclinaison `style`.
     static func styled(_ design: CallFrameDesign, with style: CallFrameStyle) -> CallFrameDesign {
         CallFrameDesign(
-            id: "\(design.id).\(style.id)", motif: design.motif, mood: design.mood, name: design.name, bucket: design.bucket,
+            id: "\(design.id).\(style.id)", motif: design.motif, mood: design.mood, name: design.name,
+            localizedNames: design.localizedNames, bucket: design.bucket,
             look: design.look.applying(style.look), credits: design.credits, surfaces: design.surfaces, cost: design.cost,
             styles: design.styles, styleId: style.id
         )

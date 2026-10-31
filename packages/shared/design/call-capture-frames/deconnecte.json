@@ -5,6 +5,15 @@
       "id": "deconnecte.carte-postale",
       "mood": "deconnecte",
       "name": "Carte postale",
+      "localizedNames": {
+        "fr": "Carte postale",
+        "en": "Postcard",
+        "es": "Postal",
+        "pt": "Cartão-postal",
+        "de": "Postkarte",
+        "it": "Cartolina",
+        "ar": "بطاقة بريدية"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -175,6 +184,15 @@
       "id": "deconnecte.road-trip",
       "mood": "deconnecte",
       "name": "Road trip",
+      "localizedNames": {
+        "fr": "Road trip",
+        "en": "Road Trip",
+        "es": "Viaje por carretera",
+        "pt": "Viagem de carro",
+        "de": "Roadtrip",
+        "it": "Road trip",
+        "ar": "رحلة برية"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -306,6 +324,15 @@
       "id": "deconnecte.cahier-de-vacances",
       "mood": "deconnecte",
       "name": "Cahier de vacances",
+      "localizedNames": {
+        "fr": "Cahier de vacances",
+        "en": "Summer Notebook",
+        "es": "Cuaderno de verano",
+        "pt": "Caderno de férias",
+        "de": "Ferienheft",
+        "it": "Quaderno delle vacanze",
+        "ar": "دفتر العطلة"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -469,6 +496,15 @@
       "id": "deconnecte.coucher-de-soleil",
       "mood": "deconnecte",
       "name": "Coucher de soleil",
+      "localizedNames": {
+        "fr": "Coucher de soleil",
+        "en": "Sunset",
+        "es": "Atardecer",
+        "pt": "Pôr do sol",
+        "de": "Sonnenuntergang",
+        "it": "Tramonto",
+        "ar": "غروب الشمس"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -556,6 +592,15 @@
       "id": "deconnecte.lagon",
       "mood": "deconnecte",
       "name": "Lagon",
+      "localizedNames": {
+        "fr": "Lagon",
+        "en": "Lagoon",
+        "es": "Laguna",
+        "pt": "Lagoa",
+        "de": "Lagune",
+        "it": "Laguna",
+        "ar": "بحيرة ساحلية"
+      },
       "surfaces": [
         "capture",
         "live"

@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "hors-norme.pop-art",
             mood: .horsNorme,
             name: "Pop Art",
+            localizedNames: ["fr": "Pop Art", "en": "Pop Art", "es": "Pop art", "pt": "Pop art", "de": "Pop-Art", "it": "Pop art", "ar": "بوب آرت"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.15, bottom: 0.1),
@@ -29,13 +30,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .duotone, duotone: CallFrameDuotone(shadow: "#2B1BD1", light: "#FF8AD8")), ornaments: [CallFrameOrnament(kind: .lightning, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#2A8CFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_pop-art_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_pop-art_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .duotone, duotone: CallFrameDuotone(shadow: "#2B1BD1", light: "#FF8AD8")), ornaments: [CallFrameOrnament(kind: .lightning, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#2A8CFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_pop-art_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_pop-art_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.pop-art.comite",
             motif: "hors-norme.pop-art",
             mood: .horsNorme,
             name: "Pop Art",
+            localizedNames: ["fr": "Pop Art", "en": "Pop Art", "es": "Pop art", "pt": "Pop art", "de": "Pop-Art", "it": "Pop art", "ar": "بوب آرت"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .cascade, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -54,13 +56,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .duotone, duotone: CallFrameDuotone(shadow: "#2B1BD1", light: "#FF8AD8")), ornaments: [CallFrameOrnament(kind: .lightning, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#2A8CFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_pop-art_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_pop-art_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .duotone, duotone: CallFrameDuotone(shadow: "#2B1BD1", light: "#FF8AD8")), ornaments: [CallFrameOrnament(kind: .lightning, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#2A8CFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_pop-art_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_pop-art_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.pop-art.groupe",
             motif: "hors-norme.pop-art",
             mood: .horsNorme,
             name: "Pop Art",
+            localizedNames: ["fr": "Pop Art", "en": "Pop Art", "es": "Pop art", "pt": "Pop art", "de": "Pop-Art", "it": "Pop art", "ar": "بوب آرت"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .mosaic, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.1),
@@ -79,13 +82,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .duotone, duotone: CallFrameDuotone(shadow: "#2B1BD1", light: "#FF8AD8")), ornaments: [CallFrameOrnament(kind: .lightning, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#2A8CFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_pop-art_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_pop-art_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .duotone, duotone: CallFrameDuotone(shadow: "#2B1BD1", light: "#FF8AD8")), ornaments: [CallFrameOrnament(kind: .lightning, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#2A8CFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_pop-art_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_pop-art_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.pop-art.tablee",
             motif: "hors-norme.pop-art",
             mood: .horsNorme,
             name: "Pop Art",
+            localizedNames: ["fr": "Pop Art", "en": "Pop Art", "es": "Pop art", "pt": "Pop art", "de": "Pop-Art", "it": "Pop art", "ar": "بوب آرت"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.1),
@@ -104,13 +108,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .duotone, duotone: CallFrameDuotone(shadow: "#2B1BD1", light: "#FF8AD8")), ornaments: [CallFrameOrnament(kind: .lightning, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#2A8CFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_pop-art_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_pop-art_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#111111", width: 0.014), double: false, glow: nil, shadow: true, card: nil, tilt: .gentle, tone: .duotone, duotone: CallFrameDuotone(shadow: "#2B1BD1", light: "#FF8AD8")), ornaments: [CallFrameOrnament(kind: .lightning, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .stars, color: "#2A8CFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_pop-art_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_pop-art_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.collage.duo",
             motif: "hors-norme.collage",
             mood: .horsNorme,
             name: "Collage",
+            localizedNames: ["fr": "Collage", "en": "Collage", "es": "Collage", "pt": "Colagem", "de": "Collage", "it": "Collage", "ar": "كولاج"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -130,13 +135,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .torn, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: nil, tilt: .wild, tone: .noir, duotone: nil), background: .solid(color: "#C8A26E"), ornaments: [CallFrameOrnament(kind: .tape, color: "#BFF54A", density: .low, layer: .front), CallFrameOrnament(kind: .stars, color: "#111111", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .tag, color: "#111111", place: .top, size: .l, effect: nil, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_collage_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_collage_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .torn, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: nil, tilt: .wild, tone: .noir, duotone: nil), background: .solid(color: "#C8A26E"), ornaments: [CallFrameOrnament(kind: .tape, color: "#BFF54A", density: .low, layer: .front), CallFrameOrnament(kind: .stars, color: "#111111", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .tag, color: "#111111", place: .top, size: .l, effect: nil, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_collage_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_collage_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.collage.comite",
             motif: "hors-norme.collage",
             mood: .horsNorme,
             name: "Collage",
+            localizedNames: ["fr": "Collage", "en": "Collage", "es": "Collage", "pt": "Colagem", "de": "Collage", "it": "Collage", "ar": "كولاج"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .cascade, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -156,13 +162,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .torn, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: nil, tilt: .wild, tone: .noir, duotone: nil), background: .solid(color: "#C8A26E"), ornaments: [CallFrameOrnament(kind: .tape, color: "#BFF54A", density: .low, layer: .front), CallFrameOrnament(kind: .stars, color: "#111111", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .tag, color: "#111111", place: .top, size: .l, effect: nil, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_collage_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_collage_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .torn, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: nil, tilt: .wild, tone: .noir, duotone: nil), background: .solid(color: "#C8A26E"), ornaments: [CallFrameOrnament(kind: .tape, color: "#BFF54A", density: .low, layer: .front), CallFrameOrnament(kind: .stars, color: "#111111", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .tag, color: "#111111", place: .top, size: .l, effect: nil, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_collage_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_collage_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.collage.groupe",
             motif: "hors-norme.collage",
             mood: .horsNorme,
             name: "Collage",
+            localizedNames: ["fr": "Collage", "en": "Collage", "es": "Collage", "pt": "Colagem", "de": "Collage", "it": "Collage", "ar": "كولاج"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.1),
@@ -182,13 +189,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .torn, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: nil, tilt: .wild, tone: .noir, duotone: nil), background: .solid(color: "#C8A26E"), ornaments: [CallFrameOrnament(kind: .tape, color: "#BFF54A", density: .low, layer: .front), CallFrameOrnament(kind: .stars, color: "#111111", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .tag, color: "#111111", place: .top, size: .l, effect: nil, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_collage_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_collage_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .torn, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: nil, tilt: .wild, tone: .noir, duotone: nil), background: .solid(color: "#C8A26E"), ornaments: [CallFrameOrnament(kind: .tape, color: "#BFF54A", density: .low, layer: .front), CallFrameOrnament(kind: .stars, color: "#111111", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .tag, color: "#111111", place: .top, size: .l, effect: nil, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_collage_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_collage_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.collage.tablee",
             motif: "hors-norme.collage",
             mood: .horsNorme,
             name: "Collage",
+            localizedNames: ["fr": "Collage", "en": "Collage", "es": "Collage", "pt": "Colagem", "de": "Collage", "it": "Collage", "ar": "كولاج"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.12),
@@ -208,13 +216,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .torn, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: nil, tilt: .wild, tone: .noir, duotone: nil), background: .solid(color: "#C8A26E"), ornaments: [CallFrameOrnament(kind: .tape, color: "#BFF54A", density: .low, layer: .front), CallFrameOrnament(kind: .stars, color: "#111111", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .tag, color: "#111111", place: .top, size: .l, effect: nil, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_collage_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_collage_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .torn, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: nil, tilt: .wild, tone: .noir, duotone: nil), background: .solid(color: "#C8A26E"), ornaments: [CallFrameOrnament(kind: .tape, color: "#BFF54A", density: .low, layer: .front), CallFrameOrnament(kind: .stars, color: "#111111", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .tag, color: "#111111", place: .top, size: .l, effect: nil, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_collage_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_collage_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.vitrail.duo",
             motif: "hors-norme.vitrail",
             mood: .horsNorme,
             name: "Vitrail",
+            localizedNames: ["fr": "Vitrail", "en": "Stained Glass", "es": "Vitral", "pt": "Vitral", "de": "Buntglas", "it": "Vetrata", "ar": "زجاج معشّق"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .column, margin: 0.08, gap: 0.035, top: 0.18, bottom: 0.12),
@@ -238,6 +247,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "hors-norme.vitrail",
             mood: .horsNorme,
             name: "Vitrail",
+            localizedNames: ["fr": "Vitrail", "en": "Stained Glass", "es": "Vitral", "pt": "Vitral", "de": "Buntglas", "it": "Vetrata", "ar": "زجاج معشّق"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .orbit, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.12),
@@ -261,6 +271,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "hors-norme.vitrail",
             mood: .horsNorme,
             name: "Vitrail",
+            localizedNames: ["fr": "Vitrail", "en": "Stained Glass", "es": "Vitral", "pt": "Vitral", "de": "Buntglas", "it": "Vetrata", "ar": "زجاج معشّق"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.02, top: 0.16, bottom: 0.1),
@@ -284,6 +295,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "hors-norme.vitrail",
             mood: .horsNorme,
             name: "Vitrail",
+            localizedNames: ["fr": "Vitrail", "en": "Stained Glass", "es": "Vitral", "pt": "Vitral", "de": "Buntglas", "it": "Vetrata", "ar": "زجاج معشّق"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.05, gap: 0.015, top: 0.15, bottom: 0.09),
@@ -307,6 +319,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "hors-norme.tete-d-affiche",
             mood: .horsNorme,
             name: "Tête d’affiche",
+            localizedNames: ["fr": "Tête d’affiche", "en": "Headliner", "es": "Cabeza de cartel", "pt": "Atração principal", "de": "Hauptattraktion", "it": "Protagonista", "ar": "نجم الملصق"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.11),
@@ -325,13 +338,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#A3141E", "#5A0A10"]), ornaments: [CallFrameOrnament(kind: .crown, color: "#FFE08A", density: .low, layer: .front), CallFrameOrnament(kind: .sparkles, color: "#FFF4D0", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bokeh, color: "#FFC65A", density: .low, layer: .back, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFE08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_tete-d-affiche_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_tete-d-affiche_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .radial(colors: ["#A3141E", "#5A0A10"]), ornaments: [CallFrameOrnament(kind: .crown, color: "#FFE08A", density: .low, layer: .front), CallFrameOrnament(kind: .sparkles, color: "#FFF4D0", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bokeh, color: "#FFC65A", density: .low, layer: .back, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFE08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_tete-d-affiche_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_tete-d-affiche_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.tete-d-affiche.groupe",
             motif: "hors-norme.tete-d-affiche",
             mood: .horsNorme,
             name: "Tête d’affiche",
+            localizedNames: ["fr": "Tête d’affiche", "en": "Headliner", "es": "Cabeza de cartel", "pt": "Atração principal", "de": "Hauptattraktion", "it": "Protagonista", "ar": "نجم الملصق"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.07, gap: 0.025, top: 0.16, bottom: 0.11),
@@ -350,13 +364,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#A3141E", "#5A0A10"]), ornaments: [CallFrameOrnament(kind: .crown, color: "#FFE08A", density: .low, layer: .front), CallFrameOrnament(kind: .sparkles, color: "#FFF4D0", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bokeh, color: "#FFC65A", density: .low, layer: .back, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFE08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_tete-d-affiche_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_tete-d-affiche_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .radial(colors: ["#A3141E", "#5A0A10"]), ornaments: [CallFrameOrnament(kind: .crown, color: "#FFE08A", density: .low, layer: .front), CallFrameOrnament(kind: .sparkles, color: "#FFF4D0", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bokeh, color: "#FFC65A", density: .low, layer: .back, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFE08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_tete-d-affiche_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_tete-d-affiche_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "hors-norme.tete-d-affiche.tablee",
             motif: "hors-norme.tete-d-affiche",
             mood: .horsNorme,
             name: "Tête d’affiche",
+            localizedNames: ["fr": "Tête d’affiche", "en": "Headliner", "es": "Cabeza de cartel", "pt": "Atração principal", "de": "Hauptattraktion", "it": "Protagonista", "ar": "نجم الملصق"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.02, top: 0.15, bottom: 0.12),
@@ -375,7 +390,7 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#A3141E", "#5A0A10"]), ornaments: [CallFrameOrnament(kind: .crown, color: "#FFE08A", density: .low, layer: .front), CallFrameOrnament(kind: .sparkles, color: "#FFF4D0", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bokeh, color: "#FFC65A", density: .low, layer: .back, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFE08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_tete-d-affiche_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_tete-d-affiche_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .radial(colors: ["#A3141E", "#5A0A10"]), ornaments: [CallFrameOrnament(kind: .crown, color: "#FFE08A", density: .low, layer: .front), CallFrameOrnament(kind: .sparkles, color: "#FFF4D0", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bokeh, color: "#FFC65A", density: .low, layer: .back, motion: .loop)], title: CallFrameTitle(source: .group, font: .poster, color: "#FFE08A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/hors-norme_tete-d-affiche_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/hors-norme_tete-d-affiche_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         )
     ]
 }

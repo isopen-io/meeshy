@@ -1,8 +1,8 @@
 import SwiftUI
 import MeeshyUI
 
-/// Les mots des cadres (#8742) : les ambiances se traduisent, les motifs sont des noms
-/// propres (`CallFrameDesign.name`) et ne se traduisent pas.
+/// Les mots des cadres (#8742) : les ambiances se traduisent, et les motifs aussi depuis #13953
+/// (`CallFrameDesign.displayName()`, le nom de la langue d'interface, `name` en repli).
 enum CallFrameCopy {
     static var classics: String {
         String(localized: "call.frames.classics", defaultValue: "Classiques", bundle: .main)
@@ -53,14 +53,14 @@ enum CallFrameCopy {
         }
     }
 
-    /// Le nom d'un élément du carrousel : le style classique traduit, ou le nom propre du motif.
+    /// Le nom d'un élément du carrousel : le style classique traduit, ou le nom du motif dans la langue d'interface.
     static func choiceName(_ choice: CallMontageChoice) -> String {
         switch choice {
         case .classic(let style): return CallCaptureCopy.styleName(style)
         case .frame(let id):
             guard let design = CallMontageFrameRule.design(id: id) else { return "" }
             let style = design.styles.first { $0.id == design.styleId }
-            return style.map { "\(design.name) · \($0.name)" } ?? design.name
+            return style.map { "\(design.displayName()) · \($0.displayName())" } ?? design.displayName()
         }
     }
 
