@@ -278,4 +278,33 @@ describe('plancher X-App-Version — présence sous plancher = 426, ABSENCE = pa
     expect(res.json().data).toEqual({ minVersion: '1.2.0' });
     await app.close();
   });
+  it('GET /app/min-version?platform= sert le plancher de la plateforme, le global reste servi sans paramètre', async () => {
+    process.env.MIN_APP_VERSION = '1.2.0';
+    process.env.MIN_APP_VERSION_ANDROID = '3.1.0';
+    const app = await buildApp();
+    const android = await app.inject({ method: 'GET', url: '/app/min-version?platform=android' });
+    const ios = await app.inject({ method: 'GET', url: '/app/min-version?platform=ios' });
+    const web = await app.inject({ method: 'GET', url: '/app/min-version?platform=pwa' });
+    const bare = await app.inject({ method: 'GET', url: '/app/min-version' });
+    delete process.env.MIN_APP_VERSION_ANDROID;
+    await app.close();
+    expect(android.json().data).toEqual({ minVersion: '3.1.0' });
+    expect(ios.json().data).toEqual({ minVersion: '1.2.0' });
+    expect(web.json().data).toEqual({ minVersion: '' });
+    expect(bare.json().data).toEqual({ minVersion: '1.2.0' });
+  });
+
+  it('plancher par plateforme : la porte des stories juge iOS sur MIN_APP_VERSION_IOS, pas sur celui d’Android', async () => {
+    process.env.MIN_APP_VERSION_IOS = '1.2.0';
+    process.env.MIN_APP_VERSION_ANDROID = '3.1.0';
+    const app = await buildApp();
+    const ios = await createStory(app, { 'x-app-version': '1.1.9', 'x-app-platform': 'ios' });
+    const iosAt = await createStory(app, { 'x-app-version': '1.2.0', 'x-app-platform': 'ios' });
+    delete process.env.MIN_APP_VERSION_IOS;
+    delete process.env.MIN_APP_VERSION_ANDROID;
+    await app.close();
+    expect(ios.statusCode).toBe(426);
+    expect(ios.json().minVersion).toBe('1.2.0');
+    expect(iosAt.statusCode).toBe(201);
+  });
 });
