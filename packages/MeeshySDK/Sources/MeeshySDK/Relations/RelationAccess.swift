@@ -40,7 +40,7 @@ public enum RelationLevel: String, CaseIterable, Sendable, Comparable {
 /// Les actions que la loi d'accès gouverne — miroir de `RELATION_FEATURES` et
 /// des tables de `packages/shared/utils/relation-levels.ts`, que
 /// `RelationAccessCasesTests` relit ligne à ligne.
-public enum RelationFeature: String, CaseIterable, Sendable {
+public enum RelationFeature: String, CaseIterable, Sendable, Decodable {
     case presenceOnline = "presence.online"
     case presenceDetailed = "presence.detailed"
     case gameBasic = "game.basic"
