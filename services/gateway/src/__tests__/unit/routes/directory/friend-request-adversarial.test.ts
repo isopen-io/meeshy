@@ -47,6 +47,7 @@ jest.mock('../../../../services/PresenceVisibilityService', () => ({
 
 import { directoryFriendRequestsRoutes } from '../../../../routes/directory/friend-requests';
 import { relationsRoutes } from '../../../../routes/relations';
+import { relationsLevelRoutes } from '../../../../routes/relations/level';
 import {
   AUTRE, DAY, MOI, NOW, buildRelationApp, demande, freezeClock, lien, semaineActive, thawClock,
   type AppOptions, type TestApp,
@@ -66,6 +67,7 @@ const appli = (options: AppOptions): Promise<TestApp> =>
   buildRelationApp(async (a) => {
     await a.register(directoryFriendRequestsRoutes, { prefix: DIR });
     await a.register(relationsRoutes, { prefix: REL });
+    await a.register(relationsLevelRoutes, { prefix: REL });
   }, options);
 
 beforeEach(() => { cache.clear(); freezeClock(NOW); });
