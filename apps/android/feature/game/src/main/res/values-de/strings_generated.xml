@@ -252,6 +252,8 @@
     <string name="game2_visibility_saving">Wird gespeichert…</string>
     <string name="game_actions_one">%1$s Aktion</string>
     <string name="game_actions_other">%1$s Aktionen</string>
+    <string name="game_badge_a11y_imprint">Erloschen, noch %1$s, um es neu zu entzünden</string>
+    <string name="game_badge_a11y_stars">Sterne: %1$s von %2$s</string>
     <string name="game_chest_claimed">Eine neue Gabe wartet am Ende des nächsten Traums auf dich.</string>
     <string name="game_chest_locked">Erfülle die drei Akte des Traums, damit sie erscheint.</string>
     <string name="game_chest_open">Die Gabe öffnen</string>
@@ -344,6 +346,7 @@
     <string name="game_concept_link_prestige">Seite der Wiedergeburt</string>
     <string name="game_concept_link_season">Der Weg der Reise</string>
     <string name="game_concept_link_showcase">Meine Trophäen ordnen</string>
+    <string name="game_concept_link_succes">Alle Heldentaten</string>
     <string name="game_concept_meesh_how">Eine Meesh zu prägen bannt einen Teil deines Lichts in eine Münze.</string>
     <string name="game_concept_meesh_name">Das Erbe</string>
     <string name="game_concept_meesh_tip_1">Behalte deine Meeshes: Dein Erbe wandert von einem Behältnis ins nächste.</string>
@@ -667,6 +670,7 @@
     <string name="game_treasury_next">%1$s bis %2$s</string>
     <string name="game_treasury_reserve">Reserve</string>
     <string name="game_treasury_tresor">Schatz</string>
+    <string name="progression_achievement_a11y_hint">Tippe, um diese Heldentat groß zu sehen.</string>
     <string name="progression_achievement_all_content_types_condition">Eine Sprachnachricht, eine Textnachricht, ein Beitrag, eine Story und ein Reel</string>
     <string name="progression_achievement_all_content_types_title">Alleskönner</string>
     <string name="progression_achievement_editor_condition">Eine erste Bearbeitung in der App vor dem Veröffentlichen</string>
@@ -697,13 +701,25 @@
     <string name="progression_axis_tool_in_app_edit">Bearbeitungen in der App</string>
     <string name="progression_axis_tool_reaction">Reaktionen</string>
     <string name="progression_axis_tool_sticker">Gesetzte Sticker</string>
+    <string name="progression_family_comment">Kommentare</string>
+    <string name="progression_family_content">Erstellte Inhalte</string>
+    <string name="progression_family_conversation">Unterhaltungen</string>
+    <string name="progression_family_social">Geknüpfte Bande</string>
+    <string name="progression_family_tool">Werkzeuge</string>
+    <string name="progression_hero_first">Erste Heldentat</string>
+    <string name="progression_hero_first_hint">Schreib eine Nachricht – die erste Heldentat vollbringst du sofort.</string>
+    <string name="progression_hero_last">Letzte Heldentat</string>
+    <string name="progression_hero_next">Nächste Heldentat</string>
+    <string name="progression_hero_reveal_hint">Das Zeichen der Ahnen zu dieser Heldentat erneut ansehen</string>
     <string name="progression_level">Level %1$d</string>
     <string name="progression_meesh_mint_error">Die Prägung ist fehlgeschlagen — versuchen Sie es erneut</string>
     <string name="progression_obtained">Erhalten am %1$s</string>
+    <string name="progression_section_achievements">Heldentaten</string>
     <plurals name="progression_streak_days">
         <item quantity="one">%1$d Tag in Folge</item>
         <item quantity="other">%1$d Tage in Folge</item>
     </plurals>
+    <string name="progression_unlocked">Freigeschaltet</string>
     <string name="reveal_achievement_photo">Als Karte teilen</string>
     <string name="reveal_badge_achievement">Erfolg freigeschaltet</string>
     <string name="reveal_badge_axis_subtitle">Eine Stufe mehr auf dieser Achse. Die nächste wird freigeschaltet, wenn du weitermachst.</string>

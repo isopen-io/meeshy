@@ -26,6 +26,8 @@ import me.meeshy.app.game.pages.SeasonScreen
 import me.meeshy.app.game.pages.ShowcaseScreen
 import me.meeshy.app.game.progression.ProgressionConceptScreen
 import me.meeshy.app.game.progression.ProgressionScreen
+import me.meeshy.app.game.progression.ProgressionSection
+import me.meeshy.app.game.progression.ProgressionSectionScreen
 import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.game.pages.GamePage
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
@@ -40,6 +42,9 @@ object GameRoutes {
     const val PAGE_ARG = "page"
     const val PAGE = "progression/page/{$PAGE_ARG}"
 
+    const val SECTION_ARG = "section"
+    const val SECTION = "progression/section/{$SECTION_ARG}"
+
     /** Le lien profond de la première page (iOS `RootView` : `progression`). */
     val PROGRESSION_DEEP_LINKS: List<String> = listOf("meeshy://$PROGRESSION")
 
@@ -47,6 +52,9 @@ object GameRoutes {
 
     /** Une sous-page du jeu (iOS `Route.gamePage`) : Ligue, Voyage, Vitrine, Atlas, Renaissance, Réglages. */
     fun page(page: GamePage): String = "$PROGRESSION/page/${page.wire}"
+
+    /** Une section d'une fiche (iOS `Route.progressionSection`) : la page des hauts faits ; son parent est la fiche. */
+    fun section(section: ProgressionSection): String = "$PROGRESSION/section/${section.wire}"
 
     /** La route d'un écran du jeu ouvert par une entrée extérieure (notification) : [GameTarget]. */
     fun route(target: GameTarget): String = when (target) {
@@ -98,6 +106,21 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
             }
         }
         builder.composable(
+            route = GameRoutes.SECTION,
+            arguments = listOf(navArgument(GameRoutes.SECTION_ARG) { type = NavType.StringType }),
+            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
+            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
+            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
+            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
+        ) { entry ->
+            val section = ProgressionSection.fromWire(entry.arguments?.getString(GameRoutes.SECTION_ARG))
+            if (section == null) {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            } else {
+                ProgressionSectionScreen(section = section, onBack = { navController.popBackStack() })
+            }
+        }
+        builder.composable(
             route = GameRoutes.CONCEPT,
             arguments = listOf(navArgument(GameRoutes.CONCEPT_ARG) { type = NavType.StringType }),
             enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
@@ -114,6 +137,7 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
                     onBack = { navController.popBackStack() },
                     onOpenConcept = { navController.navigate(GameRoutes.concept(it)) },
                     onOpenPage = { navController.navigate(GameRoutes.page(it)) },
+                    onOpenSection = { navController.navigate(GameRoutes.section(it)) },
                 )
             }
         }

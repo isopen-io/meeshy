@@ -66,6 +66,7 @@ fun ProgressionConceptScreen(
     onBack: () -> Unit,
     onOpenConcept: (ProgressionConcept) -> Unit,
     onOpenPage: (GamePage) -> Unit = {},
+    onOpenSection: (ProgressionSection) -> Unit = {},
     viewModel: ProgressionViewModel = hiltViewModel(),
     gestures: GameGesturesViewModel = hiltViewModel(),
 ) {
@@ -102,15 +103,22 @@ fun ProgressionConceptScreen(
                 Sentence(stringResource(ConceptCopy.use(concept)))
             }
             val game = snapshot.game
-            if (game != null && conceptHasGestures(concept, game)) {
-                FicheSection(stringResource(R.string.game_concept_section_act)) { ConceptGestures(concept, game, gestures) }
+            val acts = game != null && conceptHasGestures(concept, game)
+            if (acts || conceptHasRevealPiece(concept)) {
+                FicheSection(stringResource(R.string.game_concept_section_act)) {
+                    if (acts && game != null) ConceptGestures(concept, game, gestures)
+                    // Les médailles et le dernier haut fait se TOUCHENT : ils s'ouvrent en grand, en consultation.
+                    ConceptRevealPiece(concept, snapshot.progress, game, hidden.hidden)
+                }
             }
             if (concept == ProgressionConcept.Points) {
                 ConceptLink(stringResource(R.string.game_fiche_light_to_heritage)) { onOpenConcept(ProgressionConcept.Meesh) }
             }
             val pages = GamePageLinks.of(concept)
-            if (pages.isNotEmpty()) {
+            val sections = ProgressionSection.of(concept)
+            if (pages.isNotEmpty() || sections.isNotEmpty()) {
                 FicheSection(stringResource(R.string.game_fiche_more)) {
+                    sections.forEach { section -> ConceptLink(stringResource(sectionLinkTitle(section))) { onOpenSection(section) } }
                     pages.forEach { page -> ConceptLink(stringResource(pageLinkTitle(page))) { onOpenPage(page) } }
                 }
             }

@@ -252,6 +252,8 @@
     <string name="game2_visibility_saving">Salvando…</string>
     <string name="game_actions_one">%1$s ação</string>
     <string name="game_actions_other">%1$s ações</string>
+    <string name="game_badge_a11y_imprint">Apagado, mais %1$s para reacendê-lo</string>
+    <string name="game_badge_a11y_stars">Estrelas: %1$s de %2$s</string>
     <string name="game_chest_claimed">Uma nova Oferenda espera por você no fim do próximo sonho.</string>
     <string name="game_chest_locked">Realize os três atos do sonho para fazê-la aparecer.</string>
     <string name="game_chest_open">Abrir a Oferenda</string>
@@ -344,6 +346,7 @@
     <string name="game_concept_link_prestige">Página do renascimento</string>
     <string name="game_concept_link_season">O caminho da viagem</string>
     <string name="game_concept_link_showcase">Arrumar meus troféus</string>
+    <string name="game_concept_link_succes">Todas as façanhas</string>
     <string name="game_concept_meesh_how">Cunhar uma Meesh cristaliza uma parte da sua luz numa moeda.</string>
     <string name="game_concept_meesh_name">A Herança</string>
     <string name="game_concept_meesh_tip_1">Guarde suas Meeshes: sua herança passa de um recipiente ao seguinte.</string>
@@ -670,6 +673,7 @@
     <string name="game_treasury_next">%1$s até o %2$s</string>
     <string name="game_treasury_reserve">Reserva</string>
     <string name="game_treasury_tresor">Tesouro</string>
+    <string name="progression_achievement_a11y_hint">Toque para ver esta façanha em tela cheia.</string>
     <string name="progression_achievement_all_content_types_condition">Uma mensagem de voz, uma de texto, uma publicação, uma story e um reel</string>
     <string name="progression_achievement_all_content_types_title">Faz-tudo</string>
     <string name="progression_achievement_editor_condition">Uma primeira edição no app antes de publicar</string>
@@ -700,14 +704,26 @@
     <string name="progression_axis_tool_in_app_edit">Edições no app</string>
     <string name="progression_axis_tool_reaction">Reações</string>
     <string name="progression_axis_tool_sticker">Stickers colocados</string>
+    <string name="progression_family_comment">Comentários</string>
+    <string name="progression_family_content">Conteúdo criado</string>
+    <string name="progression_family_conversation">Conversas</string>
+    <string name="progression_family_social">Laços tecidos</string>
+    <string name="progression_family_tool">Ferramentas</string>
+    <string name="progression_hero_first">Primeira façanha</string>
+    <string name="progression_hero_first_hint">Envie uma mensagem: a primeira se cumpre na hora.</string>
+    <string name="progression_hero_last">Última façanha</string>
+    <string name="progression_hero_next">Próxima façanha</string>
+    <string name="progression_hero_reveal_hint">Rever o sinal dos ancestrais desta façanha</string>
     <string name="progression_level">Nível %1$d</string>
     <string name="progression_meesh_mint_error">A cunhagem não foi concluída — tente novamente</string>
     <string name="progression_obtained">Obtido em %1$s</string>
+    <string name="progression_section_achievements">Façanhas</string>
     <plurals name="progression_streak_days">
         <item quantity="one">%1$d dia seguido</item>
         <item quantity="many">%1$d dias seguidos</item>
         <item quantity="other">%1$d dias seguidos</item>
     </plurals>
+    <string name="progression_unlocked">Desbloqueado</string>
     <string name="reveal_achievement_photo">Fazer um cartão</string>
     <string name="reveal_badge_achievement">Conquista desbloqueada</string>
     <string name="reveal_badge_axis_subtitle">Mais um nível neste eixo. O próximo é desbloqueado ao continuar.</string>
