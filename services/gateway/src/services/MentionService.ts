@@ -232,10 +232,9 @@ export class MentionService {
   async getUserSuggestionsForPost(
     postId: string,
     currentUserId: string,
-    query: string = '',
-    viewerRole?: string | null
+    query: string = ''
   ): Promise<MentionSuggestion[]> {
-    return this.suggestions.forPost(postId, currentUserId, query, viewerRole);
+    return this.suggestions.forPost(postId, currentUserId, query);
   }
 
   /**

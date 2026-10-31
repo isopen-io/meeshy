@@ -66,13 +66,14 @@ export interface MentionSuggestion {
 export const MAX_SUGGESTIONS = 10;
 
 /**
- * Court et versionné : la clé `v2` n'est pas relue par l'ancienne forme (dont
- * les entrées vides de l'annuaire cassé), et un changement de membres que
+ * Court et versionné : une clé d'une version antérieure n'est jamais relue par la
+ * forme courante (ni les entrées vides de l'annuaire cassé, ni les connaissances
+ * servies avant la loi de découvrabilité), et un changement de membres que
  * personne n'invalide ne survit pas plus d'une minute.
  */
 const CACHE_TTL_SECONDS = 60;
 const NO_BLOCKS: ReadonlySet<string> = new Set();
-const CACHE_PREFIX = 'mentions:suggestions:v3';
+const CACHE_PREFIX = 'mentions:suggestions:v4';
 
 export const ACCESS_DENIED = 'Conversation non trouvée ou accès refusé';
 export const POST_ACCESS_DENIED = 'Post non trouvé ou accès refusé';
@@ -514,20 +515,21 @@ export class MentionSuggestionFinder {
    * celle du FIL (`resolveConsumptionTarget`) : un post — ou l'original d'une
    * republication simple — que l'appelant ne peut pas lire ne livre personne, et un
    * id malformé est un refus. Les réacteurs ne sortent que pour qui en lit la liste
-   * en tant qu'auteur (`viewerListAccess`, décision porteur 2026-10-09).
+   * en tant qu'auteur (`viewerListAccess`, décision porteur 2026-10-09) — jamais
+   * pour un ADMIN par ce chemin, qui n'écrit aucune trace d'audit : le rôle n'y
+   * entre donc pas.
    */
   async forPost(
     postId: string,
     currentUserId: string,
-    query: string,
-    viewerRole?: string | null
+    query: string
   ): Promise<MentionSuggestion[]> {
     const target = await resolveConsumptionTarget(this.prisma, postId, currentUserId);
     if (!target) throw new Error(POST_ACCESS_DENIED);
 
     const thread = target.redirectedFrom ?? target;
     const withReactors =
-      viewerListAccess({ authorId: thread.authorId, type: thread.type }, { id: currentUserId, role: viewerRole ?? null }) ===
+      viewerListAccess({ authorId: thread.authorId, type: thread.type }, { id: currentUserId, role: null }) ===
       'author';
 
     const blocked = await getBlockRelatedUserIds(this.prisma, currentUserId);

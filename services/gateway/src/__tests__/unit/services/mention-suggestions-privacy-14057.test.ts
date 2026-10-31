@@ -39,6 +39,7 @@ const REACTOR = id(3);
 const HIDDEN = id(4);
 const DEACTIVATED = id(5);
 const MEMBER_ACQUAINTANCE = id(6);
+const ORIGINAL_COMMENTER = id(7);
 
 type Person = {
   id: string; username: string; firstName: null; lastName: null; displayName: string; avatar: null;
@@ -56,6 +57,7 @@ const PEOPLE: Record<string, Person> = {
   [HIDDEN]: person(HIDDEN, 'hidden'),
   [DEACTIVATED]: person(DEACTIVATED, 'gone', false),
   [MEMBER_ACQUAINTANCE]: person(MEMBER_ACQUAINTANCE, 'acqmember'),
+  [ORIGINAL_COMMENTER]: person(ORIGINAL_COMMENTER, 'origcommenter'),
 };
 
 type PostRow = {
@@ -70,6 +72,7 @@ const post = (overrides: Partial<PostRow> = {}): PostRow => ({
 type World = {
   readonly posts?: readonly PostRow[];
   readonly commenters?: readonly string[];
+  readonly commentsByPost?: Readonly<Record<string, readonly string[]>>;
   readonly reactors?: readonly string[];
   readonly relations?: ReadonlyArray<readonly [string, string]>;
   readonly addressBook?: readonly string[];
@@ -89,7 +92,11 @@ function fakePrisma(world: World) {
 
   return {
     post: { findFirst: jest.fn(async ({ where }: { where: { id: string } }) => posts.get(where.id) ?? null) },
-    postComment: { findMany: jest.fn(async () => (world.commenters ?? []).map((authorId) => ({ authorId }))) },
+    postComment: {
+      findMany: jest.fn(async ({ where }: { where: { postId: string } }) =>
+        (world.commentsByPost ? world.commentsByPost[where.postId] ?? [] : world.commenters ?? []).map((authorId) => ({ authorId }))
+      ),
+    },
     postReaction: { findMany: jest.fn(async () => (world.reactors ?? []).map((userId) => ({ userId }))) },
     postMention: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) },
     communityMember: { findMany: jest.fn(async () => []), findFirst: jest.fn(async () => null) },
@@ -186,6 +193,17 @@ describe('#14057 — la garde de lecture est celle du fil', () => {
     const repost = post({ id: POST, authorId: COMMENTER, repostOfId: ORIGINAL });
     const original = post({ id: ORIGINAL, authorId: AUTHOR });
     expect(ids(await finder({ posts: [repost, original] }).forPost(POST, ME, ''))).toEqual([COMMENTER, AUTHOR]);
+  });
+
+  it('une republication lisible propose les commentateurs de SON fil, jamais ceux de l’original', async () => {
+    HIDDEN_IDS.clear();
+    const repost = post({ id: POST, authorId: COMMENTER, repostOfId: ORIGINAL });
+    const original = post({ id: ORIGINAL, authorId: AUTHOR });
+    const list = await finder({
+      posts: [repost, original],
+      commentsByPost: { [POST]: [MEMBER_ACQUAINTANCE], [ORIGINAL]: [ORIGINAL_COMMENTER] },
+    }).forPost(POST, ME, '');
+    expect(ids(list)).toEqual([COMMENTER, AUTHOR, MEMBER_ACQUAINTANCE]);
   });
 });
 

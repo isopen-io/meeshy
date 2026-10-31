@@ -27,7 +27,7 @@ const USER_ID = '507f1f77bcf86cd799439099';
 // ---------------------------------------------------------------------------
 
 const mockGetSuggestionsForConversation = jest.fn<(contextId: string, userId: string, query: string) => Promise<MentionSuggestion[]>>();
-const mockGetSuggestionsForPost = jest.fn<(postId: string, userId: string, query: string, viewerRole?: string | null) => Promise<MentionSuggestion[]>>();
+const mockGetSuggestionsForPost = jest.fn<(postId: string, userId: string, query: string) => Promise<MentionSuggestion[]>>();
 
 jest.mock('../../../services/MentionService', () => ({
   MentionService: jest.fn().mockImplementation(() => ({
@@ -273,7 +273,7 @@ describe('GET /mentions/suggestions — route handler wiring', () => {
       headers: { authorization: 'Bearer fake-token' },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockGetSuggestionsForPost).toHaveBeenCalledWith(VALID_POST_ID, USER_ID, '', null);
+    expect(mockGetSuggestionsForPost).toHaveBeenCalledWith(VALID_POST_ID, USER_ID, '');
     expect(mockGetSuggestionsForConversation).not.toHaveBeenCalled();
   });
 
@@ -284,7 +284,7 @@ describe('GET /mentions/suggestions — route handler wiring', () => {
       headers: { authorization: 'Bearer fake-token' },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockGetSuggestionsForPost).toHaveBeenCalledWith(VALID_POST_ID, USER_ID, 'alice', null);
+    expect(mockGetSuggestionsForPost).toHaveBeenCalledWith(VALID_POST_ID, USER_ID, 'alice');
   });
 
   it('contextType=post access denied by service → 403', async () => {

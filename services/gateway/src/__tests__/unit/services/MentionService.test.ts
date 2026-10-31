@@ -857,7 +857,7 @@ describe('MentionService', () => {
 
       await service.invalidateCacheForConversation(conversationId);
 
-      expect(mockRedis.keys).toHaveBeenCalledWith(`mentions:suggestions:v3:${conversationId}:*`);
+      expect(mockRedis.keys).toHaveBeenCalledWith(`mentions:suggestions:v4:${conversationId}:*`);
       expect(mockRedis.del).toHaveBeenCalledTimes(2);
     });
 
