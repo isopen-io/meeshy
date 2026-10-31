@@ -29,6 +29,7 @@ export function pairInteractionStore(
     users?: readonly Row[];
     relations?: readonly Row[];
     notifications?: readonly Row[];
+    conversations?: readonly Row[];
     racesOnFirstCreate?: boolean;
     failCreate?: Error;
   } = {},
@@ -38,6 +39,7 @@ export function pairInteractionStore(
     days: [...(seed.days ?? [])].map((r) => ({ ...r })) as Row[],
     users: [...(seed.users ?? [])].map((r) => ({ ...r })) as Row[],
     notifications: [...(seed.notifications ?? [])].map((r) => ({ ...r })) as Row[],
+    conversations: [...(seed.conversations ?? [])].map((r) => ({ ...r })) as Row[],
     races: seed.racesOnFirstCreate === true,
     sequence: 0,
   };
@@ -89,8 +91,18 @@ export function pairInteractionStore(
     },
   };
 
+  /** `participants` : { userId, type, isActive } ; seuls les participants ACTIFS de type « user » sont rendus. */
+  const conversation = {
+    findUnique: (args: { where: { id: string }; select?: Record<string, unknown> }): Promise<Row | null> => {
+      const found = state.conversations.find((c) => c.id === args.where.id);
+      if (!found) return Promise.resolve(null);
+      const participants = ((found.participants as Row[] | undefined) ?? []).filter((p) => p.isActive !== false && p.type === 'user');
+      return Promise.resolve({ id: found.id, type: found.type, participants: participants.map((p) => ({ userId: p.userId })) });
+    },
+  };
+
   return {
-    prisma: { ...base.prisma, pairInteractionDay, user },
+    prisma: { ...base.prisma, pairInteractionDay, user, conversation },
     days: (): readonly Row[] => state.days.map((r) => ({ ...r })),
     relations: base.relations,
   };

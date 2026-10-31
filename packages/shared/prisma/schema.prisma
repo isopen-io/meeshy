@@ -2043,6 +2043,55 @@ model UserRelation {
   @@index([userHighId])
 }
 
+/// L'AGRÉGAT DES INTERACTIONS D'UNE PAIRE, par jour UTC (#13932, cercles de proximité).
+///
+/// Une ligne par paire NON orientée (`relationPairKey`) et par jour : `byLow<Nature>`
+/// compte ce que `userLowId` a fait ENVERS `userHighId` ce jour-là, `byHigh<Nature>`
+/// l'inverse. Neuf natures (RG-04) : message, réaction (like compris), vue de post,
+/// commentaire, partage, réponse à une story ou un mood, mention, appel, message
+/// audio. Un message audio ne compte qu'en `Audio` (jamais en plus en `Message`).
+///
+/// Ce que ce modèle remplace : la `PairInteractionWeek` Json de la spec — Prisma
+/// n'incrémente pas dans un Json, et la fenêtre de la Connaissance automatique (D-1)
+/// est une semaine GLISSANTE que la clé ISO ne calcule pas. La semaine ISO UTC se
+/// déduit par somme de jours.
+///
+/// Seul le FAIT d'une interaction est compté : aucun contenu, jamais (E2EE).
+///
+/// Expiration : `expiresAt` porte un index TTL (`expireAfterSeconds: 0`) posé par
+/// `migrations/2026-10-31-pair-interaction-day-indexes.mongodb.js`, hors `db push`.
+/// Conservation 120 jours : douze semaines entières (84 j) plus la marge de deux
+/// semaines partielles et de la semaine courante.
+model PairInteractionDay {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userLowId          String   @db.ObjectId
+  userHighId         String   @db.ObjectId
+  /// Minuit UTC du jour compté.
+  day                DateTime
+  byLowMessage       Int      @default(0)
+  byLowReaction      Int      @default(0)
+  byLowPostView      Int      @default(0)
+  byLowComment       Int      @default(0)
+  byLowShare         Int      @default(0)
+  byLowStoryReply    Int      @default(0)
+  byLowMention       Int      @default(0)
+  byLowCall          Int      @default(0)
+  byLowAudio         Int      @default(0)
+  byHighMessage      Int      @default(0)
+  byHighReaction     Int      @default(0)
+  byHighPostView     Int      @default(0)
+  byHighComment      Int      @default(0)
+  byHighShare        Int      @default(0)
+  byHighStoryReply   Int      @default(0)
+  byHighMention      Int      @default(0)
+  byHighCall         Int      @default(0)
+  byHighAudio        Int      @default(0)
+  expiresAt          DateTime
+
+  @@unique([userLowId, userHighId, day])
+  @@index([day])
+}
+
 /// RÉSERVÉ — le lien parent/tuteur vérifié du niveau ATOME (hors MVP, #13926).
 /// Aucune route ne l'écrit ni ne le lit au MVP : le modèle est prêt, rien de plus.
 model AtomLink {

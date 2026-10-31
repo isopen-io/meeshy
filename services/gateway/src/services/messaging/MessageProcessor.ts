@@ -28,6 +28,7 @@ import {
   type MessageNotificationTarget,
 } from './messageNotificationFanOut';
 import { resolveMessageMentions } from './messageMentions';
+import { noteMessageInteractions } from '../relations/messageInteractions';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
@@ -957,6 +958,20 @@ export class MessageProcessor {
       // « pas de `@`, pas de requête » vit dans l'unité, pas ici : c'est une
       // garde qu'un nouvel écrivain oublierait.
       const validatedMentionUserIds = await this.processMentionsInDB(data, message, processedContent);
+
+      // Les cercles (#13932) : le FAIT du message compte pour la paire, jamais son contenu.
+      const counted = message as Message & {
+        sender?: { userId?: string | null } | null;
+        replyTo?: { sender?: { userId?: string | null } | null } | null;
+      };
+      noteMessageInteractions(this.prisma, {
+        conversationId: data.conversationId,
+        senderUserId: counted.sender?.userId ?? null,
+        messageType: message.messageType,
+        replyToAuthorUserId: counted.replyTo?.sender?.userId ?? null,
+        isStoryReply: Boolean(message.storyReplyToId),
+        mentionedUserIds: validatedMentionUserIds,
+      });
 
       // 2. Déclencher les notifications (Mentions, Réponses, Messages)
       if (this.notificationService) {
