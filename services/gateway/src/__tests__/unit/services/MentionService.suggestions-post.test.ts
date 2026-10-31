@@ -1,385 +1,176 @@
 /**
- * MentionService.getUserSuggestionsForPost — Unit Tests
+ * MentionService.getUserSuggestionsForPost — le contexte post (story, réel, mood
+ * compris : tous des `Post`).
  *
- * Tests for the new post-context suggestions method.
- * Priority order: post author > previous commenters > friends > others (capped at 10)
+ * Ordre (#14052, directive porteur 2026-10-31) : connaissances (≥ ACQUAINTANCE)
+ * > intervenants (auteur, commentateurs, réacteurs) > contacts de tout cercle >
+ * annuaire, plafonné à 10. Un post absent, supprimé ou illisible ne livre personne.
  *
  * @jest-environment node
  */
+import { describe, it, expect, jest } from '@jest/globals';
 
 jest.mock('../../../services/CacheStore', () => {
-  const sharedMockCache = {
-    get: jest.fn().mockResolvedValue(null),
-    set: jest.fn().mockResolvedValue(undefined),
-    del: jest.fn().mockResolvedValue(undefined),
-    keys: jest.fn().mockResolvedValue([]),
-    setnx: jest.fn().mockResolvedValue(true),
-    expire: jest.fn().mockResolvedValue(true),
-    publish: jest.fn().mockResolvedValue(0),
-    info: jest.fn().mockResolvedValue(''),
-    isAvailable: jest.fn().mockReturnValue(false),
-    close: jest.fn().mockResolvedValue(undefined),
-    getNativeClient: jest.fn().mockReturnValue(null),
+  const cache = {
+    get: jest.fn(async () => null),
+    set: jest.fn(async () => undefined),
+    del: jest.fn(async () => undefined),
+    keys: jest.fn(async () => []),
+    isAvailable: jest.fn(() => false),
   };
-  return {
-    getCacheStore: jest.fn().mockReturnValue(sharedMockCache),
-    __sharedMockCache: sharedMockCache,
-  };
+  return { getCacheStore: jest.fn(() => cache) };
 });
 
 jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: {
-    child: jest.fn(() => ({
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-      debug: jest.fn(),
-    })),
-  },
+  enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })) },
 }));
 
-jest.mock('@meeshy/shared/prisma/client', () => {
-  const mockPrisma = {
-    user: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-    },
-    post: {
-      findUnique: jest.fn(),
-    },
-    postComment: {
-      findMany: jest.fn(),
-    },
-    participant: {
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-    },
-    friendRequest: {
-      findMany: jest.fn(),
-    },
-    mention: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-    },
-  };
-  return {
-    PrismaClient: jest.fn(() => mockPrisma),
-  };
-});
-
-import { MentionService, MentionSuggestion } from '../../../services/MentionService';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { getCacheStore } from '../../../services/CacheStore';
+import { MentionService, type MentionSuggestion } from '../../../services/MentionService';
 
 const POST_ID = '507f1f77bcf86cd799439011';
 const CURRENT_USER_ID = '507f1f77bcf86cd799439099';
 const AUTHOR_ID = '507f1f77bcf86cd799439001';
 const COMMENTER_ID = '507f1f77bcf86cd799439002';
-const FRIEND_ID = '507f1f77bcf86cd799439003';
+const REACTOR_ID = '507f1f77bcf86cd799439003';
+const FRIEND_ID = '507f1f77bcf86cd799439004';
 
-function buildUser(overrides: Record<string, unknown> = {}) {
+type User = {
+  id: string; username: string; firstName: string | null; lastName: string | null;
+  displayName: string | null; avatar: string | null; equippedAvatarRing: string | null;
+};
+
+const user = (id: string, username: string, displayName: string | null = username): User => ({
+  id, username, firstName: null, lastName: null, displayName, avatar: null, equippedAvatarRing: null,
+});
+
+type Scenario = {
+  readonly post?: { authorId: string; visibility?: string } | null;
+  readonly commenters?: readonly User[];
+  readonly reactors?: readonly User[];
+  readonly friends?: readonly User[];
+  readonly directory?: readonly User[];
+};
+
+const AUTHOR = user(AUTHOR_ID, 'author_user', 'Author User');
+
+function fakePrisma(scenario: Scenario) {
+  const people = new Map<string, User>(
+    [AUTHOR, ...(scenario.commenters ?? []), ...(scenario.reactors ?? []), ...(scenario.friends ?? []), ...(scenario.directory ?? [])]
+      .map((u) => [u.id, u])
+  );
+  const friendIds = (scenario.friends ?? []).map((f) => f.id);
+  const post = scenario.post === undefined ? { authorId: AUTHOR_ID } : scenario.post;
+
   return {
-    id: AUTHOR_ID,
-    username: 'author_user',
-    firstName: 'Author',
-    lastName: 'User',
-    displayName: 'Author User',
-    avatar: null,
-    lastActiveAt: new Date(),
-    isActive: true,
-    deletedAt: null,
-    ...overrides,
+    post: {
+      findFirst: jest.fn(async () =>
+        post ? { id: POST_ID, authorId: post.authorId, visibility: post.visibility ?? 'PUBLIC', visibilityUserIds: [], expiresAt: null } : null
+      ),
+    },
+    postComment: {
+      findMany: jest.fn(async () => (scenario.commenters ?? []).map((c) => ({ authorId: c.id, author: c }))),
+    },
+    postReaction: {
+      findMany: jest.fn(async () => (scenario.reactors ?? []).map((r) => ({ userId: r.id, user: r }))),
+    },
+    postMention: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) },
+    communityMember: { findMany: jest.fn(async () => []), findFirst: jest.fn(async () => null) },
+    participant: { findMany: jest.fn(async () => []), findFirst: jest.fn(async () => null) },
+    userRelation: { findMany: jest.fn(async () => []) },
+    userContact: { findMany: jest.fn(async () => []) },
+    friendRequest: {
+      findMany: jest.fn(async () =>
+        friendIds.map((friendId) => ({ senderId: CURRENT_USER_ID, receiverId: friendId, respondedAt: null, updatedAt: null }))
+      ),
+    },
+    user: {
+      findMany: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        const ids = (where.id as { in?: string[] } | undefined)?.in;
+        if (ids) return ids.flatMap((id) => (people.has(id) ? [people.get(id) as User] : []));
+        if (where.blockedUserIds) return [];
+        const notIn = ((where.AND as Array<Record<string, unknown>> | undefined)?.find((c) => c.id) as { id: { notIn: string[] } } | undefined)?.id.notIn ?? [];
+        return (scenario.directory ?? []).filter((u) => !notIn.includes(u.id));
+      }),
+      findUnique: jest.fn(async () => ({ blockedUserIds: [] })),
+    },
+    userPreferences: { findMany: jest.fn(async () => []) },
+    userPreference: { findMany: jest.fn(async () => []) },
   };
 }
 
-function buildPost(overrides: Record<string, unknown> = {}) {
-  return {
-    id: POST_ID,
-    authorId: AUTHOR_ID,
-    deletedAt: null,
-    visibility: 'PUBLIC',
-    author: buildUser(),
-    ...overrides,
-  };
-}
+const suggestionsFor = (scenario: Scenario, query = ''): Promise<MentionSuggestion[]> =>
+  new MentionService(fakePrisma(scenario) as never).getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, query);
 
-function buildComment(authorId: string, overrides: Record<string, unknown> = {}) {
-  return {
-    id: `comment-${authorId}`,
-    postId: POST_ID,
-    authorId,
-    deletedAt: null,
-    author: buildUser({ id: authorId, username: `commenter_${authorId.slice(-4)}` }),
-    ...overrides,
-  };
-}
-
-function buildFriendship(friendId: string) {
-  return {
-    senderId: CURRENT_USER_ID,
-    receiverId: friendId,
-    status: 'accepted',
-    sender: buildUser({ id: CURRENT_USER_ID, username: 'current_user' }),
-    receiver: buildUser({ id: friendId, username: 'friend_user' }),
-  };
-}
+const ids = (list: readonly MentionSuggestion[]) => list.map((s) => s.id);
 
 describe('MentionService.getUserSuggestionsForPost', () => {
-  let service: MentionService;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let prisma: any;
-  let mockCache: ReturnType<typeof getCacheStore>;
-
-  beforeEach(() => {
-    const cacheStoreMod = jest.requireMock('../../../services/CacheStore') as {
-      __sharedMockCache: ReturnType<typeof getCacheStore>;
-      getCacheStore: jest.Mock;
-    };
-    mockCache = cacheStoreMod.__sharedMockCache;
-
-    jest.clearAllMocks();
-
-    (mockCache.get as jest.Mock).mockResolvedValue(null);
-    (mockCache.set as jest.Mock).mockResolvedValue(undefined);
-    (mockCache.isAvailable as jest.Mock).mockReturnValue(false);
-
-    (getCacheStore as jest.Mock).mockReturnValue(mockCache);
-
-    prisma = new PrismaClient() as unknown as typeof prisma;
-    (prisma.user as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-    service = new MentionService(prisma as unknown as import('@meeshy/shared/prisma/client').PrismaClient);
-  });
-
-  // =========================================================================
-  // Post not found / access denied
-  // =========================================================================
-
-  describe('post access check', () => {
-    it('should throw PermissionDeniedError when post does not exist', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '')
-      ).rejects.toThrow('Post non trouvé ou accès refusé');
+  describe('accès au post', () => {
+    it('refuse un post absent ou supprimé (loadPostAcl rend null dans les deux cas)', async () => {
+      await expect(suggestionsFor({ post: null })).rejects.toThrow('Post non trouvé ou accès refusé');
     });
 
-    it('should throw PermissionDeniedError when post is soft-deleted', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(
-        buildPost({ deletedAt: new Date() })
+    it("refuse un post que l'appelant ne peut pas lire", async () => {
+      await expect(suggestionsFor({ post: { authorId: AUTHOR_ID, visibility: 'PRIVATE' } })).rejects.toThrow(
+        'Post non trouvé ou accès refusé'
       );
-
-      await expect(
-        service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '')
-      ).rejects.toThrow('Post non trouvé ou accès refusé');
     });
   });
 
-  // =========================================================================
-  // Priority: post author first
-  // =========================================================================
+  describe('intervenants', () => {
+    it("l'auteur ouvre le contexte, badgé « conversation »", async () => {
+      const [first] = await suggestionsFor({});
+      expect(first).toMatchObject({ id: AUTHOR_ID, username: 'author_user', badge: 'conversation', inConversation: true, group: 'context' });
+    });
 
-  describe('priority 1 — post author', () => {
-    it('should include the post author as the first suggestion with badge "conversation"', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
+    it("n'inclut jamais l'appelant, même auteur du post", async () => {
+      expect(ids(await suggestionsFor({ post: { authorId: CURRENT_USER_ID } }))).not.toContain(CURRENT_USER_ID);
+    });
 
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-
-      expect(results[0]).toMatchObject({
-        id: AUTHOR_ID,
-        username: 'author_user',
-        badge: 'conversation',
-        inConversation: true,
+    it("les commentateurs suivent l'auteur, puis ceux qui ont réagi", async () => {
+      const list = await suggestionsFor({
+        commenters: [user(COMMENTER_ID, 'commenter')],
+        reactors: [user(REACTOR_ID, 'reactor')],
       });
+      expect(ids(list)).toEqual([AUTHOR_ID, COMMENTER_ID, REACTOR_ID]);
+      expect(list.every((s) => s.badge === 'conversation')).toBe(true);
     });
 
-    it('should exclude the current user from suggestions', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(
-        buildPost({ authorId: CURRENT_USER_ID, author: buildUser({ id: CURRENT_USER_ID }) })
-      );
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-
-      expect(results.map(r => r.id)).not.toContain(CURRENT_USER_ID);
+    it('un auteur qui commente ne paraît qu’une fois', async () => {
+      expect(ids(await suggestionsFor({ commenters: [AUTHOR] }))).toEqual([AUTHOR_ID]);
     });
   });
 
-  // =========================================================================
-  // Priority: previous commenters second
-  // =========================================================================
-
-  describe('priority 2 — previous commenters', () => {
-    it('should include commenters after the author', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([
-        buildComment(COMMENTER_ID),
-      ]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-
-      const ids = results.map(r => r.id);
-      expect(ids.indexOf(AUTHOR_ID)).toBeLessThan(ids.indexOf(COMMENTER_ID));
-    });
-
-    it('should badge commenters as "conversation"', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([
-        buildComment(COMMENTER_ID),
-      ]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-      const commenter = results.find(r => r.id === COMMENTER_ID);
-
-      expect(commenter?.badge).toBe('conversation');
-      expect(commenter?.inConversation).toBe(true);
-    });
-
-    it('should not duplicate user that is both author and commenter', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([
-        buildComment(AUTHOR_ID),
-      ]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-      const authorEntries = results.filter(r => r.id === AUTHOR_ID);
-
-      expect(authorEntries).toHaveLength(1);
+  describe('connaissances', () => {
+    it("un ami vient AVANT les intervenants, badgé « friend »", async () => {
+      const list = await suggestionsFor({ friends: [user(FRIEND_ID, 'friend_user')], commenters: [user(COMMENTER_ID, 'commenter')] });
+      expect(ids(list)).toEqual([FRIEND_ID, AUTHOR_ID, COMMENTER_ID]);
+      expect(list[0]).toMatchObject({ badge: 'friend', isFriend: true, group: 'known' });
     });
   });
 
-  // =========================================================================
-  // Priority: friends third
-  // =========================================================================
-
-  describe('priority 3 — friends', () => {
-    it('should include friends who are not already in thread', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([
-        buildFriendship(FRIEND_ID),
-      ]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-      const friend = results.find(r => r.id === FRIEND_ID);
-
-      expect(friend).toBeDefined();
-      expect(friend?.badge).toBe('friend');
-      expect(friend?.isFriend).toBe(true);
+  describe('filtre de la requête', () => {
+    it('par nom d’utilisateur', async () => {
+      expect(ids(await suggestionsFor({}, 'author'))).toEqual([AUTHOR_ID]);
     });
 
-    it('should come after thread participants in the list', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([
-        buildComment(COMMENTER_ID),
-      ]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([
-        buildFriendship(FRIEND_ID),
-      ]);
+    it('par nom affiché', async () => {
+      expect(ids(await suggestionsFor({}, 'Author User'))).toEqual([AUTHOR_ID]);
+    });
 
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-      const ids = results.map(r => r.id);
-      const commenterIdx = ids.indexOf(COMMENTER_ID);
-      const friendIdx = ids.indexOf(FRIEND_ID);
-
-      expect(commenterIdx).toBeLessThan(friendIdx);
+    it('écarte qui ne correspond pas', async () => {
+      expect(ids(await suggestionsFor({}, 'zzz'))).toEqual([]);
     });
   });
 
-  // =========================================================================
-  // Query filtering
-  // =========================================================================
-
-  describe('query filtering', () => {
-    it('should filter author by username query', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, 'author');
-      expect(results.some(r => r.id === AUTHOR_ID)).toBe(true);
-    });
-
-    it('should filter out author when query does not match', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, 'alice');
-      expect(results.some(r => r.id === AUTHOR_ID)).toBe(false);
-    });
-
-    it('should filter by displayName', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(
-        buildPost({ author: buildUser({ displayName: 'Alice Wonder' }) })
-      );
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, 'alice');
-      expect(results.some(r => r.id === AUTHOR_ID)).toBe(true);
-    });
+  it('plafonne à 10 suggestions', async () => {
+    const commenters = Array.from({ length: 15 }, (_, i) => user(`507f1f77bcf86cd7994391${String(i).padStart(2, '0')}`, `c${i}`));
+    expect(await suggestionsFor({ commenters })).toHaveLength(10);
   });
 
-  // =========================================================================
-  // Result cap
-  // =========================================================================
-
-  describe('result cap', () => {
-    it('should return at most 10 suggestions', async () => {
-      const manyCommenters = Array.from({ length: 15 }, (_, i) => ({
-        id: `60000000000000000000000${i}`,
-        username: `commenter${i}`,
-        firstName: `First${i}`,
-        lastName: `Last${i}`,
-        displayName: null,
-        avatar: null,
-        isActive: true,
-        deletedAt: null,
-      }));
-
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue(
-        manyCommenters.map(u => ({
-          id: `comment-${u.id}`,
-          postId: POST_ID,
-          authorId: u.id,
-          deletedAt: null,
-          author: u,
-        }))
-      );
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-
-      expect(results.length).toBeLessThanOrEqual(10);
-    });
-  });
-
-  // =========================================================================
-  // Return shape matches MentionSuggestion
-  // =========================================================================
-
-  describe('return shape', () => {
-    it('should return MentionSuggestion[] shape', async () => {
-      (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(buildPost());
-      (prisma.postComment as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-      (prisma.friendRequest as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
-
-      const results = await service.getUserSuggestionsForPost(POST_ID, CURRENT_USER_ID, '');
-
-      results.forEach((s: MentionSuggestion) => {
-        expect(s).toHaveProperty('id');
-        expect(s).toHaveProperty('username');
-        expect(s).toHaveProperty('badge');
-        expect(s).toHaveProperty('inConversation');
-        expect(s).toHaveProperty('isFriend');
-      });
-    });
+  it('rend la forme MentionSuggestion', async () => {
+    const [first] = await suggestionsFor({});
+    expect(Object.keys(first).sort()).toEqual(
+      ['avatar', 'badge', 'displayName', 'group', 'id', 'inConversation', 'isFriend', 'username'].sort()
+    );
   });
 });
