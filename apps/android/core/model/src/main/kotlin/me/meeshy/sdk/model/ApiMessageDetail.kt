@@ -1,7 +1,11 @@
 package me.meeshy.sdk.model
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import me.meeshy.sdk.model.auth.TolerantStringSerializer
 import me.meeshy.sdk.model.serialization.LossyListSerializer
 import me.meeshy.sdk.model.serialization.LossyNullableListSerializer
@@ -33,8 +37,14 @@ data class CursorPagination(
     val limit: Int? = null,
 )
 
-/** A transcription segment as decoded from the socket/API — port of TranscriptionSegment (MessageSocketManager.swift). */
-@Serializable
+/**
+ * A transcription segment as decoded from the socket/API — port of TranscriptionSegment
+ * (`MessageSocketEvents+Media.swift`). [startTime]/[endTime] are SECONDS; the gateway serves
+ * milliseconds (`startMs`/`endMs`, `packages/shared/types/attachment-transcription.ts`), which win
+ * when present, each bound falling back on its own seconds key — exactly iOS `init(from:)`. It
+ * encodes seconds only, so a cached segment decodes back through the fallback.
+ */
+@Serializable(with = TranscriptionSegmentSerializer::class)
 data class TranscriptionSegment(
     val text: String = "",
     val startTime: Double? = null,
@@ -42,6 +52,48 @@ data class TranscriptionSegment(
     val speakerId: String? = null,
     val voiceSimilarityScore: Double? = null,
 )
+
+@Serializable
+@SerialName("TranscriptionSegment")
+private data class TranscriptionSegmentWire(
+    val text: String = "",
+    val startMs: Double? = null,
+    val endMs: Double? = null,
+    val startTime: Double? = null,
+    val endTime: Double? = null,
+    val speakerId: String? = null,
+    val voiceSimilarityScore: Double? = null,
+)
+
+internal object TranscriptionSegmentSerializer : KSerializer<TranscriptionSegment> {
+    private val wire = TranscriptionSegmentWire.serializer()
+
+    override val descriptor: SerialDescriptor = wire.descriptor
+
+    override fun deserialize(decoder: Decoder): TranscriptionSegment {
+        val served = decoder.decodeSerializableValue(wire)
+        return TranscriptionSegment(
+            text = served.text,
+            startTime = served.startMs?.let { it / 1000.0 } ?: served.startTime,
+            endTime = served.endMs?.let { it / 1000.0 } ?: served.endTime,
+            speakerId = served.speakerId,
+            voiceSimilarityScore = served.voiceSimilarityScore,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: TranscriptionSegment) {
+        encoder.encodeSerializableValue(
+            wire,
+            TranscriptionSegmentWire(
+                text = value.text,
+                startTime = value.startTime,
+                endTime = value.endTime,
+                speakerId = value.speakerId,
+                voiceSimilarityScore = value.voiceSimilarityScore,
+            ),
+        )
+    }
+}
 
 /** Nested user inside a message sender — port of APIMessageSenderUser (MessageModels.swift). */
 @Serializable
