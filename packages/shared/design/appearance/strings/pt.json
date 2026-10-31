@@ -95,6 +95,18 @@
     "cadres-illustres": {
       "name": "Molduras ilustradas",
       "description": "Seis molduras que transbordam do teu avatar: uma máscara de olhos que ficam vermelhos, uma teia e a sua aranha, asas de anjo, um círculo rúnico, garras de osso e asas de demônio."
+    },
+    "cadres-asiatiques": {
+      "name": "Molduras da Ásia",
+      "description": "Três molduras inspiradas na Ásia: um dragão de jade que ondula à volta do teu avatar, nuvens de seda à deriva e lanternas de papel que balançam."
+    },
+    "cadres-africains": {
+      "name": "Molduras de África",
+      "description": "Três molduras inspiradas em África: uma máscara de ébano cujos olhos se iluminam diante de um sol de savana, faixas tecidas que ondulam e um colar de contas que gira."
+    },
+    "cadres-celtes": {
+      "name": "Molduras celtas",
+      "description": "Três molduras inspiradas nos entrelaçados celtas: um nó que se apaga e se volta a traçar, uma espiral tripla que gira e uma hera esmeralda de folhas que estremecem."
     }
   },
   "designs": {
@@ -148,7 +160,16 @@
     "ailes-ange": "Asas de anjo",
     "cercle-runique": "Círculo rúnico",
     "griffes-os": "Garras de osso",
-    "ailes-demon": "Asas de demônio"
+    "ailes-demon": "Asas de demônio",
+    "dragon-jade": "Dragão de jade",
+    "nuages-soie": "Nuvens de seda",
+    "lanternes-papier": "Lanternas de papel",
+    "masque-ebene": "Máscara de ébano",
+    "bandes-tissees": "Faixas tecidas",
+    "collier-perles": "Colar de contas",
+    "noeud-entrelace": "Nó entrelaçado",
+    "spirale-triple": "Espiral tripla",
+    "lierre-emeraude": "Hera esmeralda"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

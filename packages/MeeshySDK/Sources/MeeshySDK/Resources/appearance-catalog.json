@@ -4684,6 +4684,730 @@
           }
         }
       ]
+    },
+    {
+      "slug": "cadres-asiatiques",
+      "order": 10,
+      "installedByDefault": true,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "rings": [
+        {
+          "key": "dragon-jade",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#1F8A5B",
+              "#0B3B2E",
+              "#E8B547",
+              "#8EE6B4",
+              "#D7263D"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 3,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.45
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 5.8L50 2.2M59.84 6.91L60.64 3.4M69.18 10.18L70.74 6.93M77.56 15.44L79.8 12.63M84.56 22.44L87.37 20.2M89.82 30.82L93.07 29.26M93.09 40.16L96.6 39.36M94.2 50L97.8 50M93.09 59.84L96.6 60.64M89.82 69.18L93.07 70.74M84.56 77.56L87.37 79.8M77.56 84.56L79.8 87.37M69.18 89.82L70.74 93.07M59.84 93.09L60.64 96.6M50 94.2L50 97.8M40.16 93.09L39.36 96.6M30.82 89.82L29.26 93.07M22.44 84.56L20.2 87.37M15.44 77.56L12.63 79.8M10.18 69.18L6.93 70.74M6.91 59.84L3.4 60.64M5.8 50L2.2 50M6.91 40.16L3.4 39.36M10.18 30.82L6.93 29.26M15.44 22.44L12.63 20.2M22.44 15.44L20.2 12.63M30.82 10.18L29.26 6.93M40.16 6.91L39.36 3.4",
+                "color": 1,
+                "opacity": 0.6,
+                "width": 0.9
+              },
+              {
+                "d": "M50 7.2L47.77 4.05L50 0.8L52.23 4.05Z",
+                "color": 4,
+                "opacity": 1
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "4795849d085214d1.json",
+              "bytes": 12054,
+              "sha256": "4795849d085214d19b5e420a51047716743798b90ab1931dd71f9a9ccb71a08f"
+            },
+            "front": {
+              "src": "42b600603bdd0b5a.json",
+              "bytes": 35104,
+              "sha256": "42b600603bdd0b5a8efac39526985b54e77f7a95d8b0a1eb3c672d74a6ea4f78"
+            }
+          }
+        },
+        {
+          "key": "nuages-soie",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#3A2E7A",
+              "#1B1440",
+              "#F4A6B8",
+              "#E9C46A",
+              "#C8344B"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 1,
+                "width": 0.7
+              },
+              {
+                "d": "M42.01 95.3A46 46 0 0 1 10.16 27",
+                "color": 4,
+                "opacity": 1,
+                "width": 2.4
+              },
+              {
+                "d": "M61.54 6.92L62.27 4.22M81.54 18.46L83.52 16.48M93.08 38.46L95.78 37.73M93.08 61.54L95.78 62.27M81.54 81.54L83.52 83.52M61.54 93.08L62.27 95.78M38.46 93.08L37.73 95.78M18.46 81.54L16.48 83.52M6.92 61.54L4.22 62.27M6.92 38.46L4.22 37.73M18.46 18.46L16.48 16.48M38.46 6.92L37.73 4.22",
+                "color": 2,
+                "opacity": 0.85,
+                "width": 1.2
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "b96ce836e650be25.json",
+              "bytes": 13930,
+              "sha256": "b96ce836e650be253eb3dcac3e407513281808d3668c9d4bbd0701c15841eecd"
+            },
+            "front": {
+              "src": "a4363804450ffe21.json",
+              "bytes": 17907,
+              "sha256": "a4363804450ffe2134b68c68441bba1f853c7e8d7e91729015e0e332618126ef"
+            }
+          }
+        },
+        {
+          "key": "lanternes-papier",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#D21F3C",
+              "#6E0B14",
+              "#E8B547",
+              "#FFD58A"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 6.4L50 1.6M66.68 9.72L68.52 5.28M80.83 19.17L84.22 15.78M90.28 33.32L94.72 31.48M93.6 50L98.4 50M90.28 66.68L94.72 68.52M80.83 80.83L84.22 84.22M66.68 90.28L68.52 94.72M50 93.6L50 98.4M33.32 90.28L31.48 94.72M19.17 80.83L15.78 84.22M9.72 66.68L5.28 68.52M6.4 50L1.6 50M9.72 33.32L5.28 31.48M19.17 19.17L15.78 15.78M33.32 9.72L31.48 5.28",
+                "color": 1,
+                "opacity": 0.7,
+                "width": 0.6
+              },
+              {
+                "d": "M50 6.6L48.19 4.04L50 1.4L51.81 4.04ZM87.59 71.7L90.71 71.41L92.09 74.3L88.9 74.55ZM12.41 71.7L11.1 74.55L7.91 74.3L9.29 71.41Z",
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "900eb5c8967779c4.json",
+              "bytes": 7360,
+              "sha256": "900eb5c8967779c439936b150324e4c8ba1b7c0990be236ff7cf7ab37e5c2574"
+            },
+            "front": {
+              "src": "f49901ba7e019d1f.json",
+              "bytes": 14657,
+              "sha256": "f49901ba7e019d1fd688c05f90b2262e988af3fe6226af9138741bc99b970198"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "cadres-africains",
+      "order": 11,
+      "installedByDefault": true,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "rings": [
+        {
+          "key": "masque-ebene",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#4A2C17",
+              "#1C0F07",
+              "#D08A2E",
+              "#F2C14E",
+              "#F3E3C3"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 5.8L50 2.2M61.44 7.31L62.37 3.83M72.1 11.72L73.9 8.6M81.25 18.75L83.8 16.2M88.28 27.9L91.4 26.1M92.69 38.56L96.17 37.63M94.2 50L97.8 50M92.69 61.44L96.17 62.37M88.28 72.1L91.4 73.9M81.25 81.25L83.8 83.8M72.1 88.28L73.9 91.4M61.44 92.69L62.37 96.17M50 94.2L50 97.8M38.56 92.69L37.63 96.17M27.9 88.28L26.1 91.4M18.75 81.25L16.2 83.8M11.72 72.1L8.6 73.9M7.31 61.44L3.83 62.37M5.8 50L2.2 50M7.31 38.56L3.83 37.63M11.72 27.9L8.6 26.1M18.75 18.75L16.2 16.2M27.9 11.72L26.1 8.6M38.56 7.31L37.63 3.83",
+                "color": 4,
+                "opacity": 0.8,
+                "width": 0.7
+              },
+              {
+                "d": "M50 7.4L47.63 4.06L50 0.6L52.37 4.06Z",
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "503e5e2ea0f0588f.json",
+              "bytes": 7079,
+              "sha256": "503e5e2ea0f0588f6a393f112a6d2c383e36e90df654ea98c3c8e7f0fe0d0d0d"
+            },
+            "front": {
+              "src": "8dc60f63c888106f.json",
+              "bytes": 14663,
+              "sha256": "8dc60f63c888106fa517977791d9db032867dcec1a0d299e7c24e76ba2123d45"
+            }
+          }
+        },
+        {
+          "key": "bandes-tissees",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#F2B705",
+              "#1E7B45",
+              "#C0392B",
+              "#17120E"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4
+              },
+              {
+                "d": "M50.64 4A46 46 0 0 1 61.28 5.41M82.98 17.93A46 46 0 0 1 89.51 26.45M96 50.64A46 46 0 0 1 94.59 61.28M82.07 82.98A46 46 0 0 1 73.55 89.51M49.36 96A46 46 0 0 1 38.72 94.59M17.02 82.07A46 46 0 0 1 10.49 73.55M4 49.36A46 46 0 0 1 5.41 38.72M17.93 17.02A46 46 0 0 1 26.45 10.49",
+                "color": 1,
+                "opacity": 1,
+                "width": 6.4
+              },
+              {
+                "d": "M62.52 5.74A46 46 0 0 1 72.44 9.85M90.15 27.56A46 46 0 0 1 94.26 37.48M94.26 62.52A46 46 0 0 1 90.15 72.44M72.44 90.15A46 46 0 0 1 62.52 94.26M37.48 94.26A46 46 0 0 1 27.56 90.15M9.85 72.44A46 46 0 0 1 5.74 62.52M5.74 37.48A46 46 0 0 1 9.85 27.56M27.56 9.85A46 46 0 0 1 37.48 5.74",
+                "color": 2,
+                "opacity": 1,
+                "width": 6.4
+              },
+              {
+                "d": "M73.55 10.49A46 46 0 0 1 82.07 17.02M94.59 38.72A46 46 0 0 1 96 49.36M89.51 73.55A46 46 0 0 1 82.98 82.07M61.28 94.59A46 46 0 0 1 50.64 96M26.45 89.51A46 46 0 0 1 17.93 82.98M5.41 61.28A46 46 0 0 1 4 50.64M10.49 26.45A46 46 0 0 1 17.02 17.93M38.72 5.41A46 46 0 0 1 49.36 4",
+                "color": 3,
+                "opacity": 1,
+                "width": 6.4
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 1,
+                "width": 0.8
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "dcf1a1d3b6343ee5.json",
+              "bytes": 6685,
+              "sha256": "dcf1a1d3b6343ee52c38192790d60076e891604ca2a2dbbf7812dcc68e231eb2"
+            },
+            "front": {
+              "src": "da59abd2bc7ad5f2.json",
+              "bytes": 35481,
+              "sha256": "da59abd2bc7ad5f2f45822e501b38587c87410149b0a5b07514a38674b947e84"
+            }
+          }
+        },
+        {
+          "key": "collier-perles",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#3B2414",
+              "#D08A2E",
+              "#B4532A",
+              "#F3E3C3",
+              "#25337A"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 1,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 6.2L48.46 4.03L50 1.8L51.54 4.03ZM63.53 8.34L62.75 5.8L64.89 4.16L65.67 6.75ZM75.74 14.57L75.78 11.9L78.33 11.01L78.27 13.71ZM85.43 24.26L86.29 21.73L88.99 21.67L88.1 24.22ZM91.66 36.47L93.25 34.33L95.84 35.11L94.2 37.25ZM93.8 50L95.97 48.46L98.2 50L95.97 51.54ZM91.66 63.53L94.2 62.75L95.84 64.89L93.25 65.67ZM85.43 75.74L88.1 75.78L88.99 78.33L86.29 78.27ZM75.74 85.43L78.27 86.29L78.33 88.99L75.78 88.1ZM63.53 91.66L65.67 93.25L64.89 95.84L62.75 94.2ZM50 93.8L51.54 95.97L50 98.2L48.46 95.97ZM36.47 91.66L37.25 94.2L35.11 95.84L34.33 93.25ZM24.26 85.43L24.22 88.1L21.67 88.99L21.73 86.29ZM14.57 75.74L13.71 78.27L11.01 78.33L11.9 75.78ZM8.34 63.53L6.75 65.67L4.16 64.89L5.8 62.75ZM6.2 50L4.03 51.54L1.8 50L4.03 48.46ZM8.34 36.47L5.8 37.25L4.16 35.11L6.75 34.33ZM14.57 24.26L11.9 24.22L11.01 21.67L13.71 21.73ZM24.26 14.57L21.73 13.71L21.67 11.01L24.22 11.9ZM36.47 8.34L34.33 6.75L35.11 4.16L37.25 5.8Z",
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "d": "M56.98 5.95L56.23 4.42L57.41 3.18L58.16 4.73ZM70.25 10.26L70.01 8.58L71.52 7.77L71.75 9.47ZM81.54 18.46L81.83 16.79L83.52 16.48L83.21 18.17ZM89.74 29.75L90.53 28.25L92.23 28.48L91.42 29.99ZM94.05 43.02L95.27 41.84L96.82 42.59L95.58 43.77ZM94.05 56.98L95.58 56.23L96.82 57.41L95.27 58.16ZM89.74 70.25L91.42 70.01L92.23 71.52L90.53 71.75ZM81.54 81.54L83.21 81.83L83.52 83.52L81.83 83.21ZM70.25 89.74L71.75 90.53L71.52 92.23L70.01 91.42ZM56.98 94.05L58.16 95.27L57.41 96.82L56.23 95.58ZM43.02 94.05L43.77 95.58L42.59 96.82L41.84 95.27ZM29.75 89.74L29.99 91.42L28.48 92.23L28.25 90.53ZM18.46 81.54L18.17 83.21L16.48 83.52L16.79 81.83ZM10.26 70.25L9.47 71.75L7.77 71.52L8.58 70.01ZM5.95 56.98L4.73 58.16L3.18 57.41L4.42 56.23ZM5.95 43.02L4.42 43.77L3.18 42.59L4.73 41.84ZM10.26 29.75L8.58 29.99L7.77 28.48L9.47 28.25ZM18.46 18.46L16.79 18.17L16.48 16.48L18.17 16.79ZM29.75 10.26L28.25 9.47L28.48 7.77L29.99 8.58ZM43.02 5.95L41.84 4.73L42.59 3.18L43.77 4.42Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.7
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "724aa4d05c38fe0b.json",
+              "bytes": 1530,
+              "sha256": "724aa4d05c38fe0b1bc69981892e836625a12bc4e476a64379a731f118439159"
+            },
+            "front": {
+              "src": "128644730baf734b.json",
+              "bytes": 41718,
+              "sha256": "128644730baf734bdcc54f501f9b259b18d456887dc478c7fd69883d8b8d5e1a"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "cadres-celtes",
+      "order": 12,
+      "installedByDefault": true,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "rings": [
+        {
+          "key": "noeud-entrelace",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0F5132",
+              "#071A12",
+              "#E3B65A",
+              "#F4E9C9"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 6L50 2M69.09 10.36L70.83 6.75M84.4 22.57L87.53 20.07M92.9 40.21L96.8 39.32M92.9 59.79L96.8 60.68M84.4 77.43L87.53 79.93M69.09 89.64L70.83 93.25M50 94L50 98M30.91 89.64L29.17 93.25M15.6 77.43L12.47 79.93M7.1 59.79L3.2 60.68M7.1 40.21L3.2 39.32M15.6 22.57L12.47 20.07M30.91 10.36L29.17 6.75",
+                "color": 2,
+                "opacity": 0.9,
+                "width": 1.1
+              },
+              {
+                "d": "M50 6.4L48.32 4.03L50 1.6L51.68 4.03ZM93.6 50L95.97 48.32L98.4 50L95.97 51.68ZM50 93.6L51.68 95.97L50 98.4L48.32 95.97ZM6.4 50L4.03 51.68L1.6 50L4.03 48.32Z",
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "5e399a2af3618d9e.json",
+              "bytes": 2075,
+              "sha256": "5e399a2af3618d9ebc214bcff9afe1ff135ad57b6917734c4401591d18c8e9f3"
+            },
+            "front": {
+              "src": "d751d726f1eb0cbf.json",
+              "bytes": 18980,
+              "sha256": "d751d726f1eb0cbf518aa9aa451f09e9fc311758386f23a387b6d74db6c2430e"
+            }
+          }
+        },
+        {
+          "key": "spirale-triple",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#2E8B57",
+              "#071A12",
+              "#E3B65A",
+              "#F4E9C9"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 7L47.91 4.05L50 1L52.09 4.05ZM87.24 71.5L90.84 71.16L92.44 74.5L88.75 74.79ZM12.76 71.5L11.25 74.79L7.56 74.5L9.16 71.16Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M50 5.4L50 2.6M59.27 6.37L59.86 3.64M68.14 9.26L69.28 6.7M76.22 13.92L77.86 11.65M83.14 20.16L85.23 18.28M88.62 27.7L91.05 26.3M92.42 36.22L95.08 35.35M94.36 45.34L97.14 45.05M94.36 54.66L97.14 54.95M92.42 63.78L95.08 64.65M88.62 72.3L91.05 73.7M83.14 79.84L85.23 81.72M76.22 86.08L77.86 88.35M68.14 90.74L69.28 93.3M59.27 93.63L59.86 96.36M50 94.6L50 97.4M40.73 93.63L40.14 96.36M31.86 90.74L30.72 93.3M23.78 86.08L22.14 88.35M16.86 79.84L14.77 81.72M11.38 72.3L8.95 73.7M7.58 63.78L4.92 64.65M5.64 54.66L2.86 54.95M5.64 45.34L2.86 45.05M7.58 36.22L4.92 35.35M11.38 27.7L8.95 26.3M16.86 20.16L14.77 18.28M23.78 13.92L22.14 11.65M31.86 9.26L30.72 6.7M40.73 6.37L40.14 3.64",
+                "color": 1,
+                "opacity": 0.6,
+                "width": 0.6
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "5406419a365361af.json",
+              "bytes": 2594,
+              "sha256": "5406419a365361af2e08990d8234dbba00b75e3658b9fb6794e1a043083ab0fd"
+            },
+            "front": {
+              "src": "4fea05d9a9476a3e.json",
+              "bytes": 21424,
+              "sha256": "4fea05d9a9476a3eca25a039f50ba916ca82f1dbeebd91bbb0f48cdec7314047"
+            }
+          }
+        },
+        {
+          "key": "lierre-emeraude",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0F5132",
+              "#071A12",
+              "#6CC48A",
+              "#9A6A2E"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 1,
+                "width": 0.8
+              },
+              {
+                "d": "M50 6.2L48.46 4.03L50 1.8L51.54 4.03ZM71.9 12.07L71.66 9.42L74.1 8.26L74.32 10.95ZM87.93 28.1L89.05 25.68L91.74 25.9L90.58 28.34ZM93.8 50L95.97 48.46L98.2 50L95.97 51.54ZM87.93 71.9L90.58 71.66L91.74 74.1L89.05 74.32ZM71.9 87.93L74.32 89.05L74.1 91.74L71.66 90.58ZM50 93.8L51.54 95.97L50 98.2L48.46 95.97ZM28.1 87.93L28.34 90.58L25.9 91.74L25.68 89.05ZM12.07 71.9L10.95 74.32L8.26 74.1L9.42 71.66ZM6.2 50L4.03 51.54L1.8 50L4.03 48.46ZM12.07 28.1L9.42 28.34L8.26 25.9L10.95 25.68ZM28.1 12.07L25.68 10.95L25.9 8.26L28.34 9.42Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M61.65 6.53L61.23 5.39L62.16 4.6L62.58 5.75ZM81.82 18.18L82.03 16.98L83.23 16.77L83.02 17.97ZM93.47 38.35L94.25 37.42L95.4 37.84L94.61 38.77ZM93.47 61.65L94.61 61.23L95.4 62.16L94.25 62.58ZM81.82 81.82L83.02 82.03L83.23 83.23L82.03 83.02ZM61.65 93.47L62.58 94.25L62.16 95.4L61.23 94.61ZM38.35 93.47L38.77 94.61L37.84 95.4L37.42 94.25ZM18.18 81.82L17.97 83.02L16.77 83.23L16.98 82.03ZM6.53 61.65L5.75 62.58L4.6 62.16L5.39 61.23ZM6.53 38.35L5.39 38.77L4.6 37.84L5.75 37.42ZM18.18 18.18L16.98 17.97L16.77 16.77L17.97 16.98ZM38.35 6.53L37.42 5.75L37.84 4.6L38.77 5.39Z",
+                "color": 3,
+                "opacity": 0.9
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "f97727531fcede9c.json",
+              "bytes": 2152,
+              "sha256": "f97727531fcede9c9ca84d3414eec84e8efb9db90df1bed09d7cf03fa1b1eb30"
+            },
+            "front": {
+              "src": "760552513470ab3e.json",
+              "bytes": 37546,
+              "sha256": "760552513470ab3ed2786dceefd877d2ac459470e8a0085092a65c4a531322c4"
+            }
+          }
+        }
+      ]
     }
   ],
   "bannerFrames": [
@@ -8362,6 +9086,18 @@
         "cadres-illustres": {
           "name": "Cadres illustrés",
           "description": "Six cadres qui débordent de l’avatar : un masque aux yeux qui rougissent, une toile et son araignée, des ailes d’ange, un cercle runique, des griffes d’os, des ailes de démon."
+        },
+        "cadres-asiatiques": {
+          "name": "Cadres d’Asie",
+          "description": "Trois cadres inspirés de l’Asie : un dragon de jade qui ondule autour de l’avatar, des nuages de soie qui dérivent, des lanternes de papier qui se balancent."
+        },
+        "cadres-africains": {
+          "name": "Cadres d’Afrique",
+          "description": "Trois cadres inspirés de l’Afrique : un masque d’ébène aux yeux qui s’illuminent devant un soleil de savane, des bandes tissées qui ondulent, un collier de perles qui roule."
+        },
+        "cadres-celtes": {
+          "name": "Cadres celtes",
+          "description": "Trois cadres inspirés des entrelacs celtes : un nœud entrelacé qui s’efface puis se retrace, une spirale triple qui tourne, un lierre d’émeraude dont les feuilles frémissent."
         }
       },
       "designs": {
@@ -8415,7 +9151,16 @@
         "ailes-ange": "Ailes d’ange",
         "cercle-runique": "Cercle runique",
         "griffes-os": "Griffes d’os",
-        "ailes-demon": "Ailes de démon"
+        "ailes-demon": "Ailes de démon",
+        "dragon-jade": "Dragon de jade",
+        "nuages-soie": "Nuages de soie",
+        "lanternes-papier": "Lanternes de papier",
+        "masque-ebene": "Masque d’ébène",
+        "bandes-tissees": "Bandes tissées",
+        "collier-perles": "Collier de perles",
+        "noeud-entrelace": "Nœud entrelacé",
+        "spirale-triple": "Spirale triple",
+        "lierre-emeraude": "Lierre d’émeraude"
       },
       "gamut": {
         "indigo": "Indigo Meeshy",
@@ -8555,6 +9300,18 @@
         "cadres-illustres": {
           "name": "Illustrated frames",
           "description": "Six frames that spill past your avatar: a mask whose eyes turn red, a web and its spider, angel wings, a runic circle, bone claws and demon wings."
+        },
+        "cadres-asiatiques": {
+          "name": "Asian frames",
+          "description": "Three frames inspired by Asia: a jade dragon coiling around your avatar, drifting silk clouds and swaying paper lanterns."
+        },
+        "cadres-africains": {
+          "name": "African frames",
+          "description": "Three frames inspired by Africa: an ebony mask whose eyes light up before a savanna sun, rippling woven bands and a rolling bead necklace."
+        },
+        "cadres-celtes": {
+          "name": "Celtic frames",
+          "description": "Three frames inspired by Celtic interlace: a knot that fades and redraws itself, a turning triple spiral and an emerald ivy whose leaves quiver."
         }
       },
       "designs": {
@@ -8608,7 +9365,16 @@
         "ailes-ange": "Angel wings",
         "cercle-runique": "Runic circle",
         "griffes-os": "Bone claws",
-        "ailes-demon": "Demon wings"
+        "ailes-demon": "Demon wings",
+        "dragon-jade": "Jade dragon",
+        "nuages-soie": "Silk clouds",
+        "lanternes-papier": "Paper lanterns",
+        "masque-ebene": "Ebony mask",
+        "bandes-tissees": "Woven bands",
+        "collier-perles": "Bead necklace",
+        "noeud-entrelace": "Interlaced knot",
+        "spirale-triple": "Triple spiral",
+        "lierre-emeraude": "Emerald ivy"
       },
       "gamut": {
         "indigo": "Meeshy Indigo",
@@ -8748,6 +9514,18 @@
         "cadres-illustres": {
           "name": "Marcos ilustrados",
           "description": "Seis marcos que desbordan tu avatar: una máscara de ojos que enrojecen, una telaraña con su araña, alas de ángel, un círculo rúnico, garras de hueso y alas de demonio."
+        },
+        "cadres-asiatiques": {
+          "name": "Marcos de Asia",
+          "description": "Tres marcos inspirados en Asia: un dragón de jade que ondula alrededor de tu avatar, nubes de seda a la deriva y farolillos de papel que se mecen."
+        },
+        "cadres-africains": {
+          "name": "Marcos de África",
+          "description": "Tres marcos inspirados en África: una máscara de ébano cuyos ojos se iluminan ante un sol de sabana, bandas tejidas que ondulan y un collar de cuentas que gira."
+        },
+        "cadres-celtes": {
+          "name": "Marcos celtas",
+          "description": "Tres marcos inspirados en los entrelazados celtas: un nudo que se borra y se vuelve a trazar, una espiral triple que gira y una hiedra esmeralda de hojas que tiemblan."
         }
       },
       "designs": {
@@ -8801,7 +9579,16 @@
         "ailes-ange": "Alas de ángel",
         "cercle-runique": "Círculo rúnico",
         "griffes-os": "Garras de hueso",
-        "ailes-demon": "Alas de demonio"
+        "ailes-demon": "Alas de demonio",
+        "dragon-jade": "Dragón de jade",
+        "nuages-soie": "Nubes de seda",
+        "lanternes-papier": "Farolillos de papel",
+        "masque-ebene": "Máscara de ébano",
+        "bandes-tissees": "Bandas tejidas",
+        "collier-perles": "Collar de cuentas",
+        "noeud-entrelace": "Nudo entrelazado",
+        "spirale-triple": "Espiral triple",
+        "lierre-emeraude": "Hiedra esmeralda"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -8941,6 +9728,18 @@
         "cadres-illustres": {
           "name": "Molduras ilustradas",
           "description": "Seis molduras que transbordam do teu avatar: uma máscara de olhos que ficam vermelhos, uma teia e a sua aranha, asas de anjo, um círculo rúnico, garras de osso e asas de demônio."
+        },
+        "cadres-asiatiques": {
+          "name": "Molduras da Ásia",
+          "description": "Três molduras inspiradas na Ásia: um dragão de jade que ondula à volta do teu avatar, nuvens de seda à deriva e lanternas de papel que balançam."
+        },
+        "cadres-africains": {
+          "name": "Molduras de África",
+          "description": "Três molduras inspiradas em África: uma máscara de ébano cujos olhos se iluminam diante de um sol de savana, faixas tecidas que ondulam e um colar de contas que gira."
+        },
+        "cadres-celtes": {
+          "name": "Molduras celtas",
+          "description": "Três molduras inspiradas nos entrelaçados celtas: um nó que se apaga e se volta a traçar, uma espiral tripla que gira e uma hera esmeralda de folhas que estremecem."
         }
       },
       "designs": {
@@ -8994,7 +9793,16 @@
         "ailes-ange": "Asas de anjo",
         "cercle-runique": "Círculo rúnico",
         "griffes-os": "Garras de osso",
-        "ailes-demon": "Asas de demônio"
+        "ailes-demon": "Asas de demônio",
+        "dragon-jade": "Dragão de jade",
+        "nuages-soie": "Nuvens de seda",
+        "lanternes-papier": "Lanternas de papel",
+        "masque-ebene": "Máscara de ébano",
+        "bandes-tissees": "Faixas tecidas",
+        "collier-perles": "Colar de contas",
+        "noeud-entrelace": "Nó entrelaçado",
+        "spirale-triple": "Espiral tripla",
+        "lierre-emeraude": "Hera esmeralda"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -9134,6 +9942,18 @@
         "cadres-illustres": {
           "name": "Illustrierte Rahmen",
           "description": "Sechs Rahmen, die über deinen Avatar hinausragen: eine Maske mit rot glühenden Augen, ein Netz samt Spinne, Engelsflügel, ein Runenkreis, Knochenkrallen und Dämonenflügel."
+        },
+        "cadres-asiatiques": {
+          "name": "Asiatische Rahmen",
+          "description": "Drei von Asien inspirierte Rahmen: ein Jadedrache, der sich um deinen Avatar windet, treibende Seidenwolken und schaukelnde Papierlaternen."
+        },
+        "cadres-africains": {
+          "name": "Afrikanische Rahmen",
+          "description": "Drei von Afrika inspirierte Rahmen: eine Ebenholzmaske, deren Augen vor einer Savannensonne aufleuchten, wogende Webbänder und eine rollende Perlenkette."
+        },
+        "cadres-celtes": {
+          "name": "Keltische Rahmen",
+          "description": "Drei von keltischen Flechtmustern inspirierte Rahmen: ein Knoten, der verblasst und sich neu zeichnet, eine kreisende Dreifachspirale und smaragdgrüner Efeu mit zitternden Blättern."
         }
       },
       "designs": {
@@ -9187,7 +10007,16 @@
         "ailes-ange": "Engelsflügel",
         "cercle-runique": "Runenkreis",
         "griffes-os": "Knochenkrallen",
-        "ailes-demon": "Dämonenflügel"
+        "ailes-demon": "Dämonenflügel",
+        "dragon-jade": "Jadedrache",
+        "nuages-soie": "Seidenwolken",
+        "lanternes-papier": "Papierlaternen",
+        "masque-ebene": "Ebenholzmaske",
+        "bandes-tissees": "Webbänder",
+        "collier-perles": "Perlenkette",
+        "noeud-entrelace": "Flechtknoten",
+        "spirale-triple": "Dreifachspirale",
+        "lierre-emeraude": "Smaragdefeu"
       },
       "gamut": {
         "indigo": "Meeshy-Indigo",
@@ -9327,6 +10156,18 @@
         "cadres-illustres": {
           "name": "Cornici illustrate",
           "description": "Sei cornici che escono dal tuo avatar: una maschera dagli occhi che diventano rossi, una ragnatela col suo ragno, ali d’angelo, un cerchio runico, artigli d’osso e ali di demone."
+        },
+        "cadres-asiatiques": {
+          "name": "Cornici d’Asia",
+          "description": "Tre cornici ispirate all’Asia: un drago di giada che si snoda attorno al tuo avatar, nuvole di seta alla deriva e lanterne di carta che dondolano."
+        },
+        "cadres-africains": {
+          "name": "Cornici d’Africa",
+          "description": "Tre cornici ispirate all’Africa: una maschera d’ebano dagli occhi che si accendono davanti a un sole di savana, bande tessute che ondeggiano e una collana di perle che ruota."
+        },
+        "cadres-celtes": {
+          "name": "Cornici celtiche",
+          "description": "Tre cornici ispirate agli intrecci celtici: un nodo che svanisce e si ridisegna, una spirale tripla che gira e un’edera smeraldo dalle foglie che fremono."
         }
       },
       "designs": {
@@ -9380,7 +10221,16 @@
         "ailes-ange": "Ali d’angelo",
         "cercle-runique": "Cerchio runico",
         "griffes-os": "Artigli d’osso",
-        "ailes-demon": "Ali di demone"
+        "ailes-demon": "Ali di demone",
+        "dragon-jade": "Drago di giada",
+        "nuages-soie": "Nuvole di seta",
+        "lanternes-papier": "Lanterne di carta",
+        "masque-ebene": "Maschera d’ebano",
+        "bandes-tissees": "Bande tessute",
+        "collier-perles": "Collana di perle",
+        "noeud-entrelace": "Nodo intrecciato",
+        "spirale-triple": "Spirale tripla",
+        "lierre-emeraude": "Edera smeraldo"
       },
       "gamut": {
         "indigo": "Indaco Meeshy",
@@ -9520,6 +10370,18 @@
         "cadres-illustres": {
           "name": "إطارات مرسومة",
           "description": "ستة إطارات تتجاوز صورتك الرمزية: قناع تحمرّ عيناه، وشبكة وعنكبوتها، وجناحا ملاك، ودائرة رموز، ومخالب عظمية، وجناحا شيطان."
+        },
+        "cadres-asiatiques": {
+          "name": "إطارات آسيوية",
+          "description": "ثلاثة إطارات مستوحاة من آسيا: تنين من اليشم يتموّج حول صورتك الرمزية، وغيوم حريرية تنساب، وفوانيس ورقية تتأرجح."
+        },
+        "cadres-africains": {
+          "name": "إطارات أفريقية",
+          "description": "ثلاثة إطارات مستوحاة من أفريقيا: قناع من الأبنوس تتوهّج عيناه أمام شمس السافانا، وأشرطة منسوجة تتموّج، وعقد من الخرز يدور."
+        },
+        "cadres-celtes": {
+          "name": "إطارات سلتية",
+          "description": "ثلاثة إطارات مستوحاة من الزخارف السلتية المتشابكة: عقدة تمّحي ثم تُرسم من جديد، ولولب ثلاثي يدور، ولبلاب زمرّدي ترتعش أوراقه."
         }
       },
       "designs": {
@@ -9573,7 +10435,16 @@
         "ailes-ange": "جناحا ملاك",
         "cercle-runique": "دائرة الرموز",
         "griffes-os": "مخالب العظم",
-        "ailes-demon": "جناحا شيطان"
+        "ailes-demon": "جناحا شيطان",
+        "dragon-jade": "تنين اليشم",
+        "nuages-soie": "غيوم الحرير",
+        "lanternes-papier": "فوانيس ورقية",
+        "masque-ebene": "قناع الأبنوس",
+        "bandes-tissees": "أشرطة منسوجة",
+        "collier-perles": "عقد الخرز",
+        "noeud-entrelace": "العقدة المتشابكة",
+        "spirale-triple": "اللولب الثلاثي",
+        "lierre-emeraude": "اللبلاب الزمرّدي"
       },
       "gamut": {
         "indigo": "نيلي ميشي",

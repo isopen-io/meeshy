@@ -95,6 +95,18 @@
     "cadres-illustres": {
       "name": "Illustrated frames",
       "description": "Six frames that spill past your avatar: a mask whose eyes turn red, a web and its spider, angel wings, a runic circle, bone claws and demon wings."
+    },
+    "cadres-asiatiques": {
+      "name": "Asian frames",
+      "description": "Three frames inspired by Asia: a jade dragon coiling around your avatar, drifting silk clouds and swaying paper lanterns."
+    },
+    "cadres-africains": {
+      "name": "African frames",
+      "description": "Three frames inspired by Africa: an ebony mask whose eyes light up before a savanna sun, rippling woven bands and a rolling bead necklace."
+    },
+    "cadres-celtes": {
+      "name": "Celtic frames",
+      "description": "Three frames inspired by Celtic interlace: a knot that fades and redraws itself, a turning triple spiral and an emerald ivy whose leaves quiver."
     }
   },
   "designs": {
@@ -148,7 +160,16 @@
     "ailes-ange": "Angel wings",
     "cercle-runique": "Runic circle",
     "griffes-os": "Bone claws",
-    "ailes-demon": "Demon wings"
+    "ailes-demon": "Demon wings",
+    "dragon-jade": "Jade dragon",
+    "nuages-soie": "Silk clouds",
+    "lanternes-papier": "Paper lanterns",
+    "masque-ebene": "Ebony mask",
+    "bandes-tissees": "Woven bands",
+    "collier-perles": "Bead necklace",
+    "noeud-entrelace": "Interlaced knot",
+    "spirale-triple": "Triple spiral",
+    "lierre-emeraude": "Emerald ivy"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",

@@ -95,6 +95,18 @@
     "cadres-illustres": {
       "name": "Marcos ilustrados",
       "description": "Seis marcos que desbordan tu avatar: una máscara de ojos que enrojecen, una telaraña con su araña, alas de ángel, un círculo rúnico, garras de hueso y alas de demonio."
+    },
+    "cadres-asiatiques": {
+      "name": "Marcos de Asia",
+      "description": "Tres marcos inspirados en Asia: un dragón de jade que ondula alrededor de tu avatar, nubes de seda a la deriva y farolillos de papel que se mecen."
+    },
+    "cadres-africains": {
+      "name": "Marcos de África",
+      "description": "Tres marcos inspirados en África: una máscara de ébano cuyos ojos se iluminan ante un sol de sabana, bandas tejidas que ondulan y un collar de cuentas que gira."
+    },
+    "cadres-celtes": {
+      "name": "Marcos celtas",
+      "description": "Tres marcos inspirados en los entrelazados celtas: un nudo que se borra y se vuelve a trazar, una espiral triple que gira y una hiedra esmeralda de hojas que tiemblan."
     }
   },
   "designs": {
@@ -148,7 +160,16 @@
     "ailes-ange": "Alas de ángel",
     "cercle-runique": "Círculo rúnico",
     "griffes-os": "Garras de hueso",
-    "ailes-demon": "Alas de demonio"
+    "ailes-demon": "Alas de demonio",
+    "dragon-jade": "Dragón de jade",
+    "nuages-soie": "Nubes de seda",
+    "lanternes-papier": "Farolillos de papel",
+    "masque-ebene": "Máscara de ébano",
+    "bandes-tissees": "Bandas tejidas",
+    "collier-perles": "Collar de cuentas",
+    "noeud-entrelace": "Nudo entrelazado",
+    "spirale-triple": "Espiral triple",
+    "lierre-emeraude": "Hiedra esmeralda"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

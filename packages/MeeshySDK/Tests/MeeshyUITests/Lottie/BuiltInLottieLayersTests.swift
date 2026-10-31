@@ -45,13 +45,14 @@ final class BuiltInLottieLayersTests: XCTestCase {
         }
     }
 
-    /// #13960 — les deux films de chaque cadre illustré (derrière et au-dessus de l'avatar)
+    /// #13960 — les deux films de chaque cadre illustré, vitrine et familles culturelles (derrière et au-dessus de l'avatar)
     /// sont servis, à l'octet de leur référence, et le moteur partagé les lit.
     func test_eachIllustratedFrame_shipsItsBackAndFrontFilms_andTheSharedEngineReadsThem() throws {
         try XCTSkipUnless(FileManager.default.fileExists(atPath: shippedFolder.path), "les fichiers servis ne sont pas lisibles depuis cet hôte de test")
-        let pack = try XCTUnwrap(AvatarRingCatalog.shared.packs.first { $0.slug == "cadres-illustres" })
-        let films = pack.rings.flatMap { [$0.decor?.back, $0.decor?.front].compactMap { $0 } }
-        XCTAssertEqual(films.count, 12)
+        let packs = AvatarRingCatalog.shared.packs.filter { $0.slug.hasPrefix("cadres-") }
+        XCTAssertEqual(packs.first?.slug, "cadres-illustres")
+        let films = packs.flatMap { $0.rings.flatMap { [$0.decor?.back, $0.decor?.front].compactMap { $0 } } }
+        XCTAssertEqual(films.count, 30)
         for ref in films {
             let data = try Data(contentsOf: shippedFolder.appendingPathComponent(ref.src))
             XCTAssertEqual(data.count, ref.bytes, ref.src)
