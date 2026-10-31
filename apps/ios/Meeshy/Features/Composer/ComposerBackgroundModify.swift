@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 
 // MARK: - Fond › Modifier, image posée › Modifier : N1, N2, N3 dans le bas
-// (#13974, lots I-E2 et I-E3)
+// (#13974, lots I-E2, I-E3 et I-E4)
 
 /// **Une entrée de N1 « Modifier » d'un fond ou d'une image posée**,
 /// identifiée comme dans l'arbre partagé (`background.media.edit`,
@@ -46,10 +46,12 @@ nonisolated enum ComposerBackgroundModifyOpening: Equatable, Sendable {
 
 /// **Où l'on est sous « Modifier »** : l'entrée de N1 ouverte (sa feuille ou
 /// son N2) et, sous Réglages ou Effets, le réglage dont le curseur seul est
-/// ouvert (N3).
+/// ouvert (N3) — sous Son, le curseur du Volume. Un seul curseur à la fois :
+/// la loi qui ouvre l'un range l'autre.
 nonisolated struct ComposerBackgroundModifyPath: Equatable, Sendable {
     var entry: ComposerBackgroundModifyEntry?
     var adjustment: AdjustmentKind?
+    var volume = false
 
     static let closed = ComposerBackgroundModifyPath(entry: nil, adjustment: nil)
 }
@@ -73,16 +75,17 @@ nonisolated enum ComposerBackgroundModify {
     /// **N1 d'un média POSÉ** (I-E3) : l'arbre `media.placed.edit`, dans son
     /// ordre. Mettre en fond et Remplacer le fond ne se servent jamais
     /// ensemble — la diapo a un fond ou n'en a pas ; Faire un sticker attend
-    /// le détourage. Son reste à la vidéo posée (I-E4).
+    /// le détourage. Son va à la vidéo posée (I-E4), par l'offre de l'arbre.
     static func servedPlaced(isVideo: Bool, hasTrimmableSource: Bool,
                              background: ComposerPlacedBackgroundOffer, makesSticker: Bool,
                              tree: ComposerEditTree = .shared) -> [ComposerBackgroundModifyEntry] {
         let cables = Set(ComposerBackgroundModifyEntry.allCases.filter { modif in
             switch modif {
-            case .framing, .loop, .sound: return false
+            case .framing, .loop:         return false
             case .setAsBackground:        return background == .set
             case .replaceBackground:      return background == .replace
             case .makeSticker:            return makesSticker
+            case .sound: return false
             case .crop, .trim, .filters, .frames, .adjust, .effects, .rotate, .description: return true
             }
         })
@@ -134,6 +137,12 @@ nonisolated enum ComposerBackgroundModify {
         ComposerBackgroundModifyPath(entry: path.entry, adjustment: path.adjustment == kind ? nil : kind)
     }
 
+    /// Toucher Volume dans N2 « Son » ouvre son curseur seul ; le retoucher le
+    /// range.
+    static func tappedVolume(in path: ComposerBackgroundModifyPath) -> ComposerBackgroundModifyPath {
+        ComposerBackgroundModifyPath(entry: path.entry, adjustment: nil, volume: !path.volume)
+    }
+
     /// Les niveaux de rail que le chemin pose au-dessus de N1.
     static func levels(_ path: ComposerBackgroundModifyPath) -> [ComposerEditRailLevel] {
         guard let modif = path.entry, case .level(let niveau) = opening(modif) else { return [] }
@@ -143,14 +152,16 @@ nonisolated enum ComposerBackgroundModify {
     /// La feuille basse est-elle ouverte : une bande ou une feuille de N1, ou le
     /// curseur seul de N3.
     static func propertiesAreOpen(_ path: ComposerBackgroundModifyPath) -> Bool {
-        if path.adjustment != nil { return true }
+        if path.adjustment != nil || path.volume { return true }
         guard let modif = path.entry else { return false }
         return opening(modif) == .properties
     }
 
     /// Retour : un niveau à la fois — N3, puis la feuille ou N2.
     static func back(_ path: ComposerBackgroundModifyPath) -> ComposerBackgroundModifyPath {
-        guard path.adjustment == nil else { return ComposerBackgroundModifyPath(entry: path.entry, adjustment: nil) }
+        guard path.adjustment == nil, !path.volume else {
+            return ComposerBackgroundModifyPath(entry: path.entry, adjustment: nil)
+        }
         return .closed
     }
 

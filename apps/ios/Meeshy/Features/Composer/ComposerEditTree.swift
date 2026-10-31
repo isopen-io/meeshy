@@ -68,6 +68,7 @@ nonisolated struct ComposerEditTree: Codable, Equatable, Sendable {
         case backgroundMediaReplace = "background.media.replace"
         case backgroundMediaEdit = "background.media.edit"
         case mediaPlacedEdit = "media.placed.edit"
+        case mediaSound = "media.sound"
     }
 
     let schemaVersion: Int
@@ -121,7 +122,7 @@ nonisolated extension ComposerEditTree {
             Entry(id: "effects", label: "composer.object.editor.effects", sfSymbol: "sparkles",
                   material: "Sparkles", offer: .image, opens: .band),
             Entry(id: "sound", label: "composer.rail.title.sound", sfSymbol: "speaker.wave.2",
-                  material: "VolumeUp", offer: .video, opens: .band),
+                  material: "VolumeUp", offer: .video, opens: .level, next: "media.sound"),
             Entry(id: "loop", label: "story.timeline.inspector.loop", sfSymbol: "repeat",
                   material: "Repeat", offer: .video, opens: .toggle),
             Entry(id: "rotate", label: "composer.object.editor.rotate", sfSymbol: "rotate.right",
@@ -143,7 +144,7 @@ nonisolated extension ComposerEditTree {
             Entry(id: "effects", label: "composer.object.editor.effects", sfSymbol: "sparkles",
                   material: "Sparkles", offer: .image, opens: .band),
             Entry(id: "sound", label: "composer.rail.title.sound", sfSymbol: "speaker.wave.2",
-                  material: "VolumeUp", offer: .video, opens: .band),
+                  material: "VolumeUp", offer: .video, opens: .level, next: "media.sound"),
             Entry(id: "rotate", label: "composer.object.editor.rotate", sfSymbol: "rotate.right",
                   material: "RotateRight", offer: .always, opens: .action),
             Entry(id: "description", label: "composer.object.editor.altText", sfSymbol: "text.below.photo",
@@ -154,6 +155,12 @@ nonisolated extension ComposerEditTree {
                   sfSymbol: "photo.on.rectangle.angled", material: "SwapHorizontal", offer: .always, opens: .action),
             Entry(id: "make-sticker", label: "composer.selection.makeSticker",
                   sfSymbol: "person.crop.square.badge.camera", material: "Emoji", offer: .image, opens: .action),
+        ]),
+        Level(id: "media.sound", kind: .rail, title: "composer.rail.title.sound", entries: [
+            Entry(id: "volume", label: "composer.capture.sound.volume", sfSymbol: "speaker.wave.3",
+                  material: "VolumeUp", offer: .always, opens: .band),
+            Entry(id: "mute", label: "composer.object.editor.mute", sfSymbol: "speaker.slash",
+                  material: "VolumeOff", offer: .always, opens: .toggle),
         ]),
     ])
 }
