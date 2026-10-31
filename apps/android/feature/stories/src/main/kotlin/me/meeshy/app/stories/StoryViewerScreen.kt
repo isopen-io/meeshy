@@ -195,11 +195,12 @@ fun StoryViewerScreen(
     // pendant le geste ; seule la prise du doigt fige la lecture.
     val cardMotion = rememberStoryCardMotion()
     val railOverlayActive = reactionBarVisible || languageBarVisible || scrubKind != null
+    val videoExport = rememberStoryVideoExport(item = { state.currentStoryId?.let(viewModel::rawItem) }, slide = slide)
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
         railBar = railOverlayActive,
         menu = showOptions,
-        dialog = showReportDialog || showDeleteDialog,
+        dialog = showReportDialog || showDeleteDialog || videoExport.busy,
     )
 
     fun closeRailBars() {
@@ -558,6 +559,10 @@ fun StoryViewerScreen(
                                     }
                                 },
                             )
+                            StoryVideoExportMenuEntries(onPick = { mode ->
+                                showOptions = false
+                                videoExport.start(mode)
+                            })
                             if (onComposeStory != null && state.canCompose) {
                                 state.currentStoryId?.let { storyId ->
                                     DropdownMenuItem(

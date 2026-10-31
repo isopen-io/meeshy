@@ -69,4 +69,35 @@ class SceneExportRecipeTest {
         val many = (1..20).map { sound("s$it") }
         assertThat(SceneExportRecipe.of(4.0, null, many).sounds).hasSize(SceneExportRecipe.MAX_SOUNDS)
     }
+
+    @Test
+    fun `la recette du composeur se rend par le meme plan que la story, son de la video de fond compris`() {
+        val recipe = SceneExportRecipe.of(
+            durationSeconds = 10.0,
+            video = SceneExportVideoInput(startSeconds = 1.0, endSeconds = 4.0, assetDurationSeconds = 20.0, isMuted = false),
+            sounds = listOf(sound(id = "v", start = 1.0, end = 2.5, volume = 0.5)),
+        )
+        val timeline = recipe.timeline(backgroundSource = "fond", soundSource = { "son-${it.id}" })
+
+        assertThat(timeline.totalMillis).isEqualTo(3_000L)
+        assertThat(timeline.sounds.map { it.src to it.role }).containsExactly(
+            "fond" to me.meeshy.sdk.model.scene.export.StoryExportSoundRole.BACKGROUND_VIDEO,
+            "son-v" to me.meeshy.sdk.model.scene.export.StoryExportSoundRole.FOREGROUND_AUDIO,
+        ).inOrder()
+        val background = timeline.sounds.first()
+        assertThat(background.trimStartMillis to background.trimEndMillis).isEqualTo(1_000L to 4_000L)
+        val voice = timeline.sounds.last()
+        assertThat(listOf(voice.startMillis, voice.endMillis)).containsExactly(1_000L, 2_500L).inOrder()
+        assertThat(voice.gain).isWithin(1e-4f).of(0.5f)
+    }
+
+    @Test
+    fun `une video de fond muette et un son sans fichier ne partent pas`() {
+        val recipe = SceneExportRecipe.of(
+            durationSeconds = 6.0,
+            video = SceneExportVideoInput(null, null, assetDurationSeconds = 20.0, isMuted = true),
+            sounds = listOf(sound(id = "v")),
+        )
+        assertThat(recipe.timeline(backgroundSource = "fond", soundSource = { null }).sounds).isEmpty()
+    }
 }

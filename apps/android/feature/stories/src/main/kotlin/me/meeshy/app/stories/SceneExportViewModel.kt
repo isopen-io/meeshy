@@ -9,11 +9,17 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
 import me.meeshy.sdk.media.scene.SceneExportCoordinatorFactory
 import me.meeshy.sdk.media.scene.SceneExportJob
+import me.meeshy.sdk.media.scene.SceneExportOverlay
+import me.meeshy.sdk.media.scene.SceneExportSlideFill
+import me.meeshy.sdk.media.scene.SceneExportSoundFile
+import me.meeshy.sdk.media.scene.SceneMediaProbe
 import me.meeshy.sdk.model.composer.scene.SceneExportBackground
 import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import me.meeshy.sdk.model.composer.scene.SceneExportRecipe
 import me.meeshy.sdk.model.composer.scene.SceneExportState
 import me.meeshy.sdk.model.composer.scene.SceneExportVideoInput
+import me.meeshy.sdk.model.scene.export.StoryExportClipRange
+import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
 
 /**
  * L'export de la scène hors de Meeshy (galerie, partage) : le bake se tient ici et non dans l'écran — il dure des
@@ -48,21 +54,32 @@ class SceneExportViewModel @Inject constructor(
             val plan = recipe.plan
             val scaled = scaledCopy(frame, plan.width, plan.height).also { painted = it }
             work.mkdirs()
-            val background = when (recipe.background) {
+            val background = when (val fill = recipe.background) {
                 SceneExportBackground.Still -> File(work, "scene.png").also { file ->
                     file.outputStream().use { scaled.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, it) }
-                }
+                }.let { SceneExportSlideFill.Picture(it) }
                 is SceneExportBackground.Video -> File(work, "background.mp4").also {
                     factory.fetcher.fetch(factory.mediaUrl(requireNotNull(sources.video).url), it)
-                }
+                }.let { SceneExportSlideFill.Video(it, listOf(StoryExportClipRange(fill.clipStartMillis, fill.clipEndMillis))) }
             }
             val sounds = recipe.sounds.withIndex().associate { (index, sound) ->
                 val url = sources.sounds.first { it.input.id == sound.id }.url
-                sound.id to File(work, "sound-$index.audio").also { factory.fetcher.fetch(url, it) }
+                url to File(work, "sound-$index.audio").also { factory.fetcher.fetch(url, it) }
             }
-            val overlay = scaled.takeIf { recipe.background is SceneExportBackground.Video }
+            val files = sounds.mapValues { (_, file) -> SceneExportSoundFile(file, SceneMediaProbe.durationMillis(file)) } +
+                ((background as? SceneExportSlideFill.Video)?.let { mapOf(BACKGROUND_SOURCE to SceneExportSoundFile(it.file, null)) }.orEmpty())
+            val timeline = recipe.timeline(BACKGROUND_SOURCE) { sound -> sources.sounds.firstOrNull { it.input.id == sound.id }?.url }
+            val overlay = scaled.takeIf { background is SceneExportSlideFill.Video }
             if (overlay == null) { scaled.recycle(); painted = null }
-            return SceneExportJob(recipe, background, overlay, sounds, output, release = { painted?.recycle() })
+            return SceneExportJob(
+                plan = timeline,
+                format = StoryExportVideoFormat(plan.width, plan.height, plan.fps, plan.bitRate),
+                fills = listOf(background),
+                overlays = listOfNotNull(overlay?.let { SceneExportOverlay.Painted(0L, plan.durationMillis, it) }),
+                sounds = files,
+                output = output,
+                release = { painted?.recycle() },
+            )
         } catch (failure: Throwable) {
             painted?.recycle()
             throw failure
@@ -94,5 +111,6 @@ class SceneExportViewModel @Inject constructor(
 
     private companion object {
         const val PNG_QUALITY = 100
+        const val BACKGROUND_SOURCE = "background"
     }
 }

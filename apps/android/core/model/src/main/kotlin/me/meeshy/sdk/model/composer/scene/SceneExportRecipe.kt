@@ -1,6 +1,10 @@
 package me.meeshy.sdk.model.composer.scene
 
 import me.meeshy.sdk.model.scene.export.StoryExportSourceWindowRule
+import me.meeshy.sdk.model.scene.export.StoryExportSlide
+import me.meeshy.sdk.model.scene.export.StoryExportSound
+import me.meeshy.sdk.model.scene.export.StoryExportSoundRole
+import me.meeshy.sdk.model.scene.export.StoryExportTimelinePlan
 
 /** Le fond de la scène exportée : une vidéo (fenêtre lue, son propre ou non) ou un fixe peint une fois. */
 public sealed interface SceneExportBackground {
@@ -33,8 +37,21 @@ public data class SceneExportRecipe(
     val background: SceneExportBackground,
     val sounds: List<SceneExportSound>,
 ) {
+    /** La recette rendue par le plan commun des exports ([StoryExportTimelinePlan]) : [soundSource] `null` ⇒ le son ne part pas. */
+    public fun timeline(backgroundSource: String, soundSource: (SceneExportSound) -> String?): StoryExportTimelinePlan {
+        val duration = plan.durationMillis
+        val background = (background as? SceneExportBackground.Video)?.takeIf { it.keepsOwnAudio }?.let {
+            StoryExportSound(backgroundSource, StoryExportSoundRole.BACKGROUND_VIDEO, BACKGROUND_ID, 0L, duration, it.clipStartMillis, it.clipEndMillis, loop = false, gain = 1f)
+        }
+        val placed = sounds.mapNotNull { sound ->
+            soundSource(sound)?.let { StoryExportSound(it, StoryExportSoundRole.FOREGROUND_AUDIO, sound.id, sound.startMillis, sound.endMillis, 0L, null, loop = false, gain = sound.volume) }
+        }
+        return StoryExportTimelinePlan(listOf(StoryExportSlide(0, 0L, duration)), listOfNotNull(background) + placed, still = false)
+    }
+
     public companion object {
         public const val MAX_SOUNDS: Int = 8
+        private const val BACKGROUND_ID = "background"
 
         public fun of(
             durationSeconds: Double,

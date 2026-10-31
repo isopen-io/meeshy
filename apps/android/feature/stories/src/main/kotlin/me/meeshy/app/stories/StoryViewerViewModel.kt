@@ -325,6 +325,9 @@ class StoryViewerViewModel @Inject constructor(
         super.onCleared()
     }
 
+    /** La story telle que la passerelle l'a servie — ce que l'export vidéo lit (objets sonores, fenêtres, pièces). */
+    fun rawItem(id: String): StoryItem? = rawItems[id]
+
     /** Appui long : la story se fige (iOS `explicitPause`). */
     fun pauseByHold() {
         if (playback.currentSlide == null || _state.value.isPaused) return

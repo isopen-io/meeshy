@@ -2,25 +2,48 @@ package me.meeshy.sdk.media.scene
 
 import android.graphics.Bitmap
 import java.io.File
-import me.meeshy.sdk.model.composer.scene.SceneExportRecipe
+import me.meeshy.sdk.model.scene.export.StoryExportClipRange
+import me.meeshy.sdk.model.scene.export.StoryExportTimelinePlan
+import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
+
+/** Ce qui remplit l'image d'une slide sous ses objets : une vidéo de fond lue en tours ([laps]), ou une image fixe. */
+public sealed interface SceneExportSlideFill {
+    public data class Video(val file: File, val laps: List<StoryExportClipRange>) : SceneExportSlideFill
+
+    public data class Picture(val file: File) : SceneExportSlideFill
+}
+
+/** Un calque des objets, posé sur la timeline commune de [startMillis] à [endMillis]. */
+public sealed interface SceneExportOverlay {
+    public val startMillis: Long
+    public val endMillis: Long
+
+    /** Déjà peint en mémoire : il appartient à l'appelant, qui le libère ([SceneExportJob.release]). */
+    public class Painted(override val startMillis: Long, override val endMillis: Long, public val bitmap: Bitmap) : SceneExportOverlay
+
+    /** Peint sur disque (PNG) : le moteur le décode à son instant et le libère après. */
+    public class Stored(override val startMillis: Long, override val endMillis: Long, public val file: File) : SceneExportOverlay
+}
+
+/** Un fichier son rapatrié, et sa durée sondée (`null` : non sondée — il se lit alors une fois, sans boucle). */
+public data class SceneExportSoundFile(val file: File, val durationMillis: Long?)
 
 /**
- * Tout ce que le moteur reçoit pour baker UNE scène : la recette (lois pures), les fichiers déjà résolus, et le calque
- * des objets peint à la taille de la vidéo (1080x1920). [overlay] appartient à l'appelant, qui le libère.
+ * Tout ce que le moteur reçoit pour rendre un export : le plan (lois pures — slides, sons), le format de la vidéo, ce qui
+ * remplit chaque slide (dans l'ordre des slides du plan), les calques des objets, et les fichiers des sons par adresse.
  */
 public class SceneExportJob(
-    public val recipe: SceneExportRecipe,
-    /** Le fond : la vidéo à lire, ou le fixe (fond, couleur, image, déjà composés) peint une fois. */
-    public val backgroundFile: File?,
-    public val overlay: Bitmap?,
-    /** Les fichiers audio, par identifiant de son de la recette. */
-    public val soundFiles: Map<String, File>,
+    public val plan: StoryExportTimelinePlan,
+    public val format: StoryExportVideoFormat,
+    public val fills: List<SceneExportSlideFill>,
+    public val overlays: List<SceneExportOverlay>,
+    public val sounds: Map<String, SceneExportSoundFile>,
     public val output: File,
-    /** Libère ce que le job tient (le calque peint) : appelé une fois le moteur arrêté, réussi, échoué ou annulé. */
+    /** Libère ce que le job tient (les calques peints) : appelé une fois le moteur arrêté, réussi, échoué ou annulé. */
     public val release: () -> Unit = {},
 )
 
-/** Le moteur de rendu derrière [SceneExportCoordinator] : annulable, il rend la fraction bakée à mesure. */
+/** Le moteur de rendu derrière [SceneExportCoordinator] : annulable, il rend la fraction rendue à mesure. */
 public interface SceneTransformRunner {
     public suspend fun run(job: SceneExportJob, onProgress: (Float) -> Unit)
 }

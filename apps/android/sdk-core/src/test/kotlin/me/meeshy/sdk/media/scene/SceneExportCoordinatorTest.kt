@@ -11,8 +11,10 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.media.CaptureGallery
 import me.meeshy.sdk.model.composer.scene.SceneExportDestination
-import me.meeshy.sdk.model.composer.scene.SceneExportRecipe
 import me.meeshy.sdk.model.composer.scene.SceneExportState
+import me.meeshy.sdk.model.scene.export.StoryExportSlide
+import me.meeshy.sdk.model.scene.export.StoryExportTimelinePlan
+import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -59,12 +61,14 @@ class SceneExportCoordinatorTest {
             nowMillis = { 1_700_000_000_000L },
         )
 
-    private fun job(output: File) = SceneExportJob(
-        recipe = SceneExportRecipe.of(3.0, null, emptyList()),
-        backgroundFile = null,
-        overlay = null,
-        soundFiles = emptyMap(),
+    private fun job(output: File, release: () -> Unit = {}) = SceneExportJob(
+        plan = StoryExportTimelinePlan(listOf(StoryExportSlide(0, 0, 3_000)), emptyList(), still = false),
+        format = StoryExportVideoFormat.of(),
+        fills = emptyList(),
+        overlays = emptyList(),
+        sounds = emptyMap(),
         output = output,
+        release = release,
     )
 
     @Test
@@ -185,7 +189,7 @@ class SceneExportCoordinatorTest {
         var released = 0
         val c = coordinator(FakeRunner(failure = IllegalStateException("x")))
         c.export(SceneExportDestination.SHARE) { out, _ ->
-            SceneExportJob(SceneExportRecipe.of(3.0, null, emptyList()), null, null, emptyMap(), out) { released++ }
+            job(out) { released++ }
         }
         advanceUntilIdle()
         assertThat(released).isEqualTo(1)
