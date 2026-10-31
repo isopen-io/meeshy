@@ -7,7 +7,8 @@ import MeeshyUI
 //
 // Toucher un élément le SÉLECTIONNE : le canvas l'encadre de pointillés, les
 // outils se retirent et la barre libellée paraît au-dessus de Public et Publier
-// — Modifier · Ordre · Dupliquer · Temps · Retirer. La règle vit dans
+// — Modifier · Dupliquer · Temps · Retirer — et l'objet passe au premier plan
+// (#13918) : il n'y a pas d'action « Ordre ». La règle vit dans
 // `ComposerSelectionActions` ; ce fichier lui fournit l'état du meuble et relaie
 // chaque action vers la primitive qui existait déjà. Tant que rien n'est publié,
 // tout reste mobile : aucune action n'aplatit la scène.
@@ -54,17 +55,20 @@ struct ComposerSceneSelectionRelay {
         let actions = ComposerSelectionActions.served(family: selection.family, offered: offertes,
                                                       isLocked: isLocked(selection.id))
         guard !actions.isEmpty else { return nil }
-        return ComposerSelectionBar(actions: actions,
-                                    orders: ComposerSelectionActions.order(family: selection.family, offered: offertes),
-                                    onAction: { performSelectionAction($0) },
-                                    onOrder: { performSelectionOrder($0) })
+        return ComposerSelectionBar(actions: actions, onAction: { performSelectionAction($0) })
     }
 
     // MARK: - Sélectionner, désélectionner
 
     /// **Toucher un élément le sélectionne** — sans l'éditer : la barre dit ce
-    /// qu'on peut en faire, VoiceOver l'annonce.
+    /// qu'on peut en faire, VoiceOver l'annonce. **Et il passe au premier plan**
+    /// (#13918, R6), la pastille de son de la surcouche comprise : une étape
+    /// d'annulation, aucune s'il était déjà devant ; un fond n'entre jamais
+    /// dans l'ordre.
     func selectSceneItem(_ id: String, kind: StoryCanvasUIView.CanvasItemKind? = nil) {
+        if let devant = host.viewModel.currentSlide.effects.broughtToFront(id) {
+            host.viewModel.currentSlide.effects = devant
+        }
         let famille = host.inlineFamily(of: id)
         let nouvelle = host.selectedSceneItemId != id
         host.presentedPortal = nil
@@ -92,7 +96,6 @@ struct ComposerSceneSelectionRelay {
         guard let id = host.selectedSceneItemId else { return }
         switch action {
         case .modify:    modifySceneItem(id)
-        case .order:     break
         case .duplicate: duplicateSceneItem(id)
         case .time:      host.beginInlineEdit(id, purpose: .time); HapticFeedback.light()
         case .remove:    host.handleTrailingRailAction(.delete); HapticFeedback.medium()
@@ -126,18 +129,6 @@ struct ComposerSceneSelectionRelay {
                                            isEditing: host.activeInlineEdit != nil)
     }
 
-    func performSelectionOrder(_ order: ComposerSelectionOrder) {
-        guard let id = host.selectedSceneItemId else { return }
-        switch order {
-        case .forward:        host.handleTrailingRailAction(.bringForward)
-        case .backward:       host.handleTrailingRailAction(.sendBackward)
-        case .makeBackground: host.makeSceneBackground(id)
-        case .foreground:     host.viewModel.toggleBackground(id: id)
-        case .leaveScene:     host.handleTrailingRailAction(.leaveScene)
-        }
-        HapticFeedback.light()
-    }
-
     /// **« Modifier », famille par famille** — le double toucher, l'appui long
     /// et la barre y mènent. Le `switch` est exhaustif : une famille ajoutée
     /// devra dire ce qu'elle ouvre.
@@ -166,12 +157,16 @@ struct ComposerSceneSelectionRelay {
         guard edition.purpose == .modify else { return [] }
         return ComposerSelectionActions.mediaExtras(
             family: edition.family,
+            offered: offered(edition.objectId),
             cameraTakesPhotos: ComposerSceneCamera.modes(for: host.selectedFormat).contains(.photo),
             subjectLiftAvailable: StickerSubjectLift.isAvailable && host.viewModel.loadedImages[edition.objectId] != nil)
     }
 
     func performMediaExtra(_ extra: ComposerSelectionMediaExtra, on id: String) {
         switch extra {
+        case .setAsBackground, .replaceBackground:
+            host.inlineEdit = nil
+            host.makeSceneBackground(id)
         case .retakePhoto:
             host.inlineEdit = nil
             host.sceneCaptureReplacesBackgroundId = id

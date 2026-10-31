@@ -4,9 +4,9 @@ import XCTest
 @testable import MeeshyUI
 
 /// #13864 (R4) — **les cinq familles posées sur une même scène se servent la
-/// même barre** : Modifier · Ordre · Dupliquer · Temps · Retirer, et « Ordre »
-/// les range les unes par rapport aux autres, la pastille de son comprise —
-/// les mêmes mots et la même règle qu'Android (`ComposerSelectionActionBar`).
+/// même barre** : Modifier · Dupliquer · Temps · Retirer ; toucher l'une la
+/// fait passer devant les autres, la pastille de son comprise (#13918) — les
+/// mêmes mots et la même règle qu'Android (`ComposerSelectionActionBar`).
 @MainActor
 final class ComposerSceneObjectFamiliesTests: XCTestCase {
 
@@ -29,7 +29,7 @@ final class ComposerSceneObjectFamiliesTests: XCTestCase {
     }
 
     private func barre(_ id: String, _ famille: ComposerInlineFamily, in slide: StorySlide)
-        -> (actions: [ComposerSelectionAction], ordre: [ComposerSelectionOrder]) {
+        -> (actions: [ComposerSelectionAction], extras: [ComposerSelectionMediaExtra]) {
         let objet = slide.sceneObject(id: id)
         let offertes = ComposerTrailingRailPolicy.actions(
             slide: slide, selectedId: id, served: ComposerTrailingColumn.servedActions,
@@ -38,25 +38,33 @@ final class ComposerSceneObjectFamiliesTests: XCTestCase {
             } ?? false,
             canLeaveScene: false)
         return (ComposerSelectionActions.served(family: famille, offered: offertes, isLocked: false),
-                ComposerSelectionActions.order(family: famille, offered: offertes))
+                ComposerSelectionActions.mediaExtras(family: famille, offered: offertes,
+                                                     cameraTakesPhotos: false, subjectLiftAvailable: false))
     }
 
-    func test_everyFamilyOnASharedScene_servesTheFiveActions() {
+    func test_everyFamilyOnASharedScene_servesTheFourActions() {
         let slide = scene()
         let familles: [(String, ComposerInlineFamily)] =
             [("texte", .text), ("image", .image), ("sticker", .sticker), ("lieu", .place), ("son", .audio)]
 
         for (id, famille) in familles {
             XCTAssertEqual(barre(id, famille, in: slide).actions,
-                           [.modify, .order, .duplicate, .time, .remove], "famille \(famille)")
+                           [.modify, .duplicate, .time, .remove], "famille \(famille)")
         }
     }
 
-    func test_theSoundChip_ordersAgainstTheOtherFamilies() {
-        let ordre = barre("son", .audio, in: scene()).ordre
+    func test_onlyAPlacedMedia_becomesTheBackground() {
+        let slide = scene()
+        XCTAssertEqual(barre("image", .image, in: slide).extras, [.setAsBackground])
+        XCTAssertEqual(barre("son", .audio, in: slide).extras, [], "seul un média devient le fond")
+        XCTAssertEqual(barre("sticker", .sticker, in: slide).extras, [])
+    }
 
-        XCTAssertTrue(ordre.contains(.forward), "un son peut passer devant un sticker")
-        XCTAssertTrue(ordre.contains(.backward), "et derrière lui")
-        XCTAssertFalse(ordre.contains(.makeBackground(replacing: false)), "seul un média devient le fond")
+    /// Toucher la pastille de son la fait passer devant le sticker — la même
+    /// règle que les quatre autres familles.
+    func test_touchingTheSoundChip_bringsItInFrontOfTheOtherFamilies() throws {
+        let stickerDevant = try XCTUnwrap(scene().effects.broughtToFront("sticker"))
+        let devant = try XCTUnwrap(stickerDevant.broughtToFront("son"))
+        XCTAssertEqual(devant.sceneObjects.filter { !$0.isBackground }.last?.id, "son")
     }
 }

@@ -16,9 +16,13 @@ import MeeshyUI
 
 /// **Une action de la barre**, dans l'ordre de la maquette : Retirer, la seule
 /// qui détruit, à l'autre bout.
+///
+/// **Il n'y a pas d'action « Ordre »** (décision porteur, #13918, R6) : toucher
+/// un objet posé le fait passer au premier plan (`StoryEffects.broughtToFront`) ;
+/// pour l'envoyer au dernier rang, on touche les autres, du plus profond au plus
+/// haut.
 nonisolated enum ComposerSelectionAction: String, CaseIterable, Equatable, Sendable {
     case modify
-    case order
     case duplicate
     case time
     case remove
@@ -26,7 +30,6 @@ nonisolated enum ComposerSelectionAction: String, CaseIterable, Equatable, Senda
     var symbol: String {
         switch self {
         case .modify:    return "pencil"
-        case .order:     return "square.3.layers.3d"
         case .duplicate: return "plus.square.on.square"
         case .time:      return "clock"
         case .remove:    return "trash"
@@ -34,16 +37,6 @@ nonisolated enum ComposerSelectionAction: String, CaseIterable, Equatable, Senda
     }
 
     var isDestructive: Bool { self == .remove }
-}
-
-/// **Un choix du menu « Ordre »** — devant, derrière, mettre en fond, sortir de
-/// la scène ; pour un fond, revenir devant.
-nonisolated enum ComposerSelectionOrder: Hashable, Sendable {
-    case forward
-    case backward
-    case makeBackground(replacing: Bool)
-    case foreground
-    case leaveScene
 }
 
 /// **Ce que « Modifier » ouvre, famille par famille.**
@@ -62,6 +55,11 @@ nonisolated enum ComposerSelectionModifyRoute: Equatable, Sendable {
 
 /// **Ce que la feuille « Modifier » d'un média offre en plus de ses réglages.**
 nonisolated enum ComposerSelectionMediaExtra: String, CaseIterable, Equatable, Sendable {
+    /// Le média posé devient le fond (#8716) — il vivait au menu « Ordre », qui
+    /// a quitté la barre (#13918).
+    case setAsBackground
+    /// Le même geste quand un fond existe déjà : il le remplace.
+    case replaceBackground
     /// Détourer le sujet de l'image et le poser en sticker (inventaire H3).
     case makeSticker
     /// Reprendre la photo du fond au viseur (inventaire D8).
@@ -69,8 +67,10 @@ nonisolated enum ComposerSelectionMediaExtra: String, CaseIterable, Equatable, S
 
     var symbol: String {
         switch self {
-        case .makeSticker: return "person.crop.square.badge.camera"
-        case .retakePhoto: return "camera"
+        case .setAsBackground:   return StoryCanvasContextAction.setAsBackground.systemImage
+        case .replaceBackground: return StoryCanvasContextAction.replaceBackground.systemImage
+        case .makeSticker:       return "person.crop.square.badge.camera"
+        case .retakePhoto:       return "camera"
         }
     }
 }
@@ -81,40 +81,20 @@ nonisolated enum ComposerSelectionActions {
     /// qu'inerte (loi 4).
     ///
     /// - Modifier : l'objet a un éditeur, ou c'est le fond (ses réglages).
-    /// - Ordre : au moins un choix d'empilement a un effet.
     /// - Dupliquer : jamais un fond — il deviendrait un second fond.
     /// - Temps : toute famille POSÉE ; un fond dure la slide entière.
     /// - Retirer : l'objet n'est pas verrouillé.
     static func served(family: ComposerInlineFamily,
                        offered: [StoryCanvasContextAction],
                        isLocked: Bool) -> [ComposerSelectionAction] {
-        let ordre = order(family: family, offered: offered)
-        return ComposerSelectionAction.allCases.filter { action in
+        ComposerSelectionAction.allCases.filter { action in
             switch action {
             case .modify:    return !isLocked && (family.isBackground || offered.contains(.edit))
-            case .order:     return !ordre.isEmpty
             case .duplicate: return !family.isBackground && offered.contains(.duplicate)
             case .time:      return !family.isBackground && !isLocked
             case .remove:    return offered.contains(.delete)
             }
         }
-    }
-
-    /// **Les choix d'« Ordre »** — pour TOUTES les familles, le texte compris :
-    /// il n'avait aucun empilement atteignable. Seule une image ou une vidéo
-    /// posée devient le fond ; un fond revient devant.
-    static func order(family: ComposerInlineFamily,
-                      offered: [StoryCanvasContextAction]) -> [ComposerSelectionOrder] {
-        let sortie: [ComposerSelectionOrder] = offered.contains(.leaveScene) ? [.leaveScene] : []
-        guard !family.isBackground else { return [.foreground] + sortie }
-        let estMedia = family == .image || family == .video
-        let devant: [ComposerSelectionOrder] = offered.contains(.bringForward) ? [.forward] : []
-        let derriere: [ComposerSelectionOrder] = offered.contains(.sendBackward) ? [.backward] : []
-        let fond: [ComposerSelectionOrder] = !estMedia ? []
-            : offered.contains(.replaceBackground) ? [.makeBackground(replacing: true)]
-            : offered.contains(.setAsBackground) ? [.makeBackground(replacing: false)]
-            : []
-        return devant + derriere + fond + sortie
     }
 
     static func modifyRoute(_ family: ComposerInlineFamily) -> ComposerSelectionModifyRoute {
@@ -127,30 +107,36 @@ nonisolated enum ComposerSelectionActions {
         }
     }
 
-    /// Faire un sticker : une IMAGE, posée ou en fond, quand le détourage existe
-    /// (iOS 17). Reprendre la photo : le fond, quand le viseur prend des photos.
+    /// Devenir le fond : une image ou une vidéo POSÉE, quand l'objet l'admet —
+    /// en remplaçant le fond s'il y en a un. Faire un sticker : une IMAGE, posée
+    /// ou en fond, quand le détourage existe (iOS 17). Reprendre la photo : le
+    /// fond, quand le viseur prend des photos.
     static func mediaExtras(family: ComposerInlineFamily,
+                            offered: [StoryCanvasContextAction] = [],
                             cameraTakesPhotos: Bool,
                             subjectLiftAvailable: Bool) -> [ComposerSelectionMediaExtra] {
         let estImage = family == .image || family == .background(isVideo: false)
+        let estPose = family == .image || family == .video
         return ComposerSelectionMediaExtra.allCases.filter { extra in
             switch extra {
-            case .makeSticker: return estImage && subjectLiftAvailable
-            case .retakePhoto: return family.isBackground && cameraTakesPhotos
+            case .setAsBackground:   return estPose && offered.contains(.setAsBackground)
+            case .replaceBackground: return estPose && offered.contains(.replaceBackground)
+            case .makeSticker:       return estImage && subjectLiftAvailable
+            case .retakePhoto:       return family.isBackground && cameraTakesPhotos
             }
         }
     }
 
     /// **La porte de la barre qu'une entrée du menu d'appui long raccourcit.**
-    /// Le rognage n'en a pas : il vit dans Modifier › Découper.
+    /// Le rognage n'en a pas : il vit dans Modifier › Découper. Devenir le fond
+    /// vit dans Modifier. L'empilement n'a plus de porte : le toucher le fait
+    /// (#13918).
     static func shortcut(_ action: StoryCanvasContextAction) -> ComposerSelectionAction? {
         switch action {
-        case .edit:                                    return .modify
-        case .duplicate:                               return .duplicate
-        case .bringForward, .sendBackward, .setAsBackground,
-             .replaceBackground, .leaveScene:          return .order
-        case .delete:                                  return .remove
-        case .trim:                                    return nil
+        case .edit, .setAsBackground, .replaceBackground: return .modify
+        case .duplicate:                                  return .duplicate
+        case .delete:                                     return .remove
+        case .trim, .bringForward, .sendBackward, .leaveScene: return nil
         }
     }
 
@@ -222,8 +208,6 @@ nonisolated enum ComposerSelectionCopy {
         switch action {
         case .modify:
             return String(localized: "composer.selection.modify", defaultValue: "Modifier", bundle: .main)
-        case .order:
-            return String(localized: "composer.selection.order", defaultValue: "Ordre", bundle: .main)
         case .duplicate:
             return String(localized: "composer.selection.duplicate", defaultValue: "Dupliquer", bundle: .main)
         case .time:
@@ -234,32 +218,12 @@ nonisolated enum ComposerSelectionCopy {
     }
 
     @MainActor
-    static func label(_ order: ComposerSelectionOrder) -> String {
-        switch order {
-        case .forward:                         return StoryCanvasContextAction.bringForward.title
-        case .backward:                        return StoryCanvasContextAction.sendBackward.title
-        case .makeBackground(replacing: true): return StoryCanvasContextAction.replaceBackground.title
-        case .makeBackground(replacing: false): return StoryCanvasContextAction.setAsBackground.title
-        case .foreground:                      return ComposerBackgroundMenuCopy.label(for: .bringForward)
-        case .leaveScene:                      return StoryCanvasContextAction.leaveScene.title
-        }
-    }
-
-    static func symbol(_ order: ComposerSelectionOrder) -> String {
-        switch order {
-        case .forward:        return StoryCanvasContextAction.bringForward.systemImage
-        case .backward:       return StoryCanvasContextAction.sendBackward.systemImage
-        case .makeBackground(let remplace):
-            return remplace ? StoryCanvasContextAction.replaceBackground.systemImage
-                            : StoryCanvasContextAction.setAsBackground.systemImage
-        case .foreground:     return ComposerBackgroundMenuAction.bringForward.symbol
-        case .leaveScene:     return StoryCanvasContextAction.leaveScene.systemImage
-        }
-    }
-
-    @MainActor
     static func label(_ extra: ComposerSelectionMediaExtra) -> String {
         switch extra {
+        case .setAsBackground:
+            return StoryCanvasContextAction.setAsBackground.title
+        case .replaceBackground:
+            return StoryCanvasContextAction.replaceBackground.title
         case .makeSticker:
             return String(localized: "composer.selection.makeSticker", defaultValue: "Faire un sticker", bundle: .main)
         case .retakePhoto:

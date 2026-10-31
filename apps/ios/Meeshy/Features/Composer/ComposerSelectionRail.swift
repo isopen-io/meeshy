@@ -5,7 +5,7 @@ import MeeshyUI
 /// **Le rail droit du grand écran, « SÉLECTION »** (#13839, L6, maquette validée).
 ///
 /// Les actions de la barre de sélection (L5), composées par la MÊME loi (`ComposerSelectionActions`) et remises
-/// par le même relais : Modifier · Ordre · Dupliquer · Temps, puis Retirer en rouge, à l'écart. Sans sélection, le
+/// par le même relais : Modifier · Dupliquer · Temps, puis Retirer en rouge, à l'écart. Sans sélection, le
 /// rail reste en place et vide — la scène ne bouge pas quand on sélectionne. ↶ ↷ au pied, seulement avec un
 /// historique.
 struct ComposerSelectionRail: View {
@@ -53,26 +53,14 @@ struct ComposerSelectionRail: View {
         }
     }
 
-    @ViewBuilder
     private func item(_ action: ComposerSelectionAction, in selection: ComposerSelectionBar) -> some View {
-        let rangee = ComposerLabeledRailRow(symbol: action.symbol, label: ComposerSelectionCopy.label(action),
-                                            tint: ComposerSelectionBarPaint.tint(action))
-        if action == .order {
-            Menu {
-                ForEach(selection.orders, id: \.self) { choix in
-                    Button { selection.onOrder(choix) } label: {
-                        Label(ComposerSelectionCopy.label(choix), systemImage: ComposerSelectionCopy.symbol(choix))
-                    }
-                }
-            } label: { rangee }
-            .accessibilityLabel(Text(ComposerSelectionCopy.label(action)))
-            .accessibilityIdentifier("composer.rail.selection.order")
-        } else {
-            Button { selection.onAction(action) } label: { rangee }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(ComposerSelectionCopy.label(action)))
-                .accessibilityIdentifier("composer.rail.selection.\(action.rawValue)")
+        Button { selection.onAction(action) } label: {
+            ComposerLabeledRailRow(symbol: action.symbol, label: ComposerSelectionCopy.label(action),
+                                   tint: ComposerSelectionBarPaint.tint(action))
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(ComposerSelectionCopy.label(action)))
+        .accessibilityIdentifier("composer.rail.selection.\(action.rawValue)")
     }
 
     @ViewBuilder

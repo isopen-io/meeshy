@@ -6,7 +6,7 @@ import XCTest
 /// **Un élément sélectionné : une seule barre d'actions libellées** (#13839, L5,
 /// maquette validée le 2026-10-30, état 3).
 ///
-/// Modifier · Ordre · Dupliquer · Temps · Retirer, servies par famille par une
+/// Modifier · Dupliquer · Temps · Retirer, servies par famille par une
 /// loi pure : une action sans effet n'est pas servie (loi 4), et le menu d'appui
 /// long n'en est qu'un raccourci.
 final class ComposerSelectionActionsTests: XCTestCase {
@@ -16,56 +16,89 @@ final class ComposerSelectionActionsTests: XCTestCase {
 
     // MARK: - La barre, par famille
 
-    func test_served_textAmongOthers_servesTheFiveActionsInOrder() {
+    func test_served_textAmongOthers_servesTheFourActionsInOrder() {
         let actions = ComposerSelectionActions.served(family: .text,
                                                       offered: [.edit, .duplicate, .bringForward, .sendBackward, .delete],
                                                       isLocked: false)
-        XCTAssertEqual(actions, [.modify, .order, .duplicate, .time, .remove])
+        XCTAssertEqual(actions, [.modify, .duplicate, .time, .remove])
     }
 
-    func test_served_textAloneOnTheScene_servesNoOrder() {
+    /// **#13918 (R6) — « Ordre » quitte la barre** : toucher un objet le fait
+    /// passer devant. La barre garde Modifier, Dupliquer, Temps, Retirer.
+    func test_theBar_hasNoOrderAction_anyMore() {
+        XCTAssertEqual(ComposerSelectionAction.allCases.map(\.rawValue), ["modify", "duplicate", "time", "remove"])
+        let libelles = ComposerSelectionAction.allCases.map(ComposerSelectionCopy.label)
+        XCTAssertEqual(Set(libelles).count, 4, "quatre libellés distincts, aucun « Ordre »")
+        XCTAssertFalse(libelles.contains { $0.isEmpty })
+    }
+
+    func test_served_textAloneOnTheScene_keepsRemoveAtTheOtherEnd() {
         let actions = ComposerSelectionActions.served(family: .text, offered: [.edit, .duplicate, .delete],
                                                       isLocked: false)
-        XCTAssertFalse(actions.contains(.order), "rien à mettre devant ni derrière : Ordre n'aurait aucun effet")
         XCTAssertEqual(actions.last, .remove, "Retirer reste à l'autre bout de la barre")
     }
 
-    func test_served_lockedRepostBadge_servesOnlyTheOrder() {
+    func test_served_lockedRepostBadge_servesNothing() {
         let actions = ComposerSelectionActions.served(family: .text, offered: [.bringForward, .sendBackward],
                                                       isLocked: true)
-        XCTAssertEqual(actions, [.order], "le badge d'attribution ne se modifie, ne se copie, ni ne se retire")
+        XCTAssertEqual(actions, [], "le badge d'attribution ne se modifie, ne se copie, ni ne se retire")
     }
 
-    func test_served_background_servesModifyOrderAndRemoveOnly() {
+    func test_served_background_servesModifyAndRemoveOnly() {
         let actions = ComposerSelectionActions.served(family: .background(isVideo: false),
                                                       offered: [.duplicate, .delete], isLocked: false)
-        XCTAssertEqual(actions, [.modify, .order, .remove],
+        XCTAssertEqual(actions, [.modify, .remove],
                        "un fond dure la slide entière et ne se duplique pas en second fond")
     }
 
     func test_served_stickerWithEditor_servesModify() {
         let actions = ComposerSelectionActions.served(family: .sticker, offered: toutesLesActions, isLocked: false)
-        XCTAssertEqual(actions, [.modify, .order, .duplicate, .time, .remove])
+        XCTAssertEqual(actions, [.modify, .duplicate, .time, .remove])
     }
 
-    // MARK: - Ordre
+    // MARK: - Devenir le fond vit dans Modifier
 
-    func test_order_foregroundImageOverABackground_offersFrontBackAndBackground() {
-        let ordre = ComposerSelectionActions.order(family: .image,
-                                                   offered: [.edit, .bringForward, .sendBackward,
-                                                             .replaceBackground, .delete])
-        XCTAssertEqual(ordre, [.forward, .backward, .makeBackground(replacing: true)])
+    /// « Mettre en fond » vivait au menu « Ordre » ; il passe à la feuille
+    /// Modifier d'un média posé, sans quoi la barre l'aurait perdu.
+    func test_mediaSheetExtras_foregroundImage_offersToBecomeTheBackground() {
+        XCTAssertEqual(ComposerSelectionActions.mediaExtras(family: .image, offered: [.setAsBackground],
+                                                            cameraTakesPhotos: true, subjectLiftAvailable: false),
+                       [.setAsBackground])
+        XCTAssertEqual(ComposerSelectionActions.mediaExtras(family: .video, offered: [.replaceBackground],
+                                                            cameraTakesPhotos: true, subjectLiftAvailable: false),
+                       [.replaceBackground])
     }
 
-    func test_order_background_offersToComeForward() {
-        XCTAssertEqual(ComposerSelectionActions.order(family: .background(isVideo: true), offered: []),
-                       [.foreground])
+    func test_mediaSheetExtras_backgroundOrNotOffered_neverBecomesTheBackground() {
+        XCTAssertEqual(ComposerSelectionActions.mediaExtras(family: .background(isVideo: false),
+                                                            offered: [.setAsBackground],
+                                                            cameraTakesPhotos: false, subjectLiftAvailable: false), [])
+        XCTAssertEqual(ComposerSelectionActions.mediaExtras(family: .image, offered: [],
+                                                            cameraTakesPhotos: false, subjectLiftAvailable: false), [])
     }
 
-    func test_order_leaveSceneOffered_comesLast() {
-        let ordre = ComposerSelectionActions.order(family: .image,
-                                                   offered: [.leaveScene, .bringForward, .setAsBackground])
-        XCTAssertEqual(ordre, [.forward, .makeBackground(replacing: false), .leaveScene])
+    func test_shortcutMenu_becomingTheBackground_goesThroughModify_andStackingHasNoDoor() {
+        XCTAssertEqual(ComposerSelectionActions.shortcut(.setAsBackground), .modify)
+        XCTAssertEqual(ComposerSelectionActions.shortcut(.replaceBackground), .modify)
+        XCTAssertNil(ComposerSelectionActions.shortcut(.bringForward))
+        XCTAssertNil(ComposerSelectionActions.shortcut(.sendBackward))
+        let menu = ComposerSelectionActions.menuActions(family: .image, offered: toutesLesActions, isLocked: false)
+        XCTAssertFalse(menu.contains(.bringForward))
+        XCTAssertFalse(menu.contains(.sendBackward))
+        XCTAssertTrue(menu.contains(.setAsBackground))
+    }
+
+    /// **Toucher un objet le sélectionne ET le fait passer devant** (#13918) :
+    /// le relais de la sélection, par où passent le canvas, la pastille de son
+    /// de la surcouche et VoiceOver, appelle la règle du modèle.
+    @MainActor
+    func test_selectingAnObject_bringsItToTheFront() throws {
+        let code = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/MeeshyComposerHost+Selection.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(code.contains(
+            "funcselectSceneItem(_id:String,kind:StoryCanvasUIView.CanvasItemKind?=nil){"
+                + "ifletdevant=host.viewModel.currentSlide.effects.broughtToFront(id){"
+                + "host.viewModel.currentSlide.effects=devant}"))
     }
 
     // MARK: - Modifier, par famille

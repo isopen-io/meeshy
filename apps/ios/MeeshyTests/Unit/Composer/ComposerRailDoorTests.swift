@@ -481,12 +481,12 @@ final class ComposerSceneCapabilitiesTests: XCTestCase {
         XCTAssertFalse(portes.contains(.sticker))
     }
 
-    /// **L'empilement est SERVI.** Son absence était attribuée à la
-    /// `StoryCanvasUIView` ; il vit en réalité sur le MODÈLE, et y persiste son
-    /// `zIndex` dans la slide — donc jusqu'au reader et à la publication.
-    func test_lEmpilement_estServi() {
-        XCTAssertTrue(ComposerSceneCapabilities.controllers.contains(.bringForward))
-        XCTAssertTrue(ComposerSceneCapabilities.controllers.contains(.sendBackward))
+    /// **L'empilement n'est plus une action** (#13918, R6) : toucher un objet
+    /// le fait passer devant, et le meuble ne sert plus ni « devant » ni
+    /// « derrière ». Le rang reste persisté dans la slide, jusqu'au reader.
+    func test_lEmpilement_nEstPlusServi() {
+        XCTAssertFalse(ComposerSceneCapabilities.controllers.contains(.bringForward))
+        XCTAssertFalse(ComposerSceneCapabilities.controllers.contains(.sendBackward))
     }
 
     /// La bande de la scène passe par la même capacité — sans quoi le littéral
@@ -657,11 +657,12 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
                        "Aucun chemin ne doit convertir un lieu en sticker.")
     }
 
-    /// L'empilement route vers le MODÈLE, jamais vers la vue UIKit.
-    func test_lEmpilement_routeVersLeViewModel() throws {
+    /// L'empilement ne se pilote plus depuis le rail : toucher un objet le
+    /// fait passer devant (#13918, R6).
+    func test_lEmpilement_neSePilotePlusDepuisLeRail() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("case.bringForward:viewModel.bringForward(id:id)"))
-        XCTAssertTrue(source.contains("case.sendBackward:viewModel.sendBackward(id:id)"))
+        XCTAssertFalse(source.contains("viewModel.bringForward(id:id)"))
+        XCTAssertFalse(source.contains("viewModel.sendBackward(id:id)"))
     }
 }
 

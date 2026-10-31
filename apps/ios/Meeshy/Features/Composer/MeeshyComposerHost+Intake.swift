@@ -424,9 +424,7 @@ extension MeeshyComposerHost {
             retractMedia(objectIds: [id])
             selectedSceneItemId = nil
             selectedSceneItemKind = nil
-        case .bringForward: viewModel.bringForward(id: id)
         case .setAsBackground, .replaceBackground: makeSceneBackground(id)
-        case .sendBackward: viewModel.sendBackward(id: id)
         case .trim:
             // **« Rogner » ouvre l'ÉDITEUR sur ses bornes.** La première vue n'édite
             // pas, et les bornes de lecture vivent à `.media(.trim)`.
@@ -436,9 +434,10 @@ extension MeeshyComposerHost {
             // ranger. Un écran modal se referme par son propre en-tête.
             openObjectEditor(id, section: .media(.trim))
             HapticFeedback.light()
-        case .edit, .leaveScene:
-            // Injoignables DEPUIS LE RAIL, et pour deux raisons distinctes que
-            // le `switch` exhaustif oblige à relire quand on les sert.
+        case .edit, .leaveScene, .bringForward, .sendBackward:
+            // Injoignables DEPUIS LE RAIL, et pour trois raisons distinctes que
+            // le `switch` exhaustif oblige à relire quand on les sert — l'empilement
+            // se fait au TOUCHER (#13918).
             //
             // `edit` a son chemin — l'appui long et l'action
             // VoiceOver « Modifier », câblés par `onItemEdit` — mais

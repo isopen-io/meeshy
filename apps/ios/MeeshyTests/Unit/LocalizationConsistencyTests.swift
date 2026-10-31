@@ -86,9 +86,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         // interpolation, so this is immune to the nested-literal pitfalls that
         // break naive literal extraction.
         let quotedTokens = quotedIdentifierTokens(in: env.combinedSource)
+        let adopted = androidAdoptedAppKeys(repoRoot: env.repoRoot)
 
         let orphans = env.appIdentifierKeys
-            .filter { !Self.orphanAllowlist.contains($0) && !quotedTokens.contains($0) }
+            .filter { !Self.orphanAllowlist.contains($0) && !quotedTokens.contains($0) && !adopted.contains($0) }
             .sorted()
 
         XCTAssertTrue(

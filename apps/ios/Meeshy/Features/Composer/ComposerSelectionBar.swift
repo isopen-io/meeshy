@@ -5,14 +5,12 @@ import MeeshyUI
 /// **La barre d'un élément sélectionné** (#13839, L5, maquette validée, état
 /// 3) — une rangée de verre sombre, posée sur la scène
 /// au-dessus de Public et Publier : chaque action a son glyphe ET son mot,
-/// Retirer, en rouge, à l'autre bout, loin de tout ✕. « Ordre » ouvre ses
-/// choix en menu. Rien n'y est décidé : les actions arrivent composées par
-/// `ComposerSelectionActions`.
+/// Retirer, en rouge, à l'autre bout, loin de tout ✕. Aucune action « Ordre » :
+/// toucher un objet le fait passer devant (#13918). Rien n'y est décidé : les
+/// actions arrivent composées par `ComposerSelectionActions`.
 struct ComposerSelectionBar: View {
     let actions: [ComposerSelectionAction]
-    let orders: [ComposerSelectionOrder]
     let onAction: (ComposerSelectionAction) -> Void
-    let onOrder: (ComposerSelectionOrder) -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -36,24 +34,10 @@ struct ComposerSelectionBar: View {
         .accessibilityIdentifier("composer.selection.bar")
     }
 
-    @ViewBuilder
     private func item(_ action: ComposerSelectionAction) -> some View {
-        if action == .order {
-            Menu {
-                ForEach(orders, id: \.self) { choix in
-                    Button { onOrder(choix) } label: {
-                        Label(ComposerSelectionCopy.label(choix), systemImage: ComposerSelectionCopy.symbol(choix))
-                    }
-                }
-            } label: {
-                label(action)
-            }
-            .accessibilityIdentifier("composer.selection.order")
-        } else {
-            Button { onAction(action) } label: { label(action) }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("composer.selection.\(action.rawValue)")
-        }
+        Button { onAction(action) } label: { label(action) }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("composer.selection.\(action.rawValue)")
     }
 
     private func label(_ action: ComposerSelectionAction) -> some View {

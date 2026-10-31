@@ -453,9 +453,10 @@ nonisolated enum ComposerSceneCapabilities {
     /// de rognage sous la scène. Ce jeu dit ce que CE meuble sait faire ; ce
     /// qu'un OBJET admet reste à la règle du SDK, qui n'offre le rognage qu'à
     /// une vidéo ou un son (`hasTrimmableSource`).
+    /// L'empilement n'y est plus : toucher un objet le fait passer devant
+    /// (#13918, R6), et aucune action « Ordre » ne le commande.
     static let controllers: Set<StoryCanvasContextAction> = [
-        .duplicate, .delete, .bringForward, .sendBackward, .trim,
-        .setAsBackground, .replaceBackground
+        .duplicate, .delete, .trim, .setAsBackground, .replaceBackground
     ]
 
     /// Les bandes contextuelles du bas de scène. Passées à
