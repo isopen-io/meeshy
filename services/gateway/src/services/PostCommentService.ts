@@ -1,3 +1,4 @@
+import { notePairInteraction } from './relations/pairInteractionRecorder.js';
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import type { MobileTranscription } from '../routes/posts/types';
@@ -120,11 +121,13 @@ export class PostCommentService {
     if (!post) return null;
 
     // If parentId, verify parent exists
+    let parentAuthorId: string | null = null;
     if (parentId) {
       const parent = await this.prisma.postComment.findFirst({
         where: { id: parentId, postId, deletedAt: NOT_DELETED },
       });
       if (!parent) throw new Error('PARENT_NOT_FOUND');
+      parentAuthorId = parent.authorId;
     }
 
     // Chaque média demandé doit être LIBRE et téléversé par l'auteur de la
@@ -203,6 +206,10 @@ export class PostCommentService {
     }));
     // #10404 — commenter le post d'un autre, c'est l'avoir vu.
     await creditEngagedReaderView(this.prisma, { postId, userId: authorId, authorId: post.authorId });
+    // Les cercles (#13932) : commenter le post de l'autre, ou répondre à son commentaire, compte pour la paire.
+    [...new Set([post.authorId, parentAuthorId])].forEach((otherId) => {
+      if (otherId) notePairInteraction(this.prisma, { actorId: authorId, otherId, nature: 'comment', at: comment.createdAt });
+    });
     if (parentId) {
       await this.afterBirth('parent.replyCount', comment.id, () => this.prisma.postComment.update({
         where: { id: parentId },
@@ -738,6 +745,8 @@ export class PostCommentService {
         { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId, receipt: creditSource.commentReaction(like.id) },
         this.engagement,
       );
+      // Les cercles (#13932) : réagir au commentaire de l'autre compte pour la paire.
+      notePairInteraction(this.prisma, { actorId: userId, otherId: comment.authorId, nature: 'reaction' });
     }
     return this.syncCommentLikeCounters(commentId);
   }
