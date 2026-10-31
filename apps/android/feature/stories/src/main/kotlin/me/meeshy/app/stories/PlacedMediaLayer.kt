@@ -151,6 +151,7 @@ internal fun PlacedMediaLayer(
     val currentTransform by rememberUpdatedState(gestures.onTransform)
     val currentScale by rememberUpdatedState(placed.scale)
     val currentRotation by rememberUpdatedState(placed.rotationDeg)
+    val reframe by rememberUpdatedState(LocalPlacedReframe.current?.takeIf { it.mediaId == frame.key && !frame.isVideo })
     val context = LocalContext.current
     val density = LocalDensity.current
     val measuredRatio by produceState<Double?>(initialValue = null, frame.pendingItem) {
@@ -197,6 +198,11 @@ internal fun PlacedMediaLayer(
             }
             .pointerInput(frame.key) {
                 detectTransformGestures { _, pan, zoom, rotation ->
+                    // Recadrer ouvert : le geste règle la fenêtre dans la source, plus la pose (#13973, A-E4).
+                    reframe?.let { crop ->
+                        if (size.width > 0 && size.height > 0) crop.onReframe(pan.x / size.width, pan.y / size.height, zoom)
+                        return@detectTransformGestures
+                    }
                     if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
                         val onCanvas = PlacedMediaPan.toCanvas(pan, currentScale, currentRotation)
                         currentDrag(frame.key, onCanvas.x / canvasWidthPx, onCanvas.y / canvasHeightPx)

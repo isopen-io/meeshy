@@ -2,7 +2,6 @@ package me.meeshy.sdk.model.composer.edit
 
 import com.google.common.truth.Truth.assertThat
 import java.io.File
-import me.meeshy.sdk.model.composer.edit.ComposerBackgroundAction.EDIT
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundAction.PUT_ON_SCENE
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundAction.REMOVE
 import me.meeshy.sdk.model.composer.edit.ComposerBackgroundAction.REPLACE
@@ -14,8 +13,8 @@ import org.junit.Test
 /**
  * UNE grammaire d'édition (spec 2026-10-31, #13973) : Android rejoue `packages/shared/design/composer-edit-tree.json`, le
  * fichier qu'iOS décode aussi. Ce témoin DÉCODE le fichier et exige la valeur compilée ; un mot, un ordre ou une icône changé
- * d'un seul côté le rougit. Puis il lit le niveau « Fond » d'un fond média : Modifier · Remplacer · Mettre sur la scène ·
- * Retirer, jamais Dupliquer ni Temps (le fond dure toute la diapo).
+ * d'un seul côté le rougit. Puis il lit le rail « Fond » d'un fond média, À PLAT (#14047) : ses outils, puis Remplacer ·
+ * Mettre sur la scène · Retirer, jamais Modifier, Dupliquer ni Temps (le fond dure toute la diapo).
  */
 class ComposerEditTreeTest {
 
@@ -29,7 +28,7 @@ class ComposerEditTreeTest {
         error("composer-edit-tree.json introuvable en remontant depuis ${File("").absolutePath}")
     }
 
-    private val all = ComposerBackgroundLevel.Offers(editor = true, mediaSource = true, camera = true)
+    private val all = ComposerBackgroundLevel.Offers(mediaSource = true, camera = true)
 
     @Test
     fun `the tree of Android is the shared file, field for field`() {
@@ -44,10 +43,19 @@ class ComposerEditTreeTest {
     }
 
     @Test
-    fun `the background of a media scene offers Edit, Replace, Put on the scene and Remove, in that order`() {
-        assertThat(ComposerBackgroundLevel.actions(all)).containsExactly(EDIT, REPLACE, PUT_ON_SCENE, REMOVE).inOrder()
-        assertThat(ComposerEditTree.shared.level(ComposerEditTree.BACKGROUND_MEDIA)!!.entries.map { it.id })
-            .containsNoneOf("duplicate", "time")
+    fun `the background of a media scene lays its tools flat, then Replace, Put on the scene and Remove, Edit never served`() {
+        assertThat(ComposerBackgroundLevel.actions(all)).containsExactly(REPLACE, PUT_ON_SCENE, REMOVE).inOrder()
+        assertThat(ComposerEditTree.shared.level(ComposerEditTree.BACKGROUND_MEDIA_EDIT)!!.entries.map { it.id }).containsExactly(
+            "framing", "crop", "trim", "filters", "frames", "adjust", "effects", "sound", "loop", "rotate", "description",
+        ).inOrder()
+        assertThat(ComposerBackgroundLevel.actions(all).map { it.entryId }).doesNotContain("edit")
+    }
+
+    @Test
+    fun `Sound of a video, placed or background, lays its level Volume and Mute`() {
+        val sound = ComposerEditTree.shared.level(ComposerEditTree.BACKGROUND_MEDIA_EDIT)!!.entries.single { it.id == "sound" }
+        assertThat(sound.opens).isEqualTo(ComposerEditTree.Opens.LEVEL)
+        assertThat(ComposerEditTree.shared.level(sound.next!!)!!.entries.map { it.id }).containsExactly("volume", "mute").inOrder()
     }
 
     @Test
@@ -68,8 +76,7 @@ class ComposerEditTreeTest {
 
     @Test
     fun `an action without effect on this surface is not offered`() {
-        assertThat(ComposerBackgroundLevel.actions(all.copy(editor = false))).containsExactly(REPLACE, PUT_ON_SCENE, REMOVE).inOrder()
-        assertThat(ComposerBackgroundLevel.actions(all.copy(mediaSource = false, camera = false))).containsExactly(EDIT, PUT_ON_SCENE, REMOVE).inOrder()
+        assertThat(ComposerBackgroundLevel.actions(all.copy(mediaSource = false, camera = false))).containsExactly(PUT_ON_SCENE, REMOVE).inOrder()
     }
 
     @Test

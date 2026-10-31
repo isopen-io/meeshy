@@ -47,7 +47,10 @@
     <string name="composer_edit_background_framing">Ausschnitt</string>
     <string name="composer_edit_frames">Rahmen</string>
     <string name="composer_edit_loop">Schleife</string>
+    <string name="composer_edit_mute">Stumm</string>
+    <string name="composer_edit_rotate">Drehen</string>
     <string name="composer_edit_trim">Kürzen</string>
+    <string name="composer_edit_volume">Lautstärke</string>
     <string name="composer_family_text">Text</string>
     <string name="composer_frise_earlier">Früher</string>
     <string name="composer_frise_empty">Füge einen Text oder Sticker hinzu: Jedes Objekt wird zu einer Spur.</string>

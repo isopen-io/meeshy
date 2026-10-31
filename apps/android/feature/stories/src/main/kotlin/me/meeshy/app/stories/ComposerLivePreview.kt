@@ -45,7 +45,7 @@ internal val LocalComposerLive = compositionLocalOf<ComposerLiveStage?> { null }
 
 /**
  * Ce que la scène joue en continu (#13863, loi 6 : le player est l'aperçu) : la vidéo du fond dans la fenêtre de son Couper,
- * chaque vidéo posée dans la sienne, chaque son — de fond ou posé — dans sa fenêtre propre et à son volume ; sélectionnés
+ * chaque vidéo posée dans la sienne et à son volume d'auteur (#13973, A-E4), chaque son — de fond ou posé — dans sa fenêtre propre et à son volume ; sélectionnés
  * ou non — un son enregistré se joue depuis son média. Les vidéos au-delà de ce que l'appareil décode ensemble gardent leur image ([ComposerLivePlayback.playing]). Un
  * média sans adresse jouable (un envoi gardé en mémoire) ne joue pas.
  */
@@ -64,7 +64,12 @@ private fun StoryComposerUiState.backgroundVideoCue(mediaBaseUrl: String?): Comp
 private fun StoryComposerUiState.placedVideoCues(mediaBaseUrl: String?): List<ComposerLiveCue> =
     deck.selectedSlide.placedMedia.filter { placedMediaIsVideo(it.id) }.mapNotNull { placed ->
         playableVideoUrl(placed.id, mediaBaseUrl)?.let { url ->
-            ComposerLiveCue(ComposerLiveSubject(placed.id, ComposerLiveKind.VIDEO, background = false), url, ComposerLivePlayback.window(placedTrimOf(placed.id)), FULL_VOLUME)
+            ComposerLiveCue(
+                subject = ComposerLiveSubject(placed.id, ComposerLiveKind.VIDEO, background = false),
+                url = url,
+                window = ComposerLivePlayback.window(placedTrimOf(placed.id)),
+                volume = ComposerLivePlayback.volume(placed.volume, placed.isMuted),
+            )
         }
     }
 

@@ -145,15 +145,15 @@ internal fun ColumnScope.StoryTrailingRail(
  * sélection et aux options de l'objet — Fermer et les outils reviennent à la désélection.
  */
 @Composable
-internal fun StoryEditingRail(bar: SceneSelectionBar, onAction: (ComposerSelectionAction) -> Unit) {
+internal fun StoryEditingRail(bar: SceneSelectionBar, tools: List<RailTool>, onAction: (ComposerSelectionAction) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
-    ) { SelectionRailBlock(bar, onAction) }
+    ) { SelectionRailBlock(bar, tools, onAction) }
 }
 
 @Composable
-private fun SelectionRailBlock(bar: SceneSelectionBar, onAction: (ComposerSelectionAction) -> Unit) {
+private fun SelectionRailBlock(bar: SceneSelectionBar, tools: List<RailTool>, onAction: (ComposerSelectionAction) -> Unit) {
     Text(
         text = stringResource(R.string.composer_rail_selection),
         style = MaterialTheme.typography.labelSmall,
@@ -163,6 +163,7 @@ private fun SelectionRailBlock(bar: SceneSelectionBar, onAction: (ComposerSelect
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.xs).semantics { heading() },
     )
+    tools.forEach { tool -> LabeledRailItem(icon = tool.icon, label = stringResource(tool.label), onClick = tool.onClick) }
     bar.actions.forEach { action -> RailActionItem(action) { onAction(action) } }
 }
 

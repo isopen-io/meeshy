@@ -4,7 +4,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.unit.height
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -167,4 +174,37 @@ class ComposerImageAdjustmentsPanelTest {
         assertThat(probe.adjusted.last()).isEqualTo(AdjustmentKind.CONTRAST to AdjustmentKind.CONTRAST.neutral)
     }
 
+    @Test
+    fun `le premier geste ne fait pas grandir le panneau, et rien ne bouge sous le doigt`() {
+        val adjusted = mutableListOf<AdjustmentKind>()
+        compose.setContent {
+            MeeshyTheme {
+                var current by remember { mutableStateOf(ImageAdjustments.NEUTRAL) }
+                Box(Modifier.testTag("panel")) {
+                    ComposerImageAdjustmentsPanel(
+                        adjustments = current,
+                        isVideo = false,
+                        family = AdjustmentFamily.TONE,
+                        accent = Color.Magenta,
+                        carriesLook = current != ImageAdjustments.NEUTRAL,
+                        onAdjust = { kind, value -> adjusted += kind; current = current.with(kind, value) },
+                        onReset = {},
+                        onCompare = {},
+                    )
+                }
+            }
+        }
+        compose.onNodeWithTag("adjust-kind-brightness").performClick()
+        val panel = compose.onNodeWithTag("panel").getUnclippedBoundsInRoot()
+        val slider = compose.onNodeWithTag("adjust-slider").getUnclippedBoundsInRoot()
+        val chip = compose.onNodeWithTag("adjust-kind-contrast").getUnclippedBoundsInRoot()
+
+        compose.onNodeWithTag("adjust-slider").performSemanticsAction(SemanticsActions.SetProgress) { it(0.4f) }
+
+        compose.onNodeWithTag("adjust-reset").assertIsDisplayed()
+        assertThat(compose.onNodeWithTag("panel").getUnclippedBoundsInRoot().height).isEqualTo(panel.height)
+        assertThat(compose.onNodeWithTag("adjust-slider").getUnclippedBoundsInRoot()).isEqualTo(slider)
+        assertThat(compose.onNodeWithTag("adjust-kind-contrast").getUnclippedBoundsInRoot()).isEqualTo(chip)
+        assertThat(adjusted.toSet()).containsExactly(AdjustmentKind.BRIGHTNESS)
+    }
 }
