@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.game.ChestStatus
 import me.meeshy.sdk.model.game.FlameFormKey
 import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.LeagueKey
+import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.ui.component.game.GameMaterial
 import me.meeshy.ui.component.game.SignatureStyle
@@ -24,7 +25,9 @@ class ProgressionEmblemArtTest {
         chest: ChestStatus = ChestStatus.Ready,
         league: LeagueKey? = LeagueKey.Jade,
         stamps: List<AtlasStamp>? = listOf(AtlasStamp(language = "ja", stampedOn = "2026-10-01")),
+        nextMint: Int = 13,
     ): GameBlock = mockk(relaxed = true) {
+        every { mint.number } returns nextMint
         every { flame.form } returns form
         every { this@mockk.chest.status } returns chest
         every { this@mockk.league?.current?.league } returns league
@@ -82,8 +85,18 @@ class ProgressionEmblemArtTest {
     }
 
     @Test
-    fun `aucun concept hors la Meesh ne retombe sur un pictogramme`() {
-        val pictograms = ProgressionConcept.entries.filter { ProgressionEmblemArt.of(it, game()) == ProgressionEmblemArt.Pictogram }
-        assertEquals(listOf(ProgressionConcept.Meesh), pictograms)
+    fun `la Meesh est la piece dessinee a l edition de la prochaine frappe, argent sans jeu`() {
+        assertEquals(ProgressionEmblemArt.Coin(MeeshEdition.Silver), ProgressionEmblemArt.of(ProgressionConcept.Meesh, game(nextMint = 99)))
+        assertEquals(ProgressionEmblemArt.Coin(MeeshEdition.Gold), ProgressionEmblemArt.of(ProgressionConcept.Meesh, game(nextMint = 100)))
+        assertEquals(ProgressionEmblemArt.Coin(MeeshEdition.Gold), ProgressionEmblemArt.of(ProgressionConcept.Meesh, game(nextMint = 101)))
+        assertEquals(ProgressionEmblemArt.Coin(MeeshEdition.Prism), ProgressionEmblemArt.of(ProgressionConcept.Meesh, game(nextMint = 1000)))
+        assertEquals(ProgressionEmblemArt.Coin(MeeshEdition.Silver), ProgressionEmblemArt.of(ProgressionConcept.Meesh, null))
+    }
+
+    @Test
+    fun `aucun concept ne retombe sur un pictogramme`() {
+        val pictograms = ProgressionConcept.entries.filter { ProgressionEmblemArt.of(it, game()).tag == "pictogram" } +
+            ProgressionConcept.entries.filter { ProgressionEmblemArt.of(it, null).tag == "pictogram" }
+        assertEquals(emptyList<ProgressionConcept>(), pictograms)
     }
 }
