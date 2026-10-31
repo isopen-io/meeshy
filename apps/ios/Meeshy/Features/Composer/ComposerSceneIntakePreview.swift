@@ -1,5 +1,5 @@
 import UIKit
-import ImageIO
+import MeeshySDK
 import Photos
 import PhotosUI
 import SwiftUI
@@ -48,15 +48,8 @@ nonisolated enum ComposerSceneIntakePreview {
 
     /// La vignette d'une photo déjà copiée sur l'appareil.
     static func thumbnail(at url: URL, maxPixel: CGFloat = maxPixel) -> UIImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return UIImage(cgImage: image)
+        ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: maxPixel, decodeImmediately: true)
+            .map { UIImage(cgImage: $0) }
     }
 
     /// La vignette tenue par la photothèque — `nil` sans accès (aucune demande

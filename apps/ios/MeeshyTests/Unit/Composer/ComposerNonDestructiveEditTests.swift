@@ -50,9 +50,9 @@ final class ComposerNonDestructiveEditTests: XCTestCase {
                       "la feuille Modifier d'un média est l'édition en place, non destructive (#13839, L5)")
     }
 
-    func test_menuDuFond_modifier_ouvreLEditionEnPlace() throws {
-        let code = try source("MeeshyComposerHost+BackgroundMenu.swift")
-        XCTAssertTrue(code.contains("case.edit:openObjectEditor(id)"))
+    func test_fond_modifier_ouvreLEditionEnPlace() throws {
+        let code = try source("MeeshyComposerHost+BackgroundEdit.swift")
+        XCTAssertTrue(code.contains("case.modify:host.backgroundSourcesAreOpen=falsehost.beginInlineEdit(id,purpose:.modify)"))
         XCTAssertFalse(code.contains("ComposerSceneMediaRetouchCover"),
                        "le compositeur de story ne monte plus la retouche qui cuit")
     }

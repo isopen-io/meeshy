@@ -282,7 +282,7 @@ extension MessageListViewController {
         let quoteJumpHandler = handlers.quoteJump
         let tapLocationHandler = callbacks.tapLocation
         let hasStory = inputs.senderRingState != .none
-        var focalActions = FocalRowActions(onMoodTap: statuses.moodTapHandler(for: senderId))
+        var focalActions = FocalRowActions(onMoodTap: statuses.moodSpotlightHandler(for: senderId))
         focalActions.onToggleReaction = { emoji in callbacks.toggleReaction?(messageId, emoji) }
         focalActions.onAddReaction = handlers.addReaction
         focalActions.onOpenReactPicker = callbacks.openReactPicker
@@ -459,7 +459,7 @@ extension MessageListViewController {
             presenceState: senderPresence,
             senderIsHere: senderIsHere, senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
             senderStoryRingState: inputs.senderRingState,
-            onSenderMoodTap: statuses.moodTapHandler(for: senderId),
+            onSenderMoodTap: statuses.moodSpotlightHandler(for: senderId),
             onViewStory: onViewStory,
             onAddReaction: handlers.addReaction,
             onToggleReaction: { emoji in callbacks.toggleReaction?(messageId, emoji) },

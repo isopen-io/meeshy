@@ -62,6 +62,9 @@ on:
       # Le tier média (#11281) : DeviceMediaTierTests rejoue ces vecteurs neutres,
       # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
       - 'packages/shared/fixtures/device-tier-vectors.json'
+      # Le logo de cercle d'une story exportée (#13997) : RelationExportBadgeVectorTests
+      # rejoue ces vecteurs, partagés avec la loi TypeScript et le miroir Kotlin.
+      - 'packages/shared/fixtures/relation-export-badge.vectors.json'
       # Le contrat MeeshyLens v1 (#11270) : LensFormatVectorsTests rejoue ses vecteurs.
       - 'packages/shared/fixtures/lens-v1/**'
       - '.github/workflows/sdk-tests.yml'
@@ -102,6 +105,9 @@ on:
       # Le tier média (#11281) : DeviceMediaTierTests rejoue ces vecteurs neutres,
       # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
       - 'packages/shared/fixtures/device-tier-vectors.json'
+      # Le logo de cercle d'une story exportée (#13997) : RelationExportBadgeVectorTests
+      # rejoue ces vecteurs, partagés avec la loi TypeScript et le miroir Kotlin.
+      - 'packages/shared/fixtures/relation-export-badge.vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
       - '.github/workflows/sdk-tests.yml'
       - 'scripts/ci/**'

@@ -5,7 +5,8 @@ import org.junit.Test
 
 /**
  * Un objet sélectionné met le compositeur en édition (#13956, décision porteur du 2026-10-31, spec R6) : ni audience, ni
- * Publier, ni Annuler, et la colonne des outils cède sa place aux options de l'objet. Le fond n'entre pas dans la règle.
+ * Publier, ni Annuler, et la colonne des outils cède sa place aux options de l'objet. Le fond média y entre aussi (grammaire
+ * d'édition, #13973) : sélectionné, il pose son niveau « Fond » à la même place, sans barre au-dessus de Publier.
  */
 class ComposerEditingChromeTest {
 
@@ -25,7 +26,6 @@ class ComposerEditingChromeTest {
         assertThat(rest.sceneControls).isTrue()
         assertThat(rest.rail).isEqualTo(ComposerRailContent.TOOLS)
         assertThat(rest.editing).isFalse()
-        assertThat(rest.backgroundBar).isFalse()
     }
 
     @Test
@@ -36,7 +36,6 @@ class ComposerEditingChromeTest {
         assertThat(editing.publication).isFalse()
         assertThat(editing.rail).isEqualTo(ComposerRailContent.OBJECT_OPTIONS)
         assertThat(editing.editing).isTrue()
-        assertThat(editing.backgroundBar).isFalse()
     }
 
     @Test
@@ -55,14 +54,22 @@ class ComposerEditingChromeTest {
     }
 
     @Test
-    fun `the background is never selected in the sense of the rule, publication and close stay`() {
+    fun `a selected background enters the editing like an object, its level Fond in place of the tools`() {
         val background = chrome(ComposerSelectionSubject.BACKGROUND)
 
-        assertThat(background.close).isTrue()
-        assertThat(background.publication).isTrue()
-        assertThat(background.editing).isFalse()
-        assertThat(background.rail).isNotEqualTo(ComposerRailContent.OBJECT_OPTIONS)
-        assertThat(background.backgroundBar).isTrue()
+        assertThat(background.close).isFalse()
+        assertThat(background.publication).isFalse()
+        assertThat(background.editing).isTrue()
+        assertThat(background.sceneControls).isTrue()
+        assertThat(background.rail).isEqualTo(ComposerRailContent.BACKGROUND_OPTIONS)
+    }
+
+    @Test
+    fun `a background with a panel open keeps publication hidden and leaves the rail empty`() {
+        val background = chrome(ComposerSelectionSubject.BACKGROUND, gestureOpen = true)
+
+        assertThat(background.publication).isFalse()
+        assertThat(background.rail).isEqualTo(ComposerRailContent.NONE)
     }
 
     @Test

@@ -227,7 +227,8 @@ nonisolated enum ComposerSelectionCopy {
         case .makeSticker:
             return String(localized: "composer.selection.makeSticker", defaultValue: "Faire un sticker", bundle: .main)
         case .retakePhoto:
-            return ComposerBackgroundMenuCopy.label(for: .retakePhoto)
+            return String(localized: "composer.scene.background.menu.retakePhoto",
+                          defaultValue: "Reprendre une photo", bundle: .main)
         }
     }
 

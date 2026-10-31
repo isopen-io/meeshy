@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_edit_replace">Ersetzen</string>
+    <string name="composer_edit_remove_background_title">Hintergrund entfernen?</string>
+    <string name="composer_edit_remove_background_message">Das Hintergrundfoto oder -video verlässt diese Folie. ↶ holt es zurück.</string>
+</resources>

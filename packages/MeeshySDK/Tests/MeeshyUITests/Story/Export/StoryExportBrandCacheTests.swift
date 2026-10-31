@@ -20,11 +20,16 @@ final class StoryExportBrandCacheTests: XCTestCase {
 
     private let size = CGSize(width: 1080, height: 1920)
 
-    private func makeIdentity(username: String, mood: String? = nil) -> StoryExportIntroContent {
+    private func makeIdentity(username: String,
+                              mood: String? = nil,
+                              presence: StoryExportPresence? = nil,
+                              relationLogo: String? = nil) -> StoryExportIntroContent {
         StoryExportIntroContent(displayName: "J. Charles N. M.",
                                 username: username,
                                 moodEmoji: mood,
-                                accentColorHex: "6366F1")
+                                accentColorHex: "6366F1",
+                                presence: presence,
+                                relationLogo: relationLogo)
     }
 
     func test_outroClip_logoOnly_isEncodedOnce() async throws {
@@ -67,6 +72,34 @@ final class StoryExportBrandCacheTests: XCTestCase {
             size: size, content: makeIdentity(username: "carol", mood: "😢"))
 
         XCTAssertNotEqual(happy, sad, "un changement d'humeur doit repeindre la carte")
+    }
+
+    /// La présence et le logo de cercle sont peints sur la carte d'identité (#13997) : un
+    /// auteur repassé hors ligne, ou promu Proche, ne doit pas ressortir avec l'ancienne carte.
+    func test_outroClip_presenceChange_invalidatesTheCachedClip() async throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
+        let online = try await StoryExportBranding.brandOutroClip(
+            size: size, content: makeIdentity(username: "dora", presence: .online))
+        let nobody = try await StoryExportBranding.brandOutroClip(
+            size: size, content: makeIdentity(username: "dora"))
+
+        XCTAssertNotEqual(online, nobody, "un changement de présence doit repeindre la carte")
+    }
+
+    func test_outroClip_relationLogoChange_invalidatesTheCachedClip() async throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
+        let close = try await StoryExportBranding.brandOutroClip(
+            size: size, content: makeIdentity(username: "erin", relationLogo: "🔥"))
+        let friend = try await StoryExportBranding.brandOutroClip(
+            size: size, content: makeIdentity(username: "erin"))
+
+        XCTAssertNotEqual(close, friend, "un changement de cercle doit repeindre la carte")
     }
 
     func test_brandJingles_areSynthesisedOnce() async throws {

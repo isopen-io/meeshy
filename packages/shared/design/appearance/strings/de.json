@@ -95,6 +95,42 @@
     "cadres-illustres": {
       "name": "Illustrierte Rahmen",
       "description": "Sechs Rahmen, die über deinen Avatar hinausragen: eine Maske mit rot glühenden Augen, ein Netz samt Spinne, Engelsflügel, ein Runenkreis, Knochenkrallen und Dämonenflügel."
+    },
+    "cadres-asiatiques": {
+      "name": "Asiatische Rahmen",
+      "description": "Drei von Asien inspirierte Rahmen: ein Jadedrache, der sich um deinen Avatar windet, treibende Seidenwolken und schaukelnde Papierlaternen."
+    },
+    "cadres-africains": {
+      "name": "Afrikanische Rahmen",
+      "description": "Drei von Afrika inspirierte Rahmen: eine Ebenholzmaske, deren Augen vor einer Savannensonne aufleuchten, wogende Webbänder und eine rollende Perlenkette."
+    },
+    "cadres-celtes": {
+      "name": "Keltische Rahmen",
+      "description": "Drei von keltischen Flechtmustern inspirierte Rahmen: ein Knoten, der verblasst und sich neu zeichnet, eine kreisende Dreifachspirale und smaragdgrüner Efeu mit zitternden Blättern."
+    },
+    "cadres-nordiques": {
+      "name": "Nordische Rahmen",
+      "description": "Vier Rahmen aus dem hohen Norden: kreisende Raben, ein wogendes Nordlicht, ein gravierter Steinring, der aufleuchtet, und ein geschnitzter Bug auf den Wellen."
+    },
+    "cadres-egyptiens": {
+      "name": "Ägyptische Rahmen",
+      "description": "Vier Rahmen aus Gold und Lapislazuli: eine sich aufrichtende Kobra, ein Skarabäus, der die Flügel öffnet, eine Wüstensonne mit breitem Halskragen und aufblühende Nil-Lotusblüten."
+    },
+    "cadres-mayas": {
+      "name": "Maya-Rahmen",
+      "description": "Vier Rahmen aus Stein und Jade: eine Jadeschlange mit Federkamm, aufleuchtende Glyphenkartuschen, ein Stufenfries unter aufgehender Sonne und ein im Dschungel verborgener Jaguar."
+    },
+    "cadres-indiens": {
+      "name": "Indische Rahmen",
+      "description": "Drei Rahmen nach indischen Motiven: ein florales Mandala, das sich öffnet, ein Pfau, der ein Rad schlägt, und eine schwingende Girlande aus Ringelblumen und Jasmin."
+    },
+    "cadres-amerindiens": {
+      "name": "Indigene amerikanische Rahmen",
+      "description": "Drei Rahmen nach Web- und Perlenmustern: ein gewebter Reif mit schwingenden stilisierten Federn, ein drehendes Perlenband aus Rauten und eine gestufte Sonne über Bergen und ihrem Fluss."
+    },
+    "cadres-australs": {
+      "name": "Südliche Rahmen",
+      "description": "Drei Rahmen nach Punktmalerei und südlichem Himmel: funkelnde Punktkreise, eine Meeresschildkröte, die um deinen Avatar schwimmt, und das leuchtende Kreuz des Südens."
     }
   },
   "designs": {
@@ -148,7 +184,37 @@
     "ailes-ange": "Engelsflügel",
     "cercle-runique": "Runenkreis",
     "griffes-os": "Knochenkrallen",
-    "ailes-demon": "Dämonenflügel"
+    "ailes-demon": "Dämonenflügel",
+    "dragon-jade": "Jadedrache",
+    "nuages-soie": "Seidenwolken",
+    "lanternes-papier": "Papierlaternen",
+    "masque-ebene": "Ebenholzmaske",
+    "bandes-tissees": "Webbänder",
+    "collier-perles": "Perlenkette",
+    "noeud-entrelace": "Flechtknoten",
+    "spirale-triple": "Dreifachspirale",
+    "lierre-emeraude": "Smaragdefeu",
+    "corbeaux-tournoyants": "Kreisende Raben",
+    "aurore-boreale": "Nordlicht",
+    "anneau-pierre-gravee": "Gravierter Steinring",
+    "proue-sculptee": "Geschnitzter Bug",
+    "cobra-dore": "Goldene Kobra",
+    "scarabee-aile": "Geflügelter Skarabäus",
+    "soleil-du-desert": "Wüstensonne",
+    "lotus-du-nil": "Nil-Lotus",
+    "serpent-de-jade": "Jadeschlange",
+    "cartouches-de-glyphes": "Glyphenkartuschen",
+    "frise-a-gradins": "Stufenfries",
+    "jaguar-de-jungle": "Dschungeljaguar",
+    "mandala-floral": "Blumenmandala",
+    "paon-roue": "Radschlagender Pfau",
+    "guirlande-soucis": "Ringelblumengirlande",
+    "cercle-tisse": "Gewebter Federreif",
+    "perlage-losanges": "Perlenrauten",
+    "soleil-montagnes": "Sonne über den Bergen",
+    "cercles-points": "Punktkreise",
+    "tortue-marine": "Meeresschildkröte",
+    "croix-du-sud": "Kreuz des Südens"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",

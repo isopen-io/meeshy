@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.StateFlow
 import me.meeshy.app.chat.piece.PieceOverlayModel
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.call.ActiveCallSession
@@ -258,6 +259,13 @@ internal class ChatHostActions(
     val dismissEffectsPicker: () -> Unit,
     val toggleEffect: (Long) -> Unit,
     val selectEphemeralDuration: (EphemeralDuration) -> Unit,
+    val selectEphemeralChoice: (EphemeralChoice?) -> Unit = {},
+    /** #13995 — les ids serveur que le fil MONTRE (preuve d'affichage de la flamme-œil). */
+    val noteDisplayed: (List<String>) -> Unit = {},
+    /** #13995 — la sortie (arrière-plan) consomme les flammes-œil vues. */
+    val consumeAfterReadOnExit: () -> Unit = {},
+    /** #13995 — la vue unique lue et refermée consomme son compteur serveur. */
+    val consumeViewOnce: (String) -> Unit = {},
     val clearEffects: () -> Unit,
     val closeReplyThread: () -> Unit,
     val onReplyThreadReplyTap: (String) -> Unit,
@@ -378,6 +386,10 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     dismissEffectsPicker = this::dismissEffectsPicker,
     toggleEffect = this::toggleEffect,
     selectEphemeralDuration = this::selectEphemeralDuration,
+    selectEphemeralChoice = this::selectEphemeralChoice,
+    noteDisplayed = { ids -> controllers.find<AfterReadController>()?.noteDisplayed(ids) },
+    consumeAfterReadOnExit = { controllers.find<AfterReadController>()?.consumeOnExit() },
+    consumeViewOnce = { id -> controllers.find<AfterReadController>()?.consumeViewOnce(id) },
     clearEffects = this::clearEffects,
     closeReplyThread = this::closeReplyThread,
     onReplyThreadReplyTap = this::onReplyThreadReplyTap,

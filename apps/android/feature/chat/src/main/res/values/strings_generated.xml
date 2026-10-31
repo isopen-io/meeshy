@@ -25,11 +25,17 @@
         <item quantity="one">Delete %1$d message?</item>
         <item quantity="other">Delete %1$d messages?</item>
     </plurals>
+    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_engagement_a11y_streak">%1$s · Sparks: %2$d · Today: %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d day</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d days</string>
     <string name="chat_engagement_a11y_total_one">%1$s spark earned in this conversation</string>
     <string name="chat_engagement_a11y_total_other">%1$s sparks earned in this conversation</string>
+    <string name="chat_ephemeral_activate">Turn on ephemeral mode</string>
+    <string name="chat_ephemeral_active">Ephemeral mode on: %1$s</string>
+    <string name="chat_ephemeral_after_read">After reading</string>
+    <string name="chat_ephemeral_after_read_a11y">After reading, once the reader leaves the conversation</string>
+    <string name="chat_ephemeral_off">Off</string>
     <string name="chat_exit_blocked_after_read">It disappears after reading: it can’t be forwarded, saved or shared.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">This item is no longer part of the message.</string>
     <string name="chat_exit_blocked_encrypted_source">This encrypted content is copied from this device.</string>

@@ -13,14 +13,15 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Les feuilles que le compositeur fait monter (#13838) : une seule à la fois. Quatre servent l'élément sélectionné
- * (#13836) — son Modifier (média, son), son Temps, l'échange d'un sticker, le lieu qu'une pastille désigne (#13902) — et
- * n'existent pas sans lui.
+ * Les feuilles que le compositeur fait monter (#13838) : une seule à la fois. Cinq servent l'élément sélectionné
+ * (#13836) — son Modifier (média, son), son Temps, l'échange d'un sticker, le lieu qu'une pastille désigne (#13902), les
+ * sources de « Remplacer » du fond (#13973) — et n'existent pas sans lui.
  */
 internal enum class StoryComposerSheet {
-    STICKERS, SOUND, AUDIENCE, OBJECT_EDIT, OBJECT_TIME, STICKER_SWAP, MENTION, HASHTAGS, PLACE, PLACE_REPOINT;
+    STICKERS, SOUND, AUDIENCE, OBJECT_EDIT, OBJECT_TIME, STICKER_SWAP, MENTION, HASHTAGS, PLACE, PLACE_REPOINT, BACKGROUND_SOURCE;
 
-    val servesSelection: Boolean get() = this == OBJECT_EDIT || this == OBJECT_TIME || this == STICKER_SWAP || this == PLACE_REPOINT
+    val servesSelection: Boolean
+        get() = this == OBJECT_EDIT || this == OBJECT_TIME || this == STICKER_SWAP || this == PLACE_REPOINT || this == BACKGROUND_SOURCE
 
     /** Les feuilles qui se lisent sur la scène, sombres comme elle : le son et ce qui nomme la publication. */
     val isDarkOnScene: Boolean get() = this == SOUND || this == MENTION || this == HASHTAGS || this == PLACE || this == PLACE_REPOINT

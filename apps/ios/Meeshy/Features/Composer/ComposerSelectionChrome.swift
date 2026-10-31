@@ -15,9 +15,9 @@ import SwiftUI
 /// la scène se réduisant au-dessus. Rien en haut à droite, rien en menu
 /// flottant, rien sur la scène.
 ///
-/// Tant qu'un objet POSÉ est sélectionné, ni l'audience, ni Publier, ni Fermer.
-/// Le fond, lui, n'est jamais « sélectionné » au sens de cette règle : il ne
-/// prend le chrome que quand son ÉDITION est ouverte (appui long › Modifier).
+/// Tant qu'un élément est sélectionné, ni l'audience, ni Publier, ni Fermer.
+/// Le fond image ou vidéo y entre comme les objets posés (#13974, I-E1) : le
+/// toucher ou l'appui long le sélectionne et pose son niveau « Fond ».
 nonisolated enum ComposerSelectionChrome {
 
     /// Ce que le rail GAUCHE du grand écran porte.
@@ -26,12 +26,10 @@ nonisolated enum ComposerSelectionChrome {
         case editing
     }
 
-    /// L'objet prend-il le chrome ? Un objet posé dès sa sélection ; le fond
-    /// seulement en édition ; jamais pendant la frappe, qui a sa barre collée
-    /// au clavier (L4).
-    static func ownsChrome(family: ComposerInlineFamily?, isEditing: Bool, typing: Bool) -> Bool {
-        guard let family, !typing else { return false }
-        return !family.isBackground || isEditing
+    /// L'élément prend-il le chrome ? Dès sa sélection, le fond compris ;
+    /// jamais pendant la frappe, qui a sa barre collée au clavier (L4).
+    static func ownsChrome(family: ComposerInlineFamily?, typing: Bool) -> Bool {
+        family != nil && !typing
     }
 
     /// Audience et Publier : ni pendant un outil, ni pendant une édition.
@@ -84,6 +82,9 @@ nonisolated enum ComposerSelectionChrome {
 nonisolated enum ComposerEditRailLevel: Equatable, Sendable {
     /// Le premier : Modifier · Dupliquer · Temps · Retirer.
     case actions
+    /// Le premier d'un fond image ou vidéo, N0 « Fond » : Modifier · Remplacer
+    /// · Mettre sur la scène · Retirer (`ComposerBackgroundEdit`).
+    case background
     /// Posé par-dessus : les sous-outils de Modifier ou de Temps ; toucher l'un
     /// ouvre ses propriétés dans la feuille basse.
     case options(ComposerInlineEditPurpose)
@@ -110,12 +111,12 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
 
     static let rest = ComposerEditRailStack(levels: [])
 
-    /// Un objet posé : ses actions, puis le niveau de l'option ouverte. Le fond
-    /// n'a pas d'actions à ce rang : son édition est son premier niveau.
+    /// Un objet posé : ses actions, puis le niveau de l'option ouverte. Le fond :
+    /// son niveau « Fond », puis celui de « Modifier ».
     static func of(family: ComposerInlineFamily?, editing purpose: ComposerInlineEditPurpose?,
                    typing: Bool) -> ComposerEditRailStack {
         guard let family, !typing else { return .rest }
-        let base: [ComposerEditRailLevel] = family.isBackground ? [] : [.actions]
+        let base: [ComposerEditRailLevel] = [family.isBackground ? .background : .actions]
         let dessus = purpose.map { [ComposerEditRailLevel.options($0)] } ?? []
         return ComposerEditRailStack(levels: base + dessus)
     }
@@ -126,6 +127,7 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
     static func levelKey(_ level: ComposerEditRailLevel) -> String {
         switch level {
         case .actions:          return "actions"
+        case .background:       return "background"
         case .options(.modify): return "options.modify"
         case .options(.time):   return "options.time"
         }
@@ -154,6 +156,8 @@ nonisolated struct ComposerEditRailStack: Equatable, Sendable {
 /// **Une entrée d'un rail d'édition.**
 nonisolated enum ComposerEditRailItem: Hashable, Sendable {
     case action(ComposerSelectionAction)
+    /// Une entrée du niveau « Fond ».
+    case background(ComposerBackgroundEditAction)
     /// ‹ Retour, en tête de tout niveau posé par-dessus.
     case back
     case section(ComposerObjectEditorSection)
@@ -163,6 +167,7 @@ nonisolated enum ComposerEditRailItem: Hashable, Sendable {
     var identifier: String {
         switch self {
         case .action(let action):   return action.rawValue
+        case .background(let action): return "background.\(action.rawValue)"
         case .back:                 return "back"
         case .section(let section): return section.identifier
         case .extra(let extra):     return extra.rawValue
@@ -171,8 +176,11 @@ nonisolated enum ComposerEditRailItem: Hashable, Sendable {
     }
 
     var isDestructive: Bool {
-        if case .action(let action) = self { return action.isDestructive }
-        return false
+        switch self {
+        case .action(let action):     return action.isDestructive
+        case .background(let action): return ComposerBackgroundEdit.isDestructive(action)
+        case .back, .section, .extra, .keyframes: return false
+        }
     }
 }
 
@@ -182,12 +190,15 @@ nonisolated enum ComposerEditRailItems {
     /// (loi 4) : le meuble ne remet que ce que l'objet sert.
     static func items(for level: ComposerEditRailLevel,
                       actions: [ComposerSelectionAction],
+                      backgroundActions: [ComposerBackgroundEditAction] = [],
                       sections: [ComposerObjectEditorSection],
                       extras: [ComposerSelectionMediaExtra],
                       keyframes: Bool) -> [ComposerEditRailItem] {
         switch level {
         case .actions:
             return actions.map(ComposerEditRailItem.action)
+        case .background:
+            return backgroundActions.map(ComposerEditRailItem.background)
         case .options:
             return [.back] + sections.map(ComposerEditRailItem.section)
                 + extras.map(ComposerEditRailItem.extra) + (keyframes ? [.keyframes] : [])

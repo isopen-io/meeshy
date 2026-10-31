@@ -1,24 +1,15 @@
 package me.meeshy.sdk.media.scene
 
 import android.content.Context
-import android.net.Uri
-import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.audio.AudioProcessor
-import androidx.media3.effect.OverlayEffect
-import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.DefaultMuxer
-import androidx.media3.transformer.EditedMediaItem
-import androidx.media3.transformer.EditedMediaItemSequence
-import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
-import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -27,9 +18,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.audioedit.MetadataFreeMuxerFactory
-import me.meeshy.sdk.model.scene.export.StoryExportClipRange
-import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
-import java.io.File
 
 /**
  * **Le rendu d'un export par Media3 Transformer** (#13431, #13872) : les slides bout à bout dans UNE séquence vidéo (vidéo de
@@ -51,7 +39,7 @@ internal class Media3SceneTransformRunner(
             coroutineScope {
                 val finished = CompletableDeferred<Unit>()
                 val transformer = transformer(job, finished)
-                transformer.start(composition(job), job.output.absolutePath)
+                transformer.start(Media3SceneComposition.of(job), job.output.absolutePath)
                 val ticker = launch {
                     val holder = ProgressHolder()
                     while (true) {
@@ -94,54 +82,6 @@ internal class Media3SceneTransformRunner(
                         finished.completeExceptionally(exportException)
                     }
                 },
-            )
-            .build()
-
-    private fun composition(job: SceneExportJob): Composition {
-        val planned = SceneCompositionPlanner.of(job)
-        val video = EditedMediaItemSequence(planned.video.map { videoItem(it, job.format) })
-        val sounds = planned.audio.map { sequence -> EditedMediaItemSequence(sequence.map(::audioItem)) }
-        val overlay = job.overlays.takeIf { it.isNotEmpty() }?.let { TimedBitmapOverlay(it) }
-        return Composition.Builder(listOf(video) + sounds)
-            .apply { overlay?.let { setEffects(Effects(emptyList(), listOf(OverlayEffect(ImmutableList.of(it))))) } }
-            .build()
-    }
-
-    /** Une plage d'une vidéo de fond (sans son : sa piste, quand elle joue, est une séquence audio du plan), ou une image tenue. */
-    private fun videoItem(item: SceneVideoItem, format: StoryExportVideoFormat): EditedMediaItem {
-        val fit = Effects(emptyList(), listOf(Presentation.createForWidthAndHeight(format.width, format.height, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)))
-        val clip = item.clip
-        if (clip == null) {
-            return EditedMediaItem.Builder(MediaItem.Builder().setUri(Uri.fromFile(item.file)).setImageDurationMs(item.imageMillis ?: 0L).build())
-                .setFrameRate(format.fps)
-                .setEffects(fit)
-                .build()
-        }
-        return EditedMediaItem.Builder(clipped(item.file, clip))
-            .setRemoveAudio(true)
-            .setEffects(fit)
-            .build()
-    }
-
-    private fun audioItem(item: SceneAudioItem): EditedMediaItem {
-        val processors = buildList<AudioProcessor> {
-            if (item.leadMillis > 0) add(LeadingSilenceAudioProcessor(item.leadMillis))
-            if (item.gain != 1f || item.envelope.isNotEmpty()) add(EnvelopeGainAudioProcessor(item.gain, item.envelope, item.originMillis))
-        }
-        return EditedMediaItem.Builder(clipped(item.file, item.clip))
-            .setRemoveVideo(true)
-            .setEffects(Effects(processors, emptyList()))
-            .build()
-    }
-
-    private fun clipped(file: File, clip: StoryExportClipRange): MediaItem =
-        MediaItem.Builder()
-            .setUri(Uri.fromFile(file))
-            .setClippingConfiguration(
-                MediaItem.ClippingConfiguration.Builder()
-                    .setStartPositionMs(clip.startMillis)
-                    .setEndPositionMs(clip.endMillis)
-                    .build(),
             )
             .build()
 

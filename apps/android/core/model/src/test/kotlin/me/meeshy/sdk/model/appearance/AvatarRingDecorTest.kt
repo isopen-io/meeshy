@@ -74,4 +74,25 @@ class AvatarRingDecorTest {
             assertThat(ring.decor?.front).isNotNull()
         }
     }
+
+    @Test
+    fun `the embedded catalog carries the cultural families (#13962-#13970), each installed by default, three to four frames with both films`() {
+        val catalog = AppearanceCatalog.decode(AppearanceFixtures.embeddedCatalogText())
+        val families = catalog.ringPacks.filter { it.slug.startsWith("cadres-") && it.slug != "cadres-illustres" }
+
+        assertThat(families.map { it.slug }).containsExactlyElementsIn(CULTURAL_FAMILIES).inOrder()
+        families.forEach { pack ->
+            assertThat(pack.installedByDefault).isTrue()
+            assertThat(pack.rings.size in 3..4).isTrue()
+            pack.rings.forEach { ring ->
+                assertThat(ring.decor?.reach).isEqualTo(1.4)
+                assertThat(ring.decor?.back).isNotNull()
+                assertThat(ring.decor?.front).isNotNull()
+            }
+        }
+    }
+
+    private companion object {
+        val CULTURAL_FAMILIES = listOf("cadres-asiatiques", "cadres-africains", "cadres-celtes", "cadres-nordiques", "cadres-egyptiens", "cadres-mayas", "cadres-indiens", "cadres-amerindiens", "cadres-australs")
+    }
 }

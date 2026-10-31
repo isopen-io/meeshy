@@ -151,7 +151,6 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithContentDescription("Close").assertDoesNotExist()
         compose.onNodeWithContentDescription("Undo").assertExists()
         compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
         compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
     }
 

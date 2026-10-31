@@ -351,6 +351,12 @@ struct iPadRootView: View {
             )
         }
 
+        // En conversation, la boule de mood ouvre la page plein écran de
+        // l'humeur (#13987) — la même que la notification « nouvelle humeur ».
+        StatusBubbleController.shared.onOpenSpotlight = { entry in
+            router.push(.moodSpotlight(statusId: entry.id))
+        }
+
         // Republication d'un mood depuis la bulle (hôte racine) —
         // même câblage que RootView.
         StatusBubbleController.shared.onRepublish = { entry in

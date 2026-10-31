@@ -26,11 +26,17 @@
         <item quantity="many">Apagar %1$d mensagens?</item>
         <item quantity="other">Apagar %1$d mensagens?</item>
     </plurals>
+    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_engagement_a11y_streak">%1$s · Faíscas: %2$d · Hoje: %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d dia</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d dias</string>
     <string name="chat_engagement_a11y_total_one">%1$s faísca ganha nesta conversa</string>
     <string name="chat_engagement_a11y_total_other">%1$s faíscas ganhas nesta conversa</string>
+    <string name="chat_ephemeral_activate">Ativar o modo efêmero</string>
+    <string name="chat_ephemeral_active">Modo efêmero ativo: %1$s</string>
+    <string name="chat_ephemeral_after_read">Após a leitura</string>
+    <string name="chat_ephemeral_after_read_a11y">Após a leitura, quando o leitor sai da conversa</string>
+    <string name="chat_ephemeral_off">Desativado</string>
     <string name="chat_exit_blocked_after_read">Ela desaparece após a leitura: não pode ser encaminhada, salva nem compartilhada.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">Este item não faz mais parte da mensagem.</string>
     <string name="chat_exit_blocked_encrypted_source">Este conteúdo criptografado é copiado deste dispositivo.</string>

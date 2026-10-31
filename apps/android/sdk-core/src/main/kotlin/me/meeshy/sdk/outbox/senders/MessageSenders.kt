@@ -12,6 +12,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.ConsumeAfterReadRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.apiCall
@@ -20,6 +21,8 @@ import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.OutboxPayloadGraft
 import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
+import me.meeshy.sdk.outbox.ConsumeAfterReadPayload
+import me.meeshy.sdk.outbox.ConsumeViewOncePayload
 import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
@@ -149,6 +152,33 @@ public class UnpinMessageHandler @Inject constructor(
     }
 }
 
+/**
+ * `CONSUME_AFTER_READ` (#13995) : la flamme-œil vue puis quittée disparaît chez ce lecteur — l'effet
+ * local est déjà posé, le serveur l'applique à ses autres appareils (`message:expired`). Rien à défaire.
+ */
+public class ConsumeAfterReadHandler @Inject constructor(
+    private val messageApi: MessageApi,
+    private val json: Json,
+) : OutboxKindHandler {
+
+    override suspend fun send(row: OutboxEntity): SendResult =
+        json.withPayload<ConsumeAfterReadPayload>(row) { payload ->
+            apiCall { messageApi.consumeAfterRead(row.targetId, ConsumeAfterReadRequest(payload.messageIds)) }.toSendResult(row.targetId)
+        }
+}
+
+/** `CONSUME_VIEW_ONCE` (#13995) : la vue unique lue et refermée consomme son compteur serveur. */
+public class ConsumeViewOnceHandler @Inject constructor(
+    private val messageApi: MessageApi,
+    private val json: Json,
+) : OutboxKindHandler {
+
+    override suspend fun send(row: OutboxEntity): SendResult =
+        json.withPayload<ConsumeViewOncePayload>(row) { payload ->
+            apiCall { messageApi.consumeViewOnce(payload.conversationId, row.targetId) }.toSendResult(payload.conversationId)
+        }
+}
+
 private suspend fun refreshPinnedConversation(
     json: Json,
     messageRepository: MessageRepository,
@@ -187,4 +217,14 @@ public interface MessageSendersModule {
     @IntoMap
     @OutboxKindKey(OutboxKind.UNPIN_MESSAGE)
     public fun unpinMessage(handler: UnpinMessageHandler): OutboxKindHandler
+
+    @Binds
+    @IntoMap
+    @OutboxKindKey(OutboxKind.CONSUME_AFTER_READ)
+    public fun consumeAfterRead(handler: ConsumeAfterReadHandler): OutboxKindHandler
+
+    @Binds
+    @IntoMap
+    @OutboxKindKey(OutboxKind.CONSUME_VIEW_ONCE)
+    public fun consumeViewOnce(handler: ConsumeViewOnceHandler): OutboxKindHandler
 }

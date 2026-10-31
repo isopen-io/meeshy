@@ -37,6 +37,7 @@ import me.meeshy.sdk.model.composer.scene.SceneExportPlan
 import me.meeshy.sdk.model.composer.scene.SceneExportState
 import me.meeshy.sdk.model.scene.export.ImagerLengthChoice
 import me.meeshy.sdk.model.scene.export.ImagerQuarter
+import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
 import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
@@ -62,9 +63,9 @@ class StoryVideoExport internal constructor(
  * celle que le lecteur peint. Le choix de longueur, la peinture des calques et le voile du bake vivent ici.
  */
 @Composable
-internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideView?): StoryVideoExport {
+internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideView?, author: () -> StoryExportAuthorFacts? = { null }): StoryVideoExport {
     val currentSlide by rememberUpdatedState(slide)
-    return rememberSceneVideoExport { listOfNotNull(item()?.let { story -> currentSlide?.let { story to it } }) }
+    return rememberSceneVideoExport(author = author) { listOfNotNull(item()?.let { story -> currentSlide?.let { story to it } }) }
 }
 
 /**
@@ -73,7 +74,11 @@ internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideV
  * [key] sépare la course de cet hôte de celle d'un autre hôte du même écran : chacun remet ce qu'il a lancé, une fois.
  */
 @Composable
-fun rememberSceneVideoExport(key: String? = null, scenes: () -> List<Pair<StoryItem, StorySlideView>>): StoryVideoExport {
+fun rememberSceneVideoExport(
+    key: String? = null,
+    author: () -> StoryExportAuthorFacts? = { null },
+    scenes: () -> List<Pair<StoryItem, StorySlideView>>,
+): StoryVideoExport {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val viewModel: StoryVideoExportViewModel = hiltViewModel(key = key)
@@ -81,17 +86,18 @@ fun rememberSceneVideoExport(key: String? = null, scenes: () -> List<Pair<StoryI
     val stage by viewModel.stage.collectAsStateWithLifecycle()
     val shareTitle = stringResource(R.string.stories_viewer_export_share)
     val currentScenes by rememberUpdatedState(scenes)
+    val currentAuthor by rememberUpdatedState(author)
     var outcome by remember { mutableStateOf<SceneExportOutcome?>(null) }
     var lastRun by remember { mutableStateOf<SceneExportRun?>(null) }
     val permissions = rememberPermissionFlow()
 
-    fun run(mode: StoryExportMode, shown: List<Pair<StoryItem, StorySlideView>>) {
+    fun run(mode: StoryExportMode, shown: List<Pair<StoryItem, StorySlideView>>, storyAuthor: StoryExportAuthorFacts?) {
         scope.launch {
             // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
             if (mode != StoryExportMode.SHARE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
             outcome = null
-            lastRun = SceneExportRun(mode, shown)
-            viewModel.export(mode, shown)
+            lastRun = SceneExportRun(mode, shown, storyAuthor)
+            viewModel.export(mode, shown, storyAuthor)
         }
     }
 
@@ -115,7 +121,7 @@ fun rememberSceneVideoExport(key: String? = null, scenes: () -> List<Pair<StoryI
                 fraction = exportState.veilFraction,
                 onCancel = viewModel::cancel,
                 outcome = outcome,
-                onRetry = { lastRun?.let { previous -> run(previous.mode, previous.scenes) } },
+                onRetry = { lastRun?.let { previous -> run(previous.mode, previous.scenes, previous.author) } },
                 onOutcomeShown = { outcome = null },
                 painting = painting?.let { request -> { StoryExportPainter(request, viewModel::painted) } },
             )
@@ -124,12 +130,12 @@ fun rememberSceneVideoExport(key: String? = null, scenes: () -> List<Pair<StoryI
     PermissionFlowHost(permissions)
 
     return StoryVideoExport(busy = exportState.isExporting || stage != StoryVideoExportStage.Idle) { mode, chosen ->
-        (chosen ?: currentScenes()).takeIf { it.isNotEmpty() }?.let { shown -> run(mode, shown) }
+        (chosen ?: currentScenes()).takeIf { it.isNotEmpty() }?.let { shown -> run(mode, shown, if (chosen == null) currentAuthor() else null) }
     }
 }
 
 /** Le dernier export lancé, que « Réessayer » relance tel quel : même sortie, mêmes scènes. */
-private class SceneExportRun(val mode: StoryExportMode, val scenes: List<Pair<StoryItem, StorySlideView>>)
+private class SceneExportRun(val mode: StoryExportMode, val scenes: List<Pair<StoryItem, StorySlideView>>, val author: StoryExportAuthorFacts?)
 
 /** Au-delà d'une minute, Imager propose la longueur rendue depuis le début : chaque quart avec sa durée. */
 @Composable

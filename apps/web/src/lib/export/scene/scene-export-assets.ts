@@ -1,6 +1,7 @@
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasDocument } from '@/lib/canvas/document';
 
+import type { AppliedBranding } from './scene-export-branding';
 import { decodeAnimatedImage, frameAt, type AnimatedImage } from './scene-export-animated';
 import { grainTiles } from './scene-export-media';
 import type { ExportAssets } from './scene-export-paint';
@@ -38,6 +39,8 @@ export type PreparedSceneExport = {
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
   readonly buffers: ReadonlyMap<string, AudioBuffer>;
   readonly missing: readonly string[];
+  /** L'intro, la carte de fin et leurs jingles (#13997) — présent pour une story, posé APRÈS la préparation. */
+  readonly branding?: AppliedBranding;
   readonly dispose: () => void;
 };
 

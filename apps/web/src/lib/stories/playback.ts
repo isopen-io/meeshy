@@ -106,6 +106,11 @@ export type StoryPlaybackAuthor = {
   readonly firstName?: string;
   readonly lastName?: string;
   readonly avatar?: string;
+  /** La bannière et la PRÉSENCE de l'auteur, telles que `storyAuthorSelect` les sert (présence déjà
+   * filtrée par `resolvePresenceVisibility` : absente tant que l'auteur n'est pas un ami accepté). */
+  readonly banner?: string | null;
+  readonly isOnline?: boolean | null;
+  readonly lastActiveAt?: string | Date | null;
 };
 
 export type StoryPlaybackMedia = {

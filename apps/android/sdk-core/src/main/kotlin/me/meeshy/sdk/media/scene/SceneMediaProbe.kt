@@ -11,6 +11,7 @@ public object SceneMediaProbe {
             retriever.setDataSource(file.absolutePath)
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.takeIf { it > 0L }
         } catch (unreadable: RuntimeException) {
+            SceneExportLog.warn("durée illisible (${file.name}, ${file.length()} octets)", unreadable)
             null
         } finally {
             runCatching { retriever.release() }

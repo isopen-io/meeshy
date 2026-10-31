@@ -29,6 +29,8 @@ import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.profile.LocalPeerMoodDirectory
+import me.meeshy.ui.profile.LocalPeerMoodOpener
 import me.meeshy.ui.profile.LocalProfileSheetOpener
 
 /**
@@ -89,6 +91,9 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
     }
     val peerPresence = rememberPresence(state.directPeerUserId)
     val peerHere = rememberConversationHere(state.directPeerUserId.takeUnless { state.isGroup }, state.conversationId)
+    // La boule de mood du pair ouvre sa page plein écran, sans bulle ni pop-up (#13987, iOS).
+    val peerMood = if (state.isGroup) null else LocalPeerMoodDirectory.current.moodOf(state.directPeerUserId)
+    val moodOpener = LocalPeerMoodOpener.current
     val headerAvatar: @Composable (AvatarContext) -> Unit = { context ->
         ChatHeaderAvatar(
             name = title,
@@ -102,6 +107,8 @@ internal fun ChatHeaderHost(host: ChatHostContext) {
             onOpenDetails = openDetails,
             onToggle = toggle,
             context = context,
+            mood = peerMood,
+            onOpenMood = moodOpener::open,
         )
     }
 

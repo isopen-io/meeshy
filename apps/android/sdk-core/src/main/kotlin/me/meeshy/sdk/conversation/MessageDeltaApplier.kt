@@ -138,6 +138,12 @@ class MessageDeltaApplier internal constructor(
             ConversationEventDeltas.pinned(message, null, null)
         }
 
+    /**
+     * La flamme-œil consommée par CE lecteur (#13995) : le même effet local qu'un `message:expired`
+     * servi — la ligne quitte le cache, ses révisions avec elle.
+     */
+    suspend fun expireLocally(messageIds: List<String>) = purge(messageIds)
+
     /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés), en une transaction. */
     private suspend fun purge(messageIds: List<String>) {
         if (messageIds.isEmpty()) return

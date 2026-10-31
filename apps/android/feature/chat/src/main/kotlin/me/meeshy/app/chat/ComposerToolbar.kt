@@ -41,13 +41,15 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.feature.chat.R
-import me.meeshy.sdk.model.EphemeralDuration
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEditor
@@ -56,6 +58,7 @@ import me.meeshy.sdk.model.composer.ComposerProtection
 import me.meeshy.sdk.model.composer.ComposerToolbarDoors
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 import me.meeshy.sdk.model.composer.ComposerTrailingDoor
+import me.meeshy.ui.component.protection.FlameEyeGlyph
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMessageStateColors
 import me.meeshy.ui.theme.MeeshyPalette
@@ -139,17 +142,27 @@ internal fun ComposerToolbar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
         ) {
+            val ephemeralChoice = EphemeralChoice.of(effects)
             val ephemeralOn = MessageEffectFlags.has(flags, MessageEffectFlags.EPHEMERAL)
             val ephemeralTint = composerProtectionColor(ComposerProtection.EPHEMERAL, forIcon = true)
+            val ephemeralDescription = if (ephemeralOn) {
+                stringResource(R.string.chat_ephemeral_active, ephemeralChoiceA11y(ephemeralChoice))
+            } else {
+                stringResource(R.string.chat_ephemeral_activate)
+            }
             ComposerToolToggle(
                 icon = if (ephemeralOn || showEphemeralRail) MeeshyIcons.FlameFilled else MeeshyIcons.Flame,
+                glyph = if (ephemeralChoice == EphemeralChoice.AfterRead) {
+                    { _ -> FlameEyeGlyph(size = 16.dp, tint = ephemeralTint) }
+                } else {
+                    null
+                },
                 active = ephemeralOn,
-                label = EphemeralDuration.fromSeconds(effects.ephemeralDuration)
-                    ?.takeIf { ephemeralOn }
-                    ?.let { stringResource(ephemeralDurationLabel(it)) },
+                label = (ephemeralChoice as? EphemeralChoice.Duration)
+                    ?.let { stringResource(ephemeralDurationLabel(it.duration)) },
                 tint = iconTint,
                 activeTint = ephemeralTint,
-                description = stringResource(R.string.chat_effect_ephemeral),
+                description = ephemeralDescription,
                 onClick = onEphemeral,
             )
             val blurOn = MessageEffectFlags.has(flags, MessageEffectFlags.BLURRED)
@@ -332,42 +345,113 @@ private fun ComposerGlassDoor(icon: ImageVector, label: String, tint: Color, onC
     }
 }
 
+/** Le repère de test du rail de l'éphémère et de chacune de ses pastilles. */
+internal const val EPHEMERAL_RAIL_TAG: String = "composer-ephemeral-rail"
+internal const val EPHEMERAL_OFF_CHIP_TAG: String = "composer-ephemeral-off"
+internal fun ephemeralChoiceChipTag(choice: EphemeralChoice): String = when (choice) {
+    EphemeralChoice.AfterRead -> "composer-ephemeral-after-read"
+    is EphemeralChoice.Duration -> "composer-ephemeral-${choice.duration.seconds}"
+}
+
+/** Le libellé court d'un choix : « Après lecture » ou « 15 s » (iOS `EphemeralChoiceCopy.chipLabel`). */
+@Composable
+internal fun ephemeralChoiceLabel(choice: EphemeralChoice): String = when (choice) {
+    EphemeralChoice.AfterRead -> stringResource(R.string.chat_ephemeral_after_read)
+    is EphemeralChoice.Duration -> stringResource(ephemeralDurationLabel(choice.duration))
+}
+
+/** Le libellé dit au lecteur d'écran (iOS `EphemeralChoiceCopy.displayLabel`). */
+@Composable
+internal fun ephemeralChoiceA11y(choice: EphemeralChoice?): String = when (choice) {
+    EphemeralChoice.AfterRead -> stringResource(R.string.chat_ephemeral_after_read_a11y)
+    is EphemeralChoice.Duration -> stringResource(ephemeralDurationLabel(choice.duration))
+    null -> ""
+}
+
 /**
- * Le rail des durées éphémères, DANS la plaque (iOS `ephemeralPicker` sur `railSurface`) : un
- * toucher arme l'éphémère avec cette durée.
+ * Le sélecteur de l'éphémère, DANS la plaque — miroir de iOS `ephemeralDurationPicker`
+ * (#8303) : « Désactivé », la flamme-œil « Après lecture », puis 15 s et les durées. Un
+ * toucher arme (ou désarme) l'éphémère avec ce choix.
  */
 @Composable
 internal fun ComposerEphemeralRail(
-    selected: EphemeralDuration?,
-    onPick: (EphemeralDuration) -> Unit,
+    selected: EphemeralChoice?,
+    accentColor: Color,
+    onPick: (EphemeralChoice?) -> Unit,
 ) {
     val dark = MeeshyTheme.isDark
     val tint = composerProtectionColor(ComposerProtection.EPHEMERAL, forIcon = true)
+    val railShape = RoundedCornerShape(MeeshyRadius.lg)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = MeeshySpacing.sm, end = MeeshySpacing.sm, top = MeeshySpacing.sm)
-            .clip(RoundedCornerShape(MeeshyRadius.lg))
+            .clip(railShape)
             .background(if (dark) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.9f))
+            .border(0.5.dp, tint.copy(alpha = 0.2f), railShape)
+            .testTag(EPHEMERAL_RAIL_TAG)
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.sm),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(MeeshyIcons.FlameFilled, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
-        EphemeralDuration.entries.forEach { duration ->
-            val on = duration == selected
-            Text(
-                text = stringResource(ephemeralDurationLabel(duration)),
-                color = if (on) Color.White else tint,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
+        val off = selected == null
+        val offLabel = stringResource(R.string.chat_ephemeral_off)
+        Text(
+            text = offLabel,
+            color = if (off) Color.White else composerIconTint(0L),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(
+                    when {
+                        off -> accentColor
+                        dark -> Color.White.copy(alpha = 0.08f)
+                        else -> Color.Black.copy(alpha = 0.04f)
+                    },
+                )
+                .clickable(role = Role.Button) { onPick(null) }
+                .semantics {
+                    contentDescription = offLabel
+                    this.selected = off
+                }
+                .testTag(EPHEMERAL_OFF_CHIP_TAG)
+                .padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.xsPlus),
+        )
+        EphemeralChoice.menu.forEach { choice ->
+            val on = choice == selected
+            val a11y = ephemeralChoiceA11y(choice)
+            val content = if (on) Color.White else tint
+            Row(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(if (on) tint else tint.copy(alpha = 0.12f))
-                    .clickable(role = Role.Button) { onPick(duration) }
-                    .padding(horizontal = MeeshySpacing.smPlus, vertical = MeeshySpacing.xsPlus),
-            )
+                    .background(if (on) tint else tint.copy(alpha = 0.1f))
+                    .border(0.5.dp, tint.copy(alpha = 0.3f), CircleShape)
+                    .clickable(role = Role.Button) { onPick(choice) }
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = a11y
+                        this.selected = on
+                    }
+                    .testTag(ephemeralChoiceChipTag(choice))
+                    .padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.xsPlus),
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (choice == EphemeralChoice.AfterRead) {
+                    FlameEyeGlyph(size = 13.dp, tint = content)
+                } else {
+                    Icon(MeeshyIcons.FlameFilled, contentDescription = null, tint = content, modifier = Modifier.size(11.dp))
+                }
+                Text(
+                    text = ephemeralChoiceLabel(choice),
+                    color = content,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

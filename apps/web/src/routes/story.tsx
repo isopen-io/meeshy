@@ -15,7 +15,8 @@ import { RefusedContentBackdrop, RefusedContentNotice, refusalViewOf } from '@/c
 import { isContentRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
 import { useViewerSwipe } from '@/components/viewer-chrome-gestures';
 import { apiDeps } from '@/lib/api/deps';
-import { markStoryViewedAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
+import { markStoryViewedAction, useStatusMoods, useStoryFeed, useStoryPost } from '@/lib/api/query';
+import { moodOfAuthor } from '@/lib/export/scene/scene-export-branding-author';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -494,7 +495,9 @@ export default function StoryScreen() {
    * comme `commentsHost` deux blocs plus haut. Déclaré ICI, AVANT le clavier,
    * pour que `viewersOpen` puisse rejoindre la cession `layerOpen`.
    */
-  const ownerRail = useStoryOwnerRail({ story: currentStory, online, announce, language: interfaceLanguage, preferredLanguages: language.prism });
+  const moods = useStatusMoods({ enabled: !visitor });
+  const exportBranding = useMemo(() => ({ viewerId: viewer.id, mood: moodOfAuthor(moods.data, currentStory?.author?.id) }), [viewer.id, moods.data, currentStory?.author?.id]);
+  const ownerRail = useStoryOwnerRail({ story: currentStory, online, announce, language: interfaceLanguage, preferredLanguages: language.prism, branding: exportBranding });
   const viewersOpen = ownerRail.viewers.postId !== null;
   /* « ENVOYER » (#8884) : la feuille d'envoi commune, ouverte avec la story
      regardée ; la story boucle dessous (`engaged` plus bas, #9821). */
