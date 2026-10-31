@@ -1,3 +1,5 @@
+import { initialsOf } from '@/lib/view/conversation';
+
 import type { BrandingIdentity } from './scene-export-branding-identity';
 import { BRANDING_TIMING } from './scene-export-branding-plan';
 import type { ScenePaintable } from './scene-export-paint';
@@ -80,15 +82,6 @@ function paintScrim(canvas: BrandingCanvas): void {
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0.72)');
   fillGradient(canvas, gradient);
 }
-
-const initialsOf = (name: string): string =>
-  name
-    .split(/\s+/)
-    .filter((word) => word !== '')
-    .slice(0, 2)
-    .map((word) => Array.from(word)[0] ?? '')
-    .join('')
-    .toUpperCase();
 
 const font = (canvas: BrandingCanvas, size: number, weight: 'bold' | 'normal'): string => `${weight} ${size}px ${canvas.fontFamily}`;
 

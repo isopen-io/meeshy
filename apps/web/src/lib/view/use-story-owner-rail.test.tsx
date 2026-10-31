@@ -1,3 +1,4 @@
+import type { StoryBrandingContext } from '@/lib/export/scene/scene-export-branding-author';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
@@ -79,7 +80,7 @@ function anchorHost(delivered: string[]): FileDeliveryHost {
   };
 }
 
-function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null, sceneExporter?: StorySceneExporter, exportLauncher?: StoryExportLauncher): Probe {
+function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null, sceneExporter?: StorySceneExporter, exportLauncher?: StoryExportLauncher, branding?: StoryBrandingContext): Probe {
   const announced: string[] = [];
   const delivered: string[] = [];
   const deliveryHost = host ?? anchorHost(delivered);
@@ -87,7 +88,7 @@ function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null =
   const announce = (message: string) => announced.push(message);
 
   function Harness({ story, online }: { readonly story: StoryPlaybackStory | undefined; readonly online: boolean }) {
-    seen.push(useStoryOwnerRail({ story, online, announce, language: 'fr', deliveryHost, gallerySaver, preferredLanguages: ['es', 'fr'], ...(sceneExporter !== undefined ? { sceneExporter } : {}), ...(exportLauncher !== undefined ? { exportLauncher } : {}) }));
+    seen.push(useStoryOwnerRail({ story, online, announce, language: 'fr', deliveryHost, gallerySaver, preferredLanguages: ['es', 'fr'], ...(sceneExporter !== undefined ? { sceneExporter } : {}), ...(exportLauncher !== undefined ? { exportLauncher } : {}), ...(branding !== undefined ? { branding } : {}) }));
     return null;
   }
 
@@ -193,6 +194,18 @@ describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « 
     act(() => probe?.rail().handlers.share?.());
     await settle(0);
     expect(spy.launched).toEqual([{ key: 'story:st-a', fileStem: 'story-st-a', mode: 'share', media: [MEDIA_URL], gestureContext: true }]);
+  });
+
+  test('« Partager » emporte l’emballage de marque : l’auteur lu sur la charge servie, soi reconnu, l’humeur détenue par le web (#13997)', async () => {
+    const subjects: { readonly branding: unknown }[] = [];
+    const launcher: StoryExportLauncher = async ({ subject }) => {
+      subjects.push({ branding: subject.branding });
+    };
+    probe = mountProbe(undefined, null, undefined, launcher, { viewerId: 'u-author', mood: { emoji: '🎉', message: 'Fête' } });
+    probe.render({ ...storyOf('st-a'), storyEffects: SCENE, author: { id: 'u-author', username: 'ana', displayName: 'Ana', isOnline: true } });
+    act(() => probe?.rail().handlers.share?.());
+    await settle(0);
+    expect(subjects[0]?.branding).toMatchObject({ author: { authorId: 'u-author', self: true, moodEmoji: '🎉', moodMessage: 'Fête', presence: { isOnline: true } } });
   });
 
   test('« Partager » d’une story v1 compose son média seul, filigrané, et le partage', async () => {

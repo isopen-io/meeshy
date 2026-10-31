@@ -1,5 +1,6 @@
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
+import type { StatusMoodPost } from '@/lib/api/stories';
 import type { StoryPlaybackAuthor } from '@/lib/stories/playback';
 
 import type { BrandingAuthor } from './scene-export-branding-identity';
@@ -55,4 +56,17 @@ export function brandingAuthorOf(params: { readonly author: StoryPlaybackAuthor 
     presence: presenceOf(author),
     self: typeof context.viewerId === 'string' && context.viewerId === author.id,
   };
+}
+
+/**
+ * L'humeur COURANTE de l'auteur dans le corpus des humeurs que le web détient
+ * (`?scope=statuses`, la plus récente d'abord) : son emoji, et son mot s'il en
+ * a un. Aucune humeur ⇒ `null`, la capsule est absente.
+ */
+export function moodOfAuthor(moods: readonly StatusMoodPost[] | undefined, authorId: string | undefined): NonNullable<StoryBrandingContext['mood']> | null {
+  if (moods === undefined || authorId === undefined) return null;
+  const current = moods.find((mood) => (mood.authorId ?? mood.author?.id) === authorId && trimmed(mood.moodEmoji) !== '');
+  if (current === undefined) return null;
+  const message = trimmed(current.content);
+  return { emoji: trimmed(current.moodEmoji), message: message === '' ? null : message };
 }

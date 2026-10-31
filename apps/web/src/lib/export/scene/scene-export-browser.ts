@@ -3,7 +3,9 @@ import { saveToGallery } from '@/lib/gallery/save-to-gallery';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 
-import { prepareSceneExport } from './scene-export-assets';
+import { prepareSceneExport, type PreparedSceneExport } from './scene-export-assets';
+import { BRANDING_BUDGET_MS, prepareBranding, withBranding } from './scene-export-branding';
+import { noRelationLevel, type RelationLevelProvider } from './scene-export-branding-level';
 import type { ImagerLengthChoice, ImagerQuarter } from './scene-export-length';
 import type { ExportPalette } from './scene-export-paint';
 import { renderSceneExport, type RenderEnvironment } from './scene-export-render';
@@ -47,6 +49,12 @@ export function exportPalette(doc: Document): ExportPalette {
   };
 }
 
+async function brandingImage(src: string): Promise<CanvasImageSource | null> {
+  if (typeof createImageBitmap !== 'function') return null;
+  const blob = await fetchCardMediaBlob(src, mediaIdOf(src));
+  return blob === null ? null : createImageBitmap(blob);
+}
+
 const mediaIdOf = (src: string): string => src.split(/[?#]/)[0]?.split('/').pop() ?? src;
 
 function requestFrame(doc: Document): (callback: () => void) => void {
@@ -72,6 +80,22 @@ async function deliverFile(params: {
   return sceneDeliveryOf(portal === null ? 'unavailable' : await portal.deliver(params.blob, params.fileName, params.mimeType));
 }
 
+async function brandedScene(params: {
+  readonly prepared: PreparedSceneExport;
+  readonly branding: NonNullable<SceneExportSubject['branding']>;
+  readonly relationLevel: RelationLevelProvider;
+  readonly signal: AbortSignal;
+}): Promise<PreparedSceneExport | 'cancelled'> {
+  const branding = await prepareBranding({
+    author: params.branding.author,
+    signal: params.signal,
+    deps: { loadImage: brandingImage, relationLevel: params.relationLevel, now: () => Date.now(), budgetMs: BRANDING_BUDGET_MS },
+  });
+  if (!params.signal.aborted) return withBranding(params.prepared, branding);
+  params.prepared.dispose();
+  return 'cancelled';
+}
+
 export async function startSceneExport(params: {
   readonly subject: SceneExportSubject;
   readonly mode: SceneExportMode;
@@ -80,6 +104,8 @@ export async function startSceneExport(params: {
   readonly placeHere: string;
   readonly host: FileDeliveryHost;
   readonly gallerySaver: GallerySaver | null;
+  /** Le niveau de lien de l'auteur (#13997) — le port injecté du logo de cercle ; absent : aucun logo. */
+  readonly relationLevel?: RelationLevelProvider;
   readonly chooseLength: (choices: readonly ImagerLengthChoice[]) => Promise<ImagerQuarter | null>;
   /** « Partager » : le fichier prêt attend un toucher neuf — absent, il se livre sans attendre. */
   readonly awaitDeliveryTap?: (deliver: () => Promise<SceneDelivery>) => Promise<SceneDelivery>;
@@ -109,8 +135,8 @@ export async function startSceneExport(params: {
       onProgress: params.onProgress,
       ...(params.onDelivering !== undefined ? { onDelivering: params.onDelivering } : {}),
       deps: {
-        prepare: (signal) =>
-          prepareSceneExport({
+        prepare: async (signal) => {
+          const prepared = await prepareSceneExport({
             document: subject.document,
             carrier: subject.carrier,
             signal,
@@ -123,7 +149,9 @@ export async function startSceneExport(params: {
               imageDecoder: typeof ImageDecoder === 'function' ? ImageDecoder : undefined,
               decodeAudio: audioContext === null ? null : (data) => audioContext.decodeAudioData(data),
             },
-          }),
+          });
+          return subject.branding === undefined || prepared === 'cancelled' ? prepared : brandedScene({ prepared, branding: subject.branding, relationLevel: params.relationLevel ?? noRelationLevel, signal });
+        },
         render: ({ prepared, lengthMs, signal, onProgress }) =>
           renderSceneExport({
             prepared,

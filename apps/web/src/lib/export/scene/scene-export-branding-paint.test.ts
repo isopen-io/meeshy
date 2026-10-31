@@ -4,6 +4,8 @@ import type { BrandingIdentity } from './scene-export-branding-identity';
 import { paintAuthorOutroCard, paintIntroCard, paintLogoCard, traceProgress, type BrandingCanvas } from './scene-export-branding-paint';
 import type { ScenePaintable } from './scene-export-paint';
 
+type Styled = { font: string; fillStyle: unknown; strokeStyle: unknown };
+
 type Op = { readonly op: string; readonly text: string; readonly x: number; readonly y: number; readonly font: string; readonly style: string; readonly alpha: number };
 
 function recordingCanvas(width = 720, height = 1280) {
@@ -34,7 +36,7 @@ function recordingCanvas(width = 720, height = 1280) {
     shadowOffsetX: 0,
     shadowOffsetY: 0,
     fillRect: () => undefined,
-    fillText(text: string, x: number, y: number) {
+    fillText(this: Styled, text: string, x: number, y: number) {
       ops.push({ op: 'fillText', text, x, y, font: this.font, style: String(this.fillStyle), alpha: state.alpha });
     },
     strokeText: () => undefined,
@@ -51,10 +53,10 @@ function recordingCanvas(width = 720, height = 1280) {
     roundRect: () => undefined,
     rect: () => undefined,
     clip: () => undefined,
-    fill() {
+    fill(this: Styled) {
       if (pending !== null) ops.push({ op: 'disc', text: '', x: pending.x, y: pending.y, font: String(pending.radius), style: String(this.fillStyle), alpha: state.alpha });
     },
-    stroke() {
+    stroke(this: Styled) {
       ops.push({ op: 'stroke', text: '', x: 0, y: 0, font: '', style: String(this.strokeStyle), alpha: state.alpha });
     },
     save() {

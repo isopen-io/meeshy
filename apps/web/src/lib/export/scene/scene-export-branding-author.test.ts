@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { StoryPlaybackAuthor } from '@/lib/stories/playback';
 
-import { brandingAuthorOf } from './scene-export-branding-author';
+import { brandingAuthorOf, moodOfAuthor } from './scene-export-branding-author';
 
 const author = (overrides: Partial<StoryPlaybackAuthor> = {}): StoryPlaybackAuthor => ({
   id: 'u-author',
@@ -46,9 +46,28 @@ describe("l'auteur d'une story exportée, lu sur ce que le serveur a servi", () 
   });
 
   test('sans nom affiché, le prénom et le nom ; sans rien, le @username ; sans aucun, pas d\'identité', () => {
-    expect(brandingAuthorOf({ author: author({ displayName: undefined, firstName: 'Windie', lastName: 'Nh' }), context: {} })?.displayName).toBe('Windie Nh');
-    expect(brandingAuthorOf({ author: author({ displayName: undefined }), context: {} })?.displayName).toBe('windie');
-    expect(brandingAuthorOf({ author: author({ displayName: undefined, username: undefined }), context: {} })).toBeNull();
+    expect(brandingAuthorOf({ author: { id: 'u', username: 'windie', firstName: 'Windie', lastName: 'Nh' }, context: {} })?.displayName).toBe('Windie Nh');
+    expect(brandingAuthorOf({ author: { id: 'u', username: 'windie' }, context: {} })?.displayName).toBe('windie');
+    expect(brandingAuthorOf({ author: { id: 'u' }, context: {} })).toBeNull();
     expect(brandingAuthorOf({ author: undefined, context: {} })).toBeNull();
+  });
+});
+
+describe("l'humeur de l'auteur, lue dans le corpus des humeurs", () => {
+  const moods = [
+    { id: 'a', authorId: 'other', moodEmoji: '😴' },
+    { id: 'b', authorId: 'u-author', moodEmoji: '🎉', content: '  Fête ce soir ' },
+    { id: 'c', authorId: 'u-author', moodEmoji: '☕' },
+  ];
+
+  test('la plus récente (la première) de CET auteur, avec son mot', () => {
+    expect(moodOfAuthor(moods, 'u-author')).toEqual({ emoji: '🎉', message: 'Fête ce soir' });
+  });
+
+  test("sans mot, pas de message ; sans humeur ou sans corpus, rien", () => {
+    expect(moodOfAuthor([{ id: 'x', authorId: 'u', moodEmoji: '☕' }], 'u')).toEqual({ emoji: '☕', message: null });
+    expect(moodOfAuthor(moods, 'inconnu')).toBeNull();
+    expect(moodOfAuthor(undefined, 'u-author')).toBeNull();
+    expect(moodOfAuthor([{ id: 'x', authorId: 'u', moodEmoji: ' ' }], 'u')).toBeNull();
   });
 });
