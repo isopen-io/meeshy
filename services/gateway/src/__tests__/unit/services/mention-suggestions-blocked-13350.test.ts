@@ -40,18 +40,23 @@ function fakePrisma(blocks: BlockLists) {
         { senderId: BLOQUE, receiverId: MOI, sender: PEOPLE[BLOQUE], receiver: null },
       ]),
     },
-    post: { findUnique: jest.fn(async () => ({ id: 'p1', authorId: MOI, deletedAt: null, author: null })) },
+    userRelation: { findMany: jest.fn(async () => []) },
+    userContact: { findMany: jest.fn(async () => []) },
+    post: {
+      findFirst: jest.fn(async () => ({ id: 'p1', authorId: MOI, visibility: 'PUBLIC', visibilityUserIds: [], expiresAt: null })),
+    },
     postComment: { findMany: jest.fn(async () => []) },
+    postReaction: { findMany: jest.fn(async () => []) },
     user: {
       findMany: jest.fn(async ({ where }: { where: UserWhere }) => {
-        if (where.AND) {
-          const notIn = ((where.AND[1] as { id: { notIn: string[] } }).id.notIn);
-          return [PEOPLE[AMI], PEOPLE[BLOQUE]].filter((p) => !notIn.includes(p.id));
+        if (where.blockedUserIds) {
+          return Object.keys(blocks)
+            .filter((id) => blockedOf(id).includes(where.blockedUserIds?.has ?? ''))
+            .map((id) => ({ id }));
         }
-        return Object.keys(blocks)
-          .filter((id) => (where.id ? where.id.in.includes(id) : true))
-          .filter((id) => blockedOf(id).includes(where.blockedUserIds?.has ?? ''))
-          .map((id) => ({ id }));
+        if (where.id?.in) return where.id.in.flatMap((id) => (PEOPLE[id as keyof typeof PEOPLE] ? [PEOPLE[id as keyof typeof PEOPLE]] : []));
+        const notIn = ((where.AND?.[1] as { id: { notIn: string[] } }).id.notIn);
+        return [PEOPLE[AMI], PEOPLE[BLOQUE]].filter((p) => !notIn.includes(p.id));
       }),
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) => ({ blockedUserIds: blockedOf(where.id) })),
     },
@@ -62,13 +67,15 @@ function fakePrisma(blocks: BlockLists) {
 
 const cache = { get: async () => null, set: async () => undefined, keys: async () => [], del: async () => undefined } as never;
 
+// #14052 — les amis viennent désormais par la loi des niveaux (friendship.ts),
+// qui relit les demandes acceptées : le même faux les sert à toutes ses lectures.
 const SENS: Array<[string, BlockLists]> = [
   ["j'ai bloqué l'ami", { [MOI]: [BLOQUE], [BLOQUE]: [], [AMI]: [] }],
   ["l'ami m'a bloqué", { [MOI]: [], [BLOQUE]: [MOI], [AMI]: [] }],
 ];
 
 describe('#13350 — suggestions de mention sans personne bloquée', () => {
-  it.each(SENS)('conversation ouverte (membres, amis) — %s', async (_sens, blocks) => {
+  it.each(SENS)('conversation ouverte (connaissances, membres) — %s', async (_sens, blocks) => {
     const ids = (await new MentionSuggestionFinder(fakePrisma(blocks), cache).forConversation('c1', MOI, '')).map((s) => s.id);
     expect(ids).toContain(AMI);
     expect(ids).not.toContain(BLOQUE);
