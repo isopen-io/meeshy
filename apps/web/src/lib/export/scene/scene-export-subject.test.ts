@@ -64,4 +64,21 @@ describe('ce qu’un export rend', () => {
   test('sans Web Audio, l’export n’a pas de contexte — il sortira muet plutôt que pas du tout', () => {
     expect(gestureAudioContext({})).toBeNull();
   });
+
+  test('une story porte son emballage de marque ; un post, un réel et un média de commentaire rendent l’œuvre SEULE', () => {
+    const branded = storyExportSubject(story({ storyEffects: document, author: { id: 'u', username: 'ana', displayName: 'Ana', isOnline: true } }), { viewerId: 'moi', mood: { emoji: '🎉' } });
+    expect(branded?.branding?.author).toMatchObject({ authorId: 'u', username: 'ana', self: false, moodEmoji: '🎉', presence: { isOnline: true } });
+    const scene = { document: { v: 3 as const, scenes: [] }, carrier: { postId: 'p1', media: [] } };
+    expect(postExportSubject({ id: 'p1', isReel: false, scene, author: { id: 'u', username: 'ana' } } as unknown as Parameters<typeof postExportSubject>[0])?.branding).toBeUndefined();
+    expect(mediaExportSubject({ key: 'k', fileStem: 's', media: { id: 'a', src: 'https://cdn/a.png', mimeType: 'image/png' }, watermark: null })?.branding).toBeUndefined();
+  });
+
+  test('une story sans auteur résolu garde la carte de fin due : branding présent, identité nulle', () => {
+    expect(storyExportSubject(story({ storyEffects: document }))?.branding).toEqual({ author: null });
+  });
+
+  test('une story v1 composée depuis son média porte aussi la marque, et sa propre story est reconnue', () => {
+    const subject = storyMediaExportSubject(story({ author: { id: 'u', username: 'ana' }, media: [{ id: 'm', fileUrl: 'https://cdn/story.mp4', mimeType: 'video/mp4' }] }), { viewerId: 'u' });
+    expect(subject?.branding?.author).toMatchObject({ authorId: 'u', self: true });
+  });
 });

@@ -5,6 +5,9 @@ import type { FeedCardModel } from '@/lib/feed/card-model';
 import { storyCarrier } from '@/lib/stories/carrier';
 import { playedStoryScene, type StoryPlaybackStory } from '@/lib/stories/playback';
 
+import { brandingAuthorOf, type StoryBrandingContext } from './scene-export-branding-author';
+import type { BrandingAuthor } from './scene-export-branding-identity';
+
 /**
  * **CE QU'UN EXPORT REND** (#13873) — la scène que le lecteur JOUE (loi 6) :
  * celle d'une story (la sienne, ou celle de sa source pour un repartage,
@@ -21,13 +24,25 @@ export type SceneExportSubject = {
   readonly document: CanvasDocument;
   readonly carrier: SceneCarrier;
   readonly watermark: string | null;
+  /**
+   * L'EMBALLAGE DE MARQUE (#13997) — présent pour une STORY seulement : l'intro
+   * d'identité de l'auteur, la carte de fin et leurs jingles. `author: null` :
+   * aucune identité résolue, l'intro est omise mais la carte de fin reste due
+   * (invariant iOS du 2026-07-26). Absent : l'œuvre est rendue SEULE (post,
+   * réel, média de commentaire).
+   */
+  readonly branding?: { readonly author: BrandingAuthor | null };
 };
 
 /** Le filigrane d'un export : le @ de l'auteur, ou rien. */
 export const watermarkHandle = (username: string | null | undefined): string | null =>
   typeof username === 'string' && username.trim() !== '' ? `@${username.trim()}` : null;
 
-export function storyExportSubject(story: StoryPlaybackStory | undefined): SceneExportSubject | null {
+const storyBranding = (story: StoryPlaybackStory, context: StoryBrandingContext): NonNullable<SceneExportSubject['branding']> => ({
+  author: brandingAuthorOf({ author: story.author, context }),
+});
+
+export function storyExportSubject(story: StoryPlaybackStory | undefined, context: StoryBrandingContext = {}): SceneExportSubject | null {
   if (story === undefined) return null;
   const played = playedStoryScene(story);
   if (played === null) return null;
@@ -37,6 +52,7 @@ export function storyExportSubject(story: StoryPlaybackStory | undefined): Scene
     document: played.document,
     carrier: storyCarrier(played.carrierStory),
     watermark: watermarkHandle(story.author?.username),
+    branding: storyBranding(story, context),
   };
 }
 
@@ -124,18 +140,19 @@ export function mediaExportSubject(params: {
 }
 
 /** Une story v1 (sans document) — son média exportable, composé seul. */
-export function storyMediaExportSubject(story: StoryPlaybackStory | undefined): SceneExportSubject | null {
+export function storyMediaExportSubject(story: StoryPlaybackStory | undefined, context: StoryBrandingContext = {}): SceneExportSubject | null {
   if (story === undefined) return null;
   const media = storyDownloadableMedia(story);
   if (media === null || typeof media.mimeType !== 'string') return null;
   const [carried] = storyCarrier({ id: story.id, media: [media] }).media;
   if (carried === undefined) return null;
-  return mediaExportSubject({
+  const subject = mediaExportSubject({
     key: `story:${story.id}`,
     fileStem: `story-${story.id}`,
     media: { id: media.id, src: carried.src, mimeType: media.mimeType, width: media.width ?? null, height: media.height ?? null },
     watermark: watermarkHandle(story.author?.username),
   });
+  return subject === null ? null : { ...subject, branding: storyBranding(story, context) };
 }
 
 type AudioContextConstructor = new () => AudioContext;

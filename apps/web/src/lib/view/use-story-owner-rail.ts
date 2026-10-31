@@ -3,6 +3,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { StoryActionRailHandlers } from '@/components/story-action-rail';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import { storyDownloadableMedia } from '@/lib/api/story-export';
+import type { StoryBrandingContext } from '@/lib/export/scene/scene-export-branding-author';
 import { gestureAudioContext, storyExportSubject, storyMediaExportSubject, type SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -118,6 +119,8 @@ export function useStoryOwnerRail(params: {
   readonly sceneExporter?: StorySceneExporter;
   /** Injectable pour les témoins ; le bandeau global des exports par défaut. */
   readonly exportLauncher?: StoryExportLauncher;
+  /** Ce que le web détient autour de l'auteur (lecteur connecté, humeur) — peint sur l'intro et la fin (#13997). */
+  readonly branding?: StoryBrandingContext;
 }): StoryOwnerRail {
   const { story, online, announce, language, gallerySaver } = params;
   const preferredLanguages = params.preferredLanguages;
@@ -146,10 +149,11 @@ export function useStoryOwnerRail(params: {
    * pratiquent déjà : la loi autorise, le gestionnaire (ou son absence) décide
    * de l'ATTEIGNABILITÉ, indépendamment bouton par bouton. */
   const exportMedia = useMemo(() => storyDownloadableMedia(story), [story]);
-  const sceneSubject = useMemo(() => storyExportSubject(story), [story]);
+  const brandingContext = params.branding;
+  const sceneSubject = useMemo(() => storyExportSubject(story, brandingContext), [story, brandingContext]);
   /* Ce que « Partager » et « Imager » composent : la scène, sinon le média
      d'une story v1, seul (#13881). */
-  const composedSubject = useMemo(() => sceneSubject ?? storyMediaExportSubject(story), [sceneSubject, story]);
+  const composedSubject = useMemo(() => sceneSubject ?? storyMediaExportSubject(story, brandingContext), [sceneSubject, story, brandingContext]);
 
   /* La story BOUCLE sous la feuille « Vues » (#9821) : c'est le lecteur
      qui le décide (`resolveStoryPlaybackHold`), le rail ne la fige pas. */
