@@ -59,6 +59,7 @@ class SceneExportCoordinatorTest {
         runner: SceneTransformRunner,
         gallery: CaptureGallery = FakeGallery(),
         report: (Throwable) -> Unit = {},
+        proof: SceneExportProof = SceneExportProof.NONE,
     ) =
         SceneExportCoordinator(
             runner = runner,
@@ -68,6 +69,7 @@ class SceneExportCoordinatorTest {
             dispatcher = StandardTestDispatcher(testScheduler),
             nowMillis = { 1_700_000_000_000L },
             report = report,
+            proof = proof,
         )
 
     private fun job(output: File, still: File? = null, release: () -> Unit = {}) = SceneExportJob(
@@ -270,5 +272,29 @@ class SceneExportCoordinatorTest {
         val ready = c.state.value as SceneExportState.Ready
         assertThat(ready.path).endsWith(".jpg")
         assertThat(File(ready.path).readText()).isEqualTo("jpeg")
+    }
+
+    @Test
+    fun `un rendu qui ne montre pas sa scene echoue en le disant, et ne part pas a la galerie`() = runTest {
+        val gallery = FakeGallery()
+        val reported = mutableListOf<Throwable>()
+        val black = IllegalStateException("la vidéo rendue est noire (6 instants relus) alors que le calque des objets de 0 à 4000 ms se voit à 1000 ms")
+        val c = coordinator(FakeRunner(), gallery, report = { reported += it }, proof = { throw black })
+        c.export(SceneExportDestination.GALLERY) { out, _ -> job(out) }
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Failed)
+        assertThat(gallery.videos).isEmpty()
+        assertThat(reported).containsExactly(black)
+        assertThat(folder.root.walkTopDown().filter { it.isFile }.toList()).isEmpty()
+    }
+
+    @Test
+    fun `la preuve relit le rendu termine, avant la remise`() = runTest {
+        val read = mutableListOf<String>()
+        val c = coordinator(FakeRunner(), proof = { job -> read += job.output.readText() })
+        c.export(SceneExportDestination.GALLERY) { out, _ -> job(out) }
+        advanceUntilIdle()
+        assertThat(read).containsExactly("complet")
+        assertThat(c.state.value).isEqualTo(SceneExportState.Saved)
     }
 }

@@ -6,6 +6,8 @@ import android.os.Looper
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.util.BitmapLoader
+import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.Presentation
 import androidx.media3.transformer.AssetLoader
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
@@ -40,9 +42,21 @@ class Media3SceneCompositionTest {
 
     private val format = StoryExportVideoFormat.of()
 
-    private fun mixedDraft(branding: SceneExportBranding? = null): SceneExportJob {
+    private val gradient = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFFE0457B.toInt()) }
+    private val darkBlue = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF0B1A3A.toInt()) }
+    private val sticker = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888).apply { eraseColor(0x00000000) }
+
+    /** Les calques peints du brouillon du S8 : la scène 1 en dégradé coloré, 2 et 3 en bleu sombre, la 4 sans fond (sa vidéo le porte). */
+    private val painted = listOf(
+        SceneExportOverlay.Painted(0, 4_000, gradient),
+        SceneExportOverlay.Painted(4_000, 9_000, darkBlue),
+        SceneExportOverlay.Painted(9_000, 13_000, darkBlue),
+        SceneExportOverlay.Painted(13_000, 18_000, sticker),
+    )
+
+    private fun mixedDraft(branding: SceneExportBranding? = null, overlays: List<SceneExportOverlay> = emptyList()): SceneExportJob {
         val plan = StoryExportTimelinePlan(
-            listOf(StoryExportSlide(0, 0, 4_000), StoryExportSlide(1, 4_000, 9_000), StoryExportSlide(2, 9_000, 13_000), StoryExportSlide(3, 13_000, 18_000)),
+            listOf(StoryExportSlide(0, 0, 4_000), StoryExportSlide(1, 4_000, 5_000), StoryExportSlide(2, 9_000, 4_000), StoryExportSlide(3, 13_000, 5_000)),
             listOf(StoryExportSound("v", StoryExportSoundRole.FOREGROUND_AUDIO, "v", 1_000, 5_000, 0, null, false, 0.8f)),
             still = false,
         )
@@ -53,7 +67,7 @@ class Media3SceneCompositionTest {
             SceneExportSlideFill.Video(File("20261031_131911.mp4"), listOf(StoryExportClipRange(0, 3_000)), SceneExportHold(File("fin-3.png"), 2_000)),
         )
         return SceneExportJob(
-            plan, format, fills, overlays = emptyList(),
+            plan, format, fills, overlays = overlays,
             sounds = mapOf("v" to SceneExportSoundFile(File("vocal.m4a"), 4_000)), output = File("out.mp4"), branding = branding,
         )
     }
@@ -119,5 +133,37 @@ class Media3SceneCompositionTest {
         assertThat(laps.single().removeAudio).isTrue()
         assertThat(laps.single().durationUs).isEqualTo(C.TIME_UNSET)
         assertThat(laps.single().mediaItem.clippingConfiguration.endPositionMs).isEqualTo(3_000)
+    }
+
+    @Test
+    fun `aucun effet n est pose sur la composition, ou Media3 1_4_1 ignore tout sauf la Presentation`() {
+        val composition = Media3SceneComposition.of(mixedDraft(branding(), painted))
+        assertThat(composition.effects.videoEffects.filterNot { it is Presentation }).isEmpty()
+    }
+
+    @Test
+    fun `chaque item de la sequence video porte le meme calque des objets, sur l horloge commune`() {
+        val job = mixedDraft(branding(), painted)
+        val items = Media3SceneComposition.of(job).sequences.first().editedMediaItems
+        val overlays = items.map { item -> item.effects.videoEffects.filterIsInstance<OverlayEffect>().single() }
+        assertThat(overlays.distinct()).hasSize(1)
+        assertThat(items.map { it.effects.videoEffects }.distinct()).hasSize(1)
+    }
+
+    @Test
+    fun `le calque qui part a l instant d une scene est celui de cette scene, le degrade colore d abord`() {
+        val layers = Media3SceneComposition.overlaysOf(mixedDraft(overlays = painted), SceneCompositionPlanner.of(mixedDraft(overlays = painted)))
+        val objects = layers.filterIsInstance<TimedBitmapOverlay>().single()
+        assertThat(objects.getBitmap(2_000_000L)).isSameInstanceAs(gradient)
+        assertThat(objects.getBitmap(6_000_000L)).isSameInstanceAs(darkBlue)
+        assertThat(objects.getBitmap(15_000_000L)).isSameInstanceAs(sticker)
+    }
+
+    @Test
+    fun `une story encadree porte ses cartes de marque avec les objets, sur chaque item`() {
+        val job = mixedDraft(branding(), painted)
+        val layers = Media3SceneComposition.overlaysOf(job, SceneCompositionPlanner.of(job))
+        assertThat(layers.filterIsInstance<BrandCardOverlay>()).hasSize(3)
+        assertThat(layers.filterIsInstance<TimedBitmapOverlay>()).hasSize(1)
     }
 }

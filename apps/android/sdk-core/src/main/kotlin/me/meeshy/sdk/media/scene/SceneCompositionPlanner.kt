@@ -89,3 +89,12 @@ internal object SceneCompositionPlanner {
         return SceneComposition(video, sounds + listOfNotNull(introJingle) + listOf(listOf(outroJingle)), total, layers)
     }
 }
+
+/** Ce que le moteur reçoit, en une ligne de journal (#13986) : ce qu'une recette doit pouvoir lire de ce qui est parti au rendu. */
+internal fun SceneComposition.describe(overlays: Int): String {
+    val items = video.joinToString(", ") { item ->
+        item.clip?.let { "plage ${it.startMillis}–${it.endMillis} ms de ${item.file.name}" } ?: "image ${item.imageMillis} ms (${item.file.name})"
+    }
+    return "composition de $durationMillis ms : vidéo [$items], ${audio.size} séquence(s) son, $overlays calque(s) d'objets, " +
+        "${brandLayers.size} carte(s) de marque"
+}
