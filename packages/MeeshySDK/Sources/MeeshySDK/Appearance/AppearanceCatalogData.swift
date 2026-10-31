@@ -1178,6 +1178,112 @@ enum AppearanceCatalogData {
             "bytes": 1842,
             "sha256": "b19ebab0f4cfeed8715e0264fab552c11fcce89f71ba78b2f01feb0b78ab634e"
           }
+        },
+        {
+          "key": "bulles-legeres",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F0F7FF",
+              "ink": "#93C5FD",
+              "soft": "#C7D2FE"
+            },
+            "dark": {
+              "base": "#071226",
+              "ink": "#1D4ED8",
+              "soft": "#312E81"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "soft",
+                "at": 0
+              },
+              {
+                "role": "base",
+                "at": 0.55
+              },
+              {
+                "role": "base",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.15,
+                "y": 0.9,
+                "r": 0.55,
+                "role": "ink",
+                "opacity": 0.22
+              },
+              {
+                "x": 0.85,
+                "y": 0.35,
+                "r": 0.45,
+                "role": "accent",
+                "opacity": 0.14
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "3e282f6c9c6c6064.json",
+            "bytes": 6155,
+            "sha256": "3e282f6c9c6c60642c63ec560088f7bea1609fefe3206e1fee9597b875032e7c"
+          }
+        },
+        {
+          "key": "pluie-de-petales",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FFF5F8",
+              "ink": "#F9A8D4",
+              "soft": "#FCE7F3"
+            },
+            "dark": {
+              "base": "#1A0B14",
+              "ink": "#9D174D",
+              "soft": "#3B0A24"
+            }
+          },
+          "gradient": {
+            "angle": 160,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.8,
+                "y": 0.1,
+                "r": 0.6,
+                "role": "ink",
+                "opacity": 0.2
+              },
+              {
+                "x": 0.2,
+                "y": 0.75,
+                "r": 0.5,
+                "role": "soft",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "57404ed57c27976e.json",
+            "bytes": 7469,
+            "sha256": "57404ed57c27976e25aa9bb98e105dd81005ee330e7e422a332016c45bcdfe25"
+          }
         }
       ]
     }
@@ -1633,6 +1739,115 @@ enum AppearanceCatalogData {
             "bytes": 9598,
             "sha256": "5aff839c02a1cfcb6906f41b3f1bf74f312afaa24b94fd98d204c964c2fb1df6"
           }
+        },
+        {
+          "key": "maree",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#0C4A6E",
+              "ink": "#22D3EE",
+              "soft": "#0E7490"
+            },
+            "dark": {
+              "base": "#062033",
+              "ink": "#0891B2",
+              "soft": "#155E75"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.75,
+                "y": 0.1,
+                "r": 0.45,
+                "role": "ink",
+                "opacity": 0.3
+              },
+              {
+                "x": 0.2,
+                "y": 1,
+                "r": 0.6,
+                "role": "soft",
+                "opacity": 0.6
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "b91b4b2e5d828890.json",
+            "bytes": 3047,
+            "sha256": "b91b4b2e5d82889042d675520de64154b320ddcc12d9b51680390d9b566f80d2"
+          }
+        },
+        {
+          "key": "braises",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#2A0F1F",
+              "ink": "#F97316",
+              "soft": "#9F1239"
+            },
+            "dark": {
+              "base": "#14060F",
+              "ink": "#EA580C",
+              "soft": "#881337"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.55,
+                "role": "ink",
+                "opacity": 0.45
+              },
+              {
+                "x": 0.12,
+                "y": 0.9,
+                "r": 0.35,
+                "role": "ink",
+                "opacity": 0.25
+              },
+              {
+                "x": 0.9,
+                "y": 0.85,
+                "r": 0.35,
+                "role": "soft",
+                "opacity": 0.5
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "039a32b2874b1119.json",
+            "bytes": 7855,
+            "sha256": "039a32b2874b11197966a8793f3b6a36dbf098c553a58fe14f64c134f0f73e49"
+          }
         }
       ]
     }
@@ -1856,6 +2071,39 @@ enum AppearanceCatalogData {
             "src": "ec52a7f12af8a193.json",
             "bytes": 867,
             "sha256": "ec52a7f12af8a193ac26a882cbd360a657da52a19d5d98a58c74a7fc1f45d902"
+          }
+        },
+        {
+          "key": "prisme-vivant",
+          "stroke": {
+            "style": "gradient",
+            "width": 0.03,
+            "colors": [
+              "#6366F1",
+              "#EC4899",
+              "#F59E0B",
+              "#10B981"
+            ]
+          },
+          "lottie": {
+            "src": "6ba39ccae139a4bb.json",
+            "bytes": 3551,
+            "sha256": "6ba39ccae139a4bb4f851fb1e2295653df0848ef49e3ea120dfa9c07cec346dc"
+          }
+        },
+        {
+          "key": "onde",
+          "stroke": {
+            "style": "solid",
+            "width": 0.03,
+            "colors": [
+              "#6366F1"
+            ]
+          },
+          "lottie": {
+            "src": "9eeb258fda7680b6.json",
+            "bytes": 1872,
+            "sha256": "9eeb258fda7680b6db8644b8f79b341bc5521d4c51681b9242a4d198ab709470"
           }
         }
       ]
@@ -7573,15 +7821,15 @@ enum AppearanceCatalogData {
         },
         "animes": {
           "name": "Animés",
-          "description": "Des fonds qui respirent doucement."
+          "description": "La brume respire, des bulles montent, des pétales tombent."
         },
         "bannieres-animees": {
           "name": "Bannières animées",
-          "description": "Un reflet discret traverse la bannière."
+          "description": "Une aurore, une marée, des braises : la bannière s’anime."
         },
         "contours-animes": {
           "name": "Contours animés",
-          "description": "Un arc doré fait le tour de l’avatar."
+          "description": "Un halo doré, un prisme qui tourne, une onde qui bat."
         },
         "contours-haussmannien": {
           "name": "Contour haussmannien",
@@ -7656,7 +7904,11 @@ enum AppearanceCatalogData {
         "horizon": "Horizon",
         "baobab": "Baobab",
         "brume-vivante": "Brume vivante",
-        "aurore-vive": "Aurore vive"
+        "aurore-vive": "Aurore vive",
+        "bulles-legeres": "Bulles légères",
+        "pluie-de-petales": "Pluie de pétales",
+        "maree": "Marée",
+        "braises": "Braises"
       },
       "rings": {
         "filet": "Filet",
@@ -7679,7 +7931,9 @@ enum AppearanceCatalogData {
         "rituel": "Africain rituel",
         "rituel-anime": "Africain rituel animé",
         "celte": "Celte",
-        "celte-anime": "Celte animé"
+        "celte-anime": "Celte animé",
+        "prisme-vivant": "Prisme vivant",
+        "onde": "Onde"
       },
       "gamut": {
         "indigo": "Indigo Meeshy",
@@ -7750,15 +8004,15 @@ enum AppearanceCatalogData {
         },
         "animes": {
           "name": "Animated",
-          "description": "Wallpapers that breathe softly."
+          "description": "Mist that breathes, bubbles that rise, petals that fall."
         },
         "bannieres-animees": {
           "name": "Animated banners",
-          "description": "A subtle glint sweeps across the banner."
+          "description": "An aurora, a tide, embers: your banner comes alive."
         },
         "contours-animes": {
           "name": "Animated rings",
-          "description": "A golden arc travels around the avatar."
+          "description": "A golden halo, a turning prism, a pulsing ripple."
         },
         "contours-haussmannien": {
           "name": "Haussmann ring",
@@ -7833,7 +8087,11 @@ enum AppearanceCatalogData {
         "horizon": "Horizon",
         "baobab": "Baobab",
         "brume-vivante": "Living mist",
-        "aurore-vive": "Vivid aurora"
+        "aurore-vive": "Vivid aurora",
+        "bulles-legeres": "Light bubbles",
+        "pluie-de-petales": "Petal rain",
+        "maree": "Tide",
+        "braises": "Embers"
       },
       "rings": {
         "filet": "Hairline",
@@ -7856,7 +8114,9 @@ enum AppearanceCatalogData {
         "rituel": "African ritual",
         "rituel-anime": "African ritual, animated",
         "celte": "Celtic",
-        "celte-anime": "Celtic, animated"
+        "celte-anime": "Celtic, animated",
+        "prisme-vivant": "Living prism",
+        "onde": "Ripple"
       },
       "gamut": {
         "indigo": "Meeshy Indigo",
@@ -7927,15 +8187,15 @@ enum AppearanceCatalogData {
         },
         "animes": {
           "name": "Animados",
-          "description": "Fondos que respiran con suavidad."
+          "description": "La bruma respira, las burbujas suben, los pétalos caen."
         },
         "bannieres-animees": {
           "name": "Banners animados",
-          "description": "Un reflejo discreto cruza el banner."
+          "description": "Una aurora, una marea, unas brasas: el banner cobra vida."
         },
         "contours-animes": {
           "name": "Contornos animados",
-          "description": "Un arco dorado rodea el avatar."
+          "description": "Un halo dorado, un prisma que gira, una onda que late."
         },
         "contours-haussmannien": {
           "name": "Contorno Haussmanniano",
@@ -8010,7 +8270,11 @@ enum AppearanceCatalogData {
         "horizon": "Horizonte",
         "baobab": "Baobab",
         "brume-vivante": "Bruma viva",
-        "aurore-vive": "Aurora viva"
+        "aurore-vive": "Aurora viva",
+        "bulles-legeres": "Burbujas ligeras",
+        "pluie-de-petales": "Lluvia de pétalos",
+        "maree": "Marea",
+        "braises": "Brasas"
       },
       "rings": {
         "filet": "Filete",
@@ -8033,7 +8297,9 @@ enum AppearanceCatalogData {
         "rituel": "Africano ritual",
         "rituel-anime": "Africano ritual animado",
         "celte": "Celta",
-        "celte-anime": "Celta animado"
+        "celte-anime": "Celta animado",
+        "prisme-vivant": "Prisma vivo",
+        "onde": "Onda"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -8104,15 +8370,15 @@ enum AppearanceCatalogData {
         },
         "animes": {
           "name": "Animados",
-          "description": "Fundos que respiram suavemente."
+          "description": "A névoa respira, as bolhas sobem, as pétalas caem."
         },
         "bannieres-animees": {
           "name": "Banners animados",
-          "description": "Um reflexo discreto atravessa o banner."
+          "description": "Uma aurora, uma maré, brasas: o banner ganha vida."
         },
         "contours-animes": {
           "name": "Contornos animados",
-          "description": "Um arco dourado contorna o avatar."
+          "description": "Um halo dourado, um prisma que gira, uma onda que pulsa."
         },
         "contours-haussmannien": {
           "name": "Contorno Haussmanniano",
@@ -8187,7 +8453,11 @@ enum AppearanceCatalogData {
         "horizon": "Horizonte",
         "baobab": "Baobá",
         "brume-vivante": "Névoa viva",
-        "aurore-vive": "Aurora viva"
+        "aurore-vive": "Aurora viva",
+        "bulles-legeres": "Bolhas leves",
+        "pluie-de-petales": "Chuva de pétalas",
+        "maree": "Maré",
+        "braises": "Brasas"
       },
       "rings": {
         "filet": "Filete",
@@ -8210,7 +8480,9 @@ enum AppearanceCatalogData {
         "rituel": "Africano ritual",
         "rituel-anime": "Africano ritual animado",
         "celte": "Celta",
-        "celte-anime": "Celta animado"
+        "celte-anime": "Celta animado",
+        "prisme-vivant": "Prisma vivo",
+        "onde": "Onda"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -8281,15 +8553,15 @@ enum AppearanceCatalogData {
         },
         "animes": {
           "name": "Animiert",
-          "description": "Hintergründe, die sanft atmen."
+          "description": "Nebel, der atmet, Blasen, die steigen, Blüten, die fallen."
         },
         "bannieres-animees": {
           "name": "Animierte Banner",
-          "description": "Ein dezenter Glanz zieht über das Banner."
+          "description": "Polarlicht, Gezeiten, Glut: Dein Banner wird lebendig."
         },
         "contours-animes": {
           "name": "Animierte Konturen",
-          "description": "Ein goldener Bogen umkreist den Avatar."
+          "description": "Ein goldener Halo, ein kreisendes Prisma, eine pulsierende Welle."
         },
         "contours-haussmannien": {
           "name": "Rahmen Haussmann",
@@ -8364,7 +8636,11 @@ enum AppearanceCatalogData {
         "horizon": "Horizont",
         "baobab": "Baobab",
         "brume-vivante": "Lebendiger Nebel",
-        "aurore-vive": "Lebhafte Aurora"
+        "aurore-vive": "Lebhafte Aurora",
+        "bulles-legeres": "Leichte Blasen",
+        "pluie-de-petales": "Blütenregen",
+        "maree": "Gezeiten",
+        "braises": "Glut"
       },
       "rings": {
         "filet": "Haarlinie",
@@ -8387,7 +8663,9 @@ enum AppearanceCatalogData {
         "rituel": "Afrikanisch, Ritual",
         "rituel-anime": "Afrikanisch, Ritual, animiert",
         "celte": "Keltisch",
-        "celte-anime": "Keltisch, animiert"
+        "celte-anime": "Keltisch, animiert",
+        "prisme-vivant": "Lebendiges Prisma",
+        "onde": "Welle"
       },
       "gamut": {
         "indigo": "Meeshy-Indigo",
@@ -8458,15 +8736,15 @@ enum AppearanceCatalogData {
         },
         "animes": {
           "name": "Animati",
-          "description": "Sfondi che respirano piano."
+          "description": "La nebbia respira, le bolle salgono, i petali cadono."
         },
         "bannieres-animees": {
           "name": "Banner animati",
-          "description": "Un riflesso discreto attraversa il banner."
+          "description": "Un’aurora, una marea, le braci: il banner prende vita."
         },
         "contours-animes": {
           "name": "Contorni animati",
-          "description": "Un arco dorato gira attorno all’avatar."
+          "description": "Un alone dorato, un prisma che gira, un’onda che pulsa."
         },
         "contours-haussmannien": {
           "name": "Contorno Haussmanniano",
@@ -8541,7 +8819,11 @@ enum AppearanceCatalogData {
         "horizon": "Orizzonte",
         "baobab": "Baobab",
         "brume-vivante": "Foschia viva",
-        "aurore-vive": "Aurora viva"
+        "aurore-vive": "Aurora viva",
+        "bulles-legeres": "Bolle leggere",
+        "pluie-de-petales": "Pioggia di petali",
+        "maree": "Marea",
+        "braises": "Braci"
       },
       "rings": {
         "filet": "Filetto",
@@ -8564,7 +8846,9 @@ enum AppearanceCatalogData {
         "rituel": "Africano rituale",
         "rituel-anime": "Africano rituale animato",
         "celte": "Celtico",
-        "celte-anime": "Celtico animato"
+        "celte-anime": "Celtico animato",
+        "prisme-vivant": "Prisma vivo",
+        "onde": "Onda"
       },
       "gamut": {
         "indigo": "Indaco Meeshy",
@@ -8635,15 +8919,15 @@ enum AppearanceCatalogData {
         },
         "animes": {
           "name": "متحركة",
-          "description": "خلفيات تتنفس بهدوء."
+          "description": "ضباب يتنفس، وفقاعات تصعد، وبتلات تتساقط."
         },
         "bannieres-animees": {
           "name": "لافتات متحركة",
-          "description": "وميض خفيف يعبر اللافتة."
+          "description": "شفق ومدّ وجمرات: لافتتك تنبض بالحياة."
         },
         "contours-animes": {
           "name": "إطارات متحركة",
-          "description": "قوس ذهبي يدور حول الصورة الرمزية."
+          "description": "هالة ذهبية، ومنشور يدور، وتموّج ينبض."
         },
         "contours-haussmannien": {
           "name": "إطار هوسماني",
@@ -8718,7 +9002,11 @@ enum AppearanceCatalogData {
         "horizon": "أفق",
         "baobab": "باوباب",
         "brume-vivante": "ضباب حي",
-        "aurore-vive": "شفق نابض"
+        "aurore-vive": "شفق نابض",
+        "bulles-legeres": "فقاعات خفيفة",
+        "pluie-de-petales": "مطر البتلات",
+        "maree": "مدّ وجزر",
+        "braises": "جمرات"
       },
       "rings": {
         "filet": "خط رفيع",
@@ -8741,7 +9029,9 @@ enum AppearanceCatalogData {
         "rituel": "أفريقي طقسي",
         "rituel-anime": "أفريقي طقسي متحرك",
         "celte": "سلتي",
-        "celte-anime": "سلتي متحرك"
+        "celte-anime": "سلتي متحرك",
+        "prisme-vivant": "منشور حيّ",
+        "onde": "تموّج"
       },
       "gamut": {
         "indigo": "نيلي ميشي",

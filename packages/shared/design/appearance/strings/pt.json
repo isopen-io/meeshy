@@ -26,15 +26,15 @@
     },
     "animes": {
       "name": "Animados",
-      "description": "Fundos que respiram suavemente."
+      "description": "A névoa respira, as bolhas sobem, as pétalas caem."
     },
     "bannieres-animees": {
       "name": "Banners animados",
-      "description": "Um reflexo discreto atravessa o banner."
+      "description": "Uma aurora, uma maré, brasas: o banner ganha vida."
     },
     "contours-animes": {
       "name": "Contornos animados",
-      "description": "Um arco dourado contorna o avatar."
+      "description": "Um halo dourado, um prisma que gira, uma onda que pulsa."
     },
     "contours-haussmannien": {
       "name": "Contorno Haussmanniano",
@@ -109,7 +109,11 @@
     "horizon": "Horizonte",
     "baobab": "Baobá",
     "brume-vivante": "Névoa viva",
-    "aurore-vive": "Aurora viva"
+    "aurore-vive": "Aurora viva",
+    "bulles-legeres": "Bolhas leves",
+    "pluie-de-petales": "Chuva de pétalas",
+    "maree": "Maré",
+    "braises": "Brasas"
   },
   "rings": {
     "filet": "Filete",
@@ -132,7 +136,9 @@
     "rituel": "Africano ritual",
     "rituel-anime": "Africano ritual animado",
     "celte": "Celta",
-    "celte-anime": "Celta animado"
+    "celte-anime": "Celta animado",
+    "prisme-vivant": "Prisma vivo",
+    "onde": "Onda"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

@@ -51,9 +51,9 @@ class AppearanceCatalogDecodeTest {
         assertThat(catalog.bannerPacks.map { it.designs.size }).isEqualTo(declared("banners", "designs"))
         assertThat(catalog.ringPacks.map { it.rings.size }).isEqualTo(declared("rings", "rings"))
         assertThat(catalog.bannerFramePacks.map { it.frames.size }).isEqualTo(declared("bannerFrames", "frames"))
-        assertThat(catalog.wallpaperPacks.sumOf { it.designs.size }).isEqualTo(15)
-        assertThat(catalog.bannerPacks.sumOf { it.designs.size }).isEqualTo(7)
-        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(21)
+        assertThat(catalog.wallpaperPacks.sumOf { it.designs.size }).isEqualTo(17)
+        assertThat(catalog.bannerPacks.sumOf { it.designs.size }).isEqualTo(9)
+        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(23)
         assertThat(catalog.bannerFramePacks.sumOf { it.frames.size }).isEqualTo(14)
     }
 

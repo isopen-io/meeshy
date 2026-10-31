@@ -115,79 +115,79 @@
     },
     "preview": null,
     "contract": {
-      "src": "b9b7392e7d283e2a.json",
-      "bytes": 328,
-      "sha256": "b9b7392e7d283e2a5a55fa138b30de2b1f63210657d5d59bed3684ca6f387454"
+      "src": "10a21e62a40c6c25.json",
+      "bytes": 952,
+      "sha256": "10a21e62a40c6c25e266c37f3d6e07ad6ce84bf88438564aab090db9d2964b9b"
     },
     "strings": {
       "fr": {
-        "src": "e1c17dc55b522cef.json",
-        "bytes": 29,
-        "sha256": "e1c17dc55b522cef04004ae813a0033ccd46996815829634cf6a83d1399b5410"
+        "src": "f54a92ae87b9bd38.json",
+        "bytes": 81,
+        "sha256": "f54a92ae87b9bd38b1d343f39b7db4182a5574e4ca404cfb2d59f36e6cca6813"
       },
       "en": {
-        "src": "b6fe496462d63f63.json",
-        "bytes": 30,
-        "sha256": "b6fe496462d63f63ffd02b8083e21613a6aeca94266f8f68f4ba136e9704ec77"
+        "src": "3fc40ef5dbe21d43.json",
+        "bytes": 83,
+        "sha256": "3fc40ef5dbe21d4350f5038338d529207e0f675907ca68fac232c4ae633c9f54"
       },
       "es": {
-        "src": "9df01473aedf2e9d.json",
-        "bytes": 30,
-        "sha256": "9df01473aedf2e9dcc7c386c8254d224b83c38aef58f2dd4e904939a7955fa2f"
+        "src": "f204477f88ae0b22.json",
+        "bytes": 80,
+        "sha256": "f204477f88ae0b221d9c919c68f82dc1819fcb63be1fd284be6fe3c920899c23"
       },
       "pt": {
-        "src": "f6173646923084e4.json",
-        "bytes": 31,
-        "sha256": "f6173646923084e4aa16aa96ea8c7c9fc3de811c8b847cceae6f40205dc89fb0"
+        "src": "0bfb9553fd337d36.json",
+        "bytes": 81,
+        "sha256": "0bfb9553fd337d36b67d568d3481c118fd49a2f85d92ad248d8e326af3567896"
       },
       "de": {
-        "src": "6cfc10666ad5f4a5.json",
-        "bytes": 32,
-        "sha256": "6cfc10666ad5f4a526bea0f34a537a7a4a9e0a0980541460517d0377f9418630"
+        "src": "7cc8761882301708.json",
+        "bytes": 89,
+        "sha256": "7cc876188230170870898426a1154c8fc469f5651485e9469b3ed07522ef2c8d"
       },
       "it": {
-        "src": "6c28b8c99b27899e.json",
-        "bytes": 31,
-        "sha256": "6c28b8c99b27899e2df9eceab2301df7f53bf81cebc1616caa1b56a2cdf70fa0"
+        "src": "f8f999d6dd4c2825.json",
+        "bytes": 81,
+        "sha256": "f8f999d6dd4c28252b94ba43662f5f63ec343d495592b9a0aedf96f64a074689"
       },
       "ar": {
-        "src": "09b25472ef37d77e.json",
-        "bytes": 38,
-        "sha256": "09b25472ef37d77e0efa35df840794a9b99530b5abc8b4c6135d708de1be2b8d"
+        "src": "8e395e1c65872833.json",
+        "bytes": 100,
+        "sha256": "8e395e1c65872833cfd532222326d437de3e99d265627f53f7d04387f2f4efc3"
       }
     },
     "downloadBytes": {
-      "story": 328,
+      "story": 952,
       "square": null
     },
     "names": {
       "fr": {
         "name": "Contours animés",
-        "description": "Un arc doré fait le tour de l’avatar."
+        "description": "Un halo doré, un prisme qui tourne, une onde qui bat."
       },
       "en": {
         "name": "Animated rings",
-        "description": "A golden arc travels around the avatar."
+        "description": "A golden halo, a turning prism, a pulsing ripple."
       },
       "es": {
         "name": "Contornos animados",
-        "description": "Un arco dorado rodea el avatar."
+        "description": "Un halo dorado, un prisma que gira, una onda que late."
       },
       "pt": {
         "name": "Contornos animados",
-        "description": "Um arco dourado contorna o avatar."
+        "description": "Um halo dourado, um prisma que gira, uma onda que pulsa."
       },
       "de": {
         "name": "Animierte Konturen",
-        "description": "Ein goldener Bogen umkreist den Avatar."
+        "description": "Ein goldener Halo, ein kreisendes Prisma, eine pulsierende Welle."
       },
       "it": {
         "name": "Contorni animati",
-        "description": "Un arco dorato gira attorno all’avatar."
+        "description": "Un alone dorato, un prisma che gira, un’onda che pulsa."
       },
       "ar": {
         "name": "إطارات متحركة",
-        "description": "قوس ذهبي يدور حول الصورة الرمزية."
+        "description": "هالة ذهبية، ومنشور يدور، وتموّج ينبض."
       }
     },
     "usage": {
