@@ -79,7 +79,7 @@ struct StoryViewerSheets: ViewModifier {
             if let story = currentStory {
                 StoryExportShareSheet(
                     story: story,
-                    viewModel: exportShareViewModel, author: currentGroup.map(StoryExportAuthor.init(group:))
+                    viewModel: exportShareViewModel, author: currentGroup.map { StoryExportAuthor.served(from: $0) }
                 )
                 .presentationDetents([.medium, .large] as Set<PresentationDetent>)
                 .presentationDragIndicator(.visible)

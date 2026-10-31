@@ -202,6 +202,136 @@ final class StoryExportAuthorIdentityTests: XCTestCase {
     }
 }
 
+// MARK: - StoryExportRelationBadgeTests
+
+/// **Présence servie et logo de cercle de l'auteur, de l'app jusqu'à l'intro** (#13997).
+/// La présence est la projection de ce que le serveur a servi (rien servi, rien peint) ; le
+/// niveau vient d'un fournisseur INJECTÉ — la route serveur n'existe pas encore, son défaut
+/// rend `nil`.
+@MainActor
+final class StoryExportRelationBadgeTests: XCTestCase {
+
+    private nonisolated struct StubRelationLevels: RelationLevelProviding {
+        let level: String?
+        var delay: Duration? = nil
+
+        func servedLevel(withUserId userId: String) async -> String? {
+            if let delay { try? await Task.sleep(for: delay) }
+            return level
+        }
+    }
+
+    private func grace(presence: PresenceState? = nil) -> StoryExportAuthor {
+        StoryExportAuthor(userId: "u-grace", name: "Grace Hopper", presence: presence)
+    }
+
+    // MARK: Présence
+
+    func test_source_servedOnline_projectsAnOnlinePresence() {
+        let source = StoryExportAuthorIdentity.source(for: grace(presence: .online), profile: nil)
+
+        XCTAssertEqual(source.presence, .online)
+    }
+
+    func test_source_servedAwayAndIdle_projectEachState() {
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: grace(presence: .away), profile: nil).presence, .away)
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: grace(presence: .idle), profile: nil).presence, .idle)
+    }
+
+    func test_source_nothingServed_paintsNoPresence() {
+        XCTAssertNil(StoryExportAuthorIdentity.source(for: grace(), profile: nil).presence)
+    }
+
+    func test_source_servedOffline_paintsNoPresence() {
+        XCTAssertNil(StoryExportAuthorIdentity.source(for: grace(presence: .offline), profile: nil).presence)
+    }
+
+    func test_source_withProfile_keepsTheServedPresenceOfTheAuthor() {
+        let profile = MeeshyUser(id: "u-grace", username: "grace")
+
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: grace(presence: .away), profile: profile).presence, .away)
+    }
+
+    func test_unresolved_afterTheBound_keepsTheServedPresence() {
+        let content = StoryExportAuthorIdentity.unresolved(grace(presence: .online))
+
+        XCTAssertEqual(content.presence, .online)
+        XCTAssertNil(content.relationLogo, "le niveau n'a pas été attendu : pas de logo")
+    }
+
+    func test_initGroup_copiesTheServedPresenceOfTheGroup() {
+        let group = StoryGroup(id: "u-grace", username: "Grace", avatarColor: "6366F1", stories: [],
+                               authorPresence: UserPresence(isOnline: true))
+
+        XCTAssertEqual(StoryExportAuthor(group: group).presence, .online)
+    }
+
+    func test_initGroup_withoutServedPresence_hasNone() {
+        let group = StoryGroup(id: "u-grace", username: "Grace", avatarColor: "6366F1", stories: [])
+
+        XCTAssertNil(StoryExportAuthor(group: group).presence)
+    }
+
+    // MARK: Niveau de lien
+
+    func test_servedLevel_injectedClose_reachesTheIntroAsTheFireLogo() async {
+        let author = grace()
+        let level = await StoryExportAuthorIdentity.servedLevel(of: author, levels: StubRelationLevels(level: "CLOSE"))
+
+        let content = StoryExportIntroFactory.unresolvedContent(
+            for: StoryExportAuthorIdentity.source(for: author, profile: nil, servedLevel: level))
+
+        XCTAssertEqual(level, "CLOSE")
+        XCTAssertEqual(content.relationLogo, "🔥")
+    }
+
+    func test_servedLevel_injectedBlood_reachesTheIntroAsTheBloodLogo() async {
+        let author = grace()
+        let level = await StoryExportAuthorIdentity.servedLevel(of: author, levels: StubRelationLevels(level: "BLOOD"))
+
+        let content = StoryExportIntroFactory.unresolvedContent(
+            for: StoryExportAuthorIdentity.source(for: author, profile: nil, servedLevel: level))
+
+        XCTAssertEqual(content.relationLogo, "🩸")
+    }
+
+    func test_servedLevel_friendAndBelow_paintsNothing() async {
+        for served in ["FRIEND", "ACQUAINTANCE", "COMMUNITY", "PUBLIC"] {
+            let author = grace()
+            let level = await StoryExportAuthorIdentity.servedLevel(of: author, levels: StubRelationLevels(level: served))
+
+            let content = StoryExportIntroFactory.unresolvedContent(
+                for: StoryExportAuthorIdentity.source(for: author, profile: nil, servedLevel: level))
+
+            XCTAssertNil(content.relationLogo, served)
+        }
+    }
+
+    func test_servedLevel_defaultProvider_servesNothing() async {
+        let level = await StoryExportAuthorIdentity.servedLevel(of: grace(), levels: RelationLevelProvider.shared)
+
+        XCTAssertNil(level)
+    }
+
+    func test_servedLevel_authorWithoutIdentifier_isNeverAsked() async {
+        let anonymous = StoryExportAuthor(userId: nil, name: "grace")
+
+        let level = await StoryExportAuthorIdentity.servedLevel(of: anonymous, levels: StubRelationLevels(level: "CLOSE"))
+
+        XCTAssertNil(level)
+    }
+
+    func test_servedLevel_slowerThanTheBound_isGivenUp_withoutWaiting() async {
+        let slow = StubRelationLevels(level: "CLOSE", delay: .seconds(3))
+        let start = Date()
+
+        let level = await StoryExportAuthorIdentity.servedLevel(of: grace(), levels: slow, timeout: .milliseconds(100))
+
+        XCTAssertNil(level)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5, "l'export n'attend jamais le niveau au-delà de sa borne")
+    }
+}
+
 // MARK: - StoryExportPathsDressingTests
 
 /// **Un témoin par chemin qui sort une STORY en vidéo** (#10536) : le moteur
