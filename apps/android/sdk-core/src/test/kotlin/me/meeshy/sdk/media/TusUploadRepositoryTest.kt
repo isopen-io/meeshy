@@ -31,7 +31,8 @@ class TusUploadRepositoryTest {
 
     // checkpoints.find(...) is relaxed-mocked to null unless a test stubs it explicitly
     // (with the specific matching key) before calling repository() — see the resume tests below.
-    private fun repository() = TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined), me.meeshy.sdk.net.MeeshyConfig(apiBaseUrl = apiBaseUrl))
+    private fun repository(seeder: UploadedMediaSeeder = UploadedMediaSeeder.None) =
+        TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined), me.meeshy.sdk.net.MeeshyConfig(apiBaseUrl = apiBaseUrl), seeder)
 
     private fun item(name: String = "story.jpg", mime: String = "application/octet-stream") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
@@ -593,5 +594,31 @@ class TusUploadRepositoryTest {
         coVerify(exactly = 0) { api.uploadChunk(any(), any(), any(), any()) }
         coVerify(exactly = 0) { api.uploadData(any(), any(), any(), any()) }
         coVerify(exactly = 0) { checkpoints.upsert(any()) }
+    }
+
+    @Test
+    fun `a video accepted by the gateway enters the video cache under its served address`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(
+            MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn.meeshy.me/pm1.mp4", mimeType = "video/mp4", fileSize = 3L),
+        )
+        val cache = RecordingUploadedMediaCache()
+
+        repository(cache.seeder()).upload(item(name = "clip.mp4"), TusUploadContext.POST)
+
+        val adoption = cache.adoptions.single()
+        assertThat(adoption.category).isEqualTo(me.meeshy.sdk.model.mediacache.MediaCacheCategory.VIDEO)
+        assertThat(adoption.url).isEqualTo("https://cdn.meeshy.me/pm1.mp4")
+        assertThat(adoption.bytes).isEqualTo(byteArrayOf(1, 2, 3))
+    }
+
+    @Test
+    fun `a refused upload seeds nothing`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns errorResponse(500)
+        val cache = RecordingUploadedMediaCache()
+
+        repository(cache.seeder()).upload(item(name = "clip.mp4"), TusUploadContext.POST)
+
+        assertThat(cache.adoptions).isEmpty()
     }
 }

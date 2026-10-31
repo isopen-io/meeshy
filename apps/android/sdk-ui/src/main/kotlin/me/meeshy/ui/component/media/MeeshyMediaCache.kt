@@ -16,11 +16,14 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import me.meeshy.sdk.media.CachedSpanProbe
 import me.meeshy.sdk.media.MediaCacheDirs
+import me.meeshy.sdk.media.UploadedMediaCache
 import me.meeshy.sdk.model.mediacache.MediaCacheBudget
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.sdk.model.mediacache.MediaPinTable
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -32,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap
  * dans le processus : l'objet est donc un singleton ([get]).
  */
 @UnstableApi
-public class MeeshyMediaCache private constructor(context: Context) : CachedSpanProbe {
+public class MeeshyMediaCache private constructor(context: Context) : CachedSpanProbe, UploadedMediaCache {
     private val appContext = context.applicationContext
     private val dirs = MediaCacheDirs(appContext.cacheDir, appContext.cacheDir)
     private val databaseProvider by lazy { StandaloneDatabaseProvider(appContext) }
@@ -122,25 +125,63 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
     }
 
     /**
-     * Adopte un fichier local (média tout juste enregistré ou envoyé) comme ressource de [url] :
-     * startFile / commitFile, pour que sa lecture ne passe plus par le réseau.
+     * Adopte les octets d'un média tout juste envoyé comme la ressource de [url] (#13861) : sa lecture ne passe plus par
+     * le réseau. Le trou de la ressource est VERROUILLÉ avant l'écriture (`startReadWriteNonBlocking`) et rendu quoi
+     * qu'il arrive (`releaseHoleSpan`) ; une ressource déjà en écriture par un lecteur, déjà présente en partie, ou une
+     * source qui échoue ou ne rend pas [length] octets n'adopte rien et ne laisse aucun tronçon.
      */
-    public fun adoptLocalFile(category: MediaCacheCategory, url: String, file: File) {
+    override fun adopt(category: MediaCacheCategory, url: String, length: Long, open: () -> InputStream): Boolean {
+        if (length <= 0L) return false
         val cache = cacheFor(category)
         val key = MeeshyMediaCacheKey.of(url)
-        val length = file.length()
-        if (length <= 0L || cache.isCached(key, 0L, length)) return
-        val slot = cache.startFile(key, 0L, length)
+        if (isFullyCached(category, key)) return true
+        val hole = runCatching { cache.startReadWriteNonBlocking(key, 0L, length) }.getOrNull() ?: return false
+        if (hole.isCached) return cache.isCached(key, 0L, length)
         try {
-            file.copyTo(slot, overwrite = true)
-            cache.commitFile(slot, length)
+            return writeHole(cache, key, length, open)
+        } finally {
+            cache.releaseHoleSpan(hole)
+        }
+    }
+
+    private fun writeHole(cache: Cache, key: String, length: Long, open: () -> InputStream): Boolean {
+        val slot = try {
+            cache.startFile(key, 0L, length)
+        } catch (failure: IOException) {
+            return false
+        }
+        val written = try {
+            slot.outputStream().use { out -> open().use { input -> copyExactly(input, out, length) } }
+        } catch (failure: Exception) {
+            false
+        }
+        if (!written) {
+            slot.delete()
+            return false
+        }
+        return try {
             cache.applyContentMetadataMutations(
                 key,
                 ContentMetadataMutations().also { ContentMetadataMutations.setContentLength(it, length) },
             )
-        } catch (e: IOException) {
+            cache.commitFile(slot, length)
+            cache.isCached(key, 0L, length)
+        } catch (failure: IOException) {
             slot.delete()
+            false
         }
+    }
+
+    private fun copyExactly(input: InputStream, out: OutputStream, length: Long): Boolean {
+        val buffer = ByteArray(COPY_BUFFER_BYTES)
+        var copied = 0L
+        while (copied < length) {
+            val read = input.read(buffer, 0, minOf(buffer.size.toLong(), length - copied).toInt())
+            if (read < 0) return false
+            out.write(buffer, 0, read)
+            copied += read
+        }
+        return input.read() < 0
     }
 
     override fun isFullyCached(category: MediaCacheCategory, key: String): Boolean {
@@ -170,6 +211,7 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
 
     public companion object {
         private const val PINS_REFRESH_MILLIS = 2_000L
+        private const val COPY_BUFFER_BYTES = 64 * 1024
 
         @Volatile
         private var instance: MeeshyMediaCache? = null

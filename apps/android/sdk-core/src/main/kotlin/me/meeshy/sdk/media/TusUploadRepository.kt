@@ -58,6 +58,7 @@ public class TusUploadRepository @Inject constructor(
     private val checkpoints: TusUploadCheckpointDao,
     private val sanitizer: OutgoingMediaSanitizer,
     private val config: MeeshyConfig,
+    private val seeder: UploadedMediaSeeder = UploadedMediaSeeder.None,
 ) {
     /**
      * Uploads one [item] tagged with [context]. See [TusUploadRepository].
@@ -77,7 +78,9 @@ public class TusUploadRepository @Inject constructor(
             is NetworkResult.Success -> result.data
         }
         return try {
-            send(outgoing, context, chunkSizeBytes, onProgress)
+            send(outgoing, context, chunkSizeBytes, onProgress).also { result ->
+                if (result is NetworkResult.Success) result.data.forEach { seeder.seed(outgoing, it) }
+            }
         } finally {
             sanitizer.release(outgoing, item)
         }
