@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.call.CallMicrophoneSamples
 import me.meeshy.sdk.media.CaptureGallery
 import me.meeshy.sdk.model.call.montage.CallCaptureStatus
 
@@ -52,12 +53,13 @@ class CallCaptureViewModel @Inject constructor(
     private val toasts: CallToastBus,
     private val haptics: CallHaptics,
     clock: CallClock,
+    microphone: CallMicrophoneSamples,
 ) : ViewModel() {
     val controller = CallCaptureController(
         frames = CallCaptureFrameGrabber(),
         painter = CallCapturePainter(),
         saver = GalleryCallCaptureSaver(gallery),
-        recorders = { CallCaptureRecorder(context.cacheDir) },
+        recorders = { CallCaptureRecorder(context.cacheDir, microphone.frames) },
         scope = viewModelScope,
         clock = clock::nowMs,
         stamp = { SimpleDateFormat(STAMP_PATTERN, Locale.US).format(Date()) },
