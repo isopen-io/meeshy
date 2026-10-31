@@ -85,6 +85,10 @@ final class StoryPhotoSaveService: ObservableObject {
     /// @atabeth sortait signé « @atabeth ».
     private let watermark: @MainActor (String?) -> StoryExportWatermark?
 
+    /// Le choix de longueur d'« Imager » (#13871), posé AVANT le rendu.
+    typealias ImagerLengthPick = @MainActor ([ImagerLengthChoice], @escaping @MainActor (ImagerQuarter) -> Void) -> Void
+    private let pickImagerLength: ImagerLengthPick
+
     init(
         exporter: StoryVideoExportServiceProviding? = nil,
         photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
@@ -94,8 +98,10 @@ final class StoryPhotoSaveService: ObservableObject {
         intro: StoryExportDressingResolver.ViewerIntro? = nil,
         authorIntro: StoryExportDressingResolver.AuthorIntro? = nil,
         concatenate: (@MainActor ([URL], URL) async -> Bool)? = nil,
-        watermark: (@MainActor (String?) -> StoryExportWatermark?)? = nil
+        watermark: (@MainActor (String?) -> StoryExportWatermark?)? = nil,
+        pickImagerLength: ImagerLengthPick? = nil
     ) {
+        self.pickImagerLength = pickImagerLength ?? { ImagerLengthPresenter.present($0, choose: $1) }
         // `StoryVideoExportService.shared` et `FeedbackToastManager.shared`
         // sont `@MainActor`-isolés : impossible en expression de valeur par
         // défaut, résolus ici.
@@ -206,6 +212,42 @@ final class StoryPhotoSaveService: ObservableObject {
                      languages: languages,
                      stickerMedia: post.media,
                      dressing: .bareWork(author: post.savedWorkAuthorUsername))
+    }
+
+    // MARK: - Imager (#13871)
+
+    /// **« Imager » rend la MÊME composition qu'« Enregistrer »** — calques, son,
+    /// habillage — et la range dans Photos ; au-delà d'une minute, la longueur
+    /// rendue (1/4 · 2/4 · 3/4 · 4/4 depuis le début) se choisit d'abord.
+    /// « Enregistrer » et « Partager » ne coupent jamais.
+    func image(story: StoryItem, author: StoryExportAuthor?) {
+        let languages = exportLanguages(of: story)
+        image(jobKey: story.id,
+              slides: [story.toRenderableSlide(preferredLanguages: languages)],
+              languages: languages,
+              stickerMedia: story.media,
+              dressing: .forStory(of: author, viewer: .current))
+    }
+
+    /// Un réel ou un post composé, l'œuvre seule — comme `save(post:)`.
+    func image(post: FeedPost) {
+        let languages = preferredLanguages()
+        image(jobKey: post.id,
+              slides: Self.renderableSlides(of: post, preferredLanguages: languages),
+              languages: languages,
+              stickerMedia: post.media,
+              dressing: .bareWork(author: post.savedWorkAuthorUsername))
+    }
+
+    private func image(jobKey: String, slides: [StorySlide], languages: [String],
+                       stickerMedia: [FeedMedia], dressing: StoryExportDressing) {
+        let render: @MainActor (ImagerQuarter?) -> Void = { [weak self] quarter in
+            self?.bakeThenSave(jobKey: jobKey, slides: ImagerLength.cut(slides, quarter: quarter),
+                               languages: languages, stickerMedia: stickerMedia, dressing: dressing)
+        }
+        let choices = StoryExportMode.imager.lengthChoices(total: ImagerLength.total(of: slides))
+        guard !choices.isEmpty else { return render(nil) }
+        pickImagerLength(choices) { render($0) }
     }
 
     /// **Le MP4 de la scène d'un post, rendu À LA DEMANDE pour la feuille de partage**

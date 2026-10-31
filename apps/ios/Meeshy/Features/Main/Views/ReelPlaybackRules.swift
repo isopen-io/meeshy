@@ -238,4 +238,16 @@ enum PostSaveAction {
         }
         return true
     }
+
+    /// « Imager » (#13871) : seule une œuvre COMPOSÉE se rend — un réel de
+    /// médias simple n'a que son fichier. `nil` ⇒ aucune entrée (loi 4).
+    static func imagerAction(for post: FeedPost,
+                             coordinator: MediaSaveCoordinator,
+                             service: StoryPhotoSaveService = .shared) -> (() -> Void)? {
+        guard route(for: post, coordinator: coordinator) == .renderScene else { return nil }
+        return {
+            HapticFeedback.light()
+            service.image(post: post)
+        }
+    }
 }

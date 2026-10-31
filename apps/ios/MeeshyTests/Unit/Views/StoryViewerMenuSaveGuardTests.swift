@@ -48,12 +48,12 @@ final class StoryOptionsMenuPlanTests: XCTestCase {
 
     func test_theMenu_ofSomeoneElsesStory_inTheDecidedOrder() {
         let plan = StoryOptionsMenuPlanFixture.plan(isOwnStory: false, hasAudioTranscript: true)
-        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.compose, .exportVideo], [.report], [.close]])
+        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.compose, .exportVideo, .imager], [.report], [.close]])
     }
 
     func test_theMenu_ofOnesOwnStory_isTheSame_butDeletes() {
         let plan = StoryOptionsMenuPlanFixture.plan(isOwnStory: true, hasAudioTranscript: true)
-        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.compose, .exportVideo], [.delete], [.close]])
+        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.compose, .exportVideo, .imager], [.delete], [.close]])
     }
 
     func test_close_isTheLastEntry_forEveryReader() {
@@ -74,7 +74,8 @@ final class StoryOptionsMenuPlanTests: XCTestCase {
     func test_noEntryAppearsTwice_andTheMenuStaysShort() {
         for plan in StoryOptionsMenuPlanFixture.everyReader {
             XCTAssertEqual(Set(plan.entries).count, plan.entries.count, "Doublon : \(plan.entries)")
-            XCTAssertLessThanOrEqual(plan.entries.count, 6, "Trop d'entrées : \(plan.entries)")
+            // 7 depuis « Imager » (#13871, décision porteur).
+            XCTAssertLessThanOrEqual(plan.entries.count, 7, "Trop d'entrées : \(plan.entries)")
             XCTAssertFalse(plan.sections.contains { $0.isEmpty }, "Aucune section vide.")
         }
     }
@@ -148,6 +149,7 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
             ("case .transcript:", "transcriptMenuContent"),
             ("case .compose:", "demanderComposer(cible)"),
             ("case .exportVideo:", "showExportShareSheet = true"),
+            ("case .imager:", "StoryPhotoSaveService.shared.image("),
             ("case .report:", "showReportSheet = true"),
             ("case .remove:", "ContentRemovalPresenter.present(.story) { deleteCurrentStory($0) }"),
             ("case .delete:", "deleteCurrentStory(nil)"),

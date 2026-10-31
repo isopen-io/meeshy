@@ -42,6 +42,9 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
     /// La feuille d'export au choix de la LANGUE (`StoryExportShareSheet`) :
     /// une vidéo avec tous les objets de la scène, son intro et sa sortie.
     case exportVideo
+    /// « Imager » (#13871) : la même vidéo, rangée dans Photos, à la longueur
+    /// choisie au-delà d'une minute.
+    case imager
     case report
     /// #11535 — la modération rend PRIVÉE la story d'un autre, avec un motif.
     case makePrivate
@@ -70,7 +73,7 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
         guard hasStory else {
             return StoryOptionsMenuPlan(sections: [reading, [.close]])
         }
-        let making: [StoryOptionsMenuEntry] = canCompose ? [.compose, .exportVideo] : [.exportVideo]
+        let making: [StoryOptionsMenuEntry] = canCompose ? [.compose, .exportVideo, .imager] : [.exportVideo, .imager]
         let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .makePrivate, .remove] : [.report])
         return StoryOptionsMenuPlan(sections: [reading, making, acting, [.close]])
     }
@@ -448,6 +451,15 @@ struct StoryHeaderView: View {
             } label: {
                 Label(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo", bundle: .main), systemImage: "film")
             }
+        case .imager:
+            if let story = currentStory {
+                Button {
+                    HapticFeedback.light()
+                    StoryPhotoSaveService.shared.image(story: story, author: currentGroup.map(StoryExportAuthor.init(group:)))
+                } label: {
+                    Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
+                }
+            }
         case .report, .makePrivate, .remove, .delete:
             actingMenuItem(entry)
         case .close:
@@ -493,7 +505,7 @@ struct StoryHeaderView: View {
             }
         // Exhaustif, sans `default:` : une entrée nouvelle (#11535 a ajouté
         // `.makePrivate`) ne disparaît plus du menu en silence (#11151).
-        case .fullscreen, .transcript, .compose, .exportVideo, .close:
+        case .fullscreen, .transcript, .compose, .exportVideo, .imager, .close:
             EmptyView()
         }
     }
