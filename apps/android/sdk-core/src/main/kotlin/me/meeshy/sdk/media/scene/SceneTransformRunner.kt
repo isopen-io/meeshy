@@ -2,6 +2,7 @@ package me.meeshy.sdk.media.scene
 
 import android.graphics.Bitmap
 import java.io.File
+import me.meeshy.sdk.model.scene.export.StoryExportBrandingPlan
 import me.meeshy.sdk.model.scene.export.StoryExportClipRange
 import me.meeshy.sdk.model.scene.export.StoryExportTimelinePlan
 import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
@@ -35,6 +36,23 @@ public sealed interface SceneExportOverlay {
 public data class SceneExportSoundFile(val file: File, val durationMillis: Long?)
 
 /**
+ * **L'emballage de marque d'un export de story** (#13509 ; miroir de `StoryExportBranding.Plan` iOS) : l'intro d'identité en tête
+ * ([introCard] pleine puis fondue sur la story), la carte de fin qui recouvre la fin de la story ([outroCard], puis [authorCard]
+ * posée dessus quand l'auteur ferme la vidéo), et les deux signatures sonores en WAV. Les cartes sont des images à la taille
+ * du format ; le minutage vient du [plan], les cartes ne portent aucune horloge.
+ */
+public class SceneExportBranding(
+    public val plan: StoryExportBrandingPlan,
+    public val introCard: File?,
+    public val outroCard: File,
+    public val authorCard: File?,
+    public val introJingle: File?,
+    public val introJingleMillis: Long,
+    public val outroJingle: File,
+    public val outroJingleMillis: Long,
+)
+
+/**
  * Tout ce que le moteur reçoit pour rendre un export : le plan (lois pures — slides, sons), le format de la vidéo, ce qui
  * remplit chaque slide (dans l'ordre des slides du plan), les calques des objets, et les fichiers des sons par adresse.
  */
@@ -49,6 +67,8 @@ public class SceneExportJob(
     public val release: () -> Unit = {},
     /** Une scène fixe et muette : son image, déjà peinte avec son fond, remise telle quelle — aucun rendu vidéo. */
     public val still: File? = null,
+    /** L'intro, la carte de fin et les jingles ; `null` : la story seule (une scène de post rend l'œuvre sans marque). */
+    public val branding: SceneExportBranding? = null,
 )
 
 /** Le moteur de rendu derrière [SceneExportCoordinator] : annulable, il rend la fraction rendue à mesure. */

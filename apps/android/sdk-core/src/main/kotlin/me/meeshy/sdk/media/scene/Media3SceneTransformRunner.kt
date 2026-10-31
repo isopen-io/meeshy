@@ -7,6 +7,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.DefaultMuxer
@@ -101,9 +102,10 @@ internal class Media3SceneTransformRunner(
         val planned = SceneCompositionPlanner.of(job)
         val video = EditedMediaItemSequence(planned.video.map { videoItem(it, job.format) })
         val sounds = planned.audio.map { sequence -> EditedMediaItemSequence(sequence.map(::audioItem)) }
-        val overlay = job.overlays.takeIf { it.isNotEmpty() }?.let { TimedBitmapOverlay(it) }
+        val objects = job.overlays.takeIf { it.isNotEmpty() }?.let { TimedBitmapOverlay(it) }
+        val overlays = listOfNotNull<TextureOverlay>(objects) + planned.brandLayers.map { BrandCardOverlay(it.file, it.alphaAt) }
         return Composition.Builder(listOf(video) + sounds)
-            .apply { overlay?.let { setEffects(Effects(emptyList(), listOf(OverlayEffect(ImmutableList.of(it))))) } }
+            .apply { if (overlays.isNotEmpty()) setEffects(Effects(emptyList(), listOf(OverlayEffect(ImmutableList.copyOf(overlays))))) }
             .build()
     }
 
