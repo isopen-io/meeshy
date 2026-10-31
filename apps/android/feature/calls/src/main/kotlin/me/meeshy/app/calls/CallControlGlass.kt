@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -98,6 +99,9 @@ internal fun CallPillGlyph(icon: ImageVector, kind: CallPillKind, diameter: Dp, 
     }
 }
 
+/** Un bouton refusé pendant une prise ou un film se lit atténué (SwiftUI `.disabled`). */
+private const val DISABLED_ALPHA = 0.4f
+
 /**
  * One button of the pill: glyph + optional caption. The target stays at least 48 dp, the press
  * shrinks the disc to 0.88 (a plain lightening with « reduce animations »), a light haptic marks
@@ -114,6 +118,7 @@ internal fun CallPillButton(
     hint: String? = null,
     toggleState: Boolean? = null,
     diameter: Dp = 48.dp,
+    enabled: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
@@ -134,7 +139,8 @@ internal fun CallPillButton(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         modifier = modifier
             .defaultMinSize(minWidth = CallButtonFill.MIN_TARGET_DP.dp, minHeight = CallButtonFill.MIN_TARGET_DP.dp)
-            .clickable(interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onClick)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
+            .clickable(enabled = enabled, interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) {
                 contentDescription = label
                 toggleState?.let { toggleableState = ToggleableState(it) }

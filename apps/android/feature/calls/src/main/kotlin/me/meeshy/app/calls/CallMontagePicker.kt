@@ -182,6 +182,8 @@ internal fun CallMontagePicker(
         MontageActionBar(
             hold = hold,
             isRecording = captureState.isRecording,
+            facesEnabled = !captureState.isWorking && !captureState.isRecording,
+            onFaces = shooter.faces,
             onQuit = onClose,
             onHold = { id ->
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -293,9 +295,19 @@ private fun MoodChip(label: String, selected: Boolean, isEnabled: Boolean, hint:
     )
 }
 
-/** Quitter à gauche, puis « Cadre » quand le cadre affiché peut se garder pendant l'appel (iOS `CallModeActionBar`). */
+/**
+ * Quitter à gauche, puis « Cadre » quand le cadre affiché peut se garder pendant l'appel, puis « Chaque visage »
+ * (iOS `CallModeActionBar`, options `holdOptions + [faces]`), refusé pendant une prise ou un film.
+ */
 @Composable
-private fun MontageActionBar(hold: CallMontageHold?, isRecording: Boolean, onQuit: () -> Unit, onHold: (String) -> Unit) {
+private fun MontageActionBar(
+    hold: CallMontageHold?,
+    isRecording: Boolean,
+    facesEnabled: Boolean,
+    onFaces: () -> Unit,
+    onQuit: () -> Unit,
+    onHold: (String) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xl),
         verticalAlignment = Alignment.CenterVertically,
@@ -323,6 +335,16 @@ private fun MontageActionBar(hold: CallMontageHold?, isRecording: Boolean, onQui
                 onClick = { if (!isRecording) onHold(option.frameId) },
             )
         }
+        CallPillButton(
+            icon = MeeshyIcons.Account,
+            kind = CallPillKind.Normal,
+            label = stringResource(R.string.call_capture_faces),
+            caption = stringResource(R.string.call_capture_faces),
+            hint = stringResource(R.string.call_capture_faces_hint),
+            diameter = SIDE_DIAMETER,
+            enabled = facesEnabled,
+            onClick = onFaces,
+        )
     }
 }
 

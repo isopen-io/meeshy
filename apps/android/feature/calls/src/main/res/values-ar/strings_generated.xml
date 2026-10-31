@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_capture_faces">كل وجه</string>
+    <string name="call_capture_faces_saved">تم حفظ %1$d وجوه</string>
     <string name="call_capture_style_comic">قصة مصورة</string>
     <string name="call_capture_style_cover">غلاف</string>
     <string name="call_capture_style_film">شريط فيلم</string>

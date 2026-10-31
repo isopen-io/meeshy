@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="call_capture_faces">Cada rostro</string>
+    <string name="call_capture_faces_saved">%1$d rostros guardados</string>
     <string name="call_capture_style_comic">Cómic</string>
     <string name="call_capture_style_cover">Portada</string>
     <string name="call_capture_style_film">Película</string>
