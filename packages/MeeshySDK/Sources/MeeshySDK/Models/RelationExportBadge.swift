@@ -8,8 +8,8 @@ import Foundation
 ///
 /// Entrée : le niveau EFFECTIF du lien exportateur / auteur, tel que le serveur le
 /// SERT — jamais un niveau accordé d'un seul côté. Sortie : l'emoji du cercle, ou
-/// `nil` = rien n'est peint. À partir de Proche seulement (décision porteur du
-/// 2026-10-31) ; Ami et en dessous ne montrent rien. Toute valeur absente, inconnue,
+/// `nil` = rien n'est peint. À partir de Proche seulement (décision porteur,
+/// #13997) ; Ami et en dessous ne montrent rien. Toute valeur absente, inconnue,
 /// en minuscules ou réservée (ATOM, hors MVP) rend `nil` : le logo se ferme sur le doute.
 public enum RelationExportBadge {
 

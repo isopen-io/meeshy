@@ -50,7 +50,6 @@
     <string name="chat_effect_pulse">Pulso</string>
     <string name="chat_effect_rainbow">Arcoíris</string>
     <string name="chat_effect_sparkle">Destello</string>
-    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_30s">30 s</string>
     <string name="chat_effect_duration_1m">1 min</string>
     <string name="chat_effect_duration_5m">5 min</string>

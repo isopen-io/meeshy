@@ -26,6 +26,7 @@
         <item quantity="many">Apagar %1$d mensagens?</item>
         <item quantity="other">Apagar %1$d mensagens?</item>
     </plurals>
+    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_engagement_a11y_streak">%1$s · Faíscas: %2$d · Hoje: %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d dia</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d dias</string>

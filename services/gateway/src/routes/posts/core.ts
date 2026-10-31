@@ -44,7 +44,8 @@ import { mayServePostToAnonymous } from './anonymousPostGate';
 import { noteRepostInteraction, notifyRepostedAuthor, readRepostedSource, repostedAuthorToNotify } from './repostedAuthorNotification';
 import { audienceChangeVerdict, mayRepostSource } from '../../services/posts/moderationHold';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
-import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
+import { getAppVersionFloor, getAppStoreUrl } from '../../utils/appVersion';
+import { rejectBelowAppVersionFloor as rejectBelowFloor } from '../../middleware/app-version-floor';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { issuesServies } from '../../utils/zod-issue-schema';
 import { MentionService } from '../../services/MentionService';
@@ -106,17 +107,7 @@ function rejectBelowAppVersionFloor(
   data: { storyEffects?: unknown; type?: string }
 ): boolean {
   if (data.storyEffects == null && data.type !== 'STORY') return false;
-  const versionHeader = request.headers['x-app-version'];
-  const version = typeof versionHeader === 'string' ? versionHeader : undefined;
-  if (!isBelowFloor(version, getAppVersionFloor())) return false;
-  const platformHeader = request.headers['x-app-platform'];
-  sendUpgradeRequired(reply, 'App version outdated - update the app', {
-    details: {
-      minVersion: getAppVersionFloor(),
-      storeUrl: getAppStoreUrl(typeof platformHeader === 'string' ? platformHeader : undefined),
-    },
-  });
-  return true;
+  return rejectBelowFloor(request, reply);
 }
 
 function rejectNonV3StoryEffects(

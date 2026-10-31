@@ -26,6 +26,7 @@
         <item quantity="many">Eliminare %1$d messaggi?</item>
         <item quantity="other">Eliminare %1$d messaggi?</item>
     </plurals>
+    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_engagement_a11y_streak">%1$s · Scintille: %2$d · Oggi: %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d giorno</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d giorni</string>

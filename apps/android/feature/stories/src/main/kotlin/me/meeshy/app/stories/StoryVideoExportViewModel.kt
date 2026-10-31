@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.media.scene.SceneExportCoordinatorFactory
+import me.meeshy.sdk.media.scene.SceneExportLog
 import me.meeshy.sdk.media.scene.SceneMediaProbe
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryItem
@@ -132,6 +133,7 @@ class StoryVideoExportViewModel @Inject constructor(
                     frame.recycle()
                 }
             } catch (failure: Exception) {
+                SceneExportLog.warn("dernière image de la vidéo de fond illisible, fond noir tenu", failure)
                 false
             } finally {
                 retriever.release()
