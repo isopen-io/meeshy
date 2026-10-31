@@ -61,6 +61,7 @@ internal fun BubbleAttachmentSections(
             autoRevealTranscription = autoReveal,
             onClick = callbacks.onAudioClick?.takeIf { audio.isPlayable }
                 ?.let { { it(audio) } },
+            onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
     }

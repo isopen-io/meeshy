@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.MessageTranscriptionSegment
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 
 @Immutable
@@ -111,12 +112,22 @@ public data class BubbleAudio(
     val isTranscriptionTranslated: Boolean = false,
     val isAudioTranslated: Boolean = false,
     val audioLanguage: String? = null,
+    /**
+     * Les segments de [transcriptionText] que le karaoké allume pendant la lecture (#13878). Ils ne gardent leurs
+     * horodatages que s'ils décrivent la piste JOUÉE ; sur une autre piste ils avancent à la progression.
+     */
+    val transcriptionSegments: List<MessageTranscriptionSegment> = emptyList(),
 ) {
     /** True when the audio has a playable URL (already downloaded / remote-ready). */
     val isPlayable: Boolean get() = !url.isNullOrBlank()
 
     /** True when a non-blank transcription line is worth surfacing under the player. */
     val hasTranscription: Boolean get() = !transcriptionText.isNullOrBlank()
+
+    /** Ce que le karaoké lit : les segments servis, sinon la transcription en un seul bloc (iOS `resolveDisplaySegments`). */
+    val karaokeSegments: List<MessageTranscriptionSegment> get() = transcriptionSegments.ifEmpty {
+        listOfNotNull(transcriptionText?.trim()?.ifBlank { null }?.let { MessageTranscriptionSegment(text = it) })
+    }
 
     /**
      * Human-readable `m:ss` duration (unpadded minutes, zero-padded seconds — the

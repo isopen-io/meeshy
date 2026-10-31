@@ -104,6 +104,13 @@ internal class ChatAudioPlayer internal constructor(
         publish()
     }
 
+    /** A touch on a word of [audio]'s transcript (#13878): seek there, only if [audio] is the voice note loaded. */
+    fun seek(audio: BubbleAudio, positionSeconds: Double) {
+        if (audio.attachmentId != playback.attachmentId || playback.transport.currentUrl == null) return
+        tick()
+        seekTo((positionSeconds * 1000).toLong())
+    }
+
     /** What the bubble owning [audio] shows, or `null` when another voice note is loaded. */
     fun bubbleFor(audio: BubbleAudio): BubbleAudioPlayback? =
         playback.bubbleFor(audio.attachmentId, audio.durationSeconds)
