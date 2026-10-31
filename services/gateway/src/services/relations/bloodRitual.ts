@@ -8,7 +8,8 @@
  * - `start` ouvre — ou REJOINT — le rituel de la paire : un jeton unique, une vie de
  *   60 s. Il exige une demande de Sang EN ATTENTE entre les deux, un lien Proche,
  *   douze semaines actives depuis l'entrée en Proche (la même loi que l'envoi), et
- *   aucun blocage ;
+ *   aucun blocage. Pour son émetteur, une demande REFUSÉE ouvre le même rituel, muet
+ *   (le refus ne se lit pas) ;
  * - `hold` dit « je tiens l'écran » ; il se REJOUE, et ne vaut que 15 s ;
  * - `confirm` exige que les DEUX tiennent l'écran (ou que l'autre ait déjà confirmé),
  *   un jeton exact et l'accord explicite des quatre partages. Quand les deux ont
@@ -91,6 +92,8 @@ type RitualState = {
   readonly expiresAt: number;
   readonly holds: Readonly<Record<string, number>>;
   readonly confirms: Readonly<Record<string, RelationRitualConsents>>;
+  /** Ouvert sur une demande refusée, pour son seul émetteur : rien n'en part vers l'autre. */
+  readonly muted?: boolean;
 };
 
 const refuse = (status: 400 | 409, code: RitualCode, message: string): RitualOutcome => ({ ok: false, status, code, message });
@@ -138,25 +141,39 @@ const isConsents = (value: unknown): value is RelationRitualConsents =>
   typeof value === 'object' && value !== null &&
   RELATION_RITUAL_CONSENT_KEYS.every((key) => typeof (value as Record<string, unknown>)[key] === 'boolean');
 
-/** La demande de Sang EN ATTENTE entre les deux, dans un sens ou dans l'autre. */
-const pendingBloodRequest = (prisma: RitualDb, a: string, b: string) =>
-  prisma.friendRequest.findFirst({
+const BLOOD_REQUEST_SELECT = { id: true, senderId: true, receiverId: true, status: true } as const;
+
+/**
+ * La demande de Sang EN ATTENTE entre les deux, dans un sens ou dans l'autre — et,
+ * pour son ÉMETTEUR seulement, la demande qu'on lui a REFUSÉE : il la lit « en
+ * attente » (RG-07), le rituel doit donc s'ouvrir pour lui comme si elle l'était
+ * (audit #13933). Ce rituel-là est MUET (`muted`) : l'autre n'en reçoit rien, et le
+ * jeton expire sans jamais aboutir, l'écriture conditionnelle exigeant `pending`.
+ */
+async function bloodRequestFor(prisma: RitualDb, actorId: string, otherId: string) {
+  const pending = await prisma.friendRequest.findFirst({
     where: {
       status: 'pending',
       targetLevel: 'BLOOD',
-      OR: [{ senderId: a, receiverId: b }, { senderId: b, receiverId: a }],
+      OR: [{ senderId: actorId, receiverId: otherId }, { senderId: otherId, receiverId: actorId }],
     },
-    select: { id: true, senderId: true, receiverId: true },
+    select: BLOOD_REQUEST_SELECT,
   });
+  if (pending) return pending;
+  return prisma.friendRequest.findFirst({
+    where: { status: 'rejected', targetLevel: 'BLOOD', senderId: actorId, receiverId: otherId },
+    select: BLOOD_REQUEST_SELECT,
+  });
+}
 
 type Preconditions =
-  | { readonly ok: true; readonly request: { id: string; senderId: string; receiverId: string } }
+  | { readonly ok: true; readonly request: { id: string; senderId: string; receiverId: string; status: string } }
   | { readonly ok: false; readonly outcome: RitualOutcome };
 
 /** Ce qui doit tenir à l'ouverture ET à l'achèvement : demande, absence de blocage, cran, série. */
 async function checkPreconditions(deps: RitualDeps, actorId: string, otherId: string): Promise<Preconditions> {
   if (await isBlockedBetween(deps.prisma, actorId, otherId)) return { ok: false, outcome: NO_REQUEST };
-  const request = await pendingBloodRequest(deps.prisma, actorId, otherId);
+  const request = await bloodRequestFor(deps.prisma, actorId, otherId);
   if (!request) return { ok: false, outcome: NO_REQUEST };
 
   const judgement = await judgeRelationRequest(deps.prisma, {
@@ -183,6 +200,7 @@ async function start(deps: RitualDeps, actorId: string, otherId: string): Promis
       expiresAt: now + RITUAL_TTL_MS,
       holds: {},
       confirms: {},
+      ...(checked.request.status === 'rejected' ? { muted: true } : {}),
     };
     await writeState(deps.cache, key, created, now);
     return created;
@@ -190,9 +208,11 @@ async function start(deps: RitualDeps, actorId: string, otherId: string): Promis
   if (!state) return refuse(409, 'RELATION_RITUAL_BUSY', 'Le rituel est en cours de mise à jour, réessayez');
 
   const expiresAt = new Date(state.expiresAt).toISOString();
-  emitRitualStarted(deps.io, {
-    toUserId: otherId, fromUserId: actorId, token: state.token, requestId: state.requestId, expiresAt, holdWindowMs: RITUAL_HOLD_VALID_MS,
-  });
+  if (!state.muted) {
+    emitRitualStarted(deps.io, {
+      toUserId: otherId, fromUserId: actorId, token: state.token, requestId: state.requestId, expiresAt, holdWindowMs: RITUAL_HOLD_VALID_MS,
+    });
+  }
   return { ok: true, data: { token: state.token, requestId: state.requestId, expiresAt, holdWindowMs: RITUAL_HOLD_VALID_MS } };
 }
 
@@ -316,7 +336,7 @@ async function advance(
     if (step.kind === 'refuse') {
       if (step.drop) {
         await deps.cache.del(key);
-        emitRitualProgress(deps.io, { toUserId: otherId, fromUserId: actorId, token: state.token, stage: 'lapsed' });
+        if (!state.muted) emitRitualProgress(deps.io, { toUserId: otherId, fromUserId: actorId, token: state.token, stage: 'lapsed' });
       }
       return step.outcome;
     }
@@ -325,7 +345,7 @@ async function advance(
       return complete(deps, key, step.state, actorId, otherId);
     }
     await writeState(deps.cache, key, step.state, now);
-    emitRitualProgress(deps.io, { toUserId: otherId, fromUserId: actorId, token: state.token, stage: step.stage });
+    if (!state.muted) emitRitualProgress(deps.io, { toUserId: otherId, fromUserId: actorId, token: state.token, stage: step.stage });
     return { ok: true, data: step.data };
   });
 

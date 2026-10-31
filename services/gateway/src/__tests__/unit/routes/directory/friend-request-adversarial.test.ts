@@ -125,6 +125,24 @@ describe('audit #13933 — un refus ne se lit nulle part chez l’émetteur', ()
     expect(b.body?.code).toBe(a.body?.code);
   });
 
+  it('le rituel ouvert sur une demande de Sang refusée est MUET : celui qui a refusé n’en reçoit rien, et le jeton n’aboutit jamais', async () => {
+    const app = await appli({
+      liens: [lien('CLOSE', 'CLOSE', { levelSince: new Date(NOW.getTime() - 200 * DAY) })],
+      demandes: [demande(FR, 'rejected', MOI, AUTRE, { targetLevel: 'BLOOD' })],
+      jours: Array.from({ length: 13 }, (_, i) => semaineActive(i, LOW, HIGH)),
+    });
+    const ouvert = await app.call('POST', `${REL}/${AUTRE}/ritual`, { phase: 'start' }, MOI);
+    const tenu = await app.call('POST', `${REL}/${AUTRE}/ritual`, { phase: 'hold', token: ouvert.body.data.token }, MOI);
+    const parLui = await app.call('POST', `${REL}/${MOI}/ritual`, { phase: 'start' }, AUTRE);
+    await app.close();
+
+    expect([ouvert.status, tenu.status]).toEqual([200, 200]);
+    expect(parLui.body?.code).toBe('RELATION_RITUAL_NO_REQUEST');
+    expect(app.emissions.filter((e) => e.event.startsWith('relation:'))).toEqual([]);
+    expect(app.store.friendRequests()).toEqual([expect.objectContaining({ id: FR, status: 'rejected' })]);
+    expect(app.store.relations()[0]).toMatchObject({ grantedByLow: 'CLOSE', grantedByHigh: 'CLOSE' });
+  });
+
   it('le receveur qui écarte de sa liste une demande qu’il a refusée ne la fait pas disparaître chez l’émetteur', async () => {
     const app = await appli({
       demandes: [demande(FR, 'rejected', MOI, AUTRE, { targetLevel: 'FRIEND' })],
