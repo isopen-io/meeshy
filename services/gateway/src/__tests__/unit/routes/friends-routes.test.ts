@@ -164,7 +164,7 @@ function makePrisma(opts: PrismaOpts = {}) {
       findMany: mockFn(opt(opts.friendRequestFindMany, [DB_FRIEND_REQUEST])),
       count: mockFn(opt(opts.friendRequestCount, 1)),
       update: mockFn(opt(opts.friendRequestUpdate, { ...DB_FRIEND_REQUEST, status: 'accepted' })),
-      delete: mockFn(opt(opts.friendRequestDelete, {})),
+      deleteMany: mockFn(opt(opts.friendRequestDelete, { count: 1 })),
     },
     notification: {
       findMany: mockFn(opt(opts.notificationFindMany, [DB_NOTIFICATION])),

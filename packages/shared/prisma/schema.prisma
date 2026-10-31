@@ -1963,6 +1963,11 @@ model FriendRequest {
   status      String    @default("pending")
   /// When the request was accepted/rejected
   respondedAt DateTime?
+  /// Le niveau VISÉ par la demande (`RelationLevel`, cercles de proximité #13926).
+  /// `null` veut dire FRIEND, le sens historique : un ancien client qui n'écrit
+  /// pas ce champ demande une amitié, exactement comme avant. Les valeurs
+  /// nouvelles sont ACQUAINTANCE, CLOSE et BLOOD (consommées par rel-demandes).
+  targetLevel String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1980,6 +1985,74 @@ model FriendRequest {
   /// sur la seule colonne d'identité laisserait le tri en mémoire.
   @@index([receiverId, status, createdAt])
   @@index([senderId, status, createdAt])
+}
+
+/// Un passage de niveau dans l'histoire d'un lien (`UserRelation.transitions`).
+///
+/// Embarqué plutôt qu'une collection `UserRelationTransition` : l'historique
+/// d'une paire est BORNÉ (cool-down de 30 jours, cran par cran), se lit avec la
+/// ligne et n'a besoin d'aucun index propre. Une BAISSE y est gravée mais n'est
+/// JAMAIS servie (`visibleRelationTransitions`, packages/shared/types/relation.ts).
+type RelationTransition {
+  /// Qui a accordé / retiré ce niveau (l'un des deux de la paire).
+  actorId String   @db.ObjectId
+  /// `RelationLevel` avant et après.
+  from    String
+  to      String
+  at      DateTime
+}
+
+/// Le lien entre DEUX personnes, une ligne par paire NON orientée (#13926).
+///
+/// `FriendRequest` est un journal de demandes orienté, sans unique de paire et
+/// dont `dismiss` supprime la ligne : il ne peut porter ni un niveau par
+/// direction, ni une Connaissance née sans demande, ni la date d'entrée.
+/// `UserContact` est un carnet unidirectionnel lié à l'appareil.
+///
+/// `userLowId` est le plus petit des deux ObjectId (ordre lexicographique de 24
+/// caractères hexadécimaux), voir `relationPairKey`. Le niveau EFFECTIF est le
+/// minimum des deux accords (`minRelationLevel`) ; une valeur illisible se lit
+/// PUBLIC (`parseRelationLevel`). Aucune relation Prisma vers `User` : la
+/// purge d'un compte supprimera ses liens dans le lot de la loi d'accès.
+///
+/// Index : l'unique de paire sert aussi le côté low (préfixe) ; `userHighId`
+/// sert le côté high. Les colonnes de niveau (6 valeurs) ne s'indexent pas : la
+/// requête est bornée par le nombre de liens de l'utilisateur.
+///
+/// Migration d'index : `migrations/2026-10-31-user-relation-indexes.mongodb.js`.
+model UserRelation {
+  id                String               @id @default(auto()) @map("_id") @db.ObjectId
+  userLowId         String               @db.ObjectId
+  userHighId        String               @db.ObjectId
+  /// Niveau accordé par `userLowId` à `userHighId` (`RelationLevel`).
+  grantedByLow      String               @default("PUBLIC")
+  /// Niveau accordé par `userHighId` à `userLowId`.
+  grantedByHigh     String               @default("PUBLIC")
+  /// Entrée au niveau effectif courant (montée OU baisse).
+  levelSince        DateTime?
+  /// Cool-down de 30 jours (RG-08) : `userLowId` ne peut plus demander avant.
+  cooldownLowUntil  DateTime?
+  cooldownHighUntil DateTime?
+  /// "request" | "backfill-friend" | "auto-acquaintance"
+  origin            String
+  transitions       RelationTransition[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([userLowId, userHighId])
+  @@index([userHighId])
+}
+
+/// RÉSERVÉ — le lien parent/tuteur vérifié du niveau ATOME (hors MVP, #13926).
+/// Aucune route ne l'écrit ni ne le lit au MVP : le modèle est prêt, rien de plus.
+model AtomLink {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  atomId     String    @db.ObjectId
+  electronId String    @db.ObjectId
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([atomId, electronId])
 }
 
 /// DEPRECATED: Use UserPreferences.notification JSON instead
