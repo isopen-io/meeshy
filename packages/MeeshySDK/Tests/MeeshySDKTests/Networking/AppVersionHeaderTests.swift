@@ -441,15 +441,87 @@ final class UpgradeRequiredSocketPayloadTests: XCTestCase {
         wait(for: [posee], timeout: 2)
         XCTAssertEqual(received.requirements.map(\.minVersion), ["2.0.0"])
     }
+}
 
-    // MARK: - Le câblage
+/// #13954 — la SECONDE socket. `SocialSocketManager` ouvre sa propre poignée de
+/// main, au même `AuthHandler`, avec le même relevé `client` : sous le plancher,
+/// elle reçoit le même `error UPGRADE_REQUIRED` puis la même coupure. Tant que
+/// son écouteur se contentait de journaliser, `reconnects(true)` rejouait le
+/// handshake refusé toutes les 1 à 16 s, sans fin, derrière l'écran « Mettre à
+/// jour Meeshy ».
+final class SocialSocketUpgradeRequiredTests: XCTestCase {
 
-    func test_socketError_upgradeRequiredEstLuAvantLesAutresCodes() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Sockets/MessageSocketManager+GuestSessionEnd.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+    override func invokeTest() {
+        SocketConfig.$loopbackOrigin.withValue(URL(string: "http://127.0.0.1:9")) { super.invokeTest() }
+    }
 
-        XCTAssertTrue(source.contains("UpgradeRequirement.fromSocketErrorPayload(data)"))
+    private var savedToken: String?
+
+    private final class Received: @unchecked Sendable {
+        var minVersions: [String] = []
+    }
+
+    /// Un JWT lisible dont l'échéance est lointaine : `establishTransport` arme
+    /// un vrai transport (contre le loopback) au lieu de différer au rafraîchissement.
+    private static func liveJWT() -> String {
+        let payload = #"{"exp":4102444800}"#
+        let encoded = Data(payload.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "header.\(encoded).signature"
+    }
+
+    override func setUp() {
+        super.setUp()
+        savedToken = APIClient.shared.authToken
+        SocialSocketManager.shared.disconnect()
+        APIClient.shared.authToken = Self.liveJWT()
+    }
+
+    override func tearDown() {
+        SocialSocketManager.shared.disconnect()
+        APIClient.shared.authToken = savedToken
+        super.tearDown()
+    }
+
+    func test_socialSocketError_upgradeRequired_tearsTheTransportDownAndPostsTheRequirement() {
+        let sut = SocialSocketManager.shared
+        XCTAssertEqual(sut.establishTransport(), .armed, "précondition : un transport existe")
+        XCTAssertTrue(sut.hasTransport)
+        let center = NotificationCenter()
+        let posee = expectation(description: "porte posée")
+        let received = Received()
+        let token = center.addObserver(forName: .meeshyUpgradeRequired, object: nil, queue: nil) { note in
+            received.minVersions.append(UpgradeRequirement(notification: note)?.minVersion ?? "?")
+            posee.fulfill()
+        }
+        defer { center.removeObserver(token) }
+
+        sut.handleSocketError(
+            [["message": "App version outdated - update the app", "code": "UPGRADE_REQUIRED", "minVersion": "2.0.0", "storeUrl": "https://apps.apple.com/app/id6760208591"]],
+            center: center
+        )
+
+        XCTAssertFalse(sut.hasTransport, "le transport — et la boucle de reconnexion de Socket.IO — est démonté")
+        XCTAssertFalse(sut.hasPendingReconnect, "aucune relance de secours n'est armée derrière la porte")
+        wait(for: [posee], timeout: 2)
+        XCTAssertEqual(received.minVersions, ["2.0.0"])
+    }
+
+    func test_socialSocketError_autresErreurs_gardentLeTransportEtNePosentRien() {
+        let sut = SocialSocketManager.shared
+        XCTAssertEqual(sut.establishTransport(), .armed)
+        let center = NotificationCenter()
+        let rien = expectation(description: "aucune porte")
+        rien.isInverted = true
+        let token = center.addObserver(forName: .meeshyUpgradeRequired, object: nil, queue: nil) { _ in rien.fulfill() }
+        defer { center.removeObserver(token) }
+
+        sut.handleSocketError([["message": "Transport error"]], center: center)
+        sut.handleSocketError([["code": "token_expired", "message": "jwt expired"]], center: center)
+
+        XCTAssertTrue(sut.hasTransport, "une erreur passagère reste à la reconnexion de Socket.IO")
+        wait(for: [rien], timeout: 0.3)
     }
 }
