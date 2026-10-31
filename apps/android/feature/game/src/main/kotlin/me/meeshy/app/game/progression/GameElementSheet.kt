@@ -68,6 +68,7 @@ import me.meeshy.ui.component.game.GameMedalGlyph
 import me.meeshy.ui.component.game.GameMedalState
 import me.meeshy.ui.component.game.GameMedalView
 import me.meeshy.ui.component.game.LevelRing
+import me.meeshy.ui.component.game.MeeshCoin
 import me.meeshy.ui.component.game.RankBlason
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -201,6 +202,7 @@ private fun ElementEmblem(detail: GameElementDetail) {
                 modifier = modifier,
             )
             is PieceEmblem.Blason -> RankBlason(rank = emblem.rank, division5 = emblem.division5, mythic = emblem.mythic, modifier = modifier)
+            PieceEmblem.Coin -> MeeshCoin(modifier = modifier)
         }
         is GameElementDetail.Fact, is GameElementDetail.ElanFamily ->
             ProgressionConceptEmblem(detail.concept, game = null, modifier = modifier, size = EMBLEM)

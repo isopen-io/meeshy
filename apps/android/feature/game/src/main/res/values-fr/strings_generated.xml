@@ -420,6 +420,7 @@
     <string name="game_concept_fact_glory_on_pass">Gloire au passage</string>
     <string name="game_concept_fact_next_level">Prochain niveau</string>
     <string name="game_concept_fact_next_rank">Prochain rang</string>
+    <string name="game_concept_fact_next_treasury">Contenant suivant</string>
     <string name="game_concept_fact_no">Non</string>
     <string name="game_concept_fact_pending">À moitié faits</string>
     <string name="game_concept_fact_prism_hour">Heure Prisme</string>
@@ -428,6 +429,7 @@
     <string name="game_concept_fact_seal">Sceau</string>
     <string name="game_concept_fact_state">État</string>
     <string name="game_concept_fact_tier">État de ta lumière</string>
+    <string name="game_concept_fact_treasury">Héritage</string>
     <string name="game_concept_fact_visible">Visible par</string>
     <string name="game_concept_fact_week">Semaine</string>
     <string name="game_concept_fact_week_points">Étincelles de la semaine</string>
@@ -589,6 +591,8 @@
     <string name="game_detail_rank_what">Ton blason montre ton rang, le nom que le monde te donne. Il ne recule jamais.</string>
     <string name="game_detail_ring_how">Fais jaillir des étincelles : quand l’anneau est plein, ta lumière gagne un niveau.</string>
     <string name="game_detail_ring_what">L’anneau montre ton niveau : ta lumière le remplit.</string>
+    <string name="game_detail_treasury_how">Garde tes Meeshes au lieu de les dépenser : ton héritage passe au contenant suivant.</string>
+    <string name="game_detail_treasury_what">Ton héritage grandit avec les Meeshes que tu gardes.</string>
     <string name="game_difficulty_easy">Acte I</string>
     <string name="game_difficulty_gold">Acte d’or</string>
     <string name="game_difficulty_hard">Acte III</string>
@@ -641,6 +645,8 @@
     <string name="game_fiche_heritage_held_none">Ton Héritage</string>
     <string name="game_fiche_heritage_held_reserve">Ta Réserve</string>
     <string name="game_fiche_heritage_held_tresor">Ton Trésor</string>
+    <string name="game_fiche_heritage_minted_one">%1$s frappée depuis toujours</string>
+    <string name="game_fiche_heritage_minted_other">%1$s frappées depuis toujours</string>
     <string name="game_fiche_heritage_opens_bourse">la Bourse s’ouvre à %1$s</string>
     <string name="game_fiche_heritage_opens_coffre">le Coffre s’ouvre à %1$s</string>
     <string name="game_fiche_heritage_opens_coffret">le Coffret s’ouvre à %1$s</string>

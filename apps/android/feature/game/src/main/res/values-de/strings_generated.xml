@@ -420,6 +420,7 @@
     <string name="game_concept_fact_glory_on_pass">Ruhm beim Übergang</string>
     <string name="game_concept_fact_next_level">Nächste Stufe</string>
     <string name="game_concept_fact_next_rank">Nächster Rang</string>
+    <string name="game_concept_fact_next_treasury">Nächstes Behältnis</string>
     <string name="game_concept_fact_no">Nein</string>
     <string name="game_concept_fact_pending">Halb geschafft</string>
     <string name="game_concept_fact_prism_hour">Prisma-Stunde</string>
@@ -428,6 +429,7 @@
     <string name="game_concept_fact_seal">Siegel</string>
     <string name="game_concept_fact_state">Zustand</string>
     <string name="game_concept_fact_tier">Gestalt deines Lichts</string>
+    <string name="game_concept_fact_treasury">Erbe</string>
     <string name="game_concept_fact_visible">Sichtbar für</string>
     <string name="game_concept_fact_week">Woche</string>
     <string name="game_concept_fact_week_points">Funken der Woche</string>
@@ -589,6 +591,8 @@
     <string name="game_detail_rank_what">Dein Wappen zeigt deinen Rang, den Namen, den dir die Welt gibt. Er weicht nie zurück.</string>
     <string name="game_detail_ring_how">Lass Funken sprühen: Ist der Ring voll, gewinnt dein Licht ein Level.</string>
     <string name="game_detail_ring_what">Der Ring zeigt dein Level: Dein Licht füllt ihn.</string>
+    <string name="game_detail_treasury_how">Behalte deine Meeshes, statt sie auszugeben: Dein Erbe wandert ins nächste Behältnis.</string>
+    <string name="game_detail_treasury_what">Dein Erbe wächst mit den Meeshes, die du behältst.</string>
     <string name="game_difficulty_easy">Akt I</string>
     <string name="game_difficulty_gold">Goldener Akt</string>
     <string name="game_difficulty_hard">Akt III</string>
@@ -641,6 +645,8 @@
     <string name="game_fiche_heritage_held_none">Dein Erbe</string>
     <string name="game_fiche_heritage_held_reserve">Deine Reserve</string>
     <string name="game_fiche_heritage_held_tresor">Dein Schatz</string>
+    <string name="game_fiche_heritage_minted_one">%1$s seit jeher geprägt</string>
+    <string name="game_fiche_heritage_minted_other">%1$s seit jeher geprägt</string>
     <string name="game_fiche_heritage_opens_bourse">die Börse öffnet sich bei %1$s</string>
     <string name="game_fiche_heritage_opens_coffre">die Truhe öffnet sich bei %1$s</string>
     <string name="game_fiche_heritage_opens_coffret">die Schatulle öffnet sich bei %1$s</string>

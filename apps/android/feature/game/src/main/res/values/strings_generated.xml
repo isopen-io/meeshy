@@ -420,6 +420,7 @@
     <string name="game_concept_fact_glory_on_pass">Glory on passing</string>
     <string name="game_concept_fact_next_level">Next level</string>
     <string name="game_concept_fact_next_rank">Next rank</string>
+    <string name="game_concept_fact_next_treasury">Next container</string>
     <string name="game_concept_fact_no">No</string>
     <string name="game_concept_fact_pending">Half done</string>
     <string name="game_concept_fact_prism_hour">Prism Hour</string>
@@ -428,6 +429,7 @@
     <string name="game_concept_fact_seal">Seal</string>
     <string name="game_concept_fact_state">Status</string>
     <string name="game_concept_fact_tier">Phase of your light</string>
+    <string name="game_concept_fact_treasury">Legacy</string>
     <string name="game_concept_fact_visible">Visible to</string>
     <string name="game_concept_fact_week">Week</string>
     <string name="game_concept_fact_week_points">Sparks this week</string>
@@ -589,6 +591,8 @@
     <string name="game_detail_rank_what">Your crest shows your rank, the name the world gives you. It never goes back.</string>
     <string name="game_detail_ring_how">Make sparks fly: when the ring is full, your light gains a level.</string>
     <string name="game_detail_ring_what">The ring shows your level: your light fills it.</string>
+    <string name="game_detail_treasury_how">Keep your Meeshes instead of spending them: your legacy moves to the next container.</string>
+    <string name="game_detail_treasury_what">Your legacy grows with the Meeshes you keep.</string>
     <string name="game_difficulty_easy">Act I</string>
     <string name="game_difficulty_gold">Golden Act</string>
     <string name="game_difficulty_hard">Act III</string>
@@ -641,6 +645,8 @@
     <string name="game_fiche_heritage_held_none">Your Legacy</string>
     <string name="game_fiche_heritage_held_reserve">Your Reserve</string>
     <string name="game_fiche_heritage_held_tresor">Your Treasure</string>
+    <string name="game_fiche_heritage_minted_one">%1$s minted since the beginning</string>
+    <string name="game_fiche_heritage_minted_other">%1$s minted since the beginning</string>
     <string name="game_fiche_heritage_opens_bourse">the Purse opens at %1$s</string>
     <string name="game_fiche_heritage_opens_coffre">the Chest opens at %1$s</string>
     <string name="game_fiche_heritage_opens_coffret">the Casket opens at %1$s</string>

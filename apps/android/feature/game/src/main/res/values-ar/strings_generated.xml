@@ -420,6 +420,7 @@
     <string name="game_concept_fact_glory_on_pass">المجد عند العبور</string>
     <string name="game_concept_fact_next_level">المستوى التالي</string>
     <string name="game_concept_fact_next_rank">الرتبة التالية</string>
+    <string name="game_concept_fact_next_treasury">الوعاء التالي</string>
     <string name="game_concept_fact_no">لا</string>
     <string name="game_concept_fact_pending">نصف منجزة</string>
     <string name="game_concept_fact_prism_hour">ساعة المنشور</string>
@@ -428,6 +429,7 @@
     <string name="game_concept_fact_seal">الختم</string>
     <string name="game_concept_fact_state">الحالة</string>
     <string name="game_concept_fact_tier">حالة نورك</string>
+    <string name="game_concept_fact_treasury">الإرث</string>
     <string name="game_concept_fact_visible">مرئي لـ</string>
     <string name="game_concept_fact_week">الأسبوع</string>
     <string name="game_concept_fact_week_points">شرارات الأسبوع</string>
@@ -589,6 +591,8 @@
     <string name="game_detail_rank_what">شعارك يُظهر رتبتك، الاسم الذي يمنحك إياه العالم. وهي لا تتراجع أبدًا.</string>
     <string name="game_detail_ring_how">أطلق شرارات: حين تمتلئ الحلقة، يبلغ نورك مستوى جديدًا.</string>
     <string name="game_detail_ring_what">الحلقة تُظهر مستواك: نورك يملؤها.</string>
+    <string name="game_detail_treasury_how">احتفظ بعملات Meesh بدل إنفاقها: ينتقل إرثك إلى الوعاء التالي.</string>
+    <string name="game_detail_treasury_what">إرثك يكبر بعملات Meesh التي تحتفظ بها.</string>
     <string name="game_difficulty_easy">الفصل الأول</string>
     <string name="game_difficulty_gold">الفصل الذهبي</string>
     <string name="game_difficulty_hard">الفصل الثالث</string>
@@ -641,6 +645,8 @@
     <string name="game_fiche_heritage_held_none">إرثك</string>
     <string name="game_fiche_heritage_held_reserve">احتياطيّك</string>
     <string name="game_fiche_heritage_held_tresor">كنز إرثك</string>
+    <string name="game_fiche_heritage_minted_one">⁦%1$s⁩ سُكّت منذ البداية</string>
+    <string name="game_fiche_heritage_minted_other">⁦%1$s⁩ سُكّت منذ البداية</string>
     <string name="game_fiche_heritage_opens_bourse">يُفتح الكيس عند ⁦%1$s⁩</string>
     <string name="game_fiche_heritage_opens_coffre">يُفتح الصندوق عند ⁦%1$s⁩</string>
     <string name="game_fiche_heritage_opens_coffret">يُفتح الصندوق الصغير عند ⁦%1$s⁩</string>

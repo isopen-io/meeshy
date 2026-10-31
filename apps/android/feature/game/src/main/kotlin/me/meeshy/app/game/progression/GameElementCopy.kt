@@ -104,14 +104,18 @@ internal data class GameElementTexts(
         }
 
         private fun piece(res: Resources, locale: Locale, detail: GameElementDetail.Piece, status: String): GameElementTexts {
-            val ring = detail.piece.kind == PieceDetailKind.LevelRing
+            val (what, how) = when (detail.piece.kind) {
+                PieceDetailKind.LevelRing -> R.string.game_detail_ring_what to R.string.game_detail_ring_how
+                PieceDetailKind.Rank -> R.string.game_detail_rank_what to R.string.game_detail_rank_how
+                PieceDetailKind.TreasuryTier -> R.string.game_detail_treasury_what to R.string.game_detail_treasury_how
+            }
             return GameElementTexts(
                 name = GameCopy.resolve(res, detail.piece.name, locale),
                 status = status,
                 whatTitle = res.getString(R.string.game_fiche_what),
-                what = res.getString(if (ring) R.string.game_detail_ring_what else R.string.game_detail_rank_what),
+                what = res.getString(what),
                 howTitle = res.getString(R.string.game_detail_obtain_label),
-                how = res.getString(if (ring) R.string.game_detail_ring_how else R.string.game_detail_rank_how),
+                how = res.getString(how),
                 reason = null,
                 stars = null,
                 starsSpoken = null,

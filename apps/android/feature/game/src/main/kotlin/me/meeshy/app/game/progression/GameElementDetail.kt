@@ -109,11 +109,15 @@ sealed interface GameElementDetail {
         override val status: GameElementStatus get() = GameElementStatus.Value(value)
     }
 
-    /** Une pièce de tête touchée : l'anneau (fiche du Niveau) ou le blason (fiche de la Gloire), sa valeur et sa jauge. */
+    /** Une pièce de tête touchée : l'anneau, le blason ou le contenant de l'Héritage, sa valeur et sa jauge. */
     data class Piece(val piece: PieceDetail, val emblem: PieceEmblem) : GameElementDetail {
         override val id: String get() = "${piece.kind.name}:${piece.key}"
         override val concept: ProgressionConcept
-            get() = if (piece.kind == PieceDetailKind.LevelRing) ProgressionConcept.Level else ProgressionConcept.Glory
+            get() = when (piece.kind) {
+                PieceDetailKind.LevelRing -> ProgressionConcept.Level
+                PieceDetailKind.Rank -> ProgressionConcept.Glory
+                PieceDetailKind.TreasuryTier -> ProgressionConcept.Meesh
+            }
         override val status: GameElementStatus get() = GameElementStatus.Value(piece.value)
         override val progress: Double? get() = piece.progress
     }
@@ -123,6 +127,9 @@ sealed interface GameElementDetail {
 sealed interface PieceEmblem {
     data class Ring(val level: Int, val tier: LevelTierKey, val progress: Double) : PieceEmblem
     data class Blason(val rank: GloryRank, val division5: Int?, val mythic: MythicSeatRef?) : PieceEmblem
+
+    /** Le contenant de l'Héritage se dessine en pièce d'argent, à l'avers (iOS `.coin(.silver)`). */
+    data object Coin : PieceEmblem
 }
 
 /** Une fonction pure par famille (miroir de `GameElementDetails`, iOS) : rien d'inventé, ce qui n'est pas servi ne se dit pas. */

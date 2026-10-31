@@ -330,5 +330,8 @@ public enum class GameTextKey(public val androidName: String, public val form: G
     SparksLevelRecordLine("game_sparks_level_record_line", GameTextForm.Plain),
     LevelStepLine("game_level_step_line", GameTextForm.Plain),
     LevelStepDone("game_level_step_done", GameTextForm.Plain),
+    FicheHeritageMinted("game_fiche_heritage_minted", GameTextForm.Agreement),
+    FactTreasury("game_concept_fact_treasury", GameTextForm.Plain),
+    FactNextTreasury("game_concept_fact_next_treasury", GameTextForm.Plain),
     JoinedBySpace("", GameTextForm.Join),
 }

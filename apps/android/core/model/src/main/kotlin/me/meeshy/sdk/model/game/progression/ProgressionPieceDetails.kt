@@ -6,9 +6,10 @@ import me.meeshy.sdk.model.game.GameLevel
 import me.meeshy.sdk.model.game.GameText
 import me.meeshy.sdk.model.game.GameTextArg
 import me.meeshy.sdk.model.game.GameTextKey
+import me.meeshy.sdk.model.game.TreasuryStanding
 
-/** Ce qu'une PIÈCE de tête ouvre quand on la touche (iOS `GameElementKind`) : l'anneau, le blason. */
-public enum class PieceDetailKind { LevelRing, Rank }
+/** Ce qu'une PIÈCE de tête ouvre quand on la touche (iOS `GameElementKind`) : l'anneau, le blason, le contenant. */
+public enum class PieceDetailKind { LevelRing, Rank, TreasuryTier }
 
 /** Une ligne « libellé → valeur » de la feuille d'une pièce. */
 public data class PieceDetailFact(val label: GameText, val value: GameText)
@@ -87,6 +88,26 @@ public object ProgressionPieceDetails {
             facts = listOfNotNull(next?.let { PieceDetailFact(GameText(GameTextKey.FactNextRank), it) }, missing),
         )
     }
+
+    /**
+     * Le contenant de l'Héritage (iOS `GameElementDetails.treasuryTier`) : son nom (« Héritage » sans Meesh gardée), les
+     * Meeshes gardées avec la jauge vers le suivant, et ce qu'il manque pour lui ; rien à la dernière réserve.
+     */
+    public fun treasuryTier(treasury: TreasuryStanding): PieceDetail {
+        val next = treasury.next
+        return PieceDetail(
+            kind = PieceDetailKind.TreasuryTier,
+            key = treasury.tier?.name ?: "none",
+            name = treasury.tier?.let(GameCopyLaws::treasuryName) ?: GameText(GameTextKey.FactTreasury),
+            value = GameCopyLaws.meeshes(treasury.held),
+            progress = next?.let { share(treasury.held, it.minHeld) },
+            facts = listOfNotNull(
+                next?.let { PieceDetailFact(GameText(GameTextKey.FactNextTreasury), GameCopyLaws.treasuryNext(GameTextArg.Count(it.missing), it.key)) },
+            ),
+        )
+    }
+
+    private fun share(done: Int, total: Int): Double? = if (total > 0) (done.toDouble() / total).coerceIn(0.0, 1.0) else null
 
     /** `GameSparksCopy.cumulValue` : sans renaissance le total seul ; après, cet Âge d'abord, puis le tout. */
     private fun cumulValue(cycle: Long, lifetime: Long): GameText =

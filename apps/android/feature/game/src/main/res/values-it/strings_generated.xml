@@ -420,6 +420,7 @@
     <string name="game_concept_fact_glory_on_pass">Gloria al passaggio</string>
     <string name="game_concept_fact_next_level">Prossimo livello</string>
     <string name="game_concept_fact_next_rank">Prossimo grado</string>
+    <string name="game_concept_fact_next_treasury">Custodia successiva</string>
     <string name="game_concept_fact_no">No</string>
     <string name="game_concept_fact_pending">A metà</string>
     <string name="game_concept_fact_prism_hour">Ora Prisma</string>
@@ -428,6 +429,7 @@
     <string name="game_concept_fact_seal">Sigillo</string>
     <string name="game_concept_fact_state">Stato</string>
     <string name="game_concept_fact_tier">Stato della tua luce</string>
+    <string name="game_concept_fact_treasury">Eredità</string>
     <string name="game_concept_fact_visible">Visibile a</string>
     <string name="game_concept_fact_week">Settimana</string>
     <string name="game_concept_fact_week_points">Scintille della settimana</string>
@@ -589,6 +591,8 @@
     <string name="game_detail_rank_what">Il tuo blasone mostra il tuo rango, il nome che il mondo ti dà. Non arretra mai.</string>
     <string name="game_detail_ring_how">Fai scaturire scintille: quando l’anello è pieno, la tua luce guadagna un livello.</string>
     <string name="game_detail_ring_what">L’anello mostra il tuo livello: la tua luce lo riempie.</string>
+    <string name="game_detail_treasury_how">Custodisci le tue Meesh invece di spenderle: la tua eredità passa alla custodia successiva.</string>
+    <string name="game_detail_treasury_what">La tua eredità cresce con le Meesh che custodisci.</string>
     <string name="game_difficulty_easy">Atto I</string>
     <string name="game_difficulty_gold">Atto d’oro</string>
     <string name="game_difficulty_hard">Atto III</string>
@@ -641,6 +645,8 @@
     <string name="game_fiche_heritage_held_none">La tua Eredità</string>
     <string name="game_fiche_heritage_held_reserve">La tua Riserva</string>
     <string name="game_fiche_heritage_held_tresor">Il tuo Tesoro</string>
+    <string name="game_fiche_heritage_minted_one">%1$s coniata da sempre</string>
+    <string name="game_fiche_heritage_minted_other">%1$s coniate da sempre</string>
     <string name="game_fiche_heritage_opens_bourse">la Borsa si apre a %1$s</string>
     <string name="game_fiche_heritage_opens_coffre">il Forziere si apre a %1$s</string>
     <string name="game_fiche_heritage_opens_coffret">lo Scrigno si apre a %1$s</string>

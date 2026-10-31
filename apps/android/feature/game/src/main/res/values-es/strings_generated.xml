@@ -420,6 +420,7 @@
     <string name="game_concept_fact_glory_on_pass">Gloria al pasar</string>
     <string name="game_concept_fact_next_level">Siguiente nivel</string>
     <string name="game_concept_fact_next_rank">Siguiente rango</string>
+    <string name="game_concept_fact_next_treasury">Recipiente siguiente</string>
     <string name="game_concept_fact_no">No</string>
     <string name="game_concept_fact_pending">A medias</string>
     <string name="game_concept_fact_prism_hour">Hora Prisma</string>
@@ -428,6 +429,7 @@
     <string name="game_concept_fact_seal">Sello</string>
     <string name="game_concept_fact_state">Estado</string>
     <string name="game_concept_fact_tier">Estado de tu luz</string>
+    <string name="game_concept_fact_treasury">Legado</string>
     <string name="game_concept_fact_visible">Visible para</string>
     <string name="game_concept_fact_week">Semana</string>
     <string name="game_concept_fact_week_points">Chispas de la semana</string>
@@ -589,6 +591,8 @@
     <string name="game_detail_rank_what">Tu blasón muestra tu rango, el nombre que el mundo te da. Nunca retrocede.</string>
     <string name="game_detail_ring_how">Haz brotar chispas: cuando el anillo está lleno, tu luz gana un nivel.</string>
     <string name="game_detail_ring_what">El anillo muestra tu nivel: tu luz lo llena.</string>
+    <string name="game_detail_treasury_how">Guarda tus Meeshes en vez de gastarlas: tu legado pasa al recipiente siguiente.</string>
+    <string name="game_detail_treasury_what">Tu legado crece con las Meeshes que guardas.</string>
     <string name="game_difficulty_easy">Acto I</string>
     <string name="game_difficulty_gold">Acto de oro</string>
     <string name="game_difficulty_hard">Acto III</string>
@@ -641,6 +645,8 @@
     <string name="game_fiche_heritage_held_none">Tu Legado</string>
     <string name="game_fiche_heritage_held_reserve">Tu Reserva</string>
     <string name="game_fiche_heritage_held_tresor">Tu Tesoro</string>
+    <string name="game_fiche_heritage_minted_one">%1$s acuñada desde siempre</string>
+    <string name="game_fiche_heritage_minted_other">%1$s acuñadas desde siempre</string>
     <string name="game_fiche_heritage_opens_bourse">el Monedero se abre con %1$s</string>
     <string name="game_fiche_heritage_opens_coffre">el Cofre se abre con %1$s</string>
     <string name="game_fiche_heritage_opens_coffret">el Cofrecillo se abre con %1$s</string>
