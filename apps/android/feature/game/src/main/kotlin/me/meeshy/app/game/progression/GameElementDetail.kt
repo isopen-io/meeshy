@@ -1,6 +1,8 @@
 package me.meeshy.app.game.progression
 
+import me.meeshy.sdk.model.game.GameLevelStep
 import me.meeshy.sdk.model.game.GloryRank
+import me.meeshy.sdk.model.game.LevelStepFacts
 import me.meeshy.sdk.model.game.GameText
 import me.meeshy.sdk.model.game.GameTextKey
 import me.meeshy.sdk.model.game.LevelTierKey
@@ -17,6 +19,7 @@ import me.meeshy.sdk.model.game.engagement.EngagementAxisProgress
 import me.meeshy.sdk.model.game.engagement.GameBadgeTiers
 import me.meeshy.sdk.model.game.progression.FicheFact
 import me.meeshy.sdk.model.game.progression.GameDetailFactKey
+import me.meeshy.sdk.model.game.progression.LevelStepDetail
 import me.meeshy.sdk.model.game.progression.PieceDetail
 import me.meeshy.sdk.model.game.progression.PieceDetailKind
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
@@ -28,6 +31,9 @@ sealed interface GameElementMissing {
 
     /** Une empreinte, éteinte par une frappe : ce qu'il manque pour la rallumer. */
     data class Rekindle(val count: Int) : GameElementMissing
+
+    /** Une épreuve des niveaux : où elle en est, en une phrase (iOS `GameDetailText.levelStepProgress`). */
+    data class Sentence(val text: GameText) : GameElementMissing
 }
 
 /** L'état d'un élément, que la feuille dit en toutes lettres (iOS `GameElementStatus`). */
@@ -121,6 +127,21 @@ sealed interface GameElementDetail {
         override val status: GameElementStatus get() = GameElementStatus.Value(piece.value)
         override val progress: Double? get() = piece.progress
     }
+
+    /**
+     * Une épreuve des niveaux (iOS `GameElementDetails.levelStep`) : réussie, ou verrouillée avec où elle en est et sa
+     * jauge ; son emblème et sa teinte sont ceux du GESTE qui la fait ([LevelStepDetail.concept]).
+     */
+    data class LevelStep(val step: LevelStepDetail) : GameElementDetail {
+        override val id: String get() = "levelstep:${step.level}"
+        override val concept: ProgressionConcept get() = step.concept
+        override val status: GameElementStatus
+            get() = if (step.met) {
+                GameElementStatus.Obtained(reachedAt = null)
+            } else {
+                GameElementStatus.Locked(step.missing?.let(GameElementMissing::Sentence), step.progress)
+            }
+    }
 }
 
 /** Ce que la feuille d'une pièce de tête dessine en grand : l'anneau du niveau ou le blason du rang. */
@@ -177,6 +198,9 @@ object GameElementDetails {
             topPoints = EngagementCatalog.familyTopPoints[family],
             windowDays = elan?.windowDays,
         )
+
+    /** L'épreuve d'un niveau et, quand leurs faits sont servis, les dix épreuves. */
+    fun levelStep(step: GameLevelStep, facts: LevelStepFacts?): GameElementDetail.LevelStep = GameElementDetail.LevelStep(LevelStepDetail.of(step, facts))
 
     /** Une ligne de donnée d'une fiche, dans SON concept : ce que son toucher ouvre. */
     fun fact(fact: FicheFact, concept: ProgressionConcept): GameElementDetail.Fact =

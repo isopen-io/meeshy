@@ -204,7 +204,7 @@ private fun ElementEmblem(detail: GameElementDetail) {
             is PieceEmblem.Blason -> RankBlason(rank = emblem.rank, division5 = emblem.division5, mythic = emblem.mythic, modifier = modifier)
             PieceEmblem.Coin -> MeeshCoin(modifier = modifier)
         }
-        is GameElementDetail.Fact, is GameElementDetail.ElanFamily ->
+        is GameElementDetail.Fact, is GameElementDetail.ElanFamily, is GameElementDetail.LevelStep ->
             ProgressionConceptEmblem(detail.concept, game = null, modifier = modifier, size = EMBLEM)
     }
 }

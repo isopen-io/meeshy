@@ -97,11 +97,15 @@ public data class ProgressionLevelPiece(
         }
 
         /** « Épreuve du niveau 10 : frapper ta première Meesh », puis « réussie » ou où elle en est. */
-        private fun stepLine(step: GameLevelStep): LevelStepLine {
+        internal fun stepLine(step: GameLevelStep): LevelStepLine {
             val line = GameText.of(GameTextKey.LevelStepLine, count(step.level), GameTextArg.Nested(ProgressionConceptStatesMore.levelStepGoal(step)))
+            return LevelStepLine(line, if (step.met) GameText(GameTextKey.LevelStepDone) else stepProgress(step), step.met)
+        }
+
+        /** Où en est l'épreuve : « 0 / 1 » ; pour un rang, la gloire « 5 000 / 6 000 de gloire » (iOS `levelStepProgress`). */
+        internal fun stepProgress(step: GameLevelStep): GameText {
             val ratio = GameText.of(GameTextKey.Ratio, count(minOf(step.current, step.target)), count(step.target))
-            val progress = if (step.kind == LevelStepKind.Rank) GameCopyLaws.gloryAmount(GameTextArg.Nested(ratio)) else ratio
-            return LevelStepLine(line, if (step.met) GameText(GameTextKey.LevelStepDone) else progress, step.met)
+            return if (step.kind == LevelStepKind.Rank) GameCopyLaws.gloryAmount(GameTextArg.Nested(ratio)) else ratio
         }
 
         /** « Comment gagner » : une puce par famille, par gain maximal DÉCROISSANT — jamais un barème recopié. */

@@ -54,6 +54,7 @@ import me.meeshy.sdk.model.game.progression.LevelEarnItem
 import me.meeshy.sdk.model.game.progression.LevelStepLine
 import me.meeshy.sdk.model.game.progression.ProgressionLevelPiece
 import me.meeshy.sdk.model.game.progression.ProgressionPieceDetails
+import me.meeshy.sdk.model.game.progression.levelStepFacts
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameBounceButton
 import me.meeshy.ui.component.game.GameMedalFamily
@@ -98,7 +99,11 @@ internal fun LevelPiece(game: GameBlock, elan: EngagementElanProgress?, modifier
             modifier = Modifier.align(Alignment.TopEnd).size(WATERMARK).offset(x = 70.dp, y = (-60).dp),
         )
         Column(Modifier.padding(MeeshySpacing.lg), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg)) {
-            LevelRow(piece, onOpenRing = { opened = GameElementDetails.levelRing(game) })
+            LevelRow(
+                piece,
+                onOpenRing = { opened = GameElementDetails.levelRing(game) },
+                onOpenStep = { game.level.shown.step?.let { opened = GameElementDetails.levelStep(it, game.levelStepFacts) } },
+            )
             SparkPairs(piece)
             RankRow(piece, onOpen = { opened = GameElementDetails.rank(game) })
             EarnChips(piece.earn) { family -> opened = GameElementDetails.elanFamily(family, elan) }
@@ -122,7 +127,7 @@ private fun rememberShownProgress(level: Int, progress: Double): Float {
 }
 
 @Composable
-private fun LevelRow(piece: ProgressionLevelPiece, onOpenRing: () -> Unit) {
+private fun LevelRow(piece: ProgressionLevelPiece, onOpenRing: () -> Unit, onOpenStep: () -> Unit) {
     val tokens = MeeshyTheme.tokens
     val locale = LocalConfiguration.current.locales[0]
     val progress = rememberShownProgress(piece.level, piece.progress)
@@ -157,7 +162,7 @@ private fun LevelRow(piece: ProgressionLevelPiece, onOpenRing: () -> Unit) {
             )
             Text(gameString(piece.toNext), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = tokens.textMuted)
             LevelBar(progress, LevelTierPalette.color(piece.tier.ordinal + 1), piece.belowRecord)
-            piece.step?.let { StepRow(it) }
+            piece.step?.let { StepRow(it, onOpenStep) }
         }
     }
 }
@@ -192,21 +197,29 @@ private fun LevelBar(progress: Float, tint: androidx.compose.ui.graphics.Color, 
     }
 }
 
-/** La prochaine épreuve des niveaux (iOS `GameLevelStepRow`) : faite (coche) ou à faire (cercle) et où elle en est. */
+/**
+ * La prochaine épreuve des niveaux (iOS `GameLevelStepRow`) : faite (coche) ou à faire (cercle) et où elle en est ;
+ * elle se TOUCHE (rebond figé sous « réduire les animations ») et ouvre l'épreuve et les dix épreuves des niveaux.
+ */
 @Composable
-private fun StepRow(step: LevelStepLine) {
+private fun StepRow(step: LevelStepLine, onOpen: () -> Unit) {
     val tokens = MeeshyTheme.tokens
     val tone = if (step.met) MeeshyPalette.Success else tokens.textMuted
     val line = gameString(step.line)
     val state = gameString(step.state)
-    Row(
-        Modifier.heightIn(min = 44.dp).semantics(mergeDescendants = true) { contentDescription = "$line, $state" },
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
+    GameBounceButton(
+        onClick = onOpen,
+        modifier = Modifier.fillMaxWidth().testTag(LEVEL_STEP_TAG).semantics(mergeDescendants = true) { contentDescription = "$line, $state" },
     ) {
-        Icon(if (step.met) MeeshyIcons.CheckCircleFilled else MeeshyIcons.RadioUnchecked, contentDescription = null, tint = tone, modifier = Modifier.size(16.dp))
-        Text(line, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = tokens.textPrimary)
-        Text(state, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = tone, maxLines = 1)
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 44.dp),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(if (step.met) MeeshyIcons.CheckCircleFilled else MeeshyIcons.RadioUnchecked, contentDescription = null, tint = tone, modifier = Modifier.size(16.dp))
+            Text(line, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = tokens.textPrimary)
+            Text(state, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = tone, maxLines = 1)
+        }
     }
 }
 
@@ -339,6 +352,7 @@ internal fun GameElementDetails.rank(game: GameBlock): GameElementDetail.Piece =
 internal const val LEVEL_PIECE_TAG = "game.hero"
 internal const val LEVEL_RING_TAG = "game.hero.level"
 internal const val LEVEL_RANK_TAG = "game.hero.rank"
+internal const val LEVEL_STEP_TAG = "game.hero.level.step"
 private val RING = 88.dp
 private val BLASON = 64.dp
 private val WATERMARK = 240.dp

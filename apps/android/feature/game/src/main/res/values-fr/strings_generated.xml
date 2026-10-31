@@ -584,6 +584,9 @@
     <string name="game_detail_fact_trophies">C’est le nombre de trophées rangés sur ton étagère.</string>
     <string name="game_detail_fact_week_points">Ce sont les étincelles gagnées depuis lundi. Elles repartent de zéro chaque semaine.</string>
     <string name="game_detail_gives_label">Ce que ça donne</string>
+    <string name="game_detail_levelstep_how">Réussis l’épreuve : si ta lumière y est déjà, le niveau monte d’un coup.</string>
+    <string name="game_detail_levelstep_progress">Tu en es à %1$s pour cette épreuve</string>
+    <string name="game_detail_levelstep_what">De 10 à 100, tous les dix niveaux, tes aïeux demandent une épreuve simple.</string>
     <string name="game_detail_locked">Pas encore obtenu</string>
     <string name="game_detail_obtain_label">Comment l’obtenir</string>
     <string name="game_detail_open">%1$s : voir les précisions</string>

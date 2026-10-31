@@ -584,6 +584,9 @@
     <string name="game_detail_fact_trophies">É o número de troféus arrumados na sua prateleira.</string>
     <string name="game_detail_fact_week_points">São as faíscas ganhas desde segunda-feira. Elas voltam a zero toda semana.</string>
     <string name="game_detail_gives_label">O que isso dá</string>
+    <string name="game_detail_levelstep_how">Vença a prova: se sua luz já estiver lá, o nível sobe de uma vez.</string>
+    <string name="game_detail_levelstep_progress">Você está em %1$s nesta prova</string>
+    <string name="game_detail_levelstep_what">De 10 a 100, a cada dez níveis, seus ancestrais pedem uma prova simples.</string>
     <string name="game_detail_locked">Ainda não obtido</string>
     <string name="game_detail_obtain_label">Como conseguir</string>
     <string name="game_detail_open">%1$s: ver os detalhes</string>

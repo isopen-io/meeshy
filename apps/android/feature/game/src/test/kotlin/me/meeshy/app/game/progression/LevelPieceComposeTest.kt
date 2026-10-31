@@ -65,6 +65,20 @@ class LevelPieceComposeTest {
         compose.onNode(hasText("Ton blason montre ton rang", substring = true) and inSheet, useUnmergedTree = true).assertExists()
     }
 
+    @Test
+    fun `touching the step line opens the step and the ten level steps`() {
+        compose.setContent { MeeshyTheme { LevelPiece(game, elan = null) } }
+
+        compose.onNodeWithTag(LEVEL_STEP_TAG).performSemanticsAction(SemanticsActions.OnClick)
+
+        compose.onNodeWithTag(GAME_DETAIL_TAG).assertExists()
+        compose.onNode(hasText("Épreuve du niveau 150", substring = true) and inSheet, useUnmergedTree = true).assertExists()
+        compose.onNode(hasText("pour cette épreuve", substring = true) and inSheet, useUnmergedTree = true).assertExists()
+        compose.onNode(hasText("tous les dix niveaux", substring = true) and inSheet, useUnmergedTree = true).assertExists()
+        compose.onNode(hasText("Niveau 10") and inSheet, useUnmergedTree = true).assertExists()
+        compose.onNode(hasText("Niveau 100") and inSheet, useUnmergedTree = true).assertExists()
+    }
+
     private companion object {
         const val BLOCK = """
         {

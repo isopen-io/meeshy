@@ -87,6 +87,19 @@ internal data class GameElementTexts(
                     ),
                 )
                 is GameElementDetail.Piece -> piece(res, locale, detail, status)
+                is GameElementDetail.LevelStep -> GameElementTexts(
+                    name = GameCopy.resolve(res, detail.step.name, locale),
+                    status = status,
+                    whatTitle = res.getString(R.string.game_fiche_what),
+                    what = res.getString(R.string.game_detail_levelstep_what),
+                    howTitle = res.getString(R.string.game_detail_obtain_label),
+                    how = res.getString(R.string.game_detail_levelstep_how),
+                    reason = null,
+                    stars = null,
+                    starsSpoken = null,
+                    ladder = emptyList(),
+                    facts = detail.step.facts.map { GameFactText(GameCopy.resolve(res, it.label, locale), GameCopy.resolve(res, it.value, locale)) },
+                )
                 is GameElementDetail.Fact -> GameElementTexts(
                     name = GameCopy.resolve(res, detail.label, locale),
                     status = status,
@@ -159,6 +172,7 @@ internal data class GameElementTexts(
         private fun missing(res: Resources, locale: Locale, missing: GameElementMissing): String = when (missing) {
             is GameElementMissing.FirstStar -> res.getString(R.string.game_detail_badge_missing, count(missing.count, locale))
             is GameElementMissing.Rekindle -> res.getString(R.string.game_badge_a11y_imprint, count(missing.count, locale))
+            is GameElementMissing.Sentence -> GameCopy.resolve(res, missing.text, locale)
         }
 
         private fun reason(res: Resources, locale: Locale, guide: BadgeGuide): String {

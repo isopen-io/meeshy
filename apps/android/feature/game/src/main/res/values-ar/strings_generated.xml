@@ -584,6 +584,9 @@
     <string name="game_detail_fact_trophies">هذا عدد الكؤوس على رفّك.</string>
     <string name="game_detail_fact_week_points">هذه الشرارات المكتسبة منذ الاثنين. تبدأ من الصفر كل أسبوع.</string>
     <string name="game_detail_gives_label">ماذا يمنحك</string>
+    <string name="game_detail_levelstep_how">اجتز الاختبار: إن كان نورك قد بلغه، يرتفع المستوى دفعة واحدة.</string>
+    <string name="game_detail_levelstep_progress">بلغتَ %1$s في هذا الاختبار</string>
+    <string name="game_detail_levelstep_what">من 10 إلى 100، كل عشرة مستويات، يطلب أجدادك اختبارًا بسيطًا.</string>
     <string name="game_detail_locked">لم تحصل عليه بعد</string>
     <string name="game_detail_obtain_label">كيف تحصل عليه</string>
     <string name="game_detail_open">%1$s: عرض التفاصيل</string>

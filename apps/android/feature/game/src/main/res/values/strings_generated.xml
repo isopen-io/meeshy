@@ -584,6 +584,9 @@
     <string name="game_detail_fact_trophies">This is how many trophies stand on your shelf.</string>
     <string name="game_detail_fact_week_points">These are the sparks earned since Monday. They start again from zero every week.</string>
     <string name="game_detail_gives_label">What it gives</string>
+    <string name="game_detail_levelstep_how">Pass the trial: if your light is already there, the level rises at once.</string>
+    <string name="game_detail_levelstep_progress">You’re at %1$s on this trial</string>
+    <string name="game_detail_levelstep_what">From 10 to 100, every ten levels, your ancestors ask for a simple trial.</string>
     <string name="game_detail_locked">Not earned yet</string>
     <string name="game_detail_obtain_label">How to get it</string>
     <string name="game_detail_open">%1$s: see details</string>

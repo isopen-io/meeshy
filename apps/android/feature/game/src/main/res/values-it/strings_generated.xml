@@ -584,6 +584,9 @@
     <string name="game_detail_fact_trophies">È il numero di trofei sistemati sul tuo scaffale.</string>
     <string name="game_detail_fact_week_points">Sono le scintille guadagnate da lunedì. Ripartono da zero ogni settimana.</string>
     <string name="game_detail_gives_label">Che cosa dà</string>
+    <string name="game_detail_levelstep_how">Supera la prova: se la tua luce è già lì, il livello sale di colpo.</string>
+    <string name="game_detail_levelstep_progress">Sei a %1$s in questa prova</string>
+    <string name="game_detail_levelstep_what">Da 10 a 100, ogni dieci livelli, i tuoi antenati chiedono una prova semplice.</string>
     <string name="game_detail_locked">Non ancora ottenuto</string>
     <string name="game_detail_obtain_label">Come ottenerlo</string>
     <string name="game_detail_open">%1$s: vedi i dettagli</string>

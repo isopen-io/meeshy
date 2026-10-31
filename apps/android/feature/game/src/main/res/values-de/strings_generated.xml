@@ -584,6 +584,9 @@
     <string name="game_detail_fact_trophies">So viele Trophäen stehen in deinem Regal.</string>
     <string name="game_detail_fact_week_points">Das sind die Funken seit Montag. Jede Woche beginnen sie wieder bei null.</string>
     <string name="game_detail_gives_label">Was es bringt</string>
+    <string name="game_detail_levelstep_how">Bestehe die Prüfung: Ist dein Licht schon so weit, steigt das Level sofort.</string>
+    <string name="game_detail_levelstep_progress">Du stehst bei %1$s in dieser Prüfung</string>
+    <string name="game_detail_levelstep_what">Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine einfache Prüfung.</string>
     <string name="game_detail_locked">Noch nicht erhalten</string>
     <string name="game_detail_obtain_label">So bekommst du es</string>
     <string name="game_detail_open">%1$s: Details ansehen</string>

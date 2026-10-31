@@ -270,6 +270,7 @@ internal object GameStringIds {
         "game_sparks_level_record_line" to R.string.game_sparks_level_record_line,
         "game_level_step_line" to R.string.game_level_step_line,
         "game_level_step_done" to R.string.game_level_step_done,
+        "game_detail_levelstep_progress" to R.string.game_detail_levelstep_progress,
         "game_fiche_heritage_minted_one" to R.string.game_fiche_heritage_minted_one,
         "game_fiche_heritage_minted_other" to R.string.game_fiche_heritage_minted_other,
         "game_concept_fact_treasury" to R.string.game_concept_fact_treasury,

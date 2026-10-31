@@ -584,6 +584,9 @@
     <string name="game_detail_fact_trophies">Es el número de trofeos colocados en tu estante.</string>
     <string name="game_detail_fact_week_points">Son las chispas ganadas desde el lunes. Vuelven a cero cada semana.</string>
     <string name="game_detail_gives_label">Qué te da</string>
+    <string name="game_detail_levelstep_how">Supera la prueba: si tu luz ya llega, el nivel sube de golpe.</string>
+    <string name="game_detail_levelstep_progress">Vas por %1$s en esta prueba</string>
+    <string name="game_detail_levelstep_what">De 10 a 100, cada diez niveles, tus ancestros piden una prueba sencilla.</string>
     <string name="game_detail_locked">Aún no conseguido</string>
     <string name="game_detail_obtain_label">Cómo conseguirlo</string>
     <string name="game_detail_open">%1$s: ver los detalles</string>
