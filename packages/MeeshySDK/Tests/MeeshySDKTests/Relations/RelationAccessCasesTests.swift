@@ -121,8 +121,9 @@ struct RelationAccessCasesTests {
     private func featureSet(named name: String) throws -> Set<String> {
         let source = try levelsSource()
         let declaration = try block(after: "export const \(name)", until: "]);", in: source)
-        let body = try #require(declaration.range(of: "new Set<RelationFeature>([")).map { String(declaration[$0.upperBound...]) }
-        return Set(try matches("'([\\w.]+)'", in: try #require(body)).compactMap(\.first))
+        let opener = try #require(declaration.range(of: "new Set<RelationFeature>(["))
+        let body = String(declaration[opener.upperBound...])
+        return Set(try matches("'([\\w.]+)'", in: body).compactMap(\.first))
     }
 
     @Test func theMinimumLevelOfEveryFeatureIsTheOneOfTheTypeScriptTable() throws {

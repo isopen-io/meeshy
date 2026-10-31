@@ -50,6 +50,12 @@ on:
       - 'packages/shared/utils/message-content-kind.ts'
       - 'packages/shared/types/role-types.ts'
       - 'packages/shared/fixtures/conversation-preview-cases.json'
+      # La loi d'accès des cercles (#13927) : RelationAccessCasesTests rejoue ces cas
+      # et relit les tables TS — une PR TypeScript seule qui les change doit
+      # rejouer le miroir Swift.
+      - 'packages/shared/fixtures/relation-access-cases.json'
+      - 'packages/shared/utils/relation-levels.ts'
+      - 'packages/shared/types/relation.ts'
       - 'packages/shared/types/call-rules.ts'
       - 'packages/shared/types/consents.ts'
       - 'packages/shared/types/preferences/application.ts'
@@ -84,6 +90,12 @@ on:
       - 'packages/shared/utils/message-content-kind.ts'
       - 'packages/shared/types/role-types.ts'
       - 'packages/shared/fixtures/conversation-preview-cases.json'
+      # La loi d'accès des cercles (#13927) : RelationAccessCasesTests rejoue ces cas
+      # et relit les tables TS — une PR TypeScript seule qui les change doit
+      # rejouer le miroir Swift.
+      - 'packages/shared/fixtures/relation-access-cases.json'
+      - 'packages/shared/utils/relation-levels.ts'
+      - 'packages/shared/types/relation.ts'
       - 'packages/shared/types/call-rules.ts'
       - 'packages/shared/types/consents.ts'
       - 'packages/shared/types/preferences/application.ts'
