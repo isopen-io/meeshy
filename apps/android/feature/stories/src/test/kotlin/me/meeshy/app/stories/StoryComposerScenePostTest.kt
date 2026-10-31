@@ -166,4 +166,42 @@ class StoryComposerScenePostTest {
         assertThat(postDrafts.loadEditing()).isNull()
         assertThat(store.load()?.postText).isEqualTo("ancien texte")
     }
+
+    @Test
+    fun `« Rouvrir » a post composed on the scene gives back the whole scene - stickers, texts, drawing and post text`() = runTest {
+        val vm = viewModel()
+        vm.onFormat(ComposerFormat.POST, layout = null)
+        vm.onAddSticker("🔥")
+        vm.onAddTextElement()
+        vm.onTextChange("salut")
+        vm.onEnterDrawingMode()
+        vm.onStrokeCaptured(listOf(me.meeshy.sdk.model.StoryDrawingStrokePoint(0.1, 0.1), me.meeshy.sdk.model.StoryDrawingStrokePoint(0.6, 0.4)))
+        vm.onExitDrawingMode()
+        vm.onPostTextChange("à reprendre")
+        val composed = vm.state.value.deck.slides.single()
+
+        val (_, parked) = vm.postPublished()
+        val reopened = viewModel(postDrafts = InMemoryPostComposerDraftStore(editing = requireNotNull(parked)))
+        reopened.onEnterComposer()
+
+        val slide = reopened.state.value.deck.slides.single()
+        assertThat(slide.stickers.map { it.emoji }).containsExactly("🔥")
+        assertThat(slide.elements.map { it.text }).isEqualTo(composed.elements.map { it.text })
+        assertThat(slide.elements).isNotEmpty()
+        assertThat(slide.strokes).hasSize(1)
+        assertThat(reopened.state.value.postText).isEqualTo("à reprendre")
+        assertThat(reopened.state.value.restoredFormat).isEqualTo(ComposerFormat.POST)
+    }
+
+    @Test
+    fun `the parked post names its media in the order of the request, so the outbox can give them their served ids`() = runTest {
+        val vm = viewModel()
+        vm.onFormat(ComposerFormat.POST, layout = null)
+        vm.onAddSticker("🔥")
+
+        val (request, parked) = vm.postPublished()
+
+        assertThat(parked?.media?.map { it.id }).isEqualTo(request.mediaIds.orEmpty())
+        assertThat(parked?.scene?.slides?.single()?.stickers?.map { it.emoji }).containsExactly("🔥")
+    }
 }

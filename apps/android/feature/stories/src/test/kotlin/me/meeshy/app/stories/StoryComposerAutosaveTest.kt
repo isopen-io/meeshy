@@ -140,14 +140,10 @@ class StoryComposerAutosaveTest {
         assertThat(action).isEqualTo(StoryDraftPersist.None)
     }
 
-    // ---- resolve: a stroke-only deck must never purge a stored draft ----
+    // ---- resolve: a drawing is content the draft keeps (#13863) ----
 
     @Test
-    fun `a deck whose only content is a drawn stroke resolves to None, not Clear, over a stored draft`() {
-        // The snapshot cannot represent strokes yet (see the class doc), so it comes back
-        // not-worth-restoring even though the deck plainly has content. Resolving that to
-        // Clear would erase yesterday's stored draft to make room for a snapshot with
-        // nothing to save — losing content the drawing didn't even replace.
+    fun `a deck whose only content is a drawn stroke is saved, and its stroke comes back on reopening`() {
         val previous = textDeck("was here").toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
         val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
         val deck = blankDeck().setSelectedStrokes(listOf(stroke))
@@ -160,11 +156,12 @@ class StoryComposerAutosaveTest {
             previous = previous,
         )
 
-        assertThat(action).isEqualTo(StoryDraftPersist.None)
+        val saved = (action as StoryDraftPersist.Save).snapshot
+        assertThat(saved.toDeck()?.slides?.single()?.strokes).containsExactly(stroke)
     }
 
     @Test
-    fun `a deck whose only content is a drawn stroke resolves to None when there was no stored draft either`() {
+    fun `a stroke-only deck is saved when there was no stored draft either`() {
         val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
         val deck = blankDeck().setSelectedStrokes(listOf(stroke))
 
@@ -176,7 +173,7 @@ class StoryComposerAutosaveTest {
             previous = null,
         )
 
-        assertThat(action).isEqualTo(StoryDraftPersist.None)
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
     }
 
     // ---- resolve: rich-content fidelity gate ----

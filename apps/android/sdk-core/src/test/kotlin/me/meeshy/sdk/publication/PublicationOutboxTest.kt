@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -200,6 +201,70 @@ class PublicationOutboxTest {
         val reopened = publications.reopenPost(cmid)
 
         assertThat(reopened?.mediaCaption).containsExactly("media-real", "Au marché")
+    }
+
+    @Test
+    fun `reopening a failed post composed on the scene gives back its whole scene under the ids its media received`() = runTest {
+        val upload = uploads.enqueue(photo, TusUploadContext.POST)
+        val scene = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    mediaIds = listOf(upload, "pose"),
+                    backgroundMediaId = upload,
+                    elements = listOf(me.meeshy.sdk.model.StoryDraftTextElementSnapshot(id = "t1", text = "salut")),
+                    stickers = listOf(me.meeshy.sdk.model.StoryDraftStickerElementSnapshot(id = "k1", emoji = "🔥")),
+                    placedMedia = listOf(me.meeshy.sdk.model.StoryDraftPlacedMediaSnapshot(id = "pose")),
+                    strokes = listOf(me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)),
+                    mediaLooks = mapOf(upload to me.meeshy.sdk.model.StoryMediaLook(frameId = "polaroid")),
+                ),
+            ),
+            selectedId = "s1",
+            annotations = StoryDraftAnnotations(mediaAlt = mapOf(upload to "un chat")),
+            postText = "le texte",
+        )
+        val parked = draft(pending(upload), pending("pose")).copy(text = "le texte", scene = scene)
+        val cmid = publications.enqueuePost(CreatePostRequest(content = "le texte", mediaIds = listOf(upload, "pose")), parked)
+        outbox.rewriteDependents(upload) { it.replace(upload, "media-real") }
+        outbox.markExhausted(cmid, "Post refused: HTTP 422")
+
+        val reopened = requireNotNull(publications.reopenPost(cmid)?.scene)
+
+        val slide = reopened.slides.single()
+        assertThat(slide.mediaIds).containsExactly("media-real", "pose").inOrder()
+        assertThat(slide.backgroundMediaId).isEqualTo("media-real")
+        assertThat(slide.elements.map { it.text }).containsExactly("salut")
+        assertThat(slide.stickers.map { it.emoji }).containsExactly("🔥")
+        assertThat(slide.placedMedia.map { it.id }).containsExactly("pose")
+        assertThat(slide.strokes.map { it.id }).containsExactly("st1")
+        assertThat(slide.mediaLooks.keys).containsExactly("media-real")
+        assertThat(reopened.annotations.mediaAlt).containsExactly("media-real", "un chat")
+    }
+
+    @Test
+    fun `a queued post tells the feed it is on its way`() = runTest {
+        val notices = mutableListOf<PublicationNotice>()
+        val watching = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) { publications.notices.collect { notices += it } }
+
+        publications.enqueuePost(CreatePostRequest(content = "en route"), draft())
+
+        assertThat(notices).containsExactly(PublicationNotice.QUEUED)
+        watching.cancel()
+    }
+
+    @Test
+    fun `a post the device could not queue tells the feed it failed and leaves nothing behind`() = runTest {
+        val notices = mutableListOf<PublicationNotice>()
+        val brokenQueue = io.mockk.mockk<OutboxRepository> { io.mockk.coEvery { enqueue(any(), any()) } throws IllegalStateException("disk full") }
+        val refusing = PublicationOutbox(brokenQueue, uploads, drafts, storyDrafts, MediaUploadProgressLedger(), OutboxOwnerSource { "me" })
+        val watching = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) { refusing.notices.collect { notices += it } }
+
+        val failure = runCatching { refusing.enqueuePost(CreatePostRequest(content = "perdu ?"), draft()) }
+
+        assertThat(failure.isFailure).isTrue()
+        assertThat(notices).containsExactly(PublicationNotice.FAILED)
+        assertThat(drafts.parkedCmids()).isEmpty()
+        watching.cancel()
     }
 
     @Test

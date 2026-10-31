@@ -43,6 +43,8 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.publication.PublicationNotice
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -70,6 +72,8 @@ class FeedViewModelTest {
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
     private val workManager: androidx.work.WorkManager = mockk(relaxed = true)
+    private val publicationNotices = MutableSharedFlow<PublicationNotice>(extraBufferCapacity = 4)
+    private val publications: PublicationOutbox = mockk(relaxed = true) { every { notices } returns publicationNotices }
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
@@ -101,7 +105,27 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement)
+        return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)
+    }
+
+    @Test
+    fun `a post handed to the device's queue tells the feed it is on its way`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        val vm = viewModel()
+
+        publicationNotices.emit(PublicationNotice.QUEUED)
+
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_QUEUED)
+    }
+
+    @Test
+    fun `a post the device could not queue tells the feed it failed`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        val vm = viewModel()
+
+        publicationNotices.emit(PublicationNotice.FAILED)
+
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
     }
 
     @Test
@@ -449,7 +473,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement)
+        return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)
     }
 
     @Test

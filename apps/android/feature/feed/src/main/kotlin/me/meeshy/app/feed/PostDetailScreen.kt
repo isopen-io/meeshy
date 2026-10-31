@@ -320,7 +320,11 @@ internal fun PostDetailContent(
                     )
                 }
 
-                if (post.images.isNotEmpty()) {
+                val scenes = post.scenes
+                if (scenes != null) {
+                    Spacer(Modifier.height(MeeshySpacing.md))
+                    PostScenesView(scenes = scenes, live = true)
+                } else if (post.images.isNotEmpty()) {
                     Spacer(Modifier.height(MeeshySpacing.md))
                     PostImageLayout(
                         images = post.images,

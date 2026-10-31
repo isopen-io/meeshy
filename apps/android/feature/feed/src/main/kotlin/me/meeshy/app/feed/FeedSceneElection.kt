@@ -152,14 +152,14 @@ internal fun FeedSceneElectionEffect(coordinator: FeedSceneCoordinator, listStat
 private const val ELECTION_DEBOUNCE_MS = 100L
 
 /**
- * La carte montre-t-elle une scène (réel composé, story ou réel republié) ? Seules ces cartes concourent à l'élection :
+ * La carte montre-t-elle une scène (réel composé, post composé sur la scène, story ou réel republié) ? Seules ces cartes concourent à l'élection :
  * une carte sans scène n'a rien à lire.
  */
 internal val FeedPostPresentation.carriesScene: Boolean
     get() {
         val quoted = repostEmbed?.takeIf { !it.isUnavailable && republishedReel == null }
         val quotesScene = quoted?.storyItem != null
-        return quotesScene || (isReel && reelCover is ReelCover.Scene)
+        return quotesScene || (isReel && reelCover is ReelCover.Scene) || scenes != null
     }
 
 /**

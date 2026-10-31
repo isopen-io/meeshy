@@ -108,4 +108,43 @@ class PostDraftSceneTest {
 
         assertThat(PostDraftScene.opening(awaiting, old, ids)).isEqualTo(PostDraftScene.Opening(awaiting, adoptsPostDraft = false))
     }
+
+    private val composedScene = StoryComposerDraftSnapshot(
+        slides = listOf(
+            StoryDraftSlideSnapshot(
+                id = "s1",
+                mediaIds = listOf("p1", "pose"),
+                backgroundMediaId = "p1",
+                elements = listOf(me.meeshy.sdk.model.StoryDraftTextElementSnapshot(id = "t1", text = "salut")),
+                stickers = listOf(me.meeshy.sdk.model.StoryDraftStickerElementSnapshot(id = "k1", emoji = "🔥")),
+                audio = listOf(me.meeshy.sdk.model.StoryAudioPlayerObject(id = "son", postMediaId = "a1")),
+                placedMedia = listOf(me.meeshy.sdk.model.StoryDraftPlacedMediaSnapshot(id = "pose")),
+                strokes = listOf(me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)),
+            ),
+        ),
+        selectedId = "s1",
+        visibility = "FRIENDS",
+        postText = "le texte du post",
+        format = ComposerFormat.POST.name,
+    )
+
+    @Test
+    fun `a post composed on the scene reopens its whole scene, objects, sound and drawing included`() {
+        val parked = PostComposerDraftSnapshot(text = "le texte du post", visibility = "FRIENDS", media = listOf(media("p1", "image/jpeg")), scene = composedScene)
+
+        val scene = PostDraftScene.scene(parked, ids)
+
+        assertThat(scene.slides).isEqualTo(composedScene.slides)
+        assertThat(scene.postText).isEqualTo("le texte du post")
+        assertThat(scene.format).isEqualTo(ComposerFormat.POST.name)
+        assertThat(scene.visibility).isEqualTo("FRIENDS")
+    }
+
+    @Test
+    fun `a post whose scene alone holds the content is worth reopening`() {
+        val parked = PostComposerDraftSnapshot(scene = composedScene.copy(postText = ""))
+
+        assertThat(parked.isWorthRestoring).isTrue()
+        assertThat(PostDraftScene.opening(null, parked, ids).adoptsPostDraft).isTrue()
+    }
 }

@@ -26,6 +26,7 @@ import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.post.writeMediaCaptionTranslationsTo
 import me.meeshy.sdk.post.writePostTranslationsTo
 import me.meeshy.sdk.post.writePostUpdatesTo
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.session.SessionRepository
@@ -98,6 +99,7 @@ class FeedViewModel @Inject constructor(
     private val reportRepository: ReportRepository,
     private val workManager: WorkManager,
     engagement: FeedEngagementRepository,
+    private val publications: PublicationOutbox,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -145,6 +147,9 @@ class FeedViewModel @Inject constructor(
     }
 
     init {
+        viewModelScope.launch {
+            publications.notices.collect { notice -> _state.update { it.copy(notice = notice.feedNotice) } }
+        }
         viewModelScope.launch {
             combine(
                 postRepository.feedStream(

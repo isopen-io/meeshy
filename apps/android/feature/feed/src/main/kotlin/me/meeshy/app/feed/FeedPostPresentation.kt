@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.resolvedLayout
 import me.meeshy.sdk.model.resolvedCaption
 import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
+import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.story.sceneItems
 import me.meeshy.sdk.story.toStoryItem
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.PostLanguageStrip
@@ -41,6 +43,13 @@ data class FeedPostImage(
      */
     val alt: String? = null,
 )
+
+/**
+ * Les scènes d'un post composé sur la scène (#13863 R7, iOS `PostSceneCard` / `PostSceneMosaic`) : elles se peignent à la place
+ * de ses médias, dans la disposition que l'auteur a choisie, sur la couleur de l'auteur.
+ */
+@Immutable
+data class FeedPostScenes(val items: List<StoryItem>, val layout: MosaicLayoutMode, val accentHex: String?)
 
 /**
  * A feed post projected for rendering: Prisme-resolved content, the viewer's own
@@ -90,6 +99,8 @@ data class FeedPostPresentation(
     val reelCover: ReelCover? = null,
     /** Rapport largeur / hauteur de la carte du réel (`ReelCoverResolver.cardAspect`). */
     val reelAspect: Float = ReelCoverResolver.cardAspect(null, null),
+    /** Les scènes d'un post composé sur la scène, peintes à la place de [images] ; `null` pour tout autre post. */
+    val scenes: FeedPostScenes? = null,
 ) {
     /**
      * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
@@ -197,6 +208,7 @@ object FeedPostBuilder {
             languageExplorer = PostLanguageExplorerBuilder.build(post, preferences, activeCode),
             reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia, post.authorAccentHex()) { post.toStoryItem() } else null,
             reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
+            scenes = if (isReel) null else post.sceneItems()?.let { FeedPostScenes(it.items, it.layout, post.authorAccentHex()) },
         )
     }
 

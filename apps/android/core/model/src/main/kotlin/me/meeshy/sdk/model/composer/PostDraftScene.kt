@@ -12,7 +12,8 @@ import me.meeshy.sdk.model.UploadedMedia
 /**
  * Un brouillon du compositeur de post d'avant (#13863 § 3) se rouvre sur la scène SANS PERTE : son texte devient le texte
  * du post, chaque photo ou vidéo une diapo dont elle est le fond, un son la piste de la première diapo, un autre fichier
- * une pièce de la première diapo ; le fond, le lieu, les descriptions et l'audience suivent.
+ * une pièce de la première diapo ; le fond, le lieu, les descriptions et l'audience suivent. Un post composé SUR la scène
+ * et rouvert après un échec porte sa scène entière ([PostComposerDraftSnapshot.scene]) : elle revient telle quelle.
  */
 object PostDraftScene {
     /**
@@ -33,6 +34,9 @@ object PostDraftScene {
     }
 
     fun scene(post: PostComposerDraftSnapshot, slideId: (Int) -> String): StoryComposerDraftSnapshot {
+        post.scene?.takeIf { it.isStructurallyValid }?.let { composed ->
+            return composed.copy(postText = post.text, visibility = post.visibility, awaitingPublication = emptyList())
+        }
         val visuals = post.media.filter { it.isVisual }
         val sounds = post.media.filter { it.mimeType.lowercase().startsWith("audio/") }
         val files = post.media - visuals.toSet() - sounds.toSet()

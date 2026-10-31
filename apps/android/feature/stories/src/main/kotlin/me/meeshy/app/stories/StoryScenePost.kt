@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import java.time.Instant
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.PostComposerDraftSnapshot
 import me.meeshy.sdk.model.ReelComposition
@@ -42,21 +43,36 @@ internal object ScenePostRequest {
         )
     }
 
-    /** Ce que « Rouvrir » rend d'un post qui n'est pas parti : son texte, ses médias (même en attente), leurs descriptions. */
-    fun parked(state: StoryComposerUiState, request: CreatePostRequest): PostComposerDraftSnapshot = PostComposerDraftSnapshot(
-        text = state.postText,
-        visibility = request.visibility,
-        media = state.sceneMedia(),
-        language = request.originalLanguage,
-        mediaAlt = request.mediaAlt.orEmpty(),
-        mediaCaption = request.mediaCaption.orEmpty(),
-    )
+    /**
+     * Ce que « Rouvrir » rend d'un post qui n'est pas parti : son texte, sa scène ENTIÈRE (textes, stickers, médias posés,
+     * sons, dessin, look), ses médias et leurs descriptions. Les médias suivent l'ordre de la requête, pièce pour pièce : c'est
+     * par cet ordre que la file leur rend les identifiants servis, dans la scène comme dans la liste.
+     */
+    fun parked(state: StoryComposerUiState, request: CreatePostRequest, nowIso: String): PostComposerDraftSnapshot {
+        val known = state.sceneMedia().associateBy { it.id }
+        return PostComposerDraftSnapshot(
+            text = state.postText,
+            visibility = request.visibility,
+            media = request.mediaIds.orEmpty().map { id -> known[id] ?: UploadedMedia(id, "", "", 0L, null, null, null, null) },
+            language = request.originalLanguage,
+            mediaAlt = request.mediaAlt.orEmpty(),
+            mediaCaption = request.mediaCaption.orEmpty(),
+            scene = state.deck.toDraftSnapshot(
+                visibility = state.draft.visibility,
+                repostOfId = state.draft.repostOfId,
+                nowIso = nowIso,
+                visibilityUserIds = state.draft.visibilityUserIds,
+                annotations = state.draft.annotations(),
+                format = state.formatDraft(),
+            ),
+        )
+    }
 }
 
 /** Le post part par le chemin du fil, avec ce que « Rouvrir » lui rendra s'il ne part pas. */
 internal suspend fun PublicationOutbox.enqueueScene(state: StoryComposerUiState, plans: List<PublishPlan>, language: String): String {
     val request = ScenePostRequest.of(state, plans, language)
-    return enqueuePost(request, ScenePostRequest.parked(state, request))
+    return enqueuePost(request, ScenePostRequest.parked(state, request, Instant.now().toString()))
 }
 
 /** Une diapo qui fait une scène du post : un objet, un média, un son, un lieu ou un fond — jamais sa seule légende. */

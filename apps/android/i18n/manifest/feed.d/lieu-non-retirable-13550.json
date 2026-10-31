@@ -7,10 +7,6 @@
         {
           "androidName": "feed_unsent_media_location_refused",
           "status": "android-only"
-        },
-        {
-          "androidName": "feed_composer_media_location_refused",
-          "status": "android-only"
         }
       ]
     }

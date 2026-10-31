@@ -39,15 +39,8 @@
     <string name="status_composer_mood_label">Humeur %1$s</string>
     <string name="feed_composer_open_placeholder">Partager quelque chose avec le monde…</string>
     <string name="feed_composer_attach_media">Ajouter une photo ou une vidéo</string>
-    <string name="feed_composer_take_video">Filmer une vidéo</string>
     <string name="feed_composer_remove_media">Supprimer le média</string>
-    <string name="feed_composer_add_location">Ajouter ma position</string>
-    <string name="feed_composer_remove_location">Supprimer la position</string>
-    <string name="feed_composer_location_unavailable">Position indisponible — vérifiez vos paramètres de localisation et réessayez</string>
     <string name="feed_composer_media_unusable">Ce média n\'a pas pu être joint</string>
-    <string name="feed_composer_media_alt_label">Décrivez cette photo ou vidéo pour les lecteurs d\'écran (%1$d)</string>
-    <string name="feed_composer_media_alt_placeholder">ex. Un vélo rouge appuyé contre un mur en briques</string>
-    <string name="feed_composer_language_button">Langue du post : %1$s</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Options du post</string>

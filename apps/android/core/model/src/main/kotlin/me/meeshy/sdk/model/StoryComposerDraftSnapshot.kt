@@ -204,6 +204,8 @@ data class StoryDraftSlideSnapshot(
     /** Le look de chaque média de la diapo (#13841, format v1 d'iOS), posé ou de fond ; un blob d'avant ou illisible se lit « aucun ». */
     @Serializable(with = StoryMediaLooksSerializer::class)
     val mediaLooks: Map<String, StoryMediaLook> = emptyMap(),
+    /** Le dessin à main levée de la diapo (#13863) ; un blob d'avant se lit « aucun trait ». */
+    val strokes: List<StoryDrawingStroke> = emptyList(),
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
@@ -215,11 +217,11 @@ data class StoryDraftSlideSnapshot(
      * worth restoring on their own. ([backgroundMediaId] can only ever name an attached media,
      * so it never appears without a [mediaIds] entry that already makes the slide worth
      * restoring; a **blank** text element or sticker likewise carries nothing to restore, so
-     * only a publishable one counts.)
+     * only a publishable one counts.) A drawn [strokes] layer is content of its own.
      */
     val hasContent: Boolean
-        get() = text.isNotBlank() || mediaIds.isNotEmpty() ||
-            elements.any { it.isPublishable } || stickers.any { it.isPublishable } || audio.isNotEmpty() || places.isNotEmpty()
+        get() = text.isNotBlank() || mediaIds.isNotEmpty() || elements.any { it.isPublishable } ||
+            stickers.any { it.isPublishable } || audio.isNotEmpty() || places.isNotEmpty() || strokes.isNotEmpty()
 }
 
 /**

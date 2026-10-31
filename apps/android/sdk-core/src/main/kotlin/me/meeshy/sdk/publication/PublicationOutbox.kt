@@ -1,6 +1,10 @@
 package me.meeshy.sdk.publication
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.serialization.encodeToString
@@ -48,12 +52,27 @@ public class PublicationOutbox @Inject constructor(
     private val ownerSource: OutboxOwnerSource,
 ) {
 
+    private val _notices = MutableSharedFlow<PublicationNotice>(extraBufferCapacity = NOTICE_BUFFER)
+
+    /**
+     * What the feed tells the author of a post or reel just handed over (#13863): « en cours d'envoi » once it is queued on
+     * the device, the failure when the device could not queue it. The composer that published is gone by then; the feed
+     * shows the notice where the post will land.
+     */
+    public val notices: SharedFlow<PublicationNotice> = _notices.asSharedFlow()
+
     /**
      * Queues [request]: it waits on every media of its own still uploading from the device
      * (an exhausted upload is revived — the author is publishing again), and [draft], when
      * given, is parked under the returned `cmid` until the post is confirmed or discarded.
      */
-    public suspend fun enqueuePost(request: CreatePostRequest, draft: PostComposerDraftSnapshot? = null): String {
+    public suspend fun enqueuePost(request: CreatePostRequest, draft: PostComposerDraftSnapshot? = null): String =
+        runCatching { queuePost(request, draft) }
+            .onSuccess { _notices.tryEmit(PublicationNotice.QUEUED) }
+            .onFailure { if (it !is CancellationException) _notices.tryEmit(PublicationNotice.FAILED) }
+            .getOrThrow()
+
+    private suspend fun queuePost(request: CreatePostRequest, draft: PostComposerDraftSnapshot?): String {
         val cmid = OutboxIds.cmid()
         val uploads = request.mediaIds.orEmpty().filter(OutboxIds::isCmid)
         uploads.filter { outboxRepository.stateOf(it) == OutboxState.EXHAUSTED }
@@ -170,6 +189,12 @@ public class PublicationOutbox @Inject constructor(
             media = media.zip(ids) { item, id -> item.copy(id = id) },
             mediaAlt = mediaAlt.mapKeys { (key, _) -> renamed[key] ?: key },
             mediaCaption = mediaCaption.mapKeys { (key, _) -> renamed[key] ?: key },
+            scene = scene?.let { StoryDraftReopening.renamed(it, renamed.filter { (placeholder, served) -> placeholder != served }) },
         )
     }
 }
+
+/** A publication handed to the device's queue ([QUEUED]), or one it could not take ([FAILED]). */
+public enum class PublicationNotice { QUEUED, FAILED }
+
+private const val NOTICE_BUFFER = 8

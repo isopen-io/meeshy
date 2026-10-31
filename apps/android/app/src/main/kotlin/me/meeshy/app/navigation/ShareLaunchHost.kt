@@ -8,11 +8,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import me.meeshy.app.chat.AppShareSheetHost
+import me.meeshy.app.feed.LocalPostSceneReaderRenderer
 import me.meeshy.app.feed.LocalReelSceneRenderer
 import me.meeshy.app.feed.LocalRepostSceneRenderer
 import me.meeshy.app.feed.LocalStoryOpener
+import me.meeshy.app.feed.PostSceneReaderRenderer
 import me.meeshy.app.feed.ReelSceneRenderer
 import me.meeshy.app.feed.RepostSceneRenderer
+import me.meeshy.app.stories.PostSceneReaderScene
 import me.meeshy.app.stories.ReelCardScene
 import me.meeshy.app.stories.RepostSceneCard
 import me.meeshy.sdk.model.share.ShareSubject
@@ -35,12 +38,15 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     val repostScene: RepostSceneRenderer = remember { { item, author, live, open, modifier -> RepostSceneCard(item, author, live, open, modifier) } }
     // La scène d'un réel remplit sa carte (iOS `ReelCardSceneBackdrop`), au lieu de la carte 9:16 d'une story.
     val reelScene: ReelSceneRenderer = remember { { item, accent, live, modifier -> ReelCardScene(item, accent, live, modifier) } }
+    // Une scène de post touchée s'ouvre en plein écran, entière et sonore (iOS `PostSceneCardContainer`).
+    val postSceneReader: PostSceneReaderRenderer = remember { { item, accent, playing, modifier -> PostSceneReaderScene(item, accent, playing, modifier) } }
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
     val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigate(Routes.story(authorId, storyId)) } }
     CompositionLocalProvider(
         LocalShareLauncher provides launcher,
         LocalRepostSceneRenderer provides repostScene,
         LocalReelSceneRenderer provides reelScene,
+        LocalPostSceneReaderRenderer provides postSceneReader,
         LocalStoryOpener provides openStory,
     ) { content() }
     pending?.let { share ->
