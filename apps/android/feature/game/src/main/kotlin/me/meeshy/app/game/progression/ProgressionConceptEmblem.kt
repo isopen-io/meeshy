@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.game.GameBlock
@@ -23,6 +24,8 @@ import me.meeshy.ui.component.game.GameBadgeView
 import me.meeshy.ui.component.game.LevelRing
 import me.meeshy.ui.component.game.RankBlason
 import me.meeshy.ui.component.game.GameMaterial
+import me.meeshy.ui.component.game.SignatureMark
+import me.meeshy.app.game.pages.LeagueGem
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -38,23 +41,13 @@ internal fun ProgressionConcept.tint(): Color = when (this) {
     ProgressionConcept.Elans, ProgressionConcept.Defis, ProgressionConcept.Succes -> MeeshyPalette.Success
 }
 
-private fun ProgressionConcept.icon(): ImageVector = when (this) {
-    ProgressionConcept.Level -> MeeshyIcons.Sparkles
-    ProgressionConcept.Points -> MeeshyIcons.SparklesStack
-    ProgressionConcept.Meesh -> MeeshyIcons.MonetizationOn
-    ProgressionConcept.Glory -> MeeshyIcons.StarFilled
-    ProgressionConcept.Flame -> MeeshyIcons.FlameFilled
-    ProgressionConcept.Missions -> MeeshyIcons.Gift
-    ProgressionConcept.League -> MeeshyIcons.Diamond
-    ProgressionConcept.Season, ProgressionConcept.Prestige, ProgressionConcept.Showcase -> MeeshyIcons.Trophy
-    ProgressionConcept.Elans -> MeeshyIcons.Bolt
-    ProgressionConcept.Atlas -> MeeshyIcons.Public
-    ProgressionConcept.Badges, ProgressionConcept.Defis, ProgressionConcept.Succes -> MeeshyIcons.StarFilled
-}
+/** Le pictogramme de repli : la Meesh, tant que sa pièce n'est pas dessinée ici. */
+private fun ProgressionConcept.icon(): ImageVector = MeeshyIcons.MonetizationOn
 
 /**
- * L'emblème d'un concept, dessiné par les briques du jeu (anneau de palier, blason de rang, badges) et, à défaut,
- * par un pictogramme sur disque teinté — jamais une bulle vide. DÉCORATIF : le nom voisin dit tout, donc aucun
+ * L'emblème d'un concept, dessiné comme sur iOS (`ProgressionConceptEmblem`) : anneau de palier, blason de rang, marque
+ * des Points et des Élans, Flamme, coffre, gemme de ligue, coupe, tampon d'Atlas, badges — et la Signature quand le bloc
+ * de jeu manque. Seule la Meesh garde son pictogramme sur disque teinté. DÉCORATIF : le nom voisin dit tout, donc aucun
  * libellé d'accessibilité ici.
  */
 @Composable
@@ -65,10 +58,10 @@ internal fun ProgressionConceptEmblem(
     size: Dp = 40.dp,
 ) {
     val tokens = MeeshyTheme.tokens
-    Box(modifier.size(size).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-        when {
-            concept == ProgressionConcept.Level && game != null -> {
-                val level = game.level.shown
+    val art = ProgressionEmblemArt.of(concept, game)
+    Box(modifier.size(size).clearAndSetSemantics { testTag = EMBLEM_TAG_PREFIX + art.tag() }, contentAlignment = Alignment.Center) {
+        when (art) {
+            ProgressionEmblemArt.Ring -> game?.level?.shown?.let { level ->
                 LevelRing(
                     level = level.level,
                     progress = level.progress.toFloat(),
@@ -79,18 +72,31 @@ internal fun ProgressionConceptEmblem(
                     discColor = tokens.backgroundPrimary,
                 )
             }
-            concept == ProgressionConcept.Glory && game != null -> RankBlason(
-                rank = game.glory.rank,
-                division5 = game.glory.shownDivision,
-                modifier = Modifier.height(size),
-                level = game.level.shown.level,
-                mythic = game.glory.mythicSeat,
-                figures = null,
+            ProgressionEmblemArt.Blason -> game?.let {
+                RankBlason(
+                    rank = it.glory.rank,
+                    division5 = it.glory.shownDivision,
+                    modifier = Modifier.height(size),
+                    level = it.level.shown.level,
+                    mythic = it.glory.mythicSeat,
+                    figures = null,
+                )
+            }
+            is ProgressionEmblemArt.Signature -> SignatureMark(color = MeeshyPalette.Indigo500, style = art.style, modifier = Modifier.fillMaxSize())
+            is ProgressionEmblemArt.Mark -> ConceptMarkEmblem(art.kind, Modifier.fillMaxSize())
+            is ProgressionEmblemArt.Flame -> FlameEmblem(art.form, Modifier.fillMaxSize())
+            is ProgressionEmblemArt.Chest -> ChestEmblem(art.open, Modifier.fillMaxSize())
+            is ProgressionEmblemArt.Gem -> LeagueGem(art.league, size)
+            is ProgressionEmblemArt.Cup -> CupEmblem(art.material, Modifier.fillMaxSize())
+            is ProgressionEmblemArt.Stamp -> AtlasStampEmblem(
+                code = art.code,
+                stamped = art.stamped,
+                tint = MeeshyPalette.Indigo500,
+                muted = tokens.textMuted,
+                modifier = Modifier.fillMaxSize(),
             )
-            concept == ProgressionConcept.Badges -> badge(GameMaterial.GOLD, GameBadgeShape.Accumulation)
-            concept == ProgressionConcept.Defis -> badge(GameMaterial.SILVER, GameBadgeShape.Record)
-            concept == ProgressionConcept.Succes -> badge(GameMaterial.GOLD, GameBadgeShape.Collection(filled = 4, total = 6))
-            else -> {
+            is ProgressionEmblemArt.Badge -> badge(art.material, art.shape)
+            ProgressionEmblemArt.Pictogram -> {
                 val tint = concept.tint()
                 Box(Modifier.fillMaxSize().clip(CircleShape).background(tint.copy(alpha = DISC_ALPHA)), Alignment.Center) {
                     Icon(concept.icon(), contentDescription = null, tint = tint, modifier = Modifier.size(size * ICON_SHARE))
@@ -98,6 +104,20 @@ internal fun ProgressionConceptEmblem(
             }
         }
     }
+}
+
+private fun ProgressionEmblemArt.tag(): String = when (this) {
+    ProgressionEmblemArt.Ring -> "ring"
+    ProgressionEmblemArt.Blason -> "blason"
+    is ProgressionEmblemArt.Signature -> "signature"
+    is ProgressionEmblemArt.Mark -> "mark"
+    is ProgressionEmblemArt.Flame -> "flame"
+    is ProgressionEmblemArt.Chest -> "chest"
+    is ProgressionEmblemArt.Gem -> "gem"
+    is ProgressionEmblemArt.Cup -> "cup"
+    is ProgressionEmblemArt.Stamp -> "stamp"
+    is ProgressionEmblemArt.Badge -> "badge"
+    ProgressionEmblemArt.Pictogram -> "pictogram"
 }
 
 @Composable
@@ -109,3 +129,5 @@ private fun badge(material: GameMaterial, shape: GameBadgeShape) {
 private const val TRACK_ALPHA = 0.2f
 private const val DISC_ALPHA = 0.16f
 private const val ICON_SHARE = 0.55f
+
+internal const val EMBLEM_TAG_PREFIX = "progression.emblem."
