@@ -315,11 +315,11 @@ nonisolated enum ComposerSceneLift {
     }
 
     /// **Quel panneau pousse la scène** : les réglages d'un outil, ou une
-    /// bande sur téléphone (le grand écran la pose en carte, à côté du rail).
-    static func panelIsOpen(lowZone: ComposerLowZone, toolOptionsServed: Bool, roomy: Bool) -> Bool {
+    /// bande — sur tout écran, elle se pose sous la scène (#13839, L6).
+    static func panelIsOpen(lowZone: ComposerLowZone, toolOptionsServed: Bool) -> Bool {
         switch lowZone {
         case .toolOptions: return toolOptionsServed
-        case .band:        return !roomy
+        case .band:        return true
         case .nothing:     return false
         }
     }

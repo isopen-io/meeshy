@@ -110,6 +110,7 @@ struct ComposerSelectionSheetHeader: View {
                     .font(.body.weight(.semibold))
                     .foregroundStyle(MeeshyColors.brandPrimary)
                     .frame(minWidth: 44, minHeight: 44)
+                    .keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("composer.selection.sheet.done")
             }
             ScrollView(.horizontal, showsIndicators: false) {

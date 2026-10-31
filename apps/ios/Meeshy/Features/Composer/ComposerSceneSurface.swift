@@ -227,6 +227,13 @@ struct ComposerSceneSurface: View {
     var drawingBar: AnyView?
     var sceneEffectIsOpen: Bool = false
 
+    // MARK: - Le grand écran (#13839, L6)
+
+    /// Résolue par le meuble depuis la taille de sa racine. En rails, le chrome
+    /// du repos cède aux deux rails libellés et la scène rend leur couloir.
+    var rails = ComposerSceneRailsContext()
+    private var arrangement: ComposerSceneArrangement { rails.arrangement }
+
     /// **Le mode Animé** : la frise qui prend le bas tant qu'elle est
     /// ouverte, et le pont qui la laisse piloter le canvas. Sa bascule vit dans
     /// « ⋯ › Animation » (#13839) ; `onTimeButton` ne sert plus que la colonne
@@ -363,15 +370,13 @@ struct ComposerSceneSurface: View {
     /// et tout le reste du chrome s'efface : la
     /// place reste celle où l'on agit, l'outil en cours en est le seul
     /// occupant — `ComposerToolFocus` en porte la règle.
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// **L'écran LARGE** — iPad plein écran et Mac (maquette `iPad.dc.html`) :
-    /// marges de 24 pt, rails centrés en hauteur plutôt que posés au pouce, et
-    /// un volet de texte qui ne déborde pas de la carte. Le téléphone, et un
-    /// iPad en écran partagé étroit (classe compacte), gardent la disposition
-    /// du pouce.
-    private var isRoomy: Bool { horizontalSizeClass == .regular }
+    /// **L'écran LARGE** — la loi `ComposerSceneArrangement` a posé les rails
+    /// (#13839, L6) : la place libre décide, jamais la classe de taille. Marges
+    /// de 24 pt, contrôleurs centrés en hauteur, volet de texte aligné sur la
+    /// carte. Sans rails, la disposition du pouce.
+    private var isRoomy: Bool { arrangement == .rails }
     private var edge: CGFloat { ComposerRailGeometry.edgeMargin(roomy: isRoomy) }
 
     /// **Le chrome du repos, posé SUR la scène** (#13839, qui renverse #4561 et #4633). Le rail gauche, la colonne
@@ -401,6 +406,33 @@ struct ComposerSceneSurface: View {
     }
 
     private var historyIsOnTheScene: Bool { ComposerRestChrome.historyIsShown(restState) }
+
+    private var railLaneLeading: CGFloat {
+        ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: false).leading
+    }
+
+    private var showsRailsSlideRow: Bool {
+        ComposerRestChrome.showsSlideRow(slideCount: slideCount) && slideRailSlot != nil
+    }
+
+    private var railsLayer: some View {
+        ComposerSceneRailsLayer(
+            leading: ComposerLabeledRail(tools: restTools, moreEntries: rails.moreEntries, openEntry: rails.openEntry,
+                                         onClose: onClose, onTool: { onRestTool?($0) },
+                                         onMore: rails.onMore,
+                                         plus: rails.plus,
+                                         mediaLongPress: onRailDoorLongPress,
+                                         sound: .init(trace: backgroundSound, onEdit: onEditBackgroundSound,
+                                                      onDelete: onDeleteBackgroundSound,
+                                                      onPromote: onPromoteBackgroundSound),
+                                         pasteEntry: railSystemEntry),
+            selection: ComposerSelectionRail(selection: selectionBar, onUndo: onUndo, onRedo: onRedo),
+            selectionIsShown: !trailingRailIsShown,
+            slideRow: slideRailSlot,
+            showsSlideRow: showsRailsSlideRow,
+            isServed: ComposerLabeledRailLayout.railsAreServed(writesText: writing.writesText || editingTextId != nil,
+                                                               cameraIsArmed: cameraStage != .off))
+    }
 
     /// Une feuille ancrée ouverte retire le repos (#13839, L3) : la scène
     /// réduite ne porte que ce qu'on édite.
@@ -491,8 +523,7 @@ struct ComposerSceneSurface: View {
         ComposerSceneLift.bottomInset(
             panelIsOpen: ComposerSceneLift.panelIsOpen(
                 lowZone: ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band),
-                toolOptionsServed: toolOptions != nil,
-                roomy: isRoomy),
+                toolOptionsServed: toolOptions != nil),
             panelHeight: lowerFloorsHeight)
     }
 
@@ -518,7 +549,7 @@ struct ComposerSceneSurface: View {
             sceneLetterbox
             sceneLayer
             chromeLayer
-            restChrome
+            if arrangement == .rails { railsLayer } else { restChrome }
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardWidthPreferenceKey.self) { sceneCardWidth = $0 }
@@ -613,7 +644,8 @@ struct ComposerSceneSurface: View {
                 .offset(y: lift.offsetY)
                 .animation(liftAnimation, value: lift)
         }
-        .ignoresSafeArea(.container, edges: .bottom)
+        .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
+        .ignoresSafeArea(.container, edges: arrangement == .rails ? [] : .bottom)
         .ignoresSafeArea(.keyboard)
         .allowsHitTesting(timelinePanel == nil)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {
@@ -728,7 +760,7 @@ struct ComposerSceneSurface: View {
                                                                         ratio: aspectRatio,
                                                                         horizontalInset: 0)
                 Color.clear
-                    .preference(key: ComposerSceneCardLeadingKey.self, value: bordGauche)
+                    .preference(key: ComposerSceneCardLeadingKey.self, value: bordGauche + railLaneLeading)
                     // La carte se CENTRE : sa largeur est ce que les deux bords
                     // lui laissent. Le volet en proportionne sa flèche.
                     .preference(key: ComposerSceneCardWidthPreferenceKey.self,
@@ -744,22 +776,29 @@ struct ComposerSceneSurface: View {
             // fond se lit au point du bouton Son et se règle de son menu.
             freeZone
 
-            // **La frise prend le bas tant qu'elle est ouverte** : les
-            // étages qui outillent la scène image par image n'ont rien à y
-            // faire, et deux zones basses se recouvriraient.
-            if let timelinePanel {
-                timelinePanel
-            } else if ComposerToolFocus.lowerFloorsAreShown(writesText: writesText) {
-                // **Clavier levé, le bas est au clavier** : références,
-                // jetons et rangée basse y seraient couverts ou hors du pouce.
-                lowerFloors
-                    .background {
-                        GeometryReader { geo in
-                            Color.clear.preference(key: ComposerLowerFloorsHeightKey.self,
-                                                   value: geo.size.height)
-                        }
+            // **Sur grand écran, le bas reste dans la colonne de la scène** (#13839, L6) : une bande, la frise, les
+            // réglages d'un outil ou la barre de dessin posés sous un rail y seraient couverts et intouchables.
+            bottomFloors
+                .padding(ComposerSceneRailsInsets.lowerFloors(arrangement: arrangement))
+        }
+    }
+
+    /// **La frise prend le bas tant qu'elle est ouverte** : les étages qui outillent la scène image par image n'ont
+    /// rien à y faire, et deux zones basses se recouvriraient.
+    @ViewBuilder
+    private var bottomFloors: some View {
+        if let timelinePanel {
+            timelinePanel
+        } else if ComposerToolFocus.lowerFloorsAreShown(writesText: writesText) {
+            // **Clavier levé, le bas est au clavier** : références,
+            // jetons et rangée basse y seraient couverts ou hors du pouce.
+            lowerFloors
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(key: ComposerLowerFloorsHeightKey.self,
+                                               value: geo.size.height)
                     }
-            }
+                }
         }
     }
 
@@ -773,7 +812,7 @@ struct ComposerSceneSurface: View {
             if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen), band == nil {
                 ComposerSceneReferenceFooter(hashtags: sceneHashtags,
                                              references: sceneReferences,
-                                             leadingInset: sceneCardLeading,
+                                             leadingInset: sceneCardLeading - railLaneLeading,
                                              onOpenHashtags: onOpenHashtags,
                                              onOpenMentions: onOpenMentions)
             }
@@ -797,9 +836,9 @@ struct ComposerSceneSurface: View {
                         .padding(.bottom, MeeshySpacing.xsPlus)
                 }
             case .band(let ouverte):
-                // Sur grand écran, la bande flotte en CARTE à côté du rail droit
-                // (`roomyBandCard`) ; elle ne prend le bas que sur téléphone.
-                if !isRoomy { bandView(ouverte) }
+                // Sous la scène, qui se réduit au-dessus d'elle, sur tout écran :
+                // en carte à côté du rail droit, elle couvrait la scène (#13839, L6).
+                bandView(ouverte)
             case .nothing:
                 EmptyView()
             }
@@ -908,7 +947,6 @@ struct ComposerSceneSurface: View {
                ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen, writing: writing), band == nil {
                 descriptionOverlay
             }
-            roomyBandCard
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
@@ -924,19 +962,6 @@ struct ComposerSceneSurface: View {
                               plateauTint: plateauTint,
                               onPickFitMode: onPickBandFitMode,
                               onPickBackdrop: onPickBandBackdrop)
-    }
-
-    /// **La bande en CARTE flottante, sur grand écran** (maquette
-    /// `iPad.dc.html` : le panneau Cadre se pose à côté du rail droit, 250 pt
-    /// de large, sans quitter la scène des yeux). Le téléphone la garde en bas.
-    @ViewBuilder
-    private var roomyBandCard: some View {
-        if isRoomy, case .band(let ouverte) = ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
-            bandView(ouverte)
-                .frame(width: ComposerRailGeometry.roomyPanelWidth)
-                .padding(.trailing, ComposerRailGeometry.roomyPanelTrailing)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-        }
     }
 
     // **Le champ PERMANENT est absent** :

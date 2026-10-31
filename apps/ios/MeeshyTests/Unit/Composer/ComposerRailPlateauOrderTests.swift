@@ -68,8 +68,8 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
     /// vignette. La colonne droite qui reste (outil, objet) garde sa place.
     func test_leRepos_estUnCalqueAuDessusDuChrome_etLaColonneDroiteResteDansLaSceneLibre() throws {
         let code = compact(try sceneSurface())
-        XCTAssertTrue(code.contains("sceneLetterboxsceneLayerchromeLayerrestChrome}"),
-                      "sol, scène, chrome, repos — dans cet ordre")
+        XCTAssertTrue(code.contains("sceneLetterboxsceneLayerchromeLayerifarrangement==.rails{railsLayer}else{restChrome}}"),
+                      "sol, scène, chrome, repos (ou les rails du grand écran, #13839 L6) — dans cet ordre")
         guard let debut = code.range(of: "privatevarfreeZone:someView{") else {
             return XCTFail("La scène libre a changé de nom — la garde doit être re-pointée.")
         }
@@ -77,6 +77,7 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
             "HStack(alignment:isRoomy?.center:.bottom,spacing:0){Spacer(minLength:0)iftrailingRailIsShown{ComposerTrailingRail("))
         let scene = try bloc("privatevarsceneLayer:someView{", jusqua: "privatevarchromeLayer:someView{")
         XCTAssertFalse(scene.contains("restChrome"), "le repos est monté dans le calque de la scène")
+        XCTAssertFalse(scene.contains("railsLayer"), "les rails du grand écran sont montés dans le calque de la scène")
     }
 
     /// **Les boutons du repos ont UN gabarit** : 44 pt, verre, voile de 38 %,

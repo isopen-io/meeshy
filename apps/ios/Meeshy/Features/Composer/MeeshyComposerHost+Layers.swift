@@ -54,7 +54,7 @@ struct ComposerHostStage: View {
     let host: MeeshyComposerHost
     var observation: ComposerHostObservation
 
-    var body: some View { host.composerStage }
+    var body: some View { host.composerStage.modifier(ComposerSceneArrangementProbe(host: host)) }
 }
 
 /// La pile — portails, surface, socle flottant (`composerStack`).
@@ -80,7 +80,7 @@ struct ComposerHostSocleSlot: View {
     let host: MeeshyComposerHost
     var observation: ComposerHostObservation
 
-    var body: some View { host.socleSlot }
+    var body: some View { host.socleSlot.frame(maxWidth: ComposerSceneArrangementRelay(host: host).publishWidth) }
 }
 
 /// La rangée du socle — audience · texte du post · publier (`socle`).

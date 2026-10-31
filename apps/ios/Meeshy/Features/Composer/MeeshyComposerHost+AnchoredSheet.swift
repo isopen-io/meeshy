@@ -169,6 +169,7 @@ struct ComposerHostAnchoredSheetLayer: View {
 
     var body: some View {
         host.anchoredSheetLayer
+            .frame(maxWidth: ComposerSceneArrangementRelay(host: host).sheetWidth)
             .animation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.32, dampingFraction: 0.88),
                        value: host.anchoredPortal)
     }

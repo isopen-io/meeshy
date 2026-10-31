@@ -198,7 +198,7 @@ extension MeeshyComposerHost {
             // passent par le même terme : ce qui compte n'est pas LAQUELLE on
             // remplit, c'est qu'on est en train de remplir quelque chose.
             writesText: writesText,
-            panelIsOpen: sceneBottomPanelIsOpen && horizontalSizeClass != .regular
+            panelIsOpen: sceneBottomPanelIsOpen
         )
     }
 

@@ -388,9 +388,8 @@ extension MeeshyComposerHost {
                     handlePastedItems(items)
                 }
                 .labelStyle(.iconOnly)
-                // `.capsule` et non `.circle` : celle-ci est iOS 17+, et le
-                // plancher de l'app est iOS 16. Sur une cible de 44 pt, la
-                // capsule EST un cercle.
+                // `.capsule` et non `.circle` : celle-ci est iOS 17+, et le plancher de l'app
+                // est iOS 16. Sur une cible de 44 pt, la capsule EST un cercle.
                 .buttonBorderShape(.capsule)
             ),
             // Les contrôleurs que CE meuble sert — même règle, même raison.
@@ -469,6 +468,7 @@ extension MeeshyComposerHost {
             moreMenu: sceneMoreMenu,
             drawingBar: sceneDrawingBar,
             sceneEffectIsOpen: activeSceneEffect != nil,
+            rails: ComposerSceneArrangementRelay(host: self).surfaceRails,
             onTimeButton: sceneIsAnimated ? { toggleSceneFrise() } : nil,
             timeIsOpen: viewModel.timelineIsOpen,
             timelinePanel: sceneTimelinePanel,

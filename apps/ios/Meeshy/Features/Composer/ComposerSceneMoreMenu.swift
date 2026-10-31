@@ -9,6 +9,8 @@ struct ComposerSceneMoreMenu<Items: View>: View {
     let label: String
     @Binding var clearAllAsked: Bool
     let onClearAll: () -> Void
+    /// Sur le rail libellé du grand écran (#13839, L6), la face est la rangée « ⋯ Plus ».
+    var railLabel: String? = nil
     @ViewBuilder let items: () -> Items
 
     var body: some View {
@@ -21,6 +23,17 @@ struct ComposerSceneMoreMenu<Items: View>: View {
 
     @ViewBuilder
     private var face: some View {
+        if let railLabel {
+            Menu(content: items) { ComposerLabeledRailRow(symbol: ComposerRestTool.more.symbol, label: railLabel) }
+                .accessibilityLabel(Text(label))
+                .accessibilityIdentifier("composer.rail.plus")
+        } else {
+            roundFace
+        }
+    }
+
+    @ViewBuilder
+    private var roundFace: some View {
         switch ComposerTopBarMenuFace.current {
         case .label:
             Menu(content: items) { ComposerSceneRoundGlyph(symbol: ComposerRestTool.more.symbol) }

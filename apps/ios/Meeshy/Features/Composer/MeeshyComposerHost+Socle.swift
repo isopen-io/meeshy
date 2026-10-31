@@ -42,8 +42,7 @@ extension MeeshyComposerHost {
             // qu'il n'y a rien à publier, et son toucher dit pourquoi.
             if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
         }
-        // Grand écran : la marge de la maquette iPad/Mac, alignée sur les rails.
-        .padding(.horizontal, horizontalSizeClass == .regular ? ComposerRailGeometry.roomyMargin : 14)
+        .padding(.horizontal, ComposerSceneArrangementRelay(host: self).socleHorizontalPadding)
         // **Plus bas, sous la scène** : il
         // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
         .padding(.top, MeeshySpacing.xs)

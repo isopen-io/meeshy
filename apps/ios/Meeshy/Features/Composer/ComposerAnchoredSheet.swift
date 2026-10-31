@@ -153,6 +153,7 @@ struct ComposerAnchoredSheet<Content: View>: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("composer.sheet.ok")
             }
         }

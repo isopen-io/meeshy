@@ -212,14 +212,13 @@ final class ComposerSceneColumnsTests: XCTestCase {
                        ComposerSceneLift.restingInset)
     }
 
-    func test_panelIsOpen_reglagesDeLOutilOuBandeSurTelephone() {
-        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .toolOptions, toolOptionsServed: true, roomy: false))
-        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .toolOptions, toolOptionsServed: false, roomy: false),
+    func test_panelIsOpen_reglagesDeLOutilOuBande_surToutEcran() {
+        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .toolOptions, toolOptionsServed: true))
+        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .toolOptions, toolOptionsServed: false),
                        "un outil sans panneau (le texte) ne pousse rien")
-        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .band(.frame), toolOptionsServed: false, roomy: false))
-        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .band(.frame), toolOptionsServed: false, roomy: true),
-                       "sur grand écran la bande flotte en carte, à côté du rail")
-        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .nothing, toolOptionsServed: true, roomy: false))
+        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .band(.frame), toolOptionsServed: false),
+                      "la bande se pose sous la scène sur tout écran, grand écran compris (#13839, L6) : elle la réduit")
+        XCTAssertFalse(ComposerSceneLift.panelIsOpen(lowZone: .nothing, toolOptionsServed: true))
     }
 
     func test_bottomInset_neDescendJamaisSousLeRepos() {
