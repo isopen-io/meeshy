@@ -5,7 +5,7 @@ import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conv
 import { withMutationLog } from '../../utils/withMutationLog';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
-import { recordLevel, startCooldown, cooldownEnd } from '../../services/relations/userRelationWriter';
+import { recordLevel, startCooldown, cooldownEnd, type RelationWriteOutcome } from '../../services/relations/userRelationWriter';
 import { judgeRelationRequest, thresholdsNow } from '../../services/relations/relationRequestGate';
 import { emitRelationLevelRaised, relationIoOf } from '../../socketio/relationEvents';
 import { parseRequestLevel, type RelationRequestLevel } from '@meeshy/shared/types/relation';
@@ -170,6 +170,33 @@ function crediterAmitie(fastify: FastifyInstance, demande: DemandeARepondre): vo
 }
 
 /**
+ * Le lien de la paire, au niveau accepté. La demande ACCEPTÉE reste la vérité de
+ * repli pour Ami (#13926) : le lien se rattrape. Ailleurs, rien ne le rattrape —
+ * au-dessus d'Ami le rattrapage ne relève qu'à Ami, et une Connaissance consommée
+ * n'a plus de demande : on défait l'acceptation, sans quoi elle disparaîtrait en
+ * silence.
+ */
+async function ecrireLien(
+  fastify: FastifyInstance,
+  params: { demande: DemandeARepondre; ligne: LigneConsommee; niveau: RelationRequestLevel; at: Date }
+): Promise<RelationWriteOutcome | null> {
+  const { demande, ligne, niveau, at } = params;
+  const ecrit = await recordLevel(fastify.prisma, {
+    userA: demande.senderId, userB: demande.receiverId, level: niveau, origin: 'request', at,
+  }).catch((error: unknown) => {
+    logError(fastify.log, 'Error recording user relation after friend request acceptance:', error);
+    return null;
+  });
+  if (ecrit !== null || niveau === 'FRIEND') return ecrit;
+
+  const defaire = niveau === 'ACQUAINTANCE'
+    ? restaurerDemande(fastify, ligne)
+    : fastify.prisma.friendRequest.update({ where: { id: demande.id }, data: { status: 'pending', respondedAt: null } });
+  await defaire.catch(() => undefined);
+  throw new Error('relation write failed');
+}
+
+/**
  * ACCEPTER, au niveau VISÉ (#13933). Le cran est relu AVANT d'écrire : le lien a pu
  * tomber, la série se briser entre la demande et la réponse — la demande reste
  * alors en attente et le refus se dit (409). Un Sang ne s'accepte pas ici : le
@@ -220,25 +247,7 @@ async function accepterAuNiveau(
   }
 
   const at = new Date();
-  const ecriture = recordLevel(fastify.prisma, {
-    userA: demande.senderId, userB: demande.receiverId, level: niveau, origin: 'request', at,
-  });
-  const ecrit = await ecriture.catch((error: unknown) => {
-    // La demande ACCEPTÉE reste la vérité de repli pour Ami (#13926) : le lien se
-    // rattrape. Ailleurs, rien ne le rattrape — au-dessus d'Ami le rattrapage ne relève
-    // qu'à Ami, et une Connaissance consommée n'a plus de demande : on défait
-    // l'acceptation, sans quoi elle disparaîtrait en silence.
-    logError(fastify.log, 'Error recording user relation after friend request acceptance:', error);
-    return null;
-  });
-  if (ecrit === null && niveau === 'ACQUAINTANCE') {
-    await restaurerDemande(fastify, misAJour).catch(() => undefined);
-    throw new Error('relation write failed');
-  }
-  if (ecrit === null && niveau !== 'FRIEND') {
-    await fastify.prisma.friendRequest.update({ where: { id: demande.id }, data: { status: 'pending', respondedAt: null } }).catch(() => undefined);
-    throw new Error('relation write failed');
-  }
+  const ecrit = await ecrireLien(fastify, { demande, ligne: misAJour, niveau, at });
 
   await forgetFriends(fastify, [demande.senderId, demande.receiverId]);
   if (ecrit === 'created' || ecrit === 'raised') {
