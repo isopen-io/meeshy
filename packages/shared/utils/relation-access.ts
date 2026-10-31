@@ -10,11 +10,13 @@
  * ## L'ordre des verdicts
  *
  * 1. blocage dans un sens ou dans l'autre ⇒ RIEN, y compris pour ADMIN ;
- * 2. soi-même ⇒ tout, sauf les actions adressées à un autre ;
- * 3. ADMIN/BIGBOSS ⇒ la PRÉSENCE seulement (loi du 2026-08-25), sans lien ;
- * 4. Connaissance automatique ⇒ refusée entre un mineur DÉCLARÉ et quiconque
+ * 2. une identité absente (vide ou indéfinie) ⇒ RIEN : deux identités
+ *    absentes ne sont pas « soi » (fail-closed) ;
+ * 3. soi-même ⇒ tout, sauf les actions adressées à un autre ;
+ * 4. ADMIN/BIGBOSS ⇒ la PRÉSENCE seulement (loi du 2026-08-25), sans lien ;
+ * 5. Connaissance automatique ⇒ refusée entre un mineur DÉCLARÉ et quiconque
  *    ne l'est pas (majeur ou âge inconnu : fail-closed) ;
- * 5. sinon, le niveau effectif atteint-il le minimum de la feature ?
+ * 6. sinon, le niveau effectif atteint-il le minimum de la feature ?
  *
  * ## Les mineurs (décision porteur, 2026-10-31)
  *
@@ -93,6 +95,8 @@ export const resolveRelationAccess = (input: RelationAccessInput): RelationAcces
   const { feature } = input;
 
   if (input.blockedEitherWay) return verdict(false, 'PUBLIC', 'blocked');
+
+  if (!input.viewerId || !input.targetId) return verdict(false, 'PUBLIC', 'level');
 
   if (input.viewerId === input.targetId) {
     return RELATION_DIRECTED_FEATURES.has(feature) ? verdict(false, 'PUBLIC', 'self') : verdict(true, 'BLOOD', 'self');

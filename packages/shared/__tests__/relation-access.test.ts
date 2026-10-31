@@ -157,6 +157,20 @@ describe('resolveRelationAccess — soi et rôle', () => {
   it('le blocage l\'emporte sur le privilège administrateur', () => {
     expect(access({ viewerRole: 'ADMIN', blockedEitherWay: true })).toMatchObject({ allowed: false, reason: 'blocked' });
   });
+
+  it.each([
+    ['vides', '', ''],
+    ['absentes', undefined, undefined],
+  ])('deux identités %s ne valent jamais « soi » : rien ne s\'ouvre, pas même au rang Sang', (_label, viewerId, targetId) => {
+    const missing = { viewerId, targetId } as unknown as Pick<RelationAccessInput, 'viewerId' | 'targetId'>;
+    expect(access({ ...missing, feature: 'location.history' })).toEqual({
+      allowed: false,
+      effectiveLevel: 'PUBLIC',
+      reason: 'level',
+      requiresConsent: false,
+    });
+    expect(access({ ...missing, ...both('BLOOD'), feature: 'audience.blood' }).allowed).toBe(false);
+  });
 });
 
 describe('resolveRelationAccess — les mineurs (décision porteur 2026-10-31)', () => {

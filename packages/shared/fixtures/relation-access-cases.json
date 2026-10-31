@@ -1299,6 +1299,28 @@
         "reason": "level",
         "requiresConsent": false
       }
+    },
+    {
+      "id": "missing-identity-is-never-self",
+      "matrix": "Identité absente (fail-closed)",
+      "input": {
+        "viewerId": "",
+        "targetId": "",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "unknown",
+        "targetMinor": "unknown",
+        "viewerRole": "USER",
+        "feature": "location.history"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
     }
   ]
 }
