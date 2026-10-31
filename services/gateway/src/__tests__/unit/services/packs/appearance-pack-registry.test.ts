@@ -34,12 +34,12 @@ describe('registres d’apparence générés', () => {
     expect(wallpapers.every((pack) => pack.origin === 'builtin' && pack.price === undefined)).toBe(true);
   });
 
-  it('porte 17 modèles de fonds, 9 bannières, 23 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
+  it('porte 17 modèles de fonds, 9 bannières, 29 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
     const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring' | 'banner-frame') => index.entries(domain).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
 
     expect(count('wallpaper')).toBe(17);
     expect(count('banner')).toBe(9);
-    expect(count('avatar-ring')).toBe(23);
+    expect(count('avatar-ring')).toBe(29);
     expect(count('banner-frame')).toBe(14);
     expect(index.itemKeys(index.entries('wallpaper')[0])).toEqual(['monogramme', 'chevrons', 'aurore', 'maille']);
   });
@@ -56,7 +56,7 @@ describe('registres d’apparence générés', () => {
 
   it('les 28 cadres photo (#10936) : sept styles, un fixe et un animé chacun, en contour d’avatar et en cadre de bannière, à installer et usage annoncé', () => {
     const styles = ['haussmannien', 'arabe', 'grec', 'ancestral', 'technologique', 'rituel', 'celte'];
-    const rings = index.entries('avatar-ring').filter((pack) => pack.slug !== 'contours-essentiels' && pack.slug !== 'contours-animes');
+    const rings = index.entries('avatar-ring').filter((pack) => pack.slug.startsWith('contours-') && pack.slug !== 'contours-essentiels' && pack.slug !== 'contours-animes');
     const frames = index.entries('banner-frame');
 
     expect(rings.map((pack) => pack.slug)).toEqual(styles.map((style) => `contours-${style}`));
@@ -98,6 +98,21 @@ describe('registres d’apparence générés', () => {
       const path = join(ASSETS, ref.src);
       expect(createHash('sha256').update(readFileSync(path)).digest('hex')).toBe(ref.sha256);
       expect(index.isServedAsset(ref.src)).toBe(true);
+    });
+  });
+
+  it('les deux films de chaque cadre illustré (#13960) sont servis par le magasin, et le pack installé d’office porte ses six cadres', () => {
+    const pack = index.entries('avatar-ring').find((entry) => entry.slug === 'cadres-illustres');
+    expect(pack?.installedByDefault).toBe(true);
+    expect(index.itemKeys(pack!)).toEqual(['masque-felin', 'toile-araignee', 'ailes-ange', 'cercle-runique', 'griffes-os', 'ailes-demon']);
+    const contract = JSON.parse(readFileSync(join(ASSETS, pack!.contract.src), 'utf8')) as {
+      readonly rings: readonly { readonly decor?: { readonly back?: { readonly src: string; readonly sha256: string }; readonly front?: { readonly src: string; readonly sha256: string } } }[];
+    };
+    const films = contract.rings.flatMap((ring) => [ring.decor?.back, ring.decor?.front]).flatMap((ref) => (ref ? [ref] : []));
+    expect(films).toHaveLength(12);
+    films.forEach((ref) => {
+      expect(createHash('sha256').update(readFileSync(join(ASSETS, ref.src))).digest('hex')).toBe(ref.sha256);
+      expect({ src: ref.src, served: index.isServedAsset(ref.src) }).toEqual({ src: ref.src, served: true });
     });
   });
 

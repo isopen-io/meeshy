@@ -20,7 +20,7 @@ export const ANDROID_CATALOG_PATH = 'apps/android/sdk-core/src/main/assets/appea
 export const ANDROID_LOTTIE_DIR = 'apps/android/sdk-core/src/main/assets/appearance-lottie';
 const SHARED_LOTTIE_DIR = 'packages/shared/design/appearance/lottie';
 
-/** Les fichiers Lottie qu'un catalogue rendu référence, chacun une fois. */
+/** Les fichiers Lottie qu'un catalogue rendu référence — la couche d'un article et les deux films d'un cadre illustré (#13960) —, chacun une fois. */
 export function referencedLottieFiles(catalogText: string): string[] {
   const found = new Set<string>();
   const walk = (node: unknown): void => {
@@ -30,8 +30,11 @@ export function referencedLottieFiles(catalogText: string): string[] {
     }
     if (node === null || typeof node !== 'object') return;
     const record = node as Record<string, unknown>;
-    const lottie = record.lottie as { src?: unknown } | undefined;
-    if (lottie && typeof lottie.src === 'string') found.add(lottie.src);
+    const decor = record.decor as Record<string, unknown> | undefined;
+    [record.lottie, decor?.back, decor?.front].forEach((ref) => {
+      const src = (ref as { src?: unknown } | undefined)?.src;
+      if (typeof src === 'string') found.add(src);
+    });
     Object.values(record).forEach(walk);
   };
   walk(JSON.parse(catalogText));

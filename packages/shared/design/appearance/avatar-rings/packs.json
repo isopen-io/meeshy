@@ -889,5 +889,104 @@
         "avatar"
       ]
     }
+  },
+  {
+    "slug": "cadres-illustres",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 9,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "aaea7c5492142cb7.webp",
+      "bytes": 10312,
+      "sha256": "aaea7c5492142cb7bed84711ee4440694118043d12a65d959623519a5ac16d1f"
+    },
+    "preview": null,
+    "contract": {
+      "src": "7c8c0050d5fa2b4f.json",
+      "bytes": 10999,
+      "sha256": "7c8c0050d5fa2b4ffad61bc9f710c72d52f6294dceca64b1e6d69a40da606805"
+    },
+    "strings": {
+      "fr": {
+        "src": "9c35d1c2d6a33c28.json",
+        "bytes": 217,
+        "sha256": "9c35d1c2d6a33c2889bbbd86a1fdfb83c0d06f113a6331d01135d2c56f211501"
+      },
+      "en": {
+        "src": "bae9935e7e2e3fea.json",
+        "bytes": 193,
+        "sha256": "bae9935e7e2e3fea800a34a498540854a0092465232d73cac595afc75531f737"
+      },
+      "es": {
+        "src": "fffaacdb0668fe8d.json",
+        "bytes": 212,
+        "sha256": "fffaacdb0668fe8d9b75f15b77482741be7d1f29aa19b259a5c5a206162e0468"
+      },
+      "pt": {
+        "src": "84ac7d797903e287.json",
+        "bytes": 215,
+        "sha256": "84ac7d797903e28728957ff13f037237f41b75d2182bf96b2f86d196d64cb4e2"
+      },
+      "de": {
+        "src": "72c0b4de231cdec1.json",
+        "bytes": 202,
+        "sha256": "72c0b4de231cdec120ba906c094652c16cc13bd01cf1423dcd0da52d32bf532e"
+      },
+      "it": {
+        "src": "751d8b6db55e9778.json",
+        "bytes": 209,
+        "sha256": "751d8b6db55e9778091339e69b8b6e4c4a7bdb0dbeaf6f1fd3a3005dc3136d0f"
+      },
+      "ar": {
+        "src": "827e4483814ee1bd.json",
+        "bytes": 254,
+        "sha256": "827e4483814ee1bd798ac25909fa41e2e1a1354400ff48622502d0803a3356c2"
+      }
+    },
+    "downloadBytes": {
+      "story": 10999,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres illustrés",
+        "description": "Six cadres qui débordent de l’avatar : un masque aux yeux qui rougissent, une toile et son araignée, des ailes d’ange, un cercle runique, des griffes d’os, des ailes de démon."
+      },
+      "en": {
+        "name": "Illustrated frames",
+        "description": "Six frames that spill past your avatar: a mask whose eyes turn red, a web and its spider, angel wings, a runic circle, bone claws and demon wings."
+      },
+      "es": {
+        "name": "Marcos ilustrados",
+        "description": "Seis marcos que desbordan tu avatar: una máscara de ojos que enrojecen, una telaraña con su araña, alas de ángel, un círculo rúnico, garras de hueso y alas de demonio."
+      },
+      "pt": {
+        "name": "Molduras ilustradas",
+        "description": "Seis molduras que transbordam do teu avatar: uma máscara de olhos que ficam vermelhos, uma teia e a sua aranha, asas de anjo, um círculo rúnico, garras de osso e asas de demônio."
+      },
+      "de": {
+        "name": "Illustrierte Rahmen",
+        "description": "Sechs Rahmen, die über deinen Avatar hinausragen: eine Maske mit rot glühenden Augen, ein Netz samt Spinne, Engelsflügel, ein Runenkreis, Knochenkrallen und Dämonenflügel."
+      },
+      "it": {
+        "name": "Cornici illustrate",
+        "description": "Sei cornici che escono dal tuo avatar: una maschera dagli occhi che diventano rossi, una ragnatela col suo ragno, ali d’angelo, un cerchio runico, artigli d’osso e ali di demone."
+      },
+      "ar": {
+        "name": "إطارات مرسومة",
+        "description": "ستة إطارات تتجاوز صورتك الرمزية: قناع تحمرّ عيناه، وشبكة وعنكبوتها، وجناحا ملاك، ودائرة رموز، ومخالب عظمية، وجناحا شيطان."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
   }
 ]

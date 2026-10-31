@@ -91,6 +91,10 @@
     "cadres-celte": {
       "name": "Celtic banner frame",
       "description": "Endless braid and spiral triskeles."
+    },
+    "cadres-illustres": {
+      "name": "Illustrated frames",
+      "description": "Six frames that spill past your avatar: a mask whose eyes turn red, a web and its spider, angel wings, a runic circle, bone claws and demon wings."
     }
   },
   "designs": {
@@ -138,7 +142,13 @@
     "celte": "Celtic",
     "celte-anime": "Celtic, animated",
     "prisme-vivant": "Living prism",
-    "onde": "Ripple"
+    "onde": "Ripple",
+    "masque-felin": "Feline mask",
+    "toile-araignee": "Spider web",
+    "ailes-ange": "Angel wings",
+    "cercle-runique": "Runic circle",
+    "griffes-os": "Bone claws",
+    "ailes-demon": "Demon wings"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",

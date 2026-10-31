@@ -91,6 +91,10 @@
     "cadres-celte": {
       "name": "Marco Celta",
       "description": "Trenza sin fin y trisqueles en espiral."
+    },
+    "cadres-illustres": {
+      "name": "Marcos ilustrados",
+      "description": "Seis marcos que desbordan tu avatar: una máscara de ojos que enrojecen, una telaraña con su araña, alas de ángel, un círculo rúnico, garras de hueso y alas de demonio."
     }
   },
   "designs": {
@@ -138,7 +142,13 @@
     "celte": "Celta",
     "celte-anime": "Celta animado",
     "prisme-vivant": "Prisma vivo",
-    "onde": "Onda"
+    "onde": "Onda",
+    "masque-felin": "Máscara felina",
+    "toile-araignee": "Telaraña",
+    "ailes-ange": "Alas de ángel",
+    "cercle-runique": "Círculo rúnico",
+    "griffes-os": "Garras de hueso",
+    "ailes-demon": "Alas de demonio"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

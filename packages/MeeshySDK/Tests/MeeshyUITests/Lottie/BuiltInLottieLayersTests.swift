@@ -44,4 +44,21 @@ final class BuiltInLottieLayersTests: XCTestCase {
             XCTAssertGreaterThan(film.duration, 0)
         }
     }
+
+    /// #13960 — les deux films de chaque cadre illustré (derrière et au-dessus de l'avatar)
+    /// sont servis, à l'octet de leur référence, et le moteur partagé les lit.
+    func test_eachIllustratedFrame_shipsItsBackAndFrontFilms_andTheSharedEngineReadsThem() throws {
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: shippedFolder.path), "les fichiers servis ne sont pas lisibles depuis cet hôte de test")
+        let pack = try XCTUnwrap(AvatarRingCatalog.shared.packs.first { $0.slug == "cadres-illustres" })
+        let films = pack.rings.flatMap { [$0.decor?.back, $0.decor?.front].compactMap { $0 } }
+        XCTAssertEqual(films.count, 12)
+        for ref in films {
+            let data = try Data(contentsOf: shippedFolder.appendingPathComponent(ref.src))
+            XCTAssertEqual(data.count, ref.bytes, ref.src)
+            XCTAssertLessThan(data.count, 60 * 1024, ref.src)
+            XCTAssertEqual(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), ref.sha256, ref.src)
+            let film = try XCTUnwrap(LottieLayerSource.film(data: data), "\(ref.src) doit se lire")
+            XCTAssertGreaterThan(film.duration, 0)
+        }
+    }
 }

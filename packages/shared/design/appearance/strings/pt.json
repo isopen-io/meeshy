@@ -91,6 +91,10 @@
     "cadres-celte": {
       "name": "Moldura Celta",
       "description": "Trança sem fim e triskles em espiral."
+    },
+    "cadres-illustres": {
+      "name": "Molduras ilustradas",
+      "description": "Seis molduras que transbordam do teu avatar: uma máscara de olhos que ficam vermelhos, uma teia e a sua aranha, asas de anjo, um círculo rúnico, garras de osso e asas de demônio."
     }
   },
   "designs": {
@@ -138,7 +142,13 @@
     "celte": "Celta",
     "celte-anime": "Celta animado",
     "prisme-vivant": "Prisma vivo",
-    "onde": "Onda"
+    "onde": "Onda",
+    "masque-felin": "Máscara felina",
+    "toile-araignee": "Teia de aranha",
+    "ailes-ange": "Asas de anjo",
+    "cercle-runique": "Círculo rúnico",
+    "griffes-os": "Garras de osso",
+    "ailes-demon": "Asas de demônio"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

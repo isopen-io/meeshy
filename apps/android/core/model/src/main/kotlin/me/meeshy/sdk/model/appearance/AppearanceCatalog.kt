@@ -66,13 +66,13 @@ class AppearanceCatalog private constructor(
 
     /**
      * Les couches animées que le catalogue référence (#13952), une par empreinte, dans l'ordre fonds, bannières,
-     * contours, cadres de bannière : celles que le SDK embarque pour qu'elles jouent dès le premier rendu, sans réseau.
+     * contours (couche du contour, puis films arrière et avant d'un cadre illustré, #13960), cadres de bannière : celles que le SDK embarque pour qu'elles jouent dès le premier rendu, sans réseau.
      */
     val lottieLayers: List<PackAssetRef>
         get() = (
             wallpaperPacks.flatMap { pack -> pack.designs.mapNotNull { it.lottie } } +
                 bannerPacks.flatMap { pack -> pack.designs.mapNotNull { it.lottie } } +
-                ringPacks.flatMap { pack -> pack.rings.mapNotNull { it.lottie } } +
+                ringPacks.flatMap { pack -> pack.rings.flatMap { listOfNotNull(it.lottie, it.decor?.back, it.decor?.front) } } +
                 bannerFramePacks.flatMap { pack -> pack.frames.mapNotNull { it.lottie } }
             ).distinctBy { it.sha256 }
 
