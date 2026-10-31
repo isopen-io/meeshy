@@ -774,9 +774,12 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         /// serveur ne l'apprend jamais.
         allowSoundExtraction: Bool?
     ) -> ComposerDocumentDraft {
-        ComposerDocumentDraft(
+        // #13824 — le plafond du serveur s'applique ICI, comme celui du mood :
+        // la fabrique est le seul site que tous les chemins d'envoi traversent.
+        let plafonne = ComposerPostTextPolicy.truncate(text)
+        return ComposerDocumentDraft(
             format: format,
-            text: text.isEmpty ? nil : text,
+            text: plafonne.isEmpty ? nil : plafonne,
             emoji: nil,
             visibility: visibility,
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
