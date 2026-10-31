@@ -14,7 +14,7 @@ Architecture:
 - Stateless stage (no pipeline knowledge)
 - Dependency injection for services
 - Cache-first strategy
-- ThreadPoolExecutor for true GPU parallelization
+- Languages run concurrently on the task loop; blocking work goes to executors (#13865)
 """
 
 import os
@@ -24,7 +24,6 @@ import asyncio
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.audio_format import mime_type_for
 from utils.audio_pipeline_metrics import timed_audio_stage
@@ -46,7 +45,6 @@ from ..redis_service import (
     get_audio_cache_service,
     get_translation_cache_service
 )
-from services.task_privacy import run_in_thread_with_context
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -85,7 +83,7 @@ class TranslationStage:
     - Single responsibility: translation + TTS
     - No database persistence
     - Cache-first architecture
-    - True parallelization with ThreadPoolExecutor
+    - Concurrent languages on the task loop (#13865)
     """
 
     def __init__(
@@ -318,7 +316,7 @@ class TranslationStage:
             f"{languages_to_process}"
         )
 
-        # Parallel processing with ThreadPoolExecutor
+        # Concurrent processing on the task loop (#13865)
         parallel_start = time.time()
         results = await self._process_languages_parallel(
             languages=languages_to_process,
@@ -411,117 +409,56 @@ class TranslationStage:
         target_languages: Optional[List[str]] = None
     ) -> Dict[str, Optional[TranslatedAudioVersion]]:
         """
-        Process languages in parallel using ThreadPoolExecutor.
+        Process languages concurrently on the task's own event loop.
 
-        True parallelization via separate event loops per thread.
+        #13865 — the Redis client, its pool locks and connections, and the ZMQ
+        socket that publishes each track belong to the loop that created them.
+        Running each language in a thread with its own (uvloop) loop made the
+        first cache GET raise RuntimeError, left a connection bound to a closed
+        loop in the shared pool, and killed the process with a segfault (139).
+        Translation, TTS and retranscription already run their blocking work in
+        executors, so coroutines on one loop keep the languages parallel.
+        The task context (regime and message, #13102) follows each coroutine.
         """
-        tasks = [(lang, cloning_params) for lang in languages]
+        semaphore = asyncio.Semaphore(max(1, max_workers))
+        completed = 0
 
-        def run_tasks():
-            """Execute tasks in parallel via ThreadPoolExecutor"""
-            results = {}
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all tasks
-                # #13102 — chaque thread reçoit le régime et le message de
-                # la tâche : sans recopie, il retomberait sur le régime non
-                # déclaré (aucun cache, fail-closed) au lieu du sien.
-                futures = {
-                    run_in_thread_with_context(
-                        executor.submit,
-                        self._process_single_language_sync,
-                        lang,
-                        source_text,
-                        source_language,
-                        audio_hash,
-                        voice_model,
-                        message_id,
-                        attachment_id,
-                        model_type,
-                        lang_cloning_params,
-                        source_audio_path,
-                        on_translation_ready,
-                        target_languages
-                    ): lang
-                    for lang, lang_cloning_params in tasks
-                }
-
-                # Collect results
-                completed = 0
-                for future in as_completed(futures):
-                    lang = futures[future]
-                    try:
-                        lang_result, translation = future.result()
-                        results[lang_result] = translation
-                        completed += 1
-                        logger.info(
-                            f"[TRANSLATION_STAGE] Progress: "
-                            f"{completed}/{len(languages)} ({lang})"
-                        )
-                    except Exception as e:
-                        logger.error(f"[TRANSLATION_STAGE] Error processing {lang}: {e}")
-                        results[lang] = None
-
-            return results
-
-        # Execute in thread pool — avec le contexte de la tâche (#13102)
-        loop = asyncio.get_event_loop()
-        results = await run_in_thread_with_context(lambda fn, *args: loop.run_in_executor(None, fn, *args), run_tasks)
-        return results
-
-    def _process_single_language_sync(
-        self,
-        target_lang: str,
-        source_text: str,
-        source_language: str,
-        audio_hash: str,
-        voice_model: Optional[VoiceModel],
-        message_id: str,
-        attachment_id: str,
-        model_type: str,
-        cloning_params: Optional[Dict[str, Any]],
-        source_audio_path: Optional[str] = None,
-        on_translation_ready: Optional[any] = None,
-        target_languages: Optional[List[str]] = None
-    ) -> Tuple[str, Optional[TranslatedAudioVersion]]:
-        """
-        Process a single language synchronously (for ThreadPoolExecutor).
-
-        Creates new event loop for true parallelization.
-        """
-        lang_start = time.time()
-
-        try:
-            # Create new event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            try:
-                result = loop.run_until_complete(
-                    self._process_single_language_async(
-                        target_lang=target_lang,
-                        source_text=source_text,
-                        source_language=source_language,
-                        audio_hash=audio_hash,
-                        voice_model=voice_model,
-                        message_id=message_id,
-                        attachment_id=attachment_id,
-                        model_type=model_type,
-                        cloning_params=cloning_params,
-                        lang_start=lang_start,
-                        source_audio_path=source_audio_path,
-                        on_translation_ready=on_translation_ready,
-                        target_languages=target_languages
-                    )
+        async def run(lang: str) -> Tuple[str, Optional[TranslatedAudioVersion]]:
+            nonlocal completed
+            async with semaphore:
+                outcome = await self._process_single_language_async(
+                    target_lang=lang,
+                    source_text=source_text,
+                    source_language=source_language,
+                    audio_hash=audio_hash,
+                    voice_model=voice_model,
+                    message_id=message_id,
+                    attachment_id=attachment_id,
+                    model_type=model_type,
+                    cloning_params=cloning_params,
+                    lang_start=time.time(),
+                    source_audio_path=source_audio_path,
+                    on_translation_ready=on_translation_ready,
+                    target_languages=target_languages
                 )
-                return result
-            finally:
-                loop.close()
+            completed += 1
+            logger.info(
+                f"[TRANSLATION_STAGE] Progress: "
+                f"{completed}/{len(languages)} ({lang})"
+            )
+            return outcome
 
-        except Exception as e:
-            logger.error(f"[TRANSLATION_STAGE] Error processing {target_lang}: {e}")
-            import traceback
-            traceback.print_exc()
-            return (target_lang, None)
+        outcomes = await asyncio.gather(*(run(lang) for lang in languages), return_exceptions=True)
+
+        results: Dict[str, Optional[TranslatedAudioVersion]] = {}
+        for lang, outcome in zip(languages, outcomes):
+            if isinstance(outcome, BaseException):
+                logger.error(f"[TRANSLATION_STAGE] Error processing {lang}: {outcome}")
+                results[lang] = None
+                continue
+            lang_result, translation = outcome
+            results[lang_result] = translation
+        return results
 
     async def _process_single_language_async(
         self,
