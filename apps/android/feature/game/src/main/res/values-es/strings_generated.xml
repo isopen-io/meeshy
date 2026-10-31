@@ -1117,6 +1117,8 @@
     <string name="game_treasury_next">%1$s hasta %2$s</string>
     <string name="game_treasury_reserve">Reserva</string>
     <string name="game_treasury_tresor">Tesoro</string>
+    <string name="progression_a11y_bar_level">Hacia el nivel %1$d</string>
+    <string name="progression_a11y_bar_meesh">Hacia la próxima Meesh</string>
     <string name="progression_achievement_a11y_hint">Toca para ver esta hazaña en grande.</string>
     <string name="progression_achievement_all_content_types_condition">Un mensaje de voz, un mensaje de texto, una publicación, una historia y un reel</string>
     <string name="progression_achievement_all_content_types_title">Todoterreno</string>
@@ -1188,9 +1190,36 @@
     <string name="progression_hero_next">Próxima hazaña</string>
     <string name="progression_hero_reveal_hint">Volver a ver la señal de los ancestros de esta hazaña</string>
     <string name="progression_level">Nivel %1$d</string>
+    <string name="progression_meesh_first_mint">Primera acuñación</string>
+    <plurals name="progression_meesh_floor">
+        <item quantity="one">Todas tus chispas, incluida la de conversación, se pueden convertir en una Meesh.</item>
+        <item quantity="many">Todas tus chispas, incluidas %1$d de conversación, se pueden convertir en una Meesh.</item>
+        <item quantity="other">Todas tus chispas, incluidas %1$d de conversación, se pueden convertir en una Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_last_mint">Última acuñación</string>
+    <string name="progression_meesh_many">%1$d Meeshes</string>
+    <string name="progression_meesh_mint">Convertir %1$d chispas en una Meesh</string>
     <string name="progression_meesh_mint_error">La acuñación no se completó — inténtalo de nuevo</string>
+    <string name="progression_meesh_minted_many">%1$d acuñadas desde siempre</string>
+    <string name="progression_meesh_minted_one">1 acuñada desde siempre</string>
+    <string name="progression_meesh_minting">Acuñando…</string>
+    <plurals name="progression_meesh_missing">
+        <item quantity="one">%1$d chispa hasta tu próxima Meesh.</item>
+        <item quantity="many">%1$d chispas hasta tu próxima Meesh.</item>
+        <item quantity="other">%1$d chispas hasta tu próxima Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_never_minted">Ninguna acuñación por ahora.</string>
+    <string name="progression_meesh_none">Sin Meesh</string>
+    <string name="progression_meesh_one">1 Meesh</string>
+    <string name="progression_meesh_title">Meesh</string>
     <string name="progression_next_badge">%1$d hasta el escalón %2$d</string>
+    <string name="progression_next_level">%1$d chispas hasta el nivel %2$d</string>
     <string name="progression_obtained">Obtenido el %1$s</string>
+    <plurals name="progression_points">
+        <item quantity="one">%1$d chispa</item>
+        <item quantity="many">%1$d chispas</item>
+        <item quantity="other">%1$d chispas</item>
+    </plurals>
     <string name="progression_scale_complete">Escala completa</string>
     <string name="progression_section_achievements">Hazañas</string>
     <string name="progression_section_badges">Medallas</string>

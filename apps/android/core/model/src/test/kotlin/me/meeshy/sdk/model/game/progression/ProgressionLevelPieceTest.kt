@@ -109,7 +109,8 @@ class ProgressionLevelPieceTest {
         val block = game()
         val served = progress(block)
         assertThat(ProgressionConceptPieces.isHero(ProgressionConcept.Level, served, block)).isTrue()
-        assertThat(ProgressionConceptPieces.isHero(ProgressionConcept.Level, progress(null), null)).isFalse()
+        // Sans bloc de jeu, la tête du niveau d'iOS (`ProgressionLevelHero`) la tient aussi (iOS `exist` : toujours).
+        assertThat(ProgressionConceptPieces.isHero(ProgressionConcept.Level, progress(null), null)).isTrue()
         val fiche = ProgressionConceptFiches.make(
             ProgressionConcept.Level, served, block, 0L, SeasonMoment("2026-10-20", 600),
             pieceIsHero = ProgressionConceptPieces.isHero(ProgressionConcept.Level, served, block),

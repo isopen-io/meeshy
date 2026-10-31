@@ -49,6 +49,8 @@ import me.meeshy.sdk.model.game.progression.FicheHead
 import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
 import me.meeshy.sdk.model.game.progression.ProgressionHeritagePiece
 import me.meeshy.sdk.model.game.progression.ProgressionLeaguePiece
+import me.meeshy.sdk.model.game.progression.ProgressionLevelHero
+import me.meeshy.sdk.model.game.progression.ProgressionMeeshDetail
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameBounceButton
 import me.meeshy.ui.icons.MeeshyIcons
@@ -106,14 +108,19 @@ fun ProgressionConceptScreen(
                 fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Elans -> ElansPiece(snapshot.progress.elan)
                 fiche?.head == FicheHead.Piece && concept == ProgressionConcept.League ->
                     ProgressionLeaguePiece.of(snapshot.game?.league)?.let { LeaguePiece(it, onOpen = { onOpenPage(GamePage.League) }) }
-                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Level ->
-                    snapshot.game?.let { LevelPiece(it, snapshot.progress.elan) }
-                // L'HÉRITAGE puis le cadre de la frappe, EN TÊTE (iOS `GameHeritageHeadView` + `GameMintPreviewView`).
+                // L'anneau avec le bloc de jeu ; sans lui, la tête du niveau d'iOS (`ProgressionLevelHero`).
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Level -> snapshot.game
+                    ?.let { LevelPiece(it, snapshot.progress.elan) }
+                    ?: LevelHeroWithoutGame(ProgressionLevelHero.of(snapshot.progress.level))
+                // L'HÉRITAGE puis le cadre de la frappe, EN TÊTE (iOS `GameHeritageHeadView` + `GameMintPreviewView`) ;
+                // sans bloc de jeu, le portefeuille et sa frappe (iOS `ProgressionMeeshDetail`).
                 fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Meesh -> snapshot.game?.let { game ->
                     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                         HeritagePiece(ProgressionHeritagePiece.served(snapshot.progress, game), game.treasury)
                         ConceptGestures(concept, game, gestures)
                     }
+                } ?: snapshot.progress.meesh?.let { meesh ->
+                    MeeshDetailWithoutGame(ProgressionMeeshDetail.of(meesh), gestures)
                 }
                 // La ligne du héros s'efface quand les gestes de la fiche la disent déjà (iOS `fiche.heroLine`).
                 card != null -> ConceptHero(card, snapshot.game, line = if (fiche != null) fiche.heroLine else card.line)

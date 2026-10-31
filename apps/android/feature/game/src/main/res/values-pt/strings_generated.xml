@@ -1117,6 +1117,8 @@
     <string name="game_treasury_next">%1$s até o %2$s</string>
     <string name="game_treasury_reserve">Reserva</string>
     <string name="game_treasury_tresor">Tesouro</string>
+    <string name="progression_a11y_bar_level">Rumo ao nível %1$d</string>
+    <string name="progression_a11y_bar_meesh">Rumo à próxima Meesh</string>
     <string name="progression_achievement_a11y_hint">Toque para ver esta façanha em tela cheia.</string>
     <string name="progression_achievement_all_content_types_condition">Uma mensagem de voz, uma de texto, uma publicação, uma story e um reel</string>
     <string name="progression_achievement_all_content_types_title">Faz-tudo</string>
@@ -1188,9 +1190,36 @@
     <string name="progression_hero_next">Próxima façanha</string>
     <string name="progression_hero_reveal_hint">Rever o sinal dos ancestrais desta façanha</string>
     <string name="progression_level">Nível %1$d</string>
+    <string name="progression_meesh_first_mint">Primeira cunhagem</string>
+    <plurals name="progression_meesh_floor">
+        <item quantity="one">Todas as suas faíscas, inclusive a de conversa, podem ser convertidas em uma Meesh.</item>
+        <item quantity="many">Todas as suas faíscas, inclusive %1$d de conversa, podem ser convertidas em uma Meesh.</item>
+        <item quantity="other">Todas as suas faíscas, inclusive %1$d de conversa, podem ser convertidas em uma Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_last_mint">Última cunhagem</string>
+    <string name="progression_meesh_many">%1$d Meeshes</string>
+    <string name="progression_meesh_mint">Converter %1$d faíscas em uma Meesh</string>
     <string name="progression_meesh_mint_error">A cunhagem não foi concluída — tente novamente</string>
+    <string name="progression_meesh_minted_many">%1$d cunhadas desde sempre</string>
+    <string name="progression_meesh_minted_one">1 cunhada desde sempre</string>
+    <string name="progression_meesh_minting">Cunhando…</string>
+    <plurals name="progression_meesh_missing">
+        <item quantity="one">%1$d faísca até a sua próxima Meesh.</item>
+        <item quantity="many">%1$d faíscas até a sua próxima Meesh.</item>
+        <item quantity="other">%1$d faíscas até a sua próxima Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_never_minted">Nenhuma cunhagem por enquanto.</string>
+    <string name="progression_meesh_none">Nenhuma Meesh</string>
+    <string name="progression_meesh_one">1 Meesh</string>
+    <string name="progression_meesh_title">Meesh</string>
     <string name="progression_next_badge">%1$d até o degrau %2$d</string>
+    <string name="progression_next_level">%1$d faíscas até o nível %2$d</string>
     <string name="progression_obtained">Obtido em %1$s</string>
+    <plurals name="progression_points">
+        <item quantity="one">%1$d faísca</item>
+        <item quantity="many">%1$d faíscas</item>
+        <item quantity="other">%1$d faíscas</item>
+    </plurals>
     <string name="progression_scale_complete">Escala completa</string>
     <string name="progression_section_achievements">Façanhas</string>
     <string name="progression_section_badges">Medalhas</string>

@@ -1117,6 +1117,8 @@
     <string name="game_treasury_next">%1$s jusqu’au %2$s</string>
     <string name="game_treasury_reserve">Réserve</string>
     <string name="game_treasury_tresor">Trésor</string>
+    <string name="progression_a11y_bar_level">Vers le niveau %1$d</string>
+    <string name="progression_a11y_bar_meesh">Vers la prochaine Meesh</string>
     <string name="progression_achievement_a11y_hint">Touche pour voir ce haut fait en grand.</string>
     <string name="progression_achievement_all_content_types_condition">Un message vocal, un message texte, une publication, une story et un réel</string>
     <string name="progression_achievement_all_content_types_title">Touche-à-tout</string>
@@ -1188,9 +1190,36 @@
     <string name="progression_hero_next">Prochain haut fait</string>
     <string name="progression_hero_reveal_hint">Revoir le signe des aïeux de ce haut fait</string>
     <string name="progression_level">Niveau %1$d</string>
+    <string name="progression_meesh_first_mint">Première frappe</string>
+    <plurals name="progression_meesh_floor">
+        <item quantity="one">Toutes tes étincelles, dont celle de conversation, se convertissent en Meesh.</item>
+        <item quantity="many">Toutes tes étincelles, dont %1$d de conversation, se convertissent en Meesh.</item>
+        <item quantity="other">Toutes tes étincelles, dont %1$d de conversation, se convertissent en Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_last_mint">Dernière frappe</string>
+    <string name="progression_meesh_many">%1$d Meeshes</string>
+    <string name="progression_meesh_mint">Convertir %1$d étincelles en une Meesh</string>
     <string name="progression_meesh_mint_error">La frappe n\'a pas abouti — réessayez</string>
+    <string name="progression_meesh_minted_many">%1$d frappées depuis toujours</string>
+    <string name="progression_meesh_minted_one">1 frappée depuis toujours</string>
+    <string name="progression_meesh_minting">Frappe en cours…</string>
+    <plurals name="progression_meesh_missing">
+        <item quantity="one">%1$d étincelle jusqu’à ta prochaine Meesh.</item>
+        <item quantity="many">%1$d étincelles jusqu’à ta prochaine Meesh.</item>
+        <item quantity="other">%1$d étincelles jusqu’à ta prochaine Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_never_minted">Aucune frappe pour l’instant.</string>
+    <string name="progression_meesh_none">Aucune Meesh</string>
+    <string name="progression_meesh_one">1 Meesh</string>
+    <string name="progression_meesh_title">Meesh</string>
     <string name="progression_next_badge">%1$d jusqu’au palier %2$d</string>
+    <string name="progression_next_level">%1$d étincelles jusqu’au niveau %2$d</string>
     <string name="progression_obtained">Obtenu le %1$s</string>
+    <plurals name="progression_points">
+        <item quantity="one">%1$d étincelle</item>
+        <item quantity="many">%1$d étincelles</item>
+        <item quantity="other">%1$d étincelles</item>
+    </plurals>
     <string name="progression_scale_complete">Échelle complète</string>
     <string name="progression_section_achievements">Hauts faits</string>
     <string name="progression_section_badges">Médailles</string>

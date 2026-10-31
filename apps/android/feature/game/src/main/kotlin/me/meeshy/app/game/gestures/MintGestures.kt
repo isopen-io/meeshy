@@ -185,11 +185,16 @@ private fun rankLabel(rank: GloryRank, division5: Int?): String {
 
 /** Le refus d'une frappe : la dette (son montant quand il est connu), la réserve fermée, le prix changé, sinon le repli. */
 @Composable
-private fun mintFailureText(gestures: GameGesturesUiState, game: GameBlock): String? {
+private fun mintFailureText(gestures: GameGesturesUiState, game: GameBlock): String? =
+    mintFailureText(gestures, debt = game.mint.sparksDebt ?: game.level.sparksDebt ?: 0L)
+
+/** Le refus d'une frappe dit SOUS l'action qu'on peut retenter ; sans montant de dette connu, la phrase sans chiffre. */
+@Composable
+internal fun mintFailureText(gestures: GameGesturesUiState, debt: Long): String? {
     val failure = gestures.failures[GameGesture.Mint] ?: return null
     if (failure.offline) return stringResource(R.string.game_mint_offline)
     return when (MintFailureKind.of(failure.code)) {
-        MintFailureKind.Debt -> debtText(game.mint.sparksDebt ?: game.level.sparksDebt ?: 0L)
+        MintFailureKind.Debt -> debtText(debt)
         MintFailureKind.ReserveClosed, MintFailureKind.PriceChanged -> gestureMessage(failure)
         MintFailureKind.Generic -> stringResource(R.string.progression_meesh_mint_error)
     }

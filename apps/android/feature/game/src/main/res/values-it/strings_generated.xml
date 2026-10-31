@@ -1117,6 +1117,8 @@
     <string name="game_treasury_next">%1$s fino a %2$s</string>
     <string name="game_treasury_reserve">Riserva</string>
     <string name="game_treasury_tresor">Tesoro</string>
+    <string name="progression_a11y_bar_level">Verso il livello %1$d</string>
+    <string name="progression_a11y_bar_meesh">Verso la prossima Meesh</string>
     <string name="progression_achievement_a11y_hint">Tocca per vedere questa impresa in grande.</string>
     <string name="progression_achievement_all_content_types_condition">Un messaggio vocale, uno di testo, una pubblicazione, una storia e un reel</string>
     <string name="progression_achievement_all_content_types_title">Tuttofare</string>
@@ -1188,9 +1190,36 @@
     <string name="progression_hero_next">Prossima impresa</string>
     <string name="progression_hero_reveal_hint">Rivedi il segno degli antenati di questa impresa</string>
     <string name="progression_level">Livello %1$d</string>
+    <string name="progression_meesh_first_mint">Primo conio</string>
+    <plurals name="progression_meesh_floor">
+        <item quantity="one">Tutte le tue scintille, compresa quella di conversazione, si possono convertire in una Meesh.</item>
+        <item quantity="many">Tutte le tue scintille, comprese %1$d di conversazione, si possono convertire in una Meesh.</item>
+        <item quantity="other">Tutte le tue scintille, comprese %1$d di conversazione, si possono convertire in una Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_last_mint">Ultimo conio</string>
+    <string name="progression_meesh_many">%1$d Meesh</string>
+    <string name="progression_meesh_mint">Converti %1$d scintille in una Meesh</string>
     <string name="progression_meesh_mint_error">Il conio non è riuscito — riprova</string>
+    <string name="progression_meesh_minted_many">%1$d coniate da sempre</string>
+    <string name="progression_meesh_minted_one">1 coniata da sempre</string>
+    <string name="progression_meesh_minting">Conio in corso…</string>
+    <plurals name="progression_meesh_missing">
+        <item quantity="one">%1$d scintilla fino alla tua prossima Meesh.</item>
+        <item quantity="many">%1$d scintille fino alla tua prossima Meesh.</item>
+        <item quantity="other">%1$d scintille fino alla tua prossima Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_never_minted">Nessun conio per ora.</string>
+    <string name="progression_meesh_none">Nessuna Meesh</string>
+    <string name="progression_meesh_one">1 Meesh</string>
+    <string name="progression_meesh_title">Meesh</string>
     <string name="progression_next_badge">%1$d fino al gradino %2$d</string>
+    <string name="progression_next_level">%1$d scintille fino al livello %2$d</string>
     <string name="progression_obtained">Ottenuto il %1$s</string>
+    <plurals name="progression_points">
+        <item quantity="one">%1$d scintilla</item>
+        <item quantity="many">%1$d scintille</item>
+        <item quantity="other">%1$d scintille</item>
+    </plurals>
     <string name="progression_scale_complete">Scala completata</string>
     <string name="progression_section_achievements">Imprese</string>
     <string name="progression_section_badges">Medaglie</string>

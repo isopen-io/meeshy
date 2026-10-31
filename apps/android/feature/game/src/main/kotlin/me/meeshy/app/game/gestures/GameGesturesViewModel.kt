@@ -170,19 +170,25 @@ class GameGesturesViewModel internal constructor(
      * Frapper la Meesh suivante. Le prix que l'écran a montré part avec la frappe ([GameMintPreview.price]) : au-delà,
      * la passerelle refuse (`PRICE_CHANGED`) sans rien débiter. La pièce, son numéro et son édition sont ceux de la
      * RÉPONSE ; le solde, le niveau et le prix suivant sont relus sur la progression servie.
+     *
+     * Sans bloc de jeu ([preview] nul, iOS `ProgressionMeeshDetail`), la frappe part sans garde de prix, comme iOS
+     * (`maxPrice: game?.mint.price`), et la pièce ne se célèbre que si la réponse dit son numéro.
      */
-    fun mint(preview: GameMintPreview) {
+    fun mint(preview: GameMintPreview?) {
         run(
             GameGesture.Mint,
             "mint",
             onDone = { result ->
                 if (result.outcome == MeeshMintOutcome.MINTED) {
-                    celebrationFlow.update { MintCelebration(result.number ?: preview.number, result.edition ?: preview.edition, (it?.key ?: 0) + 1) }
+                    val number = result.number ?: preview?.number
+                    if (number != null) {
+                        celebrationFlow.update { MintCelebration(number, result.edition ?: preview?.edition, (it?.key ?: 0) + 1) }
+                    }
                 } else if (result.outcome != MeeshMintOutcome.ALREADY_MINTED) {
                     failures.update { it + (GameGesture.Mint to GameGestureFailure(offline = false, code = null)) }
                 }
             },
-        ) { id -> gestures.mint(id, preview.price) }
+        ) { id -> gestures.mint(id, preview?.price) }
     }
 
     /** Réclamer la récompense d'une halte du Voyage. Le crédit (points, fragment, Veilleuse) est celui que la passerelle applique. */

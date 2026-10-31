@@ -1126,6 +1126,8 @@
     <string name="game_treasury_next">%1$s حتى %2$s</string>
     <string name="game_treasury_reserve">احتياطي</string>
     <string name="game_treasury_tresor">كنز</string>
+    <string name="progression_a11y_bar_level">نحو المستوى %1$d</string>
+    <string name="progression_a11y_bar_meesh">نحو الـ Meesh التالية</string>
     <string name="progression_achievement_a11y_hint">المس لترى هذه المأثرة بالحجم الكامل.</string>
     <string name="progression_achievement_all_content_types_condition">رسالة صوتية ورسالة نصية ومنشور وقصة وريل</string>
     <string name="progression_achievement_all_content_types_title">متعدّد المواهب</string>
@@ -1197,9 +1199,45 @@
     <string name="progression_hero_next">المأثرة التالية</string>
     <string name="progression_hero_reveal_hint">إعادة مشاهدة علامة الأجداد لهذه المأثرة</string>
     <string name="progression_level">المستوى %1$d</string>
+    <string name="progression_meesh_first_mint">أول سكّ</string>
+    <plurals name="progression_meesh_floor">
+        <item quantity="zero">كل شراراتك، ومنها %1$d شرارة من المحادثات، يمكن أن تصير Meesh.</item>
+        <item quantity="one">كل شراراتك، ومنها شرارة المحادثة، يمكن أن تصير Meesh.</item>
+        <item quantity="two">كل شراراتك، ومنها شرارتا المحادثة، يمكن أن تصير Meesh.</item>
+        <item quantity="few">كل شراراتك، ومنها %1$d شرارات من المحادثات، يمكن أن تصير Meesh.</item>
+        <item quantity="many">كل شراراتك، ومنها %1$d شرارةً من المحادثات، يمكن أن تصير Meesh.</item>
+        <item quantity="other">كل شراراتك، ومنها %1$d شرارة من المحادثات، يمكن أن تصير Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_last_mint">آخر سكّ</string>
+    <string name="progression_meesh_many">%1$d Meesh</string>
+    <string name="progression_meesh_mint">تحويل %1$d شرارة إلى Meesh</string>
     <string name="progression_meesh_mint_error">فشلت عملية السك — أعد المحاولة</string>
+    <string name="progression_meesh_minted_many">%1$d سُكّت منذ البداية</string>
+    <string name="progression_meesh_minted_one">1 سُكّت منذ البداية</string>
+    <string name="progression_meesh_minting">جارٍ السك…</string>
+    <plurals name="progression_meesh_missing">
+        <item quantity="zero">%1$d شرارة حتى Meesh التالية.</item>
+        <item quantity="one">شرارة واحدة حتى Meesh التالية.</item>
+        <item quantity="two">شرارتان حتى Meesh التالية.</item>
+        <item quantity="few">%1$d شرارات حتى Meesh التالية.</item>
+        <item quantity="many">%1$d شرارةً حتى Meesh التالية.</item>
+        <item quantity="other">%1$d شرارة حتى Meesh التالية.</item>
+    </plurals>
+    <string name="progression_meesh_never_minted">لا يوجد سكّ حتى الآن.</string>
+    <string name="progression_meesh_none">لا توجد Meesh</string>
+    <string name="progression_meesh_one">Meesh واحدة</string>
+    <string name="progression_meesh_title">Meesh</string>
     <string name="progression_next_badge">%1$d حتى الدرجة %2$d</string>
+    <string name="progression_next_level">%1$d شرارة حتى المستوى %2$d</string>
     <string name="progression_obtained">تم الحصول عليه في %1$s</string>
+    <plurals name="progression_points">
+        <item quantity="zero">%1$d شرارة</item>
+        <item quantity="one">شرارة واحدة</item>
+        <item quantity="two">شرارتان</item>
+        <item quantity="few">%1$d شرارات</item>
+        <item quantity="many">%1$d شرارةً</item>
+        <item quantity="other">%1$d شرارة</item>
+    </plurals>
     <string name="progression_scale_complete">اكتمل السلّم</string>
     <string name="progression_section_achievements">المآثر</string>
     <string name="progression_section_badges">الأوسمة</string>

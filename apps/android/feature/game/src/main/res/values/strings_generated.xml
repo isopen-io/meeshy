@@ -1114,6 +1114,8 @@
     <string name="game_treasury_next">%1$s to the %2$s</string>
     <string name="game_treasury_reserve">Reserve</string>
     <string name="game_treasury_tresor">Treasure</string>
+    <string name="progression_a11y_bar_level">Towards level %1$d</string>
+    <string name="progression_a11y_bar_meesh">Toward the next Meesh</string>
     <string name="progression_achievement_a11y_hint">Tap to see this great deed in full.</string>
     <string name="progression_achievement_all_content_types_condition">A voice message, a text message, a post, a story and a reel</string>
     <string name="progression_achievement_all_content_types_title">Jack of all trades</string>
@@ -1185,9 +1187,33 @@
     <string name="progression_hero_next">Next great deed</string>
     <string name="progression_hero_reveal_hint">Replay the sign from the ancestors for this great deed</string>
     <string name="progression_level">Level %1$d</string>
+    <string name="progression_meesh_first_mint">First mint</string>
+    <plurals name="progression_meesh_floor">
+        <item quantity="one">All your sparks, including your conversation spark, can be converted into a Meesh.</item>
+        <item quantity="other">All your sparks, including %1$d from conversations, can be converted into a Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_last_mint">Last mint</string>
+    <string name="progression_meesh_many">%1$d Meeshes</string>
+    <string name="progression_meesh_mint">Convert %1$d sparks into a Meesh</string>
     <string name="progression_meesh_mint_error">Minting failed — try again</string>
+    <string name="progression_meesh_minted_many">%1$d minted since the beginning</string>
+    <string name="progression_meesh_minted_one">1 minted since the beginning</string>
+    <string name="progression_meesh_minting">Minting…</string>
+    <plurals name="progression_meesh_missing">
+        <item quantity="one">%1$d spark to your next Meesh.</item>
+        <item quantity="other">%1$d sparks to your next Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_never_minted">No mint yet.</string>
+    <string name="progression_meesh_none">No Meesh</string>
+    <string name="progression_meesh_one">1 Meesh</string>
+    <string name="progression_meesh_title">Meesh</string>
     <string name="progression_next_badge">%1$d to mark %2$d</string>
+    <string name="progression_next_level">%1$d sparks to level %2$d</string>
     <string name="progression_obtained">Earned on %1$s</string>
+    <plurals name="progression_points">
+        <item quantity="one">%1$d spark</item>
+        <item quantity="other">%1$d sparks</item>
+    </plurals>
     <string name="progression_scale_complete">Scale complete</string>
     <string name="progression_section_achievements">Great Deeds</string>
     <string name="progression_section_badges">Medals</string>

@@ -1114,6 +1114,8 @@
     <string name="game_treasury_next">%1$s bis %2$s</string>
     <string name="game_treasury_reserve">Reserve</string>
     <string name="game_treasury_tresor">Schatz</string>
+    <string name="progression_a11y_bar_level">Auf dem Weg zu Level %1$d</string>
+    <string name="progression_a11y_bar_meesh">Zur nächsten Meesh</string>
     <string name="progression_achievement_a11y_hint">Tippe, um diese Heldentat groß zu sehen.</string>
     <string name="progression_achievement_all_content_types_condition">Eine Sprachnachricht, eine Textnachricht, ein Beitrag, eine Story und ein Reel</string>
     <string name="progression_achievement_all_content_types_title">Alleskönner</string>
@@ -1185,9 +1187,33 @@
     <string name="progression_hero_next">Nächste Heldentat</string>
     <string name="progression_hero_reveal_hint">Das Zeichen der Ahnen zu dieser Heldentat erneut ansehen</string>
     <string name="progression_level">Level %1$d</string>
+    <string name="progression_meesh_first_mint">Erste Prägung</string>
+    <plurals name="progression_meesh_floor">
+        <item quantity="one">Alle deine Funken, auch der aus deiner Unterhaltung, können zu einer Meesh werden.</item>
+        <item quantity="other">Alle deine Funken, auch %1$d aus Unterhaltungen, können zu einer Meesh werden.</item>
+    </plurals>
+    <string name="progression_meesh_last_mint">Letzte Prägung</string>
+    <string name="progression_meesh_many">%1$d Meeshes</string>
+    <string name="progression_meesh_mint">Mit %1$d Funken eine Meesh prägen</string>
     <string name="progression_meesh_mint_error">Die Prägung ist fehlgeschlagen — versuchen Sie es erneut</string>
+    <string name="progression_meesh_minted_many">%1$d seit jeher geprägt</string>
+    <string name="progression_meesh_minted_one">1 seit jeher geprägt</string>
+    <string name="progression_meesh_minting">Prägung läuft…</string>
+    <plurals name="progression_meesh_missing">
+        <item quantity="one">%1$d Funke bis zu deiner nächsten Meesh.</item>
+        <item quantity="other">%1$d Funken bis zu deiner nächsten Meesh.</item>
+    </plurals>
+    <string name="progression_meesh_never_minted">Noch keine Prägung.</string>
+    <string name="progression_meesh_none">Keine Meesh</string>
+    <string name="progression_meesh_one">1 Meesh</string>
+    <string name="progression_meesh_title">Meesh</string>
     <string name="progression_next_badge">%1$d bis Stufe %2$d</string>
+    <string name="progression_next_level">%1$d Funken bis Level %2$d</string>
     <string name="progression_obtained">Erhalten am %1$s</string>
+    <plurals name="progression_points">
+        <item quantity="one">%1$d Funke</item>
+        <item quantity="other">%1$d Funken</item>
+    </plurals>
     <string name="progression_scale_complete">Skala vollständig</string>
     <string name="progression_section_achievements">Heldentaten</string>
     <string name="progression_section_badges">Medaillen</string>
