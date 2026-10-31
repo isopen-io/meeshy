@@ -25,6 +25,7 @@
         <item quantity="one">%1$d Nachricht löschen?</item>
         <item quantity="other">%1$d Nachrichten löschen?</item>
     </plurals>
+    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_engagement_a11y_streak">%1$s · Funken: %2$d · Heute: %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d Tag</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d Tage</string>

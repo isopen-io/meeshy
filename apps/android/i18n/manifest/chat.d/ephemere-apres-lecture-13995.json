@@ -8,7 +8,8 @@
         {"catalog": "app", "iosKey": "composer.ephemeral.after_read.a11y", "androidName": "chat_ephemeral_after_read_a11y", "status": "adopted"},
         {"catalog": "app", "iosKey": "composer.ephemeral.off", "androidName": "chat_ephemeral_off", "status": "adopted"},
         {"catalog": "app", "iosKey": "composer.ephemeral.active", "androidName": "chat_ephemeral_active", "status": "adopted"},
-        {"catalog": "app", "iosKey": "composer.ephemeral.activate", "androidName": "chat_ephemeral_activate", "status": "adopted"}
+        {"catalog": "app", "iosKey": "composer.ephemeral.activate", "androidName": "chat_ephemeral_activate", "status": "adopted"},
+        {"catalog": "app", "iosKey": "export.card.clip.15", "androidName": "chat_effect_duration_15s", "status": "adopted"}
       ]
     }
   }
