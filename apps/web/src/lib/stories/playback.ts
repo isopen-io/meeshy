@@ -162,6 +162,10 @@ export type StoryPlaybackStory = {
   readonly media?: readonly StoryPlaybackMedia[];
   readonly createdAt: string | Date;
   readonly expiresAt?: string | Date | null;
+  /** L'AUDIENCE (`Post.visibility`, servie par `postScalarSelect` sur les deux
+   * projections) — seule une story `PUBLIC` se fige en tête d'une carte
+   * « Imager » (`storyCommentSupportOf`, #13922). Absente : retenue. */
+  readonly visibility?: string | null;
   readonly isViewedByMe?: boolean;
   /** LE RAIL D'ACTIONS lit ces trois-là, et RIEN d'autre du réseau : la loi
    * (`lib/stories/action-rail.ts`) décide du jeu de boutons depuis le corpus

@@ -155,14 +155,25 @@ export function messageCardInputOf(params: {
   const featured = params.featured === undefined || params.featured === null ? -1 : subject.media.findIndex((item) => item.id === params.featured);
   const heroRank = subject.media.findIndex((item) => item.hero === true);
   const time = (date: Date | null) => (format.showTimes && date !== null && params.formatTime !== undefined ? params.formatTime(date) : null);
+  const nameOf = (author: string, handle: string | null, anonymized: boolean): string =>
+    anonymized ? params.anonymousLabel : format.usePseudonyms && handle !== null ? `@${handle}` : author;
   const part = (source: MessageCardSubjectPart, anonymized: boolean, at: Date | null): MessageCardPart => ({
-    author: anonymized ? params.anonymousLabel : format.usePseudonyms && source.handle !== null ? `@${source.handle}` : source.author,
+    author: nameOf(source.author, source.handle, anonymized),
     text: source.text,
     time: time(at),
   });
+  /* Le fil d'un commentaire (#13922) : le bloc garde son titre, chaque ligne se nomme sous l'anonymat de son bloc — la réponse visée sous celui de la réponse, les autres sous celui de la citation. */
+  const replyPart = (source: MessageCardSubjectPart): MessageCardPart => {
+    if (source.thread === undefined || source.thread.length === 0) return part(source, format.anonymizeReply, subject.sentAt);
+    const thread = source.thread.map((line) => ({
+      text: line.author === null ? line.text : `${nameOf(line.author, line.handle, line.isReply ? format.anonymizeReply : format.anonymizeQuoted)} : ${line.text}`,
+      level: line.level,
+    }));
+    return { author: source.author, text: thread.map((line) => line.text).join('\n'), time: time(subject.sentAt), thread };
+  };
   return {
     quoted: subject.quoted === null ? null : part(subject.quoted, format.anonymizeQuoted, subject.quotedAt),
-    reply: part(subject.reply, format.anonymizeReply, subject.sentAt),
+    reply: replyPart(subject.reply),
     handle: params.handle,
     template: format.template,
     title: format.showConversationTitle ? params.conversationTitle : null,
@@ -172,10 +183,6 @@ export function messageCardInputOf(params: {
     frame: { header: format.header, authors: format.authorsAt, tilt: format.tilt },
     media: subject.media.map((item) => (item.hero === true ? item.card : credited(item.card, item.author))),
     heroMedia: heroRank === -1 ? null : heroRank,
-    ...(subject.context === undefined || subject.context.length === 0
-      ? {}
-      : { context: subject.context.map((entry) => ({ part: part(entry.part, entry.folded ? false : format.anonymizeQuoted, null), depth: entry.depth })) }),
-    ...(subject.replyDepth === undefined ? {} : { replyDepth: subject.replyDepth }),
     mediaLayout: format.mediaLayout,
     mediaArrangement: format.mediaArrangement,
     featuredMedia: featured === -1 ? null : featured,

@@ -9,6 +9,7 @@ import { postQueryKey } from '@/lib/api/publication-detail';
 import { loadCommentRepliesAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { StoryPlaybackStory } from '@/lib/stories/playback';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CommentThread } from './comment-thread';
@@ -147,10 +148,57 @@ describe('le commentaire d’un POST compose sa carte (#9687)', () => {
     expect(document.querySelector('[data-export-compose-mode="postAndComment"]')?.getAttribute('aria-pressed')).toBe('true');
   });
 
-  test('une STORY garde la carte du commentaire et « avec les réponses »', async () => {
+  test('une STORY connue compose comme un post, comme iOS : un seul « Imager », sans « avec les réponses »', async () => {
     seedPost('STORY');
     const host = await mountThread('post-text-rank2');
-    expect(await entriesOf(host, 'cm-r2-3')).toEqual(['copy', 'image', 'image-replies', 'report']);
+    expect(await entriesOf(host, 'cm-r2-3')).toEqual(['copy', 'image', 'report']);
   });
 });
 
+describe('le commentaire de la STORY que le lecteur joue compose sa carte, son visuel en héros (#13922)', () => {
+  const story: StoryPlaybackStory = {
+    id: 'post-text-rank2',
+    createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+    content: 'Le lac',
+    author: { id: 'u-author', username: 'author', displayName: 'Auteur' },
+    media: [{ id: 'st-photo', fileUrl: '/lac.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920 }],
+    visibility: 'PUBLIC',
+  };
+
+  const mountStoryThread = async (played: StoryPlaybackStory): Promise<HTMLDivElement> => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <QueryClientProvider client={appQueryClient}>
+          <CommentThread postId={played.id} story={played} />
+        </QueryClientProvider>,
+      );
+    });
+    await settle();
+    return container;
+  };
+
+  const openImager = async (host: HTMLElement) => {
+    await pick(host, 'cm-r2-3', 'image');
+    for (let attempt = 0; attempt < 20 && document.querySelector('[data-export-compose-mode]') === null; attempt += 1) await settle();
+  };
+
+  test('« Imager » ouvre l’atelier sur « Post + commentaire » : la story en tête, comme `StoryCommentRowView`', async () => {
+    const host = await mountStoryThread(story);
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-row="cm-r2-3"] [data-comment-gesture="more"]')?.click());
+    const entries = [...document.querySelectorAll('[data-comment-menu] [role="menuitem"]')].map((element) => element.getAttribute('data-comment-gesture'));
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-row="cm-r2-3"] [data-comment-gesture="more"]')?.click());
+    expect(entries).toEqual(['copy', 'image', 'report']);
+    await openImager(host);
+    expect(document.querySelector('[data-export-compose-mode="postAndComment"]')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('une story réservée à ses amis ne se fige pas en tête, et l’atelier le dit', async () => {
+    const host = await mountStoryThread({ ...story, visibility: 'FRIENDS' });
+    await openImager(host);
+    expect(document.querySelector('[data-export-compose-mode="postAndComment"]')).toBeNull();
+    expect(document.querySelector('[data-export-compose-withheld]')).not.toBeNull();
+  });
+});

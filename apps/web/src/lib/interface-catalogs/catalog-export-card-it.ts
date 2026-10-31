@@ -135,6 +135,7 @@ const it = {
   'export.card.compose.post': 'Post in alto',
   'export.card.compose.replies': 'Risposte sulla scheda',
   'export.card.compose.folded': '+{count} risposte',
+  'export.card.compose.thread': 'Discussione dei commenti',
   'export.card.compose.head': 'Media in alto',
   'export.card.compose.head.image': 'Foto {position}',
   'export.card.compose.head.video': 'Video {position}',

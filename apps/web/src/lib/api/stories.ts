@@ -221,6 +221,8 @@ export type StoryFeedPost = {
   readonly type: string;
   readonly createdAt: string | Date;
   readonly expiresAt?: string | Date | null;
+  /** L'AUDIENCE (`postScalarSelect.visibility`) — lue par « Imager » un commentaire (#13922). */
+  readonly visibility?: string | null;
   readonly viewCount?: number;
   readonly isViewedByMe?: boolean;
   readonly author?: StoryTrayAuthor;

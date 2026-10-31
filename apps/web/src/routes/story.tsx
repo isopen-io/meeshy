@@ -967,7 +967,7 @@ export default function StoryScreen() {
             }
           />
 
-          <CommentsSheetPortal host={commentsHost} risesWithComposer />
+          <CommentsSheetPortal host={commentsHost} risesWithComposer {...(currentStory === undefined ? {} : { story: currentStory })} />
           <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} anonymousViewCount={currentStory?.anonymousViewCount} />
           <StoryCubeShade />
         </div>
