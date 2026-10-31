@@ -43,5 +43,8 @@ export function localMediaRenderer(
   ports: LocalRenderPorts,
   defer: (run: () => void) => void = setImmediate,
 ): LocalMediaRenderer {
-  return (job) => defer(() => { void renderAndNotify(ports, job); });
+  return (job) => defer(() => {
+    void renderAndNotify(ports, job).catch((error: unknown) =>
+      logger.error('Rendu de fond : rejet inattendu', { recordId: job.recordId, error }));
+  });
 }
