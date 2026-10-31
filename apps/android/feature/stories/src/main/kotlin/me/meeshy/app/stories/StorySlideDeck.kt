@@ -553,9 +553,11 @@ data class StorySlideDeck(
      * replaces any prior designation, and designating the current background again clears it
      * (a natural on/off tap). Inert (same instance) when [mediaId] is not attached to the
      * selected slide, so the ≤1-background invariant lives in one place and the caller stays
-     * glue. Every other slide and the selection are left untouched.
+     * glue. Every other slide and the selection are left untouched. Designated from a placed [objectId] (#13905), only that
+     * object leaves the scene: its copies of the same file stay posed, as iOS carries `isBackground` per object. A source
+     * left posed under the file's own id takes the departed copy's id, so no posed object is ever named like the background.
      */
-    fun toggleSelectedBackgroundMedia(mediaId: String): StorySlideDeck {
+    fun toggleSelectedBackgroundMedia(mediaId: String, objectId: String? = null): StorySlideDeck {
         val selected = selectedSlide
         if (mediaId !in selected.mediaIds) return this
         val next = if (selected.backgroundMediaId == mediaId) null else mediaId
@@ -569,7 +571,12 @@ data class StorySlideDeck(
                     backgroundMediaId = next,
                     backgroundLoop = true,
                     backgroundAdjustments = null,
-                    placedMedia = if (next == null) slide.placedMedia else slide.placedMedia.filterNot { it.mediaId == next },
+                    placedMedia = when {
+                        next == null -> slide.placedMedia
+                        objectId != null && slide.placedMedia.any { it.id == objectId && it.mediaId == next } ->
+                            slide.placedMedia.filterNot { it.id == objectId }.map { if (it.id == next) it.copy(id = objectId) else it }
+                        else -> slide.placedMedia.filterNot { it.mediaId == next }
+                    },
                 )
             } else {
                 slide

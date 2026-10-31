@@ -79,7 +79,7 @@ internal data class StoryEditOpening(
                 effects.stickerObjects.orEmpty().map { it.postMediaId } + listOfNotNull(effects.voiceAttachmentId)).filter { it.isNotBlank() }.toSet()
             val legacyBackgroundId = post.media.orEmpty().firstOrNull { it.id !in referenced }?.id.takeIf { explicitBackground == null }
             val backgroundId = explicitBackground?.postMediaId?.takeIf { it.isNotBlank() } ?: legacyBackgroundId
-            val placed = StoryPlacedMedia.foreground(foreground).filter { it.mediaId.isNotBlank() && it.mediaId != backgroundId }
+            val placed = StoryPlacedMedia.foreground(foreground).filter { it.mediaId.isNotBlank() }
             val mediaIds = (listOfNotNull(backgroundId) + placed.map { it.mediaId }).distinct()
             val bySticker = effects.stickerObjects.orEmpty().withIndex().partition { it.value.editable }
             val elements = effects.textObjects.map { it.toElement() }

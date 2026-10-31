@@ -66,7 +66,8 @@ private fun StoryComposerViewModel.reorder(ref: SceneObjectRef, op: StoryZOrder)
     else onSceneReduce { StoryComposerSceneReducer.restacked(it, ref, op) }
 
 /**
- * Un média fait fond ou le remplace (la désignation est exclusive, et porte sur son FICHIER), ou se retire — sa sélection
+ * Un média fait fond ou le remplace (la désignation est exclusive et porte sur son FICHIER ; seul l'objet choisi quitte la
+ * scène, ses copies y restent, #13905), ou se retire — sa sélection
  * tombe avec lui. Retirer un objet dont le fichier est encore posé ailleurs (sa source ou sa copie, #13902) ne retire que
  * lui : le fichier reste à la slide ; retirer le dernier retire le média.
  */
@@ -74,7 +75,8 @@ private fun StoryComposerViewModel.mediaController(id: String, action: Action) {
     val slide = state.value.deck.selectedSlide
     val file = slide.mediaFileOf(id)
     when (action) {
-        Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND -> onToggleSlideBackgroundMedia(file)
+        Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND ->
+            onSceneReduce { StoryComposerBackgroundReducer.backgroundMediaToggled(it, file, objectId = id) }
         Action.DELETE ->
             if (slide.placedMedia.any { it.id != id && it.mediaId == file }) onSceneReduce { StoryComposerPlacedMediaReducer.objectRemoved(it, id) }
             else onRemoveMedia(file)

@@ -52,8 +52,7 @@ internal object StorySceneStack {
 
     private fun entries(slide: StorySlide): List<Entry> {
         val texts = slide.elements.map { Entry(SceneObjectRef(ComposerObjectKind.TEXT, it.id), it.zIndex, TEXT) }
-        val media = slide.placedMedia.filter { it.mediaId != slide.backgroundMediaId }
-            .map { Entry(SceneObjectRef(ComposerObjectKind.MEDIA, it.id), it.zIndex, MEDIA) }
+        val media = slide.placedMedia.map { Entry(SceneObjectRef(ComposerObjectKind.MEDIA, it.id), it.zIndex, MEDIA) }
         val stickers = slide.stickers.map { Entry(SceneObjectRef(ComposerObjectKind.STICKER, it.id), it.zIndex, STICKER) }
         val places = slide.places.map { Entry(SceneObjectRef(ComposerObjectKind.PLACE, it.id), it.zIndex, PLACE) }
         val voices = slide.audio.filter(SceneAudioStageRule::isStaged)
