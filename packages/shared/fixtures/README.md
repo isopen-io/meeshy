@@ -16,3 +16,6 @@ Lus par les 3 plateformes : shared/web (Jest, import direct), iOS (XCTest, resso
 ## `relation-export-badge.vectors.json` (#13997)
 
 - Le logo de cercle de l'intro d'une story exportée (`utils/relation-export-badge.ts`, `relationExportBadge`) : niveau EFFECTIF servi (brut) → emoji ou `null`. Seuil `minLevel` = Proche. iOS (`MeeshyUI`) et Android (`:core:model`) rejouent le fichier par chemin relatif, comme `device-tier-vectors.json`.
+## `relation-access-cases.json` (#13927)
+
+- La loi d'accès des cercles `resolveRelationAccess` (`utils/relation-access.ts`) : `{ id, matrix, input, expected }`, **écrits à la main** — un oracle indépendant de la loi TS, jamais généré en l'exécutant. Rejoués par `__tests__/relation-access.test.ts`, puis par les miroirs Swift (`RelationAccess.swift`) et Kotlin (`RelationAccess.kt`) dans leurs sous-lots.

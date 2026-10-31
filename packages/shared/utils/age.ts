@@ -66,6 +66,20 @@ export function isDeclaredMinor(birthDate: Date | null | undefined, now: Date): 
   return ageInFullYearsUtc(birthDate, now) < ADULT_AGE;
 }
 
+export type DeclaredAgeClass = 'minor' | 'adult' | 'unknown';
+
+/**
+ * Le TRI-ÉTAT de l'âge déclaré : `isDeclaredMinor` rend `false` sur l'inconnu
+ * (ne rien déclarer ne restreint rien), ce qui ne distingue pas un majeur d'un
+ * compte sans date. Les cercles ont besoin de la différence : la Connaissance
+ * automatique ne naît pas entre un mineur déclaré et un âge inconnu (#13927).
+ * Date absente ou illisible ⇒ `unknown`, jamais `adult`.
+ */
+export function declaredAgeClass(birthDate: Date | null | undefined, now: Date): DeclaredAgeClass {
+  if (!birthDate || Number.isNaN(birthDate.getTime())) return 'unknown';
+  return ageInFullYearsUtc(birthDate, now) < ADULT_AGE ? 'minor' : 'adult';
+}
+
 /**
  * Sous l'âge minimal DÉCLARÉ (#9927) : la déclaration a été refusée mais
  * ÉCRITE (un refus est définitif, il ne se contourne pas en redéclarant), et

@@ -1,5 +1,7 @@
 package me.meeshy.app.reels
 
+import androidx.compose.foundation.layout.PaddingValues
+import me.meeshy.ui.component.message.MeeshyCommentComposer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,17 +16,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -38,7 +33,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -201,34 +195,13 @@ internal fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) 
 
 @Composable
 private fun ReelCommentInput(draft: String, onDraftChange: (String) -> Unit, onSend: (String) -> Unit) {
-    val canSend = draft.isNotBlank()
-    fun submit() {
-        if (!canSend) return
-        onSend(draft)
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = MeeshySpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        OutlinedTextField(
-            value = draft,
-            onValueChange = onDraftChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text(stringResource(R.string.reels_comments_input_hint)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { submit() }),
-        )
-        IconButton(onClick = ::submit, enabled = canSend) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Send,
-                contentDescription = stringResource(R.string.reels_comments_send),
-            )
-        }
-    }
+    MeeshyCommentComposer(
+        text = draft,
+        onTextChange = onDraftChange,
+        placeholder = stringResource(R.string.reels_comments_input_hint),
+        onSend = { onSend(draft) },
+        contentPadding = PaddingValues(top = MeeshySpacing.xs),
+    )
 }
 
 @Composable

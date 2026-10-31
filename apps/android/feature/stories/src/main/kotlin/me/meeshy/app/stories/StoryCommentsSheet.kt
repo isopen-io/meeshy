@@ -1,5 +1,8 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.saveable.rememberSaveable
+import me.meeshy.ui.component.message.MeeshyCommentComposer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,32 +15,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -156,37 +150,20 @@ private fun Modifier.clickableRetry(onClick: () -> Unit): Modifier =
 
 @Composable
 private fun CommentInput(accentHex: String, onSend: (String) -> Unit) {
-    var draft by remember { mutableStateOf("") }
-    val canSend = draft.isNotBlank()
-    fun submit() {
-        if (!canSend) return
-        onSend(draft)
-        draft = ""
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = MeeshySpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        OutlinedTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            modifier = Modifier.weight(1f),
-            placeholder = { Text(stringResource(R.string.stories_comments_input_hint)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { submit() }),
-        )
-        IconButton(onClick = ::submit, enabled = canSend) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Send,
-                contentDescription = stringResource(R.string.stories_comments_send),
-                tint = hexColor(accentHex),
-            )
-        }
-    }
+    var draft by rememberSaveable { mutableStateOf("") }
+    val accent = hexColor(accentHex)
+    MeeshyCommentComposer(
+        text = draft,
+        onTextChange = { draft = it },
+        placeholder = stringResource(R.string.stories_comments_input_hint),
+        onSend = {
+            onSend(draft)
+            draft = ""
+        },
+        accentColor = accent,
+        secondaryColor = accent.copy(alpha = 0.75f),
+        contentPadding = PaddingValues(top = MeeshySpacing.xs),
+    )
 }
 
 @Composable

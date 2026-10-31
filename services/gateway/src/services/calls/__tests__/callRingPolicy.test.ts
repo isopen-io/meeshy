@@ -40,6 +40,7 @@ const fakePrisma = (opts: {
   return {
     userPreferences: { findMany: jest.fn(async () => opts.documents ?? []) },
     userPreference: { findMany: jest.fn(async () => []) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: { findMany: friendRequestFindMany },
     participant: {
       findMany: jest.fn(async () => (opts.members ?? []).map((userId) => ({ userId }))),

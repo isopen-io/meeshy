@@ -9,7 +9,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,28 +24,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -55,11 +47,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.message.MessageComposerSendButton
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -269,49 +260,12 @@ internal fun ComposerSendButton(
     secondaryColor: Color,
     onSend: () -> Unit,
 ) {
-    val warning = MeeshyTheme.tokens.warning
-    val brush = if (isEditing) {
-        Brush.linearGradient(listOf(warning, warning.copy(alpha = 0.75f)))
-    } else {
-        MeeshyGradients.conversationAccent(accentColor, secondaryColor)
-    }
-    val shadowColor = if (isEditing) warning else accentColor
-    var bounce by remember { mutableIntStateOf(0) }
-    var bouncing by remember { mutableStateOf(false) }
-    LaunchedEffect(bounce) {
-        if (bounce == 0) return@LaunchedEffect
-        bouncing = true
-        delay(SEND_BOUNCE_MS)
-        bouncing = false
-    }
-    val scale by animateFloatAsState(
-        targetValue = if (bouncing) 1.08f else 1f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = MeeshyMotion.stiffnessForResponse(0.25f)),
-        label = "composer-send-bounce",
+    MessageComposerSendButton(
+        enabled = enabled,
+        accentColor = accentColor,
+        secondaryColor = secondaryColor,
+        contentDescription = stringResource(R.string.chat_send),
+        onSend = onSend,
+        isEditing = isEditing,
     )
-    val label = stringResource(R.string.chat_send)
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .alpha(if (enabled) 1f else 0f)
-            .scale(scale)
-            .shadow(8.dp, CircleShape, clip = false, ambientColor = shadowColor.copy(alpha = 0.4f), spotColor = shadowColor.copy(alpha = 0.4f))
-            .clip(CircleShape)
-            .background(brush, CircleShape)
-            .clickable(enabled = enabled, role = Role.Button) {
-                bounce += 1
-                onSend()
-            }
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(19.dp),
-        )
-    }
 }
-
-private const val SEND_BOUNCE_MS = 200L

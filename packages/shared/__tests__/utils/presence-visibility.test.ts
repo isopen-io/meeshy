@@ -9,7 +9,7 @@ import {
 const baseInput = (over: Partial<PresenceVisibilityInput> = {}): PresenceVisibilityInput => ({
   isSelf: false,
   viewerRole: 'USER',
-  areConnected: false,
+  relationLevel: 'PUBLIC',
   targetShowOnlineStatus: true,
   targetShowLastSeen: true,
   targetIsDeactivated: false,
@@ -17,7 +17,7 @@ const baseInput = (over: Partial<PresenceVisibilityInput> = {}): PresenceVisibil
   ...over,
 });
 
-// Directive produit (2026-08-25) : hors amitié acceptée (`areConnected`),
+// Directive produit (2026-08-25) : hors amitié acceptée (niveau effectif >= FRIEND),
 // la présence est supprimée pour tout le monde sauf ADMIN et supérieur
 // (BIGBOSS). MODERATOR a perdu son bypass ; le partage d'une conversation
 // n'est plus un critère d'autorisation.
@@ -55,7 +55,7 @@ describe('resolvePresenceVisibility', () => {
   });
 
   it('shows full presence to a connected contact when both preferences are on', () => {
-    expect(resolvePresenceVisibility(baseInput({ areConnected: true }))).toEqual({
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND' }))).toEqual({
       showOnline: true,
       showLastSeenTimestamp: true,
     });
@@ -63,18 +63,18 @@ describe('resolvePresenceVisibility', () => {
 
   it('hides only the timestamp for a contact when showLastSeen is off', () => {
     expect(
-      resolvePresenceVisibility(baseInput({ areConnected: true, targetShowLastSeen: false })),
+      resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', targetShowLastSeen: false })),
     ).toEqual({ showOnline: true, showLastSeenTimestamp: false });
   });
 
   it('hides all presence for a contact when showOnlineStatus is off (master switch)', () => {
     expect(
-      resolvePresenceVisibility(baseInput({ areConnected: true, targetShowOnlineStatus: false })),
+      resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', targetShowOnlineStatus: false })),
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 
   it('hides presence from a conversation co-participant who is not a contact — sharing a conversation is not a relationship', () => {
-    expect(resolvePresenceVisibility(baseInput({ areConnected: false }))).toEqual({
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'PUBLIC' }))).toEqual({
       showOnline: false,
       showLastSeenTimestamp: false,
     });
@@ -89,13 +89,13 @@ describe('resolvePresenceVisibility', () => {
 
   it('hides presence when either party blocked the other, even for a contact', () => {
     expect(
-      resolvePresenceVisibility(baseInput({ areConnected: true, isBlockedEitherWay: true })),
+      resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', isBlockedEitherWay: true })),
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 
   it('hides presence of a deactivated target, even from a contact', () => {
     expect(
-      resolvePresenceVisibility(baseInput({ areConnected: true, targetIsDeactivated: true })),
+      resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND', targetIsDeactivated: true })),
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 });
@@ -234,5 +234,36 @@ describe('applyPresenceVisibilityAsOffline', () => {
   it('conserve le défaut masquant quand aucune option n est passée', () => {
     const out = applyPresenceVisibilityAsOffline(profile, undefined, {});
     expect(out.isOnline).toBe(false);
+  });
+});
+
+// #13927 — la politique est une PROJECTION de la loi d'accès : le niveau effectif
+// remplace le booléen d'amitié, et `niveau >= FRIEND` rend exactement les verdicts
+// de l'ancien `areConnected`. L'Ami binaire (présence détaillée dès Proche) est le
+// lot suivant : à CE lot, aucun verdict ne change.
+describe('resolvePresenceVisibility — projection du niveau effectif', () => {
+  const FULL = { showOnline: true, showLastSeenTimestamp: true };
+  const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+
+  it.each(['FRIEND', 'CLOSE', 'BLOOD'] as const)('sert la présence à partir de %s, comme à un ami', (relationLevel) => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel }))).toEqual(FULL);
+  });
+
+  it.each(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCE'] as const)('ne sert rien sous Ami (%s)', (relationLevel) => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel }))).toEqual(HIDDEN);
+  });
+
+  it('respecte les préférences de la cible à tout niveau', () => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'BLOOD', targetShowOnlineStatus: false }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'CLOSE', targetShowLastSeen: false }))).toEqual({
+      showOnline: true,
+      showLastSeenTimestamp: false,
+    });
+  });
+
+  it('un blocage masque même au sommet de l\'échelle, et ADMIN reste privilégié sans lien', () => {
+    expect(resolvePresenceVisibility(baseInput({ relationLevel: 'BLOOD', isBlockedEitherWay: true }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(baseInput({ viewerRole: 'ADMIN' }))).toEqual(FULL);
+    expect(resolvePresenceVisibility(baseInput({ viewerRole: 'MODERATOR' }))).toEqual(HIDDEN);
   });
 });
