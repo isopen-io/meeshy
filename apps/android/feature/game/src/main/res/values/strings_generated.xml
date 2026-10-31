@@ -585,6 +585,10 @@
     <string name="game_detail_locked">Not earned yet</string>
     <string name="game_detail_obtain_label">How to get it</string>
     <string name="game_detail_open">%1$s: see details</string>
+    <string name="game_detail_rank_how">Make your glory grow: mint Meeshes, carry your light higher than ever, perform great deeds.</string>
+    <string name="game_detail_rank_what">Your crest shows your rank, the name the world gives you. It never goes back.</string>
+    <string name="game_detail_ring_how">Make sparks fly: when the ring is full, your light gains a level.</string>
+    <string name="game_detail_ring_what">The ring shows your level: your light fills it.</string>
     <string name="game_difficulty_easy">Act I</string>
     <string name="game_difficulty_gold">Golden Act</string>
     <string name="game_difficulty_hard">Act III</string>
@@ -783,13 +787,18 @@
     <string name="game_guide_step_welcome_means">Every useful action earns sparks: writing, talking, publishing, reacting, inviting.</string>
     <string name="game_guide_step_welcome_next">Make your first move: I’m watching for your first sparks.</string>
     <string name="game_guide_step_welcome_what">Hi, I am Mee! With Meo, we will explain the game in seven cards.</string>
+    <string name="game_hero_earn_a11y">%1$s, up to %2$s per action</string>
+    <string name="game_hero_earn_chip">up to %1$s</string>
+    <string name="game_hero_earn_title">How to earn</string>
     <string name="game_hero_level">Level %1$s</string>
     <string name="game_league_detail_week">%1$s this week</string>
     <string name="game_level_cap_reached">Level %1$s: the highest your rank opens. The %2$s rank opens what comes next.</string>
     <string name="game_level_cap_short">opens at the %1$s rank</string>
     <string name="game_level_held">Your light already opens the way: %1$s to pass level %2$s.</string>
     <string name="game_level_ring_a11y">Level %1$s, %2$s, %3$s phase of your light</string>
+    <string name="game_level_step_done">passed</string>
     <string name="game_level_step_flame">keep a %1$s-day Flame</string>
+    <string name="game_level_step_line">Level %1$s trial: %2$s</string>
     <string name="game_level_step_mint_first">mint your first Meesh</string>
     <string name="game_level_step_mint_many">mint %1$s Meeshes</string>
     <string name="game_level_step_missions_first">fulfill a dream</string>
@@ -1000,6 +1009,11 @@
     </plurals>
     <string name="game_sparks_cumul_record">%1$s this Age · %2$s in all</string>
     <string name="game_sparks_debt">A shadow on %1$s sparks</string>
+    <string name="game_sparks_level_label">Current level</string>
+    <string name="game_sparks_level_max_label">At your highest</string>
+    <string name="game_sparks_level_record_line">Your highest light: level %1$s</string>
+    <string name="game_sparks_lifetime_label">Received since the beginning</string>
+    <string name="game_sparks_pocket_label">Your light</string>
     <string name="game_sparks_record_line">%1$s received since the beginning</string>
     <string name="game_spend_missing_freeze">You lack %1$s to take a Vigil.</string>
     <string name="game_spend_missing_relight">Still missing to relight your Flame: %1$s.</string>

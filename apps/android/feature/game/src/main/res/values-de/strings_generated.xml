@@ -585,6 +585,10 @@
     <string name="game_detail_locked">Noch nicht erhalten</string>
     <string name="game_detail_obtain_label">So bekommst du es</string>
     <string name="game_detail_open">%1$s: Details ansehen</string>
+    <string name="game_detail_rank_how">Lass deinen Ruhm wachsen: Präge Meeshes, trag dein Licht höher als je zuvor, vollbringe Heldentaten.</string>
+    <string name="game_detail_rank_what">Dein Wappen zeigt deinen Rang, den Namen, den dir die Welt gibt. Er weicht nie zurück.</string>
+    <string name="game_detail_ring_how">Lass Funken sprühen: Ist der Ring voll, gewinnt dein Licht ein Level.</string>
+    <string name="game_detail_ring_what">Der Ring zeigt dein Level: Dein Licht füllt ihn.</string>
     <string name="game_difficulty_easy">Akt I</string>
     <string name="game_difficulty_gold">Goldener Akt</string>
     <string name="game_difficulty_hard">Akt III</string>
@@ -783,13 +787,18 @@
     <string name="game_guide_step_welcome_means">Jede nützliche Aktion bringt Funken: schreiben, sprechen, veröffentlichen, reagieren, einladen.</string>
     <string name="game_guide_step_welcome_next">Mach deine erste Aktion: Ich halte Ausschau nach deinen ersten Funken.</string>
     <string name="game_guide_step_welcome_what">Hallo, ich bin Mee! Mit Meo erklären wir dir das Spiel in sieben Karten.</string>
+    <string name="game_hero_earn_a11y">%1$s, bis zu %2$s pro Aktion</string>
+    <string name="game_hero_earn_chip">bis zu %1$s</string>
+    <string name="game_hero_earn_title">So sammelst du Funken</string>
     <string name="game_hero_level">Level %1$s</string>
     <string name="game_league_detail_week">%1$s diese Woche</string>
     <string name="game_level_cap_reached">Level %1$s: das höchste, das dein Rang öffnet. Der Rang %2$s öffnet die nächsten.</string>
     <string name="game_level_cap_short">öffnet ab Rang %1$s</string>
     <string name="game_level_held">Dein Licht öffnet schon den Weg: %1$s, um Level %2$s zu erreichen.</string>
     <string name="game_level_ring_a11y">Level %1$s, %2$s, %3$s Gestalt deines Lichts</string>
+    <string name="game_level_step_done">bestanden</string>
     <string name="game_level_step_flame">eine Flamme von %1$s Tagen halten</string>
+    <string name="game_level_step_line">Prüfung für Level %1$s: %2$s</string>
     <string name="game_level_step_mint_first">deine erste Meesh prägen</string>
     <string name="game_level_step_mint_many">%1$s Meeshes prägen</string>
     <string name="game_level_step_missions_first">einen Traum erfüllen</string>
@@ -1000,6 +1009,11 @@
     </plurals>
     <string name="game_sparks_cumul_record">%1$s in diesem Zeitalter · %2$s insgesamt</string>
     <string name="game_sparks_debt">Ein Schatten auf %1$s Funken</string>
+    <string name="game_sparks_level_label">Aktuelles Level</string>
+    <string name="game_sparks_level_max_label">Am hellsten</string>
+    <string name="game_sparks_level_record_line">Dein hellstes Licht: Level %1$s</string>
+    <string name="game_sparks_lifetime_label">Seit jeher empfangen</string>
+    <string name="game_sparks_pocket_label">Dein Licht</string>
     <string name="game_sparks_record_line">%1$s seit jeher empfangen</string>
     <string name="game_spend_missing_freeze">Es fehlen %1$s, um eine Hüterin zu rufen.</string>
     <string name="game_spend_missing_relight">Es fehlen %1$s, um deine Flamme neu zu entzünden.</string>

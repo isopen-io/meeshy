@@ -585,6 +585,10 @@
     <string name="game_detail_locked">Ainda não obtido</string>
     <string name="game_detail_obtain_label">Como conseguir</string>
     <string name="game_detail_open">%1$s: ver os detalhes</string>
+    <string name="game_detail_rank_how">Faça a sua glória crescer: cunhe Meeshes, leve sua luz mais alto do que nunca, cumpra façanhas.</string>
+    <string name="game_detail_rank_what">Seu brasão mostra o seu título, o nome que o mundo dá a você. Ele nunca recua.</string>
+    <string name="game_detail_ring_how">Faça saltar faíscas: quando o anel fica cheio, sua luz ganha um nível.</string>
+    <string name="game_detail_ring_what">O anel mostra o seu nível: sua luz o enche.</string>
     <string name="game_difficulty_easy">Ato I</string>
     <string name="game_difficulty_gold">Ato de ouro</string>
     <string name="game_difficulty_hard">Ato III</string>
@@ -783,13 +787,18 @@
     <string name="game_guide_step_welcome_means">Cada ação útil rende faíscas: escrever, falar, publicar, reagir, convidar.</string>
     <string name="game_guide_step_welcome_next">Faça seu primeiro gesto: estou de olho nas suas primeiras faíscas.</string>
     <string name="game_guide_step_welcome_what">Oi, eu sou a Mee! Com o Meo, explicamos o jogo em sete cartões.</string>
+    <string name="game_hero_earn_a11y">%1$s, até %2$s por ação</string>
+    <string name="game_hero_earn_chip">até %1$s</string>
+    <string name="game_hero_earn_title">Como ganhar</string>
     <string name="game_hero_level">Nível %1$s</string>
     <string name="game_league_detail_week">%1$s esta semana</string>
     <string name="game_level_cap_reached">Nível %1$s: o mais alto que sua patente abre. A patente %2$s abre os próximos.</string>
     <string name="game_level_cap_short">abre na patente %1$s</string>
     <string name="game_level_held">Sua luz já abre o que vem depois: %1$s para passar o nível %2$s.</string>
     <string name="game_level_ring_a11y">Nível %1$s, %2$s, %3$s estado da sua luz</string>
+    <string name="game_level_step_done">vencida</string>
     <string name="game_level_step_flame">manter uma Chama de %1$s dias</string>
+    <string name="game_level_step_line">Prova do nível %1$s: %2$s</string>
     <string name="game_level_step_mint_first">cunhar sua primeira Meesh</string>
     <string name="game_level_step_mint_many">cunhar %1$s Meeshes</string>
     <string name="game_level_step_missions_first">realizar um sonho</string>
@@ -1002,6 +1011,11 @@
     </plurals>
     <string name="game_sparks_cumul_record">%1$s nesta Era · %2$s ao todo</string>
     <string name="game_sparks_debt">Uma sombra sobre %1$s faíscas</string>
+    <string name="game_sparks_level_label">Nível atual</string>
+    <string name="game_sparks_level_max_label">No auge</string>
+    <string name="game_sparks_level_record_line">O auge da sua luz: nível %1$s</string>
+    <string name="game_sparks_lifetime_label">Recebidas desde sempre</string>
+    <string name="game_sparks_pocket_label">Sua luz</string>
     <string name="game_sparks_record_line">%1$s recebidas desde sempre</string>
     <string name="game_spend_missing_freeze">Faltam %1$s para pegar uma Lamparina.</string>
     <string name="game_spend_missing_relight">Faltam %1$s para reacender sua Chama.</string>

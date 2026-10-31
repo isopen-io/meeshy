@@ -1,7 +1,10 @@
 package me.meeshy.app.game.progression
 
+import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.GameText
 import me.meeshy.sdk.model.game.GameTextKey
+import me.meeshy.sdk.model.game.LevelTierKey
+import me.meeshy.sdk.model.game.MythicSeatRef
 import me.meeshy.sdk.model.game.engagement.AchievementEntry
 import me.meeshy.sdk.model.game.engagement.BadgeGuide
 import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
@@ -14,6 +17,8 @@ import me.meeshy.sdk.model.game.engagement.EngagementAxisProgress
 import me.meeshy.sdk.model.game.engagement.GameBadgeTiers
 import me.meeshy.sdk.model.game.progression.FicheFact
 import me.meeshy.sdk.model.game.progression.GameDetailFactKey
+import me.meeshy.sdk.model.game.progression.PieceDetail
+import me.meeshy.sdk.model.game.progression.PieceDetailKind
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 
 /** Ce qu'il manque à un élément verrouillé, dit avec SA cible (iOS `GameDetailText.badgeMissing`, `GameBadgeGuideText.imprint`). */
@@ -103,6 +108,21 @@ sealed interface GameElementDetail {
         override val id: String get() = "fact:${concept.name}.$label"
         override val status: GameElementStatus get() = GameElementStatus.Value(value)
     }
+
+    /** Une pièce de tête touchée : l'anneau (fiche du Niveau) ou le blason (fiche de la Gloire), sa valeur et sa jauge. */
+    data class Piece(val piece: PieceDetail, val emblem: PieceEmblem) : GameElementDetail {
+        override val id: String get() = "${piece.kind.name}:${piece.key}"
+        override val concept: ProgressionConcept
+            get() = if (piece.kind == PieceDetailKind.LevelRing) ProgressionConcept.Level else ProgressionConcept.Glory
+        override val status: GameElementStatus get() = GameElementStatus.Value(piece.value)
+        override val progress: Double? get() = piece.progress
+    }
+}
+
+/** Ce que la feuille d'une pièce de tête dessine en grand : l'anneau du niveau ou le blason du rang. */
+sealed interface PieceEmblem {
+    data class Ring(val level: Int, val tier: LevelTierKey, val progress: Double) : PieceEmblem
+    data class Blason(val rank: GloryRank, val division5: Int?, val mythic: MythicSeatRef?) : PieceEmblem
 }
 
 /** Une fonction pure par famille (miroir de `GameElementDetails`, iOS) : rien d'inventé, ce qui n'est pas servi ne se dit pas. */

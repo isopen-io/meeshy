@@ -585,6 +585,10 @@
     <string name="game_detail_locked">Non ancora ottenuto</string>
     <string name="game_detail_obtain_label">Come ottenerlo</string>
     <string name="game_detail_open">%1$s: vedi i dettagli</string>
+    <string name="game_detail_rank_how">Fai crescere la tua gloria: conia Meesh, porta la tua luce più in alto che mai, compi imprese.</string>
+    <string name="game_detail_rank_what">Il tuo blasone mostra il tuo rango, il nome che il mondo ti dà. Non arretra mai.</string>
+    <string name="game_detail_ring_how">Fai scaturire scintille: quando l’anello è pieno, la tua luce guadagna un livello.</string>
+    <string name="game_detail_ring_what">L’anello mostra il tuo livello: la tua luce lo riempie.</string>
     <string name="game_difficulty_easy">Atto I</string>
     <string name="game_difficulty_gold">Atto d’oro</string>
     <string name="game_difficulty_hard">Atto III</string>
@@ -783,13 +787,18 @@
     <string name="game_guide_step_welcome_means">Ogni gesto utile fa guadagnare scintille: scrivere, parlare, pubblicare, reagire, invitare.</string>
     <string name="game_guide_step_welcome_next">Fai il tuo primo gesto: aspetto le tue prime scintille.</string>
     <string name="game_guide_step_welcome_what">Ciao, sono Mee! Con Meo ti spieghiamo il gioco in sette carte.</string>
+    <string name="game_hero_earn_a11y">%1$s, fino a %2$s per gesto</string>
+    <string name="game_hero_earn_chip">fino a %1$s</string>
+    <string name="game_hero_earn_title">Come guadagnare</string>
     <string name="game_hero_level">Livello %1$s</string>
     <string name="game_league_detail_week">%1$s questa settimana</string>
     <string name="game_level_cap_reached">Livello %1$s: il più alto che il tuo rango apre. Il rango %2$s apre i successivi.</string>
     <string name="game_level_cap_short">si apre al rango %1$s</string>
     <string name="game_level_held">La tua luce apre già il seguito: %1$s per superare il livello %2$s.</string>
     <string name="game_level_ring_a11y">Livello %1$s, %2$s, %3$s stato della tua luce</string>
+    <string name="game_level_step_done">superata</string>
     <string name="game_level_step_flame">tenere una Fiamma di %1$s giorni</string>
+    <string name="game_level_step_line">Prova del livello %1$s: %2$s</string>
     <string name="game_level_step_mint_first">coniare la tua prima Meesh</string>
     <string name="game_level_step_mint_many">coniare %1$s Meeshes</string>
     <string name="game_level_step_missions_first">compiere un sogno</string>
@@ -1002,6 +1011,11 @@
     </plurals>
     <string name="game_sparks_cumul_record">%1$s in quest’Era · %2$s in tutto</string>
     <string name="game_sparks_debt">Un’ombra su %1$s scintille</string>
+    <string name="game_sparks_level_label">Livello attuale</string>
+    <string name="game_sparks_level_max_label">Al più alto</string>
+    <string name="game_sparks_level_record_line">La tua luce più alta: livello %1$s</string>
+    <string name="game_sparks_lifetime_label">Ricevute da sempre</string>
+    <string name="game_sparks_pocket_label">La tua luce</string>
     <string name="game_sparks_record_line">%1$s ricevute da sempre</string>
     <string name="game_spend_missing_freeze">Mancano %1$s per prendere una Lucerna.</string>
     <string name="game_spend_missing_relight">Mancano %1$s per riaccendere la tua Fiamma.</string>

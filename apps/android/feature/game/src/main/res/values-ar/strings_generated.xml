@@ -585,6 +585,10 @@
     <string name="game_detail_locked">لم تحصل عليه بعد</string>
     <string name="game_detail_obtain_label">كيف تحصل عليه</string>
     <string name="game_detail_open">%1$s: عرض التفاصيل</string>
+    <string name="game_detail_rank_how">نمِّ مجدك: سُكّ عملات Meesh، واحمل نورك أعلى من أي وقت مضى، وحقّق المآثر.</string>
+    <string name="game_detail_rank_what">شعارك يُظهر رتبتك، الاسم الذي يمنحك إياه العالم. وهي لا تتراجع أبدًا.</string>
+    <string name="game_detail_ring_how">أطلق شرارات: حين تمتلئ الحلقة، يبلغ نورك مستوى جديدًا.</string>
+    <string name="game_detail_ring_what">الحلقة تُظهر مستواك: نورك يملؤها.</string>
     <string name="game_difficulty_easy">الفصل الأول</string>
     <string name="game_difficulty_gold">الفصل الذهبي</string>
     <string name="game_difficulty_hard">الفصل الثالث</string>
@@ -783,13 +787,18 @@
     <string name="game_guide_step_welcome_means">كل إجراء مفيد يمنحك شرارات: الكتابة، والكلام، والنشر، والتفاعل، والدعوة.</string>
     <string name="game_guide_step_welcome_next">قم بأول إجراء: أنا أترقّب شراراتك الأولى.</string>
     <string name="game_guide_step_welcome_what">مرحبًا، أنا مي! مع ميو سنشرح لك اللعبة في سبع بطاقات.</string>
+    <string name="game_hero_earn_a11y">%1$s، حتى %2$s لكل إجراء</string>
+    <string name="game_hero_earn_chip">حتى ⁦%1$s⁩</string>
+    <string name="game_hero_earn_title">كيف تكسب الشرارات</string>
     <string name="game_hero_level">المستوى %1$s</string>
     <string name="game_league_detail_week">%1$s هذا الأسبوع</string>
     <string name="game_level_cap_reached">المستوى %1$s: أعلى ما تفتحه رتبتك. رتبة %2$s تفتح ما بعده.</string>
     <string name="game_level_cap_short">يُفتح برتبة %1$s</string>
     <string name="game_level_held">نورك يفتح الطريق بالفعل: %1$s لاجتياز المستوى %2$s.</string>
     <string name="game_level_ring_a11y">المستوى %1$s، %2$s، الحالة %3$s لنورك</string>
+    <string name="game_level_step_done">اجتزته</string>
     <string name="game_level_step_flame">الحفاظ على لهب لمدة %1$s يومًا</string>
+    <string name="game_level_step_line">اختبار المستوى %1$s: %2$s</string>
     <string name="game_level_step_mint_first">سكّ أول Meesh لك</string>
     <string name="game_level_step_mint_many">سكّ %1$s من Meeshes</string>
     <string name="game_level_step_missions_first">تحقيق حلم</string>
@@ -1008,6 +1017,11 @@
     </plurals>
     <string name="game_sparks_cumul_record">⁦%1$s⁩ في هذا العصر · ⁦%2$s⁩ في المجموع</string>
     <string name="game_sparks_debt">ظلّ على ⁦%1$s⁩ شرارة</string>
+    <string name="game_sparks_level_label">المستوى الحالي</string>
+    <string name="game_sparks_level_max_label">الذروة</string>
+    <string name="game_sparks_level_record_line">ذروة نورك: المستوى %1$s</string>
+    <string name="game_sparks_lifetime_label">تلقّيتها منذ البداية</string>
+    <string name="game_sparks_pocket_label">نورك</string>
     <string name="game_sparks_record_line">%1$s تلقّيتها منذ البداية</string>
     <string name="game_spend_missing_freeze">ينقصك %1$s لأخذ قنديل.</string>
     <string name="game_spend_missing_relight">ينقص %1$s لإعادة إشعال لهبك.</string>

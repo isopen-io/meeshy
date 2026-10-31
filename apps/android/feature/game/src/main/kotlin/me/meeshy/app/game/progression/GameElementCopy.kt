@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.game.engagement.BadgeReachReason
 import me.meeshy.sdk.model.game.engagement.BadgeRung
 import me.meeshy.sdk.model.game.engagement.BadgeRungState
 import me.meeshy.sdk.model.game.engagement.RevealTitle
+import me.meeshy.sdk.model.game.progression.PieceDetailKind
 
 /** Un palier de l'échelle mis en mots : « Argent · 50 », sa ligne (« Obtenu le … », « Prochaine étoile · 13 de plus », « À 100 »). */
 internal data class GameRungText(
@@ -85,6 +86,7 @@ internal data class GameElementTexts(
                         },
                     ),
                 )
+                is GameElementDetail.Piece -> piece(res, locale, detail, status)
                 is GameElementDetail.Fact -> GameElementTexts(
                     name = GameCopy.resolve(res, detail.label, locale),
                     status = status,
@@ -99,6 +101,23 @@ internal data class GameElementTexts(
                     facts = emptyList(),
                 )
             }
+        }
+
+        private fun piece(res: Resources, locale: Locale, detail: GameElementDetail.Piece, status: String): GameElementTexts {
+            val ring = detail.piece.kind == PieceDetailKind.LevelRing
+            return GameElementTexts(
+                name = GameCopy.resolve(res, detail.piece.name, locale),
+                status = status,
+                whatTitle = res.getString(R.string.game_fiche_what),
+                what = res.getString(if (ring) R.string.game_detail_ring_what else R.string.game_detail_rank_what),
+                howTitle = res.getString(R.string.game_detail_obtain_label),
+                how = res.getString(if (ring) R.string.game_detail_ring_how else R.string.game_detail_rank_how),
+                reason = null,
+                stars = null,
+                starsSpoken = null,
+                ladder = emptyList(),
+                facts = detail.piece.facts.map { GameFactText(GameCopy.resolve(res, it.label, locale), GameCopy.resolve(res, it.value, locale)) },
+            )
         }
 
         private fun badge(res: Resources, locale: Locale, detail: GameElementDetail.Badge, status: String): GameElementTexts {

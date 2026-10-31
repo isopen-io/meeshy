@@ -67,6 +67,8 @@ import me.meeshy.ui.component.game.GameMedalFamily
 import me.meeshy.ui.component.game.GameMedalGlyph
 import me.meeshy.ui.component.game.GameMedalState
 import me.meeshy.ui.component.game.GameMedalView
+import me.meeshy.ui.component.game.LevelRing
+import me.meeshy.ui.component.game.RankBlason
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -188,6 +190,18 @@ private fun ElementEmblem(detail: GameElementDetail) {
             muted = tokens.textMuted,
             modifier = modifier,
         )
+        is GameElementDetail.Piece -> when (val emblem = detail.emblem) {
+            is PieceEmblem.Ring -> LevelRing(
+                level = emblem.level,
+                progress = emblem.progress.toFloat(),
+                tier = emblem.tier,
+                trackColor = tokens.textMuted.copy(alpha = 0.22f),
+                inkColor = tokens.textPrimary,
+                discColor = tokens.backgroundPrimary,
+                modifier = modifier,
+            )
+            is PieceEmblem.Blason -> RankBlason(rank = emblem.rank, division5 = emblem.division5, mythic = emblem.mythic, modifier = modifier)
+        }
         is GameElementDetail.Fact, is GameElementDetail.ElanFamily ->
             ProgressionConceptEmblem(detail.concept, game = null, modifier = modifier, size = EMBLEM)
     }

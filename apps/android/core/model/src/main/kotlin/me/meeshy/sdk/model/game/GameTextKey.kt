@@ -322,5 +322,13 @@ public enum class GameTextKey(public val androidName: String, public val form: G
     StreakRecord("game_streak_record", GameTextForm.Plural),
     DetailElanActive("game_detail_elan_active", GameTextForm.Plain),
     DetailElanIdle("game_detail_elan_idle", GameTextForm.Plain),
+    HeroLevel("game_hero_level", GameTextForm.Plain),
+    SparksPocketLabel("game_sparks_pocket_label", GameTextForm.Plain),
+    SparksLifetimeLabel("game_sparks_lifetime_label", GameTextForm.Plain),
+    SparksLevelLabel("game_sparks_level_label", GameTextForm.Plain),
+    SparksLevelMaxLabel("game_sparks_level_max_label", GameTextForm.Plain),
+    SparksLevelRecordLine("game_sparks_level_record_line", GameTextForm.Plain),
+    LevelStepLine("game_level_step_line", GameTextForm.Plain),
+    LevelStepDone("game_level_step_done", GameTextForm.Plain),
     JoinedBySpace("", GameTextForm.Join),
 }

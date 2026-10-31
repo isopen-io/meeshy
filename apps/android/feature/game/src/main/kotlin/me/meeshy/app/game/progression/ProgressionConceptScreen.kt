@@ -105,6 +105,8 @@ fun ProgressionConceptScreen(
                 fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Elans -> ElansPiece(snapshot.progress.elan)
                 fiche?.head == FicheHead.Piece && concept == ProgressionConcept.League ->
                     ProgressionLeaguePiece.of(snapshot.game?.league)?.let { LeaguePiece(it, onOpen = { onOpenPage(GamePage.League) }) }
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Level ->
+                    snapshot.game?.let { LevelPiece(it, snapshot.progress.elan) }
                 // La ligne du héros s'efface quand les gestes de la fiche la disent déjà (iOS `fiche.heroLine`).
                 card != null -> ConceptHero(card, snapshot.game, line = if (fiche != null) fiche.heroLine else card.line)
             }
