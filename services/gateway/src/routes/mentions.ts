@@ -74,7 +74,8 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         suggestions = await mentionService.getUserSuggestionsForPost(
           resolvedContextId,
           userId,
-          query || ''
+          query || '',
+          authRequest.authContext.registeredUser?.role ?? null
         );
       } else {
         suggestions = await mentionService.getUserSuggestionsForConversation(

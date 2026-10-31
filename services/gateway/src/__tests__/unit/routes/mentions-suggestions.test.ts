@@ -273,7 +273,7 @@ describe('GET /mentions/suggestions — route handler wiring', () => {
       headers: { authorization: 'Bearer fake-token' },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockGetSuggestionsForPost).toHaveBeenCalledWith(VALID_POST_ID, USER_ID, '');
+    expect(mockGetSuggestionsForPost).toHaveBeenCalledWith(VALID_POST_ID, USER_ID, '', null);
     expect(mockGetSuggestionsForConversation).not.toHaveBeenCalled();
   });
 
@@ -284,7 +284,7 @@ describe('GET /mentions/suggestions — route handler wiring', () => {
       headers: { authorization: 'Bearer fake-token' },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockGetSuggestionsForPost).toHaveBeenCalledWith(VALID_POST_ID, USER_ID, 'alice');
+    expect(mockGetSuggestionsForPost).toHaveBeenCalledWith(VALID_POST_ID, USER_ID, 'alice', null);
   });
 
   it('contextType=post access denied by service → 403', async () => {
