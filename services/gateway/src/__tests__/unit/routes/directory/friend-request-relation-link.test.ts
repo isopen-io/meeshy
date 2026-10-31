@@ -28,6 +28,11 @@ jest.mock('../../../../utils/withMutationLog', () => ({
 jest.mock('../../../../services/engagement/EngagementService', () => ({
   EngagementService: jest.fn().mockImplementation(() => ({ recordActivity: jest.fn(async () => undefined) })),
 }));
+const mockFeedCacheDel = jest.fn(async (_key: string) => undefined);
+jest.mock('../../../../services/CacheStore', () => ({
+  ...(jest.requireActual('../../../../services/CacheStore') as object),
+  getCacheStore: () => ({ del: (key: string) => mockFeedCacheDel(key) }),
+}));
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({ resolveForTargets: async () => new Map() }),
 }));
@@ -56,6 +61,7 @@ async function repondre(params: {
   notifier?: boolean;
   userRelation?: unknown;
   lectureDemande?: Record<string, unknown>;
+  socialEvents?: { invalidateFriendsCache: (userId: string) => void };
 }) {
   const store = relationStore({ friendRequests: params.demandes, relations: params.liens ?? [] });
   const notificationService = {
@@ -81,7 +87,7 @@ async function repondre(params: {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma as never);
   app.decorate('notificationService', (params.notifier === false ? null : notificationService) as never);
-  app.decorate('socialEvents', null);
+  app.decorate('socialEvents', (params.socialEvents ?? null) as never);
   app.decorate('authenticate', async (req: object) => {
     Object.assign(req, {
       user: { userId: MOI },
@@ -111,6 +117,16 @@ describe('#13926 — accepter une demande écrit le lien FRIEND/FRIEND', () => {
     });
   });
 
+  it('oublie les amis des DEUX comptes dans les caches du temps réel social et du fil (feed:friends:, 300 s, jamais invalidé avant #13927)', async () => {
+    mockFeedCacheDel.mockClear();
+    const socialEvents = { invalidateFriendsCache: jest.fn((_userId: string) => undefined) };
+
+    await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], socialEvents });
+
+    expect(socialEvents.invalidateFriendsCache.mock.calls.map(([id]) => id).sort()).toEqual([MOI, AUTRE].sort());
+    expect(mockFeedCacheDel.mock.calls.map(([key]) => key).sort()).toEqual([`feed:friends:${MOI}`, `feed:friends:${AUTRE}`].sort());
+  });
+
   it('ne fait pas échouer l’acceptation quand l’écriture du lien échoue — la demande acceptée reste la vérité de repli', async () => {
     const down = { findUnique: jest.fn(async () => { throw new Error('mongo down'); }) };
 
@@ -128,6 +144,16 @@ describe('#13926 — supprimer une demande ACCEPTÉE rompt le lien, en silence',
 
     expect(status).toBe(200);
     expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
+
+  it('oublie les amis des DEUX comptes dans les caches du temps réel social et du fil (#13927)', async () => {
+    mockFeedCacheDel.mockClear();
+    const socialEvents = { invalidateFriendsCache: jest.fn((_userId: string) => undefined) };
+
+    await repondre({ action: 'dismiss', demandes: [demande(FR_ID, 'accepted')], liens: [lien('FRIEND', 'FRIEND')], socialEvents });
+
+    expect(socialEvents.invalidateFriendsCache.mock.calls.map(([id]) => id).sort()).toEqual([MOI, AUTRE].sort());
+    expect(mockFeedCacheDel.mock.calls.map(([key]) => key).sort()).toEqual([`feed:friends:${MOI}`, `feed:friends:${AUTRE}`].sort());
   });
 
   it('garde l’amitié quand une AUTRE demande acceptée relie encore la paire', async () => {

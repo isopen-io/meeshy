@@ -18,6 +18,9 @@ import { findFirstHonouringWhere } from './find-first-honouring-where';
 
 type Row = MongoDocument;
 
+const byUpdatedAtDesc = (a: Row, b: Row): number =>
+  ((b.updatedAt as Date | undefined)?.getTime() ?? 0) - ((a.updatedAt as Date | undefined)?.getTime() ?? 0);
+
 const unsupported = (what: string): never => {
   throw new Error(`double userRelation: ${what} non supporté`);
 };
@@ -54,12 +57,12 @@ export function relationStore(seed: { friendRequests?: readonly Row[]; relations
     },
     findFirst: (args?: unknown) => findFirstHonouringWhere(state.friendRequests)(args),
     findMany: (args: {
-      where?: Row; orderBy?: { id: 'asc' }; take?: number; cursor?: { id: string }; skip?: number;
+      where?: Row; orderBy?: { id: 'asc' } | { updatedAt: 'desc' }; take?: number; cursor?: { id: string }; skip?: number;
       select?: Record<string, boolean>;
     }): Promise<Row[]> => {
       const ordered = state.friendRequests
         .filter((row) => matchesMongoWhere(row, args.where))
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        .sort(args.orderBy && 'updatedAt' in args.orderBy ? byUpdatedAtDesc : (a, b) => String(a.id).localeCompare(String(b.id)));
       const from = args.cursor ? ordered.findIndex((row) => row.id === args.cursor?.id) + (args.skip ?? 0) : 0;
       const page = ordered.slice(from, args.take === undefined ? undefined : from + args.take);
       const keys = args.select ? Object.keys(args.select) : null;
@@ -74,6 +77,15 @@ export function relationStore(seed: { friendRequests?: readonly Row[]; relations
       const { userLowId, userHighId } = args.where.userLowId_userHighId;
       const found = state.relations.find((r) => r.userLowId === userLowId && r.userHighId === userHighId);
       return Promise.resolve(found ? { ...found } : null);
+    },
+    findMany: (args: {
+      where?: Row; orderBy?: { updatedAt: 'desc' }; take?: number; select?: Record<string, boolean>;
+    }): Promise<Row[]> => {
+      const matched = state.relations.filter((row) => matchesMongoWhere(row, args.where));
+      const ordered = args.orderBy ? matched.sort(byUpdatedAtDesc) : matched;
+      const page = ordered.slice(0, args.take);
+      const keys = args.select ? Object.keys(args.select) : null;
+      return Promise.resolve(page.map((row) => (keys ? Object.fromEntries(keys.map((k) => [k, row[k]])) : { ...row })));
     },
     create: (args: { data: Row }): Promise<Row> => {
       const { userLowId, userHighId } = args.data;
