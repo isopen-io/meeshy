@@ -126,7 +126,9 @@ async function supprimerDemande(
   acteurId: string
 ): Promise<StatutSupprime | null> {
   for (const statut of ['pending', 'rejected'] as const) {
-    const retiree = await fastify.prisma.friendRequest.deleteMany({ where: { id: demande.id, status: statut } });
+    // Une demande REFUSÉE ne part que du geste de son émetteur (voir `retirerDemande`).
+    const auteur = statut === 'rejected' ? { senderId: acteurId } : {};
+    const retiree = await fastify.prisma.friendRequest.deleteMany({ where: { id: demande.id, status: statut, ...auteur } });
     if (retiree.count > 0) return statut;
   }
 
@@ -153,6 +155,10 @@ const ACCUSE = (id: string): Resultat<Record<string, unknown>> => ({
  *   geste, et la demande doit quitter la liste de l'autre) ;
  * - une demande EN ATTENTE écartée par son receveur est une IGNORANCE : un refus
  *   silencieux (RG-07), le statut passe à `rejected`, l'émetteur ne voit rien ;
+ * - une demande REFUSÉE écartée par son RECEVEUR ne part pas : l'émetteur la lit
+ *   « en attente », et la voir disparaître de sa liste dirait le refus (audit
+ *   #13933). Aucun client ne sert au receveur la liste de ses refus : le geste
+ *   est accusé, sans effet ;
  * - une demande REFUSÉE ou ACCEPTÉE qui part ne prévient personne : l'une dirait le
  *   refus, l'autre la baisse.
  */
@@ -162,6 +168,8 @@ export async function retirerDemande(
   demande: DemandeRetirable,
   acteurId: string
 ): Promise<Resultat<Record<string, unknown>>> {
+  if (demande.status === 'rejected' && demande.receiverId === acteurId) return ACCUSE(demande.id);
+
   if (demande.status === 'pending' && demande.receiverId === acteurId) {
     const ignoree = await refuserEnSilence(fastify, request, demande, acteurId, { retirerNotification: true });
     if (ignoree) return ACCUSE(demande.id);
