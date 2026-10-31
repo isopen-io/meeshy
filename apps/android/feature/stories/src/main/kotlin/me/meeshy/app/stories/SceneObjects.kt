@@ -121,8 +121,11 @@ private fun StoryComposerUiState.stickerSubject(id: String) = SceneObjectMenu.Su
     canDuplicate = deck.selectedCanAddSticker,
 )
 
-/** Un média se fait fond de la scène (ou le REMPLACE), s'ordonne quand il est posé, et se retire ; il ne se duplique pas. */
-private val mediaActions = SceneObjectMenu.ORDER + listOf(
+/**
+ * Un média se fait fond de la scène (ou le REMPLACE), et se retire ; POSÉ, il se duplique (la copie nomme le même fichier,
+ * #13902) et s'ordonne. Le fond ne se duplique pas : il deviendrait un second fond.
+ */
+private val mediaActions = listOf(SceneObjectMenu.Action.DUPLICATE) + SceneObjectMenu.ORDER + listOf(
     SceneObjectMenu.Action.SET_AS_BACKGROUND, SceneObjectMenu.Action.REPLACE_BACKGROUND, SceneObjectMenu.Action.DELETE,
 )
 
@@ -131,13 +134,13 @@ private fun StoryComposerUiState.mediaSubject(id: String) = SceneObjectMenu.Subj
     sharesPlaneWithAnother = stacksWithAnother(SceneObjectRef(ComposerObjectKind.MEDIA, id)),
     canBecomeBackground = true,
     sceneHasBackground = deck.selectedSlideBackgroundMediaId != null,
-    canDuplicate = false,
+    canDuplicate = canDuplicate(SceneObjectRef(ComposerObjectKind.MEDIA, id)),
 )
 
 private val controllerActions = listOf(SceneObjectMenu.Action.DUPLICATE) + SceneObjectMenu.ORDER + SceneObjectMenu.Action.DELETE
 
-/** Un lieu, une pastille de son : ils s'ordonnent et se retirent. */
-private val pinActions = SceneObjectMenu.ORDER + SceneObjectMenu.Action.DELETE
+/** Un lieu, une pastille de son : ils se dupliquent (#13902), s'ordonnent et se retirent ; le son d'ambiance ne se duplique pas. */
+private val pinActions = controllerActions
 
 /**
  * Les contrôleurs de l'objet SÉLECTIONNÉ (empilement, dupliquer, supprimer) : ce que la loi [SceneObjectMenu] lui sert,
@@ -151,7 +154,7 @@ val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
             ComposerObjectKind.TEXT -> textSubject(ref.id) to controllerActions
             ComposerObjectKind.MEDIA -> mediaSubject(ref.id) to mediaActions
             ComposerObjectKind.AUDIO, ComposerObjectKind.PLACE ->
-                SceneObjectMenu.Subject(sharesPlaneWithAnother = stacksWithAnother(ref), canDuplicate = false) to pinActions
+                SceneObjectMenu.Subject(sharesPlaneWithAnother = stacksWithAnother(ref), canDuplicate = canDuplicate(ref)) to pinActions
             else -> stickerSubject(ref.id) to controllerActions
         }
         return SceneObjectContextMenu(ref, SceneObjectMenu.offered(subject).filter { it in served })
@@ -160,8 +163,9 @@ val StoryComposerUiState.selectedObjectControllers: SceneObjectContextMenu?
 /**
  * La barre d'actions de l'objet SÉLECTIONNÉ — ni écrit, ni sous le pinceau (#13836). Elle part de ce que la loi
  * [SceneObjectMenu] sert à l'objet : le MÊME menu que son appui long pour un texte ou un sticker, les contrôleurs d'un
- * média ou d'un son ; chaque famille y câble son Modifier — écrire le texte, la feuille du média ou du son, l'échange du
- * sticker. Le Temps est celui des objets qui ont une fenêtre propre, un texte ou un sticker, dans une scène animée.
+ * média, d'un lieu ou d'un son ; chaque famille y câble son Modifier — écrire le texte, la feuille du média ou du son,
+ * l'échange du sticker, le lieu d'une pastille. Le Temps est celui de tout objet POSÉ sur la scène (#13902, comme iOS) — texte, sticker, média
+ * posé, lieu, pastille de son —, la scène animée ou non ; un fond dure la slide entière.
  */
 val StoryComposerUiState.selectionBar: SceneSelectionBar?
     get() {
@@ -172,15 +176,13 @@ val StoryComposerUiState.selectionBar: SceneSelectionBar?
             ComposerObjectKind.STICKER -> SceneObjectMenu.offered(stickerSubject(controllers.ref.id))
             else -> controllers.actions
         }
-        val timed = controllers.ref.kind == ComposerObjectKind.TEXT || controllers.ref.kind == ComposerObjectKind.STICKER
         return SceneSelectionBar(
             ref = controllers.ref,
             actions = ComposerSelectionActions.served(
                 ComposerSelectionActions.Input(
                     offered = offered,
-                    editable = controllers.ref.kind != ComposerObjectKind.PLACE,
-                    timed = timed,
-                    sceneAnimated = sceneIsAnimated,
+                    editable = true,
+                    timed = controllers.ref in StorySceneStack.order(deck.selectedSlide),
                 ),
             ),
             orderChoices = ComposerSelectionActions.orderChoices(offered),

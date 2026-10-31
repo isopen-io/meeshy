@@ -14,21 +14,23 @@ enum class ComposerSelectionAction {
  * La barre d'actions d'un élément sélectionné (#13836, maquette du 2026-10-30), et le rail droit du grand écran (#13837)
  * qui en reprend la liste : UNE loi pour les deux, et pour le menu de l'appui long, qui n'en est qu'un raccourci. Elle part
  * de ce que [SceneObjectMenu] offre à l'objet — chaque action du menu tombe sur une action de la barre ([of]) — et n'ajoute
- * que ce que le menu ne dit pas : un Modifier câblé par l'hôte ([Input.editable]) et le Temps d'une scène animée. Loi 4 :
- * une action sans effet pour l'objet n'est pas servie.
+ * que ce que le menu ne dit pas : un Modifier câblé par l'hôte ([Input.editable]) et le Temps de tout objet posé (iOS
+ * `ComposerSelectionActions.served`, #13902 : `!family.isBackground && !isLocked`, la scène animée ou non). Loi 4 : une
+ * action sans effet pour l'objet n'est pas servie.
  */
 object ComposerSelectionActions {
 
     /**
      * [offered] : le menu de l'objet ([SceneObjectMenu.offered]). [editable] : l'hôte a câblé son Modifier (l'écriture
-     * d'un texte, la feuille d'un média ou d'un son, l'échange d'un sticker). [timed] : l'objet a sa propre fenêtre sur la
-     * frise (un texte, un sticker). [sceneAnimated] : la scène joue ses objets dans le temps.
+     * d'un texte, la feuille d'un média ou d'un son, l'échange d'un sticker). [timed] : l'objet est POSÉ sur la scène et a
+     * sa fenêtre d'apparition propre — un fond, média ou son d'ambiance, dure la slide entière. [isLocked] : l'objet ne se
+     * règle pas (le badge d'une republication).
      */
     data class Input(
         val offered: List<Action>,
         val editable: Boolean,
         val timed: Boolean,
-        val sceneAnimated: Boolean,
+        val isLocked: Boolean = false,
     )
 
     fun served(input: Input): List<ComposerSelectionAction> {
@@ -36,7 +38,7 @@ object ComposerSelectionActions {
         return ComposerSelectionAction.entries.filter { action ->
             when (action) {
                 ComposerSelectionAction.EDIT -> input.editable || action in fromMenu
-                ComposerSelectionAction.TIME -> input.timed && input.sceneAnimated
+                ComposerSelectionAction.TIME -> input.timed && !input.isLocked
                 else -> action in fromMenu
             }
         }

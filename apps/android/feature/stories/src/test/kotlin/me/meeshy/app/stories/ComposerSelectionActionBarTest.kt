@@ -140,8 +140,8 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithContentDescription("😀").performClick()
 
         compose.onNodeWithContentDescription("😀").assertIsSelected()
-        listOf("Edit", "Duplicate", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
-        listOf("Order", "Timing").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        listOf("Edit", "Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("Order").assertDoesNotExist()
         listOf("Text", "Media", "Sticker", "More options").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
         compose.onNodeWithContentDescription("Close").assertExists()
         compose.onNodeWithContentDescription("Undo").assertExists()
@@ -210,10 +210,8 @@ class ComposerSelectionActionBarTest {
     }
 
     @Test
-    fun `timing is offered in an animated scene and opens the start and duration of the element`() {
+    fun `timing is offered in a still scene and opens the start and duration of the element`() {
         val vm = viewModel()
-        vm.onSceneReduce(StoryComposerSceneReducer::animationToggled)
-        vm.onBandDismiss()
         vm.onAddSticker("😀")
         show(vm)
 
@@ -237,7 +235,62 @@ class ComposerSelectionActionBarTest {
 
         assertThat(vm.state.value.selectedMedia).isEqualTo("p")
         compose.onNodeWithContentDescription("Media on the scene").assertIsSelected()
-        listOf("Edit", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        listOf("Edit", "Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+    }
+
+    private fun assertBarOffersDuplicateAndTiming(select: (StoryComposerViewModel) -> Unit) {
+        val vm = viewModel()
+        select(vm)
+        show(vm)
+        listOf("Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+    }
+
+    @Test
+    fun `a selected text shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm ->
+        vm.onAddTextElement()
+        vm.onTextChange("Bonjour")
+        vm.onSceneBackgroundTap()
+        vm.onSceneReduce { StoryComposerTextReducer.tapped(it, it.deck.selectedSlide.elements.single().id) }
+    }
+
+    @Test
+    fun `a selected sticker shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm -> vm.onAddSticker("😀") }
+
+    @Test
+    fun `a selected placed media shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm ->
+        withPlacedClip(vm)
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+    }
+
+    @Test
+    fun `a selected place shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm ->
+        val place = me.meeshy.sdk.model.StoryLocationObject(id = "l1", place = me.meeshy.sdk.model.SharedPlace(latitude = 48.8, longitude = 2.3, name = "Paris"))
+        vm.onSceneReduce { it.copy(deck = it.deck.addPlaceToSelected(place)) }
+        vm.onSelectPlace("l1")
+    }
+
+    @Test
+    fun `a selected sound chip shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm ->
+        val voice = me.meeshy.sdk.model.StoryAudioPlayerObject(id = "a1", postMediaId = "pm", x = 0.5, y = 0.7)
+        vm.onSceneReduce { s -> s.copy(deck = s.deck.copy(slides = s.deck.slides.map { it.copy(audio = listOf(voice)) })) }
+        vm.onSceneReduce { StoryComposerSelectionReducer.soundSelected(it, "a1") }
+    }
+
+    @Test
+    fun `Duplicate on a placed media lands a selected copy of the same file, and Timing opens its window`() {
+        val vm = viewModel()
+        withPlacedClip(vm)
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+        show(vm)
+
+        compose.onNodeWithText("Duplicate").performClick()
+
+        val slide = vm.state.value.deck.selectedSlide
+        assertThat(slide.placedMedia.map { it.mediaId }).containsExactly("p", "p")
+        assertThat(vm.state.value.selectedMediaId).isEqualTo(slide.placedMedia.last().id)
+        assertThat(slide.mediaIds).containsExactly("p")
+        compose.onNodeWithText("Timing").performClick()
+        compose.onNodeWithContentDescription("Text start time").assertExists()
     }
 
     @Test

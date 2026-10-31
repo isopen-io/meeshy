@@ -159,11 +159,11 @@ internal object StoryEditMerge {
 
     private fun medias(opening: StoryEditOpening, slide: StorySlide, built: List<StoryMediaObject>): List<StoryMediaObject>? {
         val hydrated = opening.slide
-        val originals = opening.effects.mediaObjects.orEmpty().filterNot { it.isBackground }.associateBy { it.postMediaId.ifBlank { it.id } }
-        val openedPlaced = hydrated.placedMedia.associateBy { it.mediaId }
-        val placedNow = slide.placedMedia.associateBy { it.mediaId }
+        val originals = opening.effects.mediaObjects.orEmpty().filterNot { it.isBackground }.associateBy { it.id.ifBlank { it.postMediaId } }
+        val openedPlaced = hydrated.placedMedia.associateBy { it.id }
+        val placedNow = slide.placedMedia.associateBy { it.id }
         val foreground = built.filterNot { it.isBackground }.map { wire ->
-            val id = wire.postMediaId
+            val id = wire.id
             val original = originals[id]
             when {
                 original == null -> wire

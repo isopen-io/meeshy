@@ -40,7 +40,7 @@ class StoryComposerSelectionBarTest {
 
         assertThat(framed.selectedSceneObject).isEqualTo(SceneObjectRef(ComposerObjectKind.TEXT, "t1"))
         assertThat(framed.isEditingTextElement).isFalse()
-        assertThat(framed.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, REMOVE).inOrder()
+        assertThat(framed.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
     }
 
     @Test
@@ -91,16 +91,16 @@ class StoryComposerSelectionBarTest {
     fun `stickers sharing the plane are ordered, and Order opens its four moves`() {
         val bar = StoryComposerStickerReducer.selected(withStickers("s1", "s2"), "s1").selectionBar!!
 
-        assertThat(bar.actions).containsExactly(EDIT, ORDER, DUPLICATE, REMOVE).inOrder()
+        assertThat(bar.actions).containsExactly(EDIT, ORDER, DUPLICATE, TIME, REMOVE).inOrder()
         assertThat(bar.orderChoices).containsExactly(Action.BRING_TO_FRONT, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.SEND_TO_BACK).inOrder()
     }
 
     @Test
-    fun `timing joins the bar of a text or a sticker only once the scene is animated`() {
+    fun `timing joins the bar of a text or a sticker, the scene animated or still, as on iOS`() {
         val animated = withStickers("s1").copy(sceneIsAnimated = true)
 
         assertThat(animated.selectionBar!!.actions).contains(TIME)
-        assertThat(withStickers("s1").selectionBar!!.actions).doesNotContain(TIME)
+        assertThat(withStickers("s1").selectionBar!!.actions).contains(TIME)
     }
 
     @Test
@@ -112,7 +112,7 @@ class StoryComposerSelectionBarTest {
     }
 
     @Test
-    fun `a sound is edited in its sheet and removed, never timed from the bar`() {
+    fun `an ambient sound is edited in its sheet and removed, never timed from the bar`() {
         val bar = StoryComposerSelectionReducer.soundSelected(withSound(), "a1").copy(sceneIsAnimated = true).selectionBar!!
 
         assertThat(bar.actions).containsExactly(EDIT, REMOVE).inOrder()

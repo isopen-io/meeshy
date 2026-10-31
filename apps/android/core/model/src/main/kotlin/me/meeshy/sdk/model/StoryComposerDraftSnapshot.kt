@@ -150,6 +150,11 @@ data class StoryDraftPlacedMediaSnapshot(
     val crop: StoryMediaCrop? = null,
     /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
     val zIndex: Int = 0,
+    /** L'identité de l'OBJET quand elle n'est pas celle de son média (une copie, #13902) ; un blob d'avant se lit `null` : l'objet est son média. */
+    val objectId: String? = null,
+    /** Sa fenêtre d'apparition dans la slide (#13902), en secondes, 0 = dès le début / jusqu'à la fin ; un blob d'avant se lit « toute la slide ». */
+    val startSeconds: Float = 0f,
+    val durationSeconds: Float = 0f,
 )
 
 /**

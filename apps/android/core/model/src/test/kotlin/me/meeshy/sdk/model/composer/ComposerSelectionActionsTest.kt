@@ -19,23 +19,23 @@ class ComposerSelectionActionsTest {
         offered: List<Action> = emptyList(),
         editable: Boolean = false,
         timed: Boolean = false,
-        sceneAnimated: Boolean = false,
-    ) = ComposerSelectionActions.served(ComposerSelectionActions.Input(offered, editable, timed, sceneAnimated))
+        locked: Boolean = false,
+    ) = ComposerSelectionActions.served(ComposerSelectionActions.Input(offered, editable, timed, locked))
 
     private val textAmongOthers = SceneObjectMenu.offered(
         SceneObjectMenu.Subject(sharesPlaneWithAnother = true, hasEditor = true),
     )
 
     @Test
-    fun `a text sharing the plane serves the five actions of the mockup, in its order, once the scene is animated`() {
-        assertThat(served(textAmongOthers, editable = true, timed = true, sceneAnimated = true))
+    fun `a text sharing the plane serves the five actions of the mockup, in its order, the scene left still`() {
+        assertThat(served(textAmongOthers, editable = true, timed = true))
             .containsExactly(EDIT, ORDER, DUPLICATE, TIME, REMOVE).inOrder()
     }
 
     @Test
-    fun `timing is served only for an animated scene, and only to an object that has a window of its own`() {
-        assertThat(served(textAmongOthers, editable = true, timed = true, sceneAnimated = false)).doesNotContain(TIME)
-        assertThat(served(listOf(Action.DELETE), editable = true, timed = false, sceneAnimated = true)).doesNotContain(TIME)
+    fun `timing is served to every object placed on the scene, never to a background that lasts the whole slide`() {
+        assertThat(served(listOf(Action.DUPLICATE, Action.DELETE), editable = true, timed = true)).contains(TIME)
+        assertThat(served(listOf(Action.DELETE), editable = true, timed = false)).doesNotContain(TIME)
     }
 
     @Test
@@ -55,9 +55,9 @@ class ComposerSelectionActionsTest {
     }
 
     @Test
-    fun `a locked object serves nothing but its timing`() {
+    fun `a locked object is only ordered, never timed, as on iOS`() {
         val locked = SceneObjectMenu.offered(SceneObjectMenu.Subject(isLocked = true, sharesPlaneWithAnother = true))
-        assertThat(served(locked, timed = true, sceneAnimated = true)).containsExactly(ORDER, TIME).inOrder()
+        assertThat(served(locked, timed = true, locked = true)).containsExactly(ORDER)
     }
 
     @Test

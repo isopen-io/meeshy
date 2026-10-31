@@ -85,6 +85,12 @@ internal fun StoryReferenceSheet(open: StoryComposerSheet, state: StoryComposerU
                 onDone()
             }
         }
+        StoryComposerSheet.PLACE_REPOINT -> ComposerAnchoredSheet(fill = false) {
+            StoryPlaceSheet(onCancel = onDone) { place ->
+                state.selectedPlace?.let { viewModel.onRepointPlace(it.id, place) }
+                onDone()
+            }
+        }
         else -> Unit
     }
 }

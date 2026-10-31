@@ -141,7 +141,7 @@ internal fun StoryComposerUiState.thumbnailPlacedOf(slide: StorySlide, mediaBase
                 ?.takeUnless { it.mimeType.startsWith("video", ignoreCase = true) }
                 ?.let { Triple("pending:${placed.mediaId}:${it.sizeBytes}", it.previewModel, null) }
         } ?: return@mapNotNull null
-        ThumbnailPlaced(placed.mediaId, source.first, source.second, placed.x, placed.y, placed.scale, placed.rotationDeg, source.third)
+        ThumbnailPlaced(placed.id, source.first, source.second, placed.x, placed.y, placed.scale, placed.rotationDeg, source.third)
     }
 
 /** The media painted behind [slide]: its designated background, else its first media not posed on the scene (#13853) — exactly what the scene canvas renders. */

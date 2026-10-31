@@ -67,7 +67,7 @@ internal data class PlacedMediaFrame(
     /** Son filtre, son effet et son cadre de l'appel (#13841), peints AVANT son filtre de story ; `null` : aucun. */
     val mediaLook: StoryMediaLook? = null,
 ) {
-    val key: String get() = placed.mediaId
+    val key: String get() = placed.id
 
     /** Le look que le plateau peint : SON filtre à pleine force puis SES réglages, jamais ceux de la scène — le même que lit `SceneLookRecipe.forMedia`. */
     val look: SceneLookRecipe get() = SceneLookRecipe.forStory(placed.filter, 1f, placed.adjustments, isVideo)
@@ -78,9 +78,9 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
     val background = deck.selectedSlide.backgroundMediaId
     val looks = deck.selectedSlide.mediaLooks
     return deck.selectedSlide.placedMedia.filter { it.mediaId != background }.map { placed ->
-        if (placed.mediaId == comparing) placed.copy(filter = null, adjustments = null) else placed
+        if (placed.id == comparing) placed.copy(filter = null, adjustments = null) else placed
     }.mapNotNull { placed ->
-        val look = looks[placed.mediaId].takeUnless { placed.mediaId == comparing }
+        val look = looks[placed.mediaId].takeUnless { placed.id == comparing }
         val uploaded = selectedSlideAttachments.firstOrNull { it.id == placed.mediaId }
         val pending = selectedSlidePending.firstOrNull { it.cmid == placed.mediaId }
         when {

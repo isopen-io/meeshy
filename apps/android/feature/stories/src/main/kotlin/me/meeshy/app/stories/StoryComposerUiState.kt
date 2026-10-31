@@ -372,7 +372,7 @@ internal fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState
         draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
         selectedTextElementId = if (stillSelected) elementId else null,
         selectedStickerId = if (stickerStillSelected) stickerId else null,
-        selectedMediaId = selectedMediaId?.takeIf { it in deck.selectedSlide.mediaIds },
+        selectedMediaId = selectedMediaId?.takeIf(deck.selectedSlide::holdsMediaObject),
         selectedSoundId = selectedSoundId?.takeIf { id -> deck.selectedSlide.audio.any { it.id == id } },
         selectedPlaceId = selectedPlaceId?.takeIf { id -> deck.selectedSlide.places.any { it.id == id } },
         drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),

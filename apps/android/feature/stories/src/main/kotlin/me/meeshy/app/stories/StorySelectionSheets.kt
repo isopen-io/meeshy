@@ -55,6 +55,7 @@ internal fun StorySelectionSheet(
             )
         }
         StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
+        StoryComposerSheet.PLACE_REPOINT -> StoryReferenceSheet(open, state, viewModel, onDone)
         StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
     }
 }
@@ -63,8 +64,9 @@ internal fun StorySelectionSheet(
 internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = when (sheet) {
     StoryComposerSheet.STICKER_SWAP -> selectedSticker != null
     StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
-    StoryComposerSheet.OBJECT_TIME -> selectedTextElement != null || selectedSticker != null
+    StoryComposerSheet.OBJECT_TIME -> selectedObjectTiming != null
     StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
+    StoryComposerSheet.PLACE_REPOINT -> selectedPlace != null
     StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }
 
@@ -114,18 +116,21 @@ private fun BackgroundChip(ref: SceneObjectRef, action: SceneObjectMenu.Action, 
     )
 }
 
-/** Le Temps d'un texte ou d'un sticker : son départ et sa durée, puis la frise du plan, où toucher une piste sélectionne son objet. */
+/**
+ * Le Temps de l'objet posé (#13902) — texte, sticker, média, lieu ou pastille de son : son départ et sa durée dans la slide,
+ * puis la frise du plan, où toucher une piste sélectionne son objet.
+ */
 @Composable
 private fun ObjectTimeSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
     SelectionSheetColumn(stringResource(R.string.composer_scene_more_timing), onDone) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            state.selectedTextElement?.let { text ->
-                TimingCycleButtons(text.timing, { viewModel.onTextElementCycleStart(text.id) }, { viewModel.onTextElementCycleDuration(text.id) })
-            } ?: state.selectedSticker?.let { sticker ->
+            val ref = state.selectedSceneObject
+            val timing = state.selectedObjectTiming
+            if (ref != null && timing != null) {
                 TimingCycleButtons(
-                    sticker.timing,
-                    { viewModel.onSceneReduce { StoryComposerStickerReducer.startCycled(it, sticker.id) } },
-                    { viewModel.onSceneReduce { StoryComposerStickerReducer.durationCycled(it, sticker.id) } },
+                    timing,
+                    { viewModel.onSceneReduce { StoryComposerObjectTimeReducer.startCycled(it, ref) } },
+                    { viewModel.onSceneReduce { StoryComposerObjectTimeReducer.durationCycled(it, ref) } },
                 )
             }
         }

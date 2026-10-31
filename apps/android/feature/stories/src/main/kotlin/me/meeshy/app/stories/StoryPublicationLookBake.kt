@@ -52,7 +52,7 @@ internal object StoryPublicationLookBake {
             slide.copy(
                 mediaIds = slide.mediaIds.map(::moved),
                 backgroundMediaId = slide.backgroundMediaId?.let(::moved),
-                placedMedia = slide.placedMedia.map { it.copy(mediaId = moved(it.mediaId)) },
+                placedMedia = slide.placedMedia.map { it.copy(mediaId = moved(it.mediaId), id = if (it.id == it.mediaId) moved(it.id) else it.id) },
                 mediaLooks = emptyMap(),
             )
         }

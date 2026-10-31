@@ -107,6 +107,11 @@ internal object StoryComposerReferencesReducer {
     fun hashtagsRestored(state: StoryComposerUiState, before: List<String>): StoryComposerUiState =
         ComposerHashtags.togglesRestoring(state.hashtags, before).fold(state, ::hashtagToggled)
 
+    /** Le Modifier d'une pastille (iOS `ComposerPlaceRepoint`) : elle désigne [place], à sa place, sa pose et sa fenêtre intactes, toujours sélectionnée. */
+    fun repointed(state: StoryComposerUiState, id: String, place: SharedPlace): StoryComposerUiState =
+        if (state.deck.selectedSlide.places.none { it.id == id }) state
+        else state.copy(deck = state.deck.updatePlace(id) { it.copy(place = place) })
+
     fun placePosed(state: StoryComposerUiState, place: SharedPlace, id: String): StoryComposerUiState {
         if (!state.deck.selectedCanAddPlace) return state
         val posed = state.deck.selectedSlide.places.size

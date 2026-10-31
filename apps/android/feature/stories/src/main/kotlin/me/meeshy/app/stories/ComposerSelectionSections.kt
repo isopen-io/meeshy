@@ -59,15 +59,15 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
                 onChoose = { item -> viewModel.onSceneReduce { StoryComposerLookReducer.chosen(it, mediaId, item) } },
             )
             ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT) -> MediaAltField(
-                alt = state.draft.mediaAlt[mediaId].orEmpty(),
-                onChange = { viewModel.onMediaAltChange(mediaId, it.take(MediaDescriptionLaw.MAX_LENGTH)) },
+                alt = state.draft.mediaAlt[state.deck.selectedSlide.mediaFileOf(mediaId)].orEmpty(),
+                onChange = { viewModel.onMediaAltChange(state.deck.selectedSlide.mediaFileOf(mediaId), it.take(MediaDescriptionLaw.MAX_LENGTH)) },
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.TRIM) -> PlacedTrimSection(state, mediaId, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.CROP) -> PlacedCropSection(state, mediaId, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.ADJUST) -> AdjustSection(state, mediaId, AdjustmentFamily.TONE, viewModel, comparison)
             ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) -> AdjustSection(state, mediaId, AdjustmentFamily.EFFECT, viewModel, comparison)
-            else -> if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) {
+            else -> if (state.deck.selectedSlide.placedMedia.any { it.id == mediaId }) {
                 FilterRow(
                     selected = state.placedFilterOf(mediaId),
                     intensity = 1f,
@@ -112,7 +112,8 @@ private fun AdjustSection(state: StoryComposerUiState, mediaId: String, family: 
 private fun PlacedTrimSection(state: StoryComposerUiState, mediaId: String, viewModel: StoryComposerViewModel) {
     val source = state.placedTrimSourceOf(mediaId) ?: return
     val bounds = state.placedTrimOf(mediaId) ?: return
-    val url = state.attachments.firstOrNull { it.id == mediaId }?.url.orEmpty().let { ComposerMediaAddress.of(it, viewModel.mediaBaseUrl) }
+    val file = state.deck.selectedSlide.mediaFileOf(mediaId)
+    val url = state.attachments.firstOrNull { it.id == file }?.url.orEmpty().let { ComposerMediaAddress.of(it, viewModel.mediaBaseUrl) }
     MediaTrimStrip(
         content = MediaTrimContent.VIDEO,
         sourceDuration = source,

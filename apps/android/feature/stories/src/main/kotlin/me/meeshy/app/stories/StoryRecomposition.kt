@@ -84,7 +84,7 @@ internal object StoryRecomposition {
         val slide = source.copy(
             mediaIds = source.mediaIds.map(::id),
             backgroundMediaId = source.backgroundMediaId?.let(::id),
-            placedMedia = source.placedMedia.map { it.copy(mediaId = id(it.mediaId)) },
+            placedMedia = source.placedMedia.map { it.copy(mediaId = id(it.mediaId), id = if (it.id == it.mediaId) id(it.id) else it.id) },
             audio = source.audio.map { track ->
                 renamed[track.postMediaId]?.let { fresh -> track.copy(postMediaId = fresh.id, mediaURL = fresh.url) } ?: track
             },

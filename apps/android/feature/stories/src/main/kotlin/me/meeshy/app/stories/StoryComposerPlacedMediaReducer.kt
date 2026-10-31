@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.composer.look.ComposerCropPreset
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.media.MediaTrimRule
+import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /**
  * Réducteurs purs des médias posés sur la scène (miroir du sticker) : poser au centre, déplacer, pivoter / agrandir,
@@ -35,6 +36,22 @@ internal object StoryComposerPlacedMediaReducer {
         return state.copy(deck = state.deck.updatePlacedMediaWhere({ s -> s.placedMedia.any { it.mediaId == mediaId } }) { list -> list.filterNot { it.mediaId == mediaId } })
     }
 
+    /**
+     * Retire l'OBJET posé [id], et lui seul : sa source ou sa copie (#13902), qui nomment le même fichier, restent posées,
+     * et le fichier reste attaché à la slide. Sa sélection tombe avec lui ; inerte s'il n'est pas posé.
+     */
+    fun objectRemoved(state: StoryComposerUiState, id: String): StoryComposerUiState {
+        if (state.deck.slides.none { s -> s.placedMedia.any { it.id == id } }) return state
+        return state.copy(
+            deck = state.deck.updatePlacedMediaWhere({ s -> s.placedMedia.any { it.id == id } }) { list -> list.filterNot { it.id == id } },
+            selectedMediaId = state.selectedMediaId?.takeIf { it != id },
+        )
+    }
+
+    /** Réécrit la fenêtre d'apparition de l'objet posé [id] (#13902) ; inerte s'il n'est pas posé. */
+    fun windowed(state: StoryComposerUiState, id: String, change: (StoryElementTiming) -> StoryElementTiming): StoryComposerUiState =
+        rewritten(state, id) { it.copy(timing = change(it.timing)) }
+
     fun moved(state: StoryComposerUiState, mediaId: String, dx: Float, dy: Float): StoryComposerUiState =
         rewritten(state, mediaId) { it.nudged(dx, dy) }
 
@@ -43,7 +60,7 @@ internal object StoryComposerPlacedMediaReducer {
 
     /** Règle le filtre propre de CE média posé, et de lui seul : la scène garde le sien ; inerte si le média n'est pas posé ou le filtre inchangé. */
     fun filtered(state: StoryComposerUiState, mediaId: String, filter: StoryFilter?): StoryComposerUiState {
-        if (state.deck.slides.none { s -> s.placedMedia.any { it.mediaId == mediaId && it.filter != filter } }) return state
+        if (state.deck.slides.none { s -> s.placedMedia.any { it.id == mediaId && it.filter != filter } }) return state
         return rewritten(state, mediaId) { it.copy(filter = filter) }
     }
 
@@ -64,7 +81,7 @@ internal object StoryComposerPlacedMediaReducer {
      * ou si la fenêtre ne change rien. Les autres médias, la scène et les sons ne bougent pas.
      */
     fun trimmed(state: StoryComposerUiState, mediaId: String, bounds: MediaTrimBounds): StoryComposerUiState {
-        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.mediaId == mediaId } } ?: return state
+        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.id == mediaId } } ?: return state
         val source = state.placedTrimSourceOf(mediaId) ?: return state
         val fields = MediaTrimRule.fields(MediaTrimRule.resolved(bounds.start, bounds.end, source), source)
         if (fields.start == current.sourceStart && fields.end == current.sourceEnd) return state
@@ -77,7 +94,7 @@ internal object StoryComposerPlacedMediaReducer {
      * posé ou si le cadre ne change rien.
      */
     fun cropped(state: StoryComposerUiState, mediaId: String, crop: StoryMediaCrop?): StoryComposerUiState {
-        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.mediaId == mediaId } } ?: return state
+        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.id == mediaId } } ?: return state
         val next = crop?.let { StoryMediaCrop.fromPayloadBounds(it.x, it.y, it.width, it.height) }
         if (next == current.crop) return state
         return rewritten(state, mediaId) { it.copy(crop = next) }
@@ -92,17 +109,17 @@ internal object StoryComposerPlacedMediaReducer {
     }
 
     private fun adjustments(state: StoryComposerUiState, mediaId: String, change: (ImageAdjustments) -> ImageAdjustments): StoryComposerUiState {
-        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.mediaId == mediaId } } ?: return state
+        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.id == mediaId } } ?: return state
         val next = change(current.adjustments ?: ImageAdjustments.NEUTRAL).takeUnless { it.isNeutral }
         if (next == current.adjustments) return state
         return rewritten(state, mediaId) { it.copy(adjustments = next) }
     }
 
     private fun rewritten(state: StoryComposerUiState, mediaId: String, change: (StoryPlacedMedia) -> StoryPlacedMedia): StoryComposerUiState {
-        if (state.deck.slides.none { s -> s.placedMedia.any { it.mediaId == mediaId } }) return state
+        if (state.deck.slides.none { s -> s.placedMedia.any { it.id == mediaId } }) return state
         return state.copy(
-            deck = state.deck.updatePlacedMediaWhere({ s -> s.placedMedia.any { it.mediaId == mediaId } }) { list ->
-                list.map { if (it.mediaId == mediaId) change(it).normalised() else it }
+            deck = state.deck.updatePlacedMediaWhere({ s -> s.placedMedia.any { it.id == mediaId } }) { list ->
+                list.map { if (it.id == mediaId) change(it).normalised() else it }
             },
         )
     }
