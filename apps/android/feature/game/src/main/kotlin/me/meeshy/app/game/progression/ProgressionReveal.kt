@@ -1,6 +1,9 @@
 package me.meeshy.app.game.progression
 
 import me.meeshy.sdk.model.game.GameRarityEntry
+import me.meeshy.sdk.model.game.engagement.AchievementEntry
+import me.meeshy.sdk.model.game.engagement.BadgeGuide
+import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
 import me.meeshy.sdk.model.game.engagement.BadgeMaterialKey
 import me.meeshy.sdk.model.game.engagement.EngagementAchievementKey
 import me.meeshy.sdk.model.game.engagement.EngagementAchievementProgress
@@ -73,6 +76,15 @@ sealed interface AchievementHero {
     private data class Candidate(val at: Long, val iso: String, val title: RevealTitle, val reveal: EngagementReveal)
 }
 
+/**
+ * Un palier de DÉFI se touche et s'ouvre en consultation, obtenu ou non : le doigt se pose sur la puce, la révélation
+ * dit sa date ou ce qu'il demande (iOS ouvre ses précisions depuis la même puce).
+ */
+object ChallengeRequest {
+    fun of(entry: AchievementEntry): ProgressionRevealRequest =
+        ProgressionRevealRequest(EngagementReveal.ComposedAchievement(entry.family, entry.tier), entry.reachedAt, entry.unlocked)
+}
+
 /** Une ligne de la liste des hauts faits : le succès nommé, sa rareté quand elle a le droit de se montrer, sa porte. */
 data class AchievementRow(val achievement: EngagementAchievementProgress, val rarity: GameRarityEntry?) {
     val request: ProgressionRevealRequest
@@ -100,6 +112,8 @@ data class BadgeShelfEntry(
     val nextThreshold: Int?,
     val stars: Int,
     val reachedAt: String?,
+    /** Ce que la loi partagée dit de la médaille, dont la SUITE de ses paliers (iOS `GameBadgeShelfEntry.guide`). */
+    val guide: BadgeGuide,
 ) {
     /** La part parcourue vers le palier suivant, de 0 à 1 ; 1 au sommet, 0 pour une empreinte. */
     val progress: Double
@@ -136,6 +150,7 @@ object BadgeShelf {
                 nextThreshold = scale.tiers.map { it.threshold }.filter { it > top.threshold }.minOrNull(),
                 stars = scale.reachedCount,
                 reachedAt = top.reachedAt,
+                guide = BadgeGuideResolver.resolve(axis),
             )
         }
         entries.takeIf { it.isNotEmpty() }?.let { BadgeShelfGroup(group.family, it) }

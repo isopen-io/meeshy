@@ -121,6 +121,9 @@ internal object RevealCopy {
     private fun sectionTitle(res: Resources, section: String): String =
         SECTIONS[section]?.let(res::getString) ?: section
 
+    /** Le titre d'une section de défis (« Parole », « Cercles ») ; une section inconnue garde sa clé plutôt que rien. */
+    fun sectionName(res: Resources, section: String): String = sectionTitle(res, section)
+
     /**
      * En allemand, un nom commun garde sa majuscule ; seul l'adjectif qui ouvre le groupe la perd après le numéral
      * (« 10 geknüpfte Freundschaften », « 100 Sprachnachrichten »). Les autres langues passent le nom en minuscule.

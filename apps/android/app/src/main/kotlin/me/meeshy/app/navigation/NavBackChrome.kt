@@ -160,6 +160,7 @@ internal object NavBackChrome {
         arrow("GameRoutes.PAGE", GameRoutes.PAGE, gameScaffold),
         arrow("GameRoutes.CONCEPT", GameRoutes.CONCEPT, gameScaffold),
         arrow("GameRoutes.SECTION", GameRoutes.SECTION, gameScaffold),
+        arrow("GameRoutes.RULES", GameRoutes.RULES, gameScaffold),
         // Liens.
         arrow("LinksRoutes.HUB", LinksRoutes.HUB, linksChrome),
         arrow("LinksRoutes.TRACKING", LinksRoutes.TRACKING, linksChrome),

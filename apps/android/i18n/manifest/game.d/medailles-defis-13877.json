@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "progression.section.badges",
+          "androidName": "progression_section_badges",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "achievement.header",
+          "androidName": "achievement_header",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.link.badges",
+          "androidName": "game_concept_link_badges",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.link.defis",
+          "androidName": "game_concept_link_defis",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.earned",
+          "androidName": "game_detail_earned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.upcoming_title",
+          "androidName": "game_badge_upcoming_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.guide_link",
+          "androidName": "game_badge_guide_link",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.complete",
+          "androidName": "game_badge_complete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.rung.upcoming",
+          "androidName": "game_badge_rung_upcoming",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.rung.a11y.next",
+          "androidName": "game_badge_rung_a11y_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.badge.rung.a11y.upcoming",
+          "androidName": "game_badge_rung_a11y_upcoming",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.next.badge",
+          "androidName": "progression_next_badge",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.scale.complete",
+          "androidName": "progression_scale_complete",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.page_title",
+          "androidName": "game_rules_page_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.badges.title",
+          "androidName": "game_rules_badges_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.badges.intro",
+          "androidName": "game_rules_badges_intro",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.badges.ladder",
+          "androidName": "game_rules_badges_ladder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.badges.ribbon",
+          "androidName": "game_rules_badges_ribbon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.badges.imprint",
+          "androidName": "game_rules_badges_imprint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.badges.families",
+          "androidName": "game_rules_badges_families",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.rules.badges.sheet",
+          "androidName": "game_rules_badges_sheet",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.audio_message.counts",
+          "androidName": "progression_axis_content_audio_message_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.text_message.counts",
+          "androidName": "progression_axis_content_text_message_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.post.counts",
+          "androidName": "progression_axis_content_post_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.story.counts",
+          "androidName": "progression_axis_content_story_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.content.reel.counts",
+          "androidName": "progression_axis_content_reel_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.comment.audio.counts",
+          "androidName": "progression_axis_comment_audio_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.comment.text.counts",
+          "androidName": "progression_axis_comment_text_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.conversation.private.counts",
+          "androidName": "progression_axis_conversation_private_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.conversation.public.counts",
+          "androidName": "progression_axis_conversation_public_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.conversation.community.counts",
+          "androidName": "progression_axis_conversation_community_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.conversation.group_created.counts",
+          "androidName": "progression_axis_conversation_group_created_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.sticker.counts",
+          "androidName": "progression_axis_tool_sticker_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.in_app_edit.counts",
+          "androidName": "progression_axis_tool_in_app_edit_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.direct_publish.counts",
+          "androidName": "progression_axis_tool_direct_publish_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.reaction.counts",
+          "androidName": "progression_axis_tool_reaction_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.attachment.counts",
+          "androidName": "progression_axis_tool_attachment_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.social.tracked_link.counts",
+          "androidName": "progression_axis_social_tracked_link_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.social.share.counts",
+          "androidName": "progression_axis_social_share_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.social.invite_joined.counts",
+          "androidName": "progression_axis_social_invite_joined_counts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.social.friendship.counts",
+          "androidName": "progression_axis_social_friendship_counts",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

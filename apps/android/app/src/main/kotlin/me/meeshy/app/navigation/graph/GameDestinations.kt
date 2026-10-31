@@ -23,6 +23,8 @@ import me.meeshy.app.game.pages.GameSettingsScreen
 import me.meeshy.app.game.pages.LeagueScreen
 import me.meeshy.app.game.pages.PrestigeScreen
 import me.meeshy.app.game.pages.SeasonScreen
+import me.meeshy.app.game.progression.GameRulesScreen
+import me.meeshy.app.game.progression.GameRulesSection
 import me.meeshy.app.game.pages.ShowcaseScreen
 import me.meeshy.app.game.progression.ProgressionConceptScreen
 import me.meeshy.app.game.progression.ProgressionScreen
@@ -45,6 +47,9 @@ object GameRoutes {
     const val SECTION_ARG = "section"
     const val SECTION = "progression/section/{$SECTION_ARG}"
 
+    const val RULES_ARG = "rules"
+    const val RULES = "progression/rules/{$RULES_ARG}"
+
     /** Le lien profond de la première page (iOS `RootView` : `progression`). */
     val PROGRESSION_DEEP_LINKS: List<String> = listOf("meeshy://$PROGRESSION")
 
@@ -55,6 +60,9 @@ object GameRoutes {
 
     /** Une section d'une fiche (iOS `Route.progressionSection`) : la page des hauts faits ; son parent est la fiche. */
     fun section(section: ProgressionSection): String = "$PROGRESSION/section/${section.wire}"
+
+    /** Le carnet des règles ouvert à une section (iOS `Route.progressionRules`) : « Comprendre les médailles ». */
+    fun rules(section: GameRulesSection): String = "$PROGRESSION/rules/${section.wire}"
 
     /** La route d'un écran du jeu ouvert par une entrée extérieure (notification) : [GameTarget]. */
     fun route(target: GameTarget): String = when (target) {
@@ -117,8 +125,25 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
             if (section == null) {
                 LaunchedEffect(Unit) { navController.popBackStack() }
             } else {
-                ProgressionSectionScreen(section = section, onBack = { navController.popBackStack() })
+                ProgressionSectionScreen(
+                    section = section,
+                    onBack = { navController.popBackStack() },
+                    onOpenBadgesGuide = { navController.openBadgesGuide() },
+                )
             }
+        }
+        builder.composable(
+            route = GameRoutes.RULES,
+            arguments = listOf(navArgument(GameRoutes.RULES_ARG) { type = NavType.StringType }),
+            enterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeIn(tween(PUSH_MILLIS)) },
+            exitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeOut(tween(FADE_MILLIS)) },
+            popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
+            popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
+        ) { entry ->
+            GameRulesScreen(
+                onBack = { navController.popBackStack() },
+                focused = GameRulesSection.fromWire(entry.arguments?.getString(GameRoutes.RULES_ARG)),
+            )
         }
         builder.composable(
             route = GameRoutes.CONCEPT,
@@ -138,8 +163,20 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
                     onOpenConcept = { navController.navigate(GameRoutes.concept(it)) },
                     onOpenPage = { navController.navigate(GameRoutes.page(it)) },
                     onOpenSection = { navController.navigate(GameRoutes.section(it)) },
+                    onOpenBadgesGuide = { navController.openBadgesGuide() },
                 )
             }
+        }
+    }
+
+    /**
+     * « Comprendre les médailles » (iOS `GameNavigationMap.badgesGuide`) : le carnet est une porte de la PREMIÈRE page —
+     * son retour y ramène, quelle que soit la fiche ou la section d'où l'on vient.
+     */
+    private fun NavHostController.openBadgesGuide() {
+        navigate(GameRoutes.rules(GameRulesSection.Badges)) {
+            popUpTo(GameRoutes.PROGRESSION)
+            launchSingleTop = true
         }
     }
 
