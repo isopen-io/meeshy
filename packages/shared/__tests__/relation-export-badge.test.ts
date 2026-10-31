@@ -23,4 +23,15 @@ describe('relationExportBadge — le logo de cercle de l’intro exportée', () 
     expect(relationExportBadge(' FRIEND ')).toBeNull();
     expect(relationExportBadge(' CLOSE ')).toBeNull();
   });
+
+  it('une clé héritée d’un objet n’est pas un niveau : rien n’est peint', () => {
+    for (const inherited of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(relationExportBadge(inherited)).toBeNull();
+    }
+  });
+
+  it('seuls Proche et Sang, au-dessus du seuil, ont un logo', () => {
+    const painted = fixture().vectors.filter((v) => relationExportBadge(v.input) !== null).map((v) => v.input);
+    expect(painted).toEqual([RELATION_EXPORT_BADGE_MIN_LEVEL, 'BLOOD']);
+  });
 });
