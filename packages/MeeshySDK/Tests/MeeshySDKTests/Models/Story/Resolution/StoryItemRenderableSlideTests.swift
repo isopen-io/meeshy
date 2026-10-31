@@ -298,4 +298,59 @@ struct StoryItemRenderableSlideTests {
         #expect(slide.effects.audioPlayerObjects?.first?.mediaURL
                 == "https://cdn.example.com/persisted.m4a")
     }
+
+    // MARK: - Hydratation de l'URL des objets média (#13972)
+
+    /// L'exporteur (« Enregistrer », « Partager », « Imager ») ne reçoit qu'un
+    /// slide : il rapatrie chaque `StoryMediaObject.mediaURL` avant de composer.
+    /// Un objet publié ne porte que son `postMediaId` ; sans l'URL de son
+    /// `FeedMedia`, la photo comme la vidéo — posées ou en fond — sortaient
+    /// noires (fixture staging `6a9d051cdf14f4a6e6d5d1fb`).
+    @Test func toRenderableSlide_hydratesPosedAndBackgroundMediaURLs_fromFeedMedia() throws {
+        let fond = StoryMediaObject(id: "bg", postMediaId: "pm-bg", kind: .video,
+                                    aspectRatio: 0.5625, isBackground: true)
+        let posee = StoryMediaObject(id: "fg", postMediaId: "pm-fg", kind: .image, aspectRatio: 1.0)
+        var effects = StoryEffects()
+        effects.mediaObjects = [fond, posee]
+        let media = [
+            FeedMedia(id: "pm-bg", type: .video, url: "https://cdn.example.com/fond.mp4",
+                      thumbnailColor: "000000"),
+            FeedMedia(id: "pm-fg", type: .image, url: "https://cdn.example.com/photo.jpg",
+                      thumbnailColor: "000000"),
+        ]
+        let item = StoryItem(id: "post-1", content: nil, media: media,
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        let objets = try #require(slide.effects.mediaObjects)
+        #expect(objets.first { $0.id == "bg" }?.mediaURL == "https://cdn.example.com/fond.mp4")
+        #expect(objets.first { $0.id == "fg" }?.mediaURL == "https://cdn.example.com/photo.jpg")
+        #expect(slide.mediaURL == nil)
+    }
+
+    /// Une URL déjà portée par l'objet gagne, comme pour les pistes audio ; un
+    /// `FeedMedia` sans adresse ne pose rien.
+    @Test func toRenderableSlide_keepsPersistedMediaURL_andIgnoresAnEmptyCarrier() throws {
+        var persistee = StoryMediaObject(id: "a", postMediaId: "pm-a", kind: .image, aspectRatio: 1.0)
+        persistee.mediaURL = "https://cdn.example.com/persisted.jpg"
+        let sansAdresse = StoryMediaObject(id: "b", postMediaId: "pm-b", kind: .image, aspectRatio: 1.0)
+        var effects = StoryEffects()
+        effects.mediaObjects = [persistee, sansAdresse]
+        let media = [
+            FeedMedia(id: "pm-a", type: .image, url: "https://cdn.example.com/other.jpg",
+                      thumbnailColor: "000000"),
+            FeedMedia(id: "pm-b", type: .image, url: "", thumbnailColor: "000000"),
+        ]
+        let item = StoryItem(id: "post-1", content: nil, media: media,
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        let objets = try #require(slide.effects.mediaObjects)
+        #expect(objets.first { $0.id == "a" }?.mediaURL == "https://cdn.example.com/persisted.jpg")
+        #expect(objets.first { $0.id == "b" }?.mediaURL == nil)
+    }
 }
