@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -19,9 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +43,9 @@ import me.meeshy.ui.theme.hexColor
 internal fun StoryExportPainter(request: StoryExportPaintRequest, onPainted: (List<File>?) -> Unit) {
     val density = LocalDensity.current
     val layer = rememberGraphicsLayer()
+    val recording = remember { StoryExportLayerRecording() }
+    var passes by remember { mutableIntStateOf(0) }
+    val view = LocalView.current
     val progress = remember(request) { Animatable(0f) }
     var imageReady by remember(request) { mutableStateOf(!request.withBackground || request.slide.imageUrl == null) }
     val durationMs = request.durationMillis.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
@@ -55,7 +60,9 @@ internal fun StoryExportPainter(request: StoryExportPaintRequest, onPainted: (Li
         onImageResolved = { imageReady = true },
         modifier = Modifier
             .requiredSize(width, height)
-            .drawWithContent { layer.record { this@drawWithContent.drawContent() } },
+            .drawWithContent {
+                if (passes >= 0) recording.pass { layer.record { recording.record { this@drawWithContent.drawContent() } } }
+            },
     )
     LaunchedEffect(request) {
         val files = try {
@@ -64,7 +71,15 @@ internal fun StoryExportPainter(request: StoryExportPaintRequest, onPainted: (Li
             request.frames.mapIndexed { index, frame ->
                 progress.snapTo((frame.startMillis.toFloat() / durationMs).coerceIn(0f, 1f))
                 repeat(SETTLE_FRAMES) { withFrameNanos { } }
-                writeLayer(layer, request, File(request.directory, if (request.still) STILL_LAYER_NAME else "calque-$index.png"))
+                val captured = recording.capture(
+                    capture = { layer.toImageBitmap() },
+                    redraw = {
+                        SceneExportLog.info("calque rejoué hors de son passage de dessin (fenêtre attachée : ${view.isAttachedToWindow}), repeint")
+                        passes++
+                        repeat(SETTLE_FRAMES) { withFrameNanos { } }
+                    },
+                )
+                writeLayer(captured, request, File(request.directory, if (request.still) STILL_LAYER_NAME else "calque-$index.png"))
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -76,8 +91,8 @@ internal fun StoryExportPainter(request: StoryExportPaintRequest, onPainted: (Li
     }
 }
 
-private suspend fun writeLayer(layer: GraphicsLayer, request: StoryExportPaintRequest, target: File): File {
-    val captured = layer.toImageBitmap().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
+private suspend fun writeLayer(image: ImageBitmap, request: StoryExportPaintRequest, target: File): File {
+    val captured = image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
     return withContext(Dispatchers.IO) {
         val sized = if (captured.width == request.format.width && captured.height == request.format.height) captured
         else Bitmap.createScaledBitmap(captured, request.format.width, request.format.height, true)

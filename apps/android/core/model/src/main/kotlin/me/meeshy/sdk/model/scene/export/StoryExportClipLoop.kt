@@ -19,6 +19,9 @@ public data class StoryExportSoundSegment(val clipStartMillis: Long, val clipEnd
 public object StoryExportClipLoop {
     public const val MAX_SEGMENTS: Int = 512
 
+    /** Le plus court tour qu'une vidéo lit : en deçà, aucune image ne le remplit et le moteur n'a rien à rendre (#13897). */
+    public const val MIN_VIDEO_LAP_MILLIS: Long = 100L
+
     public fun ranges(lengthMillis: Long, trimStartMillis: Long, trimEndMillis: Long?, clipDurationMillis: Long, loop: Boolean): List<StoryExportClipRange> {
         if (clipDurationMillis <= 0L || lengthMillis <= 0L) return emptyList()
         val start = trimStartMillis.coerceIn(0L, clipDurationMillis)
@@ -34,6 +37,21 @@ public object StoryExportClipLoop {
             remaining -= taken
         }
         return laps
+    }
+
+    /**
+     * Les tours d'une VIDÉO ([ranges]) dont le dernier tient au moins [MIN_VIDEO_LAP_MILLIS] : un dernier tour trop court
+     * emprunte au tour d'avant, qui finit d'autant plus tôt ; la durée totale ne bouge pas (#13897, recette S8).
+     */
+    public fun videoLaps(lengthMillis: Long, trimStartMillis: Long, trimEndMillis: Long?, clipDurationMillis: Long, loop: Boolean): List<StoryExportClipRange> {
+        val laps = ranges(lengthMillis, trimStartMillis, trimEndMillis, clipDurationMillis, loop)
+        val last = laps.lastOrNull() ?: return laps
+        val before = laps.getOrNull(laps.size - 2) ?: return laps
+        val borrowed = MIN_VIDEO_LAP_MILLIS - last.durationMillis
+        if (borrowed <= 0L || before.durationMillis - borrowed < MIN_VIDEO_LAP_MILLIS) return laps
+        return laps.dropLast(2) +
+            StoryExportClipRange(before.startMillis, before.endMillis - borrowed) +
+            StoryExportClipRange(last.startMillis, last.startMillis + MIN_VIDEO_LAP_MILLIS)
     }
 
     /**

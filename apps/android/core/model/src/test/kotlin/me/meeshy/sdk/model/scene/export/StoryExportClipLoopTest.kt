@@ -58,4 +58,20 @@ class StoryExportClipLoopTest {
         assertThat(StoryExportVolumeCurve.gainAt(curve, 0.5f, 3_000)).isWithin(1e-4f).of(1f)
         assertThat(StoryExportVolumeCurve.gainAt(emptyList(), 0.5f, 3_000)).isWithin(1e-4f).of(0.5f)
     }
+
+    /**
+     * #13897 — recette S8 : une diapo de 65 744 ms sur un fond vidéo de 8 217 ms finissait sur un tour de 8 ms, qu'aucune
+     * image ne remplit ; Media3 s'arrêtait sur « The asset loader has no track to output ». Le dernier tour d'une vidéo tient
+     * au moins [StoryExportClipLoop.MIN_VIDEO_LAP_MILLIS] : il emprunte au tour d'avant, la durée totale ne bouge pas.
+     */
+    @Test fun `le dernier tour d une video de fond n est jamais plus court qu une image`() {
+        val laps = StoryExportClipLoop.videoLaps(65_744, 0, null, 8_217, loop = true)
+        assertThat(laps.sumOf { it.durationMillis }).isEqualTo(65_744)
+        assertThat(laps.last().durationMillis).isEqualTo(StoryExportClipLoop.MIN_VIDEO_LAP_MILLIS)
+        assertThat(laps.dropLast(2).all { it == StoryExportClipRange(0, 8_217) }).isTrue()
+        assertThat(laps.all { it.durationMillis >= StoryExportClipLoop.MIN_VIDEO_LAP_MILLIS }).isTrue()
+        assertThat(StoryExportClipLoop.videoLaps(9_000, 1_000, 4_000, 8_217, loop = true))
+            .isEqualTo(StoryExportClipLoop.ranges(9_000, 1_000, 4_000, 8_217, loop = true))
+        assertThat(StoryExportClipLoop.videoLaps(20, 0, null, 8_217, loop = true)).containsExactly(StoryExportClipRange(0, 20))
+    }
 }

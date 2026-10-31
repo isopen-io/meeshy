@@ -50,7 +50,7 @@ struct ComposerBackgroundModifySheet: View {
     private var content: some View {
         if let kind = path.adjustment {
             ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: mediaId, onCompare: onCompare, only: kind)
-        } else if false {
+        } else if path.volume {
             ComposerMediaVolumeDial(viewModel: viewModel, mediaId: mediaId)
         } else {
             entryContent
