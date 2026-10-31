@@ -545,7 +545,7 @@ extension StoryComposerViewModel {
 
     /// Volume d'une piste VIDÉO, 0 à `StoryVolume.maxGain` (#13974) ; 0 vaut Muet.
     public func setMediaVolume(id: String, volume: Float) {
-        editMedia(id: id, videoOnly: true) { $0.setVolumePreservingMuteMemento(volume) }
+        editMedia(id: id, videoOnly: true) { $0.setVolumePreservingMuteMemento(min(StoryVolume.maxGain, volume)) }
     }
 
     private func editMedia(id: String, videoOnly: Bool = false, _ edit: (inout StoryMediaObject) -> Void) {

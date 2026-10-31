@@ -28,20 +28,41 @@ import java.io.File
  * voit ses images à l'heure de la séquence (`FrameInfo.offsetToAddUs`), l'horloge commune des calques ; et la MÊME liste
  * d'effets sur chaque item garde la chaîne GL configurée une fois (`DefaultVideoFrameProcessor` ne la refait que si les
  * effets changent), d'une image à une vidéo comme d'une slide à l'autre.
+ *
+ * **Une vidéo posée est un calque de cette même liste** (#13897), à sa place dans la pile : Media3 1.4.1 ne compose pas
+ * plusieurs séquences vidéo sous Transformer sans le graphe expérimental à plusieurs entrées, alors qu'un calque daté passe
+ * par la chaîne que le S8 rend déjà — il lit l'image de la source à l'instant que l'horloge de la vidéo désigne.
  */
 internal object Media3SceneComposition {
 
-    fun of(job: SceneExportJob, planned: SceneComposition = SceneCompositionPlanner.of(job)): Composition {
-        val frame = frameEffects(job.format, overlaysOf(job, planned))
+    fun of(
+        job: SceneExportJob,
+        planned: SceneComposition = SceneCompositionPlanner.of(job),
+        frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = { RetrieverVideoFrames(it.file) },
+    ): Composition {
+        val frame = frameEffects(job.format, overlaysOf(job, planned, frames))
         val video = EditedMediaItemSequence(planned.video.map { videoItem(it, job.format, frame) })
         val sounds = planned.audio.map { sequence -> EditedMediaItemSequence(sequence.map(::audioItem)) }
         return Composition.Builder(listOf(video) + sounds).build()
     }
 
-    /** Les calques de la vidéo, du plus bas au plus haut : les objets à leur instant, puis les cartes de marque qui se fondent. */
-    fun overlaysOf(job: SceneExportJob, planned: SceneComposition): List<TextureOverlay> =
-        listOfNotNull<TextureOverlay>(job.overlays.takeIf { it.isNotEmpty() }?.let { TimedBitmapOverlay(it) }) +
-            planned.brandLayers.map { BrandCardOverlay(it.file, it.alphaAt) }
+    /**
+     * Les calques de la vidéo, du plus bas au plus haut : à chaque profondeur, les objets à leur instant puis les vidéos
+     * posées au-dessus d'eux ; enfin les cartes de marque qui se fondent.
+     */
+    fun overlaysOf(
+        job: SceneExportJob,
+        planned: SceneComposition,
+        frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = { RetrieverVideoFrames(it.file) },
+    ): List<TextureOverlay> {
+        val deepest = (job.overlays.map { it.depth } + job.placedVideos.map { it.depth }).maxOrNull() ?: 0
+        val stack = (0..deepest).flatMap { depth ->
+            val layers = job.overlays.filter { it.depth == depth }
+            listOfNotNull<TextureOverlay>(layers.takeIf { it.isNotEmpty() }?.let { TimedBitmapOverlay(it, gaps = depth > 0) }) +
+                job.placedVideos.filter { it.depth == depth }.map { PlacedVideoOverlay(it, job.format, frames) }
+        }
+        return stack + planned.brandLayers.map { BrandCardOverlay(it.file, it.alphaAt) }
+    }
 
     /** Le cadrage au format, puis les calques : UNE instance partagée par tous les items. */
     private fun frameEffects(format: StoryExportVideoFormat, overlays: List<TextureOverlay>): Effects {

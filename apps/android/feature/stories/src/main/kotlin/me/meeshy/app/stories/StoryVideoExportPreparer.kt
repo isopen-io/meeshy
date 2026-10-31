@@ -80,12 +80,22 @@ class StoryVideoExportPreparer(
         val plan = whole.cut(length(mode, whole.totalMillis))
         val branding = identity?.let { brand?.assemble(it, format, work) }
         val delay = branding?.plan?.storyStartMillis ?: 0L
-        val still = plan.still && scenes.all { it.subject.backgroundVideo == null } && branding == null
+        val still = plan.still && scenes.all { it.subject.backgroundVideo == null && StoryExportPlacedVideos.videosOf(it.slide).isEmpty() } && branding == null
         val rendered = plan.slides.map { placed -> placed to scenes[placed.index] }
         val overlays = rendered.flatMap { (placed, scene) ->
             val backgroundFile = scene.subject.backgroundVideo?.let { files[it] }
             paintedOverlays(scene, placed.index, placed.durationMillis, backgroundFile == null, still, File(work, "scene-${placed.index}").apply { mkdirs() })
                 .map { it.shifted(placed.startMillis + delay) }
+        }
+        val placedVideos = rendered.flatMap { (placed, scene) ->
+            StoryExportPlacedVideos.videosOf(scene.slide).mapIndexedNotNull { depth, view ->
+                val src = scene.subject.source.soundSources[view.id]
+                val file = src?.let(files::get) ?: return@mapIndexedNotNull null.also {
+                    warn("vidéo posée sans adresse, rendue sans elle (${view.id}, scène ${placed.index})", IllegalStateException("adresse absente"))
+                }
+                val clip = durations[src] ?: error("la vidéo posée ${view.id} de la scène ${placed.index} n'a pas de durée lisible")
+                StoryExportPlacedVideos.placed(view, depth, file, clip, placed.startMillis + delay, placed.durationMillis, format)
+            }
         }
         val sounds = plan.sounds.map { it.src }.distinct()
             .mapNotNull { src -> files[src]?.let { src to SceneExportSoundFile(it, durations[src]) } }
@@ -101,6 +111,7 @@ class StoryVideoExportPreparer(
             output = output,
             still = overlays.singleOrNull()?.file?.takeIf { still },
             branding = branding,
+            placedVideos = placedVideos,
         )
     }
 
@@ -120,16 +131,19 @@ class StoryVideoExportPreparer(
     ): List<SceneExportOverlay.Stored> {
         val effects = scene.subject.source.effects
         val frames = StoryExportOverlayFrames.of(effects, duration)
-        val layers = paint(StoryExportPaintRequest(scene.slide, effects, duration, frames, withBackground, directory, format, still))
-            ?.takeIf { it.size == frames.size }
-            ?: error("les calques de la scène $index ne se sont pas peints (${frames.size} attendus)")
-        return frames.zip(layers) { frame, file -> SceneExportOverlay.Stored(frame.startMillis, frame.endMillis, file) }
+        return StoryExportPlacedVideos.bands(scene.slide, withBackground).flatMap { band ->
+            val target = if (band.depth == 0) directory else File(directory, "etage-${band.depth}").apply { mkdirs() }
+            val layers = paint(StoryExportPaintRequest(band.slide, effects, duration, frames, band.withBackground, target, format, still))
+                ?.takeIf { it.size == frames.size }
+                ?: error("les calques de la scène $index ne se sont pas peints (${frames.size} attendus)")
+            frames.zip(layers) { frame, file -> SceneExportOverlay.Stored(frame.startMillis, frame.endMillis, file, band.depth) }
+        }
     }
 
-    private fun SceneExportOverlay.Stored.shifted(by: Long) = SceneExportOverlay.Stored(startMillis + by, endMillis + by, file)
+    private fun SceneExportOverlay.Stored.shifted(by: Long) = SceneExportOverlay.Stored(startMillis + by, endMillis + by, file, depth)
 
     private suspend fun download(subjects: List<StoryExportSubject>, work: File): Map<String, File> {
-        val required = subjects.mapNotNull { it.backgroundVideo }.toSet()
+        val required = subjects.flatMap { listOfNotNull(it.backgroundVideo) + it.placedVideos }.toSet()
         return subjects.flatMap { it.downloads }.distinct().withIndex().mapNotNull { (index, url) ->
             val target = File(work, "source-$index.media")
             try {
@@ -155,7 +169,7 @@ class StoryVideoExportPreparer(
         if (file == null) return SceneExportSlideFill.Picture(File(work, "fond-$index.png").also(blankPicture))
         val clip = durations[subject.backgroundVideo] ?: error("la vidéo de fond de la scène $index n'a pas de durée lisible")
         val window = subject.backgroundWindow
-        val laps = StoryExportClipLoop.ranges(duration, window?.startMs ?: 0L, window?.endMs, clip, loop = subject.backgroundLoop)
+        val laps = StoryExportClipLoop.videoLaps(duration, window?.startMs ?: 0L, window?.endMs, clip, loop = subject.backgroundLoop)
         val rest = duration - laps.sumOf { it.durationMillis }
         if (rest <= 0L) return SceneExportSlideFill.Video(file, laps)
         val held = File(work, "fin-$index.png")

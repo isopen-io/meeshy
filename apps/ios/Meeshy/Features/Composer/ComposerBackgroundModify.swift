@@ -85,8 +85,7 @@ nonisolated enum ComposerBackgroundModify {
             case .setAsBackground:        return background == .set
             case .replaceBackground:      return background == .replace
             case .makeSticker:            return makesSticker
-            case .sound: return false
-            case .crop, .trim, .filters, .frames, .adjust, .effects, .rotate, .description: return true
+            case .crop, .trim, .filters, .frames, .adjust, .effects, .sound, .rotate, .description: return true
             }
         })
         return served(in: .mediaPlacedEdit, wired: cables, isVideo: isVideo,
