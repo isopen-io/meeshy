@@ -486,6 +486,7 @@
     <string name="game_fiche_heritage_opens_escarcelle">يُفتح الجراب عند ⁦%1$s⁩</string>
     <string name="game_fiche_heritage_opens_reserve">يُفتح الاحتياطي عند ⁦%1$s⁩</string>
     <string name="game_fiche_heritage_opens_tresor">يُفتح الكنز عند ⁦%1$s⁩</string>
+    <string name="game_fiche_light_label">نورك</string>
     <string name="game_fiche_light_to_heritage">افتح إرثك</string>
     <string name="game_fiche_mint_mee_gold">هذه ستكون ذهبية: سيراها أجدادك.</string>
     <string name="game_fiche_mint_mee_next_gold">Meesh رقم ⁦%1$s⁩ ستكون ذهبية.</string>
@@ -749,7 +750,9 @@
         <item quantity="many">%1$d شرارةً</item>
         <item quantity="other">%1$d شرارة</item>
     </plurals>
+    <string name="game_sparks_cumul_record">⁦%1$s⁩ في هذا العصر · ⁦%2$s⁩ في المجموع</string>
     <string name="game_sparks_debt">ظلّ على ⁦%1$s⁩ شرارة</string>
+    <string name="game_sparks_record_line">%1$s تلقّيتها منذ البداية</string>
     <string name="game_spend_missing_freeze">ينقصك %1$s لأخذ قنديل.</string>
     <string name="game_spend_missing_relight">ينقص %1$s لإعادة إشعال لهبك.</string>
     <string name="game_spend_missing_reroll">ينقصك %1$s لتبديل هذا الفصل.</string>

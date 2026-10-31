@@ -486,6 +486,7 @@
     <string name="game_fiche_heritage_opens_escarcelle">l’Escarcelle s’ouvre à %1$s</string>
     <string name="game_fiche_heritage_opens_reserve">la Réserve s’ouvre à %1$s</string>
     <string name="game_fiche_heritage_opens_tresor">le Trésor s’ouvre à %1$s</string>
+    <string name="game_fiche_light_label">Ta lumière</string>
     <string name="game_fiche_light_to_heritage">Ouvrir ton Héritage</string>
     <string name="game_fiche_mint_mee_gold">Celle-ci sera d’or : tes aïeux la verront.</string>
     <string name="game_fiche_mint_mee_next_gold">La n° %1$s sera d’or.</string>
@@ -743,7 +744,9 @@
         <item quantity="many">%1$d étincelles</item>
         <item quantity="other">%1$d étincelles</item>
     </plurals>
+    <string name="game_sparks_cumul_record">%1$s cet Âge · %2$s en tout</string>
     <string name="game_sparks_debt">Une ombre sur %1$s étincelles</string>
+    <string name="game_sparks_record_line">%1$s reçues depuis toujours</string>
     <string name="game_spend_missing_freeze">Il manque %1$s pour prendre une Veilleuse.</string>
     <string name="game_spend_missing_relight">Il manque %1$s pour rallumer ta Flamme.</string>
     <string name="game_spend_missing_reroll">Il manque %1$s pour changer cet acte.</string>

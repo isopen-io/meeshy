@@ -260,6 +260,8 @@ internal object GameStringIds {
         "game_flame_form_line" to R.string.game_flame_form_line,
         "game_level_cap_short" to R.string.game_level_cap_short,
         "game_sparks_debt" to R.string.game_sparks_debt,
+        "game_sparks_record_line" to R.string.game_sparks_record_line,
+        "game_sparks_cumul_record" to R.string.game_sparks_cumul_record,
     )
 
     private val plurals: Map<String, Int> = mapOf(

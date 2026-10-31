@@ -44,6 +44,7 @@ import me.meeshy.app.game.pages.rememberGameHidden
 import me.meeshy.sdk.model.game.pages.GamePage
 import me.meeshy.sdk.model.game.pages.GamePageLinks
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
+import me.meeshy.sdk.model.game.progression.GameSparksHead
 import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameBounceButton
@@ -93,7 +94,12 @@ fun ProgressionConceptScreen(
         }
         if (state.plan.showsSkeleton) ProgressionSkeleton()
         if (snapshot != null) {
-            if (card != null) ConceptHero(card, snapshot.game)
+            val sparksGame = snapshot.game?.takeIf { concept == ProgressionConcept.Points }
+            when {
+                // TA LUMIÈRE (iOS `GameSparksHeadView`) : la poche en grand, le « depuis toujours » en petit.
+                sparksGame != null -> GameSparksHeadView(GameSparksHead.of(sparksGame.level), sparksGame)
+                card != null -> ConceptHero(card, snapshot.game)
+            }
             FicheSection(stringResource(R.string.game_fiche_what)) {
                 Sentence(stringResource(ConceptCopy.what(concept)))
                 Sentence(stringResource(ConceptCopy.why(concept)), strong = true)

@@ -47,18 +47,20 @@ public data class ProgressionConceptCard(
 
 /** L'identité d'un fait rendu : le dédoublonnage compare des identités, jamais des chaînes. */
 public enum class ConceptFact {
-    Level, Tier, LevelNext, LevelTop, Score,
-    SparksPocket, SparksDebt,
-    MeeshHeld, TreasuryTier, TreasuryNext, MintPrice, MintMissing, CanMint,
-    Rank, Glory,
+    Level, Tier, LevelNext, LevelTop, LevelRecord, LevelProgress, LevelStep, Score,
+    SparksPocket, SparksLifetime, SparksDebt,
+    MeeshHeld, Minted, TreasuryTier, TreasuryNext, TreasuryLocked, MintNext, MintPrice, MintMissing, MintGlory,
+    MintNextSpecial, CanMint,
+    Rank, Glory, RankNext, GloryMissing,
     Streak, StreakRecord, FlameForm, Freezes, FlameState,
     MissionsDone, MissionsUnlockLevel, Chest, MissionExpiring, PrismDay,
-    League, LeaguePlace, LeagueFriendsDoor, LeagueUnlockLevel,
-    Season, SeasonWeek, SeasonSteps,
-    PrestigeStars, PrestigeDoor,
-    Factor, ElanFamilies,
+    League, LeaguePlace, WeekPoints, LeagueCloses, LeagueZone, LeagueMissing, LeagueFriends, LeagueFriendsDoor,
+    LeagueUnlockLevel,
+    Season, SeasonWeek, SeasonSteps, SeasonStars, SeasonNext, SeasonSeal,
+    PrestigeStars, PrestigeGlory, PrestigeDoor,
+    Factor, ElanFamilies, Tailwind, PrismHour,
     Trophies, ShowcaseVisibility,
-    AtlasStamps, AtlasLeft,
+    AtlasStamps, AtlasLeft, AtlasPending, AtlasVisibility,
     Earned, Left,
 }
 

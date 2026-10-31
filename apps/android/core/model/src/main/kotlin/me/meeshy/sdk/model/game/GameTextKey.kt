@@ -228,6 +228,8 @@ public enum class GameTextKey(public val androidName: String, public val form: G
     FlameFormLine("game_flame_form_line", GameTextForm.Plain),
     LevelCapShort("game_level_cap_short", GameTextForm.Plain),
     SparksDebt("game_sparks_debt", GameTextForm.Plain),
+    SparksRecordLine("game_sparks_record_line", GameTextForm.Plain),
+    SparksCumulRecord("game_sparks_cumul_record", GameTextForm.Plain),
     StreakRecord("game_streak_record", GameTextForm.Plural),
     JoinedBySpace("", GameTextForm.Join),
 }
