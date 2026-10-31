@@ -4,11 +4,13 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.auth.SavedAccountsStore
@@ -65,6 +67,11 @@ data class AuthUiState(
     val keepSignedIn: Boolean = true,
     /** iOS `AuthManager.offersKeepSignedIn` : un AUTRE compte garde déjà sa session — sinon la case ne se montre pas. */
     val offersKeepSignedIn: Boolean = false,
+    /**
+     * Réinstaller l'app garde la connexion (#14058) : le démarrage sans session relit la session sauvegardée hors
+     * de l'app et la renouvelle. Le rideau de démarrage tient pendant ce temps — l'écran de connexion ne clignote pas.
+     */
+    val isRestoringSession: Boolean = false,
 ) {
     /** Ce que la session qui s'ouvre garde : le premier compte de l'appareil l'est sans question (iOS `keepsNewSession`). */
     val keepsNewSession: Boolean get() = KeepSignedInPolicy.keepsNewSession(offersKeepSignedIn, keepSignedIn)
@@ -122,14 +129,20 @@ class AuthViewModel @Inject constructor(
             // "is this a debug build" flag would only ever agree with the existing
             // one, so this reuses rather than duplicates it.
             showEnvironmentSelector = config.enableLogging,
+            isRestoringSession = !authRepository.isAuthenticated,
         ),
     )
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
+
+    /** La restauration en vol : une connexion faite à la main la remplace, jamais l'inverse. */
+    private var restoration: Job? = null
 
     init {
         realtimeCoordinator.onAuthenticatedChanged(authRepository.isAuthenticated)
         if (authRepository.isAuthenticated) {
             viewModelScope.launch { authRepository.restoreSession() }
+        } else {
+            restoration = viewModelScope.launch { restoreBackedUpSession() }
         }
         viewModelScope.launch {
             savedAccountsStore.accounts.collect { accounts ->
@@ -138,6 +151,17 @@ class AuthViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun abandonRestoration() {
+        restoration?.cancel()
+        restoration = null
+        _state.update { it.copy(isRestoringSession = false) }
+    }
+
+    private suspend fun restoreBackedUpSession() {
+        withTimeoutOrNull(RESTORE_TIMEOUT_MILLIS) { authRepository.restoreBackedUpSession() }?.let(::sessionOpened)
+        _state.update { it.copy(isRestoringSession = false) }
     }
 
     private fun offersKeepSignedIn(accounts: List<SavedAccount>): Boolean =
@@ -235,6 +259,7 @@ class AuthViewModel @Inject constructor(
             _state.update { it.copy(errorRes = R.string.login_error_required) }
             return
         }
+        abandonRestoration()
         _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
         viewModelScope.launch {
             when (val result = authRepository.loginOutcome(current.username.trim(), current.password, rememberDevice = current.keepsNewSession)) {
@@ -253,6 +278,7 @@ class AuthViewModel @Inject constructor(
         val current = _state.value
         val challenge = current.twoFactorToken ?: return
         if (!current.canSubmitTwoFactor) return
+        abandonRestoration()
         _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
         viewModelScope.launch {
             when (val result = authRepository.completeLoginWith2FA(challenge, current.twoFactorCode.trim())) {
@@ -281,6 +307,7 @@ class AuthViewModel @Inject constructor(
         val current = _state.value
         val pending = current.pendingVerification ?: return
         if (!current.canSubmitVerification) return
+        abandonRestoration()
         _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
         viewModelScope.launch {
             val request = EmailVerificationRequest(
@@ -401,6 +428,7 @@ class AuthViewModel @Inject constructor(
      * sockets reveilles, compte memorise pour le picker, etat aligne.
      */
     fun onExternalSessionOpened() {
+        abandonRestoration()
         realtimeCoordinator.onAuthenticatedChanged(authRepository.isAuthenticated)
         _state.update { it.copy(isAuthenticated = authRepository.isAuthenticated, hasAccount = authRepository.hasAccountSession) }
     }
@@ -440,5 +468,8 @@ class AuthViewModel @Inject constructor(
     private companion object {
         /** Un code TOTP (6 chiffres) ou de secours (`XXXX-XXXX`). */
         const val MAX_CODE_INPUT = 9
+
+        /** Au-delà, la connexion se rend à la main : une sauvegarde hors ligne ne tient pas l'écran. */
+        const val RESTORE_TIMEOUT_MILLIS = 8_000L
     }
 }

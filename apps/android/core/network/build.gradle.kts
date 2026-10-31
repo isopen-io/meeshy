@@ -48,6 +48,8 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.socketio)
     implementation(libs.hilt.android)
+    // Réinstaller l'app garde la connexion (#14058) : la session d'un compte survit dans le Block Store.
+    implementation(libs.play.services.auth.blockstore)
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)

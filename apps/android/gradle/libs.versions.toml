@@ -1,4 +1,6 @@
 [versions]
+# Réinstaller l'app garde la connexion (#14058) : la session d'un compte dans le Block Store.
+playServicesAuthBlockstore = "16.4.0"
 agp = "8.13.0"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.25"
@@ -58,6 +60,7 @@ mlkitSelfieSegmentation = "16.0.0-beta6"
 mlkitFaceDetection = "17.1.0"
 
 [libraries]
+play-services-auth-blockstore = { module = "com.google.android.gms:play-services-auth-blockstore", version.ref = "playServicesAuthBlockstore" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "splashscreen" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
