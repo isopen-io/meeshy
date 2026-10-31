@@ -28,6 +28,7 @@ const prisma = () => ({
   },
   conversationMessageStats: { findUnique: jest.fn<any>(async () => null) },
   friendRequest: { findMany: jest.fn<any>(async () => []) },
+  userRelation: { findMany: jest.fn<any>(async () => []) },
   user: { findMany: jest.fn<any>(async () => []) },
   userPreferences: { findMany: jest.fn<any>(async () => []) },
   userPreference: { findMany: jest.fn<any>(async () => []) },
