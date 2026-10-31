@@ -1,5 +1,6 @@
 import { currentDeviceLocale } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
+import { relationLevelProvider } from '@/lib/api/relation-level';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -52,6 +53,7 @@ const browserRunner: SceneExportRunner = async (input) => {
     placeHere: translate(currentInterfaceLanguage(), 'scene.place.here'),
     host: browserFileDeliveryHost(),
     gallerySaver: currentGallerySaver(),
+    relationLevel: relationLevelProvider(apiDeps),
     chooseLength: input.job.chooseLength,
     awaitDeliveryTap: input.job.awaitDeliveryTap,
     signal: input.job.signal,

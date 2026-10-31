@@ -1,10 +1,10 @@
 /**
  * **LE PORT DU NIVEAU DE LIEN** (#13997) — d'où vient le niveau EFFECTIF du
- * lien exportateur ↔ auteur que le logo de cercle projette. Il viendra du
- * serveur (#13998, route de relation) ; tant que cette route n'est pas
- * livrée, le fournisseur par défaut ne sait rien (`null`) et le logo ne se
- * peint pas. Le rendu et le câblage jusqu'ici sont complets : un fournisseur
- * injecté suffit à voir le logo.
+ * lien exportateur ↔ auteur que le logo de cercle projette. Il vient du
+ * serveur (`GET /relations/:userId`, #13998) par `relationLevelProvider`
+ * (`lib/api/relation-level.ts`), que les hôtes du navigateur injectent ;
+ * `noRelationLevel` ne sait rien (`null`) et ne peint aucun logo — c'est le
+ * défaut d'un hôte qui n'injecte rien.
  *
  * La résolution est BORNÉE comme le reste du préambule : l'export n'attend
  * jamais le réseau au-delà de `budgetMs`, il part sans logo.
