@@ -76,6 +76,34 @@ public final class StoryAudioChipLayer: CALayer {
         repaint(elapsed: elapsed)
     }
 
+    /// Suit le son pendant un geste du canvas (#13864) : place, taille et
+    /// rotation lues dans le modèle, la capsule n'étant repeinte que si sa
+    /// taille change.
+    @MainActor
+    public func follow(_ son: StoryAudioPlayerObject) {
+        let pose = StoryAudioChipPainter.placement(for: son, renderSize: renderSize, elapsed: 0)
+        audio = son
+        position = pose.center
+        transform = CATransform3DMakeRotation(StoryAudioChipPainter.radians(pose.rotation), 0, 0, 1)
+        guard bounds.size != pose.size else { return }
+        bounds = CGRect(origin: .zero, size: pose.size)
+        paintedFrame = nil
+        repaint(elapsed: 0)
+    }
+
+    /// **Le calque d'un geste du canvas** : s'il est une pastille, elle suit son
+    /// son et rend `true` — le geste n'a rien d'autre à poser (#13864).
+    @MainActor
+    public static func follows(_ layer: CALayer, in slide: StorySlide) -> Bool {
+        guard let pastille = layer as? StoryAudioChipLayer, let id = layer.name,
+              let son = slide.effects.audioPlayerObjects?.first(where: { $0.id == id }) else { return false }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        pastille.follow(son)
+        CATransaction.commit()
+        return true
+    }
+
     /// Dans la boucle de lecture du moteur : l'onde d'une pastille enfouie suit
     /// le temps, comme celle de la surcouche ; hors du cache, comme le fondu.
     @MainActor
