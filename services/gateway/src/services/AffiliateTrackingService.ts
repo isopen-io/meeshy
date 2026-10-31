@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { EngagementService } from './engagement/EngagementService.js';
+import { recordFriendship } from './relations/userRelationWriter.js';
 
 const logger = enhancedLogger.child({ module: 'AffiliateTrackingService' });
 
@@ -186,6 +187,15 @@ export class AffiliateTrackingService {
             }
           });
         }
+
+        // Le lien (#13926) : la demande acceptée d'une affiliation vaut FRIEND des
+        // deux côtés, par le MÊME écrivain que l'acceptation d'une demande.
+        await recordFriendship(prisma, {
+          userA: affiliateToken.createdBy,
+          userB: userId,
+          origin: 'request',
+          at: new Date(),
+        });
       } catch (friendRequestError) {
         logger.error(
           'Erreur synchronisation friend request affiliation',

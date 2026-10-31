@@ -44,4 +44,12 @@ describe('schéma — le lien entre deux personnes (#13926)', () => {
     expect(atom).toMatch(/@@unique\(\[atomId, electronId\]\)/);
     expect(atom).toMatch(/verifiedAt\s+DateTime\?/);
   });
+
+  it('a sa migration d’index idempotente, qui pose l’unique de paire et celui d’AtomLink', () => {
+    const migration = readFileSync(join(__dirname, '..', 'prisma', 'migrations', '2026-10-31-user-relation-indexes.mongodb.js'), 'utf8');
+    expect(migration).toMatch(/collection: 'UserRelation'[^}]*key: \{ userLowId: 1, userHighId: 1 \}, unique: true/);
+    expect(migration).toMatch(/collection: 'UserRelation'[^}]*key: \{ userHighId: 1 \}/);
+    expect(migration).toMatch(/collection: 'AtomLink'[^}]*key: \{ atomId: 1, electronId: 1 \}, unique: true/);
+    expect(migration).toMatch(/DRY_RUN/);
+  });
 });

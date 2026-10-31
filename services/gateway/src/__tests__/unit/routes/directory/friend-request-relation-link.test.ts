@@ -62,6 +62,7 @@ async function repondre(params: {
     retractFriendRequestNotifications: jest.fn<any>(async () => undefined),
     markFriendRequestNotificationsAsRead: jest.fn<any>(async () => undefined),
     createFriendAcceptedNotification: jest.fn<any>(async () => undefined),
+    emitFriendRequestAccepted: jest.fn(),
   };
   const prisma = {
     user: { findUnique: jest.fn<any>(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })) },
@@ -148,7 +149,10 @@ describe('#13926 — supprimer une demande ACCEPTÉE rompt le lien, en silence',
       action: 'dismiss', demandes: [demande(FR_ID, 'accepted')], liens: [lien('FRIEND', 'FRIEND')],
     });
 
-    expect(Object.keys(notificationService)).not.toContain('createRelationLoweredNotification');
-    expect(notificationService.createFriendAcceptedNotification).not.toHaveBeenCalled();
+    const appeles = Object.entries(notificationService)
+      .filter(([, fn]) => (fn as jest.Mock).mock.calls.length > 0)
+      .map(([nom]) => nom)
+      .sort();
+    expect(appeles).toEqual(['emitFriendRequestCancelled', 'retractFriendRequestNotifications']);
   });
 });

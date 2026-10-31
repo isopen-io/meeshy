@@ -131,7 +131,7 @@ describe('resetFriendship — la rupture ramène les deux accords à PUBLIC, en 
   it('abaisse les deux accords, date le niveau et garde la baisse dans l’historique', async () => {
     const store = relationStore({ relations: [relation({ grantedByLow: 'CLOSE', grantedByHigh: 'FRIEND' })] });
 
-    const outcome = await resetFriendship(store.prisma, { actorId: LOW, other: HIGH, at: LATER });
+    const outcome = await resetFriendship(store.prisma, { userA: LOW, userB: HIGH, at: LATER });
 
     expect(outcome).toBe('reset');
     const [row] = store.relations();
@@ -144,13 +144,13 @@ describe('resetFriendship — la rupture ramène les deux accords à PUBLIC, en 
 
   it('ne fait rien quand la paire n’a pas de ligne', async () => {
     const store = relationStore();
-    expect(await resetFriendship(store.prisma, { actorId: LOW, other: HIGH, at: LATER })).toBe('unchanged');
+    expect(await resetFriendship(store.prisma, { userA: LOW, userB: HIGH, at: LATER })).toBe('unchanged');
     expect(store.relations()).toEqual([]);
   });
 
   it('ne fait rien quand la paire est déjà à PUBLIC des deux côtés', async () => {
     const store = relationStore({ relations: [relation({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC', transitions: [] })] });
-    expect(await resetFriendship(store.prisma, { actorId: LOW, other: HIGH, at: LATER })).toBe('unchanged');
+    expect(await resetFriendship(store.prisma, { userA: LOW, userB: HIGH, at: LATER })).toBe('unchanged');
     expect(store.relations()[0].transitions).toEqual([]);
   });
 });

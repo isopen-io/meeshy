@@ -1,0 +1,83 @@
+/**
+ * LE LIEN ENTRE DEUX PERSONNES — l'échelle des niveaux (#13926, cercles de proximité).
+ *
+ * Chaque personne ACCORDE un niveau à l'autre ; le niveau EFFECTIF est le
+ * minimum des deux accords (RG-01 : aucun accès à sens unique). Ce module ne
+ * porte que l'échelle, son ordre et la clé de paire : la LOI d'accès (qui voit
+ * quoi à quel niveau) est `resolveRelationAccess`, un autre lot.
+ *
+ * `ATOM` (lien parent/tuteur vérifié) est RÉSERVÉ : il n'appartient pas à
+ * l'échelle accordable au MVP, et toute valeur stockée qu'on ne reconnaît pas
+ * se lit `PUBLIC` — jamais un niveau plus haut (fail-closed).
+ *
+ * Source de vérité TS ; les miroirs Swift (`MeeshySDK/.../Relations`) et Kotlin
+ * (`core/model/.../relation`) arrivent avec la loi d'accès.
+ */
+
+export const RELATION_LEVELS = ['PUBLIC', 'COMMUNITY', 'ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD'] as const;
+
+export type RelationLevel = (typeof RELATION_LEVELS)[number];
+
+export const RELATION_LEVEL_ATOM = 'ATOM' as const;
+
+const RANK: Readonly<Record<RelationLevel, number>> = {
+  PUBLIC: 0,
+  COMMUNITY: 1,
+  ACQUAINTANCE: 2,
+  FRIEND: 3,
+  CLOSE: 4,
+  BLOOD: 5,
+};
+
+const isRelationLevel = (value: unknown): value is RelationLevel =>
+  typeof value === 'string' && Object.prototype.hasOwnProperty.call(RANK, value);
+
+export const parseRelationLevel = (value: unknown): RelationLevel => (isRelationLevel(value) ? value : 'PUBLIC');
+
+export const compareRelationLevel = (a: RelationLevel, b: RelationLevel): number => RANK[a] - RANK[b];
+
+export const minRelationLevel = (a: RelationLevel, b: RelationLevel): RelationLevel =>
+  compareRelationLevel(a, b) <= 0 ? a : b;
+
+export const maxRelationLevel = (a: RelationLevel, b: RelationLevel): RelationLevel =>
+  compareRelationLevel(a, b) >= 0 ? a : b;
+
+export type RelationPairKey = { readonly userLowId: string; readonly userHighId: string };
+
+/**
+ * Une ligne par paire NON orientée. Les ObjectId font 24 caractères hexadécimaux
+ * minuscules : l'ordre lexicographique est donc l'ordre low/high.
+ */
+export function relationPairKey(a: string, b: string): RelationPairKey {
+  if (!a || !b || a === b) throw new Error('relationPairKey: deux identifiants distincts sont requis');
+  return a < b ? { userLowId: a, userHighId: b } : { userLowId: b, userHighId: a };
+}
+
+export type RelationSide = 'low' | 'high';
+
+export const relationSideOf = (pair: RelationPairKey, userId: string): RelationSide | null => {
+  if (userId === pair.userLowId) return 'low';
+  if (userId === pair.userHighId) return 'high';
+  return null;
+};
+
+export type RelationTransition = {
+  readonly actorId: string;
+  readonly from: RelationLevel;
+  readonly to: RelationLevel;
+  readonly at: Date;
+};
+
+export const isRelationDrop = (transition: Pick<RelationTransition, 'from' | 'to'>): boolean =>
+  compareRelationLevel(transition.to, transition.from) < 0;
+
+/**
+ * Ce qu'un client a le droit de lire de l'historique : les MONTÉES seulement.
+ * Une baisse, une sortie ou un refus sont silencieux (RG-07) ; un passage dont
+ * un niveau est illisible est écarté plutôt que servi.
+ */
+export const visibleRelationTransitions = (transitions: ReadonlyArray<RelationTransition>): RelationTransition[] =>
+  transitions
+    .filter((t) => isRelationLevel(t.from) && isRelationLevel(t.to) && !isRelationDrop(t))
+    .slice()
+    .sort((a, b) => a.at.getTime() - b.at.getTime());

@@ -18,6 +18,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { recordFriendship, resetFriendship } from '../../services/relations/userRelationWriter';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
@@ -335,12 +336,44 @@ export async function repondreDemande(
   return { valeur: await trancherDemande(fastify, request, demande, acteurId, action) };
 }
 
+/**
+ * Supprimer une demande ACCEPTÉE défait l'amitié (#13926) : `retirerDemande` ne
+ * garde pas le statut avant de supprimer. Le lien repasse à PUBLIC des deux
+ * côtés, en SILENCE (aucune notification de baisse), sauf si une AUTRE demande
+ * acceptée relie encore la paire — `FriendRequest` n'a pas d'unique de paire.
+ * Un échec ne fait jamais échouer la suppression, déjà committée : le
+ * rattrapage est rejouable et la loi d'accès lit la demande à défaut de ligne.
+ */
+async function rompreLien(
+  fastify: FastifyInstance,
+  demande: { senderId: string; receiverId: string }
+): Promise<void> {
+  try {
+    const restante = await fastify.prisma.friendRequest.findFirst({
+      where: {
+        status: 'accepted',
+        OR: [
+          { senderId: demande.senderId, receiverId: demande.receiverId },
+          { senderId: demande.receiverId, receiverId: demande.senderId },
+        ],
+      },
+      select: { id: true },
+    });
+    if (restante) return;
+    await resetFriendship(fastify.prisma, { userA: demande.senderId, userB: demande.receiverId, at: new Date() });
+  } catch (error) {
+    logError(fastify.log, 'Error resetting user relation after friendship removal:', error);
+  }
+}
+
 async function retirerDemande(
   fastify: FastifyInstance,
-  demande: { id: string; senderId: string; receiverId: string },
+  demande: { id: string; senderId: string; receiverId: string; status: string },
   acteurId: string
 ): Promise<Record<string, unknown>> {
   await fastify.prisma.friendRequest.delete({ where: { id: demande.id } });
+
+  if (demande.status === 'accepted') await rompreLien(fastify, demande);
 
   const notifications = fastify.notificationService;
   if (notifications) {
@@ -424,6 +457,19 @@ async function trancherDemande(
     // qu'on vient d'éconduire, exactement comme avant la demande.
     const [refusee] = await servirParties(fastify, request, [misAJour as unknown as Record<string, unknown>]);
     return refusee;
+  }
+
+  try {
+    await recordFriendship(fastify.prisma, {
+      userA: demande.senderId,
+      userB: demande.receiverId,
+      origin: 'request',
+      at: new Date(),
+    });
+  } catch (error) {
+    // La demande ACCEPTÉE reste la vérité de repli (#13926) : le lien se
+    // rattrape, l'acceptation, elle, est déjà committée.
+    logError(fastify.log, 'Error recording user relation after friend request acceptance:', error);
   }
 
   fastify.socialEvents?.invalidateFriendsCache(demande.senderId);
