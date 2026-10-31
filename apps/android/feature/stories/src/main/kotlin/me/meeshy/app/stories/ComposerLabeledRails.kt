@@ -2,7 +2,6 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -10,24 +9,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -43,7 +39,6 @@ import me.meeshy.sdk.model.composer.ComposerMoreEntry
 import me.meeshy.sdk.model.composer.ComposerSceneTool
 import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.sdk.model.composer.ComposerSelectionAction
-import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshyPalette
@@ -127,48 +122,48 @@ private fun LeadingRailTools(
 }
 
 /**
- * Le rail de la SÉLECTION (#13837) : son titre et les actions libellées de l'élément touché — la même liste que la barre
- * du petit écran (#13836), Retirer en couleur d'alerte — puis ↶ ↷ au pied. Sans sélection, le rail est vide ; l'historique
- * reste, seulement s'il existe (loi 4).
+ * Le rail droit (#13837) : ↶ ↷ au pied, seulement s'ils existent (loi 4) ; un objet de la scène comme le fond média
+ * portent leurs options dans le rail gauche, à la place des outils (#13956, #13973).
  */
 @Composable
 internal fun ColumnScope.StoryTrailingRail(
-    bar: SceneSelectionBar?,
     history: SceneHistory?,
-    onAction: (ComposerSelectionAction) -> Unit,
-    onOrder: (SceneObjectMenu.Action) -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
-    ) {
-        bar?.let {
-            Text(
-                text = stringResource(R.string.composer_rail_selection),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.xs).semantics { heading() },
-            )
-            it.actions.forEach { action ->
-                if (action == ComposerSelectionAction.ORDER) {
-                    RailOrderItem(it.orderChoices, onOrder)
-                } else {
-                    RailActionItem(action) { onAction(action) }
-                }
-            }
-        }
-    }
+    Spacer(Modifier.weight(1f))
     history?.let {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = it.canUndo)
             SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = it.canRedo)
         }
     }
+}
+
+/**
+ * Grand écran, un objet en édition (#13956) : le rail de ce qu'on ajoute cède sa place, au même endroit, au titre de la
+ * sélection et aux options de l'objet — Fermer et les outils reviennent à la désélection.
+ */
+@Composable
+internal fun StoryEditingRail(bar: SceneSelectionBar, onAction: (ComposerSelectionAction) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(RAIL_GAP),
+    ) { SelectionRailBlock(bar, onAction) }
+}
+
+@Composable
+private fun SelectionRailBlock(bar: SceneSelectionBar, onAction: (ComposerSelectionAction) -> Unit) {
+    Text(
+        text = stringResource(R.string.composer_rail_selection),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = Color.White.copy(alpha = 0.6f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.xs).semantics { heading() },
+    )
+    bar.actions.forEach { action -> RailActionItem(action) { onAction(action) } }
 }
 
 @Composable
@@ -179,26 +174,6 @@ private fun RailActionItem(action: ComposerSelectionAction, onClick: () -> Unit)
         onClick = onClick,
         tint = if (action.isDestructive) MeeshyPalette.ErrorSoft else Color.White,
     )
-}
-
-@Composable
-private fun RailOrderItem(choices: List<SceneObjectMenu.Action>, onOrder: (SceneObjectMenu.Action) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        RailActionItem(ComposerSelectionAction.ORDER) { open = true }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            choices.forEach { choice ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(choice.labelRes())) },
-                    leadingIcon = { Icon(choice.icon(), contentDescription = null) },
-                    onClick = {
-                        open = false
-                        onOrder(choice)
-                    },
-                )
-            }
-        }
-    }
 }
 
 /**

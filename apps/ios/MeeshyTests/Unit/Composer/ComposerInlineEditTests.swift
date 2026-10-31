@@ -52,13 +52,14 @@ final class ComposerInlineEditTests: XCTestCase {
     /// pose un look.
     func test_sections_image_recadrageFiltreReglagesEffetsActionsDescription_puisTempsEtPlan() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false),
-                       [.media(.crop), .media(.filter), .media(.adjust), .media(.effects), .media(.actions),
-                        .media(.altText), .timing, .plan])
+                       [.media(.crop), .media(.look), .media(.filter), .media(.adjust), .media(.effects),
+                        .media(.actions), .media(.altText), .timing, .plan])
     }
 
     func test_sections_video_reglagesRognageActionsDescription_sansFiltre_puisTempsEtPlan() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true),
-                       [.media(.adjust), .media(.trim), .media(.actions), .media(.altText), .timing, .plan],
+                       [.media(.look), .media(.adjust), .media(.trim), .media(.actions), .media(.altText),
+                        .timing, .plan],
                        "le filtre se cuit dans une image : une vidéo n'en rend aucun ; ses réglages, si (#9169)")
     }
 
@@ -163,9 +164,15 @@ final class ComposerInlineEditTests: XCTestCase {
 
     func test_begin_surLaScene_ouvreLaSectionDemandeeQuandElleEstServie() {
         XCTAssertEqual(
+            ComposerInlineEditing.begin(objectId: "vid", family: .video, onSceneSurface: true,
+                                        requested: .media(.adjust), hasTrimmableSource: false),
+            ComposerInlineEdit(objectId: "vid", family: .video, openSection: .media(.adjust)))
+        XCTAssertEqual(
             ComposerInlineEditing.begin(objectId: "img", family: .image, onSceneSurface: true,
                                         requested: .media(.filter), hasTrimmableSource: false),
-            ComposerInlineEdit(objectId: "img", family: .image, openSection: .media(.filter)))
+            ComposerInlineEdit(objectId: "img", family: .image, openSection: nil,
+                               modifyPath: ComposerBackgroundModifyPath(entry: .filters, adjustment: nil)),
+            "l'image posée ouvre l'entrée de N1 qui répond à la section (#13974, I-E3)")
     }
 
     func test_begin_sansSection_neMontreQueLesSousOutils() {
@@ -382,6 +389,16 @@ final class ComposerInlineEditTests: XCTestCase {
                                                            panelHeight: 400).maxHeight, pleine)
     }
 
+    /// **Le dessin a sa barre EN BAS** (#13839, état D de la maquette) : sans
+    /// objet à laisser voir, la couleur, l'épaisseur et le lissage s'ouvrent
+    /// au-dessus de la barre qui les a dépliés, jamais en haut de la scène.
+    func test_placement_sansObjet_coteDemandeBas_ouvreEnBasPleineHauteur() {
+        let pleine = ComposerInlinePanelLayout.maxHeight(freeHeight: 700)
+        XCTAssertEqual(ComposerInlinePanelLayout.placement(object: nil, free: libre402.size, panelHeight: 120,
+                                                           preferredEdge: .bottom),
+                       ComposerInlinePanelPlacement(edge: .bottom, maxHeight: pleine))
+    }
+
     /// **Chaque famille posée a un cadre** — le texte, le sticker et la puce de
     /// son aussi, pas seulement le média du #9495. Le fond n'en a pas : il
     /// couvre la carte entière.
@@ -553,13 +570,18 @@ final class ComposerInlineEditTests: XCTestCase {
                       "la plaque d'options ne doit pas renvoyer le clavier de la saisie en ligne")
     }
 
-    /// Le cadre que la plaque évite est celui du texte EN SAISIE quand c'est lui
-    /// qu'on règle.
-    func test_panneau_lisLeCadreDuTexteEnSaisie() throws {
+    /// **Les propriétés ne couvrent plus rien : elles vivent EN BAS** (#13957,
+    /// #13974). La plaque qui évitait l'objet en haut à droite (#9495) n'a plus
+    /// d'objet à éviter : la scène se réduit au-dessus de la feuille basse, qui
+    /// ne renvoie pas davantage le clavier de la saisie en ligne.
+    func test_panneau_seLogeEnBas_sansRenvoyerLeClavier() throws {
         let code = try source("Meeshy/Features/Composer/ComposerInlineToolPanel.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("typing:viewModel.textEditingMode.activeTextId==edit.objectId"),
-                      "le panneau doit lire le texte là où le canvas le montre pendant la frappe")
+        XCTAssertTrue(code.contains("ComposerPropertiesSheetPlate(plateauTint:plateauTint,holdsGesture:planHoldsGesture)"),
+                      "les propriétés d'un objet se posent dans la feuille basse")
+        let debut = try XCTUnwrap(code.range(of: "structComposerPropertiesSheetPlate<"))
+        let fin = try XCTUnwrap(code.range(of: "structComposerTrailingOptionsPlate<", range: debut.upperBound..<code.endIndex))
+        XCTAssertTrue(code[debut.upperBound..<fin.lowerBound].contains(".scrollDismissesKeyboard(.never)"))
     }
 
     // MARK: - La politique du chrome : l'édition en place met la scène en focus
@@ -583,30 +605,55 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(visibles, Set(ComposerToolFocus.Chrome.allCases).subtracting([.toolControls]))
     }
 
-    // MARK: - La colonne droite : sous-outils, actions, puis (x) — sans trou
+    // MARK: - Les feuilles Modifier et Temps : des puces LIBELLÉES (#13839, L5)
+    //
+    // Les sous-outils ont quitté la colonne droite, où ils étaient des glyphes
+    // sans libellé terminés par un ✕ collé à la corbeille. Ils sont des puces
+    // nommées en tête du panneau, et la frise du temps a sa propre feuille.
 
-    func test_trailingColumn_editionEnPlace_sousOutilsOuvertMarquePuisSortie() {
+    func test_chips_modifierUnFond_sesReglagesSansLeTemps() {
         let sections = ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false)
-        let focus = ComposerTrailingColumn.focus(
-            railMode: .doors([]),
-            selection: (sections: sections, open: .media(.actions), actions: []))
-        XCTAssertEqual(focus, .object(sections: sections, open: .media(.actions), actions: []))
-        XCTAssertEqual(ComposerTrailingColumn.options(for: focus), [
-            .editorSection(.media(.filter), isOpen: false),
-            .editorSection(.media(.adjust), isOpen: false),
-            .editorSection(.media(.effects), isOpen: false),
-            .editorSection(.media(.actions), isOpen: true),
-            .editorSection(.media(.altText), isOpen: false),
-            .exitObject,
-        ])
-        XCTAssertEqual(ComposerTrailingColumn.foot(for: focus, timeServed: true), [.undo, .redo],
-                       "annuler et rétablir restent pendant l'édition")
+        XCTAssertEqual(ComposerInlineEditing.chips(.modify, family: .background(isVideo: false), served: sections),
+                       [.media(.look), .media(.filter), .media(.adjust), .media(.effects),
+                        .media(.actions), .media(.altText)])
     }
 
-    func test_trailingColumn_editionEnPlace_lePiedSuitLesSousOutils_sansTrou() {
-        let focus = ComposerTrailingColumn.Focus.object(sections: [.media(.filter)], open: nil, actions: [])
-        XCTAssertTrue(ComposerTrailingColumn.footFollowsOptions(for: focus),
-                      "aucun ressort entre la sortie et l'historique pendant l'édition en place")
+    func test_chips_modifierUneImagePosee_neMontreNiTempsNiPlan() {
+        let sections = ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
+        let puces = ComposerInlineEditing.chips(.modify, family: .image, served: sections)
+        XCTAssertEqual(puces.first, .media(.crop), "une image se recadre d'abord")
+        XCTAssertFalse(puces.contains(.timing))
+        XCTAssertFalse(puces.contains(.plan))
+    }
+
+    func test_chips_temps_debutFinPuisPlan() {
+        let sections = ComposerInlineEditing.sections(for: .sticker, hasTrimmableSource: false)
+        XCTAssertEqual(ComposerInlineEditing.chips(.time, family: .sticker, served: sections), [.timing, .plan])
+    }
+
+    func test_chips_tempsDUnSon_porteAussiSonRognage() {
+        let sections = ComposerInlineEditing.sections(for: .audio, hasTrimmableSource: true)
+        XCTAssertEqual(ComposerInlineEditing.chips(.time, family: .audio, served: sections),
+                       [.timing, .plan, .media(.trim)],
+                       "le son se règle à Modifier par sa feuille : ses bornes ne doivent pas se perdre")
+    }
+
+    func test_begin_temps_ouvreLaFenetreDeTemps() throws {
+        let edition = try XCTUnwrap(ComposerInlineEditing.begin(objectId: "s", family: .sticker, onSceneSurface: true,
+                                                                requested: nil, hasTrimmableSource: false,
+                                                                purpose: .time))
+        XCTAssertEqual(edition.openSection, .timing, "une feuille ne naît jamais muette")
+        XCTAssertEqual(edition.purpose, .time)
+    }
+
+    func test_tapped_gardeLaFeuille() throws {
+        let edition = ComposerInlineEdit(objectId: "s", family: .sticker, openSection: .timing, purpose: .time)
+        XCTAssertEqual(ComposerInlineEditing.tapped(.plan, in: edition).purpose, .time)
+    }
+
+    func test_trailingColumn_editionEnPlace_lePiedSuitLHistorique_sansTrou() {
+        XCTAssertTrue(ComposerTrailingColumn.footFollowsOptions(for: .object),
+                      "aucun ressort entre les options et l'historique pendant l'édition en place")
         XCTAssertFalse(ComposerTrailingColumn.footFollowsOptions(for: .tool([])),
                        "le dessin garde l'historique au pouce (#8713)")
         XCTAssertFalse(ComposerTrailingColumn.footFollowsOptions(for: .scene(effects: [], open: nil)))
@@ -614,16 +661,8 @@ final class ComposerInlineEditTests: XCTestCase {
 
     func test_trailingColumn_unOutilDeDessinOuvert_lEmporteSurLEditionEnPlace() {
         let controle = ComposerToolControl(id: "drawing.tool", symbolName: "pencil", label: "Stylo", isExpanded: false)
-        let focus = ComposerTrailingColumn.focus(
-            railMode: .tool([controle]),
-            selection: (sections: [.media(.filter)], open: nil, actions: []))
-        XCTAssertEqual(focus, .tool([controle]))
-    }
-
-    @MainActor
-    func test_section_peintSonEtatOuvert() {
-        XCTAssertTrue(ComposerTrailingColumnPaint(.editorSection(.media(.filter), isOpen: true)).isOn)
-        XCTAssertFalse(ComposerTrailingColumnPaint(.editorSection(.media(.filter), isOpen: false)).isOn)
+        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .tool([controle]), objectIsEdited: true),
+                       .tool([controle]))
     }
 
     // MARK: - Aucune porte vers l'ancien éditeur depuis la scène
@@ -641,12 +680,13 @@ final class ComposerInlineEditTests: XCTestCase {
                           "le site unique d'ouverture doit rendre l'objet à l'édition en place")
     }
 
-    /// **« Modifier » sur un média, un sticker ou un lieu reste sur la scène.**
-    func test_editSceneItem_mediaStickerLieu_nOuvrentPlusLEcranPleinEcran() throws {
-        let code = try source("Meeshy/Features/Composer/MeeshyComposerHost+SceneColumns.swift")
+    /// **« Modifier » sur un média reste sur la scène** (#13839, L5) : la
+    /// feuille Modifier est l'édition en place, jamais l'écran plein.
+    func test_modifySceneItem_media_ouvreLEditionEnPlace_jamaisLEcranPleinEcran() throws {
+        let code = try source("Meeshy/Features/Composer/MeeshyComposerHost+Selection.swift")
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        let debut = try XCTUnwrap(code.range(of: "funceditSceneItem(_id:String,kind:StoryCanvasUIView.CanvasItemKind){"))
-        let branche = try XCTUnwrap(code.range(of: "case.media,.sticker,.place:", range: debut.upperBound..<code.endIndex))
+        let debut = try XCTUnwrap(code.range(of: "funcmodifySceneItem(_id:String){"))
+        let branche = try XCTUnwrap(code.range(of: "case.mediaSheet:", range: debut.upperBound..<code.endIndex))
         let corps = String(code[branche.upperBound...].prefix(120))
         XCTAssertTrue(corps.contains("beginInlineEdit("), "la branche doit ouvrir l'édition en place")
         XCTAssertFalse(corps.contains("openObjectEditor("))

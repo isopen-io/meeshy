@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.gala",
             mood: .elegant,
             name: "Gala",
+            localizedNames: ["fr": "Gala", "en": "Gala", "es": "Gala", "pt": "Gala", "de": "Gala", "it": "Gala", "ar": "حفل"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .column, margin: 0.08, gap: 0.04, top: 0.22, bottom: 0.14),
@@ -34,6 +35,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.gala",
             mood: .elegant,
             name: "Gala",
+            localizedNames: ["fr": "Gala", "en": "Gala", "es": "Gala", "pt": "Gala", "de": "Gala", "it": "Gala", "ar": "حفل"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .arch, margin: 0.07, gap: 0.03, top: 0.2, bottom: 0.14),
@@ -57,6 +59,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.gala",
             mood: .elegant,
             name: "Gala",
+            localizedNames: ["fr": "Gala", "en": "Gala", "es": "Gala", "pt": "Gala", "de": "Gala", "it": "Gala", "ar": "حفل"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.02, top: 0.18, bottom: 0.12),
@@ -80,6 +83,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.gala",
             mood: .elegant,
             name: "Gala",
+            localizedNames: ["fr": "Gala", "en": "Gala", "es": "Gala", "pt": "Gala", "de": "Gala", "it": "Gala", "ar": "حفل"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.05, gap: 0.015, top: 0.16, bottom: 0.1),
@@ -103,6 +107,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.art-deco",
             mood: .elegant,
             name: "Art déco",
+            localizedNames: ["fr": "Art déco", "en": "Art Deco", "es": "Art déco", "pt": "Art déco", "de": "Art déco", "it": "Art déco", "ar": "آرت ديكو"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.025, top: 0.14, bottom: 0.12),
@@ -125,6 +130,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.art-deco",
             mood: .elegant,
             name: "Art déco",
+            localizedNames: ["fr": "Art déco", "en": "Art Deco", "es": "Art déco", "pt": "Art déco", "de": "Art déco", "it": "Art déco", "ar": "آرت ديكو"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.02, top: 0.16, bottom: 0.12),
@@ -147,6 +153,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.art-deco",
             mood: .elegant,
             name: "Art déco",
+            localizedNames: ["fr": "Art déco", "en": "Art Deco", "es": "Art déco", "pt": "Art déco", "de": "Art déco", "it": "Art déco", "ar": "آرت ديكو"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.015, top: 0.14, bottom: 0.12),
@@ -169,6 +176,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.art-deco",
             mood: .elegant,
             name: "Art déco",
+            localizedNames: ["fr": "Art déco", "en": "Art Deco", "es": "Art déco", "pt": "Art déco", "de": "Art déco", "it": "Art déco", "ar": "آرت ديكو"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.05, gap: 0.01, top: 0.12, bottom: 0.1),
@@ -191,6 +199,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.opera",
             mood: .elegant,
             name: "Opéra",
+            localizedNames: ["fr": "Opéra", "en": "Opera", "es": "Ópera", "pt": "Ópera", "de": "Oper", "it": "Opera", "ar": "أوبرا"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.12),
@@ -213,6 +222,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.opera",
             mood: .elegant,
             name: "Opéra",
+            localizedNames: ["fr": "Opéra", "en": "Opera", "es": "Ópera", "pt": "Ópera", "de": "Oper", "it": "Opera", "ar": "أوبرا"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.12),
@@ -236,6 +246,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.opera",
             mood: .elegant,
             name: "Opéra",
+            localizedNames: ["fr": "Opéra", "en": "Opera", "es": "Ópera", "pt": "Ópera", "de": "Oper", "it": "Opera", "ar": "أوبرا"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.025, top: 0.16, bottom: 0.12),
@@ -258,6 +269,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "elegant.tete-a-tete",
             mood: .elegant,
             name: "Tête-à-tête",
+            localizedNames: ["fr": "Tête-à-tête", "en": "Tête-à-tête", "es": "Cara a cara", "pt": "Frente a frente", "de": "Zu zweit", "it": "A tu per tu", "ar": "وجهاً لوجه"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.1, gap: 0.05, top: 0.18, bottom: 0.14),
@@ -273,6 +285,109 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#F3E3B5", fill: nil),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
+            ),
+            surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "elegant.premiere-neige.duo",
+            motif: "elegant.premiere-neige",
+            mood: .elegant,
+            name: "Première neige",
+            localizedNames: ["fr": "Première neige", "en": "First Snow", "es": "Primera nieve", "pt": "Primeira neve", "de": "Erster Schnee", "it": "Prima neve", "ar": "أول ثلج"],
+            bucket: .duo,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .column, margin: 0.08, gap: 0.04, top: 0.22, bottom: 0.14),
+                slot: CallFrameSlotStyle(shape: .oval, radius: nil, stroke: CallFrameStroke(color: "#E2E8F0", width: 0.005), double: false, glow: "#BFDBFE55", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
+                background: .radial(colors: ["#1E3A5F", "#0B1426", "#050A14"]),
+                pattern: nil,
+                border: CallFrameBorder(kind: .hairline, color: "#CBD5E1", width: 0.004, inset: 0.03),
+                ornaments: [
+                    CallFrameOrnament(kind: .snow, color: "#FFFFFF", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#93C5FD55", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#E0F2FE", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .snow, color: "#FFFFFFCC", density: .low, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#E2E8F0", size: .m, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#F1F5F9", fill: nil),
+                title: CallFrameTitle(source: .names, font: .calligraphy, color: "#F8FAFC", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
+                subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#93C5FD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
+            ),
+            surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "elegant.premiere-neige.comite",
+            motif: "elegant.premiere-neige",
+            mood: .elegant,
+            name: "Première neige",
+            localizedNames: ["fr": "Première neige", "en": "First Snow", "es": "Primera nieve", "pt": "Primeira neve", "de": "Erster Schnee", "it": "Prima neve", "ar": "أول ثلج"],
+            bucket: .comite,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .arch, margin: 0.07, gap: 0.03, top: 0.2, bottom: 0.14),
+                slot: CallFrameSlotStyle(shape: .oval, radius: nil, stroke: CallFrameStroke(color: "#E2E8F0", width: 0.005), double: false, glow: "#BFDBFE55", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
+                background: .radial(colors: ["#1E3A5F", "#0B1426", "#050A14"]),
+                pattern: nil,
+                border: CallFrameBorder(kind: .hairline, color: "#CBD5E1", width: 0.004, inset: 0.03),
+                ornaments: [
+                    CallFrameOrnament(kind: .snow, color: "#FFFFFF", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#93C5FD55", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#E0F2FE", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .snow, color: "#FFFFFFCC", density: .low, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#E2E8F0", size: .m, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#F1F5F9", fill: nil),
+                title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F8FAFC", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
+                subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#93C5FD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
+            ),
+            surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "elegant.premiere-neige.groupe",
+            motif: "elegant.premiere-neige",
+            mood: .elegant,
+            name: "Première neige",
+            localizedNames: ["fr": "Première neige", "en": "First Snow", "es": "Primera nieve", "pt": "Primeira neve", "de": "Erster Schnee", "it": "Prima neve", "ar": "أول ثلج"],
+            bucket: .groupe,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.02, top: 0.18, bottom: 0.12),
+                slot: CallFrameSlotStyle(shape: .oval, radius: nil, stroke: CallFrameStroke(color: "#E2E8F0", width: 0.005), double: false, glow: "#BFDBFE55", shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
+                background: .radial(colors: ["#1E3A5F", "#0B1426", "#050A14"]),
+                pattern: nil,
+                border: CallFrameBorder(kind: .hairline, color: "#CBD5E1", width: 0.004, inset: 0.03),
+                ornaments: [
+                    CallFrameOrnament(kind: .snow, color: "#FFFFFF", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#93C5FD55", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#E0F2FE", density: .low, layer: .front, motion: .loop),
+                    CallFrameOrnament(kind: .snow, color: "#FFFFFFCC", density: .low, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#E2E8F0", size: .m, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .name, style: .badge, font: .elegant, color: "#F1F5F9", fill: "#0B1426D9"),
+                title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F8FAFC", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
+                subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#93C5FD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
+            ),
+            surfaces: [.capture, .live]
+        ),
+        CallFrameDesign(
+            id: "elegant.premiere-neige.tablee",
+            motif: "elegant.premiere-neige",
+            mood: .elegant,
+            name: "Première neige",
+            localizedNames: ["fr": "Première neige", "en": "First Snow", "es": "Primera nieve", "pt": "Primeira neve", "de": "Erster Schnee", "it": "Prima neve", "ar": "أول ثلج"],
+            bucket: .tablee,
+            look: CallFrameLook(
+                layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.015, top: 0.16, bottom: 0.1),
+                slot: CallFrameSlotStyle(shape: .oval, radius: nil, stroke: CallFrameStroke(color: "#E2E8F0", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil),
+                background: .radial(colors: ["#1E3A5F", "#0B1426", "#050A14"]),
+                pattern: nil,
+                border: CallFrameBorder(kind: .hairline, color: "#CBD5E1", width: 0.004, inset: 0.03),
+                ornaments: [
+                    CallFrameOrnament(kind: .snow, color: "#FFFFFF", density: .mid, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .bokeh, color: "#93C5FD55", density: .low, layer: .back, motion: .loop),
+                    CallFrameOrnament(kind: .sparkles, color: "#E0F2FE", density: .low, layer: .front, motion: .loop)
+                ],
+                brand: CallFrameBrand(mark: .both, place: .bottom, color: "#E2E8F0", size: .m, font: StoryTextStyle.elegant),
+                names: CallFrameNames(show: .none, style: .badge, font: .elegant, color: "#F1F5F9", fill: nil),
+                title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F8FAFC", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
+                subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#93C5FD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live]
         )

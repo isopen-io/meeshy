@@ -37,3 +37,15 @@ public object StoryExportVideoSettings {
         return raw.coerceIn(MINIMUM_BIT_RATE.toLong(), MAXIMUM_BIT_RATE.toLong()).toInt()
     }
 }
+
+/** Ce que le moteur encode : la taille, la cadence et le débit de la vidéo d'un export (réglages uniques ci-dessus). */
+public data class StoryExportVideoFormat(val width: Int, val height: Int, val fps: Int, val bitRate: Int) {
+    val size: StoryExportSize get() = StoryExportSize(width, height)
+
+    public companion object {
+        public fun of(landscape: Boolean = false): StoryExportVideoFormat {
+            val size = StoryExportVideoSettings.outputSize(landscape)
+            return StoryExportVideoFormat(size.width, size.height, StoryExportFrameRate.FPS, StoryExportVideoSettings.averageBitRate(size))
+        }
+    }
+}

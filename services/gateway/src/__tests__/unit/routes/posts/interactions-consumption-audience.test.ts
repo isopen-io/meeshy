@@ -141,6 +141,7 @@ function makePrisma(opts: {
       createMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(opts.isFriend ? { id: 'fr-1' } : null) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     communityMember: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       findFirst: jest.fn<any>().mockResolvedValue(null),

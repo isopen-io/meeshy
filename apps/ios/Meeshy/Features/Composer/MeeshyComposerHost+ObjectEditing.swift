@@ -17,9 +17,29 @@ extension MeeshyComposerHost {
         selectedSceneItemId = id
         selectedSceneItemKind = .text
         viewModel.enterTextEditingMode(textId: id)
-        // **Les sous-outils du texte à droite, comme toute famille** (#9138) :
-        // la saisie et l'édition en place sont le MÊME état, clavier en plus.
+        // **Les réglages du texte collés au clavier** (#13839, L4) : Aa · ● · ≡
+        // · ▣ · OK, et un panneau de la hauteur du clavier à sa place. La
+        // colonne de droite se tait pendant la frappe (`Focus.typing`).
+        keyboardDock.begin(session: .init(viewModel: viewModel,
+                                          mentionBox: sceneMentionBox,
+                                          onDone: { leaveInlineEdit() }))
         beginInlineEdit(id)
+    }
+
+    /// Chaque frappe sur la scène : le modèle, et la requête `@` de la bande
+    /// collée au clavier (#13839, L4).
+    func sceneInlineTextChanged(id: String, text: String) {
+        viewModel.updateTextContent(id: id, text: text)
+        sceneMentionBox.controller.handleQuery(in: text)
+    }
+
+    /// Le canvas dit que la saisie est finie ; le MODÈLE décide du sort d'une
+    /// coquille vide — sauf quand l'éditeur plein écran possède l'édition
+    /// (voir le câblage dans `sceneSurface`, #4634).
+    func sceneInlineTextEnded() {
+        guard editedObject == nil else { return }
+        keyboardDock.end()
+        viewModel.exitTextEditingMode()
     }
 
     /// **LE site unique d'ouverture d'un objet, quelle que soit la porte**

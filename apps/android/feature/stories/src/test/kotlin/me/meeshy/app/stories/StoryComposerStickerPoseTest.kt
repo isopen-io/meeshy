@@ -40,7 +40,7 @@ class StoryComposerStickerPoseTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private val session: SessionRepository = mockk(relaxed = true)
-    private val media: StoryMediaUploader = mockk(relaxed = true)
+    private val media: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
 
     private fun viewModel(): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))

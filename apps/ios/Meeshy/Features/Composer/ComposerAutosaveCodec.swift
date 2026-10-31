@@ -75,7 +75,8 @@ nonisolated enum ComposerAutosaveCodec {
             audios: state.audios.mapValues(name),
             stickerAnimations: stickers,
             publishChoice: state.publishChoice.map {
-                .init(format: ComposerAutosaveFormatCode.code($0.format), layout: $0.layout?.rawValue)
+                .init(format: ComposerAutosaveFormatCode.code($0.format), layout: $0.layout?.rawValue,
+                      formats: $0.formats.count > 1 ? $0.formats.map(ComposerAutosaveFormatCode.code) : nil)
             },
             fileAliases: aliases.isEmpty ? nil : aliases
         )
@@ -137,9 +138,12 @@ nonisolated enum ComposerAutosaveCodec {
             audios: snapshot.audios.compactMapValues { urls[$0] },
             stickerAnimations: snapshot.stickerAnimations.compactMapValues { restored.blobByFile[$0] },
             publishChoice: snapshot.publishChoice.flatMap { choix in
-                ComposerAutosaveFormatCode.format(choix.format).map {
-                    ComposerPublishChoice(format: $0, layout: choix.layout.flatMap(MosaicLayoutMode.init(rawValue:)))
-                }
+                let disposition = choix.layout.flatMap(MosaicLayoutMode.init(rawValue:))
+                return ComposerPublishChoice(formats: (choix.formats ?? []).compactMap(ComposerAutosaveFormatCode.format),
+                                             layout: disposition)
+                    ?? ComposerAutosaveFormatCode.format(choix.format).map {
+                        ComposerPublishChoice(format: $0, layout: disposition)
+                    }
             }
         )
     }

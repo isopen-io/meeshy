@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.app.stories.StorySlideView
+import me.meeshy.sdk.model.StoryItem
 
 /** A single reel ready to render: a playable video + its author/caption/counters. */
 data class ReelPresentation(
@@ -49,6 +50,8 @@ data class ReelPresentation(
      * Quand elle existe, le fichier média du post n'en est que le fond ou le son — jamais un second lecteur.
      */
     val scene: StorySlideView? = null,
+    /** Ce que « Enregistrer », « Partager » et « Imager » rendent (#13896) : la charge servie et la scène qu'elle peint. */
+    val export: Pair<StoryItem, StorySlideView>? = null,
 )
 
 object ReelBuilder {
@@ -107,6 +110,7 @@ object ReelBuilder {
                     isBookmarked = post.isBookmarkedByMe == true,
                     bookmarkCount = post.bookmarkCount ?: 0,
                     scene = scene,
+                    export = ReelScene.export(post, scene, layout, mediaBaseUrl, preferences),
                 )
             }
             .toList()

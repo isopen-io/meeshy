@@ -168,4 +168,34 @@ class StoryEditorTest {
         coVerify(exactly = 0) { posts.update(any<String>(), any<UpdatePostRequest>()) }
         coVerify(exactly = 0) { stories.adoptPublished(any()) }
     }
+
+    @Test
+    fun `une image reglee pendant l edition part cuite, et la mise a jour ne nomme que la copie, jamais un look`() = runTest {
+        coEvery { stories.cachedStories() } returns listOf(cached)
+        val copy = me.meeshy.sdk.media.MediaUploadItem(byteArrayOf(9), "story-look.jpg", "image/jpeg")
+        val uploaded = me.meeshy.sdk.model.UploadedMedia("baked-1", "2026/10/baked-1/photo.jpg", "image/jpeg", 1, 600, 800, null, null)
+        val uploader: StoryMediaUploader = mockk { coEvery { upload(listOf(copy), any()) } returns NetworkResult.Success(listOf(uploaded)) }
+        val baking = StoryEditor(reader, posts, stories, session, StoryLookOven({ copy }, mockk(), uploader))
+        val opened = StoryEditFixtures.opened(opening)
+        val looked = opened.copy(deck = opened.deck.withSelectedMediaLook(StoryEditFixtures.FOREGROUND_PHOTO, me.meeshy.sdk.model.StoryMediaLook(filterPreset = "warm")))
+        val sent = slot<UpdatePostRequest>()
+        coEvery { posts.update("p1", capture(sent)) } returns NetworkResult.Success(post)
+
+        assertThat(baking.save(opening, looked, "fr")).isNull()
+
+        assertThat(sent.captured.mediaIds).containsExactly("baked-1")
+        assertThat(sent.captured.removeMediaIds).contains(StoryEditFixtures.FOREGROUND_PHOTO)
+        assertThat(me.meeshy.sdk.net.MeeshyApi.json.encodeToString(UpdatePostRequest.serializer(), sent.captured)).doesNotContain("filterPreset")
+    }
+
+    @Test
+    fun `une copie cuite qui ne part pas laisse la story intacte`() = runTest {
+        val uploader: StoryMediaUploader = mockk { coEvery { upload(any(), any()) } returns NetworkResult.Failure(ApiError("offline")) }
+        val baking = StoryEditor(reader, posts, stories, session, StoryLookOven({ me.meeshy.sdk.media.MediaUploadItem(byteArrayOf(9), "c.jpg", "image/jpeg") }, mockk(), uploader))
+        val opened = StoryEditFixtures.opened(opening)
+        val looked = opened.copy(deck = opened.deck.withSelectedMediaLook(StoryEditFixtures.FOREGROUND_PHOTO, me.meeshy.sdk.model.StoryMediaLook(filterPreset = "warm")))
+
+        assertThat(baking.save(opening, looked, "fr")).isEqualTo(StoryEditErrors.FAILED)
+        coVerify(exactly = 0) { posts.update(any(), any<UpdatePostRequest>()) }
+    }
 }

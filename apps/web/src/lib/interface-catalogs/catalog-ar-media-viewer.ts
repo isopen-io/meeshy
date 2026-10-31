@@ -9,6 +9,7 @@ const arMediaViewer = {
   'media.viewer.react_with': 'تفاعل بـ {emoji}',
   'media.viewer.reply': 'رد',
   'media.viewer.compose': 'أنشئ بهذه الوسائط',
+  'media.viewer.imager': 'حوِّل إلى صورة',
   'media.viewer.saved': 'تم الحفظ',
   'media.viewer.save_failed': 'تعذّر الحفظ',
   'media.viewer.offline': 'غير متصل — أعد المحاولة عند الاتصال',

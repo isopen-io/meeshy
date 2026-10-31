@@ -185,6 +185,8 @@ public final class StoryBackgroundLayer: CALayer {
     /// (`StoryBackgroundLook.painted`) : cuits après le filtre dans le bitmap
     /// d'un fond image, posés en composition sur l'item d'un fond vidéo.
     @MainActor public private(set) var activeAdjustments: ImageAdjustments?
+    /// Le look de la retouche du média de fond (#13840), peint avant le filtre.
+    @MainActor public private(set) var activeMediaLook: StoryMediaLook?
     /// Le bitmap BRUT du dernier stamp final et sa clé de filtre — ce qu'un
     /// changement de rendu seul (filtre, réglages) repeint en place. Une autre
     /// source rend caduque toute cuisson en vol.
@@ -227,10 +229,12 @@ public final class StoryBackgroundLayer: CALayer {
 
     /// Pose le RENDU courant — filtre, intensité, réglages — sans rien peindre.
     @MainActor
-    func setLook(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?) {
+    func setLook(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?,
+                 mediaLook: StoryMediaLook? = nil) {
         activeFilter = filter
         activeFilterIntensity = filterIntensity
         activeAdjustments = adjustments
+        activeMediaLook = mediaLook
     }
 
     /// Applies the active look — slide filter, then the background media's
@@ -244,7 +248,8 @@ public final class StoryBackgroundLayer: CALayer {
     func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
         stampedSource = (image, imageId)
         stampDisplay(StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
-                                               adjustments: activeAdjustments, imageId: imageId), on: img)
+                                               adjustments: activeAdjustments, imageId: imageId,
+                                               look: activeMediaLook), on: img)
     }
 
     /// Pose un bitmap DÉJÀ peint — par `stampFinalImage`, ou par la cuisson
@@ -394,7 +399,7 @@ extension StoryBackgroundLayer {
                           letterboxFillHashes: [String] = [],
                           filter: StoryFilter? = nil,
                           filterIntensity: Float = 1.0,
-                          adjustments: ImageAdjustments? = nil,
+                          adjustments: ImageAdjustments? = nil, mediaLook: StoryMediaLook? = nil,
                           contentVersion: UInt64 = 0) {
         // FAST PATH ANTI-FLASH :
         // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
@@ -446,7 +451,7 @@ extension StoryBackgroundLayer {
         let filterUnchanged = (self.activeFilter == filter)
             && (self.activeFilterIntensity == filterIntensity)
             && (self.lastContentVersion == contentVersion)
-        let adjustmentsUnchanged = (self.activeAdjustments == adjustments)
+        let adjustmentsUnchanged = (self.activeAdjustments == adjustments) && (self.activeMediaLook == mediaLook)
         let sameScene = (previousContentIdentity == nextContentIdentity)
             && (self.transform3D == transform)
             && (self.configuredRenderSize == geometry.renderSize)
@@ -458,7 +463,7 @@ extension StoryBackgroundLayer {
         // filtre : le fond se repeint EN PLACE, sans détacher son contenu. Une
         // image repart de son bitmap brut retenu ; une vidéo garde son player
         // (la lecture ne saute pas) et reçoit la composition de ses réglages.
-        if sameScene, restyleInPlace(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments) {
+        if sameScene, restyleInPlace(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments, mediaLook: mediaLook) {
             return
         }
 
@@ -516,7 +521,7 @@ extension StoryBackgroundLayer {
 
         self.kind = kind
         self.transform3D = transform
-        setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments)
+        setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments, mediaLook: mediaLook)
         self.lastContentVersion = contentVersion
         self.frame = CGRect(origin: .zero, size: geometry.renderSize)
         self.configuredRenderSize = geometry.renderSize

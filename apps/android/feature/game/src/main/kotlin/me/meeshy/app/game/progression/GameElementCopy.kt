@@ -2,8 +2,10 @@ package me.meeshy.app.game.progression
 
 import android.content.res.Resources
 import java.util.Locale
+import me.meeshy.app.game.GameCopy
 import me.meeshy.app.game.reveal.RevealCopy
 import me.meeshy.feature.game.R
+import me.meeshy.sdk.model.game.GameCopyLaws
 import me.meeshy.sdk.model.game.GameNumberFormat
 import me.meeshy.sdk.model.game.engagement.BadgeGuide
 import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
@@ -12,6 +14,7 @@ import me.meeshy.sdk.model.game.engagement.BadgeReachReason
 import me.meeshy.sdk.model.game.engagement.BadgeRung
 import me.meeshy.sdk.model.game.engagement.BadgeRungState
 import me.meeshy.sdk.model.game.engagement.RevealTitle
+import me.meeshy.sdk.model.game.progression.PieceDetailKind
 
 /** Un palier de l'échelle mis en mots : « Argent · 50 », sa ligne (« Obtenu le … », « Prochaine étoile · 13 de plus », « À 100 »). */
 internal data class GameRungText(
@@ -37,7 +40,8 @@ internal data class GameElementTexts(
     val whatTitle: String,
     val what: String,
     val howTitle: String,
-    val how: String,
+    /** La seconde phrase ; une donnée n'en a qu'une (iOS `how == nil`). */
+    val how: String?,
     val reason: String?,
     val stars: String?,
     val starsSpoken: String?,
@@ -62,7 +66,75 @@ internal data class GameElementTexts(
                     ladder = emptyList(),
                     facts = listOf(GameFactText(res.getString(R.string.game_concept_defis_name), RevealCopy.sectionName(res, detail.entry.section))),
                 )
+                is GameElementDetail.ElanFamily -> GameElementTexts(
+                    name = res.getString(familyTitle(detail.family)),
+                    status = status,
+                    whatTitle = res.getString(R.string.game_fiche_what),
+                    what = res.getString(R.string.game_detail_elan_what),
+                    howTitle = res.getString(R.string.game_detail_gives_label),
+                    how = res.getString(R.string.game_detail_elan_how),
+                    reason = null,
+                    stars = null,
+                    starsSpoken = null,
+                    ladder = emptyList(),
+                    facts = listOfNotNull(
+                        detail.topPoints?.let {
+                            GameFactText(res.getString(R.string.game_concept_points_name), res.getString(R.string.game_detail_elan_points, count(it, locale)))
+                        },
+                        detail.windowDays?.let {
+                            GameFactText(res.getString(R.string.game_concept_fact_window), GameCopy.resolve(res, GameCopyLaws.days(it), locale))
+                        },
+                    ),
+                )
+                is GameElementDetail.Piece -> piece(res, locale, detail, status)
+                is GameElementDetail.LevelStep -> GameElementTexts(
+                    name = GameCopy.resolve(res, detail.step.name, locale),
+                    status = status,
+                    whatTitle = res.getString(R.string.game_fiche_what),
+                    what = res.getString(R.string.game_detail_levelstep_what),
+                    howTitle = res.getString(R.string.game_detail_obtain_label),
+                    how = res.getString(R.string.game_detail_levelstep_how),
+                    reason = null,
+                    stars = null,
+                    starsSpoken = null,
+                    ladder = emptyList(),
+                    facts = detail.step.facts.map { GameFactText(GameCopy.resolve(res, it.label, locale), GameCopy.resolve(res, it.value, locale)) },
+                )
+                is GameElementDetail.Fact -> GameElementTexts(
+                    name = GameCopy.resolve(res, detail.label, locale),
+                    status = status,
+                    whatTitle = res.getString(R.string.game_fiche_what),
+                    what = res.getString(detail.key?.let(GameDetailFactCopy::sentence) ?: ConceptCopy.why(detail.concept)),
+                    howTitle = res.getString(R.string.game_detail_obtain_label),
+                    how = null,
+                    reason = null,
+                    stars = null,
+                    starsSpoken = null,
+                    ladder = emptyList(),
+                    facts = emptyList(),
+                )
             }
+        }
+
+        private fun piece(res: Resources, locale: Locale, detail: GameElementDetail.Piece, status: String): GameElementTexts {
+            val (what, how) = when (detail.piece.kind) {
+                PieceDetailKind.LevelRing -> R.string.game_detail_ring_what to R.string.game_detail_ring_how
+                PieceDetailKind.Rank -> R.string.game_detail_rank_what to R.string.game_detail_rank_how
+                PieceDetailKind.TreasuryTier -> R.string.game_detail_treasury_what to R.string.game_detail_treasury_how
+            }
+            return GameElementTexts(
+                name = GameCopy.resolve(res, detail.piece.name, locale),
+                status = status,
+                whatTitle = res.getString(R.string.game_fiche_what),
+                what = res.getString(what),
+                howTitle = res.getString(R.string.game_detail_obtain_label),
+                how = res.getString(how),
+                reason = null,
+                stars = null,
+                starsSpoken = null,
+                ladder = emptyList(),
+                facts = detail.piece.facts.map { GameFactText(GameCopy.resolve(res, it.label, locale), GameCopy.resolve(res, it.value, locale)) },
+            )
         }
 
         private fun badge(res: Resources, locale: Locale, detail: GameElementDetail.Badge, status: String): GameElementTexts {
@@ -94,11 +166,13 @@ internal data class GameElementTexts(
                 val locked = res.getString(R.string.game_detail_locked)
                 status.missing?.let { "$locked · ${missing(res, locale, it)}" } ?: locked
             }
+            is GameElementStatus.Value -> GameCopy.resolve(res, status.value, locale)
         }
 
         private fun missing(res: Resources, locale: Locale, missing: GameElementMissing): String = when (missing) {
             is GameElementMissing.FirstStar -> res.getString(R.string.game_detail_badge_missing, count(missing.count, locale))
             is GameElementMissing.Rekindle -> res.getString(R.string.game_badge_a11y_imprint, count(missing.count, locale))
+            is GameElementMissing.Sentence -> GameCopy.resolve(res, missing.text, locale)
         }
 
         private fun reason(res: Resources, locale: Locale, guide: BadgeGuide): String {

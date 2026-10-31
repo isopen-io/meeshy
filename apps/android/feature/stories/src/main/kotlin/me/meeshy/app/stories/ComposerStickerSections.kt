@@ -24,7 +24,6 @@ internal fun TextSectionToolbar(
         onCycleStart = { viewModel.onTextElementCycleStart(editedText.id) },
         onCycleDuration = { viewModel.onTextElementCycleDuration(editedText.id) },
         onDuplicate = { viewModel.onDuplicateTextElement(editedText.id) },
-        onReorder = { op -> viewModel.onReorderTextElement(editedText.id, op) },
         onDone = if (onPlateau) null else viewModel::onDeselectTextElement,
         section = open,
         intents = TextSectionIntents(

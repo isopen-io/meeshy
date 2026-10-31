@@ -250,6 +250,14 @@ public struct MeeshyScenePlayer: View {
         return StoryEffects(rendering: document, sceneIndex: sceneIndex).audioPlayerObjects ?? []
     }
 
+    /// Les pastilles que la surcouche peint (#13901) : celles qu'aucun autre
+    /// objet ne recouvre, de la plus basse à la plus haute. Une pastille
+    /// enfouie se peint dans le canvas, à son rang (`StoryAudioChipLayer`).
+    var overlaidSceneAudios: [StoryAudioPlayerObject] {
+        guard Self.sceneCarriesSound(in: document, sceneIndex: sceneIndex) else { return [] }
+        return SceneAudioStageRule.overlaidAudios(in: StoryEffects(rendering: document, sceneIndex: sceneIndex))
+    }
+
     /// **Les pastilles des sons de PREMIER PLAN** (#9737), sur toute surface
     /// qui rejoue une scène. Un mode à chrome (lecteur, réel) les fenêtre sur
     /// SON fil de position et laisse le toucher couper la piste ; la carte et
@@ -258,7 +266,7 @@ public struct MeeshyScenePlayer: View {
     @ViewBuilder
     private var soundChips: some View {
         if stagesSoundChips {
-            let audios = sceneAudios
+            let audios = overlaidSceneAudios
             if !SceneAudioStageRule.stagedAudios(in: audios).isEmpty {
                 if config.showsChrome {
                     ClockedSceneSoundChips(

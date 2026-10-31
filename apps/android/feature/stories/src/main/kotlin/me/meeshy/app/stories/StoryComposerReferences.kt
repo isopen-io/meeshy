@@ -31,6 +31,8 @@ internal fun StoryComposerViewModel.onPosePlace(place: SharedPlace) = UUID.rando
     onSceneReduce { StoryComposerReferencesReducer.placePosed(it, place, id) }
 }
 
+internal fun StoryComposerViewModel.onRepointPlace(id: String, place: SharedPlace) = onSceneReduce { StoryComposerReferencesReducer.repointed(it, id, place) }
+
 internal fun StoryComposerViewModel.onSelectPlace(id: String) = onSceneReduce { StoryComposerReferencesReducer.selected(it, id) }
 
 /** Le glissé d'une pastille : un seul cran d'historique pour tout le geste. */

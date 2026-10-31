@@ -36,6 +36,7 @@ import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
 import me.meeshy.sdk.model.game.progression.ProgressionConceptFiche
 import me.meeshy.sdk.model.game.progression.ProgressionConceptFiches
 import me.meeshy.sdk.model.game.progression.ProgressionConceptModel
+import me.meeshy.sdk.model.game.progression.ProgressionConceptPieces
 import me.meeshy.sdk.model.game.progression.ProgressionFailure
 import me.meeshy.sdk.model.game.progression.ProgressionScreenPlan
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -162,7 +163,12 @@ class ProgressionViewModel @Inject constructor(
             cards = cards,
             standing = ProgressionStanding(glory = game?.glory, meesh = progress.meesh),
             gameRevision = payload.gameRevision,
-            fiches = cards.associate { it.concept to ProgressionConceptFiches.make(it.concept, progress, game, nowMillis, moment) },
+            fiches = cards.associate { card ->
+                val concept = card.concept
+                concept to ProgressionConceptFiches.make(
+                    concept, progress, game, nowMillis, moment, pieceIsHero = ProgressionConceptPieces.isHero(concept, progress, game),
+                )
+            },
         )
     }
 

@@ -7,7 +7,9 @@ import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.media.MediaTrimRule
+import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.wireValue
+import kotlin.math.abs
 
 /**
  * Un média de premier plan posé sur la scène d'une slide (miroir d'un `StoryMediaObject` iOS non-fond) : le média
@@ -18,7 +20,10 @@ import me.meeshy.sdk.model.scene.wireValue
  * source ([sourceStart], [sourceEnd], en secondes, iOS `sourceStart` / `sourceEnd`) est celle d'une VIDÉO rognée : les
  * deux bornes ou aucune, `null` : la source entière. Son [crop] (iOS `StoryMediaObject.crop`, #13849) est le cadre d'une
  * IMAGE recadrée, en fractions de la source : rien n'est réécrit, chaque lecteur peint la source derrière ce cadre ;
- * `null` : la source entière.
+ * `null` : la source entière. Sa [timing] est sa fenêtre d'APPARITION dans la slide (iOS `startTime` / `duration`, #13902),
+ * distincte de la fenêtre de source : 0 / 0, toute la slide. Son [id] est l'identité de l'OBJET, [mediaId] celle du FICHIER :
+ * ils se confondent tant que l'objet n'est pas une copie — une copie (#13902) nomme le même fichier sous un id neuf, comme
+ * iOS `StorySceneDuplicate.media` garde `postMediaId` : rien n'est renvoyé.
  */
 data class StoryPlacedMedia(
     val mediaId: String,
@@ -31,6 +36,10 @@ data class StoryPlacedMedia(
     val sourceStart: Double? = null,
     val sourceEnd: Double? = null,
     val crop: StoryMediaCrop? = null,
+    /** Son rang dans l'ordre UNIQUE de la scène (#13852, le `zIndex` d'iOS) : le plus haut se peint au-dessus. */
+    val zIndex: Int = 0,
+    val timing: StoryElementTiming = StoryElementTiming(),
+    val id: String = mediaId,
 ) {
     /** La fenêtre rognée, ou `null` : la source entière (jamais une borne seule, jamais une fenêtre sous le plancher). */
     val trim: MediaTrimBounds?
@@ -64,9 +73,9 @@ data class StoryPlacedMedia(
         val source = durationSeconds?.takeIf { it > 0.0 && video }
         val window = trim?.takeIf { video }
         val fields = window?.let { MediaTrimRule.fields(it, source ?: it.end) }
-        val duration = fields?.duration ?: source
+        val duration = timing.durationSeconds.takeIf { timing.isTimed }?.toDouble() ?: fields?.duration ?: source
         return StoryMediaObject(
-            id = mediaId,
+            id = id,
             postMediaId = mediaId,
             mediaURL = url,
             mediaType = if (video) "video" else "image",
@@ -84,11 +93,17 @@ data class StoryPlacedMedia(
             sourceStart = fields?.start,
             sourceEnd = fields?.end,
             crop = crop.takeIf { !video },
+            zIndex = zIndex,
+            startTime = timing.startSeconds.takeIf { timing.hasStart }?.toDouble(),
         )
     }
 
     fun toDraftSnapshot(): StoryDraftPlacedMediaSnapshot =
-        StoryDraftPlacedMediaSnapshot(id = mediaId, x = x, y = y, scale = scale, rotationDeg = rotationDeg, filter = filter?.wireValue(), adjustments = adjustments, sourceStart = sourceStart, sourceEnd = sourceEnd, crop = crop)
+        StoryDraftPlacedMediaSnapshot(
+            id = mediaId, x = x, y = y, scale = scale, rotationDeg = rotationDeg, filter = filter?.wireValue(), adjustments = adjustments,
+            sourceStart = sourceStart, sourceEnd = sourceEnd, crop = crop, zIndex = zIndex, objectId = id.takeIf { it != mediaId },
+            startSeconds = timing.startSeconds, durationSeconds = timing.durationSeconds,
+        )
 
     companion object {
         /** Les deux bornes dans la source, ou `null` : une borne seule, une fenêtre sous le plancher ou aberrante vaut la source entière. */
@@ -114,14 +129,34 @@ data class StoryPlacedMedia(
                     sourceStart = it.sourceStart.takeIf { _ -> it.mediaType == "video" },
                     sourceEnd = it.sourceEnd.takeIf { _ -> it.mediaType == "video" },
                     crop = it.crop.takeIf { _ -> it.mediaType != "video" },
+                    zIndex = it.zIndex,
+                    timing = authoredWindow(it),
+                    id = it.id.ifBlank { it.postMediaId },
                 ).normalised()
             }
+
+        /**
+         * La fenêtre d'apparition qu'un AUTEUR a posée sur [media] : son départ, et sa durée quand elle n'est pas celle que
+         * la vidéo occupe d'elle-même (sa fenêtre de source, sinon sa durée propre) — celle-là, la publication la réécrit.
+         */
+        private fun authoredWindow(media: StoryMediaObject): StoryElementTiming {
+            val video = media.mediaType == "video"
+            val own = trimOf(media.sourceStart, media.sourceEnd)?.takeIf { video }?.let { it.end - it.start }
+                ?: media.intrinsicDuration?.takeIf { video }
+            val start = media.startTime?.takeIf { it.isFinite() && it > 0.0 }?.toFloat() ?: StoryElementTiming.NONE_SECONDS
+            val duration = media.duration?.takeIf { it.isFinite() && it > 0.0 && (own == null || abs(it - own) > WINDOW_EPSILON) }
+            return StoryElementTiming(start, duration?.toFloat() ?: StoryElementTiming.NONE_SECONDS)
+        }
+
+        private const val WINDOW_EPSILON = 1e-3
 
         fun from(snapshot: StoryDraftPlacedMediaSnapshot): StoryPlacedMedia =
             StoryPlacedMedia(
                 snapshot.id, snapshot.x, snapshot.y, snapshot.scale, snapshot.rotationDeg,
                 snapshot.filter?.let { token -> StoryFilter.entries.firstOrNull { it.wireValue() == token } },
-                snapshot.adjustments, snapshot.sourceStart, snapshot.sourceEnd, snapshot.crop,
+                snapshot.adjustments, snapshot.sourceStart, snapshot.sourceEnd, snapshot.crop, snapshot.zIndex,
+                timing = StoryElementTiming(snapshot.startSeconds.coerceAtLeast(0f), snapshot.durationSeconds.coerceAtLeast(0f)),
+                id = snapshot.objectId?.takeIf { it.isNotBlank() } ?: snapshot.id,
             ).normalised()
     }
 }

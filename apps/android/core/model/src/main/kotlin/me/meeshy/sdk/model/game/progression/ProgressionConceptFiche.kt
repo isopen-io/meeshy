@@ -15,8 +15,16 @@ public data class FicheStateLine(val text: GameText, val facts: List<ConceptFact
     public constructor(text: GameText, vararg facts: ConceptFact) : this(text, facts.toList())
 }
 
-/** Une ligne « libellé → valeur » de « Où j'en suis » et l'IDENTITÉ du fait qu'elle dit (iOS `ProgressionConceptFact`). */
-public data class FicheFact(val label: GameText, val value: GameText, val identity: ConceptFact?)
+/**
+ * Une ligne « libellé → valeur » de « Où j'en suis », l'IDENTITÉ du fait qu'elle dit et la clé de sa PRÉCISION — ce que
+ * son toucher ouvre (iOS `ProgressionConceptFact`, `detail`) ; `null` : la phrase de son concept.
+ */
+public data class FicheFact(
+    val label: GameText,
+    val value: GameText,
+    val identity: ConceptFact?,
+    val detail: GameDetailFactKey? = null,
+)
 
 /** Ce qui tient la tête de la fiche. */
 public sealed interface FicheHead {
@@ -118,8 +126,8 @@ public object ProgressionConceptFiches {
 
     // Les lignes de « Où j'en suis », chacune avec son identité
 
-    private fun fact(label: GameTextKey, value: GameText, identity: ConceptFact?): FicheFact =
-        FicheFact(GameText(label), value, identity)
+    private fun fact(label: GameTextKey, value: GameText, identity: ConceptFact?, detail: GameDetailFactKey? = null): FicheFact =
+        FicheFact(GameText(label), value, identity, detail)
 
     /** Un nombre seul, écrit par la locale (iOS `GameCopy.formatCount`). */
     private fun count(value: Int): GameText = GameText(GameTextKey.JoinedBySpace, listOf(GameTextArg.Count(value)))
@@ -153,7 +161,12 @@ public object ProgressionConceptFiches {
         )
         ProgressionConcept.Showcase -> listOfNotNull(
             game?.visibility?.let {
-                fact(GameTextKey.FactVisible, ProgressionConceptModel.visibilityLabel(it.showcase), ConceptFact.ShowcaseVisibility)
+                fact(
+                    GameTextKey.FactVisible,
+                    ProgressionConceptModel.visibilityLabel(it.showcase),
+                    ConceptFact.ShowcaseVisibility,
+                    GameDetailFactKey.ShowcaseVisibility,
+                )
             },
         )
         ProgressionConcept.Atlas -> atlasRows(game)
@@ -169,7 +182,7 @@ public object ProgressionConceptFiches {
         val glory = game?.glory ?: return emptyList()
         val next = glory.next?.let { ProgressionConceptModel.rankLabel(it.rank, it.division5 ?: it.division) }
         return listOfNotNull(
-            fact(GameTextKey.ConceptNameGlory, count(glory.glory), ConceptFact.Glory),
+            fact(GameTextKey.ConceptNameGlory, count(glory.glory), ConceptFact.Glory, GameDetailFactKey.Glory),
             next?.let { fact(GameTextKey.FactNextRank, it, ConceptFact.RankNext) },
             next?.let { name ->
                 glory.gloryMissing?.let { missing ->
@@ -177,6 +190,7 @@ public object ProgressionConceptFiches {
                         GameText.of(GameTextKey.FactMissingForRank, GameTextArg.Nested(name)),
                         GameCopyLaws.gloryAmount(GameTextArg.Count(missing)),
                         ConceptFact.GloryMissing,
+                        GameDetailFactKey.GloryMissing,
                     )
                 }
             },
@@ -185,8 +199,10 @@ public object ProgressionConceptFiches {
 
     /** La forme et les Veilleuses sont aux tuiles de la fiche, leurs prix aux gestes : ici, ce qui reste. */
     private fun flameRows(progress: EngagementProgress, game: GameBlock?): List<FicheFact> = listOfNotNull(
-        fact(GameTextKey.FactRecord, GameCopyLaws.days(progress.streak.longestDays), ConceptFact.StreakRecord),
-        game?.let { ProgressionConceptStates.flameStatus(it.flame.status) }?.let { fact(GameTextKey.FactState, it, ConceptFact.FlameState) },
+        fact(GameTextKey.FactRecord, GameCopyLaws.days(progress.streak.longestDays), ConceptFact.StreakRecord, GameDetailFactKey.StreakRecord),
+        game?.let { ProgressionConceptStates.flameStatus(it.flame.status) }?.let {
+            fact(GameTextKey.FactState, it, ConceptFact.FlameState, GameDetailFactKey.FlameState)
+        },
     )
 
     private fun badgesRows(progress: EngagementProgress): List<FicheFact> {
@@ -211,7 +227,7 @@ public object ProgressionConceptFiches {
         val atlas = game?.atlas ?: return emptyList()
         return listOfNotNull(
             fact(GameTextKey.FactRemaining, count((atlas.total - atlas.stamped).coerceAtLeast(0)), ConceptFact.AtlasLeft),
-            if (atlas.pending.isEmpty()) null else fact(GameTextKey.FactPending, count(atlas.pending.size), ConceptFact.AtlasPending),
+            if (atlas.pending.isEmpty()) null else fact(GameTextKey.FactPending, count(atlas.pending.size), ConceptFact.AtlasPending, GameDetailFactKey.AtlasPending),
             game.visibility?.let { fact(GameTextKey.FactVisible, ProgressionConceptModel.visibilityLabel(it.atlas), ConceptFact.AtlasVisibility) },
         )
     }

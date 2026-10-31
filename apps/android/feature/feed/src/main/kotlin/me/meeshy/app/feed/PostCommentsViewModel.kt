@@ -25,6 +25,10 @@ import me.meeshy.sdk.mention.applyRemote
 import me.meeshy.sdk.mention.onTextChange
 import me.meeshy.sdk.mention.reset
 import me.meeshy.sdk.mention.select
+import me.meeshy.sdk.model.card.PostCommentCardComposition
+import me.meeshy.sdk.model.card.PostCommentCardLabels
+import me.meeshy.sdk.model.card.PostCommentCardPost
+import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MentionCandidate
@@ -634,6 +638,26 @@ class PostCommentsViewModel @Inject constructor(
     private fun sendFailed(message: String?, content: String, notice: CommentNotice) {
         status.update { it.copy(isSubmitting = false, error = message, notice = notice) }
         if (composerDraft.value.text.isBlank()) composerDraft.update { it.copy(text = content) }
+    }
+
+    /**
+     * #13922 — la carte qu'« Imager » ouvre sur [commentId] (iOS `CommentMoreMenu`) : lui tel que sa rangée l'affiche, le
+     * fil chargé autour de lui, et [support], le post en tête quand il est public ; `null` quand rien ne s'image.
+     */
+    fun commentCard(commentId: String, support: PostCommentCardPost?, labels: PostCommentCardLabels): PostCommentCardSubject? {
+        val target = findComment(commentId) ?: return null
+        val shown = _state.value.comments + _state.value.replyThreads.values.flatMap { it.replies }
+        val user = sessionRepository.currentUser.value
+        val source = CommentCardReading.source(
+            target = target,
+            shownText = shown.firstOrNull { it.id == commentId }?.content,
+            loaded = thread.value.comments + replies.value.repliesByParent.values.flatten(),
+            pending = shown.filter { it.isPending }.map { it.id }.toSet(),
+            support = support,
+            viewer = user,
+            preferences = user ?: EmptyContentPreferences,
+        )
+        return PostCommentCardComposition.cardOf(source, labels)
     }
 
     private fun findComment(id: String): ApiPostComment? =

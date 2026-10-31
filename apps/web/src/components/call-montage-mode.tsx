@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 
+import { frameDisplayName } from '@meeshy/shared/types/frame-name';
 import { browserCanvas, captureDrawn, captureFaces, captureMontage, MONTAGE_DATE, saveCaptures, type CaptureEnv, type CaptureFile, type SaveOutcome } from '@/lib/calls/call-capture';
 import type { ClipEnv } from '@/lib/calls/call-capture-live';
 import { visibleTiles } from '@/lib/calls/call-capture-tiles';
@@ -271,7 +272,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     const at = Math.max(0, offered.findIndex((option) => option.id === chosenId));
     return offered.map((option, index) => ({
       id: option.id,
-      label: option.name,
+      label: frameDisplayName(option, language),
       detail: frameUsageText(language, atelier.usageLabel(option)),
       visual:
         Math.abs(index - at) <= FRAME_THUMB_WINDOW ? (
@@ -307,7 +308,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     setFrameId(next?.id ?? null);
   };
 
-  const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frame.name });
+  const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frameDisplayName(frame, language) });
 
   return (
     <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage">

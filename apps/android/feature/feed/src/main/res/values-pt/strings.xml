@@ -39,15 +39,8 @@
     <string name="status_composer_mood_label">Humor %1$s</string>
     <string name="feed_composer_open_placeholder">Compartilhe algo com o mundo…</string>
     <string name="feed_composer_attach_media">Adicionar foto ou vídeo</string>
-    <string name="feed_composer_take_video">Gravar um vídeo</string>
     <string name="feed_composer_remove_media">Remover mídia</string>
-    <string name="feed_composer_add_location">Adicionar minha localização</string>
-    <string name="feed_composer_remove_location">Remover localização</string>
-    <string name="feed_composer_location_unavailable">Localização indisponível — verifique suas configurações de localização e tente novamente</string>
     <string name="feed_composer_media_unusable">Não foi possível anexar essa mídia</string>
-    <string name="feed_composer_media_alt_label">Descreva esta foto ou vídeo para leitores de tela (%1$d)</string>
-    <string name="feed_composer_media_alt_placeholder">ex. Uma bicicleta vermelha encostada em uma parede de tijolos</string>
-    <string name="feed_composer_language_button">Idioma da publicação: %1$s</string>
 
     <!-- Post options menu -->
     <string name="feed_post_options">Opções da publicação</string>

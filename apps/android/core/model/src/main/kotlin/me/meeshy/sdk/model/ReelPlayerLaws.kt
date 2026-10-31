@@ -29,16 +29,17 @@ public object ReelScrub {
 
 /**
  * Le menu « … » d'un réel (iOS `ReelMoreOptionsMenu`) : ouvrir, copier le texte, partager ; puis,
- * pour son propre réel, épingler et supprimer, sinon signaler. « Sauvegarder » et « Modifier »
- * n'y sont pas encore (issues de suivi).
+ * pour son propre réel, épingler et supprimer, sinon signaler. Un réel qui se rend en vidéo (sa scène, ou sa vidéo) offre,
+ * juste après « Partager », l'export : Enregistrer, Partager et Imager la vidéo (#13896). « Modifier » n'y est pas encore.
  */
 public object ReelMenu {
-    public enum class Action { OPEN, COPY_TEXT, SHARE, PIN, DELETE, REPORT }
+    public enum class Action { OPEN, COPY_TEXT, SHARE, EXPORT, PIN, DELETE, REPORT }
 
-    public fun actions(isOwn: Boolean, hasText: Boolean): List<Action> = buildList {
+    public fun actions(isOwn: Boolean, hasText: Boolean, exportable: Boolean = false): List<Action> = buildList {
         add(Action.OPEN)
         if (hasText) add(Action.COPY_TEXT)
         add(Action.SHARE)
+        if (exportable) add(Action.EXPORT)
         if (isOwn) {
             add(Action.PIN)
             add(Action.DELETE)

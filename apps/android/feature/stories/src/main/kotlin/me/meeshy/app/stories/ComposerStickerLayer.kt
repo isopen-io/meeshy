@@ -61,7 +61,6 @@ internal fun StickerLayer(
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
     onTransform: (Float, Float) -> Unit,
-    showsSelection: Boolean = true,
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     val label = stickerTemplateName(sticker.templateId) ?: sticker.emoji
@@ -114,11 +113,12 @@ internal fun StickerLayer(
                 onClick { currentTap(); true }
                 onLongClick { currentLongPress(); true }
             }
-            .sceneSelectionFrame(selected && showsSelection, sticker.scale)
+            .sceneSelectionFrame(selected, sticker.scale)
             .padding(4.dp),
         contentAlignment = Alignment.Center,
     ) {
         ComposerStickerArt(sticker)
+        if (sticker.isAwaitingImage) IncomingStickerRing(Modifier.align(Alignment.BottomEnd))
         SceneObjectMenuPopup(menu = menu, onAction = onMenuAction, onDismiss = onMenuDismiss)
     }
 }

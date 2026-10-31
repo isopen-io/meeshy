@@ -70,18 +70,16 @@ final class ComposerSelectionMarkerWiringGuardTests: XCTestCase {
     /// précisément ce qui rend l'absence si discrète : rien ne manquait en
     /// amont, seul le dernier maillon n'était pas posé.
     ///
-    /// **Depuis le 2026-09-27, la scène plein écran ne PEINT plus la
-    /// sélection** (directive porteur : « il ne faut plus l'entourer sur la
-    /// scène ni afficher sa configuration par des détails en bas »). Le meuble
-    /// garde l'id pour l'appui long et le double-tap, et descend `nil` : la
-    /// chaîne reste câblée jusqu'au calque — les témoins suivants la tiennent —
-    /// pour les hôtes qui encadrent encore.
+    /// **Depuis le 2026-10-30, la scène plein écran PEINT de nouveau la
+    /// sélection** (#13839, L5, maquette validée : un cadre pointillé blanc de
+    /// 2 pt, décalé de 3 pt), qui remplace la sélection silencieuse du
+    /// 2026-09-27. Le badge de configuration ne revient pas : la barre libellée
+    /// dit le reste. Seul le pré-envoi de l'objet y parle (« Envoi 40 % »,
+    /// #13864, R5), muet au repos. Pendant la frappe, le curseur suffit.
     func test_leMeuble_descendLaSelectionJusquALaSurface() throws {
         let source = compact(try AppSourceGuard.composerHostSource())
-        XCTAssertTrue(source.contains("selectedItemId:nil,selectionBadge:nil,"),
-                      "la scène plein écran ne doit ni entourer l'objet choisi ni badger sa configuration")
-        XCTAssertFalse(source.contains("selectedItemId:selectedSceneItemId"),
-                       "un cadre de sélection est revenu sur la scène plein écran")
+        XCTAssertTrue(source.contains("selectedItemId:sceneTypesInline?nil:selectedSceneItemId,selectionBadge:ComposerSceneIntakeCopy.sendingBadge(for:selectedSceneItemPreUpload),"),
+                      "la scène plein écran encadre l'élément choisi, sans badge de configuration")
     }
 
     /// **La surface fait suivre, elle ne re-décide pas.** Même contrat que pour

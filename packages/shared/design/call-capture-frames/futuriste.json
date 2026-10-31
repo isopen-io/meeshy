@@ -5,6 +5,15 @@
       "id": "futuriste.hud",
       "mood": "futuriste",
       "name": "HUD",
+      "localizedNames": {
+        "fr": "HUD",
+        "en": "HUD",
+        "es": "HUD",
+        "pt": "HUD",
+        "de": "HUD",
+        "it": "HUD",
+        "ar": "HUD"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -173,6 +182,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "solid",
@@ -236,6 +254,15 @@
       "id": "futuriste.hologramme",
       "mood": "futuriste",
       "name": "Hologramme",
+      "localizedNames": {
+        "fr": "Hologramme",
+        "en": "Hologram",
+        "es": "Holograma",
+        "pt": "Holograma",
+        "de": "Hologramm",
+        "it": "Ologramma",
+        "ar": "هولوغرام"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -406,6 +433,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "radial",
@@ -476,6 +512,15 @@
       "id": "futuriste.orbite",
       "mood": "futuriste",
       "name": "Orbite",
+      "localizedNames": {
+        "fr": "Orbite",
+        "en": "Orbit",
+        "es": "Órbita",
+        "pt": "Órbita",
+        "de": "Umlaufbahn",
+        "it": "Orbita",
+        "ar": "مدار"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -608,6 +653,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "radial",
@@ -681,6 +735,15 @@
       "id": "futuriste.essaim",
       "mood": "futuriste",
       "name": "Essaim",
+      "localizedNames": {
+        "fr": "Essaim",
+        "en": "Swarm",
+        "es": "Enjambre",
+        "pt": "Enxame",
+        "de": "Schwarm",
+        "it": "Sciame",
+        "ar": "سرب"
+      },
       "surfaces": [
         "capture"
       ],

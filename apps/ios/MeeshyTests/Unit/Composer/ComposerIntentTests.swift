@@ -252,11 +252,12 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertNil(profil.routesToLegacy)
     }
 
-    func test_profile_share_reprendUnDocumentAuFormatPost() {
+    func test_profile_share_semeSaPieceAuFormatPost() {
         let profil = profil(.share)
 
         XCTAssertEqual(profil.initialFormat, .post)
-        XCTAssertEqual(profil.opensWith, .resume, "Le partage entrant reprend un document déjà constitué.")
+        XCTAssertEqual(profil.opensWith, .mediaSeeded,
+                       "Le partage entrant SÈME la pièce reçue sur la scène (#13864) — il ne reprend aucun document.")
         XCTAssertNil(profil.routesToLegacy)
     }
 
@@ -465,13 +466,13 @@ final class ComposerIntentTests: XCTestCase {
         )
     }
 
-    /// Reprendre, c'est retrouver un document déjà constitué : un brouillon, un
-    /// partage entrant, une publication qu'on retouche.
+    /// Reprendre, c'est retrouver un document déjà constitué : un brouillon, une
+    /// publication qu'on retouche. Un partage entrant SÈME une pièce (#13864).
     private func reprendUnDocumentExistant(_ origin: ComposerOrigin) -> Bool {
         switch origin {
-        case .draft, .share, .edit:
+        case .draft, .edit:
             return true
-        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia:
+        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia, .share:
             return false
         }
     }

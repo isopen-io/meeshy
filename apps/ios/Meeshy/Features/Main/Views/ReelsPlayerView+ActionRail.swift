@@ -152,6 +152,8 @@ struct ReelMoreOptionsMenu: View {
     /// Flux « Enregistrer en local » sur le média du réel (coordinateur possédé
     /// par `ReelsPlayerView`, seul habilité à présenter la sheet de destination).
     var onSaveMedia: () -> Void
+    /// « Imager » (#13871), `nil` hors d'une œuvre composée.
+    var onImager: (() -> Void)? = nil
 
     private var isOwnReel: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
@@ -190,6 +192,13 @@ struct ReelMoreOptionsMenu: View {
                 onSaveMedia()
             } label: {
                 Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: FullscreenChromeSymbol.save)
+            }
+        }
+        if let onImager {
+            Button {
+                onImager()
+            } label: {
+                Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
             }
         }
         if isOwnReel {

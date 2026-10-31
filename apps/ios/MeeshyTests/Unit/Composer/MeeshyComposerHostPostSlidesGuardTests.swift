@@ -276,25 +276,15 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
                 + "vignette change la scène sans que rien, dans le rail, ne le confirme.")
     }
 
-    /// **Le rail vit dans la BARRE HAUTE, et en UN seul exemplaire.** Deux
-    /// bandes montrant les mêmes vignettes seraient deux inventaires à faire
-    /// diverger, et la seconde mentirait au premier chemin d'ingestion qui
-    /// n'alimente que l'une. C'est le « d'un seul tenant » de #4047.
+    /// **Le rail des slides existe en UN seul exemplaire.** Deux bandes montrant
+    /// les mêmes vignettes seraient deux inventaires à faire diverger, et la
+    /// seconde mentirait au premier chemin d'ingestion qui n'alimente que l'une.
+    /// C'est le « d'un seul tenant » de #4047.
     ///
-    /// **RE-POINTÉE au #4064**, et il faut dire pourquoi plutôt que de la
-    /// réparer en silence : #4070 a sorti la barre haute de la surface document
-    /// pour en faire un composant PARTAGÉ (`ComposerTopBar`), que la surface de
-    /// scène consomme aussi. La garde, elle, lisait toujours
-    /// `ComposerDocumentSurface.swift` — elle a donc rougi sur un fichier où le
-    /// rail n'était plus, pendant que le rail allait très bien. Une garde de
-    /// source ne suit pas le code qu'elle protège : c'est à la main qu'on la
-    /// déplace, et le gate ciblé de #4070 ne l'exécutait pas.
-    ///
-    /// Elle en sort RENFORCÉE. « Un seul exemplaire » ne se compte plus dans un
-    /// fichier : il se prouve par l'ABSENCE du rail chez les deux surfaces qui
-    /// consomment la barre — la forme que #4070 rend vérifiable et que la
-    /// version d'avant ne pouvait pas exprimer.
-    func test_theRailLivesInTheTopBar_andOnlyThere() throws {
+    /// Il vivait dans la barre haute (`ComposerTopBar`), qui a quitté le projet
+    /// au #13907 : l'hôte l'injecte en slot, la scène le relaie, et aucune vue ne
+    /// le redéclare.
+    func test_theRail_isInjectedOnce_andNeverRedeclared() throws {
         func source(_ fichier: String) throws -> String {
             let url = URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent().deletingLastPathComponent()
@@ -303,44 +293,20 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
             return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         }
 
-        let barre = try source("ComposerTopBar.swift")
-        XCTAssertTrue(barre.contains("struct ComposerTopBar"),
-            "La source de la barre haute est introuvable — la garde ne mesurerait RIEN.")
-        // **On compte l'IDENTIFIANT, jamais la sous-chaîne — et cette garde a payé
-        // la différence.** Le jour où le rail est passé en SLOT injecté
-        // (`slideRailSlot: AnyView?`, 2eefee7aae), `components(separatedBy:)` en a
-        // compté CINQ au lieu de deux et la garde a rougi, alors que le rail allait
-        // très bien : `slideRail` y était toujours déclaré une fois et monté une
-        // fois, et les trois occurrences de trop appartenaient à un identifiant
-        // VOISIN dont il n'est que le préfixe.
-        //
-        // C'est la forme la plus discrète d'un piège déjà payé ici : un lot qui
-        // RENOMME n'éteint pas les gardes qui reconnaissent par le nom, il les
-        // INVERSE. Celui-ci n'a même rien renommé — un nom voisin a suffi.
-        XCTAssertEqual(
-            AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: barre), 2,
-            "`slideRail` doit apparaître EXACTEMENT deux fois : sa déclaration et son unique montage, "
-                + "dans le `body` de la barre haute. Un troisième site est un second rail. "
-                + "(`slideRailSlot` est le contenu INJECTÉ par l'hôte — une autre chose, qui ne compte pas ici.)"
-        )
-
-        guard let corps = barre.range(of: "var body: some View"),
-              let fin = barre.range(of: "private var slideRail", range: corps.upperBound..<barre.endIndex)
-        else {
-            return XCTFail("Le `body` de la barre haute doit précéder `slideRail` — c'est lui qui le MONTE.")
-        }
-        XCTAssertTrue(
-            barre[corps.upperBound..<fin.lowerBound].contains("slideRail"),
-            "La barre haute doit monter le rail. Ailleurs, il redevient la bande basse que #4047 remplace."
-        )
-
         // **La moitié « et nulle part ailleurs », désormais VÉRIFIABLE.** Les
         // deux surfaces consomment la barre ; qu'aucune ne nomme le rail est ce
         // qui garantit qu'il n'en existe qu'un.
-        for surface in ["ComposerDocumentSurface.swift", "ComposerSceneSurface.swift"] {
+        // Depuis #13839, la scène ne monte plus la barre haute : elle relaie le
+        // MÊME slot à son chrome du repos (`ComposerSceneOverlayChrome`), qui
+        // le pose entre ✕ et ↶ ↷ dès deux diapos. Un seul rail, deux places.
+        let reposDeScene = try source("ComposerSceneOverlayChrome.swift")
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: reposDeScene), 0,
+                       "le chrome du repos redéclare un rail de slides au lieu de relayer le slot")
+        // #13864 : la surface document est partie — seule la scène relaie le slot.
+        for surface in ["ComposerSceneSurface.swift"] {
             let code = try source(surface)
-            XCTAssertTrue(code.contains("ComposerTopBar("),
-                "\(surface) doit CONSOMMER la barre — sinon cette garde ne dit rien de cette surface.")
+            XCTAssertTrue(code.contains("slideRow: slideRailSlot"),
+                "\(surface) doit RELAYER le rail injecté — sinon cette garde ne dit rien de cette surface.")
             // Là encore l'IDENTIFIANT, pas la sous-chaîne — et ici la nuance PORTE
             // l'architecture : les deux surfaces déclarent bien `slideRailSlot`,
             // un slot OPAQUE qu'elles relaient sans rien savoir du rail (une
@@ -396,9 +362,8 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         XCTAssertTrue(compacted.contains("ComposerOverflowPolicy.entries("),
             "Les entrées doivent venir de la RÈGLE, lue une seule fois.")
         XCTAssertTrue(
-            compacted.contains("overflowMenu:documentOverflowEntries.isEmpty?nil:AnyView(overflowMenu)"),
-            "Aucune entrée ⇒ AUCUN bouton. Monter le menu quand même donnerait un `⋯` qui s'ouvre sur "
-                + "le vide."
+            compacted.contains("overflow:documentOverflowEntries"),
+            "Le ⋯ de la scène lit les entrées de la RÈGLE — jamais une liste écrite ici."
         )
     }
 

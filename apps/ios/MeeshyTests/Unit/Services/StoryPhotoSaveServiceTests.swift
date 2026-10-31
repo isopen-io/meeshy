@@ -121,8 +121,15 @@ final class StubPhotoSaver: PhotoLibrarySaving, @unchecked Sendable {
 
     var shouldFail = false
     private(set) var savedVideoURLs: [URL] = []
+    /// Les IMAGES rangées par fichier — la sortie d'une scène fixe (#13871).
+    private(set) var savedImageFileURLs: [URL] = []
 
     func saveImage(_ data: Data) async throws {}
+
+    func saveImageFile(at url: URL, moveFile: Bool) async throws {
+        savedImageFileURLs.append(url)
+        if shouldFail { throw Failure.denied }
+    }
 
     func saveVideo(at url: URL) async throws {
         savedVideoURLs.append(url)
@@ -301,10 +308,12 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         return (sut, exporter, photos, toasts)
     }
 
+    /// Une story qui BOUGE (un texte borné) : ce fichier témoigne du chemin
+    /// VIDÉO ; une scène fixe et muette sort en image (#13871, `StoryStillExportTests`).
     private func makeStory(translations: [StoryTranslation]? = nil) -> StoryItem {
         StoryItem(id: "story-\(UUID().uuidString)",
                   content: "Hello",
-                  storyEffects: StoryEffects(textObjects: [StoryTextObject(text: "Hello")]),
+                  storyEffects: StoryEffects(textObjects: [StoryTextObject(text: "Hello", duration: 5)]),
                   translations: translations)
     }
 
@@ -374,7 +383,7 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
     func test_save_pairsStickerImagesWithStoryMedia_andThreadsThemToExporter() async {
         let (sut, exporter, _, _) = makeSUT()
         let effects = StoryEffects(stickerObjects: [StorySticker(emoji: "", postMediaId: "pm-sticker"),
-                                                    StorySticker(emoji: "🔥")])
+                                                    StorySticker(emoji: "🔥", duration: 5)])
         let story = StoryItem(id: "story-\(UUID().uuidString)",
                               content: "Hello",
                               media: [FeedMedia(id: "pm-sticker", type: .image,
@@ -918,7 +927,7 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
                 ObjectV3(id: "t\(index)", kind: .text,
                          anchor: .free(x: 0.5, y: 0.5), plane: .fg, z: 1,
                          transform: TransformV3(),
-                         payload: ["text": .string(texte)])
+                         payload: ["text": .string(texte), "duration": .number(5)])
             ]
             if let stickerMediaId {
                 objets.append(ObjectV3(id: "st\(index)", kind: .sticker,

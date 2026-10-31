@@ -88,7 +88,7 @@ internal object ProgressionConceptStatesMore {
     fun levelHeld(step: GameLevelStep): GameText =
         GameText.of(GameTextKey.LevelHeld, nested(levelStepGoal(step)), count(step.level))
 
-    private fun levelStepGoal(step: GameLevelStep): GameText = when (step.kind) {
+    fun levelStepGoal(step: GameLevelStep): GameText = when (step.kind) {
         LevelStepKind.Mint ->
             if (step.target == 1L) GameText(GameTextKey.LevelStepMintFirst) else GameText.of(GameTextKey.LevelStepMintMany, count(step.target))
         LevelStepKind.Missions ->

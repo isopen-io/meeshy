@@ -61,7 +61,9 @@ final class ComposerSceneSoundChipMountGuardTests: XCTestCase {
     /// en a qu'une, et un doublon de cette forme ne se lit pas comme un
     /// doublon.
     func test_leSonDeFOND_nEstPasPeintCommeUnePuce() throws {
-        XCTAssertTrue(try surface.contains("SceneAudioStageRule.stagedAudios(in: slide.effects.audioPlayerObjects ?? [])"))
+        // `overlaidAudios` ne garde que les sons POSÉS (jamais le fond), et
+        // laisse au canvas ceux qu'un objet recouvre (#13901).
+        XCTAssertTrue(try surface.contains("SceneAudioStageRule.overlaidAudios(in: slide.effects)"))
     }
 
     /// **Le binding résout par IDENTIFIANT, jamais par index.**

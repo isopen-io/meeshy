@@ -26,7 +26,6 @@ enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDe
     SLIDE_DURATION,
     ANIMATION,
     TIMING,
-    FRAME,
     OPENING_EFFECT,
     VISUAL_EFFECT,
     CAPTION,
@@ -45,11 +44,8 @@ enum class ComposerMoreEntry(val export: ComposerOverflowEntry? = null, val isDe
  */
 object ComposerSceneTools {
 
+    /** Ce qui s'en retire — un objet en édition, le pinceau en main — est la loi de [ComposerEditingChrome] (#13956). */
     val column: List<ComposerSceneTool> = ComposerSceneTool.entries
-
-    /** Un objet touché ou le pinceau en main : les outils se retirent, la scène et ce qui agit sur l'objet restent. */
-    fun toolsServed(objectFocused: Boolean, drawing: Boolean): List<ComposerSceneTool> =
-        if (objectFocused || drawing) emptyList() else column
 
     /**
      * [editsSlides] : faux pendant la modification d'une story publiée, qui ne gagne pas de diapo. [sceneEffects] et
@@ -59,7 +55,6 @@ object ComposerSceneTools {
      */
     data class MoreInput(
         val editsSlides: Boolean,
-        val hasBackgroundMedia: Boolean,
         val animated: Boolean,
         val sceneEffects: List<ComposerSceneEffect>,
         val exports: List<ComposerOverflowEntry>,
@@ -67,19 +62,21 @@ object ComposerSceneTools {
         val hasBackground: Boolean = false,
         val canPickBackground: Boolean = false,
         val hasSomethingToErase: Boolean = false,
+        /** Une story légende chaque diapo ; un post ou un réel écrit son texte hors de la scène (#13863). */
+        val captionsSlides: Boolean = true,
     )
 
     fun moreEntries(input: MoreInput): List<ComposerMoreEntry> = ComposerMoreEntry.entries.filter { entry ->
         when (entry) {
             ComposerMoreEntry.ADD_SLIDE -> input.editsSlides
             ComposerMoreEntry.TIMING -> input.animated
-            ComposerMoreEntry.FRAME -> input.hasBackgroundMedia
             ComposerMoreEntry.OPENING_EFFECT -> ComposerSceneEffect.OPENING in input.sceneEffects
             ComposerMoreEntry.VISUAL_EFFECT -> ComposerSceneEffect.VISUAL in input.sceneEffects
             ComposerMoreEntry.SAVE_TO_PHOTOS, ComposerMoreEntry.SHARE -> entry.export in input.exports
             ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION,
-            ComposerMoreEntry.ANIMATION, ComposerMoreEntry.CAPTION,
+            ComposerMoreEntry.ANIMATION,
             ComposerMoreEntry.MENTION, ComposerMoreEntry.HASHTAGS, ComposerMoreEntry.PLACE -> true
+            ComposerMoreEntry.CAPTION -> input.captionsSlides
             ComposerMoreEntry.PREVIEW -> input.hasContent
             ComposerMoreEntry.PICK_BACKGROUND -> input.canPickBackground
             ComposerMoreEntry.REMOVE_BACKGROUND -> input.hasBackground
@@ -101,7 +98,4 @@ object ComposerSceneTools {
 
     /** Le chevron de Publier n'existe que s'il y a un autre format ou une disposition à choisir (route autonome : aucun). */
     fun showsFormatChevron(formats: Int, layouts: Int): Boolean = formats > 1 || layouts > 0
-
-    /** Le pinceau en main, la croix et le socle se retirent : la scène reste entière pour le trait. */
-    fun showsSceneChrome(drawing: Boolean): Boolean = !drawing
 }

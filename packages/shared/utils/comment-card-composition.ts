@@ -27,8 +27,9 @@ import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags.js';
  * LE HÉROS : le média du support (post, story, réel) ouvre la carte, grand et
  * pleine largeur, avant la ligne auteur / extrait puis le commentaire. Une
  * RÉPONSE reste imbriquée : chaque commentaire du fil garde son niveau (`depth`,
- * ses ancêtres connus, borné), que la carte rend par un retrait et une barre par
- * niveau — plus d'aplatissement en « Auteur : texte ».
+ * ses ancêtres connus, borné). La carte web le rend comme iOS (#13922) : un bloc
+ * titré « Fil de commentaires », une ligne « Auteur : texte » par commentaire,
+ * retirée d'un cran par niveau (`composed-comment-card.ts`, `replyOf`).
  *
  * BORNES : le texte du post s'arrête à 4 lignes et 280 caractères, coupé au
  * mot ; au plus 6 blocs — au-delà, le milieu du fil se replie en « +N
@@ -456,8 +457,8 @@ function heroLine<M extends PostCommentCardMediaLike>(head: PostCommentCardPart,
  * La carte que l'atelier peint pour ces blocs — `null` quand rien ne s'image.
  * Le premier bloc de plusieurs est la tête (le post, ou la racine) ; la
  * dernière est la réponse ; les commentaires entre les deux restent des
- * commentaires, IMBRIQUÉS à leur niveau (`context`) au lieu d'être aplatis en
- * « Auteur : texte » ; le pli dit `foldedLabel`.
+ * commentaires, chacun à son niveau (`context`) — l'hôte en compose le bloc
+ * du fil ; le pli dit `foldedLabel`.
  */
 export function postCommentCardSubject<M extends PostCommentCardMediaLike>(
   source: Source<M>,

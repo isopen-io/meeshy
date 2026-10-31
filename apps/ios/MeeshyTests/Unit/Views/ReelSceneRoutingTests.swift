@@ -164,7 +164,7 @@ final class ReelSceneRoutingTests: XCTestCase {
     /// Le détail de post monte l'hôte canvas nu : il pose la couche lui-même.
     func test_thePostDetail_posesTheChipLayer_overItsCanvas() throws {
         XCTAssertTrue(try view("PostDetailView+Canvas.swift")
-            .contains("SceneSoundChipLayer(audios: renderedItem.storyEffects?.audioPlayerObjects ?? [],"))
+            .contains("SceneSoundChipLayer(audios: renderedItem.storyEffects.map { SceneAudioStageRule.overlaidAudios(in: $0) } ?? [],"))
     }
 
     /// Le lecteur de story pose ses pastilles au-dessus de sa couche de gestes :
@@ -336,7 +336,10 @@ final class ReelSceneRoutingTests: XCTestCase {
                                                                     accentColorHex: "6366F1")
                                         },
                                         watermark: { handle in handles.values.append(handle); return nil })
-        let story = StoryItem(id: "story-9681", content: "x", media: [], storyEffects: nil, createdAt: Date())
+        // Un texte borné : la story BOUGE, donc sort en vidéo habillée (#13871).
+        let story = StoryItem(id: "story-9681", content: "x", media: [],
+                              storyEffects: StoryEffects(textObjects: [StoryTextObject(text: "x", duration: 5)]),
+                              createdAt: Date())
 
         sut.save(story: story, author: StoryExportAuthor(userId: "u-9681-auteur", name: "demo-test-staging"))
         for _ in 0..<200 where sut.progress(for: story.id) != nil { await Task.yield() }

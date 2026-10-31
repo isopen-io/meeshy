@@ -213,7 +213,7 @@ data class ApiPost(
     val moodEmoji: String? = null,
     val audioUrl: String? = null,
     val audioDuration: Int? = null,
-    @Serializable(with = StoryEffectsWireSerializer::class)
+    @Serializable(with = PostReadStoryEffectsSerializer::class)
     val storyEffects: StoryEffects? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
     val isLikedByMe: Boolean? = null,

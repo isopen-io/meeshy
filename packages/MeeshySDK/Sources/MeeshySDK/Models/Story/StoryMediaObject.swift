@@ -133,6 +133,12 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     /// actives voyagent (`ImageAdjustments.encode`), et une charge illisible se
     /// lit « aucun réglage » plutôt que de faire tomber la story.
     public var adjustments: ImageAdjustments?
+    /// **Le look de la retouche, gardé comme RÉGLAGE** (#13840) — filtre, cadre,
+    /// effet et cadrage de l'appel, peints en direct par le peintre de l'app
+    /// (`StoryMediaLookPainting`). Brouillon et historique seulement : la
+    /// publication le cuit dans les octets et le retire de la charge
+    /// (`StoryEffects.withoutMediaLooks`). `nil` ⇒ aucun look.
+    public var look: StoryMediaLook?
     /// ThumbHash du contenu (première frame pour vidéo, image décompressée
     /// pour image). Généré au publish (cf. spec § 2.4). Sert de placeholder
     /// pendant le fetch via `applyThumbHashPlaceholder`. `nil` autorisé
@@ -172,6 +178,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case isDuckingDisabled
         case filter
         case adjustments
+        case look
     }
 
     public init(id: String = UUID().uuidString,
@@ -275,6 +282,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         filter = try c.decodeIfPresent(String.self, forKey: .filter)
         adjustments = (try? c.decodeIfPresent(ImageAdjustments.self, forKey: .adjustments))
             .flatMap { $0.activeCount > 0 ? $0 : nil }
+        look = (try? c.decodeIfPresent(StoryMediaLook.self, forKey: .look))?.flatMap(\.normalized)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -315,6 +323,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(isDuckingDisabled, forKey: .isDuckingDisabled)
         try c.encodeIfPresent(filter, forKey: .filter)
         if let adjustments, adjustments.activeCount > 0 { try c.encode(adjustments, forKey: .adjustments) }
+        if let look = look?.normalized { try c.encode(look, forKey: .look) }
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }

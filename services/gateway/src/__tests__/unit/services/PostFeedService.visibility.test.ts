@@ -18,6 +18,7 @@ function makeMockPrisma(overrides: Record<string, any> = {}) {
     post: { findMany: jest.fn().mockResolvedValue([]) },
     postView: { findMany: jest.fn().mockResolvedValue([]) },
     postReaction: { findMany: jest.fn().mockResolvedValue([]) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: { findMany: jest.fn().mockResolvedValue([]) },
     participant: { findMany: jest.fn().mockResolvedValue([]) },
     communityMember: { findMany: jest.fn() },
@@ -65,6 +66,7 @@ describe('PostFeedService.getFeed visibility gating', () => {
   function feedPrisma() {
     return makeMockPrisma({
       // Viewer 'viewer-1' is friends with 'friend-1' (accepted request).
+      userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
       friendRequest: {
         findMany: jest.fn().mockResolvedValue([{ senderId: 'viewer-1', receiverId: 'friend-1' }]),
       },
@@ -117,6 +119,7 @@ describe('PostFeedService.getUserPosts visibility gating', () => {
   it('lets an accepted friend see the author\'s FRIENDS-only posts', async () => {
     const prisma = makeMockPrisma({
       // Viewer is friends with the profile author 'author-1'.
+      userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
       friendRequest: {
         findMany: jest.fn().mockResolvedValue([{ senderId: 'viewer-1', receiverId: 'author-1' }]),
       },

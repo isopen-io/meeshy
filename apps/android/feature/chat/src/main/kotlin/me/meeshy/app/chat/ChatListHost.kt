@@ -26,6 +26,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import me.meeshy.ui.component.bubble.LocalViewOnceConsumer
+import me.meeshy.ui.component.bubble.ViewOnceConsumer
 import androidx.compose.ui.Modifier
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
@@ -321,6 +325,21 @@ internal fun ChatListHost(
         scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isNearBottom)
     }
 
+    // #13995 — la preuve d'affichage de la flamme-œil : les bulles que le fil MONTRE.
+    val shownItems by rememberUpdatedState(renderedItems)
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val items = shownItems
+            listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
+                (items.getOrNull(info.index) as? ChatListItem.Message)?.bubble?.messageId
+            }
+        }
+            .distinctUntilChanged()
+            .collect { ids -> actions.noteDisplayed(ids) }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { actions.consumeAfterReadOnExit() }
+    val viewOnceConsumer = remember(actions) { ViewOnceConsumer { id -> actions.consumeViewOnce(id) } }
+
     LaunchedEffect(listState) {
         snapshotFlow {
             ChatScrollGeometry.topEdgeIndex(
@@ -384,7 +403,7 @@ internal fun ChatListHost(
         )
     }
     val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) { bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds) }
-    CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers) {
+    CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers, LocalViewOnceConsumer provides viewOnceConsumer) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
             state.showSkeleton -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }

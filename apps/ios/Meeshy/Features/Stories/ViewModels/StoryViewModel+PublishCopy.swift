@@ -22,6 +22,33 @@ nonisolated enum StoryPublishCopy {
         }
     }
 
+    /// Le succès d'une publication partie du compositeur, dans le nom de ce
+    /// qui part (#13913) : un post publié ne s'annonçait « Story publiée ».
+    static func published(_ type: PostType) -> String {
+        switch type {
+        case .story:
+            return String(localized: "story.published", defaultValue: "Story publiée", bundle: .main)
+        case .reel:
+            return String(localized: "reel.published", defaultValue: "Réel publié", bundle: .main)
+        case .post, .status:
+            return String(localized: "feed.post.toast.published", defaultValue: "Post publié", bundle: .main)
+        }
+    }
+
+    static func publishFailed(_ type: PostType) -> String {
+        switch type {
+        case .story:
+            return String(localized: "story.publishError",
+                          defaultValue: "Échec de la publication de la story", bundle: .main)
+        case .reel:
+            return String(localized: "reel.publishError",
+                          defaultValue: "Échec de la publication du réel", bundle: .main)
+        case .post, .status:
+            return String(localized: "feed.post.toast.publishError",
+                          defaultValue: "Échec de la publication du post", bundle: .main)
+        }
+    }
+
     /// Le média qu'une publication hors ligne n'a pas pu garder, NOMMÉ
     /// (#10495) — « les médias » ne disait pas lequel reprendre.
     static func unsavedMedia(_ kind: StoryOfflineMediaWriter.MediaKind) -> String {

@@ -484,6 +484,10 @@ function makePrisma(): any {
       findMany: fn().mockResolvedValue([]),
       findFirst: fn().mockResolvedValue(null),
     },
+    userRelation: {
+      findMany: fn().mockResolvedValue([]),
+      findUnique: fn().mockResolvedValue(null),
+    },
   };
 }
 

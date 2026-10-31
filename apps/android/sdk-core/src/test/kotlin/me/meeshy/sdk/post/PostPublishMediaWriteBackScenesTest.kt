@@ -3,31 +3,40 @@ package me.meeshy.sdk.post
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import me.meeshy.sdk.model.UploadedMedia
-import me.meeshy.sdk.model.composer.PostPhotoScenes
+import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ScenePostDocument
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.CreatePostRequest
 import org.junit.Test
 
-/** #13612 — a post of photos queued while they upload: each landed upload takes its place in the media list AND in its scene. */
+/**
+ * #13612, #13863 — a post composed on the scene queued while its photos upload: each landed upload takes its place in the
+ * media list AND in its scene of the one document the composer publishes ([ScenePostDocument]).
+ */
 class PostPublishMediaWriteBackScenesTest {
     private val first = "cmid_11111111-1111-1111-1111-111111111111"
     private val second = "cmid_22222222-2222-2222-2222-222222222222"
 
-    private fun pending(id: String) = UploadedMedia(id, "content://media/$id", "image/jpeg", 1L, null, null, null, null)
+    /** A slide whose background is a photo still uploading under its provisional id, on a colour or not. */
+    private fun photoScene(id: String, colour: String? = null) = StoryEffects(
+        background = colour,
+        mediaObjects = listOf(StoryMediaObject(id = "photo-${id.hashCode()}", postMediaId = id, mediaType = "image", isBackground = true)),
+    )
 
     private val queued = CreatePostRequest(
         content = "deux vues",
         mediaIds = listOf(first, second),
         mediaCaption = mapOf(first to "la plage"),
-        storyEffects = PostPhotoScenes.effects(listOf(pending(first), pending(second)), "fr", null),
+        storyEffects = ScenePostDocument.effects(listOf(photoScene(first), photoScene(second)), null, ComposerFormat.POST),
     )
 
     private fun payload(request: CreatePostRequest) = MeeshyApi.json.encodeToString(request)
 
     private fun scenesOf(request: CreatePostRequest): List<String?> =
         request.storyEffects!!.canvas!!.scenes.map { scene ->
-            scene.objects.firstOrNull { it.plane == "content" }?.payload?.get("postMediaId")?.toString()?.trim('"')
+            scene.objects.firstNotNullOfOrNull { it.payload["postMediaId"] }?.toString()?.trim('"')
         }
 
     @Test
@@ -53,7 +62,7 @@ class PostPublishMediaWriteBackScenesTest {
     @Test
     fun `a layout the author armed survives the write-back`() {
         val withLayout = queued.copy(
-            storyEffects = PostPhotoScenes.effects(listOf(pending(first), pending(second)), "fr", me.meeshy.sdk.model.MosaicLayoutMode.SINE),
+            storyEffects = ScenePostDocument.effects(listOf(photoScene(first), photoScene(second)), me.meeshy.sdk.model.MosaicLayoutMode.SINE, ComposerFormat.POST),
         )
 
         val grafted = PostPublishMediaWriteBack.graft(payload(withLayout), first, "64b000000000000000000001")!!
@@ -67,7 +76,7 @@ class PostPublishMediaWriteBackScenesTest {
         val single = CreatePostRequest(
             content = "une vue",
             mediaIds = listOf(first),
-            storyEffects = PostPhotoScenes.storyEffects("POST", listOf(pending(first)), "fr", null, "302B63"),
+            storyEffects = ScenePostDocument.effects(listOf(photoScene(first, colour = "302B63")), null, ComposerFormat.POST),
         )
 
         val grafted = PostPublishMediaWriteBack.graft(payload(single), first, "64b000000000000000000001")!!
@@ -83,7 +92,7 @@ class PostPublishMediaWriteBackScenesTest {
         val single = CreatePostRequest(
             content = "une vue",
             mediaIds = listOf(first),
-            storyEffects = PostPhotoScenes.storyEffects("POST", listOf(pending(first)), "fr", null, null),
+            storyEffects = ScenePostDocument.effects(listOf(photoScene(first)), null, ComposerFormat.POST),
         )
 
         val grafted = PostPublishMediaWriteBack.graft(payload(single), first, "64b000000000000000000001")!!

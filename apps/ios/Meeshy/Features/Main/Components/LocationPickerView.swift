@@ -55,6 +55,9 @@ struct LocationPickerView: View {
     /// sites, dont un littéral `{ coordinate, _ in }`.
     let onSelect: (SharedPlace) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshySheetClose) private var hostClose
+    /// L'auteur a choisi un résultat de recherche (`LocationPickerOffer`).
+    @State private var searched = false
     // Plus de référence à `ThemeManager.shared` : tout ce que cette vue pose
     // est soit une couleur de conversation, soit une couleur sémantique qui
     // s'adapte au matériau. Une vue posée sur une carte n'a pas à lire un
@@ -147,7 +150,7 @@ struct LocationPickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { close() }
                         .foregroundColor(Color(hex: accentColor))
                 }
                 ToolbarItem(placement: .principal) {
@@ -428,6 +431,7 @@ struct LocationPickerView: View {
                 Button {
                     let coord = item.placemark.coordinate
                     viewModel.updateSelectedLocation(coord)
+                    searched = true
                     // Après `updateSelectedLocation` (qui les remet à `nil`) :
                     // MapKit connaît déjà le nom et la catégorie POI du
                     // résultat choisi, inutile d'attendre le géocodage inverse.
@@ -576,7 +580,7 @@ struct LocationPickerView: View {
                     .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public) precision=\(self.precision.rawValue, privacy: .public)")
                 onSelect(place)
                 HapticFeedback.success()
-                dismiss()
+                close()
             } label: {
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "checkmark")
@@ -617,7 +621,12 @@ struct LocationPickerView: View {
     /// ce que le destinataire recevra — pas une valeur brute qui serait
     /// dégradée en silence au moment du tap.
     private var displayedPlace: SharedPlace? {
-        viewModel.sharedPlace(at: precision)
+        LocationPickerOffer.place(viewModel.sharedPlace(at: precision),
+                                  refused: viewModel.isLocationRefused, searched: searched)
+    }
+
+    private func close() {
+        MeeshySheetClose.perform(host: hostClose, system: { dismiss() })
     }
 
     /// Nom ET adresse, dédupliqués. Ne montrer que l'adresse perdrait le nom du

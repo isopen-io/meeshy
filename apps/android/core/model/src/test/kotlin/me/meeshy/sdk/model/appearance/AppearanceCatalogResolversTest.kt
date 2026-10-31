@@ -85,7 +85,7 @@ class AppearanceCatalogResolversTest {
         assertThat(catalog.defaultInstalledPacks(AppearancePackDomain.BANNER).map { it.slug })
             .containsExactly("bannieres-essentielles", "bannieres-animees").inOrder()
         assertThat(catalog.defaultInstalledPacks(AppearancePackDomain.AVATAR_RING).map { it.slug })
-            .containsExactly("contours-essentiels", "contours-animes").inOrder()
+            .containsExactly("contours-essentiels", "contours-animes", "cadres-illustres", "cadres-asiatiques", "cadres-africains", "cadres-celtes", "cadres-nordiques", "cadres-egyptiens", "cadres-mayas", "cadres-indiens", "cadres-amerindiens", "cadres-australs").inOrder()
         assertThat(catalog.defaultInstalledPacks(AppearancePackDomain.BANNER_FRAME).map { it.slug })
             .containsExactly("cadres-haussmannien", "cadres-ancestral").inOrder()
     }
@@ -117,8 +117,9 @@ class AppearanceCatalogResolversTest {
         val defaults = embedded().defaultWallpapers
 
         assertThat(defaults.map { it.packSlug }.distinct()).containsExactly("essentiels", "animes").inOrder()
-        assertThat(defaults.map { it.design.key }).containsAtLeast("monogramme", "chevrons", "aurore", "maille")
-        assertThat(defaults).hasSize(5)
+        assertThat(defaults.map { it.design.key })
+            .containsAtLeast("monogramme", "chevrons", "aurore", "maille", "bulles-legeres", "pluie-de-petales")
+        assertThat(defaults).hasSize(7)
     }
 
     @Test

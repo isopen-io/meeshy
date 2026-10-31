@@ -9,6 +9,7 @@ const ptMediaViewer = {
   'media.viewer.react_with': 'Reagir com {emoji}',
   'media.viewer.reply': 'Responder',
   'media.viewer.compose': 'Criar com esta mídia',
+  'media.viewer.imager': 'Criar imagem',
   'media.viewer.saved': 'Salvo',
   'media.viewer.save_failed': 'Não foi possível salvar',
   'media.viewer.offline': 'Sem conexão — tente de novo quando estiver conectado',

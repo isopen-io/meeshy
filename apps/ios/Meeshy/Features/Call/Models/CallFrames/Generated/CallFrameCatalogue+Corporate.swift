@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.conseil",
             mood: .corporate,
             name: "Conseil",
+            localizedNames: ["fr": "Conseil", "en": "Board", "es": "Consejo", "pt": "Conselho", "de": "Vorstand", "it": "Consiglio", "ar": "مجلس"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.02, top: 0.14, bottom: 0.1),
@@ -31,6 +32,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.conseil",
             mood: .corporate,
             name: "Conseil",
+            localizedNames: ["fr": "Conseil", "en": "Board", "es": "Consejo", "pt": "Conselho", "de": "Vorstand", "it": "Consiglio", "ar": "مجلس"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.015, top: 0.14, bottom: 0.1),
@@ -51,6 +53,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.conseil",
             mood: .corporate,
             name: "Conseil",
+            localizedNames: ["fr": "Conseil", "en": "Board", "es": "Consejo", "pt": "Conselho", "de": "Vorstand", "it": "Consiglio", "ar": "مجلس"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.05, gap: 0.015, top: 0.12, bottom: 0.16),
@@ -71,6 +74,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.conseil",
             mood: .corporate,
             name: "Conseil",
+            localizedNames: ["fr": "Conseil", "en": "Board", "es": "Consejo", "pt": "Conselho", "de": "Vorstand", "it": "Consiglio", "ar": "مجلس"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.01, top: 0.12, bottom: 0.08),
@@ -91,6 +95,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.keynote",
             mood: .corporate,
             name: "Keynote",
+            localizedNames: ["fr": "Keynote", "en": "Keynote", "es": "Keynote", "pt": "Keynote", "de": "Keynote", "it": "Keynote", "ar": "كلمة رئيسية"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -114,6 +119,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.keynote",
             mood: .corporate,
             name: "Keynote",
+            localizedNames: ["fr": "Keynote", "en": "Keynote", "es": "Keynote", "pt": "Keynote", "de": "Keynote", "it": "Keynote", "ar": "كلمة رئيسية"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .arch, margin: 0.07, gap: 0.03, top: 0.18, bottom: 0.1),
@@ -137,6 +143,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.keynote",
             mood: .corporate,
             name: "Keynote",
+            localizedNames: ["fr": "Keynote", "en": "Keynote", "es": "Keynote", "pt": "Keynote", "de": "Keynote", "it": "Keynote", "ar": "كلمة رئيسية"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.02, top: 0.16, bottom: 0.1),
@@ -160,6 +167,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.keynote",
             mood: .corporate,
             name: "Keynote",
+            localizedNames: ["fr": "Keynote", "en": "Keynote", "es": "Keynote", "pt": "Keynote", "de": "Keynote", "it": "Keynote", "ar": "كلمة رئيسية"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.05, gap: 0.015, top: 0.14, bottom: 0.08),
@@ -183,6 +191,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.badge",
             mood: .corporate,
             name: "Badge",
+            localizedNames: ["fr": "Badge", "en": "Badge", "es": "Acreditación", "pt": "Crachá", "de": "Ausweis", "it": "Badge", "ar": "شارة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .column, margin: 0.08, gap: 0.05, top: 0.16, bottom: 0.1),
@@ -203,6 +212,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.badge",
             mood: .corporate,
             name: "Badge",
+            localizedNames: ["fr": "Badge", "en": "Badge", "es": "Acreditación", "pt": "Crachá", "de": "Ausweis", "it": "Badge", "ar": "شارة"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.08, gap: 0.035, top: 0.16, bottom: 0.1),
@@ -223,6 +233,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.badge",
             mood: .corporate,
             name: "Badge",
+            localizedNames: ["fr": "Badge", "en": "Badge", "es": "Acreditación", "pt": "Crachá", "de": "Ausweis", "it": "Badge", "ar": "شارة"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .mosaic, margin: 0.06, gap: 0.025, top: 0.14, bottom: 0.08),
@@ -243,6 +254,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "corporate.poignee-de-main",
             mood: .corporate,
             name: "Poignée de main",
+            localizedNames: ["fr": "Poignée de main", "en": "Handshake", "es": "Apretón de manos", "pt": "Aperto de mão", "de": "Händedruck", "it": "Stretta di mano", "ar": "مصافحة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.07, gap: 0.012, top: 0.15, bottom: 0.1),

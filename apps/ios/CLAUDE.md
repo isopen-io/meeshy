@@ -440,7 +440,29 @@ final class SomeViewModelTests: XCTestCase {
 - `@MainActor` on ALL test classes that test `@MainActor` ViewModels
 - Default param trick for `@MainActor` mocks: use `Type? = nil` + coalescing inside function
 
-## Le composer met ses portes SUR LE PLATEAU, et les répartit par NIVEAU (directive porteur 2026-08-31)
+## Le composer se pose SUR LA SCÈNE, et la scène prend tout l'écran (directive porteur 2026-10-30, #13839)
+
+**La scène est le plus grand 9:16 de la zone sûre** (`ComposerSceneFit`) : ni carte, ni couloir. Quand le clavier ou un panneau monte, elle se réduit par une échelle ancrée en haut et un décalage, en UNE transaction ; le canvas ne se remet jamais en page pendant le geste.
+
+**Au repos, tout se pose SUR la scène** (`ComposerSceneOverlayChrome`, état servi par `ComposerRestChrome`) :
+- ✕ en haut à gauche ; ↶ ↷ en haut à droite, seulement s'il y a un historique (VoiceOver : « Défaire », jamais « Annuler », qui est le mot de la fermeture) ;
+- au centre du haut, la rangée des diapos dès deux diapos ;
+- à droite, la colonne des six boutons ronds de 44 pt : Texte, Média (appui long : les sources), Sticker, Son (un point dit le son de fond, son menu le retire ou le pose sur la scène), Dessin, ⋯ ;
+- en bas, « Public » et « Publier la story ▾ ». Publier est toujours là ; grisé, son toucher dit pourquoi. Le chevron se lit « Type de publication ».
+
+**⋯ porte tout le reste, par une loi pure** (`ComposerMoreMenuPolicy`) : ajouter une diapo, le fond (ou, avec un média de fond, transitions, effet visuel et cadrage), animation, durée, légende, écrire le post, mention, hashtags, lieu, puis les entrées d'export de `ComposerOverflowPolicy`, « Tout effacer » en dernier et confirmé. Aucune option n'a disparu : chacune a UN chemin.
+
+**Un outil ouvert retire le repos.** Le dessin a sa barre en bas (`ComposerDrawingBar` : stylo, marqueur, gomme, couleur, épaisseur, lissage, ↶, OK) ; le texte en frappe a sa barre collée au clavier (L4). **Un objet touché est SÉLECTIONNÉ, sans s'ouvrir** (L5) : le canvas du SDK l'encadre d'un pointillé blanc hors export, les outils se retirent et la barre libellée Modifier · Ordre · Dupliquer · Temps · Retirer paraît au-dessus de Public et Publier (`ComposerSelectionBar`, servie par la loi `ComposerSelectionActions`) ; le menu d'appui long n'en est qu'un raccourci, toucher la scène à vide désélectionne. La colonne droite (`ComposerTrailingColumn`) ne sert plus que les contrôles d'un outil ouvert. Le viseur garde sa sortie visible (« Revenir à la scène »).
+
+**Grand écran : deux rails LIBELLÉS autour de la scène** (L6, directive porteur du 2026-10-30). La bascule dépend de la PLACE LIBRE, jamais de la classe de taille ni du modèle : `ComposerSceneArrangement.resolve(width:height:previous:)` pose les rails quand, à côté d'une scène 9:16 pleine hauteur (Publier, 56 pt, et deux marges de 16 pt déduits), il reste deux rails de 112 pt et leurs marges (256 pt), avec 16 pt d'hystérésis ; le meuble la nourrit de la taille de sa racine, clavier ignoré, et la rejoue à la rotation, en Split View et en Stage Manager sans toucher à l'état ; aux tailles de texte d'accessibilité, repli en surimpression. Rail gauche (`ComposerLabeledRail`, loi `ComposerLabeledRailLayout`) : Fermer · Texte · Média · Sticker · Son · Dessin · Fond, puis les entrées de ⋯ qui tiennent, puis « ⋯ Plus » pour le reste (Animation et Tout effacer y restent toujours), l'outil ouvert surligné. Rail droit « SÉLECTION » (`ComposerSelectionRail`) : les actions de L5, vide sans sélection, ↶ ↷ au pied. Publier sous la scène, à sa largeur ou au moins 300 pt ; la rangée des diapos au-dessus d'elle ; feuilles, bandes, frise, réglages d'outil et barre de dessin sous la scène, dans sa colonne, jamais dessus ni sous un rail (`ComposerSceneRailsInsets.lowerFloors`). Les rails se taisent pendant la frappe et au viseur sans libérer leur place ; sous une feuille, ils restent parlants. Échap (`ComposerHardwareKeys`) ferme la feuille, puis le viseur, puis l'outil, puis la sélection, puis demande la fermeture ; Retour valide OK ; aucune `focusedValue` (#11239).
+
+**Partis** : le rail gauche, la colonne droite au repos, les pastilles de compte des portes, la barre haute, le champ de légende permanent (il ne paraît qu'en écrivant ou quand une légende existe) et le sélecteur Photos imposé à l'ouverture d'une story vierge (`ComposerMediaPlacement.opensOnPicker` : le fil seulement).
+
+**Les anciennes gardes de géographie ont été RETOURNÉES, jamais supprimées** : `ComposerSceneFloatingRailTests` garde désormais « chaque porte offerte a un chemin, et un seul », `ComposerRailPlateauOrderTests` et `ComposerRailGeometryTests` gardent l'ordre des calques et l'absence de barre haute.
+
+## (CLOS le 2026-10-30 — #13839) Le composer met ses portes SUR LE PLATEAU, et les répartit par NIVEAU (directive porteur 2026-08-31)
+
+> **Bandeau CLOS, conservé pour l'histoire** : cette section décrit la géographie des rails du 2026-08-31 au 2026-10-30. La section ci-dessus la remplace ; ses règles de géographie ne s'appliquent plus. Le NIVEAU de chaque porte (`ComposerRailDoor.level`) reste la loi qui dit si un résultat se voit sur la scène.
 
 > « Cette approche est meilleure, ce qui permet de manipuler tout le canvas sans
 > problème : on exploite la place du plateau sans encombrer le canvas. […] On

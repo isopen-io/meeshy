@@ -248,6 +248,8 @@ const es = {
   'game.guide.step.rank.means': 'Acuñar, hacer realidad tus sueños, lograr hazañas: todo hace crecer tu gloria.',
   'game.guide.step.rank.next': 'Inmortalicemos tu inicio con una foto.',
   'game.page.back': 'Volver al progreso',
+  'game.page.offline_notice': 'Sin conexión — progreso como en tu última visita',
+  'game.page.offline_notice_brief': 'Sin conexión — como en tu última visita',
   'game.door.rules': 'Cómo funciona',
   'game.door.notebook': 'La Crónica',
   'game.mint.minted_line': 'Meesh n.º {number} acuñada, {edition}.',

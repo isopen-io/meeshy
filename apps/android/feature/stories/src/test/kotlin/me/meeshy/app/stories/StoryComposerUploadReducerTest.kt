@@ -50,12 +50,13 @@ class StoryComposerUploadReducerTest {
     }
 
     @Test
-    fun `uploaded media attach to the slide and the lines go away`() {
+    fun `uploaded media attach, one slide each, and the lines go away`() {
         val state = StoryComposerUploadReducer.uploaded(StoryComposerUploadReducer.started(initial, 2), listOf(uploaded("pm1"), uploaded("pm2")))
 
         assertThat(state.isUploadingMedia).isFalse()
         assertThat(state.uploadingMedia).isEmpty()
-        assertThat(state.deck.selectedSlide.mediaIds).containsExactly("pm1", "pm2").inOrder()
+        assertThat(state.mediaLandings).isEmpty()
+        assertThat(state.deck.slides.map { it.mediaIds }).containsExactly(listOf("pm1"), listOf("pm2")).inOrder()
         assertThat(state.attachments.map { it.id }).containsExactly("pm1", "pm2").inOrder()
     }
 

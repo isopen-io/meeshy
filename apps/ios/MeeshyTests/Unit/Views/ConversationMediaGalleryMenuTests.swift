@@ -97,6 +97,8 @@ final class ConversationMediaGalleryMenuTests: XCTestCase {
             menu.components(separatedBy: "Button {").count - 1, 3,
             "trois verbes : Enregistrer, Transférer, Partager — « Enregistrer sans la marque » n'existe pas (#6146)"
         )
+        XCTAssertTrue(menu.contains("ImagerMenuButton(action: { imageCurrent(scene) })"),
+                      "« Imager » s'ajoute sur une scène, par l'entrée partagée des menus de post (#13871)")
         let saveVerb = try body(of: "private var saveVerb: String {")
         let shareVerb = try body(of: "private var shareVerb: String {")
         XCTAssertTrue(

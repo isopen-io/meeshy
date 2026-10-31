@@ -100,3 +100,37 @@ describe('captureFramePackUsage / captureFrameCount', () => {
     expect(captureFrameCount({ motifs: [motif('a', ['capture'], ['duo', 'comite']), motif('b', ['capture'], ['tablee'])] })).toBe(3);
   });
 });
+
+/**
+ * #13950 — deux cadres d'appel ANIMÉS de plus. Un ornement bouge s'il déclare `loop` et si sa forme
+ * sait bouger : les formes ci-dessous restent peintes fixes (`CallFrameMotionPlan.style(for:)`, iOS),
+ * et au-delà de quatre ornements animés, les suivants restent fixes aussi (`maxTracks`).
+ */
+describe('les deux cadres d’appel animés de #13950', () => {
+  const STILL_SHAPES = new Set(['grain', 'vignette', 'crown', 'ribbon', 'tape', 'cobwebs', 'drips', 'skulls', 'roses']);
+  const ADDED = [
+    { mood: 'elegant', id: 'elegant.premiere-neige', name: 'Première neige' },
+    { mood: 'deconnecte', id: 'deconnecte.lagon', name: 'Lagon' },
+  ] as const;
+  const allMotifs = FRAME_MOODS.flatMap((mood) => parsedMood(mood).motifs);
+  const moving = (motif: FrameMoodFile['motifs'][number]) =>
+    motif.base.ornaments.filter((ornament) => ornament.motion === 'loop' && !STILL_SHAPES.has(ornament.kind)).map((ornament) => ornament.kind);
+
+  it.each(ADDED.map((added) => [added.id, added] as const))('%s sert l’appel en direct et la capture, pour les quatre tailles de groupe', (_id, added) => {
+    const motif = parsedMood(added.mood).motifs.find((candidate) => candidate.id === added.id);
+    expect(motif?.name).toBe(added.name);
+    expect(motif?.surfaces).toEqual(['capture', 'live']);
+    expect(Object.keys(motif?.variants ?? {}).sort()).toEqual(['comite', 'duo', 'groupe', 'tablee']);
+  });
+
+  it.each(ADDED.map((added) => [added.id, added] as const))('%s bouge par trois ou quatre ornements en boucle, une combinaison qu’aucun autre cadre ne porte', (_id, added) => {
+    const motif = allMotifs.find((candidate) => candidate.id === added.id);
+    if (motif === undefined) throw new Error(`${added.id} manque au catalogue`);
+    const kinds = moving(motif);
+    expect(kinds.length).toBeGreaterThanOrEqual(3);
+    expect(kinds.length).toBeLessThanOrEqual(4);
+    const signature = (list: readonly string[]) => [...new Set(list)].sort().join('+');
+    const others = allMotifs.filter((candidate) => candidate.id !== added.id).map((candidate) => signature(moving(candidate)));
+    expect(others).not.toContain(signature(kinds));
+  });
+});

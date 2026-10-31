@@ -9,13 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
- * Emplacement médias de la carte : images, lieu, repost intégré et couverture du reel.
+ * Emplacement médias de la carte : scènes d'un post composé sur la scène ou images, lieu, repost intégré et couverture du reel.
  */
 @Composable
 internal fun FeedPostCardMediaSlot(
@@ -24,7 +25,12 @@ internal fun FeedPostCardMediaSlot(
     onOpenPost: (String) -> Unit,
     onOpenReel: (String) -> Unit = onOpenPost,
 ) {
-    if (post.images.isNotEmpty()) {
+    val scenes = post.scenes
+    if (scenes != null) {
+        Spacer(Modifier.height(MeeshySpacing.md))
+        val live by rememberSceneLive(post.id)
+        PostScenesView(scenes = scenes, live = live, modifier = Modifier.sceneFrame(post.id))
+    } else if (post.images.isNotEmpty()) {
         Spacer(Modifier.height(MeeshySpacing.md))
         PostImageLayout(images = post.images, layout = post.layout, onImageTap = onImageTap)
     }

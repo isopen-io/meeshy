@@ -24,6 +24,10 @@ export type AccountPurgeSummary = {
   readonly shareLinksDeleted: number;
   readonly notificationsDeleted: number;
   readonly addressBookContactsDeleted: number;
+  /** Ses liens de proximité (`UserRelation`, #13927) : la ligne d'une paire dont l'un des deux n'existe plus ne désigne plus personne. */
+  readonly relationsDeleted: number;
+  /** L'agrégat des échanges par paire (`PairInteractionDay`, #13932) : qui a échangé avec qui, quel jour et combien. */
+  readonly pairInteractionDaysDeleted: number;
   readonly contactJoinNoticesDeleted: number;
   readonly arrivalAnnouncementsDeleted: number;
   /** Les traductions PARTAGÉES (#9899) que les participants du compte avaient scellées pour les autres. */
@@ -95,10 +99,12 @@ export async function purgeAccountIsolatedData(
   userId: string,
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee] =
+  const [sessions, voiceProfile, relations, pairInteractionDays, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
+      prisma.userRelation.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
+      prisma.pairInteractionDay.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
       // #10492 — les invités de ses liens sont révoqués AVANT la suppression :
       // la ligne emportait la marque d'une révocation différée, et ses invités
       // restaient actifs. Un lien dont la révocation échoue reste, fermé et
@@ -128,6 +134,8 @@ export async function purgeAccountIsolatedData(
   const summary: AccountPurgeSummary = {
     sessionsDeleted: sessions.count,
     voiceProfileDeleted: voiceProfile.count,
+    relationsDeleted: relations.count,
+    pairInteractionDaysDeleted: pairInteractionDays.count,
     shareLinksDeleted: shareLinks.count,
     notificationsDeleted: notifications.count,
     addressBookContactsDeleted: addressBook.contactsDeleted,
@@ -143,7 +151,7 @@ export async function purgeAccountIsolatedData(
 
   logger.info(
     `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
-      `shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
+      `relations=${summary.relationsDeleted} pairInteractionDays=${summary.pairInteractionDaysDeleted} shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
       `gameDuos=${summary.game.duosDeleted} ` +

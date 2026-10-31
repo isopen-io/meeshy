@@ -645,10 +645,13 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: documentFormat == .story ? nil : .editPostSheet
             )
 
-        case .draft, .share:
-            // **Deux portes DÉCLARÉES SANS APPELANT** — dites ici pour qu'aucune
-            // session ne les monte en croyant qu'elles sont servies :
-            //
+        // Le partage pose déjà son média (`ShareComposeDoor` → `mediaSeed`) : il s'ouvre comme une porte SEMÉE, sur la scène (#13864, R1).
+        case .share:
+            return ComposerProfile(initialFormat: .post, offeredFormats: plusReel([.post, .story]), showsSlides: true,
+                                   showsTimeline: true, opensWith: .mediaSeeded, allowsCapture: true, routesToLegacy: nil)
+
+        case .draft:
+            // **Une porte DÉCLARÉE SANS APPELANT**, dite pour qu'aucune session ne la monte en la croyant servie :
             // - `.draft` : la reprise VIVANTE marche, et elle traverse bien le
             //   meuble — `openComposer(resumingDraftId:)` pose `pendingDraftId`,
             //   `StoryTrayActions` le remet en PARAMÈTRE (`draftId:`), le meuble
@@ -656,16 +659,13 @@ nonisolated extension ComposerProfile {
             //   intention, et c'est elle qui n'a pas d'appelant. Son `id` est lu
             //   en repli du paramètre (`ComposerOrigin.resumedDraftId`) : la
             //   monter marcherait, elle ne perd pas ce qu'on lui confie.
-            // - `.share` : l'extension de partage ne fait que router vers des
-            //   conversations. Publier une pièce reçue est la vue `2a` de la
-            //   planche.
             //
             // Inventaire gardé : `ComposerDoorInventoryGuardTests`.
             //
             // `.post` est un état TRANSITOIRE — la table reste une fonction de
             // l'origine, elle n'ouvre pas le document pour le deviner. Le host ne
-            // rebascule pas au format du document une fois celui-ci chargé : rien
-            // ne réaffecte `currentFormat` après la construction du host, et un
+            // rebascule pas au format du document une fois celui-ci chargé : seul
+            // le chevron de « Publier » réécrit `formatState` (#13864), et un
             // commentaire qui énoncerait un invariant que le code ne tient pas
             // deviendrait la loi que lirait la session suivante.
             //
@@ -760,5 +760,15 @@ nonisolated enum RepostTargeting {
         // d'inventer un format : le filet du gateway vaut mieux qu'une
         // supposition.
         return RepostTarget(postId: reference, targetType: PostType(rawValue: brut))
+    }
+}
+
+extension ComposerOrigin {
+    /// Republier ou modifier une publication n'ajoute pas de diapo (#13839).
+    var addsSlides: Bool {
+        switch self {
+        case .edit, .repost: return false
+        default: return true
+        }
     }
 }

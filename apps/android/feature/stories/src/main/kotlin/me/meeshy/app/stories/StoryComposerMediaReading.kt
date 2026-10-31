@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.composer.StoryPublishTitle
 
 internal fun ContentResolver.displayName(uri: Uri): String? =
     runCatching {
@@ -16,11 +17,16 @@ internal fun ContentResolver.displayName(uri: Uri): String? =
         }
     }.getOrNull()
 
-/** Ce que le bouton de publication nomme : la story, N stories (une par slide), ou la story et son réel. */
+/** Ce que le bouton de publication nomme : la story, N stories (une par slide), ou chaque format coché (#13919). */
 @Composable
-internal fun publishLabel(title: me.meeshy.sdk.model.composer.StoryPublishTitle): String = when (title) {
-    me.meeshy.sdk.model.composer.StoryPublishTitle.Single -> stringResource(R.string.composer_publish_as_story)
-    is me.meeshy.sdk.model.composer.StoryPublishTitle.Many -> stringResource(R.string.stories_composer_publish_many, title.count)
-    me.meeshy.sdk.model.composer.StoryPublishTitle.Save -> stringResource(R.string.story_edit_save)
-    me.meeshy.sdk.model.composer.StoryPublishTitle.StoryAndReel -> stringResource(R.string.composer_publish_as_storyAndReel)
+internal fun publishLabel(title: StoryPublishTitle): String = when (title) {
+    StoryPublishTitle.Single -> stringResource(R.string.composer_publish_as_story)
+    is StoryPublishTitle.Many -> stringResource(R.string.stories_composer_publish_many, title.count)
+    StoryPublishTitle.Save -> stringResource(R.string.story_edit_save)
+    StoryPublishTitle.StoryAndReel -> stringResource(R.string.composer_publish_as_storyAndReel)
+    StoryPublishTitle.StoryAndPost -> stringResource(R.string.composer_publish_as_storyAndPost)
+    StoryPublishTitle.PostAndReel -> stringResource(R.string.composer_publish_as_postAndReel)
+    StoryPublishTitle.StoryPostAndReel -> stringResource(R.string.composer_publish_as_storyPostAndReel)
+    StoryPublishTitle.Post -> stringResource(R.string.composer_publish_as_post)
+    StoryPublishTitle.Reel -> stringResource(R.string.composer_publish_as_reel)
 }

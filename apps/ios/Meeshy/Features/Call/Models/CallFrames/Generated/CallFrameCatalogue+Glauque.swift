@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "glauque.vhs",
             mood: .glauque,
             name: "VHS",
+            localizedNames: ["fr": "VHS", "en": "VHS", "es": "VHS", "pt": "VHS", "de": "VHS", "it": "VHS", "ar": "VHS"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.05, gap: 0.035, top: 0.12, bottom: 0.14),
@@ -30,13 +31,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .names, font: .typewriter, color: "#E8E8F0", place: .bottom, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#E7DECB", width: 0.004), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .faded, duotone: nil), background: .solid(color: "#0B0D11"), ornaments: [CallFrameOrnament(kind: .glitch, color: "#AFC3D3", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF3B30", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#FFB000", place: .bottom, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_vhs_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_vhs_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#E7DECB", width: 0.004), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .faded, duotone: nil), background: .solid(color: "#0B0D11"), ornaments: [CallFrameOrnament(kind: .glitch, color: "#AFC3D3", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF3B30", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#FFB000", place: .bottom, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_vhs_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_vhs_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "glauque.vhs.comite",
             motif: "glauque.vhs",
             mood: .glauque,
             name: "VHS",
+            localizedNames: ["fr": "VHS", "en": "VHS", "es": "VHS", "pt": "VHS", "de": "VHS", "it": "VHS", "ar": "VHS"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.025, top: 0.13, bottom: 0.13),
@@ -56,13 +58,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#E7DECB", width: 0.004), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .faded, duotone: nil), background: .solid(color: "#0B0D11"), ornaments: [CallFrameOrnament(kind: .glitch, color: "#AFC3D3", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF3B30", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#FFB000", place: .bottom, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_vhs_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_vhs_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#E7DECB", width: 0.004), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .faded, duotone: nil), background: .solid(color: "#0B0D11"), ornaments: [CallFrameOrnament(kind: .glitch, color: "#AFC3D3", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF3B30", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#FFB000", place: .bottom, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_vhs_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_vhs_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "glauque.vhs.groupe",
             motif: "glauque.vhs",
             mood: .glauque,
             name: "VHS",
+            localizedNames: ["fr": "VHS", "en": "VHS", "es": "VHS", "pt": "VHS", "de": "VHS", "it": "VHS", "ar": "VHS"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.04, gap: 0.02, top: 0.12, bottom: 0.14),
@@ -82,13 +85,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#E7DECB", width: 0.004), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .faded, duotone: nil), background: .solid(color: "#0B0D11"), ornaments: [CallFrameOrnament(kind: .glitch, color: "#AFC3D3", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF3B30", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#FFB000", place: .bottom, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_vhs_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_vhs_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#E7DECB", width: 0.004), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .faded, duotone: nil), background: .solid(color: "#0B0D11"), ornaments: [CallFrameOrnament(kind: .glitch, color: "#AFC3D3", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF3B30", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#FFB000", place: .bottom, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_vhs_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_vhs_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "glauque.videosurveillance.duo",
             motif: "glauque.videosurveillance",
             mood: .glauque,
             name: "Vidéosurveillance",
+            localizedNames: ["fr": "Vidéosurveillance", "en": "CCTV", "es": "Videovigilancia", "pt": "Videovigilância", "de": "Videoüberwachung", "it": "Videosorveglianza", "ar": "كاميرا مراقبة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.05, gap: 0.015, top: 0.12, bottom: 0.1),
@@ -108,13 +112,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .names, font: .typewriter, color: "#7CFF6B", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF6B", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#021A05", light: "#9DFF8A")), background: .solid(color: "#061009"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF6B", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF2A1A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#9DFF8A", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_videosurveillance_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_videosurveillance_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF6B", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#021A05", light: "#9DFF8A")), background: .solid(color: "#061009"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF6B", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF2A1A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#9DFF8A", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_videosurveillance_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_videosurveillance_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "glauque.videosurveillance.comite",
             motif: "glauque.videosurveillance",
             mood: .glauque,
             name: "Vidéosurveillance",
+            localizedNames: ["fr": "Vidéosurveillance", "en": "CCTV", "es": "Videovigilancia", "pt": "Videovigilância", "de": "Videoüberwachung", "it": "Videosorveglianza", "ar": "كاميرا مراقبة"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.015, top: 0.12, bottom: 0.1),
@@ -134,13 +139,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF6B", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#021A05", light: "#9DFF8A")), background: .solid(color: "#061009"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF6B", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF2A1A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#9DFF8A", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_videosurveillance_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_videosurveillance_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF6B", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#021A05", light: "#9DFF8A")), background: .solid(color: "#061009"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF6B", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF2A1A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#9DFF8A", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_videosurveillance_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_videosurveillance_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "glauque.videosurveillance.groupe",
             motif: "glauque.videosurveillance",
             mood: .glauque,
             name: "Vidéosurveillance",
+            localizedNames: ["fr": "Vidéosurveillance", "en": "CCTV", "es": "Videovigilancia", "pt": "Videovigilância", "de": "Videoüberwachung", "it": "Videosorveglianza", "ar": "كاميرا مراقبة"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.04, gap: 0.012, top: 0.12, bottom: 0.1),
@@ -160,13 +166,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF6B", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#021A05", light: "#9DFF8A")), background: .solid(color: "#061009"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF6B", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF2A1A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#9DFF8A", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_videosurveillance_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_videosurveillance_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF6B", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#021A05", light: "#9DFF8A")), background: .solid(color: "#061009"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF6B", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF2A1A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#9DFF8A", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_videosurveillance_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_videosurveillance_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "glauque.videosurveillance.tablee",
             motif: "glauque.videosurveillance",
             mood: .glauque,
             name: "Vidéosurveillance",
+            localizedNames: ["fr": "Vidéosurveillance", "en": "CCTV", "es": "Videovigilancia", "pt": "Videovigilância", "de": "Videoüberwachung", "it": "Videosorveglianza", "ar": "كاميرا مراقبة"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.04, gap: 0.01, top: 0.11, bottom: 0.12),
@@ -185,13 +192,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF6B", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#021A05", light: "#9DFF8A")), background: .solid(color: "#061009"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF6B", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF2A1A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#9DFF8A", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_videosurveillance_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_videosurveillance_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF6B", width: 0.003), double: false, glow: nil, shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#021A05", light: "#9DFF8A")), background: .solid(color: "#061009"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF6B", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#FF2A1A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .date, font: .typewriter, color: "#9DFF8A", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_videosurveillance_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_videosurveillance_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "glauque.sous-sol.duo",
             motif: "glauque.sous-sol",
             mood: .glauque,
             name: "Sous-sol",
+            localizedNames: ["fr": "Sous-sol", "en": "Basement", "es": "Sótano", "pt": "Porão", "de": "Keller", "it": "Seminterrato", "ar": "قبو"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .cascade, margin: 0.08, gap: 0.03, top: 0.14, bottom: 0.1),
@@ -216,6 +224,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "glauque.sous-sol",
             mood: .glauque,
             name: "Sous-sol",
+            localizedNames: ["fr": "Sous-sol", "en": "Basement", "es": "Sótano", "pt": "Porão", "de": "Keller", "it": "Seminterrato", "ar": "قبو"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.07, gap: 0.03, top: 0.14, bottom: 0.1),
@@ -240,6 +249,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "glauque.sous-sol",
             mood: .glauque,
             name: "Sous-sol",
+            localizedNames: ["fr": "Sous-sol", "en": "Basement", "es": "Sótano", "pt": "Porão", "de": "Keller", "it": "Seminterrato", "ar": "قبو"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.02, top: 0.12, bottom: 0.1),
@@ -264,6 +274,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "glauque.disparus",
             mood: .glauque,
             name: "Disparus",
+            localizedNames: ["fr": "Disparus", "en": "The Missing", "es": "Desaparecidos", "pt": "Desaparecidos", "de": "Vermisst", "it": "Scomparsi", "ar": "المفقودون"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.08, gap: 0.04, top: 0.2, bottom: 0.12),
@@ -287,6 +298,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "glauque.disparus",
             mood: .glauque,
             name: "Disparus",
+            localizedNames: ["fr": "Disparus", "en": "The Missing", "es": "Desaparecidos", "pt": "Desaparecidos", "de": "Vermisst", "it": "Scomparsi", "ar": "المفقودون"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.18, bottom: 0.12),
@@ -310,6 +322,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "glauque.prison",
             mood: .glauque,
             name: "Prison",
+            localizedNames: ["fr": "Prison", "en": "Prison", "es": "Prisión", "pt": "Prisão", "de": "Gefängnis", "it": "Prigione", "ar": "سجن"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.07, gap: 0.035, top: 0.15, bottom: 0.1),
@@ -328,13 +341,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#16181B", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#2E3338", width: 0.01), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .noir, duotone: nil), background: .linear(colors: ["#9EA2A6", "#53585E"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .scanlines, color: "#16181B1A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .vignette, color: "#0B0C0E", density: .mid, layer: .back)], title: CallFrameTitle(source: .group, font: .poster, color: "#F4F4F2", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#F4F4F2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_prison_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_prison_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#2E3338", width: 0.01), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .noir, duotone: nil), background: .linear(colors: ["#9EA2A6", "#53585E"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .scanlines, color: "#16181B1A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .vignette, color: "#0B0C0E", density: .mid, layer: .back)], title: CallFrameTitle(source: .group, font: .poster, color: "#F4F4F2", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#F4F4F2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_prison_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_prison_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "glauque.prison.comite",
             motif: "glauque.prison",
             mood: .glauque,
             name: "Prison",
+            localizedNames: ["fr": "Prison", "en": "Prison", "es": "Prisión", "pt": "Prisão", "de": "Gefängnis", "it": "Prigione", "ar": "سجن"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.03, top: 0.15, bottom: 0.12),
@@ -353,13 +367,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#16181B", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#2E3338", width: 0.01), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .noir, duotone: nil), background: .linear(colors: ["#9EA2A6", "#53585E"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .scanlines, color: "#16181B1A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .vignette, color: "#0B0C0E", density: .mid, layer: .back)], title: CallFrameTitle(source: .group, font: .poster, color: "#F4F4F2", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#F4F4F2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_prison_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_prison_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#2E3338", width: 0.01), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .noir, duotone: nil), background: .linear(colors: ["#9EA2A6", "#53585E"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .scanlines, color: "#16181B1A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .vignette, color: "#0B0C0E", density: .mid, layer: .back)], title: CallFrameTitle(source: .group, font: .poster, color: "#F4F4F2", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#F4F4F2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_prison_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_prison_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "glauque.prison.groupe",
             motif: "glauque.prison",
             mood: .glauque,
             name: "Prison",
+            localizedNames: ["fr": "Prison", "en": "Prison", "es": "Prisión", "pt": "Prisão", "de": "Gefängnis", "it": "Prigione", "ar": "سجن"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.025, top: 0.15, bottom: 0.1),
@@ -378,13 +393,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#16181B", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#2E3338", width: 0.01), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .noir, duotone: nil), background: .linear(colors: ["#9EA2A6", "#53585E"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .scanlines, color: "#16181B1A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .vignette, color: "#0B0C0E", density: .mid, layer: .back)], title: CallFrameTitle(source: .group, font: .poster, color: "#F4F4F2", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#F4F4F2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_prison_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_prison_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#2E3338", width: 0.01), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .noir, duotone: nil), background: .linear(colors: ["#9EA2A6", "#53585E"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .scanlines, color: "#16181B1A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .vignette, color: "#0B0C0E", density: .mid, layer: .back)], title: CallFrameTitle(source: .group, font: .poster, color: "#F4F4F2", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#F4F4F2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_prison_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_prison_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "glauque.prison.tablee",
             motif: "glauque.prison",
             mood: .glauque,
             name: "Prison",
+            localizedNames: ["fr": "Prison", "en": "Prison", "es": "Prisión", "pt": "Prisão", "de": "Gefängnis", "it": "Prigione", "ar": "سجن"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.12),
@@ -403,7 +419,7 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#16181B", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#2E3338", width: 0.01), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .noir, duotone: nil), background: .linear(colors: ["#9EA2A6", "#53585E"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .scanlines, color: "#16181B1A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .vignette, color: "#0B0C0E", density: .mid, layer: .back)], title: CallFrameTitle(source: .group, font: .poster, color: "#F4F4F2", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#F4F4F2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_prison_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_prison_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#2E3338", width: 0.01), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .noir, duotone: nil), background: .linear(colors: ["#9EA2A6", "#53585E"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .scanlines, color: "#16181B1A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .vignette, color: "#0B0C0E", density: .mid, layer: .back)], title: CallFrameTitle(source: .group, font: .poster, color: "#F4F4F2", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#F4F4F2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/glauque_prison_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/glauque_prison_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         )
     ]
 }

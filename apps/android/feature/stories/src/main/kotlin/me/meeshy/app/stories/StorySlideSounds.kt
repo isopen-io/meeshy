@@ -60,7 +60,7 @@ internal fun StorySlideDeck.withSelectedAudio(audio: List<me.meeshy.sdk.model.St
                 slide
             } else {
                 slide.copy(
-                    audio = audio,
+                    audio = slide.stackingNewVoices(audio),
                     soundSources = slide.soundSources.filterKeys { it in kept },
                     soundTranscriptions = SoundTranscriptions.pruned(slide.soundTranscriptions, audio),
                 )

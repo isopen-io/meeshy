@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 
 /** Pure state-to-state reducers behind the composer's sticker intents (see [StoryComposerTextReducer]). */
 internal object StoryComposerStickerReducer {
@@ -40,10 +41,10 @@ internal object StoryComposerStickerReducer {
         if (emoji.isBlank() || state.deck.selectedSlide.stickers.none { it.id == id }) state
         else state.copy(deck = state.deck.updateSticker(id) { it.copy(emoji = emoji) })
 
-    /** Selects [id] (inert when it is not on the selected slide); clears text editing. */
+    /** Selects [id], brought to the front of the scene ([SceneFrontPromotion], #13917); inert when it is not on the selected slide; clears text editing. */
     fun selected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.stickers.none { it.id == id }) state
-        else state.copy(selectedStickerId = id, selectedTextElementId = null, selectedMediaId = null, selectedSoundId = null, selectedPlaceId = null)
+        else SceneFrontPromotion.promoted(state, SceneObjectRef(ComposerObjectKind.STICKER, id)).copy(selectedStickerId = id, selectedTextElementId = null, selectedMediaId = null, selectedSoundId = null, selectedPlaceId = null)
 
     /** Deselects the active sticker (inert when none is selected). */
     fun deselected(state: StoryComposerUiState): StoryComposerUiState =

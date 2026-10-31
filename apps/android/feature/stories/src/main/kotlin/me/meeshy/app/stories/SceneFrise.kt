@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -68,11 +69,13 @@ private typealias Grip = FriseBarDrag.Handle
  * tirer ses poignées allonge ou raccourcit son apparition, avec aimantation sur la tête et les
  * bords voisins. Le projet ne reçoit la fenêtre qu'au lâcher (une entrée d'annulation, pas une
  * par image) ; pendant le geste, seule la rangée tenue se recompose. La tête de lecture est
- * ambre. Le son se lit en pointillé : il existe pour le cadrage, pas pour l'édition.
+ * ambre. Chaque objet posé a sa piste réglable, quelle que soit sa famille (#13904) ; un fond ou le son d'ambiance se
+ * lisent en pointillé : ils durent la slide.
  */
 @Composable
 internal fun SceneFrise(
     tracks: List<Plan2DTrack>,
+    labels: Map<String, String> = emptyMap(),
     editableIds: Set<String>,
     selectedId: String?,
     slideDurationSeconds: Float,
@@ -112,6 +115,7 @@ internal fun SceneFrise(
                     androidx.compose.runtime.key(track.id) {
                         FriseTrackRow(
                             track = track,
+                            label = labels[track.id] ?: track.label,
                             editable = track.id in editableIds,
                             selected = track.id == selectedId,
                             allTracks = tracks,
@@ -217,6 +221,7 @@ private fun Playhead(fraction: Float, laneWidthPx: Int) {
 @Composable
 private fun FriseTrackRow(
     track: Plan2DTrack,
+    label: String,
     editable: Boolean,
     selected: Boolean,
     allTracks: List<Plan2DTrack>,
@@ -245,11 +250,11 @@ private fun FriseTrackRow(
     val currentCommit by rememberUpdatedState(onCommit)
     val dragEnabled = editable && laneWidthPx > 0
     Row(
-        modifier = Modifier.fillMaxWidth().height(ROW_HEIGHT),
+        modifier = Modifier.fillMaxWidth().height(ROW_HEIGHT).semantics(mergeDescendants = true) { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = track.label,
+            text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

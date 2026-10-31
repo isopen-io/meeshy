@@ -56,3 +56,28 @@ nonisolated enum ComposerAtelierHandOffCopy {
                bundle: .main)
     }
 }
+
+
+// **Un geste, une requête par format** (#13920, décision porteur : « le choix
+// du type de post est composite et non exclusif »). Les formats cochés au
+// chevron partent tous à l'appui sur Publier, chacun par le canal de son format
+// et sous ses propres règles ; un format refusé est nommé, les autres partent.
+
+extension MeeshyComposerHost {
+
+    /// L'atelier ne publie qu'une fois par geste (son loquet) : il reçoit la
+    /// file entière, que son relais distribue (`atelierFanOut`).
+    func publishEachFormat(_ choice: ComposerPublishChoice) {
+        let plan = ComposerSeveralFormats.plan(choice, surface: mountedSurface, accepts: { canPublishDocument(as: $0) })
+        ComposerSeveralFormats.sayRefused(plan.refused)
+        plan.scene.forEach { publishStoryScene(as: $0.format, alsoAsReel: $0.alsoAsReel) }
+        if let premiere = plan.atelier.first {
+            atelierFanOut.hold(plan.atelier)
+            publishTrigger.requestPublish(as: premiere.format.postType, visibility: composerVisibility.rawValue,
+                                          visibilityUserIds: composerVisibilityUserIds, alsoAsReel: premiere.alsoAsReel)
+            atelierFanOut.hold([])
+        }
+        plan.document.forEach { publishDocument($0) }
+    }
+}
+

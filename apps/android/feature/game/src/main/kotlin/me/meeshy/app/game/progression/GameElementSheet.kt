@@ -67,6 +67,9 @@ import me.meeshy.ui.component.game.GameMedalFamily
 import me.meeshy.ui.component.game.GameMedalGlyph
 import me.meeshy.ui.component.game.GameMedalState
 import me.meeshy.ui.component.game.GameMedalView
+import me.meeshy.ui.component.game.LevelRing
+import me.meeshy.ui.component.game.MeeshCoin
+import me.meeshy.ui.component.game.RankBlason
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -74,7 +77,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * LA FEUILLE DE PRÉCISIONS d'une médaille ou d'un défi (miroir de `GameElementSheet`, iOS) : une feuille du bas, ajustée
+ * LA FEUILLE DE PRÉCISIONS d'une médaille, d'un défi, d'une famille d'élan ou d'une ligne de donnée (miroir de `GameElementSheet`, iOS) : une feuille du bas, ajustée
  * à son contenu, poignée visible ; elle se ferme en la glissant vers le bas, au toucher du voile ou par « Fermer ».
  * L'emblème entre en grand avec un ressort (un fondu sous « réduire les animations »), puis le nom, l'état, la jauge,
  * et pour une médaille ses étoiles, sa matière et pourquoi, ce qu'elle suit, la prochaine étoile et ses sept paliers.
@@ -140,7 +143,7 @@ private fun GameElementSheetContent(detail: GameElementDetail, onClose: () -> Un
             Text(it, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = tokens.textPrimary, textAlign = TextAlign.Center)
         }
         SheetSection(texts.whatTitle, texts.what)
-        SheetSection(texts.howTitle, texts.how)
+        texts.how?.let { SheetSection(texts.howTitle, it) }
         if (texts.ladder.isNotEmpty()) Ladder(texts.ladder)
         if (texts.facts.isNotEmpty()) Facts(texts.facts)
         onOpenBadgesGuide?.let { BadgeGuideLink(it) }
@@ -188,12 +191,31 @@ private fun ElementEmblem(detail: GameElementDetail) {
             muted = tokens.textMuted,
             modifier = modifier,
         )
+        is GameElementDetail.Piece -> when (val emblem = detail.emblem) {
+            is PieceEmblem.Ring -> LevelRing(
+                level = emblem.level,
+                progress = emblem.progress.toFloat(),
+                tier = emblem.tier,
+                trackColor = tokens.textMuted.copy(alpha = 0.22f),
+                inkColor = tokens.textPrimary,
+                discColor = tokens.backgroundPrimary,
+                modifier = modifier,
+            )
+            is PieceEmblem.Blason -> RankBlason(rank = emblem.rank, division5 = emblem.division5, mythic = emblem.mythic, modifier = modifier)
+            PieceEmblem.Coin -> MeeshCoin(modifier = modifier)
+        }
+        is GameElementDetail.Fact, is GameElementDetail.ElanFamily, is GameElementDetail.LevelStep ->
+            ProgressionConceptEmblem(detail.concept, game = null, modifier = modifier, size = EMBLEM)
     }
 }
 
 /** « Obtenu le … » au sceau vert, ou « Pas encore obtenu · … » au cadenas : lus d'un trait. */
 @Composable
 private fun StatusLine(status: GameElementStatus, line: String) {
+    if (status is GameElementStatus.Value) {
+        Text(line, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MeeshyTheme.tokens.textPrimary, textAlign = TextAlign.Center)
+        return
+    }
     val obtained = status is GameElementStatus.Obtained
     val color = if (obtained) MeeshyPalette.Success else MeeshyTheme.tokens.textMuted
     Row(

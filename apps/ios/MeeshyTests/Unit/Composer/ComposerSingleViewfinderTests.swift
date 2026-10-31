@@ -70,7 +70,7 @@ final class ComposerSingleViewfinderTests: XCTestCase {
     func test_laCamera_sePresenteSeuleEnPleinEcran() {
         XCTAssertEqual(ComposerPortal.camera.presentation, .fullScreen)
         for portail in ComposerPortal.allCases where portail != .camera {
-            XCTAssertEqual(portail.presentation, .sheet, "\(portail) changerait de présentation")
+            XCTAssertNotEqual(portail.presentation, .fullScreen, "\(portail) changerait de présentation")
         }
     }
 

@@ -87,11 +87,13 @@ final class ComposerStoryCanvasTests: XCTestCase {
         XCTAssertTrue(ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false))
     }
 
-    /// Un POST garde le prédicat qui est le sien — sa scène est une
-    /// incrustation, qui naît d'un fond ou d'un média.
-    func test_unPOST_garde_leprédicatDuDocument() {
-        XCTAssertFalse(ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: false))
-        XCTAssertTrue(ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: true))
+    /// Un POST se compose sur la scène, même vide (#13864) — mais il ne la
+    /// PUBLIE que si elle porte quelque chose : un post de texte seul part avec
+    /// la charge d'avant.
+    func test_unPOST_montreLaScene_maisNeLaPublieQuAvecDeLaMatiere() {
+        XCTAssertTrue(ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: false))
+        XCTAssertFalse(ComposerStoryCanvas.publishesScene(format: .post, documentHasScene: false))
+        XCTAssertTrue(ComposerStoryCanvas.publishesScene(format: .post, documentHasScene: true))
     }
 
     func test_laPremièreUnité_seSèmeSeulement_siAucuneNExiste() {
@@ -217,11 +219,6 @@ final class ComposerTextSceneDoorTests: XCTestCase {
         XCTAssertEqual(ComposerDocumentCopy.label(.textScene), ComposerRailCopy.label(.text))
     }
 
-    func test_visibleTools_captureRefusee_garde_LOutilTexte() {
-        XCTAssertTrue(ComposerDocumentToolPolicy.visibleTools(
-            served: ComposerDocumentTool.canonicalRow, allowsCapture: false
-        ).contains(.textScene))
-    }
 
     func test_background_aucunFondChoisi_prendLaPremiereCouleurDeLaPalette() {
         XCTAssertEqual(

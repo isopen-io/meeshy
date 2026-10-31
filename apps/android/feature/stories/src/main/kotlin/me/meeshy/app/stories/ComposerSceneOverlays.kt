@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -54,10 +55,10 @@ internal data class SceneHistory(val canUndo: Boolean, val canRedo: Boolean)
 /** La pastille d'audience : le libellé du mode (« Public ») et son glyphe. */
 internal data class SceneAudience(val label: String, val icon: ImageVector)
 
-private val SCENE_TARGET = 48.dp
+internal val SCENE_TARGET = 48.dp
 private val SCENE_DISC = 40.dp
 private val SCENE_VEIL = Color.Black.copy(alpha = 0.38f)
-private val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
+internal val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
 
 /**
  * Un bouton rond posé sur la scène (#13834) : un disque translucide de 40 dp dans une cible de 48 dp, nommé pour TalkBack.
@@ -96,7 +97,10 @@ internal fun SceneRoundButton(
     }
 }
 
-/** Le haut de la scène : ✕ à gauche, ↶ ↷ à droite seulement avec un historique. */
+/**
+ * Le haut de la scène : ✕ à gauche, ↶ ↷ à droite seulement avec un historique. [keepsHeight] : la barre garde sa hauteur
+ * quand ✕ se retire pour l'édition d'un objet (#13956), sans quoi la colonne remonterait d'un cran.
+ */
 @Composable
 internal fun SceneTopBar(
     onClose: () -> Unit,
@@ -104,9 +108,13 @@ internal fun SceneTopBar(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     showsClose: Boolean = true,
+    keepsHeight: Boolean = false,
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        if (showsClose) SceneRoundButton(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose)
+    Row(
+        modifier = Modifier.fillMaxWidth().then(if (keepsHeight) Modifier.heightIn(min = SCENE_TARGET) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        EditingChromeVisibility(showsClose) { SceneRoundButton(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose) }
         Spacer(Modifier.weight(1f))
         history?.let {
             SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = it.canUndo)

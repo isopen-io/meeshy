@@ -54,6 +54,8 @@ describe('CallMontageMode — les cadres', () => {
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
     await loadFrameUsageCatalog('fr');
+    await loadCallStudioCatalog('en');
+    await loadFrameUsageCatalog('en');
     loaded.module = await import('@/lib/calls/frames/frame-studio');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
@@ -65,7 +67,7 @@ describe('CallMontageMode — les cadres', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = async (call: MontageCall | undefined, options: { readonly frames?: boolean; readonly module?: FrameStudioModule; readonly clipEnv?: boolean; readonly shelf?: readonly string[] | null } = {}) => {
+  const mount = async (call: MontageCall | undefined, options: { readonly frames?: boolean; readonly module?: FrameStudioModule; readonly clipEnv?: boolean; readonly shelf?: readonly string[] | null; readonly language?: 'fr' | 'en' } = {}) => {
     const saved: Array<readonly CaptureFile[]> = [];
     const painted = recorder();
     const sizes: Array<{ width: number; height: number }> = [];
@@ -85,7 +87,7 @@ describe('CallMontageMode — les cadres', () => {
     const render = (next: MontageCall | undefined) =>
       root.render(
         <CallMontageMode
-          language="fr"
+          language={options.language ?? 'fr'}
           quitGlyph={null}
           onExit={() => undefined}
           stage={() => shown}
@@ -152,6 +154,18 @@ describe('CallMontageMode — les cadres', () => {
     expect(preview?.getAttribute('aria-label')).toBe(`Aperçu du cadre ${first}`);
     expect(view.find('[data-call-mode-carousel] [role="radiogroup"]')?.getAttribute('aria-label')).toBe('Choisir un cadre');
     view.done();
+  });
+
+  test('le nom d’un cadre se lit dans la langue d’interface, au carrousel comme à l’aperçu (#13953)', async () => {
+    const english = await mount(duo, { language: 'en' });
+    await english.press('[data-call-frame-mood="jovial"]');
+    expect(english.find('[data-carousel-item="jovial.fete.duo"]')?.getAttribute('aria-label')).toBe('Party');
+    expect(english.find('[data-call-capture-preview]')?.getAttribute('aria-label')).toContain('Party');
+    english.done();
+    const french = await mount(duo);
+    await french.press('[data-call-frame-mood="jovial"]');
+    expect(french.find('[data-carousel-item="jovial.fete.duo"]')?.getAttribute('aria-label')).toBe('Fête');
+    french.done();
   });
 
   test('les vignettes ne se rendent que pour la fenêtre visible, ± 3 autour du cadre choisi', async () => {

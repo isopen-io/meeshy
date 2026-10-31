@@ -21,9 +21,13 @@ internal val StorySlide.badges: List<ComposerSceneReferences.Badge>
         element.referenceUserId?.let { ComposerSceneReferences.Badge(userId = it, username = element.text.trim().removePrefix("@")) }
     }
 
-internal fun publishPlans(current: StoryComposerUiState, language: String): List<PublishPlan> {
+internal fun publishPlans(
+    current: StoryComposerUiState,
+    language: String,
+    slides: List<StorySlide> = current.deck.publishableSlides,
+): List<PublishPlan> {
     val pendingCmids = current.pendingUploads.mapTo(mutableSetOf(), PendingMediaUpload::cmid)
-    return current.deck.publishableSlides.map { slide ->
+    return slides.map { slide ->
         val draft = StoryComposerDraft(
             text = slide.text,
             visibility = current.draft.visibility,

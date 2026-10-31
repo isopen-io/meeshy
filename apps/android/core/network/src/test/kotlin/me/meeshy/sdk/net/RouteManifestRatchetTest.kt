@@ -81,8 +81,10 @@ class RouteManifestRatchetTest {
          * motif `{domain}` couvre aussi les domaines que l'écran n'offre pas (capture-frame, glory-frame, lens).
          * 207 : moins `POST /me/game/guide/seen` (#13885 : la ligne de Mee et sa feuille sur la première page
          * Progression), que porte `GameApi.markGuideSeen`.
+         * 205 : moins `POST /conversations/:id/messages/after-read/consume` et `POST …/messages/:messageId/consume`
+         * (#13995 : la flamme-œil consommée à la sortie, la vue unique consommée à la fermeture), que porte `MessageApi`.
          */
-        const val TO_PORT_CEILING = 207
+        const val TO_PORT_CEILING = 205
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

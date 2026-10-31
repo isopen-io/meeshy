@@ -793,7 +793,7 @@ extension StoryViewModel {
                 self.storyUploadSucceeded.send(id)
                 self.activeUploads.removeAll { $0.id == id }
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story publiée", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(StoryPublishCopy.published(finished?.targetType ?? .story))
                 self.releaseUploadSlot(after: id)
             } catch {
                 if !Task.isCancelled {
@@ -803,7 +803,7 @@ extension StoryViewModel {
                         self.rejectUpload(id: id, message: error.localizedDescription, code: code)
                     case .retryable:
                         self.mutateUpload(id: id) { $0.phase = .failed(error.localizedDescription) }
-                        FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Échec de la publication de la story", bundle: .main))
+                        FeedbackToastManager.shared.showError(StoryPublishCopy.publishFailed(self.activeUploads.first(where: { $0.id == id })?.targetType ?? .story))
                         // Don't cleanup temp files on failure — retry may need them
                         self.releaseQueueClaimIfNothingCommitted(uploadId: id)
                     }

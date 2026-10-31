@@ -165,6 +165,6 @@ class StorySlideDeckZOrderTest {
         val after = deck.reorderTextElement("x", StoryZOrder.TO_BACK)
 
         assertThat(after.idsOn("a")).containsExactly("x", "y").inOrder()
-        assertThat(after.slides.first().elements.first()).isEqualTo(styled)
+        assertThat(after.slides.first().elements.first()).isEqualTo(styled.copy(zIndex = 1))
     }
 }

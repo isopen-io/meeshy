@@ -12,7 +12,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -119,7 +118,7 @@ class ComposerLabeledRailsTest {
                         StoryComposerSceneFirst(
                             state = state,
                             viewModel = vm,
-                            sceneExport = SceneExportHost(SceneCapture(rememberGraphicsLayer(), SceneCapturePass.NONE), emptyList(), false) {},
+                            sceneExport = SceneExportHost(emptyList(), false) {},
                             doors = StoryComposerDoors(onClose = {}, onOpenAudience = {}, onOpenStickers = {}, onPickMedia = {}, onOpenSoundShelf = {}),
                             morePanel = null,
                             onMorePanel = {},
@@ -170,7 +169,7 @@ class ComposerLabeledRailsTest {
     }
 
     @Test
-    fun `the right rail is empty without a selection, then carries the labelled actions of the selection`() {
+    fun `the left rail gives its place to the labelled options of the selection, close and publish step aside`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onSceneBackgroundTap()
@@ -183,9 +182,9 @@ class ComposerLabeledRailsTest {
 
         compose.onNodeWithContentDescription("😀").assertIsSelected()
         val scene = scene()
-        listOf("SELECTION", "Edit", "Duplicate", "Remove").forEach { label -> assertThat(text(label).left).isAtLeast(scene.right) }
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
-        compose.onNodeWithText("Text").assertExists()
+        listOf("SELECTION", "Edit", "Duplicate", "Remove").forEach { label -> assertThat(text(label).right).isAtMost(scene.left) }
+        listOf("Text", "Close").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
     }
 
     @Test
@@ -223,7 +222,7 @@ class ComposerLabeledRailsTest {
         var wide by mutableStateOf(false)
         show(vm, { if (wide) 1280.dp else 360.dp }, { if (wide) 752.dp else 692.dp })
         compose.onNodeWithContentDescription("😀").performClick()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertExists()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
 
         wide = true
         compose.waitForIdle()
@@ -234,7 +233,7 @@ class ComposerLabeledRailsTest {
         wide = false
         compose.waitForIdle()
 
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertExists()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
         compose.onNodeWithText("SELECTION").assertDoesNotExist()
     }
 
@@ -309,7 +308,7 @@ class ComposerLabeledRailsTest {
         showTablet(vm)
         compose.onNodeWithContentDescription("😀").performClick()
 
-        listOf("Close", "Edit", "Duplicate", "Remove", "More").forEach { label ->
+        listOf("Edit", "Duplicate", "Timing", "Remove").forEach { label ->
             compose.onNodeWithText(label).assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
         }
     }

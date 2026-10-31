@@ -97,51 +97,7 @@
           "status": "adopted"
         },
         {
-          "androidName": "feed_composer_add_location",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.attach.file",
-          "androidName": "feed_composer_attach_file",
-          "status": "adopted"
-        },
-        {
           "androidName": "feed_composer_attach_media",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "composer.recent.cancelSelection",
-          "androidName": "feed_composer_cancel",
-          "status": "adopted"
-        },
-        {
-          "androidName": "feed_composer_language_button",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "composer.audio.languages.search",
-          "androidName": "feed_composer_language_search",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.post.language",
-          "androidName": "feed_composer_language_title",
-          "status": "adopted"
-        },
-        {
-          "androidName": "feed_composer_location_unavailable",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_composer_media_alt_label",
-          "status": "android-only"
-        },
-        {
-          "androidName": "feed_composer_media_alt_placeholder",
           "status": "android-only"
         },
         {
@@ -163,82 +119,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "feed.post.composer.placeholder",
-          "androidName": "feed_composer_placeholder",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "composer.socle.publish",
-          "androidName": "feed_composer_publish",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.attach.record-audio",
-          "androidName": "feed_composer_record_voice",
-          "status": "adopted"
-        },
-        {
-          "androidName": "feed_composer_remove_location",
-          "status": "android-only"
-        },
-        {
           "androidName": "feed_composer_remove_media",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "composer.capture.a11y.takePhoto",
-          "androidName": "feed_composer_take_photo",
-          "status": "adopted"
-        },
-        {
-          "androidName": "feed_composer_take_video",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.post.composer.title",
-          "androidName": "feed_composer_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.composer.type.hint",
-          "androidName": "feed_composer_type_hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.composer.type.post",
-          "androidName": "feed_composer_type_post",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.composer.type.reel",
-          "androidName": "feed_composer_type_reel",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.league.tab.friends",
-          "androidName": "feed_composer_visibility_friends",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "post.visibility.private",
-          "androidName": "feed_composer_visibility_private",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "post.visibility.public",
-          "androidName": "feed_composer_visibility_public",
-          "status": "adopted"
         },
         {
           "catalog": "ui",

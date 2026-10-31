@@ -38,8 +38,6 @@ internal fun SceneObjectMenuPopup(
 internal fun Action.labelRes(): Int = when (this) {
     Action.EDIT -> R.string.story_canvas_action_edit
     Action.DUPLICATE -> R.string.story_canvas_action_duplicate
-    Action.BRING_FORWARD -> R.string.story_canvas_action_bringForward
-    Action.SEND_BACKWARD -> R.string.story_canvas_action_sendBackward
     Action.LEAVE_SCENE -> R.string.story_canvas_action_leaveScene
     Action.DELETE -> R.string.story_canvas_action_delete
     Action.TRIM, Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND -> R.string.story_canvas_action_edit
@@ -48,8 +46,6 @@ internal fun Action.labelRes(): Int = when (this) {
 internal fun Action.icon(): ImageVector = when (this) {
     Action.EDIT, Action.TRIM -> MeeshyIcons.Edit
     Action.DUPLICATE -> MeeshyIcons.Copy
-    Action.BRING_FORWARD -> MeeshyIcons.LayersFilled
-    Action.SEND_BACKWARD -> MeeshyIcons.Layers
     Action.LEAVE_SCENE -> MeeshyIcons.SignOut
     Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND -> MeeshyIcons.Layers
     Action.DELETE -> MeeshyIcons.Delete

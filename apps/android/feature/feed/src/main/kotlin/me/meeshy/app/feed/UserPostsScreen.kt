@@ -219,7 +219,11 @@ internal fun UserPostCard(
                 }
             }
 
-            post.images.firstOrNull()?.let { image ->
+            val scenes = post.scenes
+            if (scenes != null) {
+                Spacer(Modifier.height(MeeshySpacing.md))
+                PostScenesView(scenes = scenes, live = false)
+            } else post.images.firstOrNull()?.let { image ->
                 Spacer(Modifier.height(MeeshySpacing.md))
                 AsyncImage(
                     model = image.url,

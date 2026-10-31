@@ -70,9 +70,9 @@ final class ComposerWritingFocusTests: XCTestCase {
         XCTAssertTrue(surface.contains("structComposerSceneSurface"), "le fichier lu n'est pas la surface")
         XCTAssertTrue(surface.contains("varwritesText:Bool=false"),
                       "la surface doit SAVOIR qu'on écrit — sans quoi elle ne peut rien céder")
-        XCTAssertTrue(surface.contains("guardComposerToolFocus.isShown(.sceneDoors,toolIsOpen:toolIsOpen,writesText:writesText),"),
-                      "le rail des portes demande à la règle s'il survit à l'écriture (#6131)")
-        XCTAssertTrue(surface.contains("ifComposerToolFocus.isShown(.trailingRail,toolIsOpen:toolIsOpen,writesText:writesText){"),
+        XCTAssertTrue(surface.contains("ComposerRestChrome.State(toolIsOpen:toolIsOpen,writesText:writing.writesText,"),
+                      "les boutons du repos demandent à la règle s'ils survivent à l'écriture (#6131, #13839)")
+        XCTAssertTrue(surface.contains("guardComposerToolFocus.isShown(.trailingRail,toolIsOpen:toolIsOpen,writesText:writesText),"),
                       "le rail droit demande à la règle s'il survit à l'écriture (#6132)")
         XCTAssertTrue(surface.contains("ComposerToolFocus.lowerFloorsAreShown(writesText:writesText)"),
                       "les étages du bas demandent à la règle s'ils survivent à l'écriture (#6132)")
@@ -172,7 +172,8 @@ final class ComposerWritingFocusTests: XCTestCase {
         XCTAssertTrue(hote.contains("writesPostBody:editsPostContent,"),
                       "la surface doit savoir QUEL texte on écrit")
         let surface = compact(try source("Meeshy/Features/Composer/ComposerSceneSurface.swift"))
-        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description,toolIsOpen:toolIsOpen,writing:writing)"),
+        // Le volet cède aussi à un objet sélectionné (#13957) : `sceneIsFocused`.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description,toolIsOpen:sceneIsFocused,writing:writing)"),
                       "le volet demande à la règle s'il survit à l'écriture du corps")
         XCTAssertTrue(surface.contains(
             ".animation(ComposerWritingExit.chromeAnimation(reduceMotion:reduceMotion,writesText:writesText),value:writesText)"),

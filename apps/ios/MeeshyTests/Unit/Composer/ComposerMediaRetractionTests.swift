@@ -167,7 +167,9 @@ final class ComposerMediaRetractionTests: XCTestCase {
             + "laissé seize témoins verts sur huit no-op.")
     }
 
-    /// **Les deux portes du SON passent par le point d'entrée unique** (#6577).
+    /// **La porte du SON passe par le point d'entrée unique** (#6577). Sa
+    /// jumelle, la carte de contenu du document, est partie avec la surface
+    /// document (#13864).
     ///
     /// Le premier lot affirmait que `deleteEditedSound()` « fait les deux
     /// moitiés depuis #4696 ». Mesuré : elle nettoyait DEUX porteurs sur huit et
@@ -178,9 +180,9 @@ final class ComposerMediaRetractionTests: XCTestCase {
     /// > Un précédent cité de mémoire est une garde imaginaire : la phrase
     /// > rassurait sur la porte la plus proche du défaut, donc sur la seule
     /// > qu'il fallait relire.
-    func test_lesDeuxPortesDuSon_passentParLePointUnique() throws {
+    func test_laPorteDuSon_passeParLePointUnique() throws {
         let source = try hostSource()
-        for porte in ["func deleteEditedSound(", "func deleteForegroundSound("] {
+        for porte in ["func deleteEditedSound("] {
             guard let corps = body(after: porte, in: source).map(compact) else {
                 return XCTFail("`\(porte)` introuvable — la garde ne mesurerait rien")
             }
@@ -301,22 +303,18 @@ final class ComposerMediaRetractionTests: XCTestCase {
             + "le fichier reste dans la charge.")
     }
 
-    /// **Le TROISIÈME geste, absent du cadrage de ce lot.** L'appui long sur un
-    /// fond ouvre un menu dont « Supprimer » retombait, lui aussi, sur le seul
-    /// `viewModel.deleteElement(id:)` (#5041). Il n'a jamais figuré dans
+    /// **Le TROISIÈME geste, absent du cadrage de ce lot.** Le retrait d'un
+    /// fond — hier son menu d'appui long (#5041), aujourd'hui « Fond › Retirer »
+    /// (#13974) — retombait, lui aussi, sur le seul `viewModel.deleteElement(id:)`. Il n'a jamais figuré dans
     /// l'inventaire des portes de suppression parce qu'il est arrivé après
     /// elles — le mode d'oubli que le dépôt nomme déjà : « une règle qui naît
     /// hors de l'unité de son hôte naît hors de toutes les gardes ».
     func test_leMenuDuFond_passeParLePointUnique() throws {
         let source = try hostSource()
-        guard let corps = body(after: "func applyBackgroundMenu(", in: source).map(compact) else {
-            return XCTFail("`applyBackgroundMenu(` introuvable — la garde ne mesurerait rien")
+        guard let corps = body(after: "func removeBackground(", in: source).map(compact) else {
+            return XCTFail("`removeBackground(` introuvable — la garde ne mesurerait rien")
         }
-        guard let suppression = corps.range(of: "case.delete:") else {
-            return XCTFail("La branche `.delete` du menu de fond est introuvable")
-        }
-        let branche = String(corps[suppression.upperBound...].prefix(200))
-        XCTAssertTrue(branche.contains("retractMedia("),
+        XCTAssertTrue(corps.contains("retractMedia("),
             "Supprimer un FOND depuis son menu retire l'objet du modèle et laisse son fichier "
             + "dans la charge : le même défaut que le rail trailing, par une porte de plus.")
     }

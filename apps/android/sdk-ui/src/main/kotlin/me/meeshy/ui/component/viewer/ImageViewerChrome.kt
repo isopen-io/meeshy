@@ -106,10 +106,10 @@ internal fun ImageViewerTopBar(
 
 /**
  * Le menu ⋯ des sorties — miroir de `FullscreenMoreMenu` : Enregistrer, puis « Partager hors de
- * Meeshy ». Pendant une sortie, le disque porte un anneau et s'annonce « Enregistrement… ».
+ * Meeshy » ; la vidéo plein écran le partage. Pendant une sortie, le disque porte un anneau et s'annonce « Enregistrement… ».
  */
 @Composable
-private fun ImageViewerMoreMenu(
+internal fun ImageViewerMoreMenu(
     exits: List<ImageViewerExit>,
     isBusy: Boolean,
     onExit: (ImageViewerExit) -> Unit,

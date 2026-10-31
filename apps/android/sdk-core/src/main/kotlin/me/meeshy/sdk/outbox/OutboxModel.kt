@@ -32,6 +32,8 @@ public enum class OutboxKind {
     UPDATE_AUDIO_SETTINGS,
     CREATE_POST,
     CREATE_COMMENT,
+    CONSUME_AFTER_READ,
+    CONSUME_VIEW_ONCE,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -76,6 +78,7 @@ public object OutboxLanes {
     public const val MEDIA_STATUS: String = "mediaStatus"
     public const val POST: String = "post"
     public const val COMMENT: String = "comment"
+    public const val CONSUMPTION: String = "consumption"
 
     /**
      * #13820 — une lane dont les lignes ne s'ordonnent pas entre elles : chaque téléversement est indépendant (l'ordre d'un
@@ -152,6 +155,9 @@ public object OutboxLaneMap {
         OutboxKind.REPORT_ATTACHMENT_STATUS -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA_STATUS)
         OutboxKind.CREATE_POST -> OutboxLaneAssignment.Shared(OutboxLanes.POST)
         OutboxKind.CREATE_COMMENT -> OutboxLaneAssignment.Shared(OutboxLanes.COMMENT)
+        OutboxKind.CONSUME_AFTER_READ,
+        OutboxKind.CONSUME_VIEW_ONCE,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.CONSUMPTION)
     }
 
     /**
@@ -272,6 +278,20 @@ public data class CommentPayload(
  */
 @kotlinx.serialization.Serializable
 public data class PinPayload(val conversationId: String)
+
+/**
+ * Payload of a `CONSUME_AFTER_READ` outbox row (#13995, iOS `ConsumeAfterReadPayload`). The row's
+ * `targetId` is the conversation; the flamme-œil messages the reader saw before leaving travel here.
+ */
+@kotlinx.serialization.Serializable
+public data class ConsumeAfterReadPayload(val messageIds: List<String>)
+
+/**
+ * Payload of a `CONSUME_VIEW_ONCE` outbox row (#13995). The row's `targetId` is the message; the
+ * route also needs its conversation.
+ */
+@kotlinx.serialization.Serializable
+public data class ConsumeViewOncePayload(val conversationId: String)
 
 /**
  * Payload of a `SEND_FRIEND_REQUEST` outbox row. The receiver is the row's

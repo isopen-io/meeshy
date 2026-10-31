@@ -433,17 +433,7 @@ extension StoryComposerView {
     /// **Ce que VoiceOver entend au geste Publier** (#8522) — le type servi,
     /// jamais « story » pour un post ou un réel.
     public static func publishStartedAnnouncement(for type: PostType) -> String {
-        switch type {
-        case .story:
-            return String(localized: "story.composer.a11y.publishStarted",
-                          defaultValue: "Publication de la story lancée", bundle: .module)
-        case .reel:
-            return String(localized: "story.composer.a11y.publishStarted.reel",
-                          defaultValue: "Publication du réel lancée", bundle: .module)
-        case .post, .status:
-            return String(localized: "story.composer.a11y.publishStarted.post",
-                          defaultValue: "Publication du post lancée", bundle: .module)
-        }
+        ComposerFormatWording(type).publishStarted
     }
 
     /// Snapshot remis au callback : une COPIE de `slides` où les effets du

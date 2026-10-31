@@ -9,7 +9,7 @@ class SlideThumbnailSpecTest {
         SlideThumbnailSpec.of(slide, backgroundKey = backgroundKey, accentHex = "#6366F1", widthPx = 74, heightPx = 132)
 
     @Test
-    fun `a slide with nothing on it is blank and paints black`() {
+    fun `a slide with nothing on it is blank`() {
         assertThat(spec(StorySlide(id = "a")).isBlank).isTrue()
     }
 

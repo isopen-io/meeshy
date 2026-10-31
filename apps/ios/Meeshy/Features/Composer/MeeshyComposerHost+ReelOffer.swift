@@ -45,7 +45,7 @@ nonisolated enum ComposerReelOfferRule {
                        formatChosenByAuthor: Bool,
                        media: [(kind: FeedMediaType, durationMs: Int?)]) -> Bool {
         let reelIsChoosable = menuEntries?.contains { $0.format == .reel && $0.isChoosable } ?? false
-        guard reelIsChoosable, choice.layout == nil else { return false }
+        guard reelIsChoosable, choice.layout == nil, choice.formats.count == 1 else { return false }
         return ReelComposition.offersReelForPost(type: choice.format.postType,
                                                  mediaKinds: media,
                                                  isRepost: origin.repostedPostId != nil,
@@ -102,7 +102,7 @@ extension MeeshyComposerHost {
         guard ComposerReelOfferRule.offers(choice: choice,
                                            menuEntries: publishMenuEntries,
                                            origin: intent.origin,
-                                           formatChosenByAuthor: armedPublishChoice != nil,
+                                           formatChosenByAuthor: reelAutoSwitch.authorChose || reelAutoSwitch.autoArmed,
                                            media: media) else {
             performSoclePublish(choice)
             return

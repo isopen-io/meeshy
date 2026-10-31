@@ -43,7 +43,7 @@ class StoryComposerLocationRefusalTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private val session: SessionRepository = mockk(relaxed = true)
-    private val media: StoryMediaUploader = mockk(relaxed = true)
+    private val media: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
     private val queue: MediaUploadQueue = mockk(relaxed = true)
 
     private fun viewModel(): StoryComposerViewModel {
@@ -80,7 +80,8 @@ class StoryComposerLocationRefusalTest {
 
         vm.onMediaPicked(listOf(MediaUploadItem(byteArrayOf(1), "a.jpg", "image/jpeg")))
 
-        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
+        assertThat(vm.state.value.canRetryMedia).isTrue()
         assertThat(vm.state.value.draft.mediaIds).containsExactly("cmid_kept")
     }
 }

@@ -72,3 +72,14 @@ describe('« Retirer » une publication d’un autre (#11150)', () => {
   });
 });
 
+describe('une publication à SCÈNE s’exporte (#13873)', () => {
+  test('« Sauvegarder » et « Imager » suivent « Partager », pour tout lecteur', () => {
+    expect(postMenuEntries({ ...base, canExportScene: true })).toEqual(['open', 'copyText', 'share', 'saveMedia', 'imager', 'save', 'report']);
+    expect(postMenuEntries({ ...base, viewerId: null, canExportScene: true })).toContain('saveMedia');
+  });
+
+  test('sans scène, rien à exporter', () => {
+    expect(postMenuEntries(base)).not.toContain('saveMedia');
+    expect(postMenuEntries(base)).not.toContain('imager');
+  });
+});

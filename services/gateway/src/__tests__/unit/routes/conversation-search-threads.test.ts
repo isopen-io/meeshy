@@ -179,7 +179,7 @@ const lawFaithfulResolver =
           ? resolvePresenceVisibility({
               isSelf: viewer.userId === id,
               viewerRole: viewer.role,
-              areConnected: friendsOfViewer.has(id),
+              relationLevel: friendsOfViewer.has(id) ? 'FRIEND' : 'PUBLIC',
               targetShowOnlineStatus: true,
               targetShowLastSeen: true,
               targetIsDeactivated: false,

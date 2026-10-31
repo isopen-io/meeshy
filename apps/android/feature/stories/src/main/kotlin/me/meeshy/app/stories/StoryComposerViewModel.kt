@@ -23,31 +23,35 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaIntake
+import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
-import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.AudienceCandidate
 import me.meeshy.sdk.model.composer.ComposerAudienceSelection
-import me.meeshy.sdk.model.composer.ComposerCarry
+import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerPublishChannel
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerBandState
 import me.meeshy.sdk.model.composer.ComposerHashtags
+import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.sdk.model.composer.StoryToolMode
-import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.media.UnclaimedMediaSweep
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.net.MeeshyConfig
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.outbox.OutboxIds
+import me.meeshy.sdk.post.PostComposerDraftStore
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.SessionRepository
@@ -84,6 +88,10 @@ class StoryComposerViewModel @Inject constructor(
     private val blocks: BlockCache = BlockCache(),
     private val config: MeeshyConfig = MeeshyConfig(),
     private val accountFence: AccountFence? = null,
+    private val lookOven: StoryLookOven? = null,
+    private val publications: PublicationOutbox? = null,
+    private val postDrafts: PostComposerDraftStore? = null,
+    private val network: NetworkMonitor? = null,
 ) : ViewModel() {
 
     /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
@@ -99,6 +107,7 @@ class StoryComposerViewModel @Inject constructor(
     val mediaBaseUrl: String? get() = config.apiBaseUrl
 
     /** The author colour the reader paints a background-less slide with (#12314). */
+    val lookPerson: ComposerLookPerson get() = sessionRepository.lookPerson()
     val authorAccentHex: String get() = StorySceneFill.authorAccentHex(sessionRepository.currentUser.value)
 
     /** One-shot signal that a story was queued — the screen dismisses on it. */
@@ -109,6 +118,7 @@ class StoryComposerViewModel @Inject constructor(
     private var seededByDoor = false
     private var ownsStoredDraft = false
     private var restoring: Job? = null
+    private var autosave: Job? = null
 
     /** Une story PUBLIÉE rouverte (#13632) : son enregistrement la met à jour, il ne publie jamais une story neuve. */
     private var editMode: StoryEditMode? = null
@@ -125,13 +135,17 @@ class StoryComposerViewModel @Inject constructor(
     /** « Composer » depuis une story vue (#13849) : la scène semée devient la composition, son historique repart d'elle. */
     internal fun onRecomposed(done: StoryRecomposed) { _state.update { StoryRecomposition.applied(it, done.plan, done.uploaded) }; resetHistory() }
 
-    /** A format switch hands over the post's media: laid on the RESTORED deck, never beneath a late restore. */
-    fun onCarry(carry: ComposerCarry, onApplied: (lost: Int) -> Unit) = viewModelScope.launch {
-        restoring?.join()
-        _state.update { StoryComposerCarryReducer.applied(it, carry) }
-        record()
-        onApplied(StoryComposerCarryReducer.lost(_state.value, carry))
-    }
+    /**
+     * L'hôte pose les formats cochés et la disposition armée (#13863, #13919) : la scène reste la même et suit le premier,
+     * la publication les prend tous.
+     */
+    fun onFormats(formats: List<ComposerFormat>, layout: MosaicLayoutMode?) = _state.update { StoryComposerFormatReducer.formatted(it, formats, layout) }
+
+    fun onFormat(format: ComposerFormat, layout: MosaicLayoutMode?) = onFormats(listOf(format), layout)
+
+    fun onPostTextChange(text: String) = _state.update { StoryComposerFormatReducer.postTyped(it, text) }
+
+    fun onFormatRestoredApplied() = _state.update { it.copy(restoredFormats = null) }
 
     /**
      * Restores a persisted draft when the screen opens — iOS `onAppear` + `StoryDraftStore.load`.
@@ -143,7 +157,7 @@ class StoryComposerViewModel @Inject constructor(
         initialVisibility?.let { audience -> _state.update { it.copy(draft = it.draft.withVisibility(audience)) } }
         restoring = viewModelScope.launch {
             draftConfirmation.settle()
-            val stored = draftStore.load()
+            val stored = draftStore.load().let { if (seededByDoor) it else StoryPostDraftAdoption.adopted(it, postDrafts) { s -> underOpeningAccount { draftStore.save(s) } } }
             val restored = StoryComposerAutosave.restore(
                 stored = stored,
                 deckIsPristine = StoryComposerAutosave.deckIsPristine(_state.value.deck),
@@ -179,10 +193,11 @@ class StoryComposerViewModel @Inject constructor(
                             ),
                         ),
                     errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
-                ).audiencePurged().mirrorDraftToSelection()
+                ).audiencePurged().mirrorDraftToSelection().let { s -> StoryComposerFormatReducer.restored(s, reconciled.snapshot) }
             }
             resetHistory()
         }
+        if (autosave?.isActive != true) autosave = StoryComposerAutosaveWatch.start(viewModelScope, restoring, _state, ::persistDraft)
     }
 
     /**
@@ -196,7 +211,7 @@ class StoryComposerViewModel @Inject constructor(
     /** « Abandonner » (#13838) : le composeur repart vierge — [persistDraft] purge alors son brouillon, jamais celui d'une porte — et ses envois en cours sont annulés. */
     fun onDiscardDraft() {
         if (editMode != null) return
-        _state.value.also { _state.value = StoryComposerUiState() }.pendingUploads.forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
+        _state.value.also { _state.value = it.blankKeepingFormat() }.pendingUploads.forEach { MediaIntake.release(it.item); cancelDurableUpload(it.cmid) }
         resetHistory()
     }
 
@@ -216,6 +231,7 @@ class StoryComposerViewModel @Inject constructor(
                     visibilityUserIds = current.draft.visibilityUserIds,
                     annotations = current.draft.annotations(),
                     mayOverwriteStored = !seededByDoor || ownsStoredDraft,
+                    format = current.formatDraft(),
                 )
                 when (action) {
                     is StoryDraftPersist.Save -> {
@@ -238,13 +254,6 @@ class StoryComposerViewModel @Inject constructor(
             lost.forEach { cancelDurableUpload(it) }
         }
     }
-
-    /**
-     * Ce qu'une écriture de brouillon a cessé de nommer, et ce qu'elle nomme. Un média retiré puis enregistré sans lui
-     * (changement de format, recréation de l'activité : l'écran se démonte, le composeur vit) peut revenir par annuler :
-     * son envoi attend dans [releasedByDraft] tant que l'historique le montre, et n'est annulé qu'ensuite (#13621).
-     */
-    private data class DraftRelease(val released: Set<String>, val named: Set<String>)
 
     private var releasedByDraft: Set<String> = emptySet()
 
@@ -280,8 +289,6 @@ class StoryComposerViewModel @Inject constructor(
                 SceneObjectMenu.Action.EDIT -> onSelectTextElement(id)
                 SceneObjectMenu.Action.DUPLICATE -> if (text) onDuplicateTextElement(id) else onDuplicateSticker(id)
                 SceneObjectMenu.Action.DELETE -> if (text) onRemoveTextElement(id) else onRemoveSticker(id)
-                SceneObjectMenu.Action.BRING_FORWARD -> onReorderScene(menu.ref, StoryZOrder.FORWARD)
-                SceneObjectMenu.Action.SEND_BACKWARD -> onReorderScene(menu.ref, StoryZOrder.BACKWARD)
                 SceneObjectMenu.Action.TRIM,
                 SceneObjectMenu.Action.LEAVE_SCENE,
                 SceneObjectMenu.Action.SET_AS_BACKGROUND,
@@ -291,10 +298,6 @@ class StoryComposerViewModel @Inject constructor(
         }
         onDismissElementMenu()
     }
-
-    private fun onReorderScene(ref: SceneObjectRef, op: StoryZOrder) =
-        if (ref.kind == ComposerObjectKind.TEXT) onReorderTextElement(ref.id, op)
-        else reduce { StoryComposerSceneReducer.stickerReordered(it, ref.id, op) }
 
     fun onDuplicateSticker(id: String) {
         val newId = newStickerId()
@@ -343,8 +346,6 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
         reduce(transformGesture(id)) { StoryComposerTextReducer.transformed(it, id, scaleBy, rotateByDeg) }
-
-    fun onReorderTextElement(id: String, op: StoryZOrder) = reduce { StoryComposerTextReducer.reordered(it, id, op) }
 
     fun onDuplicateTextElement(id: String) {
         val newId = newTextElementId()
@@ -420,9 +421,7 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onDrawUndo() = reduce { StoryComposerDrawingReducer.undone(it) }
 
-    fun onVisibilityChange(visibility: StoryVisibility) {
-        _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
-    }
+    fun onVisibilityChange(visibility: StoryVisibility) = _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
 
     /** La liste « visible par » / « sauf » : l'appelant l'a déjà bornée aux personnes proposées. */
     fun onAudienceUserIdsChange(ids: List<String>) {
@@ -457,12 +456,11 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(draft = it.draft.copy(mediaCaption = MediaDescriptionLaw.with(it.draft.mediaCaption, mediaId, text))) }
     }
 
-    fun onAllowSoundExtractionChange(allowed: Boolean) {
-        _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
-    }
+    fun onAllowSoundExtractionChange(allowed: Boolean) = _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
 
-    /** Retire [tag] du texte de TOUTES les slides : la balise EST dans la phrase, il n'y a pas de liste à côté. */
+    /** Retire [tag] du texte de TOUTES les slides (du post, en post) : la balise EST dans la phrase, il n'y a pas de liste à côté. */
     fun onRemoveHashtag(tag: String) = reduce { current ->
+        if (current.variant.writesPostText) return@reduce current.copy(postText = ComposerHashtags.removing(tag, current.postText))
         current.withDeckTransform { deck -> deck.mapSlideTexts { ComposerHashtags.removing(tag, it) } }
     }
 
@@ -476,29 +474,19 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /** Tap on a tool of the row: opens, switches to or closes its panel per [ComposerBandState.tapTool]. */
-    fun onBandToolTap(tool: StoryToolMode) {
-        _state.update { it.copy(band = it.band.tapTool(tool)) }
-    }
+    fun onBandToolTap(tool: StoryToolMode) = _state.update { it.copy(band = it.band.tapTool(tool)) }
 
     /** Swipe up on a tool: forces its panel open. */
-    fun onBandToolSwipeUp(tool: StoryToolMode) {
-        _state.update { it.copy(band = it.band.swipeUpOnTool(tool)) }
-    }
+    fun onBandToolSwipeUp(tool: StoryToolMode) = _state.update { it.copy(band = it.band.swipeUpOnTool(tool)) }
 
     /** Swipe down on the row: closes an open panel, otherwise hides the chrome (bare canvas). */
-    fun onBandSwipeDown() {
-        _state.update { it.copy(band = if (it.band.isPanelOpen) it.band.closeAnyPanel() else it.band.hideChrome()) }
-    }
+    fun onBandSwipeDown() = _state.update { it.copy(band = if (it.band.isPanelOpen) it.band.closeAnyPanel() else it.band.hideChrome()) }
 
     /** Gives the chrome back after a voluntary hiding (ghost handle tap). */
-    fun onBandShowChrome() {
-        _state.update { it.copy(band = it.band.showChrome()) }
-    }
+    fun onBandShowChrome() = _state.update { it.copy(band = it.band.showChrome()) }
 
     /** Closes the open panel (handle pulled under its minimum) and gives the row back. */
-    fun onBandDismiss() {
-        _state.update { it.copy(band = it.band.closeAnyPanel()) }
-    }
+    fun onBandDismiss() = _state.update { it.copy(band = it.band.closeAnyPanel()) }
 
     /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap). */
     fun onAddSlide() = applyDeck { if (_state.value.editing) it else it.addSlide(newSlideId()) }
@@ -600,6 +588,21 @@ class StoryComposerViewModel @Inject constructor(
 
     private val buried = BuriedUploads()
     private val stickerImages = StickerImageUploads()
+    private val mediaPick = StoryComposerMediaPick(viewModelScope, _state, mediaUploader, mediaUploadQueue) { record() }
+    private val pendingRetry = StoryComposerPendingRetry(viewModelScope, _state, mediaUploader, ::onPendingUploadResolved).also {
+        it.watch(network?.isOnline ?: MutableStateFlow(true))
+    }
+
+    /** Un média en file REÇU pendant la composition (#13959) : il devient un média envoyé partout, et sa file durable se vide. */
+    private fun onPendingUploadResolved(cmid: String, media: UploadedMedia) {
+        val pending = _state.value.pendingUploads.firstOrNull { it.cmid == cmid }
+        _state.update { StoryComposerUploadResolution.resolved(it, cmid, media) }
+        if (pending == null) return
+        history = history.mapped { StoryComposerUploadResolution.resolvedSnapshot(it, cmid, media) }
+        MediaIntake.release(pending.item)
+        cancelDurableUpload(cmid)
+        record()
+    }
 
     private fun restore(snapshot: ComposerSnapshot) {
         val before = _state.value.pendingUploads
@@ -634,7 +637,7 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     private fun reduce(gesture: String? = null, next: (StoryComposerUiState) -> StoryComposerUiState) {
-        _state.update(next)
+        _state.update { StoryComposerTextReducer.blankLeftBehind(it, next(it)) }
         record(gesture)
     }
 
@@ -645,50 +648,20 @@ class StoryComposerViewModel @Inject constructor(
 
     /**
      * Uploads freshly-picked media onto the selected slide (appended; [asBackground]: the first becomes its background, #13845).
-     * A failed or refused upload is queued **durably** ([queueDurably]) behind a [PendingMediaUpload] placeholder the outbox
-     * grafts once online; a second pick while an upload is in flight is ignored, and nothing usable comes back as a said error.
+     * A failed or refused upload is queued **durably** ([StoryComposerMediaPick]) behind a [PendingMediaUpload] placeholder the outbox
+     * grafts once online; a second pick in flight is ignored; [replacing] (« Fond › Remplacer », #13973) leaves once the new one lands.
      */
-    fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false) {
-        if (items.isEmpty() || _state.value.isUploadingMedia) return
-        val remaining = _state.value.deck.selectedRemainingMediaSlots
-        if (remaining <= 0) {
-            _state.update { it.copy(errorMessage = MEDIA_LIMIT) }
-            return
-        }
-        val accepted = items.take(remaining)
-        _state.update { StoryComposerUploadReducer.started(it, accepted.size) }
-        viewModelScope.launch {
-            try {
-                val onProgress = { index: Int, sent: Long, total: Long ->
-                    _state.update { StoryComposerUploadReducer.progressed(it, index, sent, total) }
-                }
-                when (val result = mediaUploader.upload(accepted, onProgress)) {
-                    is NetworkResult.Success -> { applyUploaded(result.data, asBackground); accepted.forEach(MediaIntake::release) }
-                    is NetworkResult.Failure -> if (StoryComposerUploadReducer.refusesForLocation(result.error)) { accepted.forEach(MediaIntake::release); _state.update(StoryComposerUploadReducer::locationRefused) } else queueDurably(accepted, asBackground)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                accepted.filter { item -> _state.value.pendingUploads.none { it.item === item } }.forEach(MediaIntake::release)
-                _state.update { StoryComposerUploadReducer.settled(it).copy(errorMessage = e.message ?: MEDIA_FAILED) }
-            }
-        }
-    }
+    fun onMediaPicked(items: List<MediaUploadItem>, asBackground: Boolean = false, replacing: String? = null) =
+        mediaPick.pick(items, asBackground, replacing)
 
-    private fun applyUploaded(uploaded: List<UploadedMedia>, asBackground: Boolean) {
-        _state.update { StoryComposerUploadReducer.uploaded(it, uploaded, asBackground) }
-        if (uploaded.isNotEmpty()) record()
-    }
+    /** ✕ sur l'espace réservé (R5 de #13863) : l'ajout s'annule, et l'écran se libère dans la même image. */
+    fun onCancelMediaPick() = mediaPick.cancel()
 
-    /** Any failed upload (a refusal included, #13417) is queued durably: its blob and outbox row share the `cmid` that rides in the draft as a placeholder id. */
-    private suspend fun queueDurably(items: List<MediaUploadItem>, asBackground: Boolean) {
-        items.forEachIndexed { index, item ->
-            val cmid = mediaUploadQueue.enqueue(item, context = TusUploadContext.STORY)
-            _state.update { StoryComposerUploadReducer.queued(it, cmid, item, asBackground && index == 0) }
-            record()
-        }
-        _state.update { StoryComposerUploadReducer.settled(it) }
-    }
+    /** « Réessayer » après un échec : les mêmes octets repartent, vers la place que la scène leur donne maintenant. */
+    fun onRetryMediaPick() = mediaPick.retry().also { pendingRetry.retryFailed() }
+
+    /** Toucher la vignette d'un média en file (#13959) : il repart maintenant. */
+    fun onRetryPendingUpload(cmid: String) = pendingRetry.retry(cmid)
 
     /**
      * Removes an attached or pending media before publishing; the UI clears at once. An offline placeholder's durable
@@ -719,16 +692,18 @@ class StoryComposerViewModel @Inject constructor(
         if (editMode != null) return
         val current = _state.updateAndGet { it.audiencePurged() }
         if (!current.canPublish) return
-        _state.update { it.copy(isPublishing = true, errorMessage = null) }
+        _state.update { it.copy(isPublishing = true, errorMessage = null, publishFailedFormats = emptyList()) }
         viewModelScope.launch {
             try {
-                val queued = publishPlans(current, resolvePublishLanguage()).mapNotNull { plan ->
-                    storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn)
-                }
+                val baked = lookOven?.queued(current) ?: current
+                val sent = current.publishedFormats.map { format -> format to runCatchingPublish { enqueueAs(baked, format) } }
+                val failed = sent.filter { it.second.isFailure }.map { it.first }
+                if (failed.size == sent.size) throw sent.first().second.exceptionOrNull()!!
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                if (failed.isNotEmpty()) return@launch partlyPublished(failed)
                 releasedByDraft = releasedByDraft - current.deck.slides.flatMap { it.mediaIds + listOfNotNull(it.backgroundMediaId) }.toSet()
-                keepDraftUntilConfirmed(current, queued)
-                _state.update { StoryComposerUiState() }
+                keepDraftUntilConfirmed(current, sent.flatMap { it.second.getOrThrow() })
+                _state.update { it.blankKeepingFormat() }
                 resetHistory()
                 _published.tryEmit(Unit)
             } catch (e: CancellationException) {
@@ -737,6 +712,29 @@ class StoryComposerViewModel @Inject constructor(
                 _state.update { it.copy(isPublishing = false, errorMessage = e.message ?: "Publish failed") }
             }
         }
+    }
+
+    /**
+     * Un envoi par format coché (#13919) : la story part par la file des stories, une par slide ; le post et le réel par la file
+     * des publications, un document pour toute la scène. Rend les stories mises en file, que le brouillon attend.
+     */
+    private suspend fun enqueueAs(baked: StoryComposerUiState, format: ComposerFormat): List<String> {
+        val alone = baked.copy(format = format, checkedFormats = emptyList())
+        val language = resolvePublishLanguage()
+        if (alone.variant.channel == ComposerPublishChannel.DOCUMENT) {
+            checkNotNull(publications).enqueueScene(alone, publishPlans(alone, language, alone.postScenesWithBackdrops()), language)
+            return emptyList()
+        }
+        return publishPlans(alone, language).mapNotNull { plan -> storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn) }
+    }
+
+    private suspend fun <T> runCatchingPublish(block: suspend () -> T): Result<T> =
+        try { Result.success(block()) } catch (e: CancellationException) { throw e } catch (e: Throwable) { Result.failure(e) }
+
+    /** Une partie seulement est partie : la composition reste, la scène dit quels formats n'ont pas suivi, et l'hôte ne garde qu'eux. */
+    private fun partlyPublished(failed: List<ComposerFormat>) = _state.update {
+        StoryComposerFormatReducer.formatted(it, failed, it.postLayout)
+            .copy(isPublishing = false, publishFailedFormats = failed, restoredFormats = failed)
     }
 
     /**
@@ -756,6 +754,7 @@ class StoryComposerViewModel @Inject constructor(
             nowIso = Instant.now().toString(),
             visibilityUserIds = published.draft.visibilityUserIds,
             annotations = published.draft.annotations(),
+            format = published.formatDraft(),
         )
         underOpeningAccount { draftStore.save(snapshot.copy(awaitingPublication = queued)) }
     }
@@ -772,6 +771,7 @@ class StoryComposerViewModel @Inject constructor(
      * envoi durable est annulé, hors de [viewModelScope] déjà fermé, pour ne pas téléverser un média qu'aucune story n'utilisera.
      */
     override fun onCleared() {
+        mediaPick.cleared()
         val held = buried.held
         (_state.value.pendingUploads + held).forEach { MediaIntake.release(it.item) }
         val doomed = held.map(PendingMediaUpload::cmid) + releasedByDraft

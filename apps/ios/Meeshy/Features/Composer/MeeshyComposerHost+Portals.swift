@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import Photos
 import MeeshySDK
 import MeeshyUI
 
@@ -43,6 +44,8 @@ extension MeeshyComposerHost {
         case .camera:       documentCameraSheet
         case .hashtag:      composerHashtagSheet
         case .audience:     composerAudienceSheet
+        case .background:   composerBackgroundSheet
+        case .slideDuration: composerDurationSheet
         }
     }
 
@@ -198,15 +201,7 @@ extension MeeshyComposerHost {
         // six alimentent une feuille ; `storyPaste` alimente AUSSI le canvas,
         // qui est plus bas — un injecteur posé haut sert les deux, l'inverse
         // n'est pas vrai.
-        .storyLocationPickerProvided()
-        .storyCameraCaptureProvided()
-        .storyRecentCameraRollProvided()
-        .storyPasteProvided()
-        .storyStickerLibraryProvided()
-        // L'onglet « Lieu » de la palette (#4579). Absent — jamais grisé —
-        // quand l'autorisation de localisation est refusée : c'est l'injecteur
-        // qui le décide, pas la feuille.
-        .stickerNearbyPlacesProvided()
+        .composerPortalProviders(format: selectedFormat)
         // **La porte « Stickers » de l'atelier ouvre la feuille du MEUBLE**
         // (#9189) : l'atelier n'en monte plus à lui, il la demande. Une seule
         // feuille, celle de la conversation, avec tous ses onglets.
@@ -266,13 +261,13 @@ extension MeeshyComposerHost {
             isPresented: $showsPhotoPicker,
             selection: $pickedPhotoLibraryItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current, photoLibrary: .shared()
         )
         .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
             guard !items.isEmpty else { return }
             let picked = items
             pickedPhotoLibraryItems = []
-            Task { await ingestPhotoLibraryItems(picked) }
+            startPhotoLibraryIntake(picked)
         }
         .fileImporter(
             isPresented: $showsFileImporter,
@@ -283,7 +278,7 @@ extension MeeshyComposerHost {
             allowedContentTypes: fileImportIntent.contentTypes,
             allowsMultipleSelection: fileImportIntent.allowsMultipleSelection
         ) { result in
-            Task { await ingestFileImporterResult(result) }
+            startFileImportIntake(result)
         }
         // **Le choix de l'appui long sur la photothèque** (#10357) : prendre
         // une photo, ou un fichier. Monté au-dessus de l'aiguillage comme les
@@ -302,5 +297,24 @@ extension MeeshyComposerHost {
             }
             Button(ComposerMediaSourcePolicy.cancel, role: .cancel) {}
         }
+    }
+}
+
+extension View {
+    /// **Les six fournisseurs que lit toute feuille du meuble** — système ou
+    /// ancrée (#13839) : une seule liste, posée aux deux présentateurs.
+    /// L'onglet « Lieu » de la palette (#4579) est absent — jamais grisé —
+    /// quand l'autorisation de localisation est refusée : c'est l'injecteur
+    /// qui le décide, pas la feuille.
+    /// Le vocabulaire du format composé voyage avec eux (#13913) : l'atelier et
+    /// ses feuilles lisent le même mot que le socle.
+    func composerPortalProviders(format: ComposerFormat) -> some View {
+        self.storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
+            .storyPasteProvided()
+            .storyStickerLibraryProvided()
+            .stickerNearbyPlacesProvided()
+            .environment(\.composerFormatWording, ComposerFormatVariant.of(format).wording)
     }
 }

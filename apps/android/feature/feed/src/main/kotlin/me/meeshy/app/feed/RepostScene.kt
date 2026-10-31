@@ -32,3 +32,22 @@ typealias ReelSceneRenderer = @Composable (item: StoryItem, accentHex: String?, 
 
 /** `null` hors de l'application (tests, aperçus) : la couverture retombe alors sur l'aplat d'accent. */
 val LocalReelSceneRenderer = staticCompositionLocalOf<ReelSceneRenderer?> { null }
+
+/**
+ * Comment une scène de POST se lit en plein écran (iOS `PostSceneCardContainer`) : la scène entière, au centre, et son son joue.
+ * Arguments : la scène, la couleur de son auteur, [playing] (la page que le lecteur montre : elle seule joue), le cadre.
+ */
+typealias PostSceneReaderRenderer = @Composable (item: StoryItem, accentHex: String?, playing: Boolean, modifier: Modifier) -> Unit
+
+/** `null` hors de l'application (tests, aperçus) : toucher une scène n'ouvre alors rien. */
+val LocalPostSceneReaderRenderer = staticCompositionLocalOf<PostSceneReaderRenderer?> { null }
+
+/**
+ * Le menu d'export du plein écran d'un post à scène (#13896) : Enregistrer, Partager et Imager rendent le post ENTIER, toutes
+ * ses scènes bout à bout, par le moteur d'export que l'application fournit. Arguments : les scènes du post, la couleur de
+ * son auteur, la place du bouton.
+ */
+typealias PostSceneExportRenderer = @Composable (scenes: List<StoryItem>, accentHex: String?, modifier: Modifier) -> Unit
+
+/** `null` hors de l'application (tests, aperçus) : le plein écran n'offre alors aucun export. */
+val LocalPostSceneExportRenderer = staticCompositionLocalOf<PostSceneExportRenderer?> { null }

@@ -56,6 +56,8 @@ data class StoryAudioChipView(
     val waveform: List<Float>,
     val startTime: Double = 0.0,
     val duration: Double = 0.0,
+    /** Son rang dans l'ordre unique de la scène (#13852) ; sans rang, la pastille reste au-dessus de tout, comme avant la pile. */
+    val zIndex: Int = Int.MAX_VALUE,
 ) {
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
@@ -105,6 +107,9 @@ object StorySceneObjectsProjection {
         )
     }
 
+    /** La pastille d'un son posé sur la scène, telle que le lecteur la peint — le compositeur peint la même. */
+    fun audioChip(track: StoryAudioPlayerObject): StoryAudioChipView = track.toChip()
+
     private fun StoryAudioPlayerObject.toChip(): StoryAudioChipView = StoryAudioChipView(
         id = id,
         x = SceneObjectNumbers.position(x),
@@ -113,6 +118,7 @@ object StorySceneObjectsProjection {
         waveform = waveformSamples,
         startTime = SceneObjectNumbers.seconds(startTime?.toDouble() ?: 0.0),
         duration = SceneObjectNumbers.seconds(duration?.toDouble() ?: 0.0),
+        zIndex = zIndex ?: Int.MAX_VALUE,
     )
 
     private fun creditLine(title: String?, username: String?): String? =

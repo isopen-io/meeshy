@@ -38,10 +38,10 @@ class UnsentPublicationsViewModel @Inject constructor(
     val offline: StateFlow<Boolean> = networkMonitor.isOnline.map { !it }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), !networkMonitor.isOnline.value)
 
-    private val _reopened = MutableSharedFlow<FeedComposerDraft>(extraBufferCapacity = 1)
+    private val _reopened = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    /** A failed post the author reopened: the composer opens on it. */
-    val reopened: SharedFlow<FeedComposerDraft> = _reopened.asSharedFlow()
+    /** A failed post the author reopened: its draft is back in the post slot, and the composer opens — its scene takes it (#13863). */
+    val reopened: SharedFlow<Unit> = _reopened.asSharedFlow()
 
     private val _reopenedStory = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
@@ -64,9 +64,8 @@ class UnsentPublicationsViewModel @Inject constructor(
 
     fun reopen(cmid: String) {
         viewModelScope.launch {
-            val post = publications.reopenPost(cmid)
-            if (post != null) {
-                _reopened.tryEmit(post.toComposerDraft())
+            if (publications.reopenPost(cmid) != null) {
+                _reopened.tryEmit(Unit)
                 return@launch
             }
             if (publications.reopenStory(cmid) != null) _reopenedStory.tryEmit(Unit)

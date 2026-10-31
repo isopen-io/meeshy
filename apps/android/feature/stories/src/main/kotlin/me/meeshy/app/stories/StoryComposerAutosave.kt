@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftStickerElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
+import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryElementTiming
@@ -19,6 +20,13 @@ import me.meeshy.sdk.model.scene.StoryTextFade
 import me.meeshy.sdk.model.scene.StoryTextFrameShape
 import me.meeshy.sdk.model.scene.StoryTextFrame
 import me.meeshy.sdk.model.scene.StoryTextOutline
+
+/**
+ * Ce qu'une écriture de brouillon a cessé de nommer, et ce qu'elle nomme. Un média retiré puis enregistré sans lui
+ * (changement de format, recréation de l'activité : l'écran se démonte, le composeur vit) peut revenir par annuler :
+ * son envoi attend dans `releasedByDraft` du composeur tant que l'historique le montre, et n'est annulé qu'ensuite (#13621).
+ */
+internal data class DraftRelease(val released: Set<String>, val named: Set<String>)
 
 /** The persistence action a composer change implies for its single durable draft. */
 sealed interface StoryDraftPersist {
@@ -52,15 +60,8 @@ sealed interface StoryDraftPersist {
  * branch: [resolve] always projects a snapshot and decides purely on whether it is
  * [StoryComposerDraftSnapshot.isWorthRestoring] and changed.
  *
- * One dimension is *not yet* full-fidelity: [StorySlide.strokes] (the drawing tool's
- * freehand layer) has no counterpart on [StoryDraftSlideSnapshot] — that type lives in
- * `:core:model`, outside this module. A drawn stroke therefore survives a slide switch,
- * a config change, and publish (it rides `StoryEffects.drawingStrokes`), but not a
- * composer close/reopen or process death — it is silently dropped on restore rather than
- * corrupting anything. [deckIsPristine] still treats a slide carrying strokes as touched,
- * so a late-resolving restore can never clobber an in-progress drawing. Closing the gap
- * needs a `strokes` field on `StoryDraftSlideSnapshot`/`StoryComposerDraftSnapshot`
- * (`:core:model`) plus the two mirror functions below.
+ * The drawing tool's freehand layer, [StorySlide.strokes], is part of the snapshot too (#13863): a drawn stroke survives a
+ * composer close/reopen, process death and « Rouvrir » on a failed post like every other layer.
  */
 object StoryComposerAutosave {
 
@@ -68,11 +69,6 @@ object StoryComposerAutosave {
      * The persistence action for the current composer [deck] / [visibility] / [repostOfId],
      * given the [previous] stored draft. Rules, in order:
      *
-     * - **No restorable content, but a slide carries [StorySlide.strokes]** (a drawing —
-     *   content that exists but that [StoryComposerDraftSnapshot] cannot yet represent, see
-     *   the class doc) → [StoryDraftPersist.None]. A stroke-only deck must never resolve to
-     *   [StoryDraftPersist.Clear]: that would erase whatever [previous] draft is already
-     *   stored to make room for a snapshot that, structurally, has nothing to save.
      * - **No restorable content at all** (no slide carries a caption, media, a publishable
      *   text element / sticker, *or* a stroke) → [StoryDraftPersist.Clear] over a stored
      *   draft, else [StoryDraftPersist.None]. A stored draft awaiting its publication is not
@@ -93,13 +89,11 @@ object StoryComposerAutosave {
         visibilityUserIds: List<String> = emptyList(),
         annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
         mayOverwriteStored: Boolean = true,
+        format: StoryDraftFormat = StoryDraftFormat(),
     ): StoryDraftPersist {
         if (!mayOverwriteStored && previous != null) return StoryDraftPersist.None
-        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds, annotations)
-        if (!snapshot.isWorthRestoring) {
-            val hasUnrepresentableContent = deck.slides.any { it.strokes.isNotEmpty() }
-            return if (hasUnrepresentableContent) StoryDraftPersist.None else purgeOrNone(previous)
-        }
+        val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso, visibilityUserIds, annotations, format)
+        if (!snapshot.isWorthRestoring) return purgeOrNone(previous)
         if (previous != null && previous.sameContentAs(snapshot)) return StoryDraftPersist.None
         return StoryDraftPersist.Save(snapshot)
     }
@@ -166,6 +160,14 @@ object StoryComposerAutosave {
         if (previous != null && !previous.isAwaitingPublication) StoryDraftPersist.Clear else StoryDraftPersist.None
 }
 
+/** Ce que le brouillon garde du format où la scène se compose (#13863) : le texte du post, le format, les médias connus. */
+data class StoryDraftFormat(
+    val postText: String = "",
+    val format: String? = null,
+    val media: List<UploadedMedia> = emptyList(),
+    val formats: List<String> = emptyList(),
+)
+
 /** Projects the deck's persistable fields onto a durable snapshot stamped [nowIso]. */
 fun StorySlideDeck.toDraftSnapshot(
     visibility: StoryVisibility,
@@ -173,6 +175,7 @@ fun StorySlideDeck.toDraftSnapshot(
     nowIso: String,
     visibilityUserIds: List<String> = emptyList(),
     annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
+    format: StoryDraftFormat = StoryDraftFormat(),
 ): StoryComposerDraftSnapshot = StoryComposerDraftSnapshot(
     slides = slides.map {
         StoryDraftSlideSnapshot(
@@ -195,9 +198,13 @@ fun StorySlideDeck.toDraftSnapshot(
             soundSources = it.soundSources,
             placedMedia = it.placedMedia.map(StoryPlacedMedia::toDraftSnapshot),
             backgroundAdjustments = it.backgroundAdjustments,
+            backgroundSourceStart = it.backgroundTrim?.start,
+            backgroundSourceEnd = it.backgroundTrim?.end,
             places = it.places,
             soundTranscriptions = it.soundTranscriptions,
             videosDuckUnderSound = it.videosDuckUnderSound,
+            mediaLooks = it.mediaLooks.filterKeys { id -> id in it.mediaIds },
+            strokes = it.strokes,
         )
     },
     selectedId = selectedId,
@@ -206,6 +213,10 @@ fun StorySlideDeck.toDraftSnapshot(
     visibilityUserIds = visibilityUserIds,
     annotations = annotations,
     updatedAt = nowIso,
+    postText = format.postText,
+    format = format.format,
+    media = format.media,
+    formats = format.formats,
 )
 
 /**
@@ -241,9 +252,12 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 soundSources = it.soundSources.filter { (id, seconds) -> seconds.isFinite() && seconds > 0f && it.audio.any { track -> track.id == id } },
                 placedMedia = it.placedMedia.map(StoryPlacedMedia::from).filter { placed -> placed.mediaId in it.mediaIds },
                 backgroundAdjustments = it.backgroundAdjustments?.takeIf { adjustments -> !adjustments.isNeutral && it.backgroundMediaId != null },
+                backgroundTrim = StoryBackgroundTrimWire.read(it.backgroundSourceStart, it.backgroundSourceEnd).takeIf { _ -> it.backgroundMediaId != null },
                 places = it.places,
                 soundTranscriptions = SoundTranscriptions.pruned(it.soundTranscriptions, it.audio),
                 videosDuckUnderSound = it.videosDuckUnderSound,
+                mediaLooks = it.mediaLooks.filterKeys { id -> id in it.mediaIds },
+                strokes = it.strokes,
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,
@@ -315,6 +329,7 @@ private fun StoryTextElement.toDraftSnapshot(): StoryDraftTextElementSnapshot =
         scale = scale,
         rotationDeg = rotationDeg,
         referenceUserId = referenceUserId,
+        zIndex = zIndex,
     )
 
 /**
@@ -351,6 +366,7 @@ private fun StoryDraftTextElementSnapshot.toTextElement(): StoryTextElement =
         scale = scale,
         rotationDeg = rotationDeg,
         referenceUserId = referenceUserId,
+        zIndex = zIndex,
     )
 
 /**
@@ -375,6 +391,7 @@ private fun StoryStickerElement.toDraftSnapshot(): StoryDraftStickerElementSnaps
         provider = provider,
         imageUrl = imageUrl,
         animation = animation,
+        zIndex = zIndex,
     )
 
 /**
@@ -399,6 +416,7 @@ private fun StoryDraftStickerElementSnapshot.toStickerElement(): StoryStickerEle
         provider = provider,
         imageUrl = imageUrl,
         animation = animation,
+        zIndex = zIndex,
     ).normalised()
 
 /** What the composer's draft attaches beside its slides, in the durable form (#13451). */

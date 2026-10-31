@@ -58,29 +58,28 @@ extension MeeshyComposerHost {
             publishTrigger: publishTrigger,
             publishTargetType: selectedFormat.postType,
             // **La remise passe par le meuble, pour y GREFFER les légendes**
-            // (#4890, seconde moitié). Elle était transmise telle quelle, et
-            // `documentMediaCaptions` n'avait alors aucun lecteur : la légende
-            // saisie sur la scène d'un post mourait à la fermeture.
-            //
-            // Le meuble ne PUBLIE toujours pas — il n'appelle ni service, ni
-            // file, ni endpoint. Il complète la charge que l'atelier remet, avec
-            // la seule matière que l'atelier ne voit pas : sa propre carte de
-            // légendes. `accessibilityCarryingComposerCaptions` est le site
-            // UNIQUE de cette greffe.
+            // (#4890) : il ne publie pas, il complète la charge de l'atelier de
+            // sa carte de légendes (`accessibilityCarryingComposerCaptions`,
+            // site UNIQUE de la greffe).
             onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs,
                                         loadedAudioURLs, loadedStickerAnimations, originalLanguage,
                                         visibility, visibilityUserIds, draftId, references,
                                         accessibility, targetType in
-                // Un post ou un réel de M scènes part en UNE publication (#8520).
-                guard atelierHandOffStaysOnAtelier(targetType: targetType,
-                                                   sceneCount: slides.count) else { return false }
-                return onPublishAllInBackground(
-                    slides, slideImages, loadedImages, loadedVideoURLs,
-                    loadedAudioURLs, loadedStickerAnimations, originalLanguage,
-                    visibility, visibilityUserIds, draftId, references,
-                    accessibilityCarryingComposerCaptions(accessibility, slides: slides),
-                    targetType
-                )
+                // Une remise par format coché (#13920) ; un post ou un réel de M
+                // scènes part en UNE publication (#8520).
+                let remises = atelierFanOut.take(served: targetType, alsoAsReel: accessibility.alsoAsReel)
+                return ComposerSeveralFormats.relay(remises, staysOnAtelier: {
+                    atelierHandOffStaysOnAtelier(targetType: $0, sceneCount: slides.count)
+                }) { remise in
+                    let charge = ComposerSeveralFormats.slides(slides, for: remise, among: remises, postText: documentText,
+                                                               currentSlideId: viewModel.currentSlide.id)
+                    return onPublishAllInBackground(
+                        charge, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations,
+                        originalLanguage, visibility, visibilityUserIds, draftId, references,
+                        accessibilityCarryingComposerCaptions(accessibility, slides: charge)
+                            .carryingAlsoAsReel(remise.alsoAsReel),
+                        remise.format.postType)
+                }
             },
             onPreview: onPreview,
             onDismiss: onDismiss,
@@ -282,40 +281,10 @@ extension MeeshyComposerHost {
     // une seule requête.
 
 
-    /// **Ce que chaque porte du rail PORTE DÉJÀ** (#4994).
-    ///
-    /// Le relevé est composé ICI parce que les deux magasins vivent ici : la
-    /// `StorySlide` pour ce qui se VOIT sur la scène, l'état du meuble pour ce
-    /// qui QUALIFIE la publication (le lieu, le fond, les personnes nommées).
-    /// La règle, elle, ne connaît ni l'un ni l'autre — c'est ce qui la rend
-    /// éprouvable sans monter une vue.
-    var railDoorBadges: [ComposerRailDoor: Int] {
-        ComposerRailDoorBadge.badges(
-            for: ComposerRailDoor.canonicalRail,
-            in: ComposerRailDoorBadge.matter(
-                slide: viewModel.currentSlide,
-                // **Le site UNIQUE, jamais une seconde dérivation** (#5007) :
-                // `composerHashtags` est déjà `ComposerHashtags.tags(in:
-                // documentText)`, et la feuille comme le sélecteur le lisent
-                // sans le recalculer.
-                hashtags: composerHashtags.count,
-                description: sceneDescriptionBinding.wrappedValue,
-                // **Le CORPS du post** (#4890) — `documentText`, jamais la
-                // description : en Post les deux textes sont distincts, et
-                // servir le même aux deux pastilles en allumerait deux pour un
-                // seul texte écrit.
-                content: documentText,
-                mentions: composerReferences.count,
-                hasDocumentLocation: documentLocation != nil))
-    }
-
     var sceneSurface: some View {
         ComposerSceneSurface(
             slideRailSlot: slideRailSlot,
-            format: selectedFormat,
-            overflowMenu: documentOverflowEntries.isEmpty
-                ? nil : AnyView(overflowMenu),
-            onClose: onDismiss,
+            onClose: { requestComposerClose() },
             slide: Binding(
                 get: { ComposerLookComparison.shown(viewModel.currentSlide, comparing: comparingLookObjectId) },
                 set: { viewModel.currentSlide = ComposerLookComparison.written($0, over: viewModel.currentSlide,
@@ -328,19 +297,11 @@ extension MeeshyComposerHost {
             sceneImagesVersion: viewModel.loadedImagesVersion,
             sceneLocalMediaAliases: viewModel.adoptedLocalMedia,
             onItemTapped: { id, kind in
-                // **Toucher un objet le SÉLECTIONNE et montre ses options à
-                // droite** (#8714, directive porteur 2026-09-29) — un son
-                // compris : sa « Création audio » est désormais l'entrée
-                // « Modifier » de la colonne, comme pour les quatre autres
-                // familles, au lieu de s'ouvrir sous le doigt (#4671).
-                //
-                // **Et le met en ÉDITION EN PLACE** (#9138) : toucher, créer,
-                // double-toucher et « Modifier » mènent au même état — ses
-                // sous-outils à droite, puis `(x)`.
-                if !beginInlineEdit(id) {
-                    selectedSceneItemId = id
-                    selectedSceneItemKind = kind
-                }
+                // **Toucher un objet le SÉLECTIONNE** (#13839, L5) — un son
+                // compris : le canvas l'encadre, les outils se retirent et la
+                // barre libellée paraît ; « Modifier » y ouvre son édition,
+                // comme le double toucher. Rien ne s'ouvre sous le doigt.
+                sceneSelectionRelay.selectSceneItem(id, kind: kind)
             },
             // **« Modifier »** — le double toucher et l'action VoiceOver du même
             // nom ouvrent la même édition que la colonne droite
@@ -364,11 +325,11 @@ extension MeeshyComposerHost {
             // une photo, ou clôt la vidéo s'il a tenu. Glisser à DROITE
             // pendant la prise la verrouille, ce qui libère la main pour les
             // autres gestes — retourner l'objectif, par exemple.
-            // **Un fond ne s'ouvre pas au viseur, il s'ouvre à son MENU**
-            // (#5041). La règle du canvas retombe sur le viseur tant que ce
-            // rappel est nil — donc le geste n'est jamais muet, même le jour
-            // où le meuble ne sert pas encore le menu.
-            onBackgroundMediaLongPressed: { backgroundMenuObjectId = $0 },
+            // **L'appui long sur un fond le SÉLECTIONNE, comme le toucher**
+            // (#13974, I-E1) : le niveau « Fond » prend le rail, aucun menu
+            // flottant. La règle du canvas retombe sur le viseur tant que ce
+            // rappel est nil — le geste n'est jamais muet.
+            onBackgroundMediaLongPressed: { selectSceneBackground($0) },
             onBackgroundLongPressChanged: { handleSceneCaptureLongPressChanged($0) },
             onBackgroundLongPressEnded: { handleSceneCaptureLongPressEnded() },
             // **Le viseur n'est plus remis à la surface — il est MONTÉ par le
@@ -415,32 +376,17 @@ extension MeeshyComposerHost {
             // ses réglages REMPLACENT les portes (#8652) — sauf quand l'éditeur
             // plein écran est monté : c'est alors lui qui les porte.
             railMode: sceneRailMode,
-            // **Ce que chaque porte PORTE DÉJÀ** (#4994). Le relevé est composé
-            // ICI parce que les deux magasins vivent ici — la slide pour ce qui
-            // se voit, l'état du meuble pour ce qui qualifie la publication.
-            // La surface, elle, ne compte rien : elle relaie.
-            railBadges: railDoorBadges,
-            onRailDoor: { door in handleRailDoor(door) },
             onRailDoorLongPress: railDoorLongPress,
-            onRailToolControl: { control in handleRailToolControl(control) },
-            onRailExitTool: { handleRailExitTool() },
             // **Le COLLAGE** (#4092) — la cinquième entrée de la vue `3b`, et la
             // seule qui ne peut pas être une porte. `BlankCanvasPasteStarter`
             // lit `\.storyPaste` lui-même (le meuble l'injecte déjà) et
             // s'éteint quand le presse-papier n'a rien d'acceptable : c'est le
             // système qui tient la loi 4 ici, pas nous.
             railSystemEntry: AnyView(
-                BlankCanvasPasteStarter(canAddMedia: viewModel.canAddMedia) { items in
+                ComposerPasteEntry(canAddMedia: viewModel.canAddMedia) { items in
                     handlePastedItems(items)
                 }
-                .labelStyle(.iconOnly)
-                // `.capsule` et non `.circle` : celle-ci est iOS 17+, et le
-                // plancher de l'app est iOS 16. Sur une cible de 44 pt, la
-                // capsule EST un cercle.
-                .buttonBorderShape(.capsule)
             ),
-            // La maquette range COLLAGE entre STICKER et MENTION.
-            railSystemEntryAfter: .sticker,
             // Les contrôleurs que CE meuble sert — même règle, même raison.
             //
             // **L'empilement y est entré le 2026-08-30.** Le commentaire qui
@@ -460,27 +406,20 @@ extension MeeshyComposerHost {
             // les réglages de l'outil ouvert, ou ceux de l'objet touché.
             trailingOptions: sceneTrailingOptions,
             onTrailingOption: { handleSceneTrailingOption($0) },
-            // L'éclair et le Cadre, au rail gauche après le lieu (#8713).
-            sceneToggles: sceneToggleEntries,
             // **L'historique a quitté le socle** (#4586). La question posée est
             // la MÊME que celle que le socle posait — `ComposerHistoryService`
             // reste le juge unique de « cet écran sert-il l'historique ? » — et
             // seule la place change. `nil` quand il n'y a rien à défaire :
             // absent, jamais grisé.
-            onUndo: composerServesHistory && viewModel.canUndoGlobal
-                ? { performHistoryUndo() } : nil,
-            onRedo: composerServesHistory && viewModel.canRedoGlobal
-                ? { performHistoryRedo() } : nil,
-            // **Une sélection SILENCIEUSE** (directive porteur 2026-09-27 :
-            // « il ne faut plus l'entourer sur la scène ni afficher sa
-            // configuration par des détails en bas »). Ni contour, ni badge, ni
-            // rangée de jetons : l'appui long montre ses actions, le double-tap
-            // ouvre son édition. Le meuble garde l'id sélectionné pour ces deux
-            // gestes, il ne le PEINT plus.
-            objectChips: [],
-            onObjectChip: { id in handleObjectChip(id) },
-            selectedItemId: nil,
-            selectionBadge: nil,
+            onUndo: sceneUndo,
+            onRedo: sceneRedo,
+            // **La sélection se VOIT** (#13839, L5) : un cadre pointillé peint hors de l'export ; la barre dit le reste.
+            // Le badge ne parle que du pré-envoi de l'objet (« Envoi 40 % », #13864, R5), qui ne retient rien.
+            selectedItemId: sceneTypesInline ? nil : selectedSceneItemId,
+            selectionBadge: ComposerSceneIntakeCopy.sendingBadge(for: selectedSceneItemPreUpload),
+            selectionColumn: sceneSelectionRelay.column,
+            intakeBlocks: sceneIntakeBlocks,
+            intakeGhost: sceneIntakeGhost,
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -515,8 +454,15 @@ extension MeeshyComposerHost {
             bandBackdrop: sceneBackdrop,
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
-            // Le `(+)` d'une nouvelle scène, à la place de l'éclair (#8713).
-            topBarAccessory: sceneAddSlideButton,
+            // **Le repos posé sur la scène** (#13839) : ⋯ porte la nouvelle
+            // diapo, le Fond, l'Animation (éclair et Temps fondus), la Durée.
+            slideCount: viewModel.slides.count,
+            restTools: sceneRestTools,
+            onRestTool: { handleRestTool($0) },
+            moreMenu: sceneMoreMenu,
+            drawingBar: sceneDrawingBar,
+            sceneEffectIsOpen: activeSceneEffect != nil,
+            rails: ComposerSceneArrangementRelay(host: self).surfaceRails,
             onTimeButton: sceneIsAnimated ? { toggleSceneFrise() } : nil,
             timeIsOpen: viewModel.timelineIsOpen,
             timelinePanel: sceneTimelinePanel,
@@ -556,7 +502,7 @@ extension MeeshyComposerHost {
             // post, par le même terme que le socle (`writesText`, #6132).
             writesText: writesText,
             writesPostBody: editsPostContent,
-            inlinePanel: sceneInlinePanel,
+            inlinePanel: sceneInlinePanel, propertiesSheet: sceneSelectionRelay.propertiesSheet,
             trailingFootFollowsOptions: sceneTrailingFootFollowsOptions,
             editingTextId: viewModel.textEditingMode.activeTextId,
             // **Le canvas reçoit de nouveau la frappe** (2026-09-28) : la porte
@@ -566,9 +512,7 @@ extension MeeshyComposerHost {
             //
             // L'écriture du TEXTE, elle, passe ici : une écriture idempotente
             // sur le modèle.
-            onInlineTextChanged: { id, texte in
-                viewModel.updateTextContent(id: id, text: texte)
-            },
+            onInlineTextChanged: { id, texte in sceneInlineTextChanged(id: id, text: texte) },
             // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
             // ce qu'il advient d'une coquille vide — il la supprime.
             //
@@ -586,11 +530,13 @@ extension MeeshyComposerHost {
             // > l'événement DIT, mais sur qui possède l'édition à cet instant :
             // > tant que l'écran plein est monté, c'est lui, et la surface du
             // > dessous n'a pas à conclure quoi que ce soit.
-            onInlineTextEditEnded: { _ in
-                guard editedObject == nil else { return }
-                viewModel.exitTextEditingMode()
+            onInlineTextEditEnded: { _ in sceneInlineTextEnded() },
+            inlineEditInputLink: sceneTypesInline ? keyboardDock.link : nil,
+            descriptionPanel: sceneDescriptionPanel.map { volet in
+                AnyView(volet.opacity(sceneLegendIsVisible ? 1 : 0)
+                    .allowsHitTesting(sceneLegendIsVisible)
+                    .accessibilityHidden(!sceneLegendIsVisible))
             },
-            descriptionPanel: sceneDescriptionPanel,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.
@@ -791,6 +737,8 @@ extension MeeshyComposerHost {
             // points chez l'hôte, qui décollerait la scène de la zone.
             collapsedLineLimit: 10
         )
+        // Le plafond du serveur, compteur dès 4 000 (#13824, #13864).
+        .modifier(ComposerPostTextCap(text: $documentText))
     }
 
     /// **La description appartient à la SLIDE** (rappel porteur 2026-08-30,
@@ -945,7 +893,7 @@ extension MeeshyComposerHost {
     /// **Le contenu de l'encart est un NŒUD** (#8387) : ce qui occupe le bas
     /// (`socleSlot`) est évalué dans son propre cadre, hors du type de la pile.
     var composerStack: some View {
-        surfaceWithIntakePortals.composerFloatingSocle { socleSlotNode }
+        withAnchoredSheet(surfaceWithIntakePortals.composerFloatingSocle { socleSlotNode })
     }
 
     /// Ce qui occupe l'encart du bas : le carrousel d'effets, ou le socle.
@@ -978,11 +926,12 @@ extension MeeshyComposerHost {
         if let effet = activeSceneEffect {
             sceneEffectCarousel(effet)
         } else if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
-            let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)
+            let servi = sceneSelectionRelay.publicationIsShown(toolOwnsScreen: sceneToolOwnsScreen)
             socleNode
                 .opacity(servi ? 1 : 0)
                 .allowsHitTesting(servi)
                 .accessibilityHidden(!servi)
+                .modifier(ComposerIntakeVeil(veiled: sceneIntakeBlocks))
                 .animation(ComposerToolFocus.transition(reduceMotion: UIAccessibility.isReduceMotionEnabled),
                            value: servi)
         }

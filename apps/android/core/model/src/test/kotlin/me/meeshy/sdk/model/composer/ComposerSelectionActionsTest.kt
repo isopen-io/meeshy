@@ -3,14 +3,13 @@ package me.meeshy.sdk.model.composer
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.DUPLICATE
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.EDIT
-import me.meeshy.sdk.model.composer.ComposerSelectionAction.ORDER
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.REMOVE
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.TIME
 import me.meeshy.sdk.model.composer.SceneObjectMenu.Action
 import org.junit.Test
 
 /**
- * La barre d'actions d'un élément sélectionné (#13836) : Modifier · Ordre · Dupliquer · Temps · Retirer, chacune servie
+ * La barre d'actions d'un élément sélectionné (#13836, #13917) : Modifier · Dupliquer · Temps · Retirer, chacune servie
  * seulement si elle a un effet pour l'objet, et le menu de l'appui long n'en est qu'un raccourci — jamais une action que
  * la barre n'a pas.
  */
@@ -19,27 +18,25 @@ class ComposerSelectionActionsTest {
         offered: List<Action> = emptyList(),
         editable: Boolean = false,
         timed: Boolean = false,
-        sceneAnimated: Boolean = false,
-    ) = ComposerSelectionActions.served(ComposerSelectionActions.Input(offered, editable, timed, sceneAnimated))
+        locked: Boolean = false,
+    ) = ComposerSelectionActions.served(ComposerSelectionActions.Input(offered, editable, timed, locked))
 
-    private val textAmongOthers = SceneObjectMenu.offered(
-        SceneObjectMenu.Subject(sharesPlaneWithAnother = true, hasEditor = true),
-    )
+    private val text = SceneObjectMenu.offered(SceneObjectMenu.Subject(hasEditor = true))
 
     @Test
-    fun `a text sharing the plane serves the five actions of the mockup, in its order, once the scene is animated`() {
-        assertThat(served(textAmongOthers, editable = true, timed = true, sceneAnimated = true))
-            .containsExactly(EDIT, ORDER, DUPLICATE, TIME, REMOVE).inOrder()
+    fun `a text serves the four actions of the mockup, in its order, the scene left still`() {
+        assertThat(served(text, editable = true, timed = true))
+            .containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
     }
 
     @Test
-    fun `timing is served only for an animated scene, and only to an object that has a window of its own`() {
-        assertThat(served(textAmongOthers, editable = true, timed = true, sceneAnimated = false)).doesNotContain(TIME)
-        assertThat(served(listOf(Action.DELETE), editable = true, timed = false, sceneAnimated = true)).doesNotContain(TIME)
+    fun `timing is served to every object placed on the scene, never to a background that lasts the whole slide`() {
+        assertThat(served(listOf(Action.DUPLICATE, Action.DELETE), editable = true, timed = true)).contains(TIME)
+        assertThat(served(listOf(Action.DELETE), editable = true, timed = false)).doesNotContain(TIME)
     }
 
     @Test
-    fun `a lone sticker is not ordered, and is edited only when its swap is wired`() {
+    fun `a sticker is edited only when its swap is wired`() {
         val lone = SceneObjectMenu.offered(SceneObjectMenu.Subject())
         assertThat(served(lone)).containsExactly(DUPLICATE, REMOVE).inOrder()
         assertThat(served(lone, editable = true)).containsExactly(EDIT, DUPLICATE, REMOVE).inOrder()
@@ -55,16 +52,9 @@ class ComposerSelectionActionsTest {
     }
 
     @Test
-    fun `a locked object serves nothing but its timing`() {
-        val locked = SceneObjectMenu.offered(SceneObjectMenu.Subject(isLocked = true, sharesPlaneWithAnother = true))
-        assertThat(served(locked, timed = true, sceneAnimated = true)).containsExactly(ORDER, TIME).inOrder()
-    }
-
-    @Test
-    fun `order opens bring forward then send backward, as the object offers them`() {
-        assertThat(ComposerSelectionActions.orderChoices(textAmongOthers))
-            .containsExactly(Action.BRING_FORWARD, Action.SEND_BACKWARD).inOrder()
-        assertThat(ComposerSelectionActions.orderChoices(listOf(Action.DELETE))).isEmpty()
+    fun `a locked object serves nothing, never timed, as on iOS`() {
+        val locked = SceneObjectMenu.offered(SceneObjectMenu.Subject(isLocked = true))
+        assertThat(served(locked, timed = true, locked = true)).isEmpty()
     }
 
     @Test
@@ -72,16 +62,20 @@ class ComposerSelectionActionsTest {
         val subjects = listOf(
             SceneObjectMenu.Subject(),
             SceneObjectMenu.Subject(hasEditor = true),
-            SceneObjectMenu.Subject(sharesPlaneWithAnother = true, hasEditor = true),
             SceneObjectMenu.Subject(canDuplicate = false, hasTrimmableSource = true, canLeaveScene = true),
             SceneObjectMenu.Subject(canBecomeBackground = true, sceneHasBackground = true),
-            SceneObjectMenu.Subject(isLocked = true, sharesPlaneWithAnother = true),
+            SceneObjectMenu.Subject(isLocked = true),
         )
         subjects.forEach { subject ->
             val menu = SceneObjectMenu.offered(subject)
             val bar = served(menu)
             menu.forEach { action -> assertThat(bar).contains(ComposerSelectionActions.of(action)) }
         }
+    }
+
+    @Test
+    fun `the bar keeps Edit, Duplicate, Time and Remove, and no Order since touching an object brings it to the front`() {
+        assertThat(ComposerSelectionAction.entries.map { it.name }).containsExactly("EDIT", "DUPLICATE", "TIME", "REMOVE").inOrder()
     }
 
     @Test

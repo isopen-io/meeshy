@@ -2,8 +2,8 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Les mots du cadre en direct (#9214). Les noms des cadres sont des noms propres
-/// (`CallFrameDesign.name`) et les ambiances viennent de `CallFrameCopy`.
+/// Les mots du cadre en direct (#9214). Les noms des cadres viennent de
+/// `CallFrameDesign.displayName()` (langue d'interface, #13953) et les ambiances de `CallFrameCopy`.
 enum CallLiveFrameCopy {
     static var label: String {
         String(localized: "call.liveFrame.label", defaultValue: "Cadre en direct", bundle: .main)

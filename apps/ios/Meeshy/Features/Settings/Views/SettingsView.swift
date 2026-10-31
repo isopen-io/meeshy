@@ -60,6 +60,8 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
+            presentations
+
             theme.backgroundGradient.ignoresSafeArea()
 
             scrollContent
@@ -68,47 +70,6 @@ struct SettingsView: View {
                 header
                 Spacer()
             }
-        }
-        .sheet(isPresented: $showStats) { UserStatsView() }
-        .sheet(isPresented: $showAffiliate) { AffiliateView() }
-        .sheet(isPresented: $showDataExport) { DataExportView() }
-        // iOS ne relit `AppleLanguages` qu'au démarrage : l'écran courant reste
-        // dans l'ancienne langue, et le taire ferait passer un réglage qui
-        // marche pour un réglage mort — c'est précisément le reproche qui avait
-        // fait retirer ce contrôle.
-        .alert(String(localized: "settings.interface_language.restart.title",
-                      defaultValue: "Langue enregistrée", bundle: .main),
-               isPresented: $showInterfaceLanguageRestartHint) {
-            Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main), role: .cancel) { }
-        } message: {
-            Text(String(localized: "settings.interface_language.restart.message",
-                        defaultValue: "L'interface passera dans cette langue au prochain démarrage de Meeshy.",
-                        bundle: .main))
-        }
-        // #8286 — « Changer de compte » GARDE les sessions : la feuille liste
-        // les comptes de l'appareil, un compte gardé s'ouvre sans mot de passe.
-        .sheet(isPresented: $showAccountSwitcher) {
-            AccountSwitcherSheet()
-                .environmentObject(authManager)
-        }
-        .alert(String(localized: "settings.logout.title", bundle: .main), isPresented: $showLogoutConfirm) {
-            Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
-            Button(String(localized: "settings.logout.title", bundle: .main), role: .destructive) {
-                // P1 — logout() est désormais async + quiesce-then-purge
-                // (disconnect sockets, reset services SDK, wipe keychain).
-                // Le disconnect explicite du socket n'est plus nécessaire,
-                // il est intégré au logout().
-                // Q6 — overlay loading pendant l'await (300-800ms p50/p95).
-                isLoggingOut = true
-                // #8286 — la session et les données locales partent, le compte
-                // RESTE listé : y revenir redemande le mot de passe.
-                Task {
-                    await authManager.logout(forgettingAccount: false)
-                    isLoggingOut = false
-                }
-            }
-        } message: {
-            Text(String(localized: "settings.logout.message", bundle: .main))
         }
         .overlay {
             // Q6 — overlay sobre pendant le logout async (p50 ~300ms,
@@ -135,37 +96,91 @@ struct SettingsView: View {
                 .animation(.easeInOut(duration: 0.18), value: isLoggingOut)
             }
         }
-        .sheet(isPresented: $showPrivacySettings) {
-            PrivacySettingsView()
-        }
-        .sheet(isPresented: $showNotificationSettings) {
-            NotificationSettingsView()
-        }
-        .sheet(isPresented: $showSecurity) {
-            // Une feuille n'hérite pas des EnvironmentObject de son
-            // présentateur : `SecurityView` lit `authManager`.
-            SecurityView()
-                .environmentObject(authManager)
-        }
-        .sheet(isPresented: $showBlockedUsers) {
-            BlockedUsersView()
-        }
-        .sheet(isPresented: $showAbout) { AboutView() }
-        .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView() }
-        .sheet(isPresented: $showTerms) { TermsOfServiceView() }
-        .sheet(isPresented: $showLicenses) { LicensesView() }
-        .sheet(isPresented: $showSupport) { SupportView() }
-        .sheet(isPresented: $showDataStorage) { DataStorageView() }
-        .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
-        .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain, focusedPack: packsFocusedPack) }
-        .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
-            let request = packShopLauncher.consume()
-            packsInitialDomain = request?.domain
-            packsFocusedPack = request?.pack
-            showPacks = true
-        }
-        .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
         .task { await prefs.fetchFromBackend() }
+    }
+
+    // MARK: - Presentations
+
+    /// Les feuilles, alertes et relais de l'écran, posés sur une ancre vide plutôt que sur
+    /// la racine. Chaque modificateur enveloppe la valeur de la vue qu'il modifie, et un
+    /// build Debug réserve chaque enveloppe sur la pile : posés sur la racine, qui porte
+    /// tout l'écran, ils faisaient descendre le premier rendu au-delà du Mio de pile du
+    /// fil principal d'un iPhone (SIGSEGV à l'ouverture des réglages).
+    private var presentations: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .sheet(isPresented: $showStats) { UserStatsView() }
+            .sheet(isPresented: $showAffiliate) { AffiliateView() }
+            .sheet(isPresented: $showDataExport) { DataExportView() }
+            // iOS ne relit `AppleLanguages` qu'au démarrage : l'écran courant reste
+            // dans l'ancienne langue, et le taire ferait passer un réglage qui
+            // marche pour un réglage mort — c'est précisément le reproche qui avait
+            // fait retirer ce contrôle.
+            .alert(String(localized: "settings.interface_language.restart.title",
+                          defaultValue: "Langue enregistrée", bundle: .main),
+                   isPresented: $showInterfaceLanguageRestartHint) {
+                Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main), role: .cancel) { }
+            } message: {
+                Text(String(localized: "settings.interface_language.restart.message",
+                            defaultValue: "L'interface passera dans cette langue au prochain démarrage de Meeshy.",
+                            bundle: .main))
+            }
+            // #8286 — « Changer de compte » GARDE les sessions : la feuille liste
+            // les comptes de l'appareil, un compte gardé s'ouvre sans mot de passe.
+            .sheet(isPresented: $showAccountSwitcher) {
+                AccountSwitcherSheet()
+                    .environmentObject(authManager)
+            }
+            .alert(String(localized: "settings.logout.title", bundle: .main), isPresented: $showLogoutConfirm) {
+                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
+                Button(String(localized: "settings.logout.title", bundle: .main), role: .destructive) {
+                    // P1 — logout() est désormais async + quiesce-then-purge
+                    // (disconnect sockets, reset services SDK, wipe keychain).
+                    // Le disconnect explicite du socket n'est plus nécessaire,
+                    // il est intégré au logout().
+                    // Q6 — overlay loading pendant l'await (300-800ms p50/p95).
+                    isLoggingOut = true
+                    // #8286 — la session et les données locales partent, le compte
+                    // RESTE listé : y revenir redemande le mot de passe.
+                    Task {
+                        await authManager.logout(forgettingAccount: false)
+                        isLoggingOut = false
+                    }
+                }
+            } message: {
+                Text(String(localized: "settings.logout.message", bundle: .main))
+            }
+            .sheet(isPresented: $showPrivacySettings) {
+                PrivacySettingsView()
+            }
+            .sheet(isPresented: $showNotificationSettings) {
+                NotificationSettingsView()
+            }
+            .sheet(isPresented: $showSecurity) {
+                // Une feuille n'hérite pas des EnvironmentObject de son
+                // présentateur : `SecurityView` lit `authManager`.
+                SecurityView()
+                    .environmentObject(authManager)
+            }
+            .sheet(isPresented: $showBlockedUsers) {
+                BlockedUsersView()
+            }
+            .sheet(isPresented: $showAbout) { AboutView() }
+            .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView() }
+            .sheet(isPresented: $showTerms) { TermsOfServiceView() }
+            .sheet(isPresented: $showLicenses) { LicensesView() }
+            .sheet(isPresented: $showSupport) { SupportView() }
+            .sheet(isPresented: $showDataStorage) { DataStorageView() }
+            .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
+            .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain, focusedPack: packsFocusedPack) }
+            .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
+                let request = packShopLauncher.consume()
+                packsInitialDomain = request?.domain
+                packsFocusedPack = request?.pack
+                showPacks = true
+            }
+            .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
     }
 
     // MARK: - Header
@@ -199,21 +214,23 @@ struct SettingsView: View {
 
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-            VStack(spacing: MeeshySpacing.xl) {
-                profileCard
-                accountSection
-                appearanceSection
-                voiceProfileSection
-                transcriptionSection
-                notificationsSection
-                dataSection
-                meeshyToolsSection
-                supportSection
-                aboutSection
-                switchAccountSection
-                logoutSection
+            SettingsDeferredContent {
+                VStack(spacing: MeeshySpacing.xl) {
+                    profileCard
+                    accountSection
+                    appearanceSection
+                    voiceProfileSection
+                    transcriptionSection
+                    notificationsSection
+                    dataSection
+                    meeshyToolsSection
+                    supportSection
+                    aboutSection
+                    switchAccountSection
+                    logoutSection
 
-                Spacer().frame(height: 40)
+                    Spacer().frame(height: 40)
+                }
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, MeeshySpacing.sm)
@@ -989,5 +1006,16 @@ struct SettingsView: View {
         .padding(.vertical, MeeshySpacing.sm + 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
+    }
+}
+
+/// Construit son contenu dans SON corps, que SwiftUI évalue à part : les sections des
+/// réglages ne se construisent plus sous le corps de l'écran, et les modificateurs qui
+/// les entourent n'enveloppent qu'une fermeture au lieu de toute la colonne.
+private struct SettingsDeferredContent<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content()
     }
 }

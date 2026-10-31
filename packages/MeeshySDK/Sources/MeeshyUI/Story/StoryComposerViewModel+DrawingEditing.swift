@@ -129,7 +129,7 @@ extension StoryComposerViewModel {
     /// Sélection d'un pinceau → plein écran de tracé : canvas full-bleed
     /// dessinable jusqu'aux angles, bulles flottantes seules (le band se
     /// replie côté vue), pinch-zoom 2 doigts actif.
-    func enterImmersiveDrawing() {
+    public func enterImmersiveDrawing() {
         if !drawingEditingMode.isActive {
             drawingEditingMode = .active(strokeId: nil, expandedTool: nil)
         }
@@ -157,7 +157,7 @@ extension StoryComposerViewModel {
     // MARK: Undo / redo (retour arrière / avant)
 
     /// `true` s'il reste au moins un trait à annuler.
-    var canUndoStroke: Bool { !drawingStrokes.isEmpty }
+    public var canUndoStroke: Bool { !drawingStrokes.isEmpty }
     /// `true` s'il reste au moins un trait annulé à rétablir.
     var canRedoStroke: Bool { !drawingRedoStack.isEmpty }
 
@@ -171,7 +171,7 @@ extension StoryComposerViewModel {
 
     /// Annule le dernier trait (le déplace vers la pile de redo). Lève la sélection
     /// si le trait annulé était sélectionné. No-op si aucun trait.
-    func undoLastStroke() {
+    public func undoLastStroke() {
         guard !drawingStrokes.isEmpty else { return }
         var strokes = drawingStrokes
         let removed = strokes.removeLast()

@@ -16,7 +16,6 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.sdk.model.composer.postsItsOwnMatter
-import me.meeshy.app.feed.PostComposerFacts
 import me.meeshy.app.stories.StoryComposerFacts
 import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerHostState
@@ -28,8 +27,8 @@ import me.meeshy.sdk.model.composer.sceneOpening
 import javax.inject.Inject
 
 /**
- * Le document de l'hôte unique : UN état (loi pure [ComposerHostState]) que chaque contenu — story, post/réel, mood —
- * alimente de ce qu'il sait (texte, médias, scène) et dont il lit le format qui gouverne. Aucune règle ici : ce
+ * Le document de l'hôte unique : UN état (loi pure [ComposerHostState]) que la scène (story, post, réel) ou l'humeur
+ * alimente de ce qu'elle sait (texte, médias, scène, nombre de scènes) et dont elle lit le format qui gouverne. Aucune règle ici : ce
  * ViewModel relaie, la loi décide.
  */
 @HiltViewModel
@@ -98,25 +97,16 @@ class ComposerHostViewModel @Inject constructor(
 
     fun choose(format: ComposerFormat) = _state.update { it.choose(format) }
 
+    /** Coche ou décoche un format au chevron de « Publier » (#13919) : jamais zéro, la scène suit le premier coché. */
+    fun toggle(format: ComposerFormat) = _state.update { it.toggle(format) }
+
+    /** Les formats d'un brouillon rouvert, ou ceux qu'un échec partiel laisse à republier. */
+    fun restore(formats: List<ComposerFormat>) = _state.update { it.restore(formats) }
+
     fun chooseLayout(mode: MosaicLayoutMode) = _state.update { it.chooseLayout(mode) }
 
-    fun onStoryFacts(facts: StoryComposerFacts) = _state.update {
-        it.withText(facts.text).withScene(facts.hasScene)
-            .withSceneDocument(facts.media, facts.pending, facts.room, facts.visibility)
-    }
-
-    fun onPostFacts(facts: PostComposerFacts) = _state.update {
-        it.withText(facts.text).withMedia(facts.kinds).withPostDocument(facts.media, facts.visibility)
-    }
-
-    /**
-     * The target surface took what the switch carried: it is never handed over twice. [lost] counts what the
-     * arrival could not take beyond the plan (a restored draft already full): `true` when it must still be SAID.
-     */
-    fun onCarryApplied(token: Int, lost: Int): Boolean {
-        val carried = _state.value.carry?.takeIf { it.token == token }
-        _state.update { it.carryApplied(token) }
-        return lost > 0 && carried != null && carried.plan.leftBehind == 0
+    fun onSceneFacts(facts: StoryComposerFacts) = _state.update {
+        it.withText(facts.text).withMedia(facts.media).withScene(facts.hasScene).withSceneCount(facts.sceneCount)
     }
 
     fun onMoodFacts(text: String, emoji: String?) = _state.update { it.withText(text).withMoodEmoji(emoji) }

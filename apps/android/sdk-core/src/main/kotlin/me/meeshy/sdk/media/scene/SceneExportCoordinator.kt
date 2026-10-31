@@ -21,7 +21,7 @@ import me.meeshy.sdk.model.composer.scene.SceneExportState
 
 /**
  * **Ce que le `⋯` du composer emporte hors de Meeshy** (miroir de `ComposerSceneExportController` iOS) : la scène bakée
- * en MP4, remise à la galerie ou à une feuille de partage. Un bake dure des secondes, peut échouer et doit survivre à
+ * en MP4 — ou, fixe et muette, son image (#13897) —, remise à la galerie ou à une feuille de partage. Un bake dure des secondes, peut échouer et doit survivre à
  * l'écran : ce type tient donc la progression, l'annulation et le nettoyage du fichier temporaire.
  *
  * Le MP4 ne touche jamais le backend (« RAW publish + author-only export »). Préparation et rendu tournent hors du fil
@@ -34,6 +34,10 @@ public class SceneExportCoordinator(
     private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val nowMillis: () -> Long = System::currentTimeMillis,
+    /** Ce qui arrête l'export, journalisé (#13986) : jamais un échec sans sa cause. */
+    private val report: (Throwable) -> Unit = SceneExportLog::failed,
+    /** Relit la vidéo rendue avant de la remettre : un fichier qui ne montre pas sa scène échoue au lieu de s'enregistrer (#13986). */
+    private val proof: SceneExportProof = SceneExportProof.NONE,
 ) {
     private val mutableState = MutableStateFlow<SceneExportState>(SceneExportState.Idle)
     public val state: StateFlow<SceneExportState> = mutableState.asStateFlow()
@@ -55,22 +59,33 @@ public class SceneExportCoordinator(
         tempDirectory.mkdirs()
         val stamp = nowMillis()
         val output = File(tempDirectory, SceneExportPlan.fileName(stamp))
+        val image = File(tempDirectory, SceneExportPlan.stillFileName(stamp))
         val workDirectory = File(tempDirectory, "work-$stamp")
         var kept = false
         var job: SceneExportJob? = null
         try {
             job = prepare(output, workDirectory)
-            runner.run(job) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
-            kept = deliver(destination, output)
+            val still = job.still
+            kept = if (still != null) {
+                deliverStill(destination, still, image)
+            } else {
+                runner.run(job) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
+                proof.verify(job)
+                deliver(destination, output)
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
+            report(failure)
             mutableState.update(SceneExportReducer::failed)
         } finally {
             withContext(NonCancellable) {
                 job?.release?.invoke()
                 workDirectory.deleteRecursively()
-                if (!kept) output.delete()
+                if (!kept) {
+                    output.delete()
+                    image.delete()
+                }
             }
         }
     }
@@ -87,10 +102,27 @@ public class SceneExportCoordinator(
             true
         }
         SceneExportDestination.GALLERY -> {
-            val saved = gallery.saveVideo(output, output.name)
-            mutableState.update { if (saved) SceneExportReducer.saved(it) else SceneExportReducer.failed(it) }
+            settle(gallery.saveVideo(output, output.name), output.name)
             false
         }
+    }
+
+    /** Une scène fixe : son image part telle quelle, à la galerie ou à la feuille de partage ; `true` quand [image] doit survivre. */
+    private suspend fun deliverStill(destination: SceneExportDestination, still: File, image: File): Boolean = when (destination) {
+        SceneExportDestination.SHARE -> {
+            still.copyTo(image, overwrite = true)
+            mutableState.update { SceneExportReducer.completed(it, image.absolutePath) }
+            true
+        }
+        SceneExportDestination.GALLERY -> {
+            settle(gallery.saveImage(still.readBytes(), image.name), image.name)
+            false
+        }
+    }
+
+    private fun settle(saved: Boolean, name: String) {
+        if (!saved) report(IllegalStateException("la galerie a refusé $name"))
+        mutableState.update { if (saved) SceneExportReducer.saved(it) else SceneExportReducer.failed(it) }
     }
 
     /** L'écran se ferme pendant un bake, ou l'auteur annule : le moteur s'arrête et ce qu'il avait écrit part. */

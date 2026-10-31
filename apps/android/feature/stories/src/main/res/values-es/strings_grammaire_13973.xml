@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_edit_replace">Reemplazar</string>
+    <string name="composer_edit_remove_background_title">¿Quitar el fondo?</string>
+    <string name="composer_edit_remove_background_message">La foto o el vídeo del fondo sale de esta diapositiva. ↶ la recupera.</string>
+</resources>

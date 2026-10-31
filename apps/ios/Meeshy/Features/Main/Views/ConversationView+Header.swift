@@ -542,7 +542,7 @@ struct ConversationHeaderAvatarView: View {
                         headerState.storyUserIdForHeader = userId
                         headerState.showStoryViewerFromHeader = true
                     },
-                    onMoodTap: statusViewModel.moodTapHandler(for: userId),
+                    onMoodTap: statusViewModel.moodSpotlightHandler(for: userId),
                     contextMenuItems: directContextMenu
                 )
                 .modifier(doorAccessibility(menu: directAccessibilityMenu))
@@ -564,7 +564,7 @@ struct ConversationHeaderAvatarView: View {
                                     isHere: isHere(member.viewingKey),
                                     ring: member.ring,
                                     onTap: { openMember(member, storyState: storyState) },
-                                    onMoodTap: statusViewModel.moodTapHandler(for: member.viewingKey),
+                                    onMoodTap: statusViewModel.moodSpotlightHandler(for: member.viewingKey),
                                     contextMenuItems: memberContextMenu(for: member, storyState: storyState)
                                 )
                             }
@@ -605,7 +605,7 @@ struct ConversationHeaderAvatarView: View {
                         headerState.showStoryViewerFromHeader = true
                     }
                 } : nil,
-                onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "", repliesInline: true) : nil,
+                onMoodTap: isDirect ? statusViewModel.moodSpotlightHandler(for: conversation?.participantUserId ?? "") : nil,
                 contextMenuItems: directContextMenu
             )
             .modifier(doorAccessibility(menu: isDirect ? directAccessibilityMenu : []))

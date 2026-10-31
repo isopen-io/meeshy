@@ -15,8 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FormatAlignCenter
@@ -26,8 +24,6 @@ import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Timelapse
-import androidx.compose.material.icons.filled.VerticalAlignBottom
-import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -91,7 +87,6 @@ internal fun TextStyleToolbar(
     onCycleStart: () -> Unit,
     onCycleDuration: () -> Unit,
     onDuplicate: () -> Unit,
-    onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
     onDone: (() -> Unit)? = null,
     /** Sur le plateau, la colonne droite range les sections : la rangée ne montre que celle qui est ouverte, sans doublon. */
@@ -156,18 +151,6 @@ internal fun TextStyleToolbar(
             }
             if (section == null) {
                 CycleButton(Icons.Filled.ContentCopy, R.string.stories_composer_duplicate_element, false, onDuplicate)
-                ZOrderButton(Icons.Filled.VerticalAlignBottom, R.string.stories_composer_zorder_to_back) {
-                    onReorder(StoryZOrder.TO_BACK)
-                }
-                ZOrderButton(Icons.Filled.ArrowDownward, R.string.stories_composer_zorder_backward) {
-                    onReorder(StoryZOrder.BACKWARD)
-                }
-                ZOrderButton(Icons.Filled.ArrowUpward, R.string.stories_composer_zorder_forward) {
-                    onReorder(StoryZOrder.FORWARD)
-                }
-                ZOrderButton(Icons.Filled.VerticalAlignTop, R.string.stories_composer_zorder_to_front) {
-                    onReorder(StoryZOrder.TO_FRONT)
-                }
             }
         }
         if (onDone != null) {
@@ -285,21 +268,6 @@ internal fun AlignToggle(
             icon,
             contentDescription = stringResource(label),
             tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-internal fun ZOrderButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    labelRes: Int,
-    onClick: () -> Unit,
-) {
-    IconButton(onClick = onClick) {
-        Icon(
-            icon,
-            contentDescription = stringResource(labelRes),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

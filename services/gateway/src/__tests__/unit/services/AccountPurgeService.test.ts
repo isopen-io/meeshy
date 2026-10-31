@@ -17,6 +17,7 @@ import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
 import { accountReaderKeyOf } from '../../../services/posts/readerKey';
 import { sharedTranslationRow, sharedTranslationTable } from '../../helpers/shared-translation-table';
 import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
 jest.mock('../../../utils/password-hash', () => ({
   hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
@@ -28,6 +29,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
   return {
     userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
     ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
@@ -226,6 +229,56 @@ describe('purgeAccountIsolatedData', () => {
       arrivalAnnouncementsDeleted: 0,
       sharedTranslationsDeleted: 0,
     });
+  });
+});
+
+/**
+ * Les liens de proximité (`UserRelation`, #13926) n'ont AUCUNE relation Prisma
+ * vers `User` : sans purge explicite, la ligne d'un compte supprimé survivait,
+ * et son identifiant restait un voisin de cercle pour la personne d'en face
+ * (#13927). La ligne est partagée avec l'autre personne, mais elle ne désigne
+ * plus personne une fois l'un des deux effacé.
+ */
+describe('purgeAccountIsolatedData — liens de proximité', () => {
+  const OTHER = '507f1f77bcf86cd7994390ff';
+  const THIRD = '507f1f77bcf86cd7994390fe';
+
+  function relationTable(rows: Array<{ id: string; userLowId: string; userHighId: string }>) {
+    const table = {
+      rows: [...rows],
+      deleteMany: jest.fn<any>(async ({ where }: { where: Record<string, unknown> }) => {
+        const before = table.rows.length;
+        table.rows = table.rows.filter((row) => !matchesMongoWhere(row, where));
+        return { count: before - table.rows.length };
+      }),
+    };
+    return table;
+  }
+
+  it('supprime tous les liens du compte, qu\'il soit le côté low ou le côté high, et laisse ceux des autres', async () => {
+    const userRelation = relationTable([
+      { id: 'r1', userLowId: USER_ID, userHighId: OTHER },
+      { id: 'r2', userLowId: THIRD, userHighId: USER_ID },
+      { id: 'r3', userLowId: THIRD, userHighId: OTHER },
+    ]);
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ userRelation }), USER_ID, NO_FILES);
+
+    expect(userRelation.rows.map((row) => row.id)).toEqual(['r3']);
+    expect(summary.relationsDeleted).toBe(2);
+  });
+
+  it('audit #13932 — efface aussi l\'agrégat des échanges par paire : qui a parlé à qui, jour par jour, ne survit pas au compte', async () => {
+    const pairInteractionDay = relationTable([
+      { id: 'd1', userLowId: USER_ID, userHighId: OTHER },
+      { id: 'd2', userLowId: THIRD, userHighId: USER_ID },
+      { id: 'd3', userLowId: THIRD, userHighId: OTHER },
+    ]);
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ pairInteractionDay }), USER_ID, NO_FILES);
+
+    expect(pairInteractionDay.rows.map((row) => row.id)).toEqual(['d3']);
+    expect(summary.pairInteractionDaysDeleted).toBe(2);
   });
 });
 

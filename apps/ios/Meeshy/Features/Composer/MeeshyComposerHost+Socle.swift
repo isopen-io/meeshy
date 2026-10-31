@@ -35,51 +35,33 @@ extension MeeshyComposerHost {
     }
 
     var socle: some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
-            if paintedSocleZones.contains(.audience) { audienceChip }
-            Spacer()
-            if socleServesPostText { postTextButton }
-            if !socleHasNothingToPublish { publishButton }
+        VStack(spacing: MeeshySpacing.xs) {
+            // **« Texte du post » au socle, au-dessus de l'envoi** (#13864, R2).
+            if socleServesPostText && !editsPostContent {
+                ComposerPostTextPillView(text: documentText, tint: tint.color) {
+                    handleRailDoor(.content)
+                }
+            }
+            HStack(spacing: MeeshySpacing.smPlus) {
+                if paintedSocleZones.contains(.audience) { audienceChip }
+                Spacer()
+                // **Sur la scène, Publier est TOUJOURS là** (#13839) : grisé tant
+                // qu'il n'y a rien à publier, et son toucher dit pourquoi.
+                if !socleHasNothingToPublish || mountedComposerView == .scene { publishButton }
+            }
         }
-        // Grand écran : la marge de la maquette iPad/Mac, alignée sur les rails.
-        .padding(.horizontal, horizontalSizeClass == .regular ? ComposerRailGeometry.roomyMargin : 14)
+        .padding(.horizontal, ComposerSceneArrangementRelay(host: self).socleHorizontalPadding)
         // **Plus bas, sous la scène** : il
         // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
         .padding(.top, MeeshySpacing.xs)
         .padding(.bottom, MeeshySpacing.xxs)
     }
 
-    /// **Le texte du post, au socle.** Ce n'est pas un nouveau chemin : c'est la
-    /// PORTE `.content`, qui quitte la rangée basse
-    /// (`ComposerSceneFloatingRail.lowRow`) et garde son unique aiguillage,
-    /// `handleRailDoor`. Peinte seulement sous la scène d'un post — la surface
-    /// document écrit son corps en place.
-    ///
-    /// **Le format lu est celui que la flèche PUBLIERA** (`armedChoice`), pas
-    /// celui de la porte d'entrée : une story armée « Post » par le chevron publie
-    /// un post, et doit offrir le bouton pour en écrire le contenu.
+    /// **« Texte du post »** (#13864) : servi au socle d'un post et d'un réel
+    /// composés sur la scène — le format lu est celui que la flèche PUBLIERA.
     var socleServesPostText: Bool {
-        mountedComposerView == .scene
-            && ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
-                                        format: armedChoice.format,
-                                        allowsCapture: profile.allowsCapture)
-                .contains(ComposerSceneFloatingRail.socleDoor)
+        ComposerPostTextPill.shows(format: armedChoice.format, sceneMounted: mountedComposerView == .scene)
     }
-
-    var postTextButton: some View {
-        Button {
-            handleRailDoor(ComposerSceneFloatingRail.socleDoor)
-        } label: {
-            Image(systemName: ComposerSceneFloatingRail.socleDoor.symbolName)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
-                .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
-        }
-        .accessibilityLabel(Text(ComposerRailCopy.label(ComposerSceneFloatingRail.socleDoor)))
-    }
-
 
     // **La pastille de son n'est pas au socle.**
     //
@@ -345,15 +327,12 @@ extension MeeshyComposerHost {
     /// Sous l'atelier, la flèche presse la télécommande en lui apportant le
     /// format ET l'audience choisis AU MOMENT DU GESTE : c'est l'atelier qui
     /// publie. L'audience voyage avec ses personnes nommées, jamais seule.
-    ///
-    /// Une STORY part par le canal de la SCÈNE, jamais par le brouillon :
-    /// `ComposerDocumentDraft` ne porte pas de slides. Un RÉEL part par le
-    /// document : le canal de la scène publie un post PAR SLIDE, et un réel de deux
-    /// photos y ferait deux posts.
+    /// Plusieurs formats cochés partent chacun par leur canal (#13920).
     func performSoclePublish(_ choice: ComposerPublishChoice) {
         // La frise ouverte rend ses pistes à la slide AVANT l'envoi :
         // sinon un timing réglé à l'instant partirait sans elle.
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
+        guard choice.legs.count == 1 else { return publishEachFormat(choice) }
         // Le texte du post ARMÉ depuis une scène part avec elle :
         // l'atelier publie le contenu de la slide, pas `documentText`.
         if let texte = ComposerPublishMenuRule.atelierCarriedPostText(
@@ -382,24 +361,9 @@ extension MeeshyComposerHost {
     /// assemble, lus sur le MÊME modèle de vue : le meuble ne recalcule rien,
     /// il relaie.
     ///
-    /// ## L'accessibilité VOYAGE par ici
-    ///
-    /// La remise du meuble porte les deux cartes d'accessibilité du meuble :
-    /// l'éditeur de LÉGENDE (`documentMediaCaptions`) et l'éditeur de TEXTE
-    /// ALTERNATIF (`documentMediaAlts`). La greffe est câblée sur les DEUX bouches
-    /// du même entonnoir : ce site et la remise à l'ATELIER
-    /// (`MeeshyComposerHost+Surfaces`). Une seule des deux ferait partir une story
-    /// publiée depuis le socle sans l'une ni l'autre carte, silencieusement,
-    /// pendant que les deux champs s'affichent, se valident et se relisent à
-    /// l'écran.
-    ///
-    /// > **Un commentaire qui justifie une valeur PAR une absence se périme
-    /// > quand l'absence se comble — et il se périme en SILENCE**, puisque
-    /// > combler l'absence se fait ailleurs, dans le fichier qui ouvre la porte.
-    /// > La question à poser en ouvrant une porte de saisie n'est pas « où
-    /// > est-ce lu ? » mais « **quels sites remettent cette charge, et les
-    /// > ai-je TOUS visités ?** ». Ils étaient deux ; un seul avait la greffe.
-    ///
+    /// La remise porte les deux cartes d'accessibilité du meuble (légendes et
+    /// textes alternatifs), greffées sur les DEUX bouches du même entonnoir : ce
+    /// site et la remise à l'ATELIER (`MeeshyComposerHost+Surfaces`).
     /// `accessibilityCarryingComposerCaptions` est le site UNIQUE de la greffe : ce
     /// qui change ici est la BASE qu'on lui donne — `.empty`, parce que le meuble
     /// n'a pas de magasin d'atelier à relayer sur ce chemin, et c'est honnête.
@@ -460,7 +424,7 @@ extension MeeshyComposerHost {
             if socleShowsLabels {
                 // La partie principale NOMME le format qui partira si
                 // l'auteur ne touche pas au chevron ; le mood garde « Publier ».
-                if let titre = ComposerPublishMenuCopy.publishTitle(for: armedChoice) {
+                if let titre = armedPublishTitle {
                     Text(titre)
                         .lineLimit(1)
                 } else {
@@ -491,7 +455,7 @@ extension MeeshyComposerHost {
     /// nom pour un même fond de bouton proéminent à travers le composer.
     /// `.opacity` marque le refus du gate : un remplissage plein aurait l'air
     /// armé même quand rien ne peut partir.
-    func publishCapsule<Contenu: View>(_ contenu: Contenu) -> some View {
+    func publishCapsule<Contenu: View>(_ contenu: Contenu, chevron: ComposerPublishChevron? = nil) -> some View {
         // **L'indice de blocage se VOIT, il ne s'entend pas seulement.** Voir
         // `publishBlockedNotice`.
         //
@@ -502,19 +466,31 @@ extension MeeshyComposerHost {
         // `.overlay` ne le consulte pas. La pile, elle, n'a rien à supposer :
         // elle place l'un au-dessus de l'autre quelle que soit la hauteur du
         // texte — deux lignes en français, trois en allemand.
+        // Le chevron est HORS du gate de matière (#13839) : il choisit le type,
+        // il ne publie pas, et une scène vide peut déjà le choisir.
         VStack(alignment: .trailing, spacing: MeeshySpacing.xsPlus) {
             publishBlockedNotice
-            contenu
-                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
-                .opacity(canPublishDocument ? 1 : 0.45)
-                .disabled(!canPublishDocument)
-                // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
-                // flèche perdrait son nom à l'instant même où elle devient
-                // compacte — le défaut que `StatusComposerView` a dû corriger,
-                // dans l'autre sens.
-                .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
-                .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
-                .accessibilityHint(publishArrowHint)
+            HStack(spacing: 0) {
+                contenu
+                    .disabled(!canPublishDocument)
+                    .overlay {
+                        ComposerPublishRefusalTapZone(isRefused: !canPublishDocument && !isPublishingDocument,
+                                                      reason: publishBlockedHint)
+                    }
+                if let chevron {
+                    chevron.disabled(!ComposerPublishMenuRule.chevronIsEnabled(isPublishing: isPublishingDocument))
+                }
+            }
+            .accessibilityElement(children: chevron == nil ? .combine : .contain)
+            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+            .opacity(canPublishDocument ? 1 : 0.45)
+            // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
+            // flèche perdrait son nom à l'instant même où elle devient
+            // compacte — le défaut que `StatusComposerView` a dû corriger,
+            // dans l'autre sens.
+            .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
+            .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
+            .accessibilityHint(publishArrowHint)
         }
     }
 
@@ -578,42 +554,36 @@ extension MeeshyComposerHost {
     /// qui porte le gate.
     var publishButton: some View {
         reelOfferPresented(publishCapsule(
-            HStack(spacing: 0) {
-                Button {
-                    // Un post à une seule vidéo demande d'abord « Publier en
-                    // réel ? » ; tout le reste part directement.
-                    requestSoclePublish(armedChoice)
-                } label: {
-                    publishCapsuleLabel
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(for: armedChoice)
-                                    ?? String(localized: "composer.socle.publish", bundle: .main))
-                if let entries = publishMenuEntries {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.35))
-                        .frame(width: 1, height: 20)
-                        .accessibilityHidden(true)
-                    ComposerPublishMenu(entries: entries, armed: armedChoice,
-                                        companionReelOffered: companionReelOffered,
-                                        onChoose: { chooseArmedPublish($0) }) {
-                        publishChevronLabel
-                    }
-                    .accessibilityLabel(ComposerPublishMenuCopy.title)
-                    .accessibilityHint(ComposerPublishMenuCopy.hint)
-                }
+            Button {
+                // Un post à une seule vidéo demande d'abord « Publier en
+                // réel ? » ; tout le reste part directement.
+                requestSoclePublish(armedChoice)
+            } label: {
+                publishCapsuleLabel
             }
-            .accessibilityElement(children: .contain)
+            .buttonStyle(.plain)
+            .accessibilityLabel(armedPublishTitle
+                                ?? String(localized: "composer.socle.publish", bundle: .main)),
+            chevron: publishMenuEntries.map { entries in
+                ComposerPublishChevron(entries: entries, armed: armedChoice,
+                                       companionReelOffered: companionReelOffered,
+                                       onChoose: { chooseArmedPublish($0) })
+            }
         ))
     }
 
     /// **Ce que la partie principale publie** — la lecture de
     /// `ComposerPublishMenuRule.armed`, jamais une condition écrite dans le corps.
     var armedChoice: ComposerPublishChoice {
-        ComposerPublishMenuRule.armed(chosen: armedPublishChoice,
-                                      defaultFormat: selectedFormat,
-                                      entries: publishMenuEntries,
-                                      companionReelOffered: companionReelOffered)
+        formatState.armedChoice(offered: profile.offeredFormats,
+                                entries: publishMenuEntries,
+                                companionReelOffered: companionReelOffered)
+    }
+
+    /// « Publier la story / le post / le réel », ou chacun des formats cochés
+    /// (#13920) : la capsule nomme ce qui part.
+    var armedPublishTitle: String? {
+        ComposerPublishMenuCopy.publishTitle(for: armedChoice)
     }
 
     /// **La story peut-elle partir AUSSI en réel ?** — la lecture de
@@ -622,15 +592,6 @@ extension MeeshyComposerHost {
         ComposerPublishMenuRule.companionReelOffered(entries: publishMenuEntries,
                                                      slideCount: viewModel.slides.count,
                                                      isRepost: intent.origin.repostedPostId != nil)
-    }
-
-    /// Le chevron — 44 pt de cible, comme la partie principale.
-    var publishChevronLabel: some View {
-        Image(systemName: "chevron.down")
-            .font(.footnote.weight(.bold))
-            .foregroundColor(.white)
-            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-            .contentShape(Rectangle())
     }
 
     /// **Les entrées du menu, ou `nil`** — la LECTURE de
@@ -714,7 +675,9 @@ extension MeeshyComposerHost {
     /// publier en post une composition ouverte en story, et une story compte un
     /// fond choisi comme matière là où un post exige un objet.
     func canPublishDocument(as format: ComposerFormat) -> Bool {
-        ComposerDocumentPublishGate.canPublish(
+        // Un ajout en préparation retient « Publier » (#13864, R5).
+        guard !ComposerSceneIntake.holdsPublication(sceneIntake) else { return false }
+        return ComposerDocumentPublishGate.canPublish(
             surface: mountedSurface,
             emoji: moodEmoji,
             text: documentText,
@@ -789,7 +752,7 @@ extension MeeshyComposerHost {
     /// audience incomplète, elle, garde la capsule et son indice : rien d'autre
     /// à l'écran ne la signale.
     var socleHasNothingToPublish: Bool {
-        !canPublishDocument && !isPublishingDocument
+        !canPublishDocument && !isPublishingDocument && !ComposerSceneIntake.holdsPublication(sceneIntake)
             && ComposerDocumentPublishGate.audienceIsComplete(composerVisibility,
                                                               userIds: composerVisibilityUserIds)
     }
@@ -871,7 +834,7 @@ extension MeeshyComposerHost {
         }
         isPublishingDocument = true
         Task {
-            let accepted = await onPublishDocument(draft)
+            let accepted = await onPublishDocument(await ComposerDocumentLookBake.baked(draft))
             isPublishingDocument = false
             if accepted { handOverAutosavedDraft(); onDismiss() }
         }

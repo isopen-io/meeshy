@@ -58,7 +58,7 @@ function prismaDouble() {
           : { id: FR_ID, senderId: AUTRE, receiverId: MOI, status: 'accepted', sender: PARTIE, receiver: PARTIE }
       ),
       update: jest.fn<any>(async () => ({ id: FR_ID, senderId: AUTRE, receiverId: MOI, status: 'accepted', sender: PARTIE, receiver: PARTIE })),
-      delete: jest.fn<any>(async () => ({})),
+      deleteMany: jest.fn<any>(async () => ({ count: 1 })),
       findMany: jest.fn<any>(async () => []),
       create: jest.fn<any>(async () => ({ id: FR_ID })),
     },

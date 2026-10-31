@@ -96,12 +96,12 @@ describe('tus-handler — la file de médias (#11264)', () => {
     else process.env.UPLOAD_PATH = ORIGINAL_UPLOAD_PATH;
   });
 
-  async function finishBigPhotoUpload(mediaQueue: unknown, extraMetadata: Record<string, string> = {}) {
+  async function finishBigPhotoUpload(mediaQueue: unknown, extraMetadata: Record<string, string> = {}, localMediaRenderer?: () => unknown) {
     process.env.UPLOAD_PATH = uploadDir;
     jest.resetModules();
     const prisma = buildFakePrisma();
     const { registerTusRoutes } = await import('../tus-handler');
-    await registerTusRoutes({ prisma, addContentTypeParser: jest.fn(), route: jest.fn() } as any, { mediaQueue: mediaQueue as never });
+    await registerTusRoutes({ prisma, addContentTypeParser: jest.fn(), route: jest.fn() } as any, { mediaQueue: mediaQueue as never, ...(localMediaRenderer ? { localMediaRenderer: localMediaRenderer as never } : {}) });
     if (!captured) throw new Error('options TUS non capturées');
     const bytes = await bigPhoto();
     const created = await captured.onUploadCreate(
@@ -112,7 +112,7 @@ describe('tus-handler — la file de médias (#11264)', () => {
     await fs.mkdir(tusTempPath, { recursive: true });
     await fs.writeFile(path.join(tusTempPath, 'upload-queue'), bytes);
     const result = await captured.onUploadFinish({}, { id: 'upload-queue', metadata: created.metadata, size: bytes.length, storage: undefined });
-    return { prisma, result, data: (prisma.postMedia.create as jest.Mock<any>).mock.calls[0][0].data };
+    return { prisma, result, data: (prisma.postMedia.create as jest.Mock<any>).mock.calls[0]?.[0]?.data };
   }
 
   it('PostMedia, worker vivant : vignette différée, ligne `pending`, une tâche en file, réponse `pending`', async () => {
@@ -134,6 +134,32 @@ describe('tus-handler — la file de médias (#11264)', () => {
     expect(data.thumbnailPath).toMatch(/_thumb\.webp$/);
     expect(schedule).not.toHaveBeenCalled();
     expect(JSON.parse(result.body ?? '{}').data.attachment.processingState).toBeUndefined();
+  }, 120_000);
+
+  it('MessageAttachment, AUCUN worker ne bat mais la passerelle rend en tâche de fond : la réponse part dès la ligne créée, les rendus après (#13984)', async () => {
+    const schedule = jest.fn(async () => undefined);
+    const rendered: unknown[] = [];
+    const { prisma, result } = await finishBigPhotoUpload(
+      { workerAlive: async () => false, schedule },
+      { uploadcontext: '' },
+      () => (job: unknown) => { rendered.push(job); },
+    );
+    const data = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0].data;
+    const attachment = JSON.parse(result.body ?? '{}').data.attachment;
+
+    expect(data.processingState).toBe('pending');
+    expect(data.thumbnailPath).toBeNull();
+    expect(data.imageVariants).toBeUndefined();
+    expect(data.avifVariants).toBeUndefined();
+    expect(schedule).not.toHaveBeenCalled();
+    expect(rendered).toEqual([{ target: 'messageAttachment', recordId: 'created-attachment', kinds: ['thumb'] }]);
+    expect(result.status_code).toBe(200);
+    expect(attachment).toEqual(expect.objectContaining({
+      id: 'created-attachment', originalName: 'photo.jpg', mimeType: 'image/jpeg', processingState: 'pending',
+      uploadedBy: USER_ID, isAnonymous: false, width: 1800, height: 1200,
+    }));
+    expect(attachment.fileUrl).toMatch(/photo_.*\.jpg$/);
+    expect(attachment.thumbnailUrl).toBeUndefined();
   }, 120_000);
 
   it('la description saisie à l’envoi (métadonnée `alt`) est persistée avec sa langue (#11329)', async () => {

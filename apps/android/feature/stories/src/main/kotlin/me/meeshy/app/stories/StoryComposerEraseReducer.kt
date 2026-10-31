@@ -44,7 +44,6 @@ internal object StoryComposerEraseReducer {
             playheadSeconds = 0f,
             openObjectSection = null,
             openSceneEffect = null,
-            isFrameOpen = false,
         )
 
     /** Retire la diapo [id] (inerte sur la dernière) ; ses médias quittent les réserves, sauf ceux qu'un duplicata partage. */

@@ -99,4 +99,16 @@ class DraftResumeEntriesTest {
     }
 
     private fun Instant(iso: String): Long = java.time.Instant.parse(iso).toEpochMilli()
+
+    @Test
+    fun `a scene draft composed as a post or a reel is offered as one, with its post text, from the scene`() {
+        val asPost = DraftResumeEntries.from(null, story().copy(format = "POST", postText = "  mon post  ")).single()
+        val asReel = DraftResumeEntries.from(null, story().copy(format = "REEL")).single()
+
+        assertThat(asPost.kind).isEqualTo(DraftResumeKind.POST)
+        assertThat(asPost.text).isEqualTo("mon post")
+        assertThat(asPost.source).isEqualTo(DraftResumeSource.SCENE)
+        assertThat(asReel.kind).isEqualTo(DraftResumeKind.REEL)
+        assertThat(DraftResumeEntries.from(post(), null).single().source).isEqualTo(DraftResumeSource.POST_SLOT)
+    }
 }

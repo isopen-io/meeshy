@@ -4,41 +4,42 @@ import MeeshyUI
 
 // **Le menu d'appui long de la scène, peint en verre par le meuble** (#8717).
 //
-// Deux demandes, un calque : l'appui long d'un OBJET (le canvas remet l'objet
-// et le point du doigt, `sceneObjectMenu`) et celui du FOND
-// (`backgroundMenuObjectId`, #5041). Les entrées viennent des inventaires qui
-// décidaient déjà des deux menus système ; chaque geste retombe sur la
-// primitive qu'ils appelaient.
+// Une demande, un calque : l'appui long d'un OBJET (le canvas remet l'objet et
+// le point du doigt, `sceneObjectMenu`). Le FOND n'y entre plus : son appui
+// long le sélectionne et pose le niveau « Fond » dans le rail (#13974, I-E1).
 @MainActor
 extension MeeshyComposerHost {
 
-    /// La demande en cours — le fond d'abord : son appui long est le plus
-    /// récent geste possible quand les deux se croisent, puisqu'un objet
-    /// touché masque le fond sous le doigt.
-    var presentedSceneMenu: ComposerSceneMenuRequest? {
-        if let id = backgroundMenuObjectId {
-            return ComposerSceneMenuRequest(target: .background(id: id))
-        }
-        return sceneObjectMenu
+    /// **Le menu, monté sur la PILE et non sur la racine** : SwiftUI n'honore
+    /// qu'UNE présentation par vue, et la racine porte déjà la feuille de
+    /// partage (#4996). Il lit la place de la carte à la même source que le
+    /// viseur (`ComposerSceneCameraFrameKey`). La confirmation du retrait du
+    /// fond s'y monte aussi.
+    func sceneMenuPresented<Contenu: View>(_ contenu: Contenu) -> some View {
+        backgroundRemovalConfirmed(contenu.overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
+            GeometryReader { proxy in
+                if let demande = presentedSceneMenu, let ancre {
+                    sceneMenuLayer(demande, card: proxy[ancre], container: proxy.size)
+                }
+            }
+            .animation(.spring(response: 0.28, dampingFraction: 0.86), value: presentedSceneMenu)
+        })
     }
 
+    var presentedSceneMenu: ComposerSceneMenuRequest? { sceneObjectMenu }
+
     func dismissSceneMenu() {
-        backgroundMenuObjectId = nil
         sceneObjectMenu = nil
     }
 
     func sceneMenuEntries(_ target: ComposerSceneMenuTarget) -> [ComposerSceneMenu.Entry] {
         switch target {
-        case .object(let id, let kind):
-            return ComposerSceneMenu.entries(objectActions: ComposerTrailingRailPolicy.actions(
-                slide: viewModel.currentSlide,
-                selectedId: id,
-                served: ComposerTrailingColumn.servedActions,
-                hasEditor: ComposerSceneSurface.defaultEditableSceneKinds.contains(kind),
-                canLeaveScene: false))
-        case .background:
-            return ComposerSceneMenu.entries(backgroundActions: ComposerBackgroundMenuAction.served(
-                offersPhoto: ComposerSceneCamera.modes(for: selectedFormat).contains(.photo)))
+        case .object(let id, _):
+            // **Un raccourci de la barre, rien de plus** (#13839, L5) : le menu
+            // ne sert que ce que la barre de la sélection sert.
+            guard let famille = inlineFamily(of: id) else { return [] }
+            return ComposerSceneMenu.entries(objectActions: ComposerSelectionActions.menuActions(
+                family: famille, offered: sceneSelectionRelay.offered(id), isLocked: sceneSelectionRelay.isLocked(id)))
         }
     }
 
@@ -63,7 +64,7 @@ extension MeeshyComposerHost {
                 .accessibilityHidden(true)
             if !entrees.isEmpty {
                 ComposerSceneContextMenu(
-                    title: sceneMenuTitle(demande.target),
+                    title: nil,
                     entries: entrees,
                     plateauTint: tint.color,
                     onSelect: { applySceneMenu($0, target: demande.target) },
@@ -82,30 +83,16 @@ extension MeeshyComposerHost {
         .onPreferenceChange(ComposerSceneMenuSizeKey.self) { sceneMenuSize = $0 }
     }
 
-    private func sceneMenuTitle(_ target: ComposerSceneMenuTarget) -> String? {
-        switch target {
-        case .object:     return nil
-        case .background: return ComposerBackgroundMenuCopy.title()
-        }
-    }
-
     /// **Chaque entrée retombe sur la primitive qui existait.** Un objet est
     /// sélectionné d'abord : l'action le vise, et ses options paraissent à
     /// droite une fois le menu refermé (#8714).
     func applySceneMenu(_ entree: ComposerSceneMenu.Entry, target: ComposerSceneMenuTarget) {
         switch (entree, target) {
-        case (.background(let action), .background):
-            applyBackgroundMenu(action)
         case (.object(let action), .object(let id, let kind)):
             sceneObjectMenu = nil
             selectedSceneItemId = id
             selectedSceneItemKind = kind
-            switch action {
-            case .edit: editSceneItem(id, kind: kind)
-            default:    handleTrailingRailAction(action)
-            }
-        default:
-            break
+            sceneSelectionRelay.applyMenuShortcut(action, on: id, kind: kind)
         }
         dismissSceneMenu()
     }

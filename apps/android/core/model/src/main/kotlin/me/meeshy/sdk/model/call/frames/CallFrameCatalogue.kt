@@ -89,6 +89,7 @@ public object CallFrameCatalogue {
                 surfaces = surfaces,
                 cost = cost,
                 styles = styles(motif, merged),
+                localizedNames = localizedNames(motif),
             )
         }
     }
@@ -101,6 +102,13 @@ public object CallFrameCatalogue {
             val name = (style["name"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: id
             val override = style["look"] as? JsonObject ?: return@mapNotNull null
             if (!CallFrameStyleRule.isStyleId(id)) return@mapNotNull null
-            runCatching { CallFrameLookDecoder.look(JsonObject(merged + override)) }.getOrNull()?.let { CallFrameStyle(id, name, it) }
+            runCatching { CallFrameLookDecoder.look(JsonObject(merged + override)) }.getOrNull()
+                ?.let { CallFrameStyle(id, name, it, localizedNames(style)) }
         }
+
+    /** Le nom dans chaque langue (#13953) : les seules chaînes non vides de `localizedNames` ; absent ⇒ aucun. */
+    private fun localizedNames(owner: JsonObject): Map<String, String> =
+        (owner["localizedNames"] as? JsonObject).orEmpty().mapNotNull { (language, value) ->
+            (value as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }?.let { language to it }
+        }.toMap()
 }

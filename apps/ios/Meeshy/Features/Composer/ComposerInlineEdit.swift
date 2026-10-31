@@ -57,6 +57,13 @@ nonisolated enum ComposerInlineFamily: Equatable, Sendable {
         if case .background = self { return true }
         return false
     }
+
+    /// **« Modifier » se règle en rails superposés** (#13974) — N1, N2, N3 et
+    /// la feuille basse : le fond (I-E2) et l'image posée (I-E3). Les autres
+    /// familles gardent leurs sections jusqu'à leur lot.
+    var modifiesInLevels: Bool {
+        isBackground || self == .image
+    }
 }
 
 /// **L'édition en cours** — quel objet, de quelle famille, et quel sous-outil a
@@ -66,6 +73,19 @@ nonisolated struct ComposerInlineEdit: Equatable, Sendable {
     let objectId: String
     let family: ComposerInlineFamily
     var openSection: ComposerObjectEditorSection?
+    /// La feuille ouverte depuis la barre de la sélection (#13839, L5).
+    var purpose: ComposerInlineEditPurpose = .modify
+    /// Sous « Modifier » en rails superposés (un fond, une image posée) :
+    /// l'entrée de N1 ouverte et le réglage de N3 (#13974, I-E2, I-E3). Ce
+    /// chemin remplace `openSection`.
+    var modifyPath: ComposerBackgroundModifyPath = .closed
+}
+
+/// **Quelle feuille de la sélection** : « Modifier » règle l'objet, « Temps »
+/// fusionne son APPARITION et sa TIMELINE (#13839, L5).
+nonisolated enum ComposerInlineEditPurpose: Equatable, Sendable {
+    case modify
+    case time
 }
 
 /// **Une seule grammaire pour toutes les familles** (#9138, directive porteur
@@ -133,12 +153,49 @@ nonisolated enum ComposerInlineEditing {
                       family: ComposerInlineFamily,
                       onSceneSurface: Bool,
                       requested: ComposerObjectEditorSection?,
-                      hasTrimmableSource: Bool) -> ComposerInlineEdit? {
+                      hasTrimmableSource: Bool,
+                      purpose: ComposerInlineEditPurpose = .modify,
+                      kept: ComposerInlineEdit? = nil) -> ComposerInlineEdit? {
         guard onSceneSurface else { return nil }
         let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource)
-        return ComposerInlineEdit(objectId: objectId,
-                                  family: family,
-                                  openSection: requested.flatMap { servies.contains($0) ? $0 : nil })
+        let ouverte = (requested ?? kept?.openSection).flatMap { servies.contains($0) ? $0 : nil }
+        let parDefaut = purpose == .time ? chips(.time, family: family, served: servies).first : nil
+        guard family.modifiesInLevels, purpose == .modify else {
+            return ComposerInlineEdit(objectId: objectId, family: family, openSection: ouverte ?? parDefaut,
+                                      purpose: purpose)
+        }
+        // « Modifier » d'un fond ou d'une image posée tient son CHEMIN, jamais
+        // une section (#13974, I-E2, I-E3) : la porte qui en nomme une ouvre
+        // l'entrée de N1 qui lui répond ; rouvrir le même objet garde où l'on
+        // était.
+        let demandee = ComposerBackgroundModify.entry(for: ouverte).map {
+            ComposerBackgroundModifyPath(entry: $0, adjustment: nil)
+        }
+        return ComposerInlineEdit(objectId: objectId, family: family, openSection: nil, purpose: purpose,
+                                  modifyPath: demandee ?? kept?.modifyPath ?? .closed)
+    }
+
+    /// **Les puces LIBELLÉES d'une feuille** (#13839, L5) : Modifier sert les
+    /// réglages de l'objet ; Temps sa fenêtre, son plan et, pour un son, ses
+    /// bornes — un son se modifie dans sa propre feuille, son rognage ne doit
+    /// pas s'y perdre.
+    static func chips(_ purpose: ComposerInlineEditPurpose,
+                      family: ComposerInlineFamily,
+                      served: [ComposerObjectEditorSection]) -> [ComposerObjectEditorSection] {
+        switch purpose {
+        case .time:
+            let temps: [ComposerObjectEditorSection] = [.timing, .plan] + (family == .audio ? [.media(.trim)] : [])
+            return temps.filter(served.contains)
+        case .modify:
+            guard family != .audio else { return [] }
+            return served.filter { $0 != .timing && $0 != .plan }
+        }
+    }
+
+    /// **Toucher l'objet qu'on règle garde sa feuille** (#13839, L5) ; toucher
+    /// un autre objet la referme, sa barre paraît.
+    static func edit(_ edit: ComposerInlineEdit?, afterSelecting id: String) -> ComposerInlineEdit? {
+        edit?.objectId == id ? edit : nil
     }
 
     /// Toucher un sous-outil ouvre ses options ; toucher celui qui est ouvert
@@ -147,7 +204,8 @@ nonisolated enum ComposerInlineEditing {
                        in edit: ComposerInlineEdit) -> ComposerInlineEdit {
         ComposerInlineEdit(objectId: edit.objectId,
                            family: edit.family,
-                           openSection: edit.openSection == section ? nil : section)
+                           openSection: edit.openSection == section ? nil : section,
+                           purpose: edit.purpose)
     }
 
     /// **L'édition ne survit ni à sa sélection, ni à son objet, ni à sa
@@ -164,7 +222,8 @@ nonisolated enum ComposerInlineEditing {
             return nil
         }
         guard let ouverte = edit.openSection, !served.contains(ouverte) else { return edit }
-        return ComposerInlineEdit(objectId: edit.objectId, family: edit.family, openSection: nil)
+        return ComposerInlineEdit(objectId: edit.objectId, family: edit.family, openSection: nil,
+                                  purpose: edit.purpose)
     }
 
     /// **« Modifier » n'est offert que s'il mène AILLEURS.** Pour un texte, il
@@ -254,11 +313,15 @@ nonisolated enum ComposerInlinePanelLayout {
     /// Le haut d'abord, s'il laisse l'objet entier ; sinon le côté qui le
     /// couvre moins (`edge`). Si les deux le couvrent, le panneau se RÉDUIT au
     /// côté qui a le plus de place hors de l'objet, et défile.
+    /// Sans objet à laisser voir, le panneau prend `preferredEdge` : le haut
+    /// par défaut, le bas quand le contrôle qui l'a déplié vit en bas (la barre
+    /// de dessin, #13839).
     static func placement(object: CGRect?, free: CGSize, panelHeight: CGFloat,
-                          roomy: Bool = false) -> ComposerInlinePanelPlacement {
+                          roomy: Bool = false,
+                          preferredEdge: ComposerInlinePanelEdge = .top) -> ComposerInlinePanelPlacement {
         let pleine = maxHeight(freeHeight: free.height)
         guard let object, !object.isNull, !object.isEmpty else {
-            return ComposerInlinePanelPlacement(edge: .top, maxHeight: pleine)
+            return ComposerInlinePanelPlacement(edge: preferredEdge, maxHeight: pleine)
         }
         let cote = edge(object: object, free: free, panelHeight: panelHeight, roomy: roomy)
         let cadre = frame(edge: cote, free: free, panelHeight: panelHeight, roomy: roomy)

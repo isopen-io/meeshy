@@ -302,7 +302,7 @@ public enum StoryRenderer {
                 let base = resolvedNonMediaOpacity(item: sticker, at: time.seconds) ?? 1.0
                 layer.opacity = Float(base * pose.opacity)
             }
-
+            if mode == .play { StoryAudioChipLayer.advance(layer, playing: item, at: time.seconds, reduceMotion: reduceMotion) }
             applyGhost(outOfWindowGhostOpacity, inWindow: inWindow, to: layer)
             tree.append(layer)
         }
@@ -345,6 +345,8 @@ public enum StoryRenderer {
             data = try? encoder.encode(sticker)
         } else if let location = item as? StoryLocationObject {
             data = try? encoder.encode(location)
+        } else if let chip = item as? StoryAudioChipItem {
+            data = try? encoder.encode(chip.audio)
         } else {
             data = nil
         }
@@ -398,6 +400,9 @@ public enum StoryRenderer {
         // sur l'ancienne `place`/position après édition (le hash ne change
         // pas donc `StoryLocationLayer` ne se re-dessine pas).
         items.append(contentsOf: slide.locationObjects)
+        // Pastilles de son ENFOUIES sous un autre objet (#13901) : peintes ici,
+        // à leur rang. Les autres restent dans la surcouche, au-dessus de tout.
+        items.append(contentsOf: SceneAudioStageRule.buriedAudios(in: slide.effects).map(StoryAudioChipItem.init))
         return items
     }
 
@@ -474,11 +479,8 @@ public enum StoryRenderer {
             }
             return layer
         }
-        if let location = item as? StoryLocationObject {
-            let layer = StoryLocationLayer()
-            layer.configure(with: location, geometry: geometry, mode: mode,
-                            renderScale: contentsScale)
-            return layer
+        if let pill = renderPill(item, into: geometry, at: time, mode: mode, contentsScale: contentsScale) {
+            return pill
         }
         if let sticker = item as? StorySticker {
             let layer = StoryStickerLayer()
@@ -496,6 +498,24 @@ public enum StoryRenderer {
         let layer = CALayer()
         layer.zPosition = CGFloat(item.zIndex)
         layer.name = item.id
+        return layer
+    }
+
+    /// **Les pastilles** — le lieu, et le son qu'un objet recouvre (#13901) : un
+    /// calque à sa pose, sans fondu ni image clé.
+    @MainActor
+    private static func renderPill(_ item: any RenderableItem, into geometry: CanvasGeometry, at time: CMTime,
+                                   mode: RenderMode, contentsScale: CGFloat) -> CALayer? {
+        if let location = item as? StoryLocationObject {
+            let layer = StoryLocationLayer()
+            layer.configure(with: location, geometry: geometry, mode: mode, renderScale: contentsScale)
+            return layer
+        }
+        guard let chip = item as? StoryAudioChipItem else { return nil }
+        let layer = StoryAudioChipLayer()
+        layer.configure(with: chip, geometry: geometry,
+                        elapsed: mode == .play ? max(0, time.seconds - (chip.startTime ?? 0)) : 0,
+                        renderScale: contentsScale)
         return layer
     }
 

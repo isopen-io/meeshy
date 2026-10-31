@@ -409,51 +409,46 @@ extension StoryComposerViewModel {
     /// Public depuis #4063 — même raison que `deleteElement`.
     public func duplicateElement(id: String) {
         var effects = currentEffects
-        if var text = effects.textObjects.first(where: { $0.id == id }) {
-            // Locked text objects (repost-attribution badge) are not duplicable —
-            // duplicating would create a second editable copy that strips intent.
-            if text.isLocked == true { return }
-            guard canAddText else { return }
-            text.id = UUID().uuidString
-            // Offset is 20 design pixels in the 1080x1920 canvas (≈2% x, ≈1% y).
-            // Small enough that the clone visibly overlaps its source so the
-            // user sees the duplication happened, large enough to be selectable
-            // independently. The previous 0.05 (54 design px) was too wide and
-            // jumped the clone outside the source's selection rect.
-            text.x = min(1.0, text.x + 20.0 / 1080.0)
-            text.y = min(1.0, text.y + 20.0 / 1920.0)
-            effects.textObjects.append(text)
-            selectedElementId = text.id
-        } else if var media = effects.mediaObjects?.first(where: { $0.id == id }) {
+        let copie: String
+        var devant = false
+        if let text = effects.textObjects.first(where: { $0.id == id }) {
+            // Le badge d'attribution d'un repost ne se copie pas.
+            guard text.isLocked != true, canAddText else { return }
+            let clone = StorySceneDuplicate.text(text)
+            effects.textObjects.append(clone)
+            copie = clone.id
+        } else if let media = effects.mediaObjects?.first(where: { $0.id == id }) {
             guard canAddMedia else { return }
-            let newId = UUID().uuidString
-            media.id = newId
-            // Le clone est TOUJOURS un foreground : dupliquer un média de fond
-            // créait un 2e background (invariant « au plus 1 background / slide »
-            // violé) qui remplit tout le canvas en ignorant l'offset → clone
-            // invisible (l'utilisateur ne voyait rien). Bug 2026-06-01.
-            media.isBackground = false
-            media.x = min(1.0, media.x + 0.05)
-            media.y = min(1.0, media.y + 0.05)
-            effects.mediaObjects?.append(media)
-            if let img = loadedImages[id] { loadedImages[newId] = img }
-            if let url = loadedVideoURLs[id] { loadedVideoURLs[newId] = url }
-            selectedElementId = media.id
-        } else if var audio = effects.audioPlayerObjects?.first(where: { $0.id == id }) {
+            let clone = StorySceneDuplicate.media(media)
+            effects.mediaObjects?.append(clone)
+            copie = clone.id
+            if let img = loadedImages[id] { loadedImages[copie] = img }
+            if let url = loadedVideoURLs[id] { loadedVideoURLs[copie] = url }
+        } else if let audio = effects.audioPlayerObjects?.first(where: { $0.id == id }) {
             guard canAddMedia else { return }
-            let newId = UUID().uuidString
-            audio.id = newId
-            // Idem média : le clone est foreground, sinon dupliquer l'audio de
-            // fond créait un 2e background audio (invariant « 1 audio de fond /
-            // slide » violé). Bug 2026-06-01.
-            audio.isBackground = false
-            audio.x = min(1.0, audio.x + 0.05)
-            audio.y = min(1.0, audio.y + 0.05)
-            effects.audioPlayerObjects?.append(audio)
-            if let url = loadedAudioURLs[id] { loadedAudioURLs[newId] = url }
-            selectedElementId = audio.id
+            let clone = StorySceneDuplicate.audio(audio)
+            effects.audioPlayerObjects?.append(clone)
+            copie = clone.id
+            if let url = loadedAudioURLs[id] { loadedAudioURLs[copie] = url }
+        } else if let sticker = effects.stickerObjects?.first(where: { $0.id == id }) {
+            guard canAddSticker else { return }
+            let clone = StorySceneDuplicate.sticker(sticker)
+            effects.stickerObjects?.append(clone)
+            copie = clone.id
+            devant = true
+            if let img = loadedImages[id] { registerLoadedImage(img, for: copie) }
+            if let bytes = loadedStickerAnimations[id] { registerLoadedStickerAnimation(bytes, for: copie) }
+        } else if let lieu = effects.locationObjects.first(where: { $0.id == id }) {
+            let clone = StorySceneDuplicate.place(lieu)
+            effects.locationObjects.append(clone)
+            copie = clone.id
+            devant = true
+        } else {
+            return
         }
+        selectedElementId = copie
         currentEffects = effects
+        if devant { bringToFront(id: copie) }
     }
 
     /// Bascule le statut background pour un media visuel OU un audio.

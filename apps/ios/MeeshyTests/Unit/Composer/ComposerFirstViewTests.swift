@@ -97,13 +97,14 @@ final class ComposerFirstViewTests: XCTestCase {
     }
 
     /// **Le meuble monte les options du dessin dans la plaque de droite**, et
-    /// plus dans la zone basse qui faisait remonter la scène (#9145).
+    /// plus dans la zone basse qui faisait remonter la scène (#9145). Depuis
+    /// #13839, la plaque s'ancre en bas, contre la barre de dessin.
     func test_leMeuble_poseLesOptionsDuDessinDansLaPlaqueDeDroite() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(source.contains("ifviewModel.isDrawingActive{returnsceneDrawingOptionsPanel}"),
                       "le dessin passe par la plaque de droite, avant l'édition en place")
-        XCTAssertTrue(source.contains("ComposerTrailingOptionsPlate(plateauTint:tint.color){MeeshyToolOptionsPanel(viewModel:viewModel)"),
+        XCTAssertTrue(source.contains("ComposerTrailingOptionsPlate(plateauTint:tint.color,preferredEdge:.bottom){MeeshyToolOptionsPanel(viewModel:viewModel)"),
                       "la plaque déplie le panneau d'options du SDK, pas une bande maison")
         XCTAssertFalse(source.contains("lowZoneShowsToolOptions(drawing:"),
                        "le dessin n'ouvre plus ses options en bas")

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.scene.carousel.previous", "androidName": "feed_scene_previous", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.scene.carousel.next", "androidName": "feed_scene_next", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.scene.mosaic.tile", "androidName": "feed_scene_tile", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.scene.mosaic.more", "androidName": "feed_scene_more", "status": "adopted" }
+      ]
+    }
+  }
+}

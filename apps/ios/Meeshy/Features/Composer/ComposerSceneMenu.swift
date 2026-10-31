@@ -16,17 +16,16 @@ import MeeshyUI
 //
 // Ses entrées ne sont pas une liste de plus : un objet offre ce que
 // `StoryCanvasContextAction.offered` lui accorde (filtré par
-// `ComposerTrailingRailPolicy`), un fond ce que `ComposerBackgroundMenuAction`
-// sert — les deux inventaires qui décidaient déjà des deux menus système.
+// `ComposerTrailingRailPolicy`). Le fond n'y entre plus : son appui long le
+// sélectionne et pose le niveau « Fond » dans le rail (#13974).
 
 /// **Ce que le doigt a désigné.**
 nonisolated enum ComposerSceneMenuTarget: Equatable {
     case object(id: String, kind: StoryCanvasUIView.CanvasItemKind)
-    case background(id: String)
 }
 
 /// **La demande de menu** : la cible, et le point du doigt normalisé sur la
-/// carte (0…1). Le fond n'a pas de point — son menu se pose au centre.
+/// carte (0…1).
 nonisolated struct ComposerSceneMenuRequest: Equatable {
     let target: ComposerSceneMenuTarget
     var anchor: CGPoint = CGPoint(x: 0.5, y: 0.5)
@@ -36,31 +35,24 @@ nonisolated enum ComposerSceneMenu {
 
     enum Entry: Equatable, Identifiable {
         case object(StoryCanvasContextAction)
-        case background(ComposerBackgroundMenuAction)
 
         var id: String {
             switch self {
-            case .object(let action):     return "object.\(String(describing: action))"
-            case .background(let action): return "background.\(action.rawValue)"
+            case .object(let action): return "object.\(String(describing: action))"
             }
         }
 
         /// La seule entrée qui DÉTRUIT se peint en couleur d'erreur et se range
-        /// en dernier — les deux inventaires la placent déjà ainsi.
+        /// en dernier — l'inventaire la place déjà ainsi.
         var isDestructive: Bool {
             switch self {
-            case .object(let action):     return action == .delete
-            case .background(let action): return action.isDestructive
+            case .object(let action): return action == .delete
             }
         }
     }
 
     static func entries(objectActions: [StoryCanvasContextAction]) -> [Entry] {
         objectActions.map(Entry.object)
-    }
-
-    static func entries(backgroundActions: [ComposerBackgroundMenuAction]) -> [Entry] {
-        backgroundActions.map(Entry.background)
     }
 
     /// **Où le menu se pose** : centré sur le doigt, sous lui s'il tient,
@@ -146,19 +138,17 @@ struct ComposerSceneContextMenu: View {
     }
 }
 
-/// Ce qu'une entrée PEINT — lu des deux inventaires qui la nomment déjà.
+/// Ce qu'une entrée PEINT — lu de l'inventaire qui la nomme déjà.
 enum ComposerSceneMenuPaint {
     static func symbol(_ entry: ComposerSceneMenu.Entry) -> String {
         switch entry {
-        case .object(let action):     return action.systemImage
-        case .background(let action): return action.symbol
+        case .object(let action): return action.systemImage
         }
     }
 
     static func label(_ entry: ComposerSceneMenu.Entry) -> String {
         switch entry {
-        case .object(let action):     return action.title
-        case .background(let action): return ComposerBackgroundMenuCopy.label(for: action)
+        case .object(let action): return action.title
         }
     }
 }

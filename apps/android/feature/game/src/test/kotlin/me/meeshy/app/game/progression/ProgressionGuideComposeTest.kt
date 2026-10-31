@@ -132,9 +132,36 @@ class ProgressionGuideComposeTest {
         compose.onNodeWithText("Ta Flamme s’est éteinte.").assertExists()
     }
 
+    @Test
+    fun `la septieme carte mene a l atelier photo et plus a la chronique`() {
+        val opened = mutableListOf<GuideDestination>()
+        val card = GameGuideCards.of(OnboardingStepKey.Rank)
+
+        routes(opened).act(card) {}
+
+        assertEquals(listOf<GuideDestination>(GuideDestination.Photo), opened)
+    }
+
+    @Test
+    fun `immortaliser ce moment s offre dans la feuille quand la premiere page a un atelier`() {
+        val tier = GameGuideCards.of(GameGuide.moment(GuideEvent.Level100(canPrestige = true), emptySet()))
+        compose.setContent {
+            MeeshyTheme {
+                androidx.compose.runtime.CompositionLocalProvider(me.meeshy.ui.accessibility.LocalReduceMotion provides true) {
+                    ProgressionGuide(tier, routes(), onDismiss = {}, onSkipAll = {}, onPhoto = {})
+                }
+            }
+        }
+
+        compose.onNodeWithTag(GUIDE_LINE_TAG).performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Immortaliser ce moment").assertExists()
+    }
+
     private fun routes(opened: MutableList<GuideDestination> = mutableListOf()) = ProgressionGuideRoutes(
         concept = { opened += GuideDestination.Concept(it) },
         conversations = { opened += GuideDestination.Conversations },
-        notebook = { opened += GuideDestination.Photo },
+        photo = { opened += GuideDestination.Photo },
     )
 }

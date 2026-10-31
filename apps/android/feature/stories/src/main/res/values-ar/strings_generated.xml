@@ -44,6 +44,11 @@
     <string name="composer_column_text_frame">إطار النص</string>
     <string name="composer_column_text_language">لغة النص</string>
     <string name="composer_column_text_plan">الخط الزمني</string>
+    <string name="composer_edit_background_framing">تأطير</string>
+    <string name="composer_edit_frames">الإطارات</string>
+    <string name="composer_edit_loop">تكرار</string>
+    <string name="composer_edit_trim">قص</string>
+    <string name="composer_family_text">نص</string>
     <string name="composer_frise_earlier">أبكر</string>
     <string name="composer_frise_empty">ضع نصًا أو ملصقًا: يصبح كل عنصر مسارًا.</string>
     <string name="composer_frise_entry">يدخل هنا</string>
@@ -54,6 +59,7 @@
     <string name="composer_frise_place">مكان</string>
     <string name="composer_frise_ruler">تحريك رأس التشغيل</string>
     <string name="composer_frise_sound">صوت</string>
+    <string name="composer_frise_video">فيديو</string>
     <string name="composer_object_editor_adjust_blur">التمويه</string>
     <string name="composer_object_editor_adjust_brightness">السطوع</string>
     <string name="composer_object_editor_adjust_compare">مقارنة</string>
@@ -71,6 +77,13 @@
     <string name="composer_object_editor_adjust_vignette">التظليل الجانبي</string>
     <string name="composer_object_editor_effects_bloom">توهج</string>
     <string name="composer_object_editor_effects_grain">حبيبات</string>
+    <string name="composer_object_editor_end">النهاية</string>
+    <string name="composer_object_editor_permanent">ظاهر من البداية إلى النهاية</string>
+    <string name="composer_object_editor_start">البداية</string>
+    <string name="composer_object_editor_window">من %1$s إلى %2$s</string>
+    <string name="composer_object_editor_window_permanent">من %1$s إلى النهاية</string>
+    <string name="composer_publish_as_post">نشر المنشور</string>
+    <string name="composer_publish_as_reel">نشر الريل</string>
     <string name="composer_publish_as_story">نشر القصة</string>
     <string name="composer_publish_as_storyAndReel">نشر القصة والريل</string>
     <string name="composer_rail_object_exit">مغادرة العنصر</string>
@@ -212,6 +225,7 @@
     <string name="stories_scene_export_failed">فشل التصدير. حاول مرة أخرى.</string>
     <string name="stories_scene_export_in_progress">جارٍ التصدير…</string>
     <string name="stories_scene_export_saved">تم الحفظ في مكتبة الصور</string>
+    <string name="stories_scene_export_shared">تمت المشاركة</string>
     <string name="stories_scene_frame_backdrop_black">أسود</string>
     <string name="stories_scene_frame_backdrop_blur">ضبابي</string>
     <string name="stories_scene_frame_backdrop_indigo">نيلي</string>

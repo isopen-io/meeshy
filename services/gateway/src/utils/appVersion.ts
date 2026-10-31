@@ -2,6 +2,26 @@ export function getAppVersionFloor(): string {
   return process.env.MIN_APP_VERSION ?? '';
 }
 
+const EXEMPT_PLATFORMS: ReadonlySet<string> = new Set(['web', 'pwa', 'android-shell']);
+
+const normalizePlatform = (platform: string | undefined): string =>
+  typeof platform === 'string' ? platform.trim().toLowerCase() : '';
+
+/**
+ * D-5 (#13947) — le plancher d'UNE plateforme : iOS (1.1.x), Android (3.0.x) et
+ * le web (2.0.x) ne se numérotent pas ensemble, un seul numéro armé pour l'une
+ * bloquerait les autres. `MIN_APP_VERSION_IOS` / `MIN_APP_VERSION_ANDROID`
+ * l'emportent, `MIN_APP_VERSION` sert de repli (plateforme absente ou inconnue :
+ * c'est le comportement de la porte des stories). Le web, la PWA et la coque
+ * Capacitor ne sont jamais jugés. Tous vides (défaut) ⇒ porte désarmée.
+ */
+export function getAppVersionFloorFor(platform?: string): string {
+  const key = normalizePlatform(platform);
+  if (EXEMPT_PLATFORMS.has(key)) return '';
+  const own = key === 'ios' ? process.env.MIN_APP_VERSION_IOS : key === 'android' ? process.env.MIN_APP_VERSION_ANDROID : undefined;
+  return own || getAppVersionFloor();
+}
+
 export function getShellLatestVersion(): string {
   return process.env.SHELL_LATEST_VERSION ?? '';
 }

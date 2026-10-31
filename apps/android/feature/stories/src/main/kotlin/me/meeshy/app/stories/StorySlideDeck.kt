@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.media.MediaTrimBounds
+
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
@@ -8,6 +10,7 @@ import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.StoryObjectPlacement
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectCaps
 import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.composer.scene.SceneFrame
@@ -46,6 +49,8 @@ data class StorySlide(
     val background: StoryBackgroundValue? = null,
     val backgroundMediaId: String? = null,
     val backgroundLoop: Boolean = true,
+    /** La fenêtre gardée de la vidéo de FOND dans sa source (iOS `sourceStart`/`sourceEnd` de l'objet `isBackground`, #13973) ; `null` : entière. */
+    val backgroundTrim: MediaTrimBounds? = null,
     /** Les sons de la slide (fond + premier plan) : le fond appartient à la SLIDE, pas à la publication. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
     /** Cadrage du fond média, fond de ses bandes, ouverture et fermeture : ce que le panneau Cadre et les effets règlent. */
@@ -62,6 +67,8 @@ data class StorySlide(
     val soundTranscriptions: Map<String, me.meeshy.sdk.model.MobileTranscriptionPayload> = emptyMap(),
     /** Les vidéos s'atténuent sous le son de fond (iOS `isDuckingDisabled`, réglé ici pour la diapo entière). */
     val videosDuckUnderSound: Boolean = true,
+    /** Le look de chaque média de la diapo (#13841), posé ou de fond : un RÉGLAGE peint en direct, cuit à la publication seulement. */
+    val mediaLooks: Map<String, me.meeshy.sdk.model.StoryMediaLook> = emptyMap(),
 )
 
 /**
@@ -213,7 +220,9 @@ data class StorySlideDeck(
                     placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
                     backgroundMediaId = slide.backgroundMediaId.takeIf { !clearsBackground },
                     backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
+                    backgroundTrim = slide.backgroundTrim.takeIf { !clearsBackground },
                     backgroundAdjustments = slide.backgroundAdjustments.takeIf { !clearsBackground },
+                    mediaLooks = slide.mediaLooks - mediaId,
                 )
             } else {
                 slide
@@ -236,7 +245,7 @@ data class StorySlideDeck(
         }
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
-            if (i == index) slide.copy(elements = slide.elements + element.normalised()) else slide
+            if (i == index) slide.copy(elements = slide.elements + element.normalised().copy(zIndex = StorySceneStack.nextZ(slide))) else slide
         }
         return copy(slides = next)
     }
@@ -320,29 +329,12 @@ data class StorySlideDeck(
     }
 
     /**
-     * Restacks the on-canvas text element [id] within its holding slide's paint order
-     * per [op] (the list order *is* the z-order: index 0 = back, last = front). The
-     * other elements keep their relative order and every other slide and the selection
-     * are untouched. Inert (same instance) when [id] is unknown or the move would not
-     * change the order (already at the extreme, a single-element slide), so the ≤1
-     * paint-order invariant lives in one place and the caller stays glue.
+     * Restacks the text element [id] on the ONE pile of its slide's scene objects ([StorySceneStack], #13852): a step or
+     * to either end, across texts, placed media, stickers, places and voices. Inert (same instance) when [id] is unknown
+     * or the move would not change the order.
      */
-    fun reorderTextElement(id: String, op: StoryZOrder): StorySlideDeck {
-        val slideIndex = slides.indexOfFirst { slide -> slide.elements.any { it.id == id } }
-        if (slideIndex < 0) return this
-        val elements = slides[slideIndex].elements
-        val from = elements.indexOfFirst { it.id == id }
-        val target = when (op) {
-            StoryZOrder.TO_BACK -> 0
-            StoryZOrder.BACKWARD -> from - 1
-            StoryZOrder.FORWARD -> from + 1
-            StoryZOrder.TO_FRONT -> elements.lastIndex
-        }.coerceIn(0, elements.lastIndex)
-        if (target == from) return this
-        val restacked = elements.toMutableList().apply { add(target, removeAt(from)) }
-        val next = slides.mapIndexed { i, s -> if (i == slideIndex) s.copy(elements = restacked) else s }
-        return copy(slides = next)
-    }
+    fun reorderTextElement(id: String, op: StoryZOrder): StorySlideDeck =
+        restacked(SceneObjectRef(ComposerObjectKind.TEXT, id), op)
 
     /**
      * Appends [sticker] (with its position clamped into the canvas) to the **selected**
@@ -358,7 +350,7 @@ data class StorySlideDeck(
         }
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
-            if (i == index) slide.copy(stickers = slide.stickers + sticker.normalised()) else slide
+            if (i == index) slide.copy(stickers = slide.stickers + sticker.normalised().copy(zIndex = StorySceneStack.nextZ(slide))) else slide
         }
         return copy(slides = next)
     }
@@ -566,9 +558,11 @@ data class StorySlideDeck(
      * replaces any prior designation, and designating the current background again clears it
      * (a natural on/off tap). Inert (same instance) when [mediaId] is not attached to the
      * selected slide, so the ≤1-background invariant lives in one place and the caller stays
-     * glue. Every other slide and the selection are left untouched.
+     * glue. Every other slide and the selection are left untouched. Designated from a placed [objectId] (#13905), only that
+     * object leaves the scene: its copies of the same file stay posed, as iOS carries `isBackground` per object. A source
+     * left posed under the file's own id takes the departed copy's id, so no posed object is ever named like the background.
      */
-    fun toggleSelectedBackgroundMedia(mediaId: String): StorySlideDeck {
+    fun toggleSelectedBackgroundMedia(mediaId: String, objectId: String? = null): StorySlideDeck {
         val selected = selectedSlide
         if (mediaId !in selected.mediaIds) return this
         val next = if (selected.backgroundMediaId == mediaId) null else mediaId
@@ -581,8 +575,14 @@ data class StorySlideDeck(
                 slide.copy(
                     backgroundMediaId = next,
                     backgroundLoop = true,
+                    backgroundTrim = null,
                     backgroundAdjustments = null,
-                    placedMedia = if (next == null) slide.placedMedia else slide.placedMedia.filterNot { it.mediaId == next },
+                    placedMedia = when {
+                        next == null -> slide.placedMedia
+                        objectId != null && slide.placedMedia.any { it.id == objectId && it.mediaId == next } ->
+                            slide.placedMedia.filterNot { it.id == objectId }.map { if (it.id == next) it.copy(id = objectId) else it }
+                        else -> slide.placedMedia.filterNot { it.mediaId == next }
+                    },
                 )
             } else {
                 slide
@@ -607,6 +607,27 @@ data class StorySlideDeck(
             if (i == index) slide.copy(backgroundLoop = loop) else slide
         }
         return copy(slides = slidesNext)
+    }
+
+    /**
+     * La fenêtre gardée de la vidéo de fond [mediaId] de la slide choisie (#13973) ; comme ses réglages, la couper la
+     * DÉSIGNE si le plateau la peignait sans désignation. Inerte si [mediaId] n'est ni le fond ni le candidat, ou si rien ne change.
+     */
+    fun setSelectedBackgroundTrim(mediaId: String, trim: MediaTrimBounds?): StorySlideDeck {
+        val selected = selectedSlide
+        val designated = selected.backgroundMediaId
+        if (mediaId !in selected.mediaIds || (designated != null && designated != mediaId)) return this
+        if (designated == mediaId && selected.backgroundTrim == trim) return this
+        val index = selectedIndex
+        return copy(slides = slides.mapIndexed { i, slide ->
+            if (i != index) slide
+            else slide.copy(
+                backgroundMediaId = mediaId,
+                backgroundLoop = if (designated == null) true else slide.backgroundLoop,
+                placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
+                backgroundTrim = trim,
+            )
+        })
     }
 
     /**

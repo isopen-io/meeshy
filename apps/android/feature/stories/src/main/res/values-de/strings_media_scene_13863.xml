@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_scene_voice_a11y">Ton auf der Szene</string>
+    <string name="story_composer_incoming_a11y">Medium wird hinzugefügt</string>
+    <string name="story_composer_incoming_preparing">Wird vorbereitet…</string>
+    <string name="story_composer_incoming_sending">Wird gesendet: %1$d %%</string>
+    <string name="story_composer_incoming_more">+%1$d</string>
+    <string name="story_composer_incoming_cancel">Hinzufügen abbrechen</string>
+    <string name="story_composer_incoming_failed">Das Medium konnte nicht hinzugefügt werden.</string>
+    <string name="story_composer_incoming_retry">Erneut versuchen</string>
+    <string name="story_composer_incoming_waiting">Wartet</string>
+</resources>

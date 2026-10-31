@@ -81,6 +81,9 @@ export type StoryTrayAuthor = {
   readonly firstName?: string;
   readonly lastName?: string;
   readonly avatar?: string;
+  readonly banner?: string | null;
+  readonly isOnline?: boolean | null;
+  readonly lastActiveAt?: string | Date | null;
 };
 
 /** Une story du plateau — la forme EXACTE de `trayStorySelect`, rien de plus.
@@ -221,6 +224,8 @@ export type StoryFeedPost = {
   readonly type: string;
   readonly createdAt: string | Date;
   readonly expiresAt?: string | Date | null;
+  /** L'AUDIENCE (`postScalarSelect.visibility`) — lue par « Imager » un commentaire (#13922). */
+  readonly visibility?: string | null;
   readonly viewCount?: number;
   readonly isViewedByMe?: boolean;
   readonly author?: StoryTrayAuthor;

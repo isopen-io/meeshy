@@ -12,7 +12,6 @@ class SceneObjectMenuTest {
     private fun offered(
         isLocked: Boolean = false,
         isBackground: Boolean = false,
-        sharesPlaneWithAnother: Boolean = false,
         hasEditor: Boolean = false,
         canLeaveScene: Boolean = false,
         hasTrimmableSource: Boolean = false,
@@ -20,26 +19,19 @@ class SceneObjectMenuTest {
         sceneHasBackground: Boolean = false,
     ) = SceneObjectMenu.offered(
         SceneObjectMenu.Subject(
-            isLocked, isBackground, sharesPlaneWithAnother, hasEditor, canLeaveScene,
+            isLocked, isBackground, hasEditor, canLeaveScene,
             hasTrimmableSource, canBecomeBackground, sceneHasBackground,
         ),
     )
 
     @Test
-    fun `un objet seul de son plan sans editeur n'offre que dupliquer et supprimer`() {
+    fun `un objet sans editeur n'offre que dupliquer et supprimer`() {
         assertThat(offered()).containsExactly(Action.DUPLICATE, Action.DELETE).inOrder()
     }
 
     @Test
-    fun `l'empilement n'est servi qu'a un objet qui partage son plan`() {
-        assertThat(offered(sharesPlaneWithAnother = true))
-            .containsExactly(Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.DELETE).inOrder()
-    }
-
-    @Test
-    fun `un fond n'empile pas meme s'il partage son plan`() {
-        assertThat(offered(isBackground = true, sharesPlaneWithAnother = true))
-            .containsExactly(Action.DUPLICATE, Action.DELETE).inOrder()
+    fun `un fond n'offre que dupliquer et supprimer`() {
+        assertThat(offered(isBackground = true)).containsExactly(Action.DUPLICATE, Action.DELETE).inOrder()
     }
 
     @Test
@@ -60,14 +52,13 @@ class SceneObjectMenuTest {
     }
 
     @Test
-    fun `l'ordre complet suit l'empilement avant la sortie et la suppression en dernier`() {
+    fun `l'ordre complet range la sortie avant le fond et la suppression en dernier`() {
         val all = offered(
-            sharesPlaneWithAnother = true, hasEditor = true, canLeaveScene = true,
+            hasEditor = true, canLeaveScene = true,
             hasTrimmableSource = true, canBecomeBackground = true,
         )
         assertThat(all).containsExactly(
-            Action.EDIT, Action.TRIM, Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD,
-            Action.LEAVE_SCENE, Action.SET_AS_BACKGROUND, Action.DELETE,
+            Action.EDIT, Action.TRIM, Action.DUPLICATE, Action.LEAVE_SCENE, Action.SET_AS_BACKGROUND, Action.DELETE,
         ).inOrder()
     }
 
@@ -86,19 +77,24 @@ class SceneObjectMenuTest {
     }
 
     @Test
-    fun `un objet verrouille ne s'edite ni ne se duplique ni ne se supprime mais s'empile`() {
+    fun `un objet verrouille ne s'edite ni ne se duplique ni ne se supprime`() {
         assertThat(
             offered(
-                isLocked = true, sharesPlaneWithAnother = true, hasEditor = true, canLeaveScene = true,
+                isLocked = true, hasEditor = true, canLeaveScene = true,
                 hasTrimmableSource = true, canBecomeBackground = true,
             ),
-        ).containsExactly(Action.BRING_FORWARD, Action.SEND_BACKWARD).inOrder()
+        ).isEmpty()
     }
 
     @Test
     fun `dupliquer disparait quand la scene est pleine pour cette famille`() {
         val full = SceneObjectMenu.offered(SceneObjectMenu.Subject(canDuplicate = false))
         assertThat(full).containsExactly(Action.DELETE)
+    }
+
+    @Test
+    fun `aucun objet n'offre plus d'ordre, toucher le fait passer devant`() {
+        assertThat(Action.entries.map { it.name }).containsNoneOf("BRING_TO_FRONT", "BRING_FORWARD", "SEND_BACKWARD", "SEND_TO_BACK")
     }
 
     @Test

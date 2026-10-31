@@ -127,8 +127,9 @@ final class ComposerSceneLegendInPlaceTests: XCTestCase {
         XCTAssertTrue(code.contains("funcopenSceneDescriptionEditing()"),
                       "Le site unique d'ouverture doit exister.")
         XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "openSceneDescriptionEditing",
-                                                  in: try hostCode()), 3,
-                       "Sa déclaration et ses DEUX portes — l'atelier et le rail. Un appelant en moins = une porte inerte.")
+                                                  in: try hostCode()), 4,
+                       "Sa déclaration et ses TROIS portes — l'atelier, le rail et « ⋯ › Légende » (#13839). "
+                       + "Un appelant en moins = une porte inerte.")
     }
 
     // MARK: - #6127 · L'encre suit le fond

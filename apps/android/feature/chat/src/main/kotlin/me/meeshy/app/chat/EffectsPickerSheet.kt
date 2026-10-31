@@ -283,6 +283,7 @@ private fun effectIcon(option: MessageEffectOption): ImageVector = when (option)
 }
 
 internal fun ephemeralDurationLabel(duration: EphemeralDuration): Int = when (duration) {
+    EphemeralDuration.FIFTEEN_SECONDS -> R.string.chat_effect_duration_15s
     EphemeralDuration.THIRTY_SECONDS -> R.string.chat_effect_duration_30s
     EphemeralDuration.ONE_MINUTE -> R.string.chat_effect_duration_1m
     EphemeralDuration.FIVE_MINUTES -> R.string.chat_effect_duration_5m

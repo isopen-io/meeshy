@@ -35,6 +35,7 @@ import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
 import me.meeshy.ui.component.media.MediaTrimContent
+import me.meeshy.ui.component.retouch.ComposerMediaLookPanel
 import me.meeshy.ui.component.media.MediaTrimStrip
 import me.meeshy.ui.component.composer.rememberHostedTextField
 
@@ -53,16 +54,20 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
         label = "media-section",
     ) { open ->
         when (open) {
+            ComposerObjectEditorSection.Media(MediaEditTool.LOOK) -> ComposerMediaLookPanel(
+                look = state.mediaLookOf(mediaId),
+                onChoose = { item -> viewModel.onSceneReduce { StoryComposerLookReducer.chosen(it, mediaId, item) } },
+            )
             ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT) -> MediaAltField(
-                alt = state.draft.mediaAlt[mediaId].orEmpty(),
-                onChange = { viewModel.onMediaAltChange(mediaId, it.take(MediaDescriptionLaw.MAX_LENGTH)) },
+                alt = state.draft.mediaAlt[state.deck.selectedSlide.mediaFileOf(mediaId)].orEmpty(),
+                onChange = { viewModel.onMediaAltChange(state.deck.selectedSlide.mediaFileOf(mediaId), it.take(MediaDescriptionLaw.MAX_LENGTH)) },
             )
             ComposerObjectEditorSection.Plan -> PlanSection(state, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.TRIM) -> PlacedTrimSection(state, mediaId, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.CROP) -> PlacedCropSection(state, mediaId, viewModel)
             ComposerObjectEditorSection.Media(MediaEditTool.ADJUST) -> AdjustSection(state, mediaId, AdjustmentFamily.TONE, viewModel, comparison)
             ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS) -> AdjustSection(state, mediaId, AdjustmentFamily.EFFECT, viewModel, comparison)
-            else -> if (state.deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }) {
+            else -> if (state.deck.selectedSlide.placedMedia.any { it.id == mediaId }) {
                 FilterRow(
                     selected = state.placedFilterOf(mediaId),
                     intensity = 1f,
@@ -86,7 +91,7 @@ internal fun MediaSectionContent(state: StoryComposerUiState, mediaId: String, v
  * d'historique par curseur et par geste. « Comparer » ne s'écrit nulle part : il montre l'original sur la scène le temps du geste.
  */
 @Composable
-private fun AdjustSection(state: StoryComposerUiState, mediaId: String, family: AdjustmentFamily, viewModel: StoryComposerViewModel, comparison: LookComparison) {
+internal fun AdjustSection(state: StoryComposerUiState, mediaId: String, family: AdjustmentFamily, viewModel: StoryComposerViewModel, comparison: LookComparison) {
     ComposerImageAdjustmentsPanel(
         adjustments = state.adjustmentsOf(mediaId) ?: ImageAdjustments.NEUTRAL,
         isVideo = state.placedMediaIsVideo(mediaId),
@@ -107,7 +112,8 @@ private fun AdjustSection(state: StoryComposerUiState, mediaId: String, family: 
 private fun PlacedTrimSection(state: StoryComposerUiState, mediaId: String, viewModel: StoryComposerViewModel) {
     val source = state.placedTrimSourceOf(mediaId) ?: return
     val bounds = state.placedTrimOf(mediaId) ?: return
-    val url = state.attachments.firstOrNull { it.id == mediaId }?.url.orEmpty().let { ComposerMediaAddress.of(it, viewModel.mediaBaseUrl) }
+    val file = state.deck.selectedSlide.mediaFileOf(mediaId)
+    val url = state.attachments.firstOrNull { it.id == file }?.url.orEmpty().let { ComposerMediaAddress.of(it, viewModel.mediaBaseUrl) }
     MediaTrimStrip(
         content = MediaTrimContent.VIDEO,
         sourceDuration = source,
@@ -120,7 +126,7 @@ private fun PlacedTrimSection(state: StoryComposerUiState, mediaId: String, view
 }
 
 @Composable
-private fun MediaAltField(alt: String, onChange: (String) -> Unit) {
+internal fun MediaAltField(alt: String, onChange: (String) -> Unit) {
     val hint = stringResource(R.string.story_media_alt_a11yHint)
     val field = rememberHostedTextField(alt, onChange)
     OutlinedTextField(
@@ -182,25 +188,12 @@ private fun PlanSection(state: StoryComposerUiState, viewModel: StoryComposerVie
 }
 
 /**
- * Le pied du plateau d'une scène sans objet touché : le Cadre quand son bouton du rail gauche est allumé, puis le
- * carrousel de l'effet ouvert dans la colonne droite (iOS `ComposerSceneEffectCarousel`). Chacun entre et sort en glissant.
+ * Le pied du plateau d'une scène sans objet touché : le carrousel de l'effet ouvert (iOS `ComposerSceneEffectCarousel`) ; le
+ * Cadrage vit désormais dans Fond › Modifier (#13973).
  */
 @Composable
 internal fun SceneEffectsDock(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     val frame = state.deck.selectedSlide.frame
-    val transform = frame.backgroundTransform()
-    AnimatedVisibility(
-        visible = state.frameOpen,
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically(),
-    ) {
-        ComposerFramePanel(
-            fitMode = ComposerBackdropFraming.fitMode(transform),
-            backdrop = ComposerBackdropFraming.backdrop(transform),
-            onPickFitMode = { mode -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.fitModeSet(it, mode) } },
-            onPickBackdrop = { fond -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.backdropChosen(it, fond) } },
-        )
-    }
     ComposerSceneEffectCarousel(
         open = state.sceneEffectCarousel,
         frame = frame,

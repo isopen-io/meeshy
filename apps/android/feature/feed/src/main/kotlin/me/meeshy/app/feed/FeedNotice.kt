@@ -1,5 +1,7 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.publication.PublicationNotice
+
 /**
  * A feedback the feed shows once, in the reader's language — never the raw technical message
  * a failed call carries. Mirrors iOS `FeedbackToastManager` and its keys (`feed.load.error`,
@@ -20,3 +22,10 @@ enum class FeedNotice(val isError: Boolean) {
     PUBLISH_QUEUED(false),
     TRANSLATION_FAILED(true),
 }
+
+/** Le retour que le fil montre pour une publication que la file de l'appareil a prise, ou n'a pas pu prendre (#13863). */
+internal val PublicationNotice.feedNotice: FeedNotice
+    get() = when (this) {
+        PublicationNotice.QUEUED -> FeedNotice.PUBLISH_QUEUED
+        PublicationNotice.FAILED -> FeedNotice.PUBLISH_FAILED
+    }

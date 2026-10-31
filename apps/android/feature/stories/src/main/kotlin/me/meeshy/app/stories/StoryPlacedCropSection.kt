@@ -36,7 +36,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 internal fun PlacedCropSection(state: StoryComposerUiState, mediaId: String, viewModel: StoryComposerViewModel) {
     val (width, height) = state.placedSourceSizeOf(mediaId) ?: return
     val media = state.attachments.firstOrNull { it.id == mediaId } ?: return
-    val crop = state.deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == mediaId }?.crop
+    val crop = state.deck.selectedSlide.placedMedia.firstOrNull { it.id == mediaId }?.crop
     val chosen = state.placedCropPresetOf(mediaId)
     val aspect = chosen?.takeUnless { it == ComposerCropPreset.ORIGINAL }?.aspect(width, height)
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {

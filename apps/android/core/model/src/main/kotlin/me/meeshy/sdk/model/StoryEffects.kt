@@ -127,9 +127,9 @@ data class StoryEffects(
     val unpaintableObjects: List<ObjectV3> = emptyList(),
     /**
      * Le document multi-scènes d'une PUBLICATION de post (miroir de `StoryEffects.canvasV3` d'iOS) : une scène par photo,
-     * composé par `PostPhotoScenes` et écrit tel quel par [PostStoryEffectsWireSerializer], qui est aussi seul à le relire
-     * (l'outbox rejoue la charge). Jamais lu d'un fil de lecture — [StoryEffects.rendering] ne le pose pas — et jamais
-     * sérialisé par les autres chemins.
+     * composé par `ScenePostDocument` et écrit tel quel par [PostStoryEffectsWireSerializer] (l'outbox rejoue la charge).
+     * À la lecture d'un post servi, [PostReadStoryEffectsSerializer] l'y garde quand il porte deux scènes ou plus : le fil
+     * en peint chaque scène ([PostSceneReading]). [StoryEffects.rendering] ne le pose jamais.
      */
     @Transient
     val canvas: CanvasV3? = null,

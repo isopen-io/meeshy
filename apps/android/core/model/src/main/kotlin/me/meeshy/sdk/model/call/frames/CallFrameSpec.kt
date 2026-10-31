@@ -322,8 +322,13 @@ public data class CallFrameDesign(
     val styles: List<CallFrameStyle> = emptyList(),
     /** La déclinaison que ce cadre porte ; `null` pour un cadre de base. */
     val styleId: String? = null,
+    /** #13953 — le nom dans chaque langue (code court) ; [name], le français, en est le repli. */
+    val localizedNames: Map<String, String> = emptyMap(),
 ) {
     public val people: IntRange get() = bucket.people
+
+    /** Le nom du cadre dans la langue d'interface (#13953). */
+    public fun displayName(language: String?): String = CallFrameNaming.name(name, localizedNames, language)
 
     public fun isOffered(surface: CallFrameSurface): Boolean = surface in surfaces
 

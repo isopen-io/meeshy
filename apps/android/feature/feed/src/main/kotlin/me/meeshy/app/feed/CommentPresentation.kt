@@ -14,9 +14,20 @@ import me.meeshy.ui.component.bubble.PostLanguageStrip
  * by [CommentProjection] so the resolution stays unit-testable and the Compose layer
  * stays dumb.
  */
-/** Un média d'un commentaire : sa vignette (absente pour une vidéo sans image d'aperçu) et sa nature. */
+/**
+ * Un média d'un commentaire : sa vignette (absente pour une vidéo sans image d'aperçu), sa nature, et ce que le plein écran
+ * et l'export en lisent (#13915) — le fichier entier, ses dimensions et sa durée servies.
+ */
 @Immutable
-data class CommentMediaPreview(val id: String, val thumbnailUrl: String?, val isVideo: Boolean)
+data class CommentMediaPreview(
+    val id: String,
+    val thumbnailUrl: String?,
+    val isVideo: Boolean,
+    val url: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val durationMillis: Int? = null,
+)
 
 @Immutable
 data class CommentPresentation(
@@ -115,7 +126,15 @@ object CommentProjection {
         comment.media.orEmpty().sortedBy { it.order ?: 0 }.map { media ->
             val isVideo = media.mimeType?.startsWith("video") == true
             val still = media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
-            CommentMediaPreview(media.id, still?.let { resolveFeedMediaUrl(it, mediaBaseUrl) }, isVideo)
+            CommentMediaPreview(
+                id = media.id,
+                thumbnailUrl = still?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
+                isVideo = isVideo,
+                url = media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
+                width = media.width,
+                height = media.height,
+                durationMillis = media.duration,
+            )
         }
 
     /**

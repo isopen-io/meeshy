@@ -51,25 +51,34 @@ enum ShareFileSource {
     func makeProvider(link: URL) -> LazyShareFileProvider? {
         switch self {
         case .story(let story, let author):
-            return ShareFilePlaceholder.video(named: "Meeshy-\(story.id).mp4").map { placeholder in
-                LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier, link: link) {
-                    await StoryPhotoSaveService.shared.renderStoryFile(of: story, author: author)
-                }
+            return Self.renderedProvider(id: story.id, still: StoryPhotoSaveService.shared.exportsStill(story: story),
+                                         link: link) {
+                await StoryPhotoSaveService.shared.renderStoryFile(of: story, author: author)
             }
         case .post(let post):
             switch PostSaveRoute.resolve(for: post, mayLeave: ContentExitGate.open.mayLeave()) {
             case .unavailable:
                 return nil
             case .renderScene:
-                return ShareFilePlaceholder.video(named: "Meeshy-\(post.id).mp4").map { placeholder in
-                    LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier, link: link) {
-                        await StoryPhotoSaveService.shared.renderSceneFile(of: post)
-                    }
+                return Self.renderedProvider(id: post.id, still: StoryPhotoSaveService.shared.exportsStill(post: post),
+                                             link: link) {
+                    await StoryPhotoSaveService.shared.renderSceneFile(of: post)
                 }
             case .rawFile(let media):
                 return Self.rawFileProvider(media, link: link)
             }
         }
+    }
+
+    /// Une œuvre rendue s'annonce telle qu'elle sortira : l'IMAGE d'une scène
+    /// fixe et muette (#13871), sinon la vidéo.
+    private static func renderedProvider(id: String, still: Bool, link: URL,
+                                         render: @escaping @MainActor @Sendable () async -> URL?) -> LazyShareFileProvider? {
+        let placeholder = still
+            ? ShareFilePlaceholder.image(named: "Meeshy-\(id).jpg")
+            : ShareFilePlaceholder.video(named: "Meeshy-\(id).mp4")
+        let type = still ? UTType.jpeg : UTType.mpeg4Movie
+        return placeholder.map { LazyShareFileProvider(placeholder: $0, typeIdentifier: type.identifier, link: link, produce: render) }
     }
 
     private static func rawFileProvider(_ media: PostSaveMedia, link: URL) -> LazyShareFileProvider? {

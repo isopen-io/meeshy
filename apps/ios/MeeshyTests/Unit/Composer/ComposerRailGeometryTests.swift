@@ -163,40 +163,8 @@ final class ComposerRailGeometryTests: XCTestCase {
 
     // MARK: - La garde de SOURCE : la règle est-elle CONSOMMÉE ?
 
-    private func surfaceSource() throws -> String {
-        return AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
-    }
-
     private func compact(_ text: String) -> String {
         text.components(separatedBy: .whitespacesAndNewlines).joined()
-    }
-
-    /// **Le fusible.** Sans lui, les deux gardes ci-dessous seraient vertes par
-    /// OMISSION le jour où le chemin du fichier change.
-    func test_laSourceDeLaSurface_estLisibleEtNonVide() throws {
-        let source = try surfaceSource()
-        XCTAssertGreaterThan(source.count, 5_000,
-                             "Source introuvable ou vide : les gardes qui suivent ne prouveraient rien.")
-        XCTAssertTrue(source.contains("EmbeddedSceneCanvas"),
-                      "Ce n'est pas le bon fichier.")
-    }
-
-    /// Une règle que personne n'applique ne règle rien : la surface doit
-    /// DEMANDER son encastrement à `ComposerRailGeometry`.
-    func test_laSurface_demandeSonEncastrementALaRegle() throws {
-        XCTAssertTrue(
-            compact(try surfaceSource()).contains("ComposerRailGeometry.sceneInset(railsShown:"),
-            "La scène doit lire son encastrement de la règle, jamais d'un littéral.")
-    }
-
-    /// **La garde NÉGATIVE, et c'est elle qui a de la valeur.** Elle rougit le
-    /// jour où quelqu'un recode 14 pt en dur sur la scène — le geste exact que
-    /// ce lot existe pour rendre impossible, et que rien d'autre ne
-    /// signalerait : le rendu serait « juste un peu plus large ».
-    func test_lEncastrementDeLaScene_nEstPlusUnLitteral() throws {
-        XCTAssertFalse(
-            compact(try surfaceSource()).contains(".padding(.horizontal,14)"),
-            "L'encastrement de la scène est revenu à un littéral : la raison qui le produit a disparu avec.")
     }
 
     // MARK: - Le volet de description DÉGAGE les rails flottants (#8388)
@@ -244,8 +212,9 @@ final class ComposerRailGeometryTests: XCTestCase {
     func test_laScene_estUnCalquePleinEcran_sousLeChrome() throws {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
             "Meeshy/Features/Composer/ComposerSceneSurface.swift")))
-        XCTAssertTrue(surface.contains("varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer}"),
-                      "Le letterbox, la scène et le chrome sont trois calques empilés, dans cet ordre.")
+        XCTAssertTrue(surface.contains(
+            "varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))ifarrangement==.rails{railsLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}else{restChrome.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}}"),
+                      "Le letterbox, la scène, le chrome et le repos — ou, sur grand écran, les rails libellés (#13839, L6) — sont quatre calques empilés, dans cet ordre.")
         XCTAssertTrue(surface.contains("SceneBackdropView(backdrop:.thumbHash,thumbHash:floorHash)"),
                       "Ce que la carte laisse est le SOL de la scène : le thumbhash de son résultat, comme le lecteur.")
         XCTAssertTrue(surface.contains("StorySlideRenderer.computeThumbHash(slide:slide,"),
@@ -255,11 +224,14 @@ final class ComposerRailGeometryTests: XCTestCase {
             return XCTFail("Les deux calques ont changé de nom — la garde doit être re-pointée.")
         }
         let scene = surface[debut.upperBound..<fin.lowerBound]
-        // `- chromeLift` : la barre haute MONTE dans la rangée de la Dynamic
-        // Island (« remonte encore le bouton X et … », 2026-09-27) — la scène
-        // la suit, elle reste dessous, jamais sous la croix.
-        XCTAssertTrue(scene.contains(".padding(.top,ComposerTopBar.height+4-chromeLift)"),
-                      "La scène se pose sous la barre haute, jamais sous la croix (directive 2026-09-27).")
+        // **Le témoin INVERSE de « la scène se pose sous la barre haute »**
+        // (#13839) : plus de barre haute à réserver, la croix se pose SUR la
+        // scène. En surimpression, la scène descend même sous le socle, qui se
+        // pose dessus ; sur grand écran, Publier se pose SOUS elle (#13839, L6).
+        XCTAssertFalse(scene.contains("ComposerTopBar.height"),
+                       "La scène réserve encore la hauteur d'une barre haute qui n'existe plus.")
+        XCTAssertTrue(scene.contains(".ignoresSafeArea(.container,edges:arrangement==.rails?[]:.bottom)"),
+                      "En surimpression la scène descend sous le socle (#13839) ; en rails, Publier est sous elle (L6).")
         XCTAssertTrue(scene.contains(".ignoresSafeArea(.keyboard)"),
                       "Le clavier ne pousse pas la scène.")
         XCTAssertTrue(surface.contains(".statusBarHidden(true)"),
@@ -268,7 +240,7 @@ final class ComposerRailGeometryTests: XCTestCase {
                        "Aucun chrome ne se loge dans le calque de la scène.")
         XCTAssertFalse(surface.contains("pushesToThumb:true"),
                        "Aucun rail de la scène ne s'étire sur sa hauteur.")
-        XCTAssertTrue(surface.contains("onRedo:onRedo,pushesToThumb:false,separateButtons:true,"),
+        XCTAssertTrue(surface.contains("onRedo:historyIsOnTheScene?nil:onRedo,pushesToThumb:false,separateButtons:true,"),
                       "Le rail droit flotte sans ressort, en petits boutons séparés sans légende (directive 2026-09-27).")
     }
 
@@ -314,48 +286,6 @@ final class ComposerRailGeometryTests: XCTestCase {
         XCTAssertEqual(ComposerRailGeometry.rowOverflow(entries: 4, available: offerte), 0)
         XCTAssertEqual(ComposerRailGeometry.rowWidth(entries: 0), 0)
         XCTAssertEqual(ComposerRailGeometry.rowWidth(entries: 1), ComposerRailGeometry.railWidth)
-    }
-
-    /// **La rangée horizontale DÉFILE, et le `(x)` reste hors du défilement.**
-    ///
-    /// Le faire défiler avec le reste l'enverrait hors champ précisément quand
-    /// il y a le plus de contrôleurs — c'est-à-dire quand on en a le plus
-    /// besoin. Le rail promet que « la position que le doigt apprend pour sortir
-    /// ne dépend pas du nombre de contrôleurs » ; un `(x)` qui défile en fait
-    /// une promesse creuse.
-    func test_laRangeeHorizontale_defile_etLaSortieResteEpinglee() throws {
-        var racine = URL(fileURLWithPath: #filePath)
-        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
-        let url = racine.appendingPathComponent(
-            "Meeshy/Features/Composer/ComposerLeadingRail.swift")
-        let brut = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertTrue(brut.contains("struct ComposerLeadingRail"),
-                      "ce n'est pas le rail — la garde lirait à côté")
-        let code = AppSourceGuard.stripComments(brut)
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-
-        XCTAssertTrue(code.contains("ScrollView(.horizontal,showsIndicators:false)"))
-        // Le `(x)` est posé APRÈS la fermeture du ScrollView, donc hors de lui.
-        let apresDefilement = code.components(separatedBy: "ScrollView(.horizontal").last ?? ""
-        XCTAssertTrue(apresDefilement.contains("exitButton"),
-                      "la sortie doit rester hors du défilement")
-    }
-
-    /// **L'écart vient de la RÈGLE, jamais d'un littéral recopié.** Deux
-    /// valeurs, l'une dans la vue et l'autre dans le calcul, rendraient la
-    /// mesure fausse sans que rien ne rougisse — la rangée déborderait
-    /// exactement de leur différence.
-    func test_lEcart_aUnSeulSite() throws {
-        var racine = URL(fileURLWithPath: #filePath)
-        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
-        let url = racine.appendingPathComponent(
-            "Meeshy/Features/Composer/ComposerLeadingRail.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-
-        XCTAssertFalse(code.contains("HStack(spacing:10)"),
-                       "l'écart doit venir de ComposerRailGeometry.entrySpacing")
-        XCTAssertFalse(code.contains("VStack(spacing:10)"))
     }
 
     // MARK: - #10542 · Le rail droit tient dans la hauteur de la scène

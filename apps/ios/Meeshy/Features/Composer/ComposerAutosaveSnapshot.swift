@@ -114,6 +114,9 @@ nonisolated struct ComposerAutosaveSnapshot: Codable, Sendable {
     struct PublishChoice: Codable, Equatable, Sendable {
         let format: String
         let layout: String?
+        /// Les formats cochés ENSEMBLE (#13920). Absent d'un choix d'un seul
+        /// format, et d'un instantané écrit avant : `format` suffit alors.
+        var formats: [String]? = nil
     }
 
     var version: Int = currentVersion

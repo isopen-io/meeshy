@@ -23,6 +23,45 @@ public data class StoryExportBrandingPlan(
     public fun totalMillis(storyDurationMillis: Long): Long =
         outroStartMillis(storyDurationMillis) + outroDurationMillis
 
+    /** La carte de fin porte-t-elle l'identité de l'auteur (logo muet, puis carte d'auteur qui porte le jingle) ? */
+    public val hasAuthorOutro: Boolean get() = outroJingleOffsetMillis > 0L
+
+    /** Fin de la story sur la timeline de l'export : elle démarre après la tenue de l'intro. */
+    public fun storyEndMillis(storyDurationMillis: Long): Long = storyStartMillis + storyDurationMillis
+
+    /** Opacité de l'intro à [atMillis] : pleine pendant la tenue, puis elle se fond vers la story sur le fondu. */
+    public fun introAlpha(atMillis: Long): Float = when {
+        !hasIntro -> 0f
+        atMillis < introFade.startMillis -> 1f
+        atMillis >= introFade.endMillis -> 0f
+        else -> 1f - (atMillis - introFade.startMillis).toFloat() / introFade.durationMillis.toFloat()
+    }
+
+    /** Courbe de volume du jingle d'ouverture : plein pendant la tenue, éteint avec le fondu. */
+    public fun introJingleEnvelope(): List<StoryExportVolumePoint> = listOf(
+        StoryExportVolumePoint(0L, 1f),
+        StoryExportVolumePoint(introFade.startMillis, 1f),
+        StoryExportVolumePoint(introFade.endMillis, 0f),
+    )
+
+    /** Opacité de la carte de fin à [atMillis] : elle recouvre la fin de la story sur le chevauchement, puis reste pleine. */
+    public fun outroAlpha(atMillis: Long, storyDurationMillis: Long): Float {
+        val start = outroStartMillis(storyDurationMillis)
+        val span = storyEndMillis(storyDurationMillis) - start
+        return when {
+            atMillis < start -> 0f
+            span <= 0L || atMillis >= start + span -> 1f
+            else -> (atMillis - start).toFloat() / span.toFloat()
+        }
+    }
+
+    /** Opacité de la carte d'auteur, 2e phase de la fermeture : entre en fondu après le logo muet ; 0 sans identité. */
+    public fun authorCardAlpha(atMillis: Long, storyDurationMillis: Long): Float {
+        if (!hasAuthorOutro) return 0f
+        val local = atMillis - (outroStartMillis(storyDurationMillis) + AUTHOR_LOGO_PHASE_MILLIS)
+        return (local.toFloat() / AUTHOR_IDENTITY_FADE_IN_MILLIS.toFloat()).coerceIn(0f, 1f)
+    }
+
     public companion object {
         public const val INTRO_HOLD_MILLIS: Long = 1_200
         public const val INTRO_CROSSFADE_MILLIS: Long = 500

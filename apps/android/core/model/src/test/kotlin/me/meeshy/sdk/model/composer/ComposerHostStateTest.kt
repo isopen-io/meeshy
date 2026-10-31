@@ -6,8 +6,6 @@ import me.meeshy.sdk.model.composer.ComposerFormat.POST
 import me.meeshy.sdk.model.composer.ComposerFormat.REEL
 import me.meeshy.sdk.model.composer.ComposerFormat.STATUS
 import me.meeshy.sdk.model.composer.ComposerFormat.STORY
-import me.meeshy.sdk.model.StoryVisibility
-import me.meeshy.sdk.model.UploadedMedia
 import org.junit.Test
 
 class ComposerHostStateTest {
@@ -105,100 +103,27 @@ class ComposerHostStateTest {
         assertThat(open(ComposerOrigin.FeedComposer).withScene(true).hasContent).isTrue()
     }
 
-    private fun carried(id: String, alt: String? = null) =
-        CarriedMedia(UploadedMedia(id, "u/$id", "image/jpeg", 1L, null, null, null, null), alt)
-
     @Test
-    fun `a post with two photos switched to story carries both onto the scene without re-upload`() {
-        val post = open(ComposerOrigin.FeedComposer).withPostDocument(listOf(carried("a", "chat"), carried("b")), StoryVisibility.FRIENDS)
-        val story = post.choose(STORY)
-        val carry = requireNotNull(story.carry)
-        assertThat(carry.target).isEqualTo(ComposerCarry.Side.SCENE)
-        assertThat(carry.plan.add.map { it.media.id }).containsExactly("a", "b").inOrder()
-        assertThat(carry.plan.alts).containsExactly("a", "chat")
-        assertThat(carry.audience).isEqualTo(StoryVisibility.FRIENDS)
-        assertThat(carry.plan.leftBehind).isEqualTo(0)
+    fun `switching between story, post and reel changes the format and nothing else, the scene stays where it is`() {
+        val scene = open(ComposerOrigin.StoryTray).withText("bonjour").withMedia(listOf(video)).withScene(true).withSceneCount(2)
+
+        val toPost = scene.choose(POST)
+        val toReel = toPost.choose(REEL)
+        val back = toReel.choose(STORY)
+
+        assertThat(toPost).isEqualTo(scene.copy(chosen = POST))
+        assertThat(toReel).isEqualTo(scene.copy(chosen = REEL))
+        assertThat(back).isEqualTo(scene.copy(chosen = STORY))
     }
 
     @Test
-    fun `a scene switched to post carries its media, and offline pending ones are counted as left behind`() {
-        val scene = open(ComposerOrigin.StoryTray).withSceneDocument(listOf(carried("a")), pending = 2, room = 10, visibility = StoryVisibility.PUBLIC)
-        val carry = requireNotNull(scene.choose(POST).carry)
-        assertThat(carry.target).isEqualTo(ComposerCarry.Side.POST)
-        assertThat(carry.plan.add.map { it.media.id }).containsExactly("a")
-        assertThat(carry.plan.leftBehind).isEqualTo(2)
-    }
+    fun `the reel is offered as soon as the scene carries what qualifies one`() {
+        val story = open(ComposerOrigin.StoryTray).withScene(true)
+        assertThat(story.verdicts.first { it.format == REEL }.isChoosable).isFalse()
 
-    @Test
-    fun `an audience the post cannot express narrows the post to private, never widens it`() {
-        val scene = open(ComposerOrigin.StoryTray).withSceneDocument(emptyList(), 0, 10, StoryVisibility.ONLY)
-        assertThat(scene.choose(POST).carry?.audience).isEqualTo(StoryVisibility.PRIVATE)
-        val community = open(ComposerOrigin.StoryTray).withSceneDocument(emptyList(), 0, 10, StoryVisibility.COMMUNITY)
-        assertThat(community.choose(POST).carry?.audience).isEqualTo(StoryVisibility.PRIVATE)
-    }
+        val withVideo = story.withMedia(listOf(video))
 
-    @Test
-    fun `the narrowed audience left untouched on the post never comes back to overwrite the story's list`() {
-        val inPost = open(ComposerOrigin.StoryTray).withSceneDocument(emptyList(), 0, 10, StoryVisibility.ONLY)
-            .choose(POST).let { it.carryApplied(it.carry!!.token) }
-            .withPostDocument(emptyList(), StoryVisibility.PRIVATE)
-        assertThat(inPost.choose(STORY).carry).isNull()
-        val chosenOnPost = inPost.withPostDocument(emptyList(), StoryVisibility.FRIENDS).choose(STORY)
-        assertThat(chosenOnPost.carry?.audience).isEqualTo(StoryVisibility.FRIENDS)
-    }
-
-    @Test
-    fun `switching back before the arrival took the carry removes nothing from the source`() {
-        val story = open(ComposerOrigin.StoryTray).withSceneDocument(listOf(carried("a")), 0, 9, StoryVisibility.PUBLIC)
-        val toPost = story.choose(POST)
-        assertThat(toPost.carry).isNotNull()
-        val back = toPost.choose(STORY)
-        assertThat(back.carry).isNull()
-        assertThat(back.synced).isEmpty()
-        val again = back.choose(POST)
-        assertThat(again.carry?.plan?.add?.map { it.media.id }).containsExactly("a")
-        assertThat(again.carry?.plan?.remove).isEmpty()
-    }
-
-    @Test
-    fun `a post media still queued offline never travels and is counted as left behind`() {
-        val post = open(ComposerOrigin.FeedComposer).withPostDocument(listOf(carried("a"), carried("cmid_0000")), StoryVisibility.PUBLIC)
-        val carry = requireNotNull(post.choose(STORY).carry)
-        assertThat(carry.plan.add.map { it.media.id }).containsExactly("a")
-        assertThat(carry.plan.leftBehind).isEqualTo(1)
-    }
-
-    @Test
-    fun `a media removed on the source after a carry is removed on the arrival, a native one is untouched`() {
-        val toStory = open(ComposerOrigin.FeedComposer).withPostDocument(listOf(carried("a")), StoryVisibility.PUBLIC).choose(STORY)
-            .let { it.carryApplied(it.carry!!.token) }
-        val inStory = toStory.withSceneDocument(listOf(carried("a"), carried("own")), 0, 8, StoryVisibility.PUBLIC)
-        val trimmedStory = inStory.withSceneDocument(listOf(carried("own")), 0, 9, StoryVisibility.PUBLIC)
-        val back = trimmedStory.choose(POST)
-        assertThat(requireNotNull(back.carry).plan.remove).containsExactly("a")
-        assertThat(back.carry!!.plan.add.map { it.media.id }).containsExactly("own")
-    }
-
-    @Test
-    fun `a carry is applied once and a text-only switch plans nothing`() {
-        val withMedia = open(ComposerOrigin.FeedComposer).withPostDocument(listOf(carried("a")), StoryVisibility.PUBLIC).choose(STORY)
-        assertThat(withMedia.carryApplied(withMedia.carry!!.token).carry).isNull()
-        assertThat(open(ComposerOrigin.FeedComposer).withText("salut").choose(STORY).carry).isNull()
-        assertThat(open(ComposerOrigin.FeedComposer).withMedia(listOf(video)).choose(REEL).carry).isNull()
-    }
-
-    @Test
-    fun `over capacity the surplus stays behind and is counted`() {
-        val many = (1..12).map { carried("m$it") }
-        val carry = requireNotNull(open(ComposerOrigin.FeedComposer).withPostDocument(many, StoryVisibility.PUBLIC).choose(STORY).carry)
-        assertThat(carry.plan.add).hasSize(10)
-        assertThat(carry.plan.leftBehind).isEqualTo(2)
-    }
-
-    @Test
-    fun `leaving a mood hands over whichever surface last held the media`() {
-        val post = open(ComposerOrigin.FeedComposer).withPostDocument(listOf(carried("a")), StoryVisibility.PUBLIC)
-        val viaMood = post.copy(chosen = STATUS)
-        assertThat(viaMood.choose(STORY).carry?.plan?.add?.map { it.media.id }).containsExactly("a")
+        assertThat(withVideo.verdicts.first { it.format == REEL }.isChoosable).isTrue()
+        assertThat(withVideo.choose(REEL).selectedFormat).isEqualTo(REEL)
     }
 }

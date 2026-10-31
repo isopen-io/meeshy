@@ -111,6 +111,10 @@ private class FakeMessageApi(
         ApiResponse<Unit>(success = true)
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = true)
+    override suspend fun consumeAfterRead(conversationId: String, body: me.meeshy.sdk.net.api.ConsumeAfterReadRequest) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
+    override suspend fun consumeViewOnce(conversationId: String, messageId: String, body: kotlinx.serialization.json.JsonObject) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
 }
 
 /**
@@ -182,6 +186,10 @@ private class EtagAwareMessageApi(
         ApiResponse<Unit>(success = false)
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = false)
+    override suspend fun consumeAfterRead(conversationId: String, body: me.meeshy.sdk.net.api.ConsumeAfterReadRequest) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
+    override suspend fun consumeViewOnce(conversationId: String, messageId: String, body: kotlinx.serialization.json.JsonObject) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
 }
 
 /**
@@ -273,6 +281,10 @@ private class GapAwareMessageApi(
         ApiResponse<Unit>(success = false)
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = false)
+    override suspend fun consumeAfterRead(conversationId: String, body: me.meeshy.sdk.net.api.ConsumeAfterReadRequest) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
+    override suspend fun consumeViewOnce(conversationId: String, messageId: String, body: kotlinx.serialization.json.JsonObject) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
 }
 
 private class FakeTranslationApi(

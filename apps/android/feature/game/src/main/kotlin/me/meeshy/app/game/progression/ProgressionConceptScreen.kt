@@ -47,6 +47,10 @@ import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.sdk.model.game.GameText
 import me.meeshy.sdk.model.game.progression.FicheHead
 import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
+import me.meeshy.sdk.model.game.progression.ProgressionHeritagePiece
+import me.meeshy.sdk.model.game.progression.ProgressionLeaguePiece
+import me.meeshy.sdk.model.game.progression.ProgressionLevelHero
+import me.meeshy.sdk.model.game.progression.ProgressionMeeshDetail
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameBounceButton
 import me.meeshy.ui.icons.MeeshyIcons
@@ -100,6 +104,24 @@ fun ProgressionConceptScreen(
             when {
                 // TA LUMIÈRE (iOS `GameSparksHeadView`) : la poche en grand, le « depuis toujours » en petit.
                 sparks != null -> GameSparksHeadView(sparks, snapshot.game)
+                // UNE pièce, UN héros (iOS `ProgressionConceptPage.hero`, `.piece`) : elle REMPLACE le héros générique.
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Elans -> ElansPiece(snapshot.progress.elan)
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.League ->
+                    ProgressionLeaguePiece.of(snapshot.game?.league)?.let { LeaguePiece(it, onOpen = { onOpenPage(GamePage.League) }) }
+                // L'anneau avec le bloc de jeu ; sans lui, la tête du niveau d'iOS (`ProgressionLevelHero`).
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Level -> snapshot.game
+                    ?.let { LevelPiece(it, snapshot.progress.elan) }
+                    ?: LevelHeroWithoutGame(ProgressionLevelHero.of(snapshot.progress.level))
+                // L'HÉRITAGE puis le cadre de la frappe, EN TÊTE (iOS `GameHeritageHeadView` + `GameMintPreviewView`) ;
+                // sans bloc de jeu, le portefeuille et sa frappe (iOS `ProgressionMeeshDetail`).
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Meesh -> snapshot.game?.let { game ->
+                    val acting by gestures.state.collectAsStateWithLifecycle()
+                    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+                        HeritageAndMint(ProgressionHeritagePiece.served(snapshot.progress, game), game, acting, onMint = { gestures.mint(game.mint) })
+                    }
+                } ?: snapshot.progress.meesh?.let { meesh ->
+                    MeeshDetailWithoutGame(ProgressionMeeshDetail.of(meesh), gestures)
+                }
                 // La ligne du héros s'efface quand les gestes de la fiche la disent déjà (iOS `fiche.heroLine`).
                 card != null -> ConceptHero(card, snapshot.game, line = if (fiche != null) fiche.heroLine else card.line)
             }
@@ -110,7 +132,7 @@ fun ProgressionConceptScreen(
             }
             // « Où j'en suis » ne redit rien : la section disparaît quand elle n'a rien à ajouter (iOS #11180).
             if (fiche != null && fiche.hasWhere) {
-                FicheSection(stringResource(R.string.game_fiche_where)) { ConceptWhereContent(fiche) }
+                FicheSection(stringResource(R.string.game_fiche_where)) { ConceptWhereContent(fiche, concept) }
             }
             FicheSection(stringResource(R.string.game_fiche_earn)) {
                 Sentence(stringResource(ConceptCopy.tip1(concept)))
@@ -120,7 +142,8 @@ fun ProgressionConceptScreen(
                 Sentence(stringResource(ConceptCopy.use(concept)))
             }
             val game = snapshot.game
-            val acts = game != null && conceptHasGestures(concept, game)
+            // La frappe monte en tête avec l'Héritage : « À toi de jouer » ne la redit pas.
+            val acts = game != null && conceptHasGestures(concept, game) && !(concept == ProgressionConcept.Meesh && fiche?.head == FicheHead.Piece)
             if (acts || conceptHasRevealPiece(concept)) {
                 FicheSection(stringResource(R.string.game_concept_section_act)) {
                     if (acts && game != null) ConceptGestures(concept, game, gestures)

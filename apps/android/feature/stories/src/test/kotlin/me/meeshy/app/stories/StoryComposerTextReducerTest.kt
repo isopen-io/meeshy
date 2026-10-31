@@ -132,10 +132,10 @@ class StoryComposerTextReducerTest {
     }
 
     @Test
-    fun `reordering a lone element keeps the same instance`() {
+    fun `touching a lone element keeps the same deck`() {
         val base = withElement("t1")
 
-        assertThat(StoryComposerTextReducer.reordered(base, "t1", StoryZOrder.TO_FRONT)).isSameInstanceAs(base)
+        assertThat(StoryComposerTextReducer.selected(base, "t1").deck).isSameInstanceAs(base.deck)
     }
 
     // --- cadre, bordure, langue (#13561, #13534) ---

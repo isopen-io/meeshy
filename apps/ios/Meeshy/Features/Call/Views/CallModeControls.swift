@@ -467,7 +467,7 @@ struct CallMontageFrameStage: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
             .accessibilityElement()
-            .accessibilityLabel(CallLiveFrameCopy.surface(design.name))
+            .accessibilityLabel(CallLiveFrameCopy.surface(design.displayName()))
         } else {
             CallMontageLiveStage(capture: capture)
         }

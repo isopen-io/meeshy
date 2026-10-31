@@ -27,11 +27,12 @@ internal val ServedMediaSections: List<ComposerObjectEditorSection> = ComposerOb
     .filter { it in setOf(ComposerObjectEditorSection.Media(MediaEditTool.FILTER), ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT), ComposerObjectEditorSection.Plan) }
 
 /**
- * Les sections d'un média POSÉ sur la scène (#13599) : le rail de la famille sans actions — rognage (d'une vidéo dont
- * la durée est connue seulement), filtre propre, Réglages, Effets, description, plan. Les Effets (bloom, grain) sont ceux d'une IMAGE : aucune vidéo ne les peint.
+ * Les sections d'un média POSÉ sur la scène (#13599) : le rail de la famille sans actions — filtres et cadres de l'appel
+ * (une image seulement, #13841), rognage (d'une vidéo dont la durée est connue seulement), filtre propre, Réglages, Effets, description, plan. Les Effets (bloom, grain) sont ceux d'une IMAGE : aucune vidéo ne les peint.
  */
 internal val ServedPlacedMediaSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(
+        ComposerObjectEditorSection.Media(MediaEditTool.LOOK),
         ComposerObjectEditorSection.Media(MediaEditTool.TRIM),
         ComposerObjectEditorSection.Media(MediaEditTool.FILTER),
         ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
@@ -41,12 +42,14 @@ internal val ServedPlacedMediaSections: List<ComposerObjectEditorSection> = Comp
     ) }
 
 /**
- * Les sections du média de FOND (#13652) : le filtre de la scène, ses Réglages et ses Effets (iOS `ComposerObjectEditorRail`
+ * Les sections du média de FOND (#13652) : les filtres et cadres de l'appel (une image seulement, #13841), le filtre de la
+ * scène, ses Réglages et ses Effets (iOS `ComposerObjectEditorRail`
  * donne au fond, image ou vidéo, ce que la chaîne `StoryBackgroundLook` peint), la description et le plan. Pas de rognage ni
  * d'actions : le fond n'est pas posé.
  */
 internal val ServedBackgroundSections: List<ComposerObjectEditorSection> = ComposerObjectEditorRail.entries(ComposerObjectKind.MEDIA)
     .filter { it in setOf(
+        ComposerObjectEditorSection.Media(MediaEditTool.LOOK),
         ComposerObjectEditorSection.Media(MediaEditTool.FILTER),
         ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
         ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS),
@@ -72,7 +75,7 @@ internal val StoryComposerUiState.servedSoundSections: List<ComposerObjectEditor
 
 /** Le média touché, s'il vit encore sur la slide sélectionnée (jamais un identifiant périmé). */
 internal val StoryComposerUiState.selectedMedia: String?
-    get() = selectedMediaId?.takeIf { it in deck.selectedSlide.mediaIds }
+    get() = selectedMediaId?.takeIf(deck.selectedSlide::holdsMediaObject)
 
 /** La piste touchée, si elle vit encore sur la slide sélectionnée. */
 internal val StoryComposerUiState.selectedSound: StoryAudioPlayerObject?
@@ -84,8 +87,11 @@ internal val StoryComposerUiState.selectedSound: StoryAudioPlayerObject?
  * ni peint ni publié comme objet tant qu'il n'est pas POSÉ sur la scène : un filtre sur lui serait perdu, il n'est pas proposé.
  * Un média posé (#13630) est un objet de la scène : il offre SON filtre (#13603), à côté de celui de la scène.
  */
-internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> {
-    if (deck.selectedSlide.placedMedia.any { it.mediaId == id }) {
+internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObjectEditorSection> =
+    servedMediaSectionsOf(id).filter { it != ComposerObjectEditorSection.Media(MediaEditTool.LOOK) || offersLook(id) }
+
+private fun StoryComposerUiState.servedMediaSectionsOf(id: String): List<ComposerObjectEditorSection> {
+    if (deck.selectedSlide.placedMedia.any { it.id == id }) {
         val trim = ComposerObjectEditorSection.Media(MediaEditTool.TRIM)
         return when {
             !placedMediaIsVideo(id) -> listOf(ComposerObjectEditorSection.Media(MediaEditTool.CROP)) + (ServedPlacedMediaSections - trim)
@@ -99,13 +105,14 @@ internal fun StoryComposerUiState.mediaSectionsFor(id: String): List<ComposerObj
     return ServedMediaSections - ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
 }
 
-/** Le média que le plateau peint en fond : celui que la publication désigne, sinon le premier envoyé de la slide. */
+/** Le média que le plateau peint en fond : celui que la publication désigne, sinon le premier envoyé de la slide qui n'est pas posé sur la scène (#13853). */
 internal val StoryComposerUiState.sceneBackgroundMediaId: String?
-    get() = deck.selectedSlideBackgroundMediaId ?: selectedSlideAttachments.firstOrNull()?.id
+    get() = deck.selectedSlideBackgroundMediaId ?: deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId }
+        .let { posed -> selectedSlideAttachments.firstOrNull { it.id !in posed }?.id }
 
 /** Les réglages et effets PROPRES du média [id], posé ou de fond ; `null` : rien de réglé, ou ni l'un ni l'autre. */
 internal fun StoryComposerUiState.adjustmentsOf(id: String): ImageAdjustments? =
-    if (deck.selectedSlide.placedMedia.any { it.mediaId == id }) placedAdjustmentsOf(id)
+    if (deck.selectedSlide.placedMedia.any { it.id == id }) placedAdjustmentsOf(id)
     else deck.selectedSlide.backgroundAdjustments.takeIf { id == sceneBackgroundMediaId }
 
 /**
@@ -113,7 +120,7 @@ internal fun StoryComposerUiState.adjustmentsOf(id: String): ImageAdjustments? =
  * (iOS `ComposerLookComparison.carriesLook`). Sans rendu « Comparer » ne montrerait rien de différent : le contrôle ne se peint pas.
  */
 internal fun StoryComposerUiState.carriesLook(id: String): Boolean {
-    val placed = deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }
+    val placed = deck.selectedSlide.placedMedia.firstOrNull { it.id == id }
     if (placed != null) return placed.adjustments != null || placed.filter != null
     if (id != sceneBackgroundMediaId) return false
     return deck.selectedSlide.backgroundAdjustments != null || deck.selectedSlide.filter != null
@@ -133,7 +140,8 @@ internal fun StoryComposerUiState.selectedSlideLook(comparing: String?): SceneLo
 /** Le média posé [id] est-il une vidéo ? (téléversé ou encore en attente) — elle ne reçoit ni netteté, ni flou, ni effets. */
 /** Les dimensions MESURÉES de la source du média [id] (largeur, hauteur) ; `null` tant qu'elles ne sont pas connues. */
 internal fun StoryComposerUiState.placedSourceSizeOf(id: String): Pair<Double, Double>? {
-    val media = attachments.firstOrNull { it.id == id } ?: return null
+    val file = deck.selectedSlide.mediaFileOf(id)
+    val media = attachments.firstOrNull { it.id == file } ?: return null
     val width = media.width?.takeIf { it > 0 } ?: return null
     val height = media.height?.takeIf { it > 0 } ?: return null
     return width.toDouble() to height.toDouble()
@@ -141,13 +149,14 @@ internal fun StoryComposerUiState.placedSourceSizeOf(id: String): Pair<Double, D
 
 /** Les proportions que réalise le recadrage du média posé [id] : « Original » sans recadrage, `null` pour un cadre libre. */
 internal fun StoryComposerUiState.placedCropPresetOf(id: String): ComposerCropPreset? {
-    val crop = deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }?.crop ?: return ComposerCropPreset.ORIGINAL
+    val crop = deck.selectedSlide.placedMedia.firstOrNull { it.id == id }?.crop ?: return ComposerCropPreset.ORIGINAL
     val (width, height) = placedSourceSizeOf(id) ?: return null
     return ComposerCropPreset.matching((crop.width * width) / (crop.height * height), width, height)
 }
 
 internal fun StoryComposerUiState.placedMediaIsVideo(id: String): Boolean {
-    val mime = attachments.firstOrNull { it.id == id }?.mimeType ?: pendingUploads.firstOrNull { it.cmid == id }?.item?.mimeType
+    val file = deck.selectedSlide.mediaFileOf(id)
+    val mime = attachments.firstOrNull { it.id == file }?.mimeType ?: pendingUploads.firstOrNull { it.cmid == file }?.item?.mimeType
     return mime?.startsWith("video", ignoreCase = true) == true
 }
 
@@ -156,25 +165,26 @@ internal fun StoryComposerUiState.placedMediaIsVideo(id: String): Boolean {
  * dont la durée n'est pas mesurée (en attente d'envoi) — aucun bouton sans effet.
  */
 internal fun StoryComposerUiState.placedTrimSourceOf(id: String): Double? {
-    if (deck.selectedSlide.placedMedia.none { it.mediaId == id } || !placedMediaIsVideo(id)) return null
-    val seconds = attachments.firstOrNull { it.id == id }?.durationMs?.let { it / 1000.0 } ?: return null
+    if (deck.selectedSlide.placedMedia.none { it.id == id } || !placedMediaIsVideo(id)) return null
+    val file = deck.selectedSlide.mediaFileOf(id)
+    val seconds = attachments.firstOrNull { it.id == file }?.durationMs?.let { it / 1000.0 } ?: return null
     return seconds.takeIf { it.isFinite() && it >= MediaTrimRule.MINIMUM_DURATION }?.coerceAtMost(SoundTrimLaw.MAX_SOURCE_SECONDS)
 }
 
 /** La fenêtre EFFECTIVE de la vidéo posée [id] dans sa source : entière tant qu'elle n'est pas rognée. */
 internal fun StoryComposerUiState.placedTrimOf(id: String): MediaTrimBounds? {
     val source = placedTrimSourceOf(id) ?: return null
-    val placed = deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }
+    val placed = deck.selectedSlide.placedMedia.firstOrNull { it.id == id }
     return MediaTrimRule.resolved(placed?.sourceStart, placed?.sourceEnd, source)
 }
 
 /** Les réglages et effets PROPRES du média posé [id] ; `null` : pas posé, ou rien de réglé. */
 internal fun StoryComposerUiState.placedAdjustmentsOf(id: String): ImageAdjustments? =
-    deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }?.adjustments
+    deck.selectedSlide.placedMedia.firstOrNull { it.id == id }?.adjustments
 
 /** Le filtre PROPRE du média posé [id] ; `null` : pas posé, ou aucun filtre. Le fond n'en a pas : il porte celui de la scène. */
 internal fun StoryComposerUiState.placedFilterOf(id: String): StoryFilter? =
-    deck.selectedSlide.placedMedia.firstOrNull { it.mediaId == id }?.filter
+    deck.selectedSlide.placedMedia.firstOrNull { it.id == id }?.filter
 
 internal val StoryComposerUiState.openMediaSection: ComposerObjectEditorSection
     get() {
@@ -198,22 +208,23 @@ internal val StoryComposerUiState.sceneEffectCarousel: ComposerSceneEffect?
         toolIsOpen = isDrawingActive || band.activeTool != null,
     )
 
-/** Le Cadre ne s'ouvre que pour un fond média, hors sélection et hors outil. */
-internal val StoryComposerUiState.frameOpen: Boolean
-    get() = isFrameOpen && selectedSlideSceneBackground != null && selectedSceneObject == null &&
-        !isDrawingActive && band.activeTool == null
-
 /** Réducteurs de la sélection d'un média ou d'un son, et des panneaux de scène du pied du plateau. */
 internal object StoryComposerSelectionReducer {
 
-    /** Un média choisi — dans la rangée du panneau Média, ou touché sur la scène — prend l'état de sélection (#13836) : le panneau se retire pour sa barre. */
+    /**
+     * Un média choisi — dans la rangée du panneau Média, ou touché sur la scène — prend l'état de sélection (#13836) : le
+     * panneau se retire pour sa barre. Posé, il passe au premier plan ([SceneFrontPromotion], #13917) ; un fond reste le fond.
+     */
     fun mediaSelected(state: StoryComposerUiState, id: String): StoryComposerUiState =
-        if (id !in state.deck.selectedSlide.mediaIds) state
-        else state.withoutObjectSelection().copy(selectedMediaId = id, band = state.band.closeAnyPanel())
+        if (!state.deck.selectedSlide.holdsMediaObject(id)) state
+        else SceneFrontPromotion.promoted(state, SceneObjectRef(ComposerObjectKind.MEDIA, id))
+            .withoutObjectSelection().copy(selectedMediaId = id, band = state.band.closeAnyPanel())
 
+    /** Une pastille de son touchée passe au premier plan ([SceneFrontPromotion]) ; le son d'ambiance n'est pas sur la scène. */
     fun soundSelected(state: StoryComposerUiState, id: String): StoryComposerUiState =
         if (state.deck.selectedSlide.audio.none { it.id == id }) state
-        else state.withoutObjectSelection().copy(selectedSoundId = id, band = state.band.closeAnyPanel())
+        else SceneFrontPromotion.promoted(state, SceneObjectRef(ComposerObjectKind.AUDIO, id))
+            .withoutObjectSelection().copy(selectedSoundId = id, band = state.band.closeAnyPanel())
 
     /** Toucher la scène à vide (#13836) : plus aucun objet n'est touché, de quelque famille qu'il soit, et les outils reviennent. */
     fun cleared(state: StoryComposerUiState): StoryComposerUiState = state.withoutObjectSelection()
@@ -226,23 +237,14 @@ internal object StoryComposerSelectionReducer {
         if (effect !in state.servedSceneEffects) state
         else state.copy(
             openSceneEffect = ComposerSceneEffects.toggled(effect, state.sceneEffectCarousel),
-            isFrameOpen = false,
             band = state.band.closeAnyPanel(),
         )
 
     fun sceneEffectClosed(state: StoryComposerUiState): StoryComposerUiState = state.copy(openSceneEffect = null)
 
-    /** Le Cadre et le carrousel d'effets se partagent le pied : ouvrir l'un referme l'autre ; l'ouvrir lâche l'objet touché, sinon le toucher ne ferait rien. */
-    fun frameToggled(state: StoryComposerUiState): StoryComposerUiState {
-        if (state.selectedSlideSceneBackground == null) return state
-        val opening = !state.frameOpen
-        val base = if (opening) state.withoutObjectSelection() else state
-        return base.copy(isFrameOpen = opening, openSceneEffect = null, band = state.band.closeAnyPanel())
-    }
-
     /** Le départ du son avance d'un cran, comme celui d'un texte ou d'un sticker ; la durée est intacte. */
     fun soundStartCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
-        state.withSoundTiming(id) { it.cycledStart() }
+        soundRetimed(state, id) { it.cycledStart() }
 
     /**
      * La fenêtre propre du son [id] dans sa source (#13601) : bornes ramenées dans la source par la loi, durée occupée
@@ -256,11 +258,12 @@ internal object StoryComposerSelectionReducer {
     }
 
     fun soundDurationCycled(state: StoryComposerUiState, id: String): StoryComposerUiState =
-        state.withSoundTiming(id) { it.cycledDuration() }
+        soundRetimed(state, id) { it.cycledDuration() }
 
-    private fun StoryComposerUiState.withSoundTiming(id: String, cycle: (StoryElementTiming) -> StoryElementTiming): StoryComposerUiState {
-        if (deck.selectedSlide.audio.none { it.id == id }) return this
-        return copy(deck = deck.updateSelectedSound(id) { sound ->
+    /** La fenêtre d'apparition de la pastille [id] réécrite par [cycle] ; `0` se range en champ absent. */
+    fun soundRetimed(state: StoryComposerUiState, id: String, cycle: (StoryElementTiming) -> StoryElementTiming): StoryComposerUiState {
+        if (state.deck.selectedSlide.audio.none { it.id == id }) return state
+        return state.copy(deck = state.deck.updateSelectedSound(id) { sound ->
             val next = cycle(sound.timing())
             sound.copy(
                 startTime = next.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS },

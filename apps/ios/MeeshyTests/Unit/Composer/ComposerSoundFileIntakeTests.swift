@@ -283,7 +283,7 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
         XCTAssertTrue(code.contains("letroutes=ComposerImportedFileRoute.partition(urls)"))
         XCTAssertTrue(code.contains("awaitingestSoundFiles(routes.sounds,placement:.foreground)"),
                       "un fichier audio est un son POSÉ sur la scène, jamais un son de fond")
-        XCTAssertTrue(code.contains("forsourceURLinroutes.medias{"),
+        XCTAssertTrue(code.contains("letfichiers=routes.medias") && code.contains("for(rang,sourceURL)infichiers.enumerated(){"),
                       "seuls les fichiers non audio entrent dans la liste média")
         XCTAssertTrue(code.contains("funcingestSoundFiles(_urls:[URL],placement:ComposerAudioRole?=nil)async{"))
         XCTAssertTrue(code.contains("switchplacement??chosenSoundPlacement{"),

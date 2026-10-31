@@ -63,6 +63,19 @@ class ReelPlayerLawsTest {
     }
 
     @Test
+    fun `un reel qui se rend en video offre l export juste apres partager, un reel d images seules ne l offre pas`() {
+        assertThat(ReelMenu.actions(isOwn = false, hasText = true, exportable = true))
+            .containsExactly(
+                ReelMenu.Action.OPEN, ReelMenu.Action.COPY_TEXT, ReelMenu.Action.SHARE, ReelMenu.Action.EXPORT, ReelMenu.Action.REPORT,
+            ).inOrder()
+        assertThat(ReelMenu.actions(isOwn = true, hasText = false, exportable = true))
+            .containsExactly(
+                ReelMenu.Action.OPEN, ReelMenu.Action.SHARE, ReelMenu.Action.EXPORT, ReelMenu.Action.PIN, ReelMenu.Action.DELETE,
+            ).inOrder()
+        assertThat(ReelMenu.actions(isOwn = false, hasText = true, exportable = false)).doesNotContain(ReelMenu.Action.EXPORT)
+    }
+
+    @Test
     fun `sans texte il n y a rien a copier`() {
         assertThat(ReelMenu.actions(isOwn = false, hasText = false)).doesNotContain(ReelMenu.Action.COPY_TEXT)
     }

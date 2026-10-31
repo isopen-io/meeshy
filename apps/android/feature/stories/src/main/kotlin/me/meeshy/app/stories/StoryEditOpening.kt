@@ -79,7 +79,7 @@ internal data class StoryEditOpening(
                 effects.stickerObjects.orEmpty().map { it.postMediaId } + listOfNotNull(effects.voiceAttachmentId)).filter { it.isNotBlank() }.toSet()
             val legacyBackgroundId = post.media.orEmpty().firstOrNull { it.id !in referenced }?.id.takeIf { explicitBackground == null }
             val backgroundId = explicitBackground?.postMediaId?.takeIf { it.isNotBlank() } ?: legacyBackgroundId
-            val placed = StoryPlacedMedia.foreground(foreground).filter { it.mediaId.isNotBlank() && it.mediaId != backgroundId }
+            val placed = StoryPlacedMedia.foreground(foreground).filter { it.mediaId.isNotBlank() }
             val mediaIds = (listOfNotNull(backgroundId) + placed.map { it.mediaId }).distinct()
             val bySticker = effects.stickerObjects.orEmpty().withIndex().partition { it.value.editable }
             val elements = effects.textObjects.map { it.toElement() }
@@ -98,6 +98,7 @@ internal data class StoryEditOpening(
                 backgroundMediaId = backgroundId,
                 backgroundLoop = explicitBackground?.loop ?: true,
                 backgroundAdjustments = explicitBackground?.adjustments,
+                backgroundTrim = StoryBackgroundTrimWire.read(explicitBackground?.sourceStart, explicitBackground?.sourceEnd),
                 audio = effects.audioPlayerObjects.orEmpty(),
                 frame = SceneFrame(
                     fitMode = effects.backgroundTransform?.videoFitMode,
@@ -156,6 +157,7 @@ internal fun StorySticker.toElement(): StoryStickerElement = StoryStickerElement
     scale = scale.toFloat(),
     rotationDeg = rotation.toFloat(),
     timing = StoryElementTiming(startSeconds = startTime?.toFloat() ?: 0f, durationSeconds = duration?.toFloat() ?: 0f),
+    zIndex = zIndex,
 ).normalised()
 
 /**
@@ -187,5 +189,6 @@ internal fun StoryTextObject.toElement(): StoryTextElement {
         scale = (scale * fontSize / size.designSize).toFloat(),
         rotationDeg = rotation.toFloat(),
         referenceUserId = referenceUserId,
+        zIndex = zIndex,
     ).normalised()
 }

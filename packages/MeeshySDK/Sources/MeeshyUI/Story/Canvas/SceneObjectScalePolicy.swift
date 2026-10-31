@@ -8,8 +8,8 @@ import Foundation
 /// Le pinch du canvas UIKit clampait en toutes lettres — `max(0.3, min(4.0,
 /// …))`, au milieu d'un `case .changed` — et c'était le seul geste qui
 /// redimensionnait un objet. La puce audio en ajoute un SECOND, en SwiftUI,
-/// sur un objet que le canvas ne saisit pas
-/// (`StoryCanvasUIView+Manipulation.manipulable` exclut `.audio`).
+/// pour la puce que rien ne recouvre (celle qui est recouverte se peint et se
+/// saisit dans le canvas, #13864).
 ///
 /// Deux gestes qui bornent la même grandeur avec deux littéraux se
 /// ressemblent le jour où on les écrit et divergent au premier ajustement de

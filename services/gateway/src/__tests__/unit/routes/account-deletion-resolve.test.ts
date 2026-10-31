@@ -67,6 +67,8 @@ function buildApp(etat: EtatDemande | null) {
     },
     userSession: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userVoiceModel: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    userRelation: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    pairInteractionDay: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     conversationShareLink: {
       findMany: jest.fn(async (_a: unknown) => [] as Array<{ id: string }>),
       deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })),

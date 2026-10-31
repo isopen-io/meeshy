@@ -185,6 +185,25 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
     }
 }
 
+// MARK: - Le menu d'un objet n'est pas la fin d'un glissé (#13839, L5)
+
+/// **Un appui long n'ouvre le menu que sur un doigt IMMOBILE.** Pendant une
+/// manipulation, ou juste après (le doigt qui ralentit au bout d'un glissé lent
+/// tient assez longtemps pour que l'appui long se reconnaisse), la demande est
+/// refusée : le menu n'est qu'un raccourci des actions de la sélection, jamais
+/// la récompense d'un déplacement.
+public nonisolated enum StoryCanvasContextMenuGate {
+    /// Le temps, après la fin d'un geste, pendant lequel un appui long est lu
+    /// comme sa queue.
+    public static let settle: TimeInterval = 0.6
+
+    public static func admits(isManipulating: Bool, lastManipulationEnd: Date?, now: Date) -> Bool {
+        guard !isManipulating else { return false }
+        guard let fin = lastManipulationEnd else { return true }
+        return now.timeIntervalSince(fin) >= settle
+    }
+}
+
 // MARK: - UIContextMenuInteractionDelegate (long-press / right-click)
 
 extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
@@ -192,6 +211,11 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                                        configurationForMenuAtLocation location: CGPoint)
     -> UIContextMenuConfiguration? {
         guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
+        guard onBackgroundMediaLongPressed == nil || hitTestForegroundItem(at: location) != nil else { return nil }
+        // Le menu n'est jamais la fin d'un glissé (#13839, L5).
+        guard StoryCanvasContextMenuGate.admits(isManipulating: isGestureActive,
+                                                lastManipulationEnd: lastManipulationEndedAt,
+                                                now: Date()) else { return nil }
         
         // **Une famille, UNE fonction** (#4671). Ce bloc redemandait « de quel
         // type est cet objet ? » et répondait autrement que `itemKind(forId:)` :
@@ -353,92 +377,19 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
 
     /// These mutate the slide and re-fire onItemModified so the binding
     /// propagates back to the SwiftUI composer layer.
-    /// Réordonne un élément foreground pour le placer en tête de la liste
-    /// `mediaObjects` / `textObjects` / `stickerObjects`. Appelé au touch
-    /// (`handlePan.began`, `handlePinch.began`, `handleRotation.began`) pour
-    /// que l'élément manipulé soit immédiatement le plus en avant. No-op pour
-    /// le background media (les bg restent toujours derrière les fg via le
-    /// filtre de `StoryRenderer.collectItems`).
-    /// Ramène l'élément touché au premier plan visuel.
     ///
-    /// **Important** : le rendu canvas (`StoryRenderer.render`) trie les
-    /// éléments par `zIndex` (pas par leur ordre dans les arrays).
-    /// Réordonner uniquement les tableaux (`remove + append`) ne suffisait
-    /// donc pas — le visuel ne bougeait pas alors que les listes de
-    /// l'inspecteur (qui lisent l'ordre du tableau) reflétaient bien le
-    /// mouvement. On assigne maintenant `nextTopZ()` à l'élément pour piloter
-    /// le z-order de rendu, et on réordonne aussi le tableau pour rester
-    /// cohérent avec l'inspecteur.
+    /// **Toucher un objet posé le fait passer au premier plan** (#13918, R6) —
+    /// au tap, au début d'un glissé, d'un pincement ou d'une rotation. La règle
+    /// est `StoryEffects.broughtToFront`, celle du modèle du compositeur : les
+    /// cinq familles, le lieu compris, et l'objet touché DÉPASSE un voisin de
+    /// même rang. Rien ne change pour un fond ou un objet déjà devant.
     ///
-    /// **Perf** : chaque mutation passe par une copie locale puis UNE
-    /// réassignation au `slide`. Mutations directes via subscript (`.foo[i]
-    /// = ...`) ou `remove/append` sur la propriété déclencheraient
-    /// `slide.didSet` plusieurs fois — donc `rebuildLayers()` plusieurs
-    /// fois par tap — visible jitter sur les devices lents.
-    ///
-    /// `internal` plutôt que `private` pour symétrie avec `sendToBack(id:)`
-    /// et pour permettre les tests sans simuler un tap UIKit.
+    /// Une seule réassignation de `slide` : un seul `didSet`, donc un seul
+    /// `rebuildLayers()` par tap.
     internal func bringForegroundToFront(id: String) {
-        let topZ = nextTopZ()
-
-        // Texte
-        if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
-            var texts = slide.effects.textObjects
-            // Skip only when BOTH the z-index AND the array position
-            // already reflect the "front" state — `||` would always
-            // continue because `nextTopZ()` returns `currentMax + 1`,
-            // so `zIndex < topZ` is always true.
-            guard texts[idx].zIndex < topZ - 1
-                  || idx != texts.count - 1 else { return }
-            texts[idx].zIndex = topZ
-            let item = texts.remove(at: idx)
-            texts.append(item)
-            slide.effects.textObjects = texts
-            onItemModified?(slide)
-            return
-        }
-        // Media foreground (skip si bg)
-        if var medias = slide.effects.mediaObjects,
-           let idx = medias.firstIndex(where: { $0.id == id }),
-           medias[idx].isBackground == false {
-            // Same `< topZ - 1` rationale as in the texts branch above.
-            guard medias[idx].zIndex < topZ - 1
-                  || idx != medias.count - 1 else { return }
-            medias[idx].zIndex = topZ
-            let item = medias.remove(at: idx)
-            medias.append(item)
-            slide.effects.mediaObjects = medias
-            onItemModified?(slide)
-            return
-        }
-        // Sticker
-        if var stickers = slide.effects.stickerObjects,
-           let idx = stickers.firstIndex(where: { $0.id == id }) {
-            // Same `< topZ - 1` rationale as in the texts branch above.
-            guard stickers[idx].zIndex < topZ - 1
-                  || idx != stickers.count - 1 else { return }
-            stickers[idx].zIndex = topZ
-            let item = stickers.remove(at: idx)
-            stickers.append(item)
-            slide.effects.stickerObjects = stickers
-            onItemModified?(slide)
-            return
-        }
-        // **Chip de SON** (#4759). Sans cette branche, « mettre au premier
-        // plan » sur une chip de son était un no-op silencieux — la même
-        // absence que celle qui rendait `bringForward` inerte, un site plus
-        // loin. Le rang ET la position dans le tableau sont posés, comme dans
-        // les trois branches ci-dessus : le rendu lit les deux.
-        if var sons = slide.effects.audioPlayerObjects,
-           let idx = sons.firstIndex(where: { $0.id == id }) {
-            guard (sons[idx].zIndex ?? 0) < topZ - 1 || idx != sons.count - 1 else { return }
-            sons[idx].zIndex = topZ
-            let item = sons.remove(at: idx)
-            sons.append(item)
-            slide.effects.audioPlayerObjects = sons
-            onItemModified?(slide)
-            return
-        }
+        guard let devant = slide.effects.broughtToFront(id) else { return }
+        slide.effects = devant
+        onItemModified?(slide)
     }
 
     func contextDuplicate(id: String) {

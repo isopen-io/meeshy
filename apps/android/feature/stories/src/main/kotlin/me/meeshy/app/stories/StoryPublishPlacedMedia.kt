@@ -8,13 +8,13 @@ import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 internal object StoryPublishPlacedMedia {
 
     /**
-     * Résout les médias posés de [slide] : seuls ceux que la slide porte encore et qui ne sont pas son fond, dans
-     * l'ordre de pose. Un média encore en téléversement hors ligne part sans URL sous son `cmid` (comme le fond) : la
+     * Résout les médias posés de [slide] : ceux que la slide porte encore, dans l'ordre de pose — une copie du fichier du
+     * fond reste un objet posé (#13905). Un média encore en téléversement hors ligne part sans URL sous son `cmid` (comme le fond) : la
      * réécriture de l'outbox met l'identifiant réel.
      */
     fun resolve(slide: StorySlide, state: StoryComposerUiState): List<StoryMediaObject> =
         slide.placedMedia
-            .filter { it.mediaId in slide.mediaIds && it.mediaId != slide.backgroundMediaId }
+            .filter { it.mediaId in slide.mediaIds }
             .mapNotNull { placed ->
                 state.attachments.firstOrNull { it.id == placed.mediaId }?.let { media ->
                     placed.toMediaObject(

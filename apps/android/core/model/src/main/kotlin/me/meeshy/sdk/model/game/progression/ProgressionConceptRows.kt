@@ -20,7 +20,8 @@ import me.meeshy.sdk.model.game.engagement.EngagementProgress
  */
 internal object ProgressionConceptRows {
 
-    private fun fact(label: GameTextKey, value: GameText, identity: ConceptFact): FicheFact = FicheFact(GameText(label), value, identity)
+    private fun fact(label: GameTextKey, value: GameText, identity: ConceptFact, detail: GameDetailFactKey? = null): FicheFact =
+        FicheFact(GameText(label), value, identity, detail)
 
     private fun count(value: Int): GameText = GameText(GameTextKey.JoinedBySpace, listOf(GameTextArg.Count(value)))
 
@@ -37,24 +38,29 @@ internal object ProgressionConceptRows {
                     GameText.of(GameTextKey.FactMissingForLevel, GameTextArg.Count(progress.level.level + 1)),
                     points(remaining.toLong()),
                     ConceptFact.LevelNext,
+                    GameDetailFactKey.LevelNext,
                 ),
             )
         }
         val next = if (level.nextThreshold == null) {
-            fact(GameTextKey.FactNextLevel, ProgressionConceptModel.levelTopShort(level.cap), ConceptFact.LevelTop)
+            fact(GameTextKey.FactNextLevel, ProgressionConceptModel.levelTopShort(level.cap), ConceptFact.LevelTop, GameDetailFactKey.LevelNext)
         } else {
             FicheFact(
                 GameText.of(GameTextKey.FactMissingForLevel, GameTextArg.Count(level.level + 1)),
                 points(level.pointsToNext),
                 ConceptFact.LevelNext,
+                GameDetailFactKey.LevelNext,
             )
         }
         val record = if (level.record > level.level) {
-            fact(GameTextKey.FactRecord, GameText.of(GameTextKey.BannerLevel, GameTextArg.Count(level.record)), ConceptFact.LevelRecord)
+            fact(GameTextKey.FactRecord, GameText.of(GameTextKey.BannerLevel, GameTextArg.Count(level.record)),
+                ConceptFact.LevelRecord,
+                GameDetailFactKey.LevelRecord,
+            )
         } else {
             null
         }
-        return listOfNotNull(fact(GameTextKey.FactTier, GameCopyLaws.tierName(level.tier), ConceptFact.Tier), next, record)
+        return listOfNotNull(fact(GameTextKey.FactTier, GameCopyLaws.tierName(level.tier), ConceptFact.Tier, GameDetailFactKey.Tier), next, record)
     }
 
     fun league(game: GameBlock?, nowMillis: Long, zone: ZoneId): List<FicheFact> {
@@ -63,15 +69,16 @@ internal object ProgressionConceptRows {
             GameTextKey.FactFriends,
             GameText.of(GameTextKey.LeagueRankLine, GameTextArg.Count(league.friends.rank), GameTextArg.Count(league.friends.size)),
             ConceptFact.LeagueFriends,
+            GameDetailFactKey.LeagueFriends,
         )
         val current = ProgressionConceptStatesMore.current(league) ?: return listOf(friends)
         return listOfNotNull(
-            fact(GameTextKey.FactWeekPoints, GameCopyLaws.points(current.weekPoints), ConceptFact.WeekPoints),
-            fact(GameTextKey.FactZone, zoneLabel(current.zone), ConceptFact.LeagueZone),
+            fact(GameTextKey.FactWeekPoints, GameCopyLaws.points(current.weekPoints), ConceptFact.WeekPoints, GameDetailFactKey.WeekPoints),
+            fact(GameTextKey.FactZone, zoneLabel(current.zone), ConceptFact.LeagueZone, GameDetailFactKey.LeagueZone),
             current.pointsToPromotion?.takeIf { it > 0 }?.let {
-                fact(GameTextKey.FactMissingForPromotion, GameCopyLaws.points(it), ConceptFact.LeagueMissing)
+                fact(GameTextKey.FactMissingForPromotion, GameCopyLaws.points(it), ConceptFact.LeagueMissing, GameDetailFactKey.LeagueMissing)
             },
-            closesIn(league.closes, nowMillis, zone)?.let { fact(GameTextKey.FactCloses, it, ConceptFact.LeagueCloses) },
+            closesIn(league.closes, nowMillis, zone)?.let { fact(GameTextKey.FactCloses, it, ConceptFact.LeagueCloses, GameDetailFactKey.LeagueCloses) },
             friends,
         )
     }
@@ -104,26 +111,27 @@ internal object ProgressionConceptRows {
     fun season(game: GameBlock?): List<FicheFact> {
         val season = game?.season ?: return emptyList()
         return listOf(
-            fact(GameTextKey.ConceptNameSeason, count(season.number), ConceptFact.Season),
+            fact(GameTextKey.ConceptNameSeason, count(season.number), ConceptFact.Season, GameDetailFactKey.Season),
             fact(
                 GameTextKey.FactWeek,
                 GameText.of(GameTextKey.Ratio, GameTextArg.Count(season.week), GameTextArg.Count(GameSeason.WEEKS)),
                 ConceptFact.SeasonWeek,
+                GameDetailFactKey.SeasonWeek,
             ),
-            fact(GameTextKey.FactStrides, count(season.stars), ConceptFact.SeasonStars),
+            fact(GameTextKey.FactStrides, count(season.stars), ConceptFact.SeasonStars, GameDetailFactKey.SeasonStars),
             fact(GameTextKey.FactSeal, GameText(if (season.sealOwned) GameTextKey.FactYes else GameTextKey.FactNo), ConceptFact.SeasonSeal),
         )
     }
 
     fun prestige(game: GameBlock?): List<FicheFact> = listOfNotNull(
-        game?.prestige?.let { fact(GameTextKey.FactGloryOnPass, count(it.gloryOnPass), ConceptFact.PrestigeGlory) },
+        game?.prestige?.let { fact(GameTextKey.FactGloryOnPass, count(it.gloryOnPass), ConceptFact.PrestigeGlory, GameDetailFactKey.PrestigeGlory) },
     )
 
     /** Les multiplicateurs du jeu sont ici, et seulement ici : le Vent arrière ne se dit que quand il souffle (#10896). */
     fun elans(game: GameBlock?): List<FicheFact> {
         val boosts = game?.boosts ?: return emptyList()
         return listOfNotNull(
-            if (boosts.tailwind > 1.0) fact(GameTextKey.TailwindName, factor(boosts.tailwind), ConceptFact.Tailwind) else null,
+            if (boosts.tailwind > 1.0) fact(GameTextKey.TailwindName, factor(boosts.tailwind), ConceptFact.Tailwind, GameDetailFactKey.Tailwind) else null,
             boosts.prismHour?.let { fact(GameTextKey.FactPrismHour, factor(it.multiplier), ConceptFact.PrismHour) },
         )
     }

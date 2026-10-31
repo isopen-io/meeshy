@@ -472,6 +472,23 @@ final class ComposerAutosaveTests: XCTestCase {
         XCTAssertEqual(relu.publishChoice, ComposerPublishChoice(format: .post, layout: nil))
     }
 
+    /// #13920 — les formats cochés ENSEMBLE reviennent avec le brouillon ; un
+    /// instantané d'avant la clé se relit sur son seul format.
+    func test_save_thenLoad_restoresEveryCheckedFormat() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        var etat = makeState(format: .post)
+        let choix = try XCTUnwrap(ComposerPublishChoice(formats: [.story, .post, .reel], layout: .hero))
+        etat.publishChoice = choix
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertEqual(relu.publishChoice, choix)
+        XCTAssertEqual(ComposerAutosaveCodec.write(from: etat).snapshot.publishChoice?.format, "post",
+                       "Une version d'avant le choix composite relit le premier format coché.")
+    }
+
     // MARK: - Une copie par image (#9420)
 
     private func makeStoreAndRoot() -> (ComposerAutosaveStore, URL) {

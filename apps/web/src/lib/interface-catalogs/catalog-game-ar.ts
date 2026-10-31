@@ -248,6 +248,8 @@ const ar = {
   'game.guide.step.rank.means': 'السكّ، وتحقيق أحلامك، وتحقيق المآثر: كلها تُنمّي مجدك.',
   'game.guide.step.rank.next': 'لنخلّد بدايتك بصورة.',
   'game.page.back': 'العودة إلى التقدّم',
+  'game.page.offline_notice': 'غير متصل — التقدّم كما في آخر زيارة',
+  'game.page.offline_notice_brief': 'غير متصل — كما في آخر زيارة',
   'game.door.rules': 'كيف تعمل اللعبة',
   'game.door.notebook': 'السيرة',
   'game.mint.minted_line': 'تم سك Meesh رقم {number}، {edition}.',

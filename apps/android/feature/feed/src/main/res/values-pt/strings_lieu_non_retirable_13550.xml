@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="feed_unsent_media_location_refused">Não enviado: não foi possível remover a localização</string>
-    <string name="feed_composer_media_location_refused">Não foi possível remover a localização deste arquivo, por isso ele não foi adicionado. Escolha outro arquivo.</string>
 </resources>

@@ -25,10 +25,15 @@ data class PostComposerDraftSnapshot(
     /** The scene's background colour (hex without `#`), absent for a post without a scene. */
     val background: String? = null,
     val updatedAtMillis: Long = 0L,
+    /**
+     * The whole scene the post was composed on (#13863) — slides, objects, sounds, drawing, looks — kept for « Rouvrir »
+     * so a post that did not leave reopens exactly as it was composed. `null` for a post of the feed composer of before.
+     */
+    val scene: StoryComposerDraftSnapshot? = null,
 ) {
-    /** Whether there is anything an author would want back: words or media. */
+    /** Whether there is anything an author would want back: words, media or a composed scene. */
     val isWorthRestoring: Boolean
-        get() = text.isNotBlank() || media.isNotEmpty()
+        get() = text.isNotBlank() || media.isNotEmpty() || scene?.isWorthRestoring == true
 
     /** Content equality that ignores [updatedAtMillis], so re-saving an unchanged draft writes nothing. */
     fun sameContentAs(other: PostComposerDraftSnapshot): Boolean =

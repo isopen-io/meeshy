@@ -52,8 +52,8 @@ extension StoryCanvasUIView {
     /// - `.began` — l'appui long émet `.began` puis `.changed`/`.ended` ; sans
     ///   ce filtre l'hôte serait appelé plusieurs fois pour un seul geste, et
     ///   ouvrirait plusieurs viseurs ;
-    /// - `hitTestItem(at:) == nil` — sur un objet, `UIContextMenuInteraction`
-    ///   possède déjà ce geste. Le lui disputer ferait clignoter le menu.
+    /// - `hitTestForegroundItem(at:) == nil` — le premier plan appartient au menu
+    ///   contextuel ; le FOND, que `hitTestItem` rend aussi, à ce geste (#13974).
     @objc func handleBackgroundLongPress(_ recognizer: UILongPressGestureRecognizer) {
         // **La LEVÉE d'abord** (#5041) : un appui long ARMÉ doit rendre sa durée
         // et sa fin, sinon le viseur n'a de quoi ouvrir un objectif, jamais de
@@ -79,7 +79,7 @@ extension StoryCanvasUIView {
             break
         }
         guard mode == .edit, recognizer.state == .began else { return }
-        guard hitTestItem(at: recognizer.location(in: self)) == nil else { return }
+        guard hitTestForegroundItem(at: recognizer.location(in: self)) == nil else { return }
         guard inlineEditingTextId == nil else { return }
         // **« Aucun objet devant » n'est pas « scène vide »** (#5041). La garde
         // ci-dessus interroge `itemsContainer`, qui ne contient que le PREMIER
@@ -89,17 +89,11 @@ extension StoryCanvasUIView {
         // on ne fait que router.
         switch StoryCanvasBackgroundLongPress.outcome(
             backgroundMediaObjectId: backgroundMediaObjectId,
-            hostServesBackgroundMenu: onBackgroundMediaLongPressed != nil) {
-        case .presentBackgroundMenu(let id):
-            // **Un menu, pas l'éditeur.** Sur un objet de premier plan, l'appui
-            // long ouvre déjà `UIContextMenuInteraction` — supprimer, dupliquer,
-            // modifier. Router le fond droit vers l'éditeur aurait donné au même
-            // geste deux effets selon que le média est devant ou derrière, et
-            // laissé « ramener en avant » — la seule action qui fait SORTIR un
-            // média du plan de fond — sans aucun chemin.
-            //
-            // Aucune prise n'est armée : ce geste-ci ouvre un menu, il ne tient
-            // pas un déclencheur.
+            hostSelectsBackground: onBackgroundMediaLongPressed != nil) {
+        case .selectBackground(let id):
+            // **La sélection, pas un menu** (#13974) : le même effet que le
+            // toucher, le niveau « Fond » prend le rail chez l'hôte. Aucune
+            // prise n'est armée : ce geste ne tient pas un déclencheur.
             onBackgroundMediaLongPressed?(id)
         case .openViewfinder:
             backgroundLongPressOrigin = recognizer.location(in: self)
@@ -262,8 +256,8 @@ extension StoryCanvasUIView {
             guard let id = manipulatedItemId else { return }
             // **La borne a un nom depuis le #4722.** Elle était écrite en
             // littéral ici, et la puce audio en ajoute un SECOND geste de
-            // taille — en SwiftUI, sur un objet que ce recognizer ne saisit
-            // même pas (`manipulable` exclut `.audio`). Deux littéraux
+            // taille — en SwiftUI, pour la puce que rien ne recouvre (celle
+            // qui est recouverte passe par ce recognizer, #13864). Deux littéraux
             // identiques divergent au premier ajustement de l'un, et aucun
             // témoin ne peut l'attraper : chacun reste juste vis-à-vis de
             // lui-même.
@@ -536,7 +530,8 @@ extension StoryCanvasUIView {
             return
         }
 
-        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return }
+        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }),
+              !StoryAudioChipLayer.follows(layer, in: slide) else { return }
 
         // Position dans le même référentiel que `StoryRenderer.renderItem` :
         // - x  est mappé en `media.x * renderWidth` (linéaire sur la largeur)
@@ -554,7 +549,6 @@ extension StoryCanvasUIView {
             return geo.render(CGPoint(x: designX, y: designY))
         }
 
-        // Read the current model values for this item
         if let media = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
             // Alignement strict sur `StoryMediaLayer.configure` : scale cuit
             // dans `bounds` (base × scale), transform = rotation only.

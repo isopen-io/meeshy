@@ -43,7 +43,7 @@ class StoryComposerMoreActionsTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private val media: StoryMediaUploader = mockk(relaxed = true)
+    private val media: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
     private val uploadQueue: MediaUploadQueue = mockk(relaxed = true)
 
     private fun viewModel(): StoryComposerViewModel {

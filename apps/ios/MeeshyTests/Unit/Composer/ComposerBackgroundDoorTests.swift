@@ -51,12 +51,12 @@ final class ComposerBackgroundDoorTests: XCTestCase {
         for format in [ComposerFormat.post, .reel] {
             XCTAssertEqual(ComposerRailDoor.background.level(for: format), .scene,
                            "le fond ne bascule PAS par format : il EST la scène, quel que soit le profil")
-            let gauche = ComposerSceneFloatingRail.sideRow(
-                from: ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
-                                               format: format, allowsCapture: true),
-                format: format)
-            XCTAssertTrue(gauche.contains(.background),
-                          "directive 2026-09-02 : le fond vit à GAUCHE, pas sur la ligne canonique")
+            let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                                  format: format, allowsCapture: true)
+            let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
+                                                            offeredDoors: portes, overflow: []))
+            XCTAssertTrue(plus.contains(.background),
+                          "#13839 : le fond s'ouvre par « ⋯ › Fond », sur tout format qui a une scène")
         }
     }
 
@@ -64,11 +64,10 @@ final class ComposerBackgroundDoorTests: XCTestCase {
     /// partition, ce témoin est la moitié qu'on oublie d'écrire.
     func test_leFond_nEstJamaisSurLaLigneCanonique() {
         for format in [ComposerFormat.story, .post, .reel] {
-            let bas = ComposerSceneFloatingRail.lowRow(
-                from: ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
-                                               format: format, allowsCapture: true),
-                format: format)
-            XCTAssertFalse(bas.contains(.background), "format \(format)")
+            let colonne = ComposerRestChrome.tools(
+                offered: ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                                  format: format, allowsCapture: true))
+            XCTAssertFalse(colonne.compactMap(\.door).contains(.background), "format \(format)")
         }
     }
 

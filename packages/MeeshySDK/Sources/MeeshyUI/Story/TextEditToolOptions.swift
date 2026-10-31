@@ -71,7 +71,7 @@ enum TextEditLabels {
     static func title(for style: StoryTextStyle) -> String {
         switch style {
         case .bold:          return String(localized: "story.textEdit.style.bold", defaultValue: "Gras", bundle: .module)
-        case .neon:          return String(localized: "story.textEdit.style.neon", defaultValue: "Néon", bundle: .module)
+        case .neon:          return String(localized: "story.textEdit.style.neon", defaultValue: "Lumière", bundle: .module)
         case .typewriter:    return String(localized: "story.textEdit.style.typewriter", defaultValue: "Machine", bundle: .module)
         case .handwriting:   return String(localized: "story.textEdit.style.handwriting", defaultValue: "Manuscrit", bundle: .module)
         case .classic:       return String(localized: "story.textEdit.style.classic", defaultValue: "Classique", bundle: .module)
@@ -123,14 +123,21 @@ public struct TextEditToolOptions: View {
     /// Les fonds offerts : l'hôte qui grave le texte dans un média n'offre pas le verre.
     let profile: StoryTextEditProfile
 
+    /// Les parties que l'hôte peint AILLEURS (#13839, L4) : la barre collée au
+    /// clavier range la graisse avec la police et ne peint qu'une palette par
+    /// panneau. Vide par défaut — chaque outil garde toutes ses parties.
+    let omitting: Set<TextEditOptionPart>
+
     public init(tool: TextEditTool,
                 textObject: Binding<StoryTextObject>,
                 layout: TextEditOptionsLayout = .row,
-                profile: StoryTextEditProfile = .composer) {
+                profile: StoryTextEditProfile = .composer,
+                omitting: Set<TextEditOptionPart> = []) {
         self.tool = tool
         self._textObject = textObject
         self.layout = layout
         self.profile = profile
+        self.omitting = omitting
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -148,22 +155,15 @@ public struct TextEditToolOptions: View {
         // contour). C'est `StoryTextEditToolbar` qui pose l'îlot de verre
         // autour de cette rangée — évite le panneau-dans-panneau et la
         // troncature verticale des pastilles.
-        Group {
-            switch tool {
-            case .style:      styleOptions
-            case .effect:     effectOptions
-            case .color:      colorOptions
-            case .align:      alignOptions
-            case .background: backgroundOptions
-            case .frame:      frameOptions
-            case .border:     borderOptions
-            case .language:   languageOptions
+        VStack(spacing: 10) {
+            ForEach(Self.parts(for: tool, omitting: omitting), id: \.self) { partie in
+                view(for: partie)
             }
         }
         .frame(maxWidth: .infinity)
         .onAppear {
             var local = textObject
-            if tool == .border { Self.initializeBorderDefaultsIfNeutral(on: &local) }
+            if tool == .border, omitting.isEmpty { Self.initializeBorderDefaultsIfNeutral(on: &local) }
             if tool == .frame { Self.initializeFrameDefaultsIfNeutral(on: &local) }
             if local.borderColor != textObject.borderColor
                 || local.borderWidth != textObject.borderWidth
@@ -174,17 +174,34 @@ public struct TextEditToolOptions: View {
         }
     }
 
+    // MARK: - Les parties
+
+    @ViewBuilder
+    private func view(for partie: TextEditOptionPart) -> some View {
+        switch partie {
+        case .size:               sizeSlider
+        case .fonts:              styleFamilyRow
+        case .effects:            effectOptions
+        case .colors:             colorOptions
+        case .weight:             weightSlider
+        case .alignment:          alignRow
+        case .language:           languageOptions
+        case .backgrounds:        backgroundOptions
+        case .frameShapes:        frameShapeRow
+        case .framePadding:       framePaddingSlider
+        case .frameBorderWidth:   frameBorderSlider
+        case .frameBorderPalette: frameBorderPalette
+        case .borderWidth:        borderWidthSlider
+        case .borderPalette:      borderPalette
+        }
+    }
+
     // MARK: - Style
 
     /// La taille coiffe la liste des polices : c'est une valeur continue, elle
     /// se règle là où on choisit la famille plutôt que derrière une bulle.
-    /// La graisse, elle, vit avec l'alignement (directive user 2026-07-28).
-    private var styleOptions: some View {
-        VStack(spacing: 10) {
-            sizeSlider
-            styleFamilyRow
-        }
-    }
+    /// La graisse, elle, vit avec l'alignement (directive user 2026-07-28) —
+    /// sauf chez l'hôte qui la range avec la police (`omitting`).
 
     private var sizeSlider: some View {
         HStack(spacing: 10) {
@@ -395,14 +412,7 @@ public struct TextEditToolOptions: View {
 
     /// Graisse et alignement partagent un panneau : ce sont les deux réglages
     /// qui décident de la SILHOUETTE du bloc de texte, indépendamment de la
-    /// famille de police. Les loger ensemble évite d'ouvrir deux panneaux pour
-    /// un même geste de mise en page.
-    private var alignOptions: some View {
-        VStack(spacing: 10) {
-            weightSlider
-            alignRow
-        }
-    }
+    /// famille de police (`parts(for: .align)`).
 
     private var alignRow: some View {
         HStack(spacing: 10) {
@@ -544,17 +554,9 @@ public struct TextEditToolOptions: View {
 
     // MARK: - Frame (cadrage)
 
-    /// Forme, marge et liseré de la boîte de cadre. La forme est indépendante
-    /// du fond depuis que `hasFrameBox` existe : choisir un cadre ne repeint
-    /// plus le texte d'un fond noir non demandé.
-    private var frameOptions: some View {
-        VStack(spacing: 10) {
-            frameShapeRow
-            framePaddingSlider
-            frameBorderSlider
-            frameBorderPalette
-        }
-    }
+    /// Forme, marge et liseré de la boîte de cadre (`parts(for: .frame)`). La
+    /// forme est indépendante du fond depuis que `hasFrameBox` existe : choisir
+    /// un cadre ne repeint plus le texte d'un fond noir non demandé.
 
     private var frameShapeRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -702,55 +704,56 @@ public struct TextEditToolOptions: View {
         obj.frameBorderColor = StoryTextAttributeCycle.defaultFrameBorderColor
     }
 
-    private var borderOptions: some View {
-        VStack(spacing: 10) {
-            // Slider continu 0...12pt, défaut 4pt (cf. `initializeBorderDefaultsIfNeutral`).
-            // Slider à 0 ⇒ aucun trait rendu (guard `widthPx > 0` dans `StoryTextLayer`).
-            // Couleur conservée → utilisateur peut remonter le slider sans re-choisir une couleur.
-            HStack(spacing: 10) {
-                Image(systemName: "textformat.size.smaller")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                Slider(
-                    value: Binding(
-                        get: { textObject.borderWidth ?? 0 },
-                        set: { newValue in
-                            textObject.borderWidth = newValue
-                            if textObject.borderColor == nil { textObject.borderColor = "FFFFFF" }
-                        }
-                    ),
-                    in: 0...12,
-                    step: 0.5
-                )
-                .tint(MeeshyColors.brandPrimary)
-                Image(systemName: "bold")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.secondary)
-                Text(String(format: "%.1f", textObject.borderWidth ?? 0))
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 34)
-            }
-            // Palette de couleurs — TOUJOURS active (suppression `.disabled` + `.opacity`).
-            // Tap sur une couleur quand `borderWidth == 0` re-active 4pt automatiquement.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(StoryTextColors.palette, id: \.self) { hex in
-                        let isSel = textObject.borderColor?.caseInsensitiveCompare(hex) == .orderedSame
-                        Button {
-                            textObject.borderColor = hex
-                            if textObject.borderWidth == nil || textObject.borderWidth == 0 {
-                                textObject.borderWidth = 4
-                            }
-                            HapticFeedback.light()
-                        } label: {
-                            colorDot(hex: hex, selected: isSel, size: 28)
-                        }
-                        .buttonStyle(.plain)
+    private var borderWidthSlider: some View {
+        // Slider continu 0...12pt, défaut 4pt (cf. `initializeBorderDefaultsIfNeutral`).
+        // Slider à 0 ⇒ aucun trait rendu (guard `widthPx > 0` dans `StoryTextLayer`).
+        // Couleur conservée → utilisateur peut remonter le slider sans re-choisir une couleur.
+        HStack(spacing: 10) {
+            Image(systemName: "textformat.size.smaller")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Slider(
+                value: Binding(
+                    get: { textObject.borderWidth ?? 0 },
+                    set: { newValue in
+                        textObject.borderWidth = newValue
+                        if textObject.borderColor == nil { textObject.borderColor = "FFFFFF" }
                     }
+                ),
+                in: 0...12,
+                step: 0.5
+            )
+            .tint(MeeshyColors.brandPrimary)
+            Image(systemName: "bold")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.secondary)
+            Text(String(format: "%.1f", textObject.borderWidth ?? 0))
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 34)
+        }
+    }
+
+    private var borderPalette: some View {
+        // Palette de couleurs — TOUJOURS active (suppression `.disabled` + `.opacity`).
+        // Tap sur une couleur quand `borderWidth == 0` re-active 4pt automatiquement.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(StoryTextColors.palette, id: \.self) { hex in
+                    let isSel = textObject.borderColor?.caseInsensitiveCompare(hex) == .orderedSame
+                    Button {
+                        textObject.borderColor = hex
+                        if textObject.borderWidth == nil || textObject.borderWidth == 0 {
+                            textObject.borderWidth = 4
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        colorDot(hex: hex, selected: isSel, size: 28)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .padding(4)   // marge pour le `scaleEffect` des pastilles sélectionnées
             }
+            .padding(4)   // marge pour le `scaleEffect` des pastilles sélectionnées
         }
     }
 

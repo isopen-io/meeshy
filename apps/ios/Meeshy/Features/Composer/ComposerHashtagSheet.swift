@@ -31,6 +31,7 @@ struct ComposerHashtagSheet: View {
     @FocusState private var champActif: Bool
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshySheetClose) private var hostClose
 
     /// **Les balises d'avant l'ouverture, retenues pour pouvoir les RENDRE**
     /// (#6134). Cette feuille écrit dans le TEXTE à chaque tap ; « Annuler » ne
@@ -40,15 +41,6 @@ struct ComposerHashtagSheet: View {
     /// oublier le point de départ dès le premier retour de plan.
     @State private var instantane: [String]?
 
-    private var propre: String {
-        saisie.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
-    }
-
-    /// Une balise déjà posée ne se réajoute pas : la loi 4 veut qu'un bouton
-    /// sans effet n'existe pas, et « ajouter » un hashtag présent n'en a aucun.
-    private var peutAjouter: Bool {
-        !propre.isEmpty && !current.contains { $0.lowercased() == propre.lowercased() }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,8 +50,9 @@ struct ComposerHashtagSheet: View {
             // ajustement de l'un aurait cassé chez l'autre.
             MeeshySheetHeader(
                 title: ComposerHashtagCopy.sheetTitle,
+                doneTitle: ComposerAnchoredSheetCopy.ok,
                 onCancel: { annuler() },
-                onDone: { dismiss() }
+                onDone: { valider() }
             )
 
             champ
@@ -79,13 +72,6 @@ struct ComposerHashtagSheet: View {
                 .padding(.bottom, MeeshySpacing.xxl)
             }
         }
-        .background(MeeshyColors.indigo950.ignoresSafeArea())
-        .preferredColorScheme(.dark)
-        // La MÊME présentation que la feuille Mention, par le MÊME modifieur
-        // (#6134 : « la feuille s'affiche en moitié d'écran comme la feuille
-        // mentionner en ce moment »). Recopier `[.medium, …]` ici donnerait deux
-        // déclarations du même fait, que le premier ajustement ferait diverger.
-        .modifier(AudiencePickerPresentationStyle())
         .onAppear {
             instantane = instantane ?? current
             champActif = true
@@ -100,7 +86,19 @@ struct ComposerHashtagSheet: View {
         for tag in ComposerHashtags.togglesRestoring(current, to: instantane ?? current) {
             onToggle(tag)
         }
-        dismiss()
+        fermer()
+    }
+
+    /// **UNE validation** (#13839, L3) : OK pose ce qui reste tapé, puis ferme.
+    /// Le bouton « Ajouter » en était une seconde, et une saisie non validée
+    /// par Retour se perdait à la fermeture.
+    private func valider() {
+        ajouter()
+        fermer()
+    }
+
+    private func fermer() {
+        MeeshySheetClose.perform(host: hostClose, system: { dismiss() })
     }
 
     private var champ: some View {
@@ -113,14 +111,8 @@ struct ComposerHashtagSheet: View {
                 .autocorrectionDisabled()
                 .focused($champActif)
                 .foregroundStyle(.white)
+                .submitLabel(.done)
                 .onSubmit { ajouter() }
-            Button(action: ajouter) {
-                Text(ComposerHashtagCopy.add)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundStyle(peutAjouter ? MeeshyColors.brandPrimary : .white.opacity(0.25))
-            }
-            .buttonStyle(.plain)
-            .disabled(!peutAjouter)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .frame(minHeight: 48)
@@ -131,8 +123,8 @@ struct ComposerHashtagSheet: View {
     }
 
     private func ajouter() {
-        guard peutAjouter else { return }
-        onToggle(propre)
+        guard let tag = ComposerHashtagEntry.pending(saisie, current: current) else { return }
+        onToggle(tag)
         saisie = ""
         HapticFeedback.light()
     }
@@ -196,15 +188,22 @@ extension ComposerHashtagSheet {
     }
 }
 
+/// **La balise qu'une saisie POSERAIT** — `nil` quand il n'y a rien à poser :
+/// vide, ou déjà là (la loi 4 : une validation sans effet n'en est pas une).
+nonisolated enum ComposerHashtagEntry {
+    static func pending(_ saisie: String, current: [String]) -> String? {
+        let propre = saisie.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard !propre.isEmpty,
+              !current.contains(where: { $0.lowercased() == propre.lowercased() }) else { return nil }
+        return propre
+    }
+}
+
 nonisolated enum ComposerHashtagCopy {
 
     static var placeholder: String {
         String(localized: "composer.hashtag.placeholder",
                defaultValue: "Ajouter un hashtag", bundle: .main)
-    }
-
-    static var add: String {
-        String(localized: "composer.hashtag.add", defaultValue: "Ajouter", bundle: .main)
     }
 
     /// Le titre de la FEUILLE — distinct du libellé de la section interne, qui

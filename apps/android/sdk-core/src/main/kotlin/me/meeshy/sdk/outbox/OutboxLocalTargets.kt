@@ -55,6 +55,8 @@ public object OutboxLocalTargets {
         OutboxKind.SEND_FRIEND_REQUEST,
         OutboxKind.RESPOND_FRIEND_REQUEST,
         OutboxKind.CREATE_COMMENT,
+        OutboxKind.CONSUME_AFTER_READ,
+        OutboxKind.CONSUME_VIEW_ONCE,
     ).map { it.name }.toSet()
 
     /** Whether [kind] sends its row's `targetId` to the server as a resource key. */

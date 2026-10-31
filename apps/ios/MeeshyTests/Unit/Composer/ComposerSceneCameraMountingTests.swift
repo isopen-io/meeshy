@@ -120,7 +120,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         // La pile est un NŒUD depuis #8387 (`composerStackNode` monte
         // `ComposerHostStack`, dont le `body` est `composerStack`) : la
         // découpe de type ne change rien à ce que le viseur enveloppe.
-        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("backgroundMenuPresented(composerStackNode)")
+        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("sceneMenuPresented(composerStackNode)")
                       || code[enveloppe.upperBound...].hasPrefix("composerStackNode)"),
                       "posé APRÈS le socle, le viseur ne l'aurait jamais couvert")
         let couches = compact(try source("MeeshyComposerHost+Layers.swift"))

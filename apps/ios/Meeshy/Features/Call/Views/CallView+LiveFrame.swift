@@ -60,7 +60,7 @@ extension CallView {
                                  chromeInsets: (Self.chromeTopInset, Self.chromeBottomInset))
                 .allowsHitTesting(false)
                 .accessibilityElement()
-                .accessibilityLabel(CallLiveFrameCopy.surface(design.name))
+                .accessibilityLabel(CallLiveFrameCopy.surface(design.displayName()))
                 .transition(.opacity)
         }
     }
@@ -85,7 +85,7 @@ extension CallView {
     var liveFrameStatus: some View {
         if let proposal = liveFrame.proposal, let design = CallFrameCatalogue.frame(id: proposal.frameId) {
             CallLiveFrameProposalCard(
-                text: CallLiveFrameCopy.proposal(from: proposal.from, frame: design.name),
+                text: CallLiveFrameCopy.proposal(from: proposal.from, frame: design.displayName()),
                 onAccept: { Task { await liveFrame.accept() } },
                 onDecline: { Task { await liveFrame.decline() } }
             )

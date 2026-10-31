@@ -27,12 +27,12 @@ class DraftResumeViewModel @Inject constructor(
         combine(posts.observeEditing(), stories.observe(), DraftResumeEntries::from)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
-    fun discard(kind: DraftResumeKind) {
+    fun discard(source: DraftResumeSource) {
         viewModelScope.launch {
             runCatching {
-                when (kind) {
-                    DraftResumeKind.POST, DraftResumeKind.REEL -> posts.clearEditing()
-                    DraftResumeKind.STORY -> if (stories.load()?.isAwaitingPublication != true) stories.clear()
+                when (source) {
+                    DraftResumeSource.POST_SLOT -> posts.clearEditing()
+                    DraftResumeSource.SCENE -> if (stories.load()?.isAwaitingPublication != true) stories.clear()
                 }
             }
         }

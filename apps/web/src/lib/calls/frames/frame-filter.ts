@@ -43,9 +43,10 @@ function overlay(base: FrameLook, variant: Variant): FrameLook {
   };
 }
 
-/** Ce que le motif déclare pour TOUTES ses tranches (doc 06 § 3) : qui l'a fait, où il se propose, ce qu'il coûte, ses déclinaisons. */
-function motifKeys(motif: FrameMotif): Pick<CaptureFrame, 'credits' | 'surfaces' | 'cost' | 'styles'> {
+/** Ce que le motif déclare pour TOUTES ses tranches (doc 06 § 3) : son nom dans chaque langue (#13953), qui l'a fait, où il se propose, ce qu'il coûte, ses déclinaisons. */
+function motifKeys(motif: FrameMotif): Pick<CaptureFrame, 'localizedNames' | 'credits' | 'surfaces' | 'cost' | 'styles'> {
   return {
+    ...(motif.localizedNames === undefined ? {} : { localizedNames: motif.localizedNames }),
     ...(motif.credits === undefined ? {} : { credits: motif.credits }),
     ...(motif.surfaces === undefined ? {} : { surfaces: motif.surfaces }),
     ...(motif.cost === undefined ? {} : { cost: motif.cost }),
@@ -72,9 +73,10 @@ export const stylesOf = (owner: { readonly styles?: readonly FrameStyle[] | unde
  * ne la liste pas (le carrousel web la découvrira avec #12692) ; le peintre la rend déjà.
  */
 export function styledFrame(frame: CaptureFrame, style: FrameStyle): CaptureFrame {
-  const { id, motif, mood, name, bucket, people, credits, surfaces, cost, styles, ...look } = frame;
+  const { id, motif, mood, name, localizedNames, bucket, people, credits, surfaces, cost, styles, ...look } = frame;
   return {
     ...overlay(look, style.look),
+    ...(localizedNames === undefined ? {} : { localizedNames }),
     ...(credits === undefined ? {} : { credits }),
     ...(surfaces === undefined ? {} : { surfaces }),
     ...(cost === undefined ? {} : { cost }),

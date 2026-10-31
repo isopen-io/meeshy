@@ -151,10 +151,13 @@ final class ComposerSheetHeaderTests: XCTestCase {
     /// recopier `[.medium, …]` dans les deux donnerait deux déclarations du
     /// même fait, que le premier ajustement ferait diverger.
     func test_lesDeuxFeuilles_souvrentAMiHauteur_parLeMemeModifieur() throws {
-        for (nom, chemin) in [("Mention", cheminMention), ("Hashtag", cheminHashtag)] {
-            XCTAssertTrue(compact(try source(chemin)).contains("AudiencePickerPresentationStyle()"),
-                          "La feuille \(nom) porte la présentation PARTAGÉE, dont le premier cran est `.medium` (#6134).")
-        }
+        XCTAssertTrue(compact(try source(cheminMention)).contains("AudiencePickerPresentationStyle()"),
+                      "La feuille Mention, présentée hors du compositeur, garde la présentation PARTAGÉE (#6134).")
+        // Dans le compositeur, Hashtag est une feuille ANCRÉE (#13839, L3) : sa
+        // hauteur est celle de `ComposerAnchoredSheet`, pas un cran système.
+        XCTAssertFalse(compact(try source(cheminHashtag)).contains("AudiencePickerPresentationStyle()"),
+                       "La feuille Hashtag ne redéclare pas de crans : le meuble la pose.")
+        XCTAssertEqual(ComposerPortal.hashtag.presentation, .anchored)
     }
 
     /// **Le « Annuler » de la feuille Mention RESTITUE.** L'instantané est ce

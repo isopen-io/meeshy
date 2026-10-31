@@ -4,9 +4,13 @@ import me.meeshy.sdk.model.PostComposerDraftSnapshot
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.ReelComposition
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.composer.ComposerFormat
 import java.time.Instant
 
 enum class DraftResumeKind { POST, REEL, STORY }
+
+/** Where a draft lives: the post slot of the composer of old (#13503), or the scene (#13863), whatever its format. */
+enum class DraftResumeSource { POST_SLOT, SCENE }
 
 /** One draft the author can pick up again, as the head of the feed shows it. */
 data class DraftResumeEntry(
@@ -14,6 +18,7 @@ data class DraftResumeEntry(
     val text: String?,
     val mediaCount: Int,
     val updatedAtMillis: Long,
+    val source: DraftResumeSource = DraftResumeSource.POST_SLOT,
 )
 
 /**
@@ -21,8 +26,9 @@ data class DraftResumeEntry(
  * the feed, the most recently touched first. A story draft whose publication is on its way is not
  * one — it is already sent, and is told by « Publications non envoyées ».
  *
- * A reel is composed in the post composer and kept in its slot (#13503): the draft is a REEL when its
- * composition is one ([ReelComposition.defaultType], the very rule the publish applies), a POST otherwise.
+ * A draft of the post composer of old kept in its slot (#13503) is a REEL when its composition is one
+ * ([ReelComposition.defaultType], the very rule the publish applies), a POST otherwise. A scene draft (#13863) is the
+ * format it was composed in, and shows its post text first.
  */
 object DraftResumeEntries {
 
@@ -45,10 +51,15 @@ object DraftResumeEntries {
     private fun StoryComposerDraftSnapshot.toEntry(): DraftResumeEntry? =
         takeIf { it.isWorthRestoring && !it.isAwaitingPublication }?.let {
             DraftResumeEntry(
-                kind = DraftResumeKind.STORY,
-                text = slides.firstNotNullOfOrNull { slide -> slide.text.trim().ifBlank { null } },
+                kind = when (format) {
+                    ComposerFormat.POST.name -> DraftResumeKind.POST
+                    ComposerFormat.REEL.name -> DraftResumeKind.REEL
+                    else -> DraftResumeKind.STORY
+                },
+                text = postText.trim().ifBlank { null } ?: slides.firstNotNullOfOrNull { slide -> slide.text.trim().ifBlank { null } },
                 mediaCount = slides.sumOf { slide -> slide.mediaIds.size },
                 updatedAtMillis = updatedAt?.let { stamp -> runCatching { Instant.parse(stamp).toEpochMilli() }.getOrNull() } ?: 0L,
+                source = DraftResumeSource.SCENE,
             )
         }
 }

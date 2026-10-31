@@ -34,15 +34,8 @@
     <string name="status_composer_mood_label">المزاج %1$s</string>
     <string name="feed_composer_open_placeholder">شارك شيئًا مع العالم…</string>
     <string name="feed_composer_attach_media">إضافة صورة أو فيديو</string>
-    <string name="feed_composer_take_video">تسجيل فيديو</string>
     <string name="feed_composer_remove_media">إزالة الوسائط</string>
-    <string name="feed_composer_add_location">إضافة موقعي</string>
-    <string name="feed_composer_remove_location">إزالة الموقع</string>
-    <string name="feed_composer_location_unavailable">الموقع غير متاح — تحقق من إعدادات الموقع وأعد المحاولة</string>
     <string name="feed_composer_media_unusable">تعذّر إرفاق هذه الوسائط</string>
-    <string name="feed_composer_media_alt_label">صف هذه الصورة أو الفيديو لقارئات الشاشة (%1$d)</string>
-    <string name="feed_composer_media_alt_placeholder">مثال: دراجة حمراء مسندة إلى جدار من الطوب</string>
-    <string name="feed_composer_language_button">لغة المنشور: %1$s</string>
     <string name="feed_post_options">خيارات المنشور</string>
     <string name="feed_quote_title">اقتباس المنشور</string>
     <string name="feed_quote_hint">أضف تعليقًا</string>

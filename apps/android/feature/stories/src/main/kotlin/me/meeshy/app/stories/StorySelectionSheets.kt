@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerSelectionSubject
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.MediaEditTool
 import me.meeshy.sdk.model.composer.SceneObjectMenu
@@ -54,18 +55,25 @@ internal fun StorySelectionSheet(
                 onDismiss = onDone,
             )
         }
-        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
-        StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
+        StoryComposerSheet.PLACE_REPOINT -> StoryReferenceSheet(open, state, viewModel, onDone)
+        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
+        StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE, StoryComposerSheet.BACKGROUND_SOURCE,
+        StoryComposerSheet.BACKGROUND_DESCRIPTION -> Unit
     }
 }
 
-/** Une feuille de sélection est servie tant que son élément l'est : retiré ou désélectionné, elle se referme. */
+/**
+ * Une feuille de sélection est servie tant que son élément l'est : retiré ou désélectionné, elle se referme. Les portes du
+ * rail et du socle (stickers, son, audience, références) ne servent aucun élément : elles le sont toujours (#13910).
+ */
 internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = when (sheet) {
     StoryComposerSheet.STICKER_SWAP -> selectedSticker != null
     StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
-    StoryComposerSheet.OBJECT_TIME -> selectedTextElement != null || selectedSticker != null
-    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
-    StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
+    StoryComposerSheet.OBJECT_TIME -> selectedObjectTiming != null
+    StoryComposerSheet.PLACE_REPOINT -> selectedPlace != null
+    StoryComposerSheet.BACKGROUND_SOURCE, StoryComposerSheet.BACKGROUND_DESCRIPTION -> selectionSubject == ComposerSelectionSubject.BACKGROUND
+    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
+    StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }
 
 /** Le Modifier d'un média ou d'un son : ses sections en pastilles libellées, la section ouverte dessous — ce que la colonne droite portait. */
@@ -114,20 +122,26 @@ private fun BackgroundChip(ref: SceneObjectRef, action: SceneObjectMenu.Action, 
     )
 }
 
-/** Le Temps d'un texte ou d'un sticker : son départ et sa durée, puis la frise du plan, où toucher une piste sélectionne son objet. */
+/**
+ * Le Temps de l'objet posé (#13902, #13904) — texte, sticker, média, lieu ou pastille de son : sa famille, sa fenêtre en
+ * début et fin (iOS `ComposerObjectTimingControls`), puis la frise du plan, où sa piste est surlignée et où toucher une
+ * autre piste sélectionne son objet. Une pastille de son dont la source est connue s'y rogne aussi (#13903) : iOS sert
+ * ROGNER au côté de la fenêtre pour l'audio (`ComposerObjectEditorRail.entries(.audio)`), le Modifier le garde aussi.
+ */
 @Composable
 private fun ObjectTimeSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
     SelectionSheetColumn(stringResource(R.string.composer_scene_more_timing), onDone) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            state.selectedTextElement?.let { text ->
-                TimingCycleButtons(text.timing, { viewModel.onTextElementCycleStart(text.id) }, { viewModel.onTextElementCycleDuration(text.id) })
-            } ?: state.selectedSticker?.let { sticker ->
-                TimingCycleButtons(
-                    sticker.timing,
-                    { viewModel.onSceneReduce { StoryComposerStickerReducer.startCycled(it, sticker.id) } },
-                    { viewModel.onSceneReduce { StoryComposerStickerReducer.durationCycled(it, sticker.id) } },
-                )
+        val ref = state.selectedSceneObject
+        val window = state.selectedObjectWindow
+        val family = state.selectedObjectFamily
+        if (ref != null && window != null && family != null) {
+            ObjectTimeControls(window, family, state.selectedSlideDurationSeconds) { next ->
+                viewModel.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, ref, next) }
             }
+        }
+        state.selectedSound?.takeIf { state.trimSourceOf(it) != null }?.let { sound ->
+            Text(stringResource(R.string.composer_column_media_trim), style = MaterialTheme.typography.labelLarge)
+            SoundTrimSection(state, sound, viewModel)
         }
         Column(Modifier.heightIn(max = FRISE_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
             StoryPlanFrise(state, viewModel)
@@ -167,6 +181,7 @@ internal fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
     }
     ComposerObjectEditorSection.Timing -> MeeshyIcons.ScheduleFilled
     is ComposerObjectEditorSection.Media -> when (tool) {
+        MediaEditTool.LOOK -> MeeshyIcons.Wallpaper
         MediaEditTool.FILTER -> MeeshyIcons.PhotoFilter
         MediaEditTool.ADJUST -> MeeshyIcons.Tune
         MediaEditTool.EFFECTS -> MeeshyIcons.Sparkles
@@ -192,6 +207,7 @@ internal fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
     ComposerObjectEditorSection.Timing -> R.string.composer_column_text_timing
     ComposerObjectEditorSection.Plan -> R.string.composer_column_text_plan
     is ComposerObjectEditorSection.Media -> when (tool) {
+        MediaEditTool.LOOK -> R.string.composer_column_media_look
         MediaEditTool.FILTER -> R.string.composer_column_media_filter
         MediaEditTool.ADJUST -> R.string.composer_column_media_adjust
         MediaEditTool.EFFECTS -> R.string.stories_composer_band_effets

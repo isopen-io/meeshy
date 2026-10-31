@@ -88,4 +88,31 @@ class ReelSceneTest {
 
         assertThat(reels.single().scene!!.textObjects).hasSize(1)
     }
+
+    @Test
+    fun `a composed reel exports the scene it plays, with the payload that names its sounds`() {
+        val reel = reel(composed)
+
+        assertThat(reel.export).isEqualTo(post(composed).toStoryItem() to reel.scene)
+    }
+
+    @Test
+    fun `a plain video reel exports its whole video, sound included, through the same projection`() {
+        val plain = reel(null)
+
+        val (item, slide) = plain.export!!
+        assertThat(item).isEqualTo(post(null).toStoryItem())
+        assertThat(slide.backgroundVideoUrl).isEqualTo("https://cdn.test/v.mp4")
+    }
+
+    @Test
+    fun `an images-only reel has no video to export`() {
+        val images = listOf(
+            ApiPostMedia(id = "i1", mimeType = "image/jpeg", fileUrl = "https://cdn.test/1.jpg"),
+            ApiPostMedia(id = "i2", mimeType = "image/jpeg", fileUrl = "https://cdn.test/2.jpg"),
+        )
+        val reel = ReelBuilder.build(listOf(post(null, media = images)), mediaBaseUrl = null).single()
+
+        assertThat(reel.export).isNull()
+    }
 }

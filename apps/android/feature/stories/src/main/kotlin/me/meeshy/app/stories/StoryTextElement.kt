@@ -157,6 +157,8 @@ data class StoryTextElement(
     val rotationDeg: Float = DEFAULT_ROTATION,
     /** La personne qu'une pastille de mention ÉPINGLÉE nomme (#13846) ; `null` : un texte ordinaire. */
     val referenceUserId: String? = null,
+    /** Son rang dans l'ordre UNIQUE de la scène (#13852, le `zIndex` d'iOS) : le plus haut se peint au-dessus. */
+    val zIndex: Int = 0,
 ) {
     /** True once the element carries content worth publishing (non-blank text). */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -252,6 +254,7 @@ data class StoryTextElement(
         duration = timing.durationSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
         sourceLanguage = StoryTextLanguage.normalised(this.sourceLanguage) ?: sourceLanguage,
         referenceUserId = referenceUserId,
+        zIndex = zIndex,
     )
 
     companion object {
