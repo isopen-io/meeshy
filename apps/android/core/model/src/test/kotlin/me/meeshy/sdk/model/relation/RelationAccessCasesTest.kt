@@ -10,6 +10,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import me.meeshy.sdk.model.AgeClass
 import me.meeshy.sdk.model.PlatformRole
 import org.junit.Test
 
@@ -61,8 +62,8 @@ class RelationAccessCasesTest {
         grantedByTarget = RelationLevel.of(case.input.text("grantedByTarget")),
         sharesCommunity = case.input.flag("sharesCommunity"),
         blockedEitherWay = case.input.flag("blockedEitherWay"),
-        viewerMinor = RelationAgeClass.of(case.input.text("viewerMinor")),
-        targetMinor = RelationAgeClass.of(case.input.text("targetMinor")),
+        viewerMinor = AgeClass.from(case.input.text("viewerMinor")),
+        targetMinor = AgeClass.from(case.input.text("targetMinor")),
         viewerRole = PlatformRole.caseFolding(case.input.text("viewerRole")),
         feature = featureOf(case),
         consent = case.input.text("consent")?.let { RelationConsent.of(it) },
@@ -71,8 +72,8 @@ class RelationAccessCasesTest {
     private fun input(
         feature: RelationFeature,
         level: RelationLevel = RelationLevel.BLOOD,
-        viewerMinor: RelationAgeClass = RelationAgeClass.ADULT,
-        targetMinor: RelationAgeClass = RelationAgeClass.ADULT,
+        viewerMinor: AgeClass = AgeClass.ADULT,
+        targetMinor: AgeClass = AgeClass.ADULT,
         viewerRole: PlatformRole? = PlatformRole.USER,
         consent: RelationConsent? = null,
     ): RelationAccessInput = RelationAccessInput(
@@ -213,9 +214,9 @@ class RelationAccessCasesTest {
 
     @Test
     fun `an unreadable age is an unknown one, never an adult`() {
-        assertThat(RelationAgeClass.of("teen")).isEqualTo(RelationAgeClass.UNKNOWN)
-        assertThat(RelationAgeClass.of(null)).isEqualTo(RelationAgeClass.UNKNOWN)
-        assertThat(RelationAgeClass.of("minor")).isEqualTo(RelationAgeClass.MINOR)
+        assertThat(AgeClass.from("teen")).isEqualTo(AgeClass.UNKNOWN)
+        assertThat(AgeClass.from(null)).isEqualTo(AgeClass.UNKNOWN)
+        assertThat(AgeClass.from("minor")).isEqualTo(AgeClass.MINOR)
     }
 
     // ── Un ancien client contre un serveur plus récent ──
@@ -232,13 +233,13 @@ class RelationAccessCasesTest {
         val automatic = RelationAccess.resolve(
             input(
                 RelationFeature.ACQUAINTANCE_AUTO,
-                viewerMinor = RelationAgeClass.MINOR,
-                targetMinor = RelationAgeClass.of("teen"),
+                viewerMinor = AgeClass.MINOR,
+                targetMinor = AgeClass.from("teen"),
             ),
         )
         assertThat(automatic.reason).isEqualTo(RelationAccessReason.MINOR)
         val location = RelationAccess.resolve(
-            input(RelationFeature.LOCATION_LIVE, viewerMinor = RelationAgeClass.MINOR, consent = RelationConsent.GRANTED),
+            input(RelationFeature.LOCATION_LIVE, viewerMinor = AgeClass.MINOR, consent = RelationConsent.GRANTED),
         )
         assertThat(location.allowed).isTrue()
     }

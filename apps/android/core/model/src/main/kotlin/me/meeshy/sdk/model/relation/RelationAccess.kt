@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.relation
 
+import me.meeshy.sdk.model.AgeClass
 import me.meeshy.sdk.model.PlatformRole
 
 /**
@@ -70,18 +71,6 @@ public enum class RelationFeature(
     }
 }
 
-/** Âge DÉCLARÉ (`DeclaredAgeClass`) : une valeur absente ou illisible se lit [UNKNOWN], jamais [ADULT]. */
-public enum class RelationAgeClass(public val wire: String) {
-    MINOR("minor"),
-    ADULT("adult"),
-    UNKNOWN("unknown"),
-    ;
-
-    public companion object {
-        public fun of(wire: String?): RelationAgeClass = entries.firstOrNull { it.wire == wire } ?: UNKNOWN
-    }
-}
-
 /** Consentement résolu par le serveur ; seul [GRANTED] ouvre, une valeur absente ou illisible se lit [UNKNOWN]. */
 public enum class RelationConsent(public val wire: String) {
     GRANTED("granted"),
@@ -110,8 +99,9 @@ public data class RelationAccessInput(
     val grantedByTarget: RelationLevel,
     val sharesCommunity: Boolean,
     val blockedEitherWay: Boolean,
-    val viewerMinor: RelationAgeClass,
-    val targetMinor: RelationAgeClass,
+    /** Âge DÉCLARÉ (`RelationAgeClass = DeclaredAgeClass`) : la classe que `PUT /me/birth-date` sert déjà, jamais une jumelle. */
+    val viewerMinor: AgeClass,
+    val targetMinor: AgeClass,
     val viewerRole: PlatformRole?,
     val feature: RelationFeature,
     /** `null` = inconnu : une feature à consentement reste fermée. */
@@ -161,7 +151,7 @@ public data class RelationAccess(
                 return RelationAccess(true, level, RelationAccessReason.ROLE, false)
             }
             if (feature == RelationFeature.ACQUAINTANCE_AUTO &&
-                (input.viewerMinor == RelationAgeClass.MINOR) != (input.targetMinor == RelationAgeClass.MINOR)
+                (input.viewerMinor == AgeClass.MINOR) != (input.targetMinor == AgeClass.MINOR)
             ) {
                 return RelationAccess(false, level, RelationAccessReason.MINOR, false)
             }
