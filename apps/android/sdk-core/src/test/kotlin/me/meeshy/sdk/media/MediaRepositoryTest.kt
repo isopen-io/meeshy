@@ -19,7 +19,8 @@ class MediaRepositoryTest {
 
     private val api: MediaApi = mockk(relaxed = true)
 
-    private fun repository() = MediaRepository(api, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined))
+    private fun repository(seeder: UploadedMediaSeeder = UploadedMediaSeeder.None) =
+        MediaRepository(api, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined), seeder)
 
     private fun item(name: String = "photo.jpg", mime: String = "application/octet-stream") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
@@ -224,5 +225,48 @@ class MediaRepositoryTest {
         coEvery { api.transcribe(any(), any()) } throws IOException("offline")
 
         assertThat(repository().requestTranscription("a1")).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun upload_voiceAccepted_entersTheAudioCacheUnderItsServedAddress() = runTest {
+        coEvery { api.upload(any()) } returns ApiResponse(
+            success = true,
+            data = MediaUploadResponse(
+                attachments = listOf(MediaAttachmentWire(id = "a1", fileUrl = "2026/10/a1/voice.m4a", mimeType = "audio/mp4", fileSize = 3L)),
+            ),
+        )
+        val cache = RecordingUploadedMediaCache()
+
+        repository(cache.seeder()).upload(listOf(item(name = "voice.m4a")))
+
+        val adoption = cache.adoptions.single()
+        assertThat(adoption.category).isEqualTo(me.meeshy.sdk.model.mediacache.MediaCacheCategory.AUDIO)
+        assertThat(adoption.url).isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/2026/10/a1/voice.m4a")
+        assertThat(adoption.bytes).isEqualTo(byteArrayOf(1, 2, 3))
+    }
+
+    @Test
+    fun upload_failed_seedsNothing() = runTest {
+        coEvery { api.upload(any()) } throws IOException("offline")
+        val cache = RecordingUploadedMediaCache()
+
+        repository(cache.seeder()).upload(listOf(item(name = "voice.m4a")))
+
+        assertThat(cache.adoptions).isEmpty()
+    }
+
+    @Test
+    fun upload_answerThatDoesNotPairWithTheFilesSent_seedsNothing() = runTest {
+        coEvery { api.upload(any()) } returns ApiResponse(
+            success = true,
+            data = MediaUploadResponse(
+                attachments = listOf(MediaAttachmentWire(id = "a1", fileUrl = "a.m4a", mimeType = "audio/mp4", fileSize = 3L)),
+            ),
+        )
+        val cache = RecordingUploadedMediaCache()
+
+        repository(cache.seeder()).upload(listOf(item(name = "a.m4a"), item(name = "b.m4a")))
+
+        assertThat(cache.adoptions).isEmpty()
     }
 }
