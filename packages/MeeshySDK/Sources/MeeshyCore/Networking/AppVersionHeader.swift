@@ -151,7 +151,7 @@ public extension UpgradeRequirement {
 
     /// Poste sur la file PRINCIPALE : les observateurs sont des vues SwiftUI,
     /// et le 426 arrive depuis la file réseau d'URLSession.
-    public func post(via center: NotificationCenter = .default) {
+    func post(via center: NotificationCenter = .default) {
         var userInfo: [String: String] = [Self.minVersionUserInfoKey: minVersion]
         if let storeUrl { userInfo[Self.storeUrlUserInfoKey] = storeUrl }
         DispatchQueue.main.async {
