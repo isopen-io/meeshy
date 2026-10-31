@@ -97,3 +97,16 @@ describe('historique des passages — une baisse n’est jamais exposée', () =>
     expect(served).toEqual([]);
   });
 });
+
+describe('[audit #13926] l’historique servi ne trahit pas une baisse par sa discontinuité', () => {
+  it('une baisse puis une remontée : la suite servie de chaque acteur reste continue (to précédent = from suivant)', () => {
+    const served = visibleRelationTransitions([
+      transition({ from: 'PUBLIC', to: 'FRIEND', at: new Date('2026-10-01T00:00:00Z') }),
+      transition({ from: 'FRIEND', to: 'CLOSE', at: new Date('2026-11-01T00:00:00Z') }),
+      transition({ from: 'CLOSE', to: 'ACQUAINTANCE', at: new Date('2026-12-01T00:00:00Z') }),
+      transition({ from: 'ACQUAINTANCE', to: 'FRIEND', at: new Date('2027-01-01T00:00:00Z') }),
+    ]);
+    const breaks = served.slice(1).filter((t, i) => t.actorId === served[i].actorId && t.from !== served[i].to);
+    expect(breaks).toEqual([]);
+  });
+});

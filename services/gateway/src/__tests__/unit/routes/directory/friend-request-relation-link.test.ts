@@ -55,6 +55,7 @@ async function repondre(params: {
   liens?: ReadonlyArray<Record<string, unknown>>;
   notifier?: boolean;
   userRelation?: unknown;
+  lectureDemande?: Record<string, unknown>;
 }) {
   const store = relationStore({ friendRequests: params.demandes, relations: params.liens ?? [] });
   const notificationService = {
@@ -68,6 +69,7 @@ async function repondre(params: {
     user: { findUnique: jest.fn(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })) },
     friendRequest: {
       ...store.prisma.friendRequest,
+      ...(params.lectureDemande ? { findUnique: jest.fn(async () => params.lectureDemande) } : {}),
       update: jest.fn(async (args: Parameters<typeof store.prisma.friendRequest.update>[0]) => ({ ...(await store.prisma.friendRequest.update(args)), sender: PARTIE, receiver: PARTIE })),
     },
     userRelation: params.userRelation ?? store.prisma.userRelation,
@@ -156,5 +158,36 @@ describe('#13926 — supprimer une demande ACCEPTÉE rompt le lien, en silence',
       .map(([nom]) => nom)
       .sort();
     expect(appeles).toEqual(['emitFriendRequestCancelled', 'retractFriendRequestNotifications']);
+  });
+});
+
+describe('[audit #13926] une amitié ne survit jamais à sa demande', () => {
+  it('rupture dont l’écriture du lien échoue : la demande reste, ou le lien ne vaut plus FRIEND', async () => {
+    const liens = relationStore({ relations: [lien('FRIEND', 'FRIEND')] });
+    const panne = { ...liens.prisma.userRelation, updateMany: jest.fn(async () => { throw new Error('mongo down'); }) };
+
+    const { store } = await repondre({ action: 'dismiss', demandes: [demande(FR_ID, 'accepted')], userRelation: panne });
+
+    const demandeSurvit = store.friendRequests().some((r) => r.id === FR_ID && r.status === 'accepted');
+    const lienAmi = liens.relations().some((r) => r.grantedByLow !== 'PUBLIC' || r.grantedByHigh !== 'PUBLIC');
+    expect(demandeSurvit || !lienAmi).toBe(true);
+  });
+
+  it('annulation lue « pending » mais acceptée entre-temps : le statut SUPPRIMÉ gouverne la rupture', async () => {
+    const { store } = await repondre({
+      action: 'cancel',
+      demandes: [demande(FR_ID, 'accepted', MOI, AUTRE)],
+      liens: [lien('FRIEND', 'FRIEND')],
+      lectureDemande: demande(FR_ID, 'pending', MOI, AUTRE),
+    });
+
+    expect(store.friendRequests()).toHaveLength(0);
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
+
+  it('accepter grave respondedAt : la date d’acceptation du rattrapage ne repose pas sur updatedAt', async () => {
+    const { store } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')] });
+
+    expect(store.friendRequests()[0].respondedAt).toBeInstanceOf(Date);
   });
 });

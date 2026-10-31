@@ -509,3 +509,21 @@ describe('convertAffiliateVisit — le lien entre le parrain et le filleul (#139
     expect(result.success).toBe(true);
   });
 });
+
+describe('[audit #13926] un lien d’invitation n’efface ni un refus ni un blocage', () => {
+  const withRelations = (overrides: Parameters<typeof makePrisma>[0] = {}) => {
+    const store = relationStore();
+    return { prisma: { ...makePrisma(overrides), userRelation: store.prisma.userRelation }, store };
+  };
+
+  it.each(['rejected', 'blocked'])('une demande « %s » du filleul vers le parrain ne devient pas une amitié FRIEND/FRIEND', async (status) => {
+    const { prisma, store } = withRelations({
+      existingFriendRequest: { id: 'fr-0', senderId: 'user-new', receiverId: 'user-affiliate', status },
+    });
+
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(store.relations()).toHaveLength(0);
+    expect(prisma.friendRequest.update).not.toHaveBeenCalled();
+  });
+});
