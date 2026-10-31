@@ -6,7 +6,7 @@
  *
  * `DRY_RUN=1` : compte sans rien écrire. Idempotent : rejoué, il ne change plus
  * rien. Il crée la ligne qui manque, relève à FRIEND une ligne née plus bas, et
- * ne baisse JAMAIS une ligne plus haute ni ne défait une baisse gravée.
+ * ne baisse JAMAIS une ligne plus haute ni ne défait une baisse gravée depuis l'acceptation.
  *
  * ⚠ À jouer APRÈS la migration d'index
  * `packages/shared/prisma/migrations/2026-10-31-user-relation-indexes.mongodb.js`

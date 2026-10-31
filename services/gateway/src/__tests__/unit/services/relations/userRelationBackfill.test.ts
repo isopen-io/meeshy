@@ -100,6 +100,48 @@ describe('backfillUserRelations', () => {
     expect(store.relations()[0]).toMatchObject({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND' });
   });
 
+  it('relève une amitié rompue puis RENOUÉE dont l’écriture du lien a échoué : la baisse précède l’acceptation', async () => {
+    const T1 = new Date('2026-10-15T08:00:00Z');
+    const store = relationStore({
+      friendRequests: [request('1', A, B, 'accepted', T1)],
+      relations: [{
+        id: 'aa0000000000000000000009', userLowId: A, userHighId: B, grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC',
+        origin: 'request', transitions: [
+          { actorId: A, from: 'FRIEND', to: 'PUBLIC', at: T0 },
+          { actorId: B, from: 'FRIEND', to: 'PUBLIC', at: T0 },
+        ],
+      }],
+    });
+
+    const dry = await run(store, { dryRun: true });
+    const first = await run(store);
+    const afterFirst = store.relations();
+    const second = await run(store);
+
+    expect(dry).toMatchObject({ raised: 1, alreadyPresent: 0 });
+    expect(first).toMatchObject({ raised: 1, alreadyPresent: 0 });
+    expect(afterFirst[0]).toMatchObject({ grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND', levelSince: T1 });
+    expect(second).toMatchObject({ raised: 0, alreadyPresent: 1 });
+    expect(store.relations()).toEqual(afterFirst);
+  });
+
+  it('à blanc, compte comme l’écriture la paire portée par une demande ANTÉRIEURE puis une POSTÉRIEURE à la baisse', async () => {
+    const T1 = new Date('2026-10-15T08:00:00Z');
+    const seed = () => relationStore({
+      friendRequests: [request('1', A, B, 'accepted', new Date('2026-08-01T08:00:00Z')), request('2', B, A, 'accepted', T1)],
+      relations: [{
+        id: 'aa0000000000000000000009', userLowId: A, userHighId: B, grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC',
+        origin: 'request', transitions: [{ actorId: A, from: 'FRIEND', to: 'PUBLIC', at: T0 }],
+      }],
+    });
+
+    const dry = await run(seed(), { dryRun: true });
+    const real = await run(seed());
+
+    expect(real).toMatchObject({ scanned: 2, raised: 1, alreadyPresent: 1 });
+    expect(dry).toEqual(real);
+  });
+
   it('ignore pending, rejected et blocked : seule une demande ACCEPTÉE fait un ami', async () => {
     const store = relationStore({
       friendRequests: [

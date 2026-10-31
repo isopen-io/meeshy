@@ -21,8 +21,11 @@
  * - `backfillFriendship` (le rattrapage) relève à FRIEND comme l'acceptation —
  *   une demande acceptée se lit FRIEND même quand une ligne est née plus bas
  *   avant le rattrapage (Connaissance automatique) — mais ne défait JAMAIS une
- *   baisse gravée : une ligne dont l'historique porte une baisse a été réglée
- *   par l'une des deux personnes, et rejouer le rattrapage ne la contredit pas.
+ *   baisse gravée APRÈS l'acceptation : elle a été réglée par l'une des deux
+ *   personnes, et rejouer le rattrapage ne la contredit pas. Une baisse
+ *   ANTÉRIEURE à l'acceptation (amitié rompue puis renouée dont l'écriture du
+ *   lien a échoué) ne retient rien : l'acceptation est plus récente. Sans date
+ *   d'acceptation, la baisse l'emporte (fail-closed).
  * - Course : la paire est unique en base (`P2002`). Un écrivain qui perd la
  *   course relit la ligne gagnante et reprend ; une mise à jour porte les
  *   accords LUS dans son `where` (garde optimiste) et relit si la ligne a bougé.
@@ -49,7 +52,7 @@ export type UserRelationRow = {
   readonly userHighId: string;
   readonly grantedByLow?: string | null;
   readonly grantedByHigh?: string | null;
-  readonly transitions?: ReadonlyArray<{ readonly from: string; readonly to: string }> | null;
+  readonly transitions?: ReadonlyArray<{ readonly from: string; readonly to: string; readonly at?: Date | null }> | null;
 };
 
 type NewUserRelation = RelationPairKey & {
@@ -157,8 +160,12 @@ async function moveTo(
 const readPair = (db: UserRelationDb, pair: RelationPairKey) =>
   db.userRelation.findUnique({ where: { userLowId_userHighId: pair } });
 
-const hasRecordedDrop = (row: UserRelationRow): boolean =>
-  (row.transitions ?? []).some((t) => isRelationDrop({ from: parseRelationLevel(t.from), to: parseRelationLevel(t.to) }));
+const dropOutlivesAcceptance = (row: UserRelationRow, acceptedAt: Date | null): boolean =>
+  (row.transitions ?? []).some(
+    (t) =>
+      isRelationDrop({ from: parseRelationLevel(t.from), to: parseRelationLevel(t.to) }) &&
+      (acceptedAt === null || !(t.at instanceof Date) || t.at.getTime() >= acceptedAt.getTime()),
+  );
 
 const atLeastFriend = (grants: Grants): Grants => ({
   low: maxRelationLevel(grants.low, 'FRIEND'),
@@ -168,18 +175,31 @@ const atLeastFriend = (grants: Grants): Grants => ({
 export type FriendshipBackfillPlan = 'create' | 'raise' | 'keep';
 
 /** Ce que le rattrapage ferait d'une paire, sans rien écrire (le `dryRun` le compte). */
-export function friendshipBackfillPlan(row: UserRelationRow | null): FriendshipBackfillPlan {
+export function friendshipBackfillPlan(row: UserRelationRow | null, acceptedAt: Date | null): FriendshipBackfillPlan {
   if (!row) return 'create';
-  if (hasRecordedDrop(row)) return 'keep';
+  if (dropOutlivesAcceptance(row, acceptedAt)) return 'keep';
   const current = grantsOf(row);
   const target = atLeastFriend(current);
   return target.low === current.low && target.high === current.high ? 'keep' : 'raise';
 }
 
+/** La ligne telle que le rattrapage la laisserait : le `dryRun` enchaîne les demandes d'une même paire dessus. */
+export function friendshipBackfillProjection(
+  row: UserRelationRow | null,
+  pair: RelationPairKey,
+  acceptedAt: Date | null,
+): UserRelationRow | null {
+  const plan = friendshipBackfillPlan(row, acceptedAt);
+  if (plan === 'keep') return row;
+  if (plan === 'create' || !row) return { id: 'dry-run', ...pair, grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND', transitions: [] };
+  const target = atLeastFriend(grantsOf(row));
+  return { ...row, grantedByLow: target.low, grantedByHigh: target.high };
+}
+
 async function raiseToFriend(
   db: UserRelationDb,
   pair: RelationPairKey,
-  params: { origin: RelationOrigin; at: Date; keepRecordedDrop: boolean },
+  params: { origin: RelationOrigin; at: Date; respectDropsSince?: { acceptedAt: Date | null } },
 ): Promise<RelationWriteOutcome> {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     const row = await readPair(db, pair);
@@ -187,7 +207,7 @@ async function raiseToFriend(
       if ((await createRow(db, pair, params)) === 'created') return 'created';
       continue;
     }
-    if (params.keepRecordedDrop && hasRecordedDrop(row)) return 'unchanged';
+    if (params.respectDropsSince && dropOutlivesAcceptance(row, params.respectDropsSince.acceptedAt)) return 'unchanged';
     const current = grantsOf(row);
     const target = atLeastFriend(current);
     if (target.low === current.low && target.high === current.high) return 'unchanged';
@@ -205,7 +225,7 @@ export async function recordFriendship(
 ): Promise<RelationWriteOutcome> {
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
-  return raiseToFriend(db, pair, { origin: params.origin, at: params.at, keepRecordedDrop: false });
+  return raiseToFriend(db, pair, { origin: params.origin, at: params.at });
 }
 
 /**
@@ -230,13 +250,18 @@ export async function resetFriendship(
 
 /**
  * Le rattrapage : la demande acceptée se lit FRIEND (création ou relève), sauf
- * baisse gravée dans l'historique de la paire.
+ * baisse gravée dans l'historique de la paire à la date de l'acceptation ou
+ * après. Le nouveau niveau est daté de l'acceptation, à défaut de `now`.
  */
 export async function backfillFriendship(
   db: UserRelationDb,
-  params: { userA: string; userB: string; at: Date },
+  params: { userA: string; userB: string; acceptedAt: Date | null; now: Date },
 ): Promise<RelationWriteOutcome> {
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
-  return raiseToFriend(db, pair, { origin: 'backfill-friend', at: params.at, keepRecordedDrop: true });
+  return raiseToFriend(db, pair, {
+    origin: 'backfill-friend',
+    at: params.acceptedAt ?? params.now,
+    respectDropsSince: { acceptedAt: params.acceptedAt },
+  });
 }

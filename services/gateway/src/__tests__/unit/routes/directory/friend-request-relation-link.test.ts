@@ -23,10 +23,10 @@ jest.mock('../../../../utils/rate-limiter.js', () => ({
 }));
 jest.mock('../../../../utils/withMutationLog', () => ({
   ...(jest.requireActual('../../../../utils/withMutationLog') as object),
-  withMutationLog: jest.fn(async (args: any) => args.op()),
+  withMutationLog: jest.fn(async (args: { op: () => unknown }) => args.op()),
 }));
 jest.mock('../../../../services/engagement/EngagementService', () => ({
-  EngagementService: jest.fn<any>().mockImplementation(() => ({ recordActivity: jest.fn<any>(async () => undefined) })),
+  EngagementService: jest.fn().mockImplementation(() => ({ recordActivity: jest.fn(async () => undefined) })),
 }));
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({ resolveForTargets: async () => new Map() }),
@@ -59,30 +59,32 @@ async function repondre(params: {
   const store = relationStore({ friendRequests: params.demandes, relations: params.liens ?? [] });
   const notificationService = {
     emitFriendRequestCancelled: jest.fn(),
-    retractFriendRequestNotifications: jest.fn<any>(async () => undefined),
-    markFriendRequestNotificationsAsRead: jest.fn<any>(async () => undefined),
-    createFriendAcceptedNotification: jest.fn<any>(async () => undefined),
+    retractFriendRequestNotifications: jest.fn(async () => undefined),
+    markFriendRequestNotificationsAsRead: jest.fn(async () => undefined),
+    createFriendAcceptedNotification: jest.fn(async () => undefined),
     emitFriendRequestAccepted: jest.fn(),
   };
   const prisma = {
-    user: { findUnique: jest.fn<any>(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })) },
+    user: { findUnique: jest.fn(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })) },
     friendRequest: {
       ...store.prisma.friendRequest,
-      update: jest.fn<any>(async (args: any) => ({ ...(await store.prisma.friendRequest.update(args)), sender: PARTIE, receiver: PARTIE })),
+      update: jest.fn(async (args: Parameters<typeof store.prisma.friendRequest.update>[0]) => ({ ...(await store.prisma.friendRequest.update(args)), sender: PARTIE, receiver: PARTIE })),
     },
     userRelation: params.userRelation ?? store.prisma.userRelation,
     conversation: {
-      findFirst: jest.fn<any>(async () => null),
-      create: jest.fn<any>(async () => ({ id: 'convid00000000000000001', identifier: 'abc', type: 'direct' })),
+      findFirst: jest.fn(async () => null),
+      create: jest.fn(async () => ({ id: 'convid00000000000000001', identifier: 'abc', type: 'direct' })),
     },
   };
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma as never);
   app.decorate('notificationService', (params.notifier === false ? null : notificationService) as never);
   app.decorate('socialEvents', null);
-  app.decorate('authenticate', async (req: any) => {
-    req.user = { userId: MOI };
-    req.authContext = { isAuthenticated: true, type: 'user', userId: MOI, registeredUser: { id: MOI, role: 'USER' } };
+  app.decorate('authenticate', async (req: object) => {
+    Object.assign(req, {
+      user: { userId: MOI },
+      authContext: { isAuthenticated: true, type: 'user', userId: MOI, registeredUser: { id: MOI, role: 'USER' } },
+    });
   });
   await app.register(directoryFriendRequestsRoutes, { prefix: PREFIXE });
   await app.ready();
@@ -108,7 +110,7 @@ describe('#13926 — accepter une demande écrit le lien FRIEND/FRIEND', () => {
   });
 
   it('ne fait pas échouer l’acceptation quand l’écriture du lien échoue — la demande acceptée reste la vérité de repli', async () => {
-    const down = { findUnique: jest.fn<any>(async () => { throw new Error('mongo down'); }) };
+    const down = { findUnique: jest.fn(async () => { throw new Error('mongo down'); }) };
 
     const { status } = await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], userRelation: down });
 
