@@ -110,6 +110,7 @@ internal fun StoryCanvasSurface(
     selectedMediaId: String? = null,
     stack: List<SceneObjectRef>,
     pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
+    live: ComposerLiveSlot? = null,
 ) {
     val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
@@ -184,6 +185,7 @@ internal fun StoryCanvasSurface(
                         }
                         .sceneLook(look),
                 )
+                live?.takeIf { it.subject.background }?.let { slot -> LiveBackground(slot, transform, look, fit = !filled) }
             }
             if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -267,7 +269,11 @@ internal fun StoryCanvasSurface(
                             )
                         }
                         ComposerObjectKind.MEDIA -> mediaById[ref.id]?.let { frame ->
-                            PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = frame.key == selectedMediaId)
+                            PlacedMediaLayer(
+                                frame, canvasWidthPx, canvasHeightPx, placedMediaGestures,
+                                selected = frame.key == selectedMediaId,
+                                live = live?.takeIf { !it.subject.background && it.subject.id == frame.key },
+                            )
                         }
                         ComposerObjectKind.STICKER -> stickerById[ref.id]?.let { sticker ->
                             StickerLayer(
@@ -325,6 +331,22 @@ private fun SceneBackdropLayer(backdrop: StoryBackdrop, model: Any) {
         )
         else -> Box(Modifier.fillMaxSize().background(hexColor(StoryBackdrop.BLACK.solidHex.orEmpty())))
     }
+}
+
+/** La vidéo de fond sélectionnée joue à la place de son affiche, à la même pose, sous le même look (#13973, A-E3). */
+@Composable
+private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransform, look: SceneLookRecipe, fit: Boolean) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = transform.scale
+                scaleY = transform.scale
+                translationX = transform.offsetX
+                translationY = transform.offsetY
+            }
+            .sceneLook(look),
+    ) { slot.Picture(fit = fit) }
 }
 
 private const val BACKDROP_BLUR_DP = 24
