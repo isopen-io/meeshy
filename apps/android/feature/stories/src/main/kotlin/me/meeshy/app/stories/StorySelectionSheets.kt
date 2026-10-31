@@ -54,20 +54,23 @@ internal fun StorySelectionSheet(
                 onDismiss = onDone,
             )
         }
-        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
         StoryComposerSheet.PLACE_REPOINT -> StoryReferenceSheet(open, state, viewModel, onDone)
-        StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
+        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
+        StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
     }
 }
 
-/** Une feuille de sélection est servie tant que son élément l'est : retiré ou désélectionné, elle se referme. */
+/**
+ * Une feuille de sélection est servie tant que son élément l'est : retiré ou désélectionné, elle se referme. Les portes du
+ * rail et du socle (stickers, son, audience, références) ne servent aucun élément : elles le sont toujours (#13910).
+ */
 internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = when (sheet) {
     StoryComposerSheet.STICKER_SWAP -> selectedSticker != null
     StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
     StoryComposerSheet.OBJECT_TIME -> selectedObjectTiming != null
-    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
     StoryComposerSheet.PLACE_REPOINT -> selectedPlace != null
-    StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
+    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
+    StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }
 
 /** Le Modifier d'un média ou d'un son : ses sections en pastilles libellées, la section ouverte dessous — ce que la colonne droite portait. */

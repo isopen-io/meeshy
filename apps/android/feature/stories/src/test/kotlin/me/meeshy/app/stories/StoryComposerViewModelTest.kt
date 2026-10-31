@@ -1570,7 +1570,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onAddTextElement at the per-slide cap surfaces a warning and adds nothing`() = runTest {
         val vm = viewModel()
-        repeat(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE) { vm.onAddTextElement() }
+        repeat(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE) { vm.addWrittenText("t$it") }
         assertThat(vm.state.value.selectedSlideTextElements).hasSize(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE)
 
         vm.onAddTextElement()
@@ -1724,7 +1724,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onDuplicateTextElement at the per-slide cap surfaces a warning and adds nothing`() = runTest {
         val vm = viewModel()
-        repeat(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE) { vm.onAddTextElement() }
+        repeat(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE) { vm.addWrittenText("t$it") }
         val id = vm.state.value.selectedTextElement!!.id
 
         vm.onDuplicateTextElement(id)
@@ -1736,7 +1736,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onDuplicateTextElement on an unknown id is inert and selects nothing new`() = runTest {
         val vm = viewModel()
-        vm.onAddTextElement()
+        vm.addWrittenText("un")
         vm.onDeselectTextElement()
 
         vm.onDuplicateTextElement("ghost")
@@ -1748,9 +1748,9 @@ class StoryComposerViewModelTest {
     @Test
     fun `onReorderTextElement sends the edited element to the back and keeps it selected`() = runTest {
         val vm = viewModel()
-        vm.onAddTextElement()
+        vm.addWrittenText("un")
         val first = vm.state.value.selectedTextElement!!.id
-        vm.onAddTextElement()
+        vm.addWrittenText("deux")
         val second = vm.state.value.selectedTextElement!!.id
 
         vm.onReorderTextElement(second, StoryZOrder.TO_BACK)
@@ -1764,9 +1764,9 @@ class StoryComposerViewModelTest {
     @Test
     fun `onReorderTextElement brings the edited element to the front`() = runTest {
         val vm = viewModel()
-        vm.onAddTextElement()
+        vm.addWrittenText("un")
         val first = vm.state.value.selectedTextElement!!.id
-        vm.onAddTextElement()
+        vm.addWrittenText("deux")
         val second = vm.state.value.selectedTextElement!!.id
 
         vm.onReorderTextElement(first, StoryZOrder.TO_FRONT)
@@ -2139,9 +2139,9 @@ class StoryComposerViewModelTest {
     @Test
     fun `styling one element of several leaves the others untouched`() = runTest {
         val vm = viewModel()
-        vm.onAddTextElement()
+        vm.addWrittenText("un")
         val first = vm.state.value.selectedTextElement!!.id
-        vm.onAddTextElement()
+        vm.addWrittenText("deux")
         val second = vm.state.value.selectedTextElement!!.id
 
         vm.onTextElementStyle(first, StoryTextStyle.CLASSIC)
@@ -2376,7 +2376,7 @@ class StoryComposerViewModelTest {
     fun `selecting a text element clears a selected sticker`() = runTest {
         val vm = viewModel()
         vm.onAddSticker("😀")
-        vm.onAddTextElement()
+        vm.addWrittenText("un")
         val elementId = vm.state.value.selectedTextElement!!.id
 
         // de-select then re-select the text element to exercise onSelectTextElement
@@ -2719,7 +2719,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `onElementMenuAction DUPLICATE clones the element and closes the menu`() = runTest {
         val vm = viewModel()
-        vm.onAddTextElement()
+        vm.addWrittenText("un")
         val id = vm.state.value.selectedTextElement!!.id
         vm.onOpenElementMenu(id)
 
@@ -2745,10 +2745,10 @@ class StoryComposerViewModelTest {
     @Test
     fun `onElementMenuAction BRING_FORWARD moves the element one step forward, as iOS, and closes the menu`() = runTest {
         val vm = viewModel()
-        vm.onAddTextElement()
+        vm.addWrittenText("un")
         val back = vm.state.value.selectedTextElement!!.id
-        vm.onAddTextElement()
-        vm.onAddTextElement()
+        vm.addWrittenText("deux")
+        vm.addWrittenText("trois")
         vm.onOpenElementMenu(back)
 
         vm.onSceneMenuAction(SceneObjectMenu.Action.BRING_FORWARD)

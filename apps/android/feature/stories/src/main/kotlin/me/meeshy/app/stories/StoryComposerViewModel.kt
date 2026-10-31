@@ -625,7 +625,7 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     private fun reduce(gesture: String? = null, next: (StoryComposerUiState) -> StoryComposerUiState) {
-        _state.update(next)
+        _state.update { StoryComposerTextReducer.blankLeftBehind(it, next(it)) }
         record(gesture)
     }
 

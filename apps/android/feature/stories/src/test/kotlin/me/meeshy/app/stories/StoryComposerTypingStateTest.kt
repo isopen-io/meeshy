@@ -151,7 +151,7 @@ class StoryComposerTypingStateTest {
     @Test
     fun `a choice applies to the text being written, and OK ends the writing without removing it`() {
         val vm = viewModel()
-        vm.onAddTextElement()
+        vm.addWrittenText("Bonjour")
         show(vm)
 
         compose.onNodeWithContentDescription("Color").performClick()
