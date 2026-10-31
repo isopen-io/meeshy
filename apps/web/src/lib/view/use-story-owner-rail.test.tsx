@@ -11,7 +11,7 @@ import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import * as storySaveStore from '@/lib/stories/save-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { useStoryOwnerRail, type StoryOwnerRail } from './use-story-owner-rail';
+import { useStoryOwnerRail, type StoryOwnerRail, type StorySceneExporter } from './use-story-owner-rail';
 
 /**
  * `useStoryOwnerRail` (#7116) — l'hôte du plan AUTEUR, mesuré par son API
@@ -77,7 +77,7 @@ function anchorHost(delivered: string[]): FileDeliveryHost {
   };
 }
 
-function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null): Probe {
+function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null, sceneExporter?: StorySceneExporter): Probe {
   const announced: string[] = [];
   const delivered: string[] = [];
   const deliveryHost = host ?? anchorHost(delivered);
@@ -85,7 +85,7 @@ function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null =
   const announce = (message: string) => announced.push(message);
 
   function Harness({ story, online }: { readonly story: StoryPlaybackStory | undefined; readonly online: boolean }) {
-    seen.push(useStoryOwnerRail({ story, online, announce, language: 'fr', deliveryHost, gallerySaver }));
+    seen.push(useStoryOwnerRail({ story, online, announce, language: 'fr', deliveryHost, gallerySaver, preferredLanguages: ['es', 'fr'], ...(sceneExporter !== undefined ? { sceneExporter } : {}) }));
     return null;
   }
 
@@ -331,5 +331,52 @@ describe('useStoryOwnerRail — « Enregistrer » dans la coque Android range la
     await settle();
     expect(probe.delivered).toEqual(['meeshy-m-st-a.jpg']);
     expect(probe.announced).toEqual(['Story enregistrée']);
+  });
+});
+
+const SCENE = { v: 3, scenes: [{ id: 's', objects: [{ id: 't', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 1, transform: {}, payload: { text: 'Salut' } }] }] };
+
+describe('useStoryOwnerRail — une story à SCÈNE s’enregistre composée, telle qu’on la voit (#13873)', () => {
+  test('une story de TEXTE seul offre « Enregistrer » : sa scène se compose', () => {
+    probe = mountProbe();
+    probe.render({ ...storyOf('st-texte', false), storyEffects: SCENE });
+    expect(Object.keys(probe.rail().handlers).sort()).toEqual(['save', 'share', 'views']);
+  });
+
+  test('« Enregistrer » passe par la composition, avec le Prisme du lecteur, et l’annonce', async () => {
+    const calls: { readonly fileStem: string; readonly languages: readonly string[]; readonly placeHere: string }[] = [];
+    const exporter: StorySceneExporter = async (input) => {
+      calls.push({ fileStem: input.subject.fileStem, languages: input.preferredLanguages, placeHere: input.placeHere });
+      input.job.report(0.5);
+      return 'saved';
+    };
+    probe = mountProbe(undefined, null, exporter);
+    probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(calls).toEqual([{ fileStem: 'story-st-a', languages: ['es', 'fr'], placeHere: 'Ici' }]);
+    expect(probe.delivered).toEqual([]);
+    expect(probe.announced).toEqual(['Story enregistrée']);
+    expect(probe.rail().saving).toBeNull();
+  });
+
+  test('l’anneau suit la composition, et l’annuler l’arrête', async () => {
+    let seenSignal: AbortSignal | null = null;
+    const exporter: StorySceneExporter = (input) =>
+      new Promise((resolve) => {
+        seenSignal = input.job.signal;
+        input.job.report(0.4);
+        input.job.signal.addEventListener('abort', () => resolve('cancelled'));
+      });
+    probe = mountProbe(undefined, null, exporter);
+    probe.render({ ...storyOf('st-b'), storyEffects: SCENE });
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(probe.rail().saving).toMatchObject({ progress: 0.4, cancellable: true });
+    act(() => probe?.rail().cancelSave());
+    await settle();
+    expect((seenSignal as AbortSignal | null)?.aborted).toBe(true);
+    expect(probe.rail().saving).toBeNull();
+    expect(probe.announced).toEqual(['Export annulé']);
   });
 });

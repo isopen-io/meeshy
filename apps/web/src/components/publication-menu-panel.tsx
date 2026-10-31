@@ -3,13 +3,16 @@ import { createPortal } from 'react-dom';
 
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import type { PostMenuEntry } from '@/lib/feed/publication-menu';
+import { launchSceneExport } from '@/lib/export/scene/scene-export-launch';
+import { postExportSubject } from '@/lib/export/scene/scene-export-subject';
 import { translate } from '@/lib/i18n-catalog';
+import { translateSceneExport } from '@/lib/i18n-scene-export-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { href, navigate } from '@/routes/route-table';
 
 import { ContentRemovalSheet } from './content-removal-sheet';
-import type { PostMenuHost } from './feed-post-menu';
+import type { PostMenuHost, PostMenuSceneExport } from './feed-post-menu';
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { LINKS_GLYPHS } from './glyphs-links';
@@ -47,6 +50,8 @@ export type PostMenuPanelProps = {
   readonly bookmarked: boolean;
   /** Voir `FeedPostMenu` — « Modifier » rouvre le studio (#9317). */
   readonly studioEditable: boolean;
+  /** Voir `FeedPostMenu` — « Sauvegarder » et « Imager » (#13873). */
+  readonly sceneExport?: PostMenuSceneExport | undefined;
   readonly menu: PostMenuHost;
   readonly onShare?: ((postId: string) => void) | undefined;
   readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
@@ -79,6 +84,7 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
     originalLanguage,
     bookmarked,
     studioEditable,
+    sceneExport,
     menu,
     onShare,
     onGesture,
@@ -99,6 +105,10 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
     setRemoving,
   } = props;
   const language = currentInterfaceLanguage();
+  const exportScene = (mode: 'save' | 'imager') => {
+    const subject = sceneExport === undefined ? null : postExportSubject(sceneExport);
+    if (subject !== null) void launchSceneExport({ subject, mode });
+  };
 
   const items: readonly { readonly id: PostMenuEntry; readonly label: string; readonly icon: ReactNode; readonly run: () => void }[] = entries.map(
     (id) => {
@@ -109,6 +119,10 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
           return { id, label: translate(language, 'feed.post.menu.copy_text'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.copy} size={16} />, run: () => menu.onCopyText(text ?? '') };
         case 'share':
           return { id, label: translate(language, 'feed.post.action.share'), icon: <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={16} />, run: () => onShare?.(postId) };
+        case 'saveMedia':
+          return { id, label: translateSceneExport(language, 'sceneExport.menu.save'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.downloadSimple} size={16} />, run: () => exportScene('save') };
+        case 'imager':
+          return { id, label: translateSceneExport(language, 'sceneExport.menu.imager'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={16} />, run: () => exportScene('imager') };
         case 'save':
           return {
             id,

@@ -494,7 +494,7 @@ export default function StoryScreen() {
    * comme `commentsHost` deux blocs plus haut. Déclaré ICI, AVANT le clavier,
    * pour que `viewersOpen` puisse rejoindre la cession `layerOpen`.
    */
-  const ownerRail = useStoryOwnerRail({ story: currentStory, online, announce, language: interfaceLanguage });
+  const ownerRail = useStoryOwnerRail({ story: currentStory, online, announce, language: interfaceLanguage, preferredLanguages: language.prism });
   const viewersOpen = ownerRail.viewers.postId !== null;
   /* « ENVOYER » (#8884) : la feuille d'envoi commune, ouverte avec la story
      regardée ; la story boucle dessous (`engaged` plus bas, #9821). */

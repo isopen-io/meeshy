@@ -6,6 +6,8 @@ import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import { storyDownloadableMedia, storyExportUrl } from '@/lib/api/story-export';
+import { gestureAudioContext, storyExportSubject, type SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
+import type { SceneExportResult } from '@/lib/export/scene/scene-export-run';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { browserFileDeliveryHost, hasFileDeliveryDoor, type FileDeliveryHost } from '@/lib/media/file-delivery-host';
@@ -130,6 +132,61 @@ async function runStoryExport(params: {
   }
 }
 
+/**
+ * **UNE STORY À SCÈNE S'EXPORTE TELLE QU'ON LA VOIT** (#13873) — tous ses
+ * calques, chaque slide à sa durée, la piste son qui JOUE (fond, vocaux,
+ * vidéos, gains et coupures respectés), rendus par le moteur d'export
+ * (`lib/export/scene/`), chargé au geste. Une story v1 (sans document) garde
+ * le téléchargement du média filigrané par la passerelle.
+ */
+export type StorySceneExporter = (input: {
+  readonly subject: SceneExportSubject;
+  readonly audioContext: AudioContext | null;
+  readonly preferredLanguages: readonly string[];
+  readonly placeHere: string;
+  readonly host: FileDeliveryHost;
+  readonly gallerySaver: GallerySaver | null | undefined;
+  readonly job: storySaveStore.StorySaveJobHandle;
+}) => Promise<SceneExportResult>;
+
+const browserStorySceneExporter: StorySceneExporter = async (input) => {
+  const [{ startSceneExport }, { currentGallerySaver }] = await Promise.all([
+    import('@/lib/export/scene/scene-export-browser'),
+    import('@/lib/gallery/gallery-saver'),
+  ]);
+  return startSceneExport({
+    subject: input.subject,
+    mode: 'save',
+    audioContext: input.audioContext,
+    preferredLanguages: input.preferredLanguages,
+    placeHere: input.placeHere,
+    host: input.host,
+    gallerySaver: input.gallerySaver === undefined ? currentGallerySaver() : input.gallerySaver,
+    chooseLength: async () => 4,
+    signal: input.job.signal,
+    onProgress: input.job.report,
+    onDelivering: input.job.lockDelivery,
+  });
+};
+
+const SCENE_NOTICE: Readonly<Record<SceneExportResult, StorySaveNoticeKey>> = {
+  saved: 'story.save.success',
+  cancelled: 'story.save.cancelled',
+  retry: 'story.save.retry',
+  failed: 'story.save.failed',
+  unsupported: 'story.save.failed',
+};
+
+async function runComposedStoryExport(input: Parameters<StorySceneExporter>[0] & { readonly exporter: StorySceneExporter }): Promise<StorySaveNoticeKey> {
+  try {
+    return SCENE_NOTICE[await input.exporter(input)];
+  } catch {
+    return input.job.signal.aborted ? 'story.save.cancelled' : 'story.save.offline';
+  } finally {
+    input.job.finish();
+  }
+}
+
 export function useStoryOwnerRail(params: {
   readonly story: StoryPlaybackStory | undefined;
   readonly online: boolean;
@@ -139,8 +196,14 @@ export function useStoryOwnerRail(params: {
   readonly deliveryHost?: FileDeliveryHost;
   /** Injectable pour les témoins ; la galerie de la coque, chargée au premier « Enregistrer », par défaut. */
   readonly gallerySaver?: GallerySaver | null;
+  /** Le Prisme du lecteur — les textes de la scène exportée sont ceux qu'il lit. */
+  readonly preferredLanguages?: readonly string[];
+  /** Injectable pour les témoins ; le moteur d'export du navigateur par défaut. */
+  readonly sceneExporter?: StorySceneExporter;
 }): StoryOwnerRail {
   const { story, online, announce, language, gallerySaver } = params;
+  const preferredLanguages = params.preferredLanguages;
+  const sceneExporter = params.sceneExporter ?? browserStorySceneExporter;
   const storyId = story?.id;
   const viewers = useCommentsSheetHost(storyId);
   const host = useMemo(() => params.deliveryHost ?? browserFileDeliveryHost(), [params.deliveryHost]);
@@ -163,6 +226,7 @@ export function useStoryOwnerRail(params: {
    * pratiquent déjà : la loi autorise, le gestionnaire (ou son absence) décide
    * de l'ATTEIGNABILITÉ, indépendamment bouton par bouton. */
   const exportMedia = useMemo(() => storyDownloadableMedia(story), [story]);
+  const sceneSubject = useMemo(() => storyExportSubject(story), [story]);
 
   /* La story BOUCLE sous la feuille « Vues » (#9821) : c'est le lecteur
      qui le décide (`resolveStoryPlaybackHold`), le rail ne la fige pas. */
@@ -177,7 +241,7 @@ export function useStoryOwnerRail(params: {
     if (story === undefined) return {};
     const storyId = story.id;
     const views = () => viewers.open(storyId);
-    if (exportMedia === null) return { views };
+    if (exportMedia === null && sceneSubject === null) return { views };
     /* « Partager » ouvre la feuille d'envoi COMMUNE (#8884) — une personne,
        plusieurs, un groupe, ou une publication ; « Plus d'options… » y garde
        la feuille du système (`MeeshySharePlugin` sur la coque Android). Le
@@ -196,13 +260,35 @@ export function useStoryOwnerRail(params: {
           announce(translate(language, 'story.save.offline'));
           return;
         }
+        /* Le contexte audio naît DANS le geste, avant tout `await`. */
+        const audioContext = sceneSubject === null ? null : gestureAudioContext();
         const job = storySaveStore.start(storyId);
-        if (job === null) return;
+        if (job === null) {
+          void audioContext?.close().catch(() => undefined);
+          return;
+        }
+        if (sceneSubject !== null) {
+          void runComposedStoryExport({
+            exporter: sceneExporter,
+            subject: sceneSubject,
+            audioContext,
+            preferredLanguages: preferredLanguages ?? [language],
+            placeHere: translate(language, 'scene.place.here'),
+            host,
+            gallerySaver,
+            job,
+          }).then((key) => announce(translate(language, key)));
+          return;
+        }
+        if (exportMedia === null) {
+          job.finish();
+          return;
+        }
         const url = storyExportUrl({ source: apiDeps.source, base: apiConfig.base, postId: storyId, media: exportMedia });
         void runStoryExport({ job, url, mediaId: exportMedia.id, host, gallerySaver }).then((key) => announce(translate(language, key)));
       },
     };
-  }, [story, exportMedia, host, gallerySaver, online, language, announce, viewers.open]);
+  }, [story, exportMedia, sceneSubject, sceneExporter, preferredLanguages, host, gallerySaver, online, language, announce, viewers.open]);
 
   const cancelSave = useCallback(() => {
     if (storyId !== undefined) storySaveStore.cancel(storyId);
