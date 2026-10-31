@@ -285,7 +285,7 @@ extension MeeshyComposerHost {
     var sceneSurface: some View {
         ComposerSceneSurface(
             slideRailSlot: slideRailSlot,
-            onClose: onDismiss,
+            onClose: { requestComposerClose() },
             slide: Binding(
                 get: { ComposerLookComparison.shown(viewModel.currentSlide, comparing: comparingLookObjectId) },
                 set: { viewModel.currentSlide = ComposerLookComparison.written($0, over: viewModel.currentSlide,
@@ -913,7 +913,7 @@ extension MeeshyComposerHost {
     /// **Le contenu de l'encart est un NŒUD** (#8387) : ce qui occupe le bas
     /// (`socleSlot`) est évalué dans son propre cadre, hors du type de la pile.
     var composerStack: some View {
-        surfaceWithIntakePortals.composerFloatingSocle { socleSlotNode }
+        withAnchoredSheet(surfaceWithIntakePortals.composerFloatingSocle { socleSlotNode })
     }
 
     /// Ce qui occupe l'encart du bas : le carrousel d'effets, ou le socle.

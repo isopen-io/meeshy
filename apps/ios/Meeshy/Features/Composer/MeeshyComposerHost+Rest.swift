@@ -31,11 +31,9 @@ extension MeeshyComposerHost {
                 ComposerSceneMoreMenuItems(
                     entries: sceneMoreEntries,
                     isAnimated: sceneIsAnimated,
-                    duration: TimeInterval(viewModel.currentSlideDuration),
                     onEntry: { performMore($0) },
                     onAnimation: { toggleSceneAnimation() },
-                    onTimeline: { toggleSceneFrise() },
-                    onDuration: { viewModel.currentSlideDuration = Float($0) })
+                    onTimeline: { toggleSceneFrise() })
             }
         )
     }
@@ -55,7 +53,8 @@ extension MeeshyComposerHost {
         case .saveToPhotos: perform(.saveToPhotos)
         case .share: perform(.share)
         case .clearAll: sceneClearAllAsked = true
-        case .animation, .slideDuration, .writePost, .mention, .hashtags, .place: break
+        case .slideDuration: presentedPortal = .slideDuration
+        case .animation, .writePost, .mention, .hashtags, .place: break
         }
     }
 

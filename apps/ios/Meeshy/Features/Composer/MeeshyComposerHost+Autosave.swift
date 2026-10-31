@@ -51,7 +51,13 @@ extension MeeshyComposerHost {
     /// brouillon, et une humeur n'est ni une story, ni un post, ni un réel.
     func autosaveState() -> ComposerAutosaveState? {
         guard mountedSurface == .document, selectedFormat != .status else { return nil }
-        return ComposerAutosaveState(
+        return composedAutosaveState()
+    }
+
+    /// Ce que le meuble tient, quelle que soit la surface montée : la question
+    /// de fermeture y lit la matière (`ComposerCloseGuard`).
+    func composedAutosaveState() -> ComposerAutosaveState {
+        ComposerAutosaveState(
             format: selectedFormat,
             text: documentText,
             background: documentBackground,

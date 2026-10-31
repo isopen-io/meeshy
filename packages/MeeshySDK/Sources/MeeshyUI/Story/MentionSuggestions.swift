@@ -265,8 +265,11 @@ public struct StoryMentionPickerSheet: View {
     /// affichage qui n'arriverait jamais.
     let modes: [PostReferenceDisplay]
     let onChange: ([ComposerReference]) -> Void
+    /// Le libellé de la validation : « OK » dans le compositeur (#13839).
+    var doneTitle: String?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshySheetClose) private var hostClose
     @State private var query = ""
 
     /// **L'état d'avant l'ouverture, retenu pour pouvoir le RENDRE** (#6134).
@@ -285,10 +288,24 @@ public struct StoryMentionPickerSheet: View {
 
     public init(references: [ComposerReference],
                 modes: [PostReferenceDisplay] = PostReferenceDisplay.declarable,
+                doneTitle: String? = nil,
                 onChange: @escaping ([ComposerReference]) -> Void) {
         self.references = references
         self.modes = modes
+        self.doneTitle = doneTitle
         self.onChange = onChange
+    }
+
+    /// **OK reste grisé tant que personne n'est nommé** (#13839) : valider une
+    /// liste vide ne valide rien, et « Annuler » sert à partir. Sauf quand la
+    /// liste s'est VIDÉE : retirer tout le monde est une modification, et
+    /// « Annuler » rendrait les mentions retirées.
+    public static func canFinish(references: [ComposerReference], initial: [ComposerReference]) -> Bool {
+        !references.isEmpty || references != initial
+    }
+
+    private func close() {
+        MeeshySheetClose.perform(host: hostClose, system: { dismiss() })
     }
 
     public var body: some View {
@@ -302,13 +319,15 @@ public struct StoryMentionPickerSheet: View {
             MeeshySheetHeader(
                 title: String(localized: "reference.sheet.title",
                               defaultValue: "Mentionner", bundle: .module),
+                doneTitle: doneTitle,
+                canFinish: Self.canFinish(references: references, initial: instantane ?? references),
                 onCancel: {
                     // RENDRE, puis fermer. L'ordre compte : fermer d'abord
                     // démonterait la vue avant que l'hôte ait reçu l'état.
                     if let instantane { onChange(instantane) }
-                    dismiss()
+                    close()
                 },
-                onDone: { dismiss() }
+                onDone: { close() }
             )
             searchField
             if !references.isEmpty { alreadyReferenced }

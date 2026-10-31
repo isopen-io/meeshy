@@ -28,7 +28,7 @@ extension MeeshyComposerHost {
                 allowsCapture: profile.allowsCapture
             ),
             focusesOnAppear: ComposerSurfaceRouting.focusesContentOnAppear(opening: profile.opensWith),
-            onClose: onDismiss,
+            onClose: { requestComposerClose() },
             onTool: { tool in handleDocumentTool(tool) },
             slideRailSlot: slideRailSlot,
             onPickBackground: { hex in

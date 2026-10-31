@@ -2655,10 +2655,16 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             compacte.contains("onClose"),
             "La surface document doit recevoir une fermeture — sans elle, c'est un écran dont on ne sort pas."
         )
+        // #13839 (L3) : la sortie passe par la QUESTION « Fermer le brouillon ? »,
+        // qui aboutit à la fermeture du MEUBLE — jamais une seconde sortie.
         XCTAssertTrue(
-            compacte.contains("onDismiss"),
-            "Et cette fermeture est celle du MEUBLE (`onDismiss`), pas une seconde sortie fabriquée sur place."
+            compacte.contains("requestComposerClose()"),
+            "Et cette fermeture est celle du MEUBLE, gardée par `requestComposerClose` (#13839)."
         )
+        let garde = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Composer/MeeshyComposerHost+AnchoredSheet.swift")))
+        XCTAssertTrue(garde.contains("funcrequestComposerClose(){"), "La garde de fermeture est nommée.")
+        XCTAssertTrue(garde.contains("onDismiss()"), "Elle aboutit à `onDismiss`, la sortie du meuble.")
     }
 
     /// Garde NÉGATIVE — l'interdit de publication, ÉTENDU au bloc de la surface

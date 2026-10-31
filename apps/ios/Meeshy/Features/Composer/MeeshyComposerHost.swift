@@ -448,6 +448,9 @@ struct MeeshyComposerHost: View {
     @StateObject var sceneMentionBox = ComposerMentionControllerBox()
 
     @State var presentedPortal: ComposerPortal?
+    /// Le haut de la feuille ancrée (global) et la question de fermeture (#13839).
+    @State var anchoredSheetTop: CGFloat?
+    @State var closeQuestion: ComposerCloseQuestion?
 
     /// **Ce que le RAIL a posé.**
     ///

@@ -43,6 +43,8 @@ extension MeeshyComposerHost {
         case .camera:       documentCameraSheet
         case .hashtag:      composerHashtagSheet
         case .audience:     composerAudienceSheet
+        case .background:   composerBackgroundSheet
+        case .slideDuration: composerDurationSheet
         }
     }
 
@@ -198,15 +200,7 @@ extension MeeshyComposerHost {
         // six alimentent une feuille ; `storyPaste` alimente AUSSI le canvas,
         // qui est plus bas — un injecteur posé haut sert les deux, l'inverse
         // n'est pas vrai.
-        .storyLocationPickerProvided()
-        .storyCameraCaptureProvided()
-        .storyRecentCameraRollProvided()
-        .storyPasteProvided()
-        .storyStickerLibraryProvided()
-        // L'onglet « Lieu » de la palette (#4579). Absent — jamais grisé —
-        // quand l'autorisation de localisation est refusée : c'est l'injecteur
-        // qui le décide, pas la feuille.
-        .stickerNearbyPlacesProvided()
+        .composerPortalProviders()
         // **La porte « Stickers » de l'atelier ouvre la feuille du MEUBLE**
         // (#9189) : l'atelier n'en monte plus à lui, il la demande. Une seule
         // feuille, celle de la conversation, avec tous ses onglets.
@@ -302,5 +296,21 @@ extension MeeshyComposerHost {
             }
             Button(ComposerMediaSourcePolicy.cancel, role: .cancel) {}
         }
+    }
+}
+
+extension View {
+    /// **Les six fournisseurs que lit toute feuille du meuble** — système ou
+    /// ancrée (#13839) : une seule liste, posée aux deux présentateurs.
+    /// L'onglet « Lieu » de la palette (#4579) est absent — jamais grisé —
+    /// quand l'autorisation de localisation est refusée : c'est l'injecteur
+    /// qui le décide, pas la feuille.
+    func composerPortalProviders() -> some View {
+        self.storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
+            .storyPasteProvided()
+            .storyStickerLibraryProvided()
+            .stickerNearbyPlacesProvided()
     }
 }

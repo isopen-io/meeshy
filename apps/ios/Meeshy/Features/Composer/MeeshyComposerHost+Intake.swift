@@ -341,7 +341,7 @@ extension MeeshyComposerHost {
             // Avec un média de fond, la même porte ouvre le CADRE.
             HapticFeedback.light()
             let bande = ComposerSceneBand.forBackgroundDoor(hasBackgroundMedia: sceneHasBackgroundMedia)
-            requestedSceneBand = requestedSceneBand == bande ? nil : bande
+            if bande == .palette { presentedPortal = .background } else { requestedSceneBand = requestedSceneBand == bande ? nil : bande }
         case .description:
             // La SEULE façon d'ouvrir la description sur la scène incrustée :
             // aucun champ permanent ne l'affiche dès qu'un texte existe.

@@ -120,7 +120,7 @@ extension MeeshyComposerHost {
         case .pickBackground:
             // Bascule : le même geste ouvre et referme la bande. « Ouvrir »
             // sans « refermer » rendrait les ≈ 170 pt à sens unique.
-            requestedSceneBand = requestedSceneBand == .palette ? nil : .palette
+            presentedPortal = .background
 
         case .removeBackground:
             // L'INTENTION de l'auteur est `documentBackground` : c'est elle qui

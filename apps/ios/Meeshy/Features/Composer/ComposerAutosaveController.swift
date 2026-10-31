@@ -29,6 +29,8 @@ final class ComposerAutosaveController: ObservableObject {
     private var mayWrite = false
     private(set) var ownsStoredDraft = false
     private(set) var isDiscarded = false
+    /// Le brouillon survivra-t-il à la fermeture ? (`ComposerCloseGuard`)
+    var keepsDraft: Bool { mayWrite && !isDiscarded }
     private(set) var didBind = false
     nonisolated(unsafe) private var pending: Task<Void, Never>?
     private var latestCapture: Capture?

@@ -68,6 +68,13 @@ final class FeedbackToastManager: ObservableObject {
         present(FeedbackToast(message: message, type: .error, isTappable: true), tapAction: tapAction)
     }
 
+    /// Un AVERTISSEMENT bref — une limite atteinte n'est pas une erreur : la
+    /// vibration d'avertissement, un toast d'information, l'annonce VoiceOver.
+    func showNotice(_ message: String) {
+        HapticFeedback.warning()
+        present(FeedbackToast(message: message, type: .info))
+    }
+
     func showSuccess(_ message: String) {
         HapticFeedback.success()
         present(FeedbackToast(message: message, type: .success))

@@ -79,6 +79,7 @@ struct AudioPostComposerView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshySheetClose) private var hostClose
     var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioRecorder = AudioRecorderManager()
 
@@ -648,7 +649,7 @@ struct AudioPostComposerView: View {
         if let url = recordedURL {
             try? FileManager.default.removeItem(at: url)
         }
-        dismiss()
+        MeeshySheetClose.perform(host: hostClose, system: { dismiss() })
     }
 
     /// **Publier applique le ROGNAGE.**

@@ -409,7 +409,16 @@ struct ComposerSceneSurface: View {
 
     private var historyIsOnTheScene: Bool { ComposerRestChrome.historyIsShown(restState) }
 
+    /// Une feuille ancrée ouverte retire le repos (#13839, L3) : la scène
+    /// réduite ne porte que ce qu'on édite.
     private var restChrome: some View {
+        restChromeContent
+            .opacity(restChromeServed ? 1 : 0)
+            .allowsHitTesting(restChromeServed)
+            .accessibilityHidden(!restChromeServed)
+    }
+
+    private var restChromeContent: some View {
         ComposerSceneOverlayChrome(state: restState,
                                    slideRow: slideRailSlot,
                                    slideCount: slideCount,
@@ -448,6 +457,11 @@ struct ComposerSceneSurface: View {
     /// Le bord gauche du DESSIN, mesuré par le canvas et lu par l'en-tête son
     /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
     @State private var sceneCardLeading: CGFloat = 0
+
+    @Environment(\.composerAnchoredSheetTop) private var anchoredSheetTop
+    private var restChromeServed: Bool {
+        ComposerSceneFraming.restChromeIsShown(sheetIsOpen: anchoredSheetTop != nil)
+    }
 
     /// La largeur du DESSIN, mesurée par le canvas : la flèche du volet
     /// s'y proportionne. `0` avant la première passe ⇒ le volet se mesure seul.
@@ -609,9 +623,13 @@ struct ComposerSceneSurface: View {
 
     /// Le bas visible de la scène, dans son propre repère : le haut des étages
     /// du bas quand un panneau y est ouvert, sinon le bas de la zone.
+    /// Une feuille ancrée du meuble borne aussi la scène (#13839, L3) : le plus
+    /// haut des deux obstacles gagne (`ComposerSceneFraming`).
     private func visibleBottom(in geo: GeometryProxy) -> CGFloat {
-        guard sceneLiftInset > 0, !freeZoneFrame.isNull else { return geo.size.height }
-        return freeZoneFrame.maxY - geo.frame(in: .global).minY
+        let panneau: CGFloat? = sceneLiftInset > 0 && !freeZoneFrame.isNull ? freeZoneFrame.maxY : nil
+        return ComposerSceneFraming.visibleBottom(zoneHeight: geo.size.height,
+                                                  zoneMinY: geo.frame(in: .global).minY,
+                                                  obstructionTops: [panneau, anchoredSheetTop])
     }
 
     private var sceneCanvas: some View {

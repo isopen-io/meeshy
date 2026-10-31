@@ -226,7 +226,8 @@ extension MeeshyComposerHost {
     var referencePickerSheet: some View {
         StoryMentionPickerSheet(
             references: composerReferences,
-            modes: PostReferenceDisplay.declarable(forCanvas: false)
+            modes: PostReferenceDisplay.declarable(forCanvas: false),
+            doneTitle: ComposerAnchoredSheetCopy.ok
         ) { updated in
             composerReferences = updated
         }

@@ -48,11 +48,9 @@ struct ComposerSceneMoreMenu<Items: View>: View {
 struct ComposerSceneMoreMenuItems: View {
     let entries: [ComposerMoreMenuEntry]
     let isAnimated: Bool
-    let duration: TimeInterval
     let onEntry: (ComposerMoreMenuEntry) -> Void
     let onAnimation: () -> Void
     let onTimeline: () -> Void
-    let onDuration: (TimeInterval) -> Void
 
     var body: some View {
         ForEach(entries, id: \.self) { entree in item(entree) }
@@ -64,8 +62,6 @@ struct ComposerSceneMoreMenuItems: View {
         switch entree {
         case .animation:
             Menu { animationItems } label: { libelle }
-        case .slideDuration:
-            Menu { durationItems } label: { libelle }
         default:
             Button(role: entree.isDestructive ? .destructive : nil) { onEntry(entree) } label: { libelle }
         }
@@ -78,23 +74,6 @@ struct ComposerSceneMoreMenuItems: View {
             Button(ComposerMoreMenuCopy.animationOff, role: .destructive, action: onAnimation)
         } else {
             Button(ComposerMoreMenuCopy.animationOn, action: onAnimation)
-        }
-    }
-
-    @ViewBuilder
-    private var durationItems: some View {
-        let menu = ComposerMoreMenuPolicy.durationMenu(current: duration)
-        ForEach(menu.choices, id: \.self) { secondes in
-            Button {
-                onDuration(secondes)
-                HapticFeedback.light()
-            } label: {
-                if secondes == menu.selected {
-                    Label(ComposerMoreMenuCopy.seconds(secondes), systemImage: "checkmark")
-                } else {
-                    Text(ComposerMoreMenuCopy.seconds(secondes))
-                }
-            }
         }
     }
 }
