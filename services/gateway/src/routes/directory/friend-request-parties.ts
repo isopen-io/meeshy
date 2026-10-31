@@ -54,13 +54,15 @@ type PartieAvecPresence = {
 /**
  * Un REFUS ne se voit pas (RG-07, #13933) : l'ÉMETTEUR continue de lire sa demande
  * « en attente ». Le statut `rejected` n'est servi qu'à celui qui a refusé ; la
- * date de réponse, qui dirait le refus à son tour, part avec lui. Appliqué ICI,
+ * date de réponse, qui dirait le refus à son tour, part avec lui, et `updatedAt`
+ * (que `@updatedAt` déplace au refus) est servi à sa date de naissance, celle
+ * d'une demande que personne n'a touchée. Appliqué ICI,
  * au site unique de sortie d'une ligne, pour que l'alias déprécié en bénéficie
  * sans le savoir.
  */
 function masquerRefus<T extends Record<string, unknown>>(demande: T, acteurId: string | undefined): T {
   if (demande.status !== 'rejected' || !acteurId || demande.senderId !== acteurId) return demande;
-  return { ...demande, status: 'pending', respondedAt: null };
+  return { ...demande, status: 'pending', respondedAt: null, updatedAt: demande.createdAt ?? demande.updatedAt };
 }
 
 /**
