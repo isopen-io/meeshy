@@ -401,7 +401,6 @@
     "POST /api/v1/friend-requests",
     "POST /api/v1/me/categories",
     "POST /api/v1/me/categories/reorder",
-    "POST /api/v1/me/game/guide/seen",
     "POST /api/v1/me/game/photo-moments/kept",
     "POST /api/v1/me/game/photo-moments/presented",
     "POST /api/v1/me/preferences/categories/reorder",

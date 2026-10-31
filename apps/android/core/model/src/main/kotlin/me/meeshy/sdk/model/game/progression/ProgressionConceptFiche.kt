@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.game.progression
 
+import java.time.ZoneId
 import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GameCopyLaws
 import me.meeshy.sdk.model.game.GameText
@@ -64,6 +65,7 @@ public object ProgressionConceptFiches {
         nowMillis: Long,
         moment: SeasonMoment,
         pieceIsHero: Boolean = false,
+        zone: ZoneId = ZoneId.systemDefault(),
     ): ProgressionConceptFiche {
         val head = headKind(concept, game, pieceIsHero)
         val shown = shows(concept, game, pieceIsHero)
@@ -77,7 +79,7 @@ public object ProgressionConceptFiches {
         }
         val state = ProgressionConceptStates.stateLine(concept, progress, game)?.takeIf { said -> said.facts.none { it in onScreen } }
         val told = onScreen + state?.facts.orEmpty()
-        val facts = rows(concept, progress, game, nowMillis).filter { fact -> fact.identity?.let { it !in told } ?: true }
+        val facts = rows(concept, progress, game, nowMillis, zone).filter { fact -> fact.identity?.let { it !in told } ?: true }
         return ProgressionConceptFiche(head, heroLine, state, facts)
     }
 
@@ -124,15 +126,13 @@ public object ProgressionConceptFiches {
 
     private fun ratio(done: Int, total: Int): GameText = GameText.of(GameTextKey.Ratio, GameTextArg.Count(done), GameTextArg.Count(total))
 
-    /**
-     * Les lignes d'un concept. Niveau, Héritage, Ligue, Voyage, Renaissance et Élans attendent leur port (#13909) :
-     * leur fiche ne dit encore que ce que sa tête montre.
-     */
+    /** Les lignes d'un concept, chacune avec son identité (iOS `ProgressionConceptFiche.rows`). */
     public fun rows(
         concept: ProgressionConcept,
         progress: EngagementProgress,
         game: GameBlock?,
-        @Suppress("UNUSED_PARAMETER") nowMillis: Long,
+        nowMillis: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
     ): List<FicheFact> = when (concept) {
         ProgressionConcept.Glory -> gloryRows(game)
         ProgressionConcept.Flame -> flameRows(progress, game)
@@ -157,10 +157,12 @@ public object ProgressionConceptFiches {
             },
         )
         ProgressionConcept.Atlas -> atlasRows(game)
-        ProgressionConcept.Points, ProgressionConcept.Meesh, ProgressionConcept.Missions,
-        ProgressionConcept.Level, ProgressionConcept.League, ProgressionConcept.Season,
-        ProgressionConcept.Prestige, ProgressionConcept.Elans,
-        -> emptyList()
+        ProgressionConcept.Level -> ProgressionConceptRows.level(progress, game)
+        ProgressionConcept.League -> ProgressionConceptRows.league(game, nowMillis, zone)
+        ProgressionConcept.Season -> ProgressionConceptRows.season(game)
+        ProgressionConcept.Prestige -> ProgressionConceptRows.prestige(game)
+        ProgressionConcept.Elans -> ProgressionConceptRows.elans(game)
+        ProgressionConcept.Points, ProgressionConcept.Meesh, ProgressionConcept.Missions -> emptyList()
     }
 
     private fun gloryRows(game: GameBlock?): List<FicheFact> {

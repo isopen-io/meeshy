@@ -79,8 +79,10 @@ class RouteManifestRatchetTest {
          * 208 : moins l'installation et le retrait d'un pack (`PUT` / `DELETE /packs/<domaine>/:slug/install`) et la
          * boutique d'un domaine (`GET /packs/<domaine>`, le repli d'un ancien serveur) (#13641), que porte `PackApi` ; le
          * motif `{domain}` couvre aussi les domaines que l'écran n'offre pas (capture-frame, glory-frame, lens).
+         * 207 : moins `POST /me/game/guide/seen` (#13885 : la ligne de Mee et sa feuille sur la première page
+         * Progression), que porte `GameApi.markGuideSeen`.
          */
-        const val TO_PORT_CEILING = 208
+        const val TO_PORT_CEILING = 207
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

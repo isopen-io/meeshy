@@ -353,7 +353,7 @@ public object ProgressionConceptModel {
 
     private fun parseMillis(iso: String): Long? = runCatching { Instant.parse(iso).toEpochMilli() }.getOrNull()
 
-    private fun leagueName(league: LeagueKey): GameText = GameText(
+    internal fun leagueName(league: LeagueKey): GameText = GameText(
         when (league) {
             LeagueKey.Quartz -> GameTextKey.LeagueNameQuartz
             LeagueKey.Ambre -> GameTextKey.LeagueNameAmbre

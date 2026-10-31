@@ -108,6 +108,17 @@ class GameApiRoutesTest {
     }
 
     @Test
+    fun `marquer le guide vu envoie les cles et leur identifiant`() = runTest {
+        val http = RecordingHttp()
+
+        game(http).markGuideSeen(me.meeshy.sdk.model.game.GuideSeenRequest("req-12345678", listOf("onboarding.welcome")))
+
+        assertThat(http.only.method).isEqualTo("POST")
+        assertThat(http.only.path).isEqualTo("/api/v1/me/game/guide/seen")
+        assertThat(http.only.body).isEqualTo("""{"requestId":"req-12345678","keys":["onboarding.welcome"]}""")
+    }
+
+    @Test
     fun `reclamer une halte nomme son numero dans le chemin`() = runTest {
         val http = RecordingHttp()
 
