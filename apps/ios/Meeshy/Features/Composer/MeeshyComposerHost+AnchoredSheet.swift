@@ -25,6 +25,10 @@ extension MeeshyComposerHost {
     func anchoredPortalDidChange(from ancien: ComposerPortal?, to nouveau: ComposerPortal?) {
         guard ancien?.presentation == .anchored, ancien != nouveau else { return }
         forgetEditedSound()
+        // Refermer la feuille Sticker ou Lieu sans choisir n'arme rien pour
+        // la prochaine pose (#13839, L5).
+        if ancien == .sticker { stickerReplacementId = nil }
+        if ancien == .location { placeRepointId = nil }
         if nouveau == nil { resumePendingPresentation() }
     }
 

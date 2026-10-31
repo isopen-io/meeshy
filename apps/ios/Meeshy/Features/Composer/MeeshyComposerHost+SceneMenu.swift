@@ -29,13 +29,12 @@ extension MeeshyComposerHost {
 
     func sceneMenuEntries(_ target: ComposerSceneMenuTarget) -> [ComposerSceneMenu.Entry] {
         switch target {
-        case .object(let id, let kind):
-            return ComposerSceneMenu.entries(objectActions: ComposerTrailingRailPolicy.actions(
-                slide: viewModel.currentSlide,
-                selectedId: id,
-                served: ComposerTrailingColumn.servedActions,
-                hasEditor: ComposerSceneSurface.defaultEditableSceneKinds.contains(kind),
-                canLeaveScene: false))
+        case .object(let id, _):
+            // **Un raccourci de la barre, rien de plus** (#13839, L5) : le menu
+            // ne sert que ce que la barre de la sélection sert.
+            guard let famille = inlineFamily(of: id) else { return [] }
+            return ComposerSceneMenu.entries(objectActions: ComposerSelectionActions.menuActions(
+                family: famille, offered: sceneSelectionRelay.offered(id), isLocked: sceneSelectionRelay.isLocked(id)))
         case .background:
             return ComposerSceneMenu.entries(backgroundActions: ComposerBackgroundMenuAction.served(
                 offersPhoto: ComposerSceneCamera.modes(for: selectedFormat).contains(.photo)))
@@ -100,10 +99,7 @@ extension MeeshyComposerHost {
             sceneObjectMenu = nil
             selectedSceneItemId = id
             selectedSceneItemKind = kind
-            switch action {
-            case .edit: editSceneItem(id, kind: kind)
-            default:    handleTrailingRailAction(action)
-            }
+            sceneSelectionRelay.applyMenuShortcut(action, on: id, kind: kind)
         default:
             break
         }

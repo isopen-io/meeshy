@@ -96,9 +96,7 @@ final class ComposerKeyboardOrOptionsTests: XCTestCase {
     // MARK: - La colonne droite se tait pendant la frappe (OK remplace ✕)
 
     func test_focus_typing_beatsTheSelection() {
-        let focus = ComposerTrailingColumn.focus(railMode: .doors([]),
-                                                 selection: (sections: [.tool(.style)], open: nil, actions: [.edit]),
-                                                 typing: true)
+        let focus = ComposerTrailingColumn.focus(railMode: .doors([]), objectIsEdited: true, typing: true)
         XCTAssertEqual(focus, .typing)
     }
 
@@ -110,14 +108,12 @@ final class ComposerKeyboardOrOptionsTests: XCTestCase {
     }
 
     func test_servesHistory_objectOrScene_keepsUndoAndRedo() {
-        let objet = ComposerTrailingColumn.Focus.object(sections: [.tool(.style)], open: nil, actions: [.edit])
-        XCTAssertTrue(ComposerTrailingColumn.servesHistory(.undo, for: objet))
+        XCTAssertTrue(ComposerTrailingColumn.servesHistory(.undo, for: .object))
         XCTAssertTrue(ComposerTrailingColumn.servesHistory(.redo, for: .scene(effects: [], open: nil)))
     }
 
     func test_options_typing_noGlyphColumnAndNoQuitButton() {
         XCTAssertEqual(ComposerTrailingColumn.options(for: .typing), [])
-        XCTAssertFalse(ComposerTrailingColumn.options(for: .typing).contains(.exitObject))
         XCTAssertEqual(ComposerTrailingColumn.foot(for: .typing, timeServed: true), [])
     }
 }

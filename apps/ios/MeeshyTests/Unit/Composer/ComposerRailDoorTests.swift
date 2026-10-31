@@ -1240,7 +1240,9 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
                        "griser au lieu d'absenter contredit la loi 4")
 
         let meuble = compact(try topBarSource())
-        XCTAssertTrue(meuble.contains("onUndo:composerServesHistory&&viewModel.canUndoGlobal"),
+        // Depuis #13839 (L4), ↶ se compose dans `sceneUndo`, qui pose la même
+        // question au même juge avant de servir le bouton.
+        XCTAssertTrue(meuble.contains("guardcomposerServesHistory,viewModel.canUndoGlobal"),
                       "le juge de l'historique reste ComposerHistoryService")
     }
 

@@ -66,6 +66,15 @@ nonisolated struct ComposerInlineEdit: Equatable, Sendable {
     let objectId: String
     let family: ComposerInlineFamily
     var openSection: ComposerObjectEditorSection?
+    /// La feuille ouverte depuis la barre de la sélection (#13839, L5).
+    var purpose: ComposerInlineEditPurpose = .modify
+}
+
+/// **Quelle feuille de la sélection** : « Modifier » règle l'objet, « Temps »
+/// fusionne son APPARITION et sa TIMELINE (#13839, L5).
+nonisolated enum ComposerInlineEditPurpose: Equatable, Sendable {
+    case modify
+    case time
 }
 
 /// **Une seule grammaire pour toutes les familles** (#9138, directive porteur
@@ -133,12 +142,39 @@ nonisolated enum ComposerInlineEditing {
                       family: ComposerInlineFamily,
                       onSceneSurface: Bool,
                       requested: ComposerObjectEditorSection?,
-                      hasTrimmableSource: Bool) -> ComposerInlineEdit? {
+                      hasTrimmableSource: Bool,
+                      purpose: ComposerInlineEditPurpose = .modify) -> ComposerInlineEdit? {
         guard onSceneSurface else { return nil }
         let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource)
+        let ouverte = requested.flatMap { servies.contains($0) ? $0 : nil }
+        let parDefaut = purpose == .time ? chips(.time, family: family, served: servies).first : nil
         return ComposerInlineEdit(objectId: objectId,
                                   family: family,
-                                  openSection: requested.flatMap { servies.contains($0) ? $0 : nil })
+                                  openSection: ouverte ?? parDefaut,
+                                  purpose: purpose)
+    }
+
+    /// **Les puces LIBELLÉES d'une feuille** (#13839, L5) : Modifier sert les
+    /// réglages de l'objet ; Temps sa fenêtre, son plan et, pour un son, ses
+    /// bornes — un son se modifie dans sa propre feuille, son rognage ne doit
+    /// pas s'y perdre.
+    static func chips(_ purpose: ComposerInlineEditPurpose,
+                      family: ComposerInlineFamily,
+                      served: [ComposerObjectEditorSection]) -> [ComposerObjectEditorSection] {
+        switch purpose {
+        case .time:
+            let temps: [ComposerObjectEditorSection] = [.timing, .plan] + (family == .audio ? [.media(.trim)] : [])
+            return temps.filter(served.contains)
+        case .modify:
+            guard family != .audio else { return [] }
+            return served.filter { $0 != .timing && $0 != .plan }
+        }
+    }
+
+    /// **Toucher l'objet qu'on règle garde sa feuille** (#13839, L5) ; toucher
+    /// un autre objet la referme, sa barre paraît.
+    static func edit(_ edit: ComposerInlineEdit?, afterSelecting id: String) -> ComposerInlineEdit? {
+        edit?.objectId == id ? edit : nil
     }
 
     /// Toucher un sous-outil ouvre ses options ; toucher celui qui est ouvert
@@ -147,7 +183,8 @@ nonisolated enum ComposerInlineEditing {
                        in edit: ComposerInlineEdit) -> ComposerInlineEdit {
         ComposerInlineEdit(objectId: edit.objectId,
                            family: edit.family,
-                           openSection: edit.openSection == section ? nil : section)
+                           openSection: edit.openSection == section ? nil : section,
+                           purpose: edit.purpose)
     }
 
     /// **L'édition ne survit ni à sa sélection, ni à son objet, ni à sa
@@ -164,7 +201,8 @@ nonisolated enum ComposerInlineEditing {
             return nil
         }
         guard let ouverte = edit.openSection, !served.contains(ouverte) else { return edit }
-        return ComposerInlineEdit(objectId: edit.objectId, family: edit.family, openSection: nil)
+        return ComposerInlineEdit(objectId: edit.objectId, family: edit.family, openSection: nil,
+                                  purpose: edit.purpose)
     }
 
     /// **« Modifier » n'est offert que s'il mène AILLEURS.** Pour un texte, il

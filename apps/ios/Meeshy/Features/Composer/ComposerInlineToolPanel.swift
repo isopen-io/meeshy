@@ -26,11 +26,15 @@ import MeeshyUI
 struct ComposerInlineToolPanel: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let edit: ComposerInlineEdit
-    let section: ComposerObjectEditorSection
+    /// `nil` ⇒ la feuille ne montre que son en-tête : aucune puce ouverte.
+    let section: ComposerObjectEditorSection?
     let plateauTint: Color
     /// La description d'un média vit au MEUBLE (#4756) ; `nil` ⇒ aucun champ
     /// qui n'écrirait nulle part (loi 4).
     var altText: Binding<String>?
+    /// L'en-tête de la feuille Modifier ou Temps (#13839, L5) : ses puces
+    /// libellées, ses compléments et OK.
+    var header: ComposerSelectionSheetHeader?
     /// Le plan 2D désigne un autre objet : l'édition en place le reprend.
     var onSelectObject: (String) -> Void = { _ in }
     /// L'appui maintenu sur « Comparer » des réglages (#9175) : le meuble
@@ -44,15 +48,20 @@ struct ComposerInlineToolPanel: View {
         ComposerTrailingOptionsPlate(plateauTint: plateauTint,
                                      holdsGesture: planHoldsGesture,
                                      objectFrame: { objectFrame(container: $0) }) {
-            content
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                if let header { header }
+                content
+            }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(ComposerObjectEditorCopy.entry(section)))
+        .accessibilityLabel(Text(section.map(ComposerObjectEditorCopy.entry) ?? ComposerSelectionCopy.bar))
     }
 
     @ViewBuilder
     private var content: some View {
         switch section {
+        case nil:
+            EmptyView()
         case .tool(let outil):
             if let binding = viewModel.textObjectBinding(for: edit.objectId) {
                 TextEditToolOptions(tool: outil, textObject: binding, layout: .column)

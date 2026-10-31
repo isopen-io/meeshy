@@ -44,7 +44,10 @@ final class ComposerNonDestructiveEditTests: XCTestCase {
         let code = try source("MeeshyComposerHost+SceneColumns.swift")
         XCTAssertFalse(code.contains("requestSceneMediaRetouch"),
                        "« Modifier » d'un média ne doit plus remplacer l'objet par un fichier cuit")
-        XCTAssertTrue(code.contains("case.media,.sticker,.place:beginInlineEdit(id)"))
+        XCTAssertTrue(code.contains("case.media,.sticker,.place:sceneSelectionRelay.modifySceneItem(id)"))
+        let selection = try source("MeeshyComposerHost+Selection.swift")
+        XCTAssertTrue(selection.contains("case.mediaSheet:host.beginInlineEdit(id,purpose:.modify)"),
+                      "la feuille Modifier d'un média est l'édition en place, non destructive (#13839, L5)")
     }
 
     func test_menuDuFond_modifier_ouvreLEditionEnPlace() throws {

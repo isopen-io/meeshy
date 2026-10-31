@@ -185,6 +185,25 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
     }
 }
 
+// MARK: - Le menu d'un objet n'est pas la fin d'un glissé (#13839, L5)
+
+/// **Un appui long n'ouvre le menu que sur un doigt IMMOBILE.** Pendant une
+/// manipulation, ou juste après (le doigt qui ralentit au bout d'un glissé lent
+/// tient assez longtemps pour que l'appui long se reconnaisse), la demande est
+/// refusée : le menu n'est qu'un raccourci des actions de la sélection, jamais
+/// la récompense d'un déplacement.
+public nonisolated enum StoryCanvasContextMenuGate {
+    /// Le temps, après la fin d'un geste, pendant lequel un appui long est lu
+    /// comme sa queue.
+    public static let settle: TimeInterval = 0.6
+
+    public static func admits(isManipulating: Bool, lastManipulationEnd: Date?, now: Date) -> Bool {
+        guard !isManipulating else { return false }
+        guard let fin = lastManipulationEnd else { return true }
+        return now.timeIntervalSince(fin) >= settle
+    }
+}
+
 // MARK: - UIContextMenuInteractionDelegate (long-press / right-click)
 
 extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
@@ -192,6 +211,10 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                                        configurationForMenuAtLocation location: CGPoint)
     -> UIContextMenuConfiguration? {
         guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
+        // Le menu n'est jamais la fin d'un glissé (#13839, L5).
+        guard StoryCanvasContextMenuGate.admits(isManipulating: isGestureActive,
+                                                lastManipulationEnd: lastManipulationEndedAt,
+                                                now: Date()) else { return nil }
         
         // **Une famille, UNE fonction** (#4671). Ce bloc redemandait « de quel
         // type est cet objet ? » et répondait autrement que `itemKind(forId:)` :

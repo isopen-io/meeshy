@@ -174,11 +174,14 @@ final class ComposerToolFocusTests: XCTestCase {
     }
 
     /// Les colonnes de la scène ne peignent plus que l'encre de repos : les
-    /// options du rail droit sont blanches, supprimer reste rouge.
+    /// options du rail droit sont blanches ; Retirer, dans la barre de la
+    /// sélection (#13839, L5), reste rouge.
     @MainActor
     func test_10364_lesOptionsDuRailDroit_peignentLEncreBlanche() {
         XCTAssertEqual(ComposerTrailingColumnPaint(.exitTool).tint, ComposerFloatingRailInk.rest)
-        XCTAssertEqual(ComposerTrailingColumnPaint(.objectAction(.delete)).tint, MeeshyColors.error)
+        XCTAssertTrue(ComposerSelectionAction.remove.isDestructive)
+        XCTAssertEqual(ComposerSelectionBarPaint.tint(.remove), MeeshyColors.error)
+        XCTAssertEqual(ComposerSelectionBarPaint.tint(.modify), ComposerFloatingRailInk.rest)
     }
 
     /// Le rail droit, le couloir de l'éditeur d'objet et la rangée d'outils du

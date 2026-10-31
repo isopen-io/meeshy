@@ -37,6 +37,9 @@ extension MeeshyComposerHost {
     /// toggle resté ouvert pour le lieu précédent.
     var documentLocationPickerSheet: some View {
         LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+            // « Modifier » une pastille de lieu la repointe (#13839, L5) ; sinon
+            // le lieu est celui du document.
+            guard !sceneSelectionRelay.repointModifiedPlace(to: place) else { return }
             documentLocation = place
             documentDiscoverability = FeedNearbyDiscoverability.choiceForNewPlace()
         }
@@ -168,8 +171,10 @@ extension MeeshyComposerHost {
 
     /// Un choix de la feuille : elle se referme, il se pose.
     func choisirDansLesStickers(_ choice: StickerSheetChoice) {
+        let remplace = stickerReplacementId
+        stickerReplacementId = nil
         presentedPortal = nil
-        poseStickerChoice(choice)
+        poseStickerChoice(choice, replacing: remplace)
     }
 
     #if DEBUG
@@ -192,16 +197,18 @@ extension MeeshyComposerHost {
     /// Pose le choix, puis ouvre son édition en place. Un sticker de pack
     /// attend ses octets (cache des images) : la feuille est déjà refermée, la
     /// scène le reçoit dès qu'ils sont là.
-    func poseStickerChoice(_ choice: StickerSheetChoice) {
+    /// Le sticker posé est SÉLECTIONNÉ (#13839, L5) : sa barre paraît, rien ne
+    /// s'ouvre d'office. Choisi depuis « Modifier », il remplace l'ancien.
+    func poseStickerChoice(_ choice: StickerSheetChoice, replacing ancien: String? = nil) {
         if let id = SceneStickerPose.pose(choice, on: viewModel) {
-            beginInlineEdit(id)
+            if !sceneSelectionRelay.replaceModifiedSticker(ancien, with: id) { sceneSelectionRelay.selectSceneItem(id) }
             HapticFeedback.light()
             return
         }
         guard case .packItem(_, let item) = choice else { return }
-        Task {
+        Task { @MainActor in
             guard let loaded = await StickerPackItemImages.load(item), let id = SceneStickerPose.posePackSticker(loaded, on: viewModel) else { return }
-            beginInlineEdit(id)
+            if !sceneSelectionRelay.replaceModifiedSticker(ancien, with: id) { sceneSelectionRelay.selectSceneItem(id) }
             HapticFeedback.light()
         }
     }

@@ -558,6 +558,10 @@ struct MeeshyComposerHost: View {
     /// `ComposerInlineEditing.resolved` (`activeInlineEdit`), jamais telle
     /// quelle.
     @State var inlineEdit: ComposerInlineEdit?
+    /// « Modifier » un sticker ou un lieu ouvre sa feuille sur CET objet
+    /// (#13839, L5) : le choix le remplace, ou repointe la pastille.
+    @State var stickerReplacementId: String?
+    @State var placeRepointId: String?
     /// L'image dont la scène montre l'ORIGINAL, le temps d'un appui sur « Comparer ».
     @State var comparingLookObjectId: String?
     /// Le menu d'appui long d'un OBJET, peint en verre par le meuble.
@@ -833,24 +837,31 @@ struct MeeshyComposerHost: View {
     /// une sélection posée par un tap sur le fond n'aurait aucune sortie, la
     /// zone contextuelle restant montée pour toujours.
     func handleSceneBackgroundTap() {
-        if handleSceneQuickTap() { return }
-        // Sur la scène, ce toucher ouvre les outils du FOND — la règle
-        // se lit AVANT d'effacer, sinon elle verrait toujours « rien ».
-        let fond = ComposerSceneBackgroundTapPolicy.backgroundToEdit(
-            currentSelection: selectedSceneItemKind,
+        // **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5) ; il
+        // n'arme le viseur que si la scène est vide ET que rien n'était
+        // sélectionné. La règle se lit AVANT d'effacer, sinon elle verrait
+        // toujours « rien ».
+        let issue = ComposerSceneEmptyTap.outcome(
+            hadSelection: sceneSelectionRelay.hasLiveSelection,
             effectIsOpen: openSceneEffect != nil,
-            backgroundMediaId: sceneBackgroundMedia?.id)
+            quickCaptureOffered: sceneQuickCaptureIsOffered,
+            backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil)
+        if issue == .armViewfinder, handleSceneQuickTap() { return }
+        // Le document sélectionne son fond par KIND (#4035).
         selectedSceneItemKind = ComposerSceneBackgroundTapPolicy.selection(
             currentSelection: selectedSceneItemKind,
             backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia
         )
-        // Toucher le fond QUITTE l'objet : ses options quittent la
-        // colonne droite, comme sous le `(x)` — et referme le carrousel
-        // d'effets, qui rend l'audience et Publier.
-        selectedSceneItemId = nil
-        inlineEdit = nil
+        // Le toucher referme aussi le carrousel d'effets, qui rend l'audience
+        // et Publier.
         openSceneEffect = nil
-        if let fond { beginInlineEdit(fond) }
+        switch issue {
+        case .deselect:                   sceneSelectionRelay.deselectSceneItem()
+        case .selectBackground(let fond): sceneSelectionRelay.selectSceneItem(fond)
+        case .closeEffect, .armViewfinder, .nothing:
+            selectedSceneItemId = nil
+            inlineEdit = nil
+        }
     }
 
     /// **Trois couches NOMINALES, jamais une seule expression.** Un

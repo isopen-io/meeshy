@@ -79,12 +79,10 @@ nonisolated enum ComposerTrailingColumn {
         /// un fond média (#8712), l'effet dont le carrousel est ouvert marqué.
         case scene(effects: [ComposerSceneEffect], open: ComposerSceneEffect?)
         case tool([ComposerToolControl])
-        /// **Un objet en édition en place** (#9138) — toutes familles, le fond
-        /// compris (#8847) : ses sous-outils, celui dont les options sont
-        /// ouvertes marqué, puis ses actions, puis le `(x)`.
-        case object(sections: [ComposerObjectEditorSection],
-                    open: ComposerObjectEditorSection?,
-                    actions: [StoryCanvasContextAction])
+        /// **Un objet en édition en place** (#9138) : la colonne se tait
+        /// (#13839, L5). Ses réglages sont les puces libellées des feuilles
+        /// Modifier et Temps, ses actions la barre de la sélection.
+        case object
         /// On écrit (#13839, L4) : la barre collée au clavier porte les
         /// réglages et OK ; la colonne se tait.
         case typing
@@ -95,33 +93,22 @@ nonisolated enum ComposerTrailingColumn {
         /// Une catégorie d'effets de la scène (#8712) — la toucher ouvre son
         /// carrousel en bas, à la place de l'audience et de Publier.
         case sceneEffect(ComposerSceneEffect, isOpen: Bool)
-        /// Un sous-outil de l'objet (#9138) — le toucher ouvre ses options à
-        /// droite, depuis le haut, jamais l'éditeur plein écran.
-        case editorSection(ComposerObjectEditorSection, isOpen: Bool)
-        case objectAction(StoryCanvasContextAction)
         /// Le `(x)` d'un outil : il le termine et rend les portes.
         case exitTool
-        /// Le `(x)` d'une sélection : il désélectionne et rend les rails de la
-        /// scène.
-        case exitObject
 
         var id: String {
             switch self {
             case .toolControl(let control):   return "tool.\(control.id)"
             case .sceneEffect(let effet, _):  return "effect.\(effet.rawValue)"
-            case .editorSection(let section, _): return "section.\(section.identifier)"
-            case .objectAction(let action):   return "action.\(String(describing: action))"
             case .exitTool:                   return "exit.tool"
-            case .exitObject:                 return "exit.object"
             }
         }
 
         /// Le `(x)` — il ne défile jamais avec les options.
         var isExit: Bool {
             switch self {
-            case .exitTool, .exitObject:                          return true
-            case .toolControl, .sceneEffect, .editorSection, .objectAction:
-                return false
+            case .exitTool:                    return true
+            case .toolControl, .sceneEffect:   return false
             }
         }
     }
@@ -137,42 +124,29 @@ nonisolated enum ComposerTrailingColumn {
     }
 
     static func focus(railMode: ComposerRailMode,
-                      selection: (sections: [ComposerObjectEditorSection],
-                                  open: ComposerObjectEditorSection?,
-                                  actions: [StoryCanvasContextAction])?,
+                      objectIsEdited: Bool,
                       effects: [ComposerSceneEffect] = [],
                       openEffect: ComposerSceneEffect? = nil,
                       typing: Bool = false) -> Focus {
         if typing { return .typing }
         if case .tool(let controls) = railMode { return .tool(controls) }
-        guard let selection else {
+        guard objectIsEdited else {
             return .scene(effects: effects, open: openEffect.flatMap { effects.contains($0) ? $0 : nil })
         }
-        return .object(sections: selection.sections, open: selection.open, actions: selection.actions)
+        return .object
     }
 
     /// **Les options, de HAUT en bas, le `(x)` en dernier.**
     ///
-    /// Pour un objet : « Modifier » d'abord (le même geste que le double
-    /// toucher), puis les sections de son éditeur, puis ses actions. Le
-    /// ROGNAGE n'y paraît qu'une fois — la section `.media(.trim)` et l'action
-    /// `.trim` ouvrent la même plaque.
+    /// Un objet n'y a plus rien (#13839, L5) : la barre de la sélection porte
+    /// ses actions, libellées, et les feuilles Modifier et Temps ses réglages.
     static func options(for focus: Focus) -> [Entry] {
         switch focus {
         case .scene(let effects, let open):
             return effects.map { Entry.sceneEffect($0, isOpen: $0 == open) }
         case .tool(let controls):
             return controls.map(Entry.toolControl) + [.exitTool]
-        case .object(let sections, let open, let actions):
-            let modifier = actions.contains(.edit) ? [Entry.objectAction(.edit)] : []
-            let reste = actions.filter { action in
-                action != .edit && !(action == .trim && sections.contains(.media(.trim)))
-            }
-            return modifier
-                + sections.map { Entry.editorSection($0, isOpen: $0 == open) }
-                + reste.map(Entry.objectAction)
-                + [.exitObject]
-        case .typing:
+        case .object, .typing:
             return []
         }
     }
@@ -206,8 +180,8 @@ nonisolated enum ComposerTrailingColumn {
         }
     }
 
-    /// Ce que CE meuble sait faire d'une action d'objet sur la colonne :
-    /// « Modifier » (le double toucher) en plus des contrôleurs du rail.
+    /// Ce que CE meuble sait faire d'une action d'objet — la barre de la
+    /// sélection les compose : « Modifier » en plus des contrôleurs du rail.
     /// « Sortir de la scène » attend sa décision produit (#4038).
     static let servedActions: Set<StoryCanvasContextAction> =
         ComposerSceneCapabilities.controllers.union([.edit])

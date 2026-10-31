@@ -55,15 +55,18 @@ extension MeeshyComposerHost {
     /// pas. Rouvrir l'objet déjà édité garde son sous-outil ouvert, sauf si la
     /// porte en désigne un autre.
     @discardableResult
-    func beginInlineEdit(_ id: String, section: ComposerObjectEditorSection? = nil) -> Bool {
+    func beginInlineEdit(_ id: String, section: ComposerObjectEditorSection? = nil,
+                         purpose: ComposerInlineEditPurpose = .modify) -> Bool {
         guard let famille = inlineFamily(of: id) else { return false }
-        let gardee = activeInlineEdit?.objectId == id ? activeInlineEdit?.openSection : nil
+        let memeFeuille = activeInlineEdit?.objectId == id && activeInlineEdit?.purpose == purpose
+        let gardee = memeFeuille ? activeInlineEdit?.openSection : nil
         guard let edition = ComposerInlineEditing.begin(
             objectId: id,
             family: famille,
             onSceneSurface: mountedComposerView == .scene,
             requested: section ?? gardee,
-            hasTrimmableSource: viewModel.sourceTrim(id: id) != nil) else { return false }
+            hasTrimmableSource: viewModel.sourceTrim(id: id) != nil,
+            purpose: purpose) else { return false }
         let nouvelle = activeInlineEdit?.objectId != id
         presentedPortal = nil
         openSceneEffect = nil
@@ -110,7 +113,7 @@ extension MeeshyComposerHost {
         if viewModel.isDrawingActive { return sceneDrawingOptionsPanel }
         // Pendant la frappe, les options remplacent le CLAVIER (#13839, L4).
         guard !sceneTypesInline else { return nil }
-        guard let edition = activeInlineEdit, let section = edition.openSection else { return nil }
+        guard let edition = activeInlineEdit else { return nil }
         let porteUnMedia: Bool
         switch edition.family {
         case .image, .video, .background: porteUnMedia = true
@@ -119,10 +122,11 @@ extension MeeshyComposerHost {
         return AnyView(ComposerInlineToolPanel(
             viewModel: viewModel,
             edit: edition,
-            section: section,
+            section: edition.openSection,
             plateauTint: tint.color,
             altText: porteUnMedia ? mediaAltBinding(for: edition.objectId) : nil,
-            onSelectObject: { beginInlineEdit($0, section: .plan) },
+            header: sceneSelectionRelay.sheetHeader(for: edition),
+            onSelectObject: { beginInlineEdit($0, section: .plan, purpose: edition.purpose) },
             onCompareLook: { comparingLookObjectId = $0 ? edition.objectId : nil }))
     }
 

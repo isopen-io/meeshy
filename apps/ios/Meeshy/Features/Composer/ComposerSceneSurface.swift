@@ -186,6 +186,9 @@ struct ComposerSceneSurface: View {
     /// composer ici la mettrait hors de portée d'un témoin.
     var selectedItemId: String?
     var selectionBadge: String?
+    /// **La barre de la sélection** (#13839, L5), déjà composée par le meuble :
+    /// `nil` ⇒ rien de sélectionné, la colonne des outils reparaît.
+    var selectionBar: ComposerSelectionBar?
 
     // MARK: - La bande contextuelle
 
@@ -380,12 +383,13 @@ struct ComposerSceneSurface: View {
                                  writesText: writing.writesText,
                                  cameraIsArmed: cameraStage != .off,
                                  bottomPanelIsOpen: band != nil || timelinePanel != nil || sceneEffectIsOpen,
-                                 timelineIsOpen: timelinePanel != nil)
+                                 timelineIsOpen: timelinePanel != nil,
+                                 objectIsSelected: selectionBar != nil)
     }
 
     /// La colonne droite ne sert plus le repos : ses effets de scène vivent
-    /// dans ⋯. Elle reste pour un outil ouvert (hors dessin, qui a sa barre) et
-    /// pour un objet sélectionné, jusqu'à la barre d'actions de L5.
+    /// dans ⋯. Elle reste pour un outil ouvert (hors dessin, qui a sa barre) ;
+    /// un objet sélectionné a sa barre d'actions (L5).
     private var trailingRailIsShown: Bool {
         guard ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText),
               drawingBar == nil else { return false }
@@ -422,7 +426,8 @@ struct ComposerSceneSurface: View {
                                                 onEdit: onEditBackgroundSound,
                                                 onDelete: onDeleteBackgroundSound,
                                                 onPromote: onPromoteBackgroundSound),
-                                   pasteEntry: railSystemEntry)
+                                   pasteEntry: railSystemEntry,
+                                   selectionBar: selectionBar)
     }
 
     /// **Le volet de description, borné à la CARTE.**

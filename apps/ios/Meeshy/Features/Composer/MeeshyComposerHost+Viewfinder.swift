@@ -43,6 +43,17 @@ extension MeeshyComposerHost {
         return true
     }
 
+    /// Le toucher d'une scène vide armerait-il le viseur ? La même question
+    /// que ci-dessus, sans l'armer (#13839, L5).
+    var sceneQuickCaptureIsOffered: Bool {
+        ComposerSceneQuickCapture.offers(
+            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
+            format: selectedFormat,
+            stage: sceneCameraStage,
+            toolIsOpen: sceneToolOwnsScreen)
+            && ComposerSceneQuickCapture.tap(format: selectedFormat) != nil
+    }
+
     /// **L'appui long sur la photothèque PROPOSE ses sources** (#10357,
     /// porteur 2026-10-12, qui remplace l'armement direct de #10306) :
     /// « Prendre une photo » — le viseur de la scène, seconde entrée de la

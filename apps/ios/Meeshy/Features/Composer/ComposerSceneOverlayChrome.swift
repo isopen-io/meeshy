@@ -30,6 +30,9 @@ struct ComposerSceneOverlayChrome: View {
     var moreMenu: AnyView?
     var sound = Sound()
     var pasteEntry: AnyView?
+    /// La barre d'un élément sélectionné (#13839, L5), en bas de la scène,
+    /// juste au-dessus de Public et Publier.
+    var selectionBar: ComposerSelectionBar?
 
     @State private var press = ComposerRailDoorPress()
 
@@ -42,7 +45,13 @@ struct ComposerSceneOverlayChrome: View {
                     .transition(.opacity)
             }
             Spacer(minLength: 0)
+            if ComposerRestChrome.selectionBarIsShown(state), let selectionBar {
+                selectionBar
+                    .padding(.bottom, MeeshySpacing.sm)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.easeOut(duration: 0.18), value: ComposerRestChrome.selectionBarIsShown(state))
         .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.top, MeeshySpacing.xs)
     }

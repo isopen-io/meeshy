@@ -298,19 +298,11 @@ extension MeeshyComposerHost {
             sceneImagesVersion: viewModel.loadedImagesVersion,
             sceneLocalMediaAliases: viewModel.adoptedLocalMedia,
             onItemTapped: { id, kind in
-                // **Toucher un objet le SÉLECTIONNE et montre ses options à
-                // droite** (#8714, directive porteur 2026-09-29) — un son
-                // compris : sa « Création audio » est désormais l'entrée
-                // « Modifier » de la colonne, comme pour les quatre autres
-                // familles, au lieu de s'ouvrir sous le doigt (#4671).
-                //
-                // **Et le met en ÉDITION EN PLACE** (#9138) : toucher, créer,
-                // double-toucher et « Modifier » mènent au même état — ses
-                // sous-outils à droite, puis `(x)`.
-                if !beginInlineEdit(id) {
-                    selectedSceneItemId = id
-                    selectedSceneItemKind = kind
-                }
+                // **Toucher un objet le SÉLECTIONNE** (#13839, L5) — un son
+                // compris : le canvas l'encadre, les outils se retirent et la
+                // barre libellée paraît ; « Modifier » y ouvre son édition,
+                // comme le double toucher. Rien ne s'ouvre sous le doigt.
+                sceneSelectionRelay.selectSceneItem(id, kind: kind)
             },
             // **« Modifier »** — le double toucher et l'action VoiceOver du même
             // nom ouvrent la même édition que la colonne droite
@@ -427,14 +419,14 @@ extension MeeshyComposerHost {
             // absent, jamais grisé.
             onUndo: sceneUndo,
             onRedo: sceneRedo,
-            // **Une sélection SILENCIEUSE** (directive porteur 2026-09-27 :
-            // « il ne faut plus l'entourer sur la scène ni afficher sa
-            // configuration par des détails en bas »). Ni contour, ni badge, ni
-            // rangée de jetons : l'appui long montre ses actions, le double-tap
-            // ouvre son édition. Le meuble garde l'id sélectionné pour ces deux
-            // gestes, il ne le PEINT plus.
-            selectedItemId: nil,
+            // **La sélection se VOIT** (#13839, L5, maquette validée, qui
+            // remplace la sélection silencieuse) : un cadre pointillé blanc,
+            // peint par le canvas hors de l'export.
+            // Ni badge, ni rangée de jetons : la barre dit le reste. Pendant
+            // la frappe, le curseur suffit.
+            selectedItemId: sceneTypesInline ? nil : selectedSceneItemId,
             selectionBadge: nil,
+            selectionBar: sceneSelectionRelay.bar,
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence

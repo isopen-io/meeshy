@@ -442,7 +442,11 @@ public final class StoryCanvasUIView: UIView {
     public internal(set) var isDrawingMode: Bool = false
 
     /// Item currently being dragged/scaled/rotated. Reset on .ended/.cancelled.
-    var manipulatedItemId: String?
+    var manipulatedItemId: String? {
+        didSet { if manipulatedItemId == nil, oldValue != nil { lastManipulationEndedAt = Date() } }
+    }
+    /// La fin du dernier geste : un appui long qui la suit n'ouvre aucun menu (L5).
+    var lastManipulationEndedAt: Date?
     var dragStartSlideX: Double = 0
     var dragStartSlideY: Double = 0
     var baseScale: Double = 1.0

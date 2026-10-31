@@ -192,7 +192,7 @@ extension MeeshyComposerHost {
         // énumérer — cinq, dont une née d'un GESTE et absente de tout
         // inventaire. Ici, une sixième porte hérite de la
         // pré-montée sans que personne n'ait à y penser.
-        if let poseeParLeRail { beginInlineEdit(poseeParLeRail) }
+        if let poseeParLeRail { sceneSelectionRelay.selectSceneItem(poseeParLeRail) }
         startPendingPreUploads()
     }
 

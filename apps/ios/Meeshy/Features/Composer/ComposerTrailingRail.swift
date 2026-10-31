@@ -368,12 +368,6 @@ nonisolated enum ComposerTrailingRailCopy {
         String(localized: "composer.rail.slide.add",
                defaultValue: "Nouvelle slide", bundle: .main)
     }
-
-    /// Le `(x)` d'une sélection (#8714) : il ne détruit rien, il rend la scène.
-    static var exitObject: String {
-        String(localized: "composer.rail.object.exit",
-               defaultValue: "Quitter l'objet", bundle: .main)
-    }
 }
 
 /// Les mots des EFFETS de la scène (#8712, #8792) : deux familles, deux noms.
@@ -443,25 +437,9 @@ struct ComposerTrailingColumnPaint {
             label = ComposerSceneEffectCopy.label(effet)
             isOn = ouvert
             tint = neutre
-        case .editorSection(let section, let ouvert):
-            symbol = ComposerObjectEditorRail.symbolName(section)
-            label = ComposerObjectEditorCopy.entry(section)
-            isOn = ouvert
-            tint = neutre
-        case .objectAction(let action):
-            symbol = action.systemImage
-            label = action.title
-            isOn = false
-            // La seule action DESTRUCTRICE porte la couleur sémantique d'erreur.
-            tint = action == .delete ? MeeshyColors.error : neutre
         case .exitTool:
             symbol = "xmark"
             label = ComposerToolExitCopy.label
-            isOn = false
-            tint = neutre
-        case .exitObject:
-            symbol = "xmark"
-            label = ComposerTrailingRailCopy.exitObject
             isOn = false
             tint = neutre
         }

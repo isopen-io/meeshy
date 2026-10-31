@@ -132,25 +132,6 @@ nonisolated enum ComposerSceneBackgroundTapPolicy {
         guard currentSelection == nil, backgroundIsMedia else { return nil }
         return .media
     }
-
-    /// **Sur la SCÈNE, le même toucher ouvre les outils du FOND.**
-    ///
-    /// Le fond est l'objet du plan `bg` (vue `1c` : trois plans, un seul objet
-    /// à la fois) et se sélectionne comme les autres, au toucher : toucher un
-    /// objet mène à son édition en place. La règle ci-dessus ne pose qu'un `kind`
-    /// sans identifiant, que seule la surface document lit : sur la scène, rien ne
-    /// bougerait, et « Réglages » du fond resterait inatteignable. Mêmes
-    /// conditions que `selection`, plus une : un carrousel d'effets ouvert, que ce
-    /// toucher referme, garde son geste.
-    static func backgroundToEdit(currentSelection: StoryCanvasUIView.CanvasItemKind?,
-                                 effectIsOpen: Bool,
-                                 backgroundMediaId: String?) -> String? {
-        guard !effectIsOpen,
-              let backgroundMediaId, !backgroundMediaId.isEmpty,
-              selection(currentSelection: currentSelection, backgroundIsMedia: true) != nil
-        else { return nil }
-        return backgroundMediaId
-    }
 }
 
 /// **Le gate du MOOD — la jumelle de `ComposerReelGate`.**

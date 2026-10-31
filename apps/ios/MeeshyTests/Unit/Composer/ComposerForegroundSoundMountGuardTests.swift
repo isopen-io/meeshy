@@ -458,7 +458,7 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         guard let tap = corps("onItemTapped: { id, kind in", dans: surfaces) else {
             return XCTFail("`onItemTapped` introuvable — la garde ne mesurerait rien.")
         }
-        XCTAssertTrue(tap.contains("selectedSceneItemId = id"))
+        XCTAssertTrue(tap.contains("selectSceneItem(id"), "le tap simple SÉLECTIONNE (#13839, L5)")
         XCTAssertFalse(tap.contains("editSceneSound(id)"),
                        "le tap simple sélectionne : la feuille s'ouvre par « Modifier »")
         let colonnes = try source("MeeshyComposerHost+SceneColumns.swift")

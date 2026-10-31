@@ -74,77 +74,36 @@ final class ComposerSceneColumnsTests: XCTestCase {
                        2 * (ComposerRailGeometry.railWidth + ComposerRailGeometry.floatingEntrySpacing))
     }
 
-    // MARK: - Un objet touché : ses options à droite, terminées par (x) (#8714)
+    // MARK: - Un objet en édition : la colonne se tait (#13839, L5)
+    //
+    // Le rail de 8 à 15 glyphes sans libellé et son ✕ « Quitter l'objet » sont
+    // partis : les actions d'un élément vivent dans la barre de la sélection
+    // (`ComposerSelectionActions`), ses réglages dans la feuille Modifier.
 
     func test_focus_outilOuvert_lEmporteSurUneSelection() {
         let controles = [control("drawing.tool")]
-        let focus = ComposerTrailingColumn.focus(railMode: .tool(controles),
-                                                 selection: (sections: [.timing], open: nil, actions: [.delete]))
+        let focus = ComposerTrailingColumn.focus(railMode: .tool(controles), objectIsEdited: true)
         XCTAssertEqual(focus, .tool(controles))
     }
 
-    func test_focus_selectionSansOutil_rendLObjet() {
-        let focus = ComposerTrailingColumn.focus(railMode: .doors([.media]),
-                                                 selection: (sections: [.timing], open: nil, actions: [.delete]))
-        XCTAssertEqual(focus, .object(sections: [.timing], open: nil, actions: [.delete]))
-        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), selection: nil), .scene(effects: [], open: nil))
+    func test_focus_objetEnEditionSansOutil_rendLObjet() {
+        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([.media]), objectIsEdited: true), .object)
+        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), objectIsEdited: false),
+                       .scene(effects: [], open: nil))
     }
 
-    func test_options_objet_modifierPuisSectionsPuisActionsPuisSortie() {
-        let options = ComposerTrailingColumn.options(for: .object(
-            sections: [.media(.filter), .timing],
-            open: .timing,
-            actions: [.edit, .duplicate, .delete]))
-        XCTAssertEqual(options, [
-            .objectAction(.edit),
-            .editorSection(.media(.filter), isOpen: false), .editorSection(.timing, isOpen: true),
-            .objectAction(.duplicate), .objectAction(.delete),
-            .exitObject
-        ])
-        XCTAssertEqual(options.last, .exitObject, "le (x) est TOUJOURS la dernière entrée")
+    func test_options_objetEnEdition_aucuneOptionAuRail() {
+        XCTAssertEqual(ComposerTrailingColumn.options(for: .object), [],
+                       "ni glyphe sans libellé, ni ✕ collé à la corbeille")
     }
 
-    func test_options_objetAvecRognage_neLeMontreQuUneFois() {
-        let options = ComposerTrailingColumn.options(for: .object(
-            sections: [.media(.trim), .timing],
-            open: nil,
-            actions: [.trim, .delete]))
-        XCTAssertFalse(options.contains(.objectAction(.trim)))
-        XCTAssertTrue(options.contains(.editorSection(.media(.trim), isOpen: false)))
+    func test_foot_objetEnEdition_garderLHistorique() {
+        XCTAssertEqual(ComposerTrailingColumn.foot(for: .object, timeServed: true), [.undo, .redo])
     }
 
-    /// **Aucune seconde liste** : ce que la colonne offre pour un texte sort
-    /// des inventaires existants, composés — jamais d'un littéral.
-    func test_options_texteReel_composeLesInventairesExistants() {
-        let texte = StoryTextObject(id: "t1", text: "salut")
-        var effets = StoryEffects()
-        effets.textObjects = [texte]
-        let slide = StorySlide(id: "s1", effects: effets)
-        let sections = ComposerObjectEditorRail.entries(for: .text)
-        let actions = ComposerTrailingRailPolicy.actions(slide: slide, selectedId: "t1",
-                                                         served: ComposerTrailingColumn.servedActions,
-                                                         hasEditor: true, canLeaveScene: false)
-        let options = ComposerTrailingColumn.options(for: .object(sections: sections, open: nil, actions: actions))
-        XCTAssertEqual(options.first, .objectAction(.edit))
-        XCTAssertTrue(options.contains(.objectAction(.delete)))
-        XCTAssertEqual(options.filter { if case .editorSection = $0 { return true }; return false }.count,
-                       sections.count)
-        XCTAssertFalse(options.contains(.objectAction(.leaveScene)), "sortir de la scène attend #4038")
-    }
-
-    func test_isExit_seulesLesSortiesEchappentAuDefilement() {
+    func test_isExit_seuleLaSortieDOutilEchappeAuDefilement() {
         XCTAssertTrue(ComposerTrailingColumn.Entry.exitTool.isExit)
-        XCTAssertTrue(ComposerTrailingColumn.Entry.exitObject.isExit)
-        XCTAssertFalse(ComposerTrailingColumn.Entry.objectAction(.delete).isExit)
-        XCTAssertFalse(ComposerTrailingColumn.Entry.editorSection(.timing, isOpen: false).isExit)
-    }
-
-    func test_entryIds_sontUniquesDansUneColonne() {
-        let options = ComposerTrailingColumn.options(for: .object(
-            sections: ComposerObjectEditorRail.entries(for: .text),
-            open: nil,
-            actions: [.edit, .duplicate, .bringForward, .sendBackward, .delete]))
-        XCTAssertEqual(Set(options.map(\.id)).count, options.count)
+        XCTAssertFalse(ComposerTrailingColumn.Entry.sceneEffect(.visual, isOpen: false).isExit)
     }
 
     // MARK: - Les effets d'une scène à fond média (#8712, #8792)
@@ -173,23 +132,22 @@ final class ComposerSceneColumnsTests: XCTestCase {
 
     func test_options_sceneAFondMedia_effetsDeHautEnBas_ouvertMarque() {
         let options = ComposerTrailingColumn.options(for: ComposerTrailingColumn.focus(
-            railMode: .doors([]), selection: nil,
+            railMode: .doors([]), objectIsEdited: false,
             effects: [.opening, .visual], openEffect: .opening))
         XCTAssertEqual(options, [.sceneEffect(.opening, isOpen: true), .sceneEffect(.visual, isOpen: false)])
         XCTAssertFalse(options.contains(where: \.isExit), "la scène n'a pas de mode à quitter")
     }
 
     func test_focus_effetOuvertNonServi_nEstPasMarque() {
-        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), selection: nil,
+        XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), objectIsEdited: false,
                                                     effects: [.opening], openEffect: .visual),
                        .scene(effects: [.opening], open: nil))
     }
 
     func test_focus_objetTouche_remplaceLesEffets() {
-        let focus = ComposerTrailingColumn.focus(railMode: .doors([]),
-                                                 selection: (sections: [.timing], open: nil, actions: [.delete]),
+        let focus = ComposerTrailingColumn.focus(railMode: .doors([]), objectIsEdited: true,
                                                  effects: [.visual], openEffect: .visual)
-        XCTAssertEqual(focus, .object(sections: [.timing], open: nil, actions: [.delete]))
+        XCTAssertEqual(focus, .object)
     }
 
     func test_toggled_retoucherLEffetOuvert_leReferme() {

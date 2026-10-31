@@ -25,36 +25,10 @@ extension MeeshyComposerHost {
 
     // MARK: - Le rail droit : les options du moment (#8713, #8714)
 
-    /// **Ce que l'objet en édition offre** (#9138) — ses sous-outils dans
-    /// l'ordre canonique, celui qui est ouvert, et ses actions, lus des
-    /// inventaires qui existent. `nil` ⇒ rien en édition, ou un identifiant qui
-    /// ne désigne plus rien (un objet supprimé pendant que la sélection tenait).
-    var sceneSelectionInventory: (sections: [ComposerObjectEditorSection],
-                                  open: ComposerObjectEditorSection?,
-                                  actions: [StoryCanvasContextAction])? {
-        let slide = viewModel.currentSlide
-        guard let edition = activeInlineEdit, let objet = slide.sceneObject(id: edition.objectId) else {
-            return nil
-        }
-        let offertes = ComposerTrailingRailPolicy.actions(
-            slide: slide,
-            selectedId: edition.objectId,
-            served: ComposerTrailingColumn.servedActions,
-            hasEditor: editableSceneKindsServed.contains(Self.canvasKind(objet.kind)),
-            canLeaveScene: false)
-        return (inlineSections(for: edition.objectId, family: edition.family),
-                edition.openSection,
-                ComposerInlineEditing.actions(for: edition.family, offered: offertes))
-    }
-
-    private var editableSceneKindsServed: Set<StoryCanvasUIView.CanvasItemKind> {
-        ComposerSceneSurface.defaultEditableSceneKinds
-    }
-
     var sceneTrailingFocus: ComposerTrailingColumn.Focus {
         ComposerTrailingColumn.focus(
             railMode: sceneRailMode,
-            selection: sceneSelectionInventory,
+            objectIsEdited: activeInlineEdit != nil,
             effects: sceneEffects,
             openEffect: activeSceneEffect,
             typing: sceneTypesInline)
@@ -98,7 +72,7 @@ extension MeeshyComposerHost {
         guard mountedComposerView == .scene else { return nil }
         return ComposerSceneEffects.carousel(open: openSceneEffect,
                                              served: sceneEffects,
-                                             objectSelected: sceneSelectionInventory != nil,
+                                             objectSelected: activeInlineEdit != nil || sceneSelectionRelay.current != nil,
                                              toolIsOpen: sceneToolOwnsScreen)
     }
 
@@ -165,22 +139,11 @@ extension MeeshyComposerHost {
             handleRailExitTool()
             selectedSceneItemId = nil
             selectedSceneItemKind = nil
-        case .editorSection(let section, _):
-            tapInlineSection(section)
-        case .objectAction(.edit):
-            guard let id = selectedSceneItemId, let kind = selectedSceneItemKind else { return }
-            editSceneItem(id, kind: kind)
-        case .objectAction(let action):
-            handleTrailingRailAction(action)
-        case .exitObject:
-            // Le `(x)` d'une édition ne détruit rien : il rend les rails de la
-            // scène.
-            leaveInlineEdit()
         }
     }
 
-    /// **« Modifier » — le double toucher, l'appui long et la colonne droite
-    /// ouvrent la MÊME édition** (#4074, #8680, #8714).
+    /// **« Modifier » — le double toucher, l'appui long et la barre de la
+    /// sélection ouvrent la MÊME édition** (#4074, #8680, #13839 L5).
     ///
     /// Le `switch` est exhaustif pour que l'ajout d'un éditeur oblige à passer
     /// ici ET à élargir `editableSceneKinds` : servir l'un sans l'autre rendrait
@@ -188,21 +151,19 @@ extension MeeshyComposerHost {
     func editSceneItem(_ id: String, kind: StoryCanvasUIView.CanvasItemKind) {
         switch kind {
         case .text:
-            // La MÊME édition que la porte TEXTE (#8680) : scène réduite,
-            // outils du texte et `(x)` au rail.
+            // La MÊME édition que la porte TEXTE (#8680) : la frappe, barre
+            // collée au clavier (L4).
             beginSceneTextEditing(id)
             HapticFeedback.medium()
         case .audio:
-            // « Création audio » SUR ce son (#4671) — le même écran que les
-            // deux autres surfaces qui portent un son.
+            // « Création audio » SUR ce son (#4671).
             editSceneSound(id)
         case .media, .sticker, .place:
-            // **Tout objet s'édite EN PLACE** (#9138) — une image ou une vidéo comprise
-            // (#13840) : ses filtres, effets et cadres sont des RÉGLAGES de l'objet,
-            // jamais un fichier cuit qui le remplace ; textes, stickers et sons
-            // posés par-dessus restent mobiles jusqu'à la publication.
-            beginInlineEdit(id)
-            HapticFeedback.medium()
+            // **Tout objet s'édite EN PLACE** (#9138, #13840) : un média par sa
+            // feuille non destructive, un sticker et un lieu par leur feuille
+            // (`modifySceneItem`). Textes, stickers et sons posés par-dessus
+            // restent mobiles jusqu'à la publication.
+            sceneSelectionRelay.modifySceneItem(id)
         }
     }
 

@@ -33,7 +33,8 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
 /// Au repos : ✕ en haut à gauche, ↶ ↷ avec un historique, la rangée des diapos
 /// dès deux diapos, la colonne des six. Un outil ouvert, une frappe ou le
 /// viseur retirent tout ; un panneau du bas (fond, cadrage, effets, frise)
-/// retire la colonne et garde ✕.
+/// retire la colonne et garde ✕. Une sélection remplace la colonne par la
+/// barre d'actions (L5).
 nonisolated enum ComposerRestChrome {
 
     struct State: Equatable, Sendable {
@@ -42,6 +43,9 @@ nonisolated enum ComposerRestChrome {
         var cameraIsArmed: Bool
         var bottomPanelIsOpen: Bool
         var timelineIsOpen: Bool
+        /// Un élément est sélectionné (#13839, L5) : les outils se retirent,
+        /// la barre d'actions libellées paraît au-dessus de Public et Publier.
+        var objectIsSelected: Bool = false
     }
 
     enum SoundAction: Equatable, Sendable {
@@ -67,7 +71,13 @@ nonisolated enum ComposerRestChrome {
     }
 
     static func toolColumnIsShown(_ state: State) -> Bool {
-        topRowIsShown(state) && !state.bottomPanelIsOpen
+        topRowIsShown(state) && !state.bottomPanelIsOpen && !state.objectIsSelected
+    }
+
+    /// La barre de la sélection vit où vivait la colonne : jamais pendant un
+    /// outil, une frappe, le viseur ou un panneau du bas.
+    static func selectionBarIsShown(_ state: State) -> Bool {
+        topRowIsShown(state) && !state.bottomPanelIsOpen && state.objectIsSelected
     }
 
     /// Le bouton Son rouvre le son de fond quand il y en a un et qu'il a un
