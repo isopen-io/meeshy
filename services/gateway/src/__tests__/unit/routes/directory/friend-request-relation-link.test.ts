@@ -117,6 +117,16 @@ describe('#13926 — accepter une demande écrit le lien FRIEND/FRIEND', () => {
     });
   });
 
+  it('oublie les amis des DEUX comptes dans les caches du temps réel social et du fil (feed:friends:, 300 s, jamais invalidé avant #13927)', async () => {
+    mockFeedCacheDel.mockClear();
+    const socialEvents = { invalidateFriendsCache: jest.fn((_userId: string) => undefined) };
+
+    await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], socialEvents });
+
+    expect(socialEvents.invalidateFriendsCache.mock.calls.map(([id]) => id).sort()).toEqual([MOI, AUTRE].sort());
+    expect(mockFeedCacheDel.mock.calls.map(([key]) => key).sort()).toEqual([`feed:friends:${MOI}`, `feed:friends:${AUTRE}`].sort());
+  });
+
   it('ne fait pas échouer l’acceptation quand l’écriture du lien échoue — la demande acceptée reste la vérité de repli', async () => {
     const down = { findUnique: jest.fn(async () => { throw new Error('mongo down'); }) };
 
