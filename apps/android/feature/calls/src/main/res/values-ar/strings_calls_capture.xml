@@ -12,4 +12,5 @@
     <string name="call_mode_record">تصوير</string>
     <string name="call_mode_record_stop">إيقاف التسجيل</string>
     <string name="call_mode_record_stop_hint">يحفظ الفيديو في معرضك</string>
+    <string name="call_capture_faces_hint">يحفظ صورة مربعة لكل مشارك في معرضك</string>
 </resources>

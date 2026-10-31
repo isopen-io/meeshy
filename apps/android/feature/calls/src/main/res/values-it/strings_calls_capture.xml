@@ -12,4 +12,5 @@
     <string name="call_mode_record">Registra</string>
     <string name="call_mode_record_stop">Interrompi la registrazione</string>
     <string name="call_mode_record_stop_hint">Salva il video nella tua galleria</string>
+    <string name="call_capture_faces_hint">Salva un ritratto quadrato di ogni partecipante nella tua galleria</string>
 </resources>

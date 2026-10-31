@@ -26,6 +26,7 @@ import me.meeshy.sdk.model.call.montage.CallCaptureState
 import me.meeshy.sdk.model.call.montage.CallCaptureStatus
 import me.meeshy.sdk.model.call.montage.CallCaptureSubject
 import me.meeshy.sdk.model.call.montage.CallMontageChoice
+import me.meeshy.sdk.model.call.montage.CallMontageLayout
 import me.meeshy.sdk.model.call.montage.CallMontageMoodChip
 import me.meeshy.sdk.model.call.montage.CallMontagePick
 import me.meeshy.sdk.model.call.montage.CallMontagePickRule
@@ -99,6 +100,7 @@ class CallCaptureController(
     private val scope: CoroutineScope,
     private val clock: () -> Long,
     private val stamp: () -> String,
+    private val faces: CallFacePortraiting = CallFacePortraitPainter(),
     private val paintContext: CoroutineContext = Dispatchers.Default,
 ) {
     private val _state = MutableStateFlow(CallCaptureState())
@@ -241,6 +243,32 @@ class CallCaptureController(
         val saved = saver.saveImage(painted, CallCaptureSpec.photoName(stamp()))
         painted.recycle()
         finish(if (saved) CallCaptureStatus.Saved else CallCaptureStatus.Failed)
+    }
+
+    /**
+     * « Chaque visage » (iOS `captureFaces`, #13691) : un portrait carré de [CallMontageLayout.FACE_SIDE] par personne
+     * qui a une image, pris à pleine définition, chacun déposé en galerie sous son propre nom ; l'issue compte ceux
+     * que la galerie a gardés.
+     */
+    suspend fun captureFaces(subjects: List<CallCaptureSubject>, mayWrite: suspend () -> Boolean) {
+        val shot = CallCaptureMachine.shoot(_state.value) ?: return
+        settling?.cancel()
+        _state.value = shot
+        if (!mayWrite()) return finish(CallCaptureStatus.Denied)
+        val images = frames.snapshot(subjects, maxDimension = null)
+        if (images.isEmpty()) return finish(CallCaptureStatus.NoVideo)
+        val portraits = try {
+            withContext(paintContext) {
+                subjects.mapNotNull { images[it.id] }.mapNotNull { faces.portrait(it, CallMontageLayout.FACE_SIDE) }
+            }
+        } finally {
+            images.values.forEach(Bitmap::recycle)
+        }
+        val stamp = stamp()
+        val saved = portraits.withIndex().count { (index, portrait) ->
+            saver.saveImage(portrait, CallCaptureSpec.photoName("$stamp-${index + 1}")).also { portrait.recycle() }
+        }
+        finish(if (saved > 0) CallCaptureStatus.FacesSaved(saved) else CallCaptureStatus.Failed)
     }
 
     /** [scene] se relit à chaque image : le film suit le cadre qu'on change en chemin. */
