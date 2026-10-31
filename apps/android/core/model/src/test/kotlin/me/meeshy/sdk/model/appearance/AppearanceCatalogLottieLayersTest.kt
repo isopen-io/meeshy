@@ -9,10 +9,10 @@ class AppearanceCatalogLottieLayersTest {
     private val catalog = AppearanceCatalog.decode(AppearanceFixtures.embeddedCatalogText())
 
     @Test
-    fun `the embedded catalog references the nine animated layers and the 30 illustrated films, each once`() {
+    fun `the embedded catalog references the nine animated layers and the 54 illustrated films, each once`() {
         val layers = catalog.lottieLayers
-        assertThat(layers).hasSize(39)
-        assertThat(layers.map { it.sha256 }.toSet()).hasSize(39)
+        assertThat(layers).hasSize(63)
+        assertThat(layers.map { it.sha256 }.toSet()).hasSize(63)
     }
 
     @Test
@@ -23,7 +23,7 @@ class AppearanceCatalogLottieLayersTest {
             (catalog.wallpaper("animes", it) as? WallpaperDesign.Designed)?.design?.lottie
         }
         val films = catalog.ringPacks.filter { it.slug.startsWith("cadres-") }.flatMap { pack -> pack.rings.flatMap { listOf(it.decor?.back, it.decor?.front) } }
-        assertThat(films).hasSize(30)
+        assertThat(films).hasSize(54)
         val expected = rings + banners + wallpapers + films
         assertThat(expected).doesNotContain(null)
         assertThat(catalog.lottieLayers).containsExactlyElementsIn(expected)

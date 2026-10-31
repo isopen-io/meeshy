@@ -107,6 +107,18 @@
     "cadres-celtes": {
       "name": "Marcos celtas",
       "description": "Tres marcos inspirados en los entrelazados celtas: un nudo que se borra y se vuelve a trazar, una espiral triple que gira y una hiedra esmeralda de hojas que tiemblan."
+    },
+    "cadres-nordiques": {
+      "name": "Marcos nórdicos",
+      "description": "Cuatro marcos del gran Norte: cuervos que giran, una aurora boreal que ondula, un anillo de piedra grabada que se ilumina y una proa tallada sobre las olas."
+    },
+    "cadres-egyptiens": {
+      "name": "Marcos egipcios",
+      "description": "Cuatro marcos de oro y lapislázuli: una cobra que se yergue, un escarabajo que abre sus alas, un sol del desierto con gran collar y lotos del Nilo que se abren."
+    },
+    "cadres-mayas": {
+      "name": "Marcos mayas",
+      "description": "Cuatro marcos de piedra y jade: una serpiente de jade con cresta de plumas, cartuchos de glifos que se iluminan, un friso escalonado bajo un sol naciente y un jaguar escondido en la selva."
     }
   },
   "designs": {
@@ -169,7 +181,19 @@
     "collier-perles": "Collar de cuentas",
     "noeud-entrelace": "Nudo entrelazado",
     "spirale-triple": "Espiral triple",
-    "lierre-emeraude": "Hiedra esmeralda"
+    "lierre-emeraude": "Hiedra esmeralda",
+    "corbeaux-tournoyants": "Cuervos en círculo",
+    "aurore-boreale": "Aurora boreal",
+    "anneau-pierre-gravee": "Anillo de piedra grabada",
+    "proue-sculptee": "Proa tallada",
+    "cobra-dore": "Cobra dorada",
+    "scarabee-aile": "Escarabajo alado",
+    "soleil-du-desert": "Sol del desierto",
+    "lotus-du-nil": "Loto del Nilo",
+    "serpent-de-jade": "Serpiente de jade",
+    "cartouches-de-glyphes": "Cartuchos de glifos",
+    "frise-a-gradins": "Friso escalonado",
+    "jaguar-de-jungle": "Jaguar de la selva"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

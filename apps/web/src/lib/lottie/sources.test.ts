@@ -21,7 +21,7 @@ const declared = (): readonly Ref[] =>
 describe('les couches Lottie des packs intégrés (#10638)', () => {
   test('toute couche déclarée par le catalogue intégré est embarquée et se lit — films des cadres illustrés compris (#13960)', async () => {
     const refs = declared();
-    expect(refs.length).toBeGreaterThanOrEqual(39);
+    expect(refs.length).toBeGreaterThanOrEqual(63);
     for (const ref of refs) {
       expect(BUILTIN_LOTTIE_SRCS).toContain(ref.src);
       const bytes = await lottieBytesLoader(ref, { origin: 'https://gate.test' })();

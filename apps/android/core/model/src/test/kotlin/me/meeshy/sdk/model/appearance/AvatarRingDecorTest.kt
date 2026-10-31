@@ -93,6 +93,6 @@ class AvatarRingDecorTest {
     }
 
     private companion object {
-        val CULTURAL_FAMILIES = listOf("cadres-asiatiques", "cadres-africains", "cadres-celtes")
+        val CULTURAL_FAMILIES = listOf("cadres-asiatiques", "cadres-africains", "cadres-celtes", "cadres-nordiques", "cadres-egyptiens", "cadres-mayas")
     }
 }

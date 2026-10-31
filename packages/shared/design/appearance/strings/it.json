@@ -107,6 +107,18 @@
     "cadres-celtes": {
       "name": "Cornici celtiche",
       "description": "Tre cornici ispirate agli intrecci celtici: un nodo che svanisce e si ridisegna, una spirale tripla che gira e un’edera smeraldo dalle foglie che fremono."
+    },
+    "cadres-nordiques": {
+      "name": "Cornici nordiche",
+      "description": "Quattro cornici dal grande Nord: corvi che volteggiano, un’aurora boreale che ondeggia, un anello di pietra incisa che si illumina e una prua scolpita sulle onde."
+    },
+    "cadres-egyptiens": {
+      "name": "Cornici egizie",
+      "description": "Quattro cornici d’oro e lapislazzuli: un cobra che si erge, uno scarabeo che apre le ali, un sole del deserto dal grande collare e loti del Nilo che sbocciano."
+    },
+    "cadres-mayas": {
+      "name": "Cornici maya",
+      "description": "Quattro cornici di pietra e giada: un serpente di giada dalla cresta piumata, cartigli di glifi che si illuminano, un fregio a gradoni sotto il sole nascente e un giaguaro nascosto nella giungla."
     }
   },
   "designs": {
@@ -169,7 +181,19 @@
     "collier-perles": "Collana di perle",
     "noeud-entrelace": "Nodo intrecciato",
     "spirale-triple": "Spirale tripla",
-    "lierre-emeraude": "Edera smeraldo"
+    "lierre-emeraude": "Edera smeraldo",
+    "corbeaux-tournoyants": "Corvi in volo",
+    "aurore-boreale": "Aurora boreale",
+    "anneau-pierre-gravee": "Anello di pietra incisa",
+    "proue-sculptee": "Prua scolpita",
+    "cobra-dore": "Cobra d’oro",
+    "scarabee-aile": "Scarabeo alato",
+    "soleil-du-desert": "Sole del deserto",
+    "lotus-du-nil": "Loto del Nilo",
+    "serpent-de-jade": "Serpente di giada",
+    "cartouches-de-glyphes": "Cartigli di glifi",
+    "frise-a-gradins": "Fregio a gradoni",
+    "jaguar-de-jungle": "Giaguaro della giungla"
   },
   "gamut": {
     "indigo": "Indaco Meeshy",

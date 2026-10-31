@@ -1285,5 +1285,302 @@
         "avatar"
       ]
     }
+  },
+  {
+    "slug": "cadres-nordiques",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 13,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "50c75c96d2170339.webp",
+      "bytes": 9576,
+      "sha256": "50c75c96d217033910e78a28491189cee8c435ac9069e87a6660723eee885666"
+    },
+    "preview": null,
+    "contract": {
+      "src": "a6ef258ac7ee97eb.json",
+      "bytes": 7042,
+      "sha256": "a6ef258ac7ee97eb229e174ed7f6a1d71435da3e4e0e803351c5409413814284"
+    },
+    "strings": {
+      "fr": {
+        "src": "da3350313e54e21e.json",
+        "bytes": 181,
+        "sha256": "da3350313e54e21e6539625ab60a1b003585559e52243e37ea3b5f63c23ddb34"
+      },
+      "en": {
+        "src": "c5f7d58fddb241c7.json",
+        "bytes": 165,
+        "sha256": "c5f7d58fddb241c7cad80a1e58f19e5e89d5d0137e6774b5b6373de12eb539f7"
+      },
+      "es": {
+        "src": "ae6a17f21a907963.json",
+        "bytes": 175,
+        "sha256": "ae6a17f21a907963f0c6944074d14abb3724a283b63fd75a09b8b84ceb923f47"
+      },
+      "pt": {
+        "src": "f36e5f30928a9f4a.json",
+        "bytes": 173,
+        "sha256": "f36e5f30928a9f4a9fea9a94187c92af4c3581de8c8b5beced0a3c30025848d1"
+      },
+      "de": {
+        "src": "a1a268569087e68e.json",
+        "bytes": 167,
+        "sha256": "a1a268569087e68ed8aefe144fe9b1ee5f069199fcb259392a8663585cacc760"
+      },
+      "it": {
+        "src": "bbb0d6af076fb960.json",
+        "bytes": 170,
+        "sha256": "bbb0d6af076fb960d8ec850e9e5b0492415de8856fe43918fcb8bee67694dab3"
+      },
+      "ar": {
+        "src": "d9ccd15e7939aeda.json",
+        "bytes": 212,
+        "sha256": "d9ccd15e7939aeda1e288837a5d39c0bb3a3f51eaa0042beedee66abc0bb1e58"
+      }
+    },
+    "downloadBytes": {
+      "story": 7042,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres nordiques",
+        "description": "Quatre cadres venus du grand Nord : des corbeaux qui tournoient, une aurore boréale qui ondule, un anneau de pierre gravée qui s’allume, une proue sculptée sur les vagues."
+      },
+      "en": {
+        "name": "Nordic frames",
+        "description": "Four frames from the far North: circling ravens, a rippling northern aurora, a carved stone ring that lights up and a carved prow riding the waves."
+      },
+      "es": {
+        "name": "Marcos nórdicos",
+        "description": "Cuatro marcos del gran Norte: cuervos que giran, una aurora boreal que ondula, un anillo de piedra grabada que se ilumina y una proa tallada sobre las olas."
+      },
+      "pt": {
+        "name": "Molduras nórdicas",
+        "description": "Quatro molduras do grande Norte: corvos que rodopiam, uma aurora boreal que ondula, um anel de pedra gravada que se acende e uma proa esculpida sobre as ondas."
+      },
+      "de": {
+        "name": "Nordische Rahmen",
+        "description": "Vier Rahmen aus dem hohen Norden: kreisende Raben, ein wogendes Nordlicht, ein gravierter Steinring, der aufleuchtet, und ein geschnitzter Bug auf den Wellen."
+      },
+      "it": {
+        "name": "Cornici nordiche",
+        "description": "Quattro cornici dal grande Nord: corvi che volteggiano, un’aurora boreale che ondeggia, un anello di pietra incisa che si illumina e una prua scolpita sulle onde."
+      },
+      "ar": {
+        "name": "إطارات شمالية",
+        "description": "أربعة إطارات من أقصى الشمال: غربان تحلّق في دوائر، وشفق قطبي يتموّج، وحلقة من الحجر المنقوش تضيء، ومقدّمة سفينة منحوتة فوق الأمواج."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-egyptiens",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 14,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "f35cb6670b3d7003.webp",
+      "bytes": 10024,
+      "sha256": "f35cb6670b3d7003949c1691a6e7962e79d091de6165f323fa9fa8ff922ecfdc"
+    },
+    "preview": null,
+    "contract": {
+      "src": "a7463868ca9ca6e8.json",
+      "bytes": 6933,
+      "sha256": "a7463868ca9ca6e8b343b8d3659d7204f53ea26e954cd7a6e40f8aeaf4228211"
+    },
+    "strings": {
+      "fr": {
+        "src": "3910d32ff7d463c3.json",
+        "bytes": 146,
+        "sha256": "3910d32ff7d463c30dade92bb4f8d66197095c23563c727012561906029056bc"
+      },
+      "en": {
+        "src": "040259621587e80c.json",
+        "bytes": 135,
+        "sha256": "040259621587e80c0712fa78f5acc4a6cd86e485c5000b1aff991c7ff4aefd28"
+      },
+      "es": {
+        "src": "f7b8373834d377f0.json",
+        "bytes": 147,
+        "sha256": "f7b8373834d377f07ffd1808686bf3cadfadba50722b0297be35fab440e82752"
+      },
+      "pt": {
+        "src": "2707240c325e757f.json",
+        "bytes": 147,
+        "sha256": "2707240c325e757f3cf7f14d0ea4330b17569b7e5aec50290a3d2ad35e2cf3c7"
+      },
+      "de": {
+        "src": "e009190490559ab5.json",
+        "bytes": 147,
+        "sha256": "e009190490559ab57d56ca35b7f09cdcf722f28ba1eba1cc69737a873a2ccb51"
+      },
+      "it": {
+        "src": "5ee60ad6bc7b1fb3.json",
+        "bytes": 146,
+        "sha256": "5ee60ad6bc7b1fb333d52f0c3200d0c5097e3be388e977018eb8269b2331ba33"
+      },
+      "ar": {
+        "src": "564c59254d574a92.json",
+        "bytes": 188,
+        "sha256": "564c59254d574a929945b6ae9f32077b6e1603038513ff35021271cec5bab4bb"
+      }
+    },
+    "downloadBytes": {
+      "story": 6933,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres égyptiens",
+        "description": "Quatre cadres d’or et de lapis : un cobra qui se dresse, un scarabée qui ouvre ses ailes, un soleil du désert au grand collier, des lotus du Nil qui s’ouvrent."
+      },
+      "en": {
+        "name": "Egyptian frames",
+        "description": "Four frames of gold and lapis: a rising cobra, a scarab opening its wings, a desert sun with a broad collar and Nile lotuses that bloom."
+      },
+      "es": {
+        "name": "Marcos egipcios",
+        "description": "Cuatro marcos de oro y lapislázuli: una cobra que se yergue, un escarabajo que abre sus alas, un sol del desierto con gran collar y lotos del Nilo que se abren."
+      },
+      "pt": {
+        "name": "Molduras egípcias",
+        "description": "Quatro molduras de ouro e lápis-lazúli: uma naja que se ergue, um escaravelho que abre as asas, um sol do deserto com grande colar e lótus do Nilo que se abrem."
+      },
+      "de": {
+        "name": "Ägyptische Rahmen",
+        "description": "Vier Rahmen aus Gold und Lapislazuli: eine sich aufrichtende Kobra, ein Skarabäus, der die Flügel öffnet, eine Wüstensonne mit breitem Halskragen und aufblühende Nil-Lotusblüten."
+      },
+      "it": {
+        "name": "Cornici egizie",
+        "description": "Quattro cornici d’oro e lapislazzuli: un cobra che si erge, uno scarabeo che apre le ali, un sole del deserto dal grande collare e loti del Nilo che sbocciano."
+      },
+      "ar": {
+        "name": "إطارات مصرية",
+        "description": "أربعة إطارات من الذهب واللازورد: كوبرا تنتصب، وجُعَل يفتح جناحيه، وشمس الصحراء بقلادة عريضة، وزهور لوتس النيل تتفتّح."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-mayas",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 15,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "cfa30485857caae4.webp",
+      "bytes": 7838,
+      "sha256": "cfa30485857caae49a3173dc125b3a35d19af17e8a86b008ffb5b7925595bd58"
+    },
+    "preview": null,
+    "contract": {
+      "src": "823b2e7ea0aa8b34.json",
+      "bytes": 8030,
+      "sha256": "823b2e7ea0aa8b34c2c53b2ada09bf45231512aae8e1cefacc721bfb9486b64f"
+    },
+    "strings": {
+      "fr": {
+        "src": "12437034f5491e7d.json",
+        "bytes": 177,
+        "sha256": "12437034f5491e7d339467fe9b614c05354f42034e4821f7eff2386d609e7712"
+      },
+      "en": {
+        "src": "5617c3b15cc18469.json",
+        "bytes": 161,
+        "sha256": "5617c3b15cc184692877ad7f110481e2e6896fd7f1369b84fe0fe3370d3aa162"
+      },
+      "es": {
+        "src": "70597c8aac9fb2b3.json",
+        "bytes": 176,
+        "sha256": "70597c8aac9fb2b3160508a8553a66585167568f22f6a2601f1d765cfad98235"
+      },
+      "pt": {
+        "src": "b8bddefeaa9d2cf4.json",
+        "bytes": 172,
+        "sha256": "b8bddefeaa9d2cf43de02d3b210079cda4354447fe2663ca8d181334f94bbccf"
+      },
+      "de": {
+        "src": "e2adc6bc5afb6ebf.json",
+        "bytes": 161,
+        "sha256": "e2adc6bc5afb6ebfa379843e4e56b9de6b77354ad0916733712ccd417393769f"
+      },
+      "it": {
+        "src": "3ba3657e67559f8a.json",
+        "bytes": 178,
+        "sha256": "3ba3657e67559f8afbc86b725b9b0322093ae948f5a6db428daf32d380fd0a85"
+      },
+      "ar": {
+        "src": "611cbaaea300e8ce.json",
+        "bytes": 202,
+        "sha256": "611cbaaea300e8ce630496cf874212e5a9f792e930af6776691f76dabbe39329"
+      }
+    },
+    "downloadBytes": {
+      "story": 8030,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres mayas",
+        "description": "Quatre cadres de pierre et de jade : un serpent de jade à crête de plumes, des cartouches de glyphes qui s’allument, une frise à gradins sous un soleil levant, un jaguar caché dans la jungle."
+      },
+      "en": {
+        "name": "Maya frames",
+        "description": "Four frames of stone and jade: a jade serpent with a feathered crest, glyph cartouches that light up, a stepped frieze under a rising sun and a jaguar hiding in the jungle."
+      },
+      "es": {
+        "name": "Marcos mayas",
+        "description": "Cuatro marcos de piedra y jade: una serpiente de jade con cresta de plumas, cartuchos de glifos que se iluminan, un friso escalonado bajo un sol naciente y un jaguar escondido en la selva."
+      },
+      "pt": {
+        "name": "Molduras maias",
+        "description": "Quatro molduras de pedra e jade: uma serpente de jade com crista de penas, cartuchos de glifos que se acendem, um friso em degraus sob um sol nascente e um jaguar escondido na selva."
+      },
+      "de": {
+        "name": "Maya-Rahmen",
+        "description": "Vier Rahmen aus Stein und Jade: eine Jadeschlange mit Federkamm, aufleuchtende Glyphenkartuschen, ein Stufenfries unter aufgehender Sonne und ein im Dschungel verborgener Jaguar."
+      },
+      "it": {
+        "name": "Cornici maya",
+        "description": "Quattro cornici di pietra e giada: un serpente di giada dalla cresta piumata, cartigli di glifi che si illuminano, un fregio a gradoni sotto il sole nascente e un giaguaro nascosto nella giungla."
+      },
+      "ar": {
+        "name": "إطارات مايا",
+        "description": "أربعة إطارات من الحجر واليشم: ثعبان من اليشم بعُرف من الريش، وخراطيش رموز تضيء، وإفريز مدرّج تحت شمس مشرقة، ونمر أمريكي يختبئ في الأدغال."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
   }
 ]

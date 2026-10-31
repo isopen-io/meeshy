@@ -107,6 +107,18 @@
     "cadres-celtes": {
       "name": "Cadres celtes",
       "description": "Trois cadres inspirés des entrelacs celtes : un nœud entrelacé qui s’efface puis se retrace, une spirale triple qui tourne, un lierre d’émeraude dont les feuilles frémissent."
+    },
+    "cadres-nordiques": {
+      "name": "Cadres nordiques",
+      "description": "Quatre cadres venus du grand Nord : des corbeaux qui tournoient, une aurore boréale qui ondule, un anneau de pierre gravée qui s’allume, une proue sculptée sur les vagues."
+    },
+    "cadres-egyptiens": {
+      "name": "Cadres égyptiens",
+      "description": "Quatre cadres d’or et de lapis : un cobra qui se dresse, un scarabée qui ouvre ses ailes, un soleil du désert au grand collier, des lotus du Nil qui s’ouvrent."
+    },
+    "cadres-mayas": {
+      "name": "Cadres mayas",
+      "description": "Quatre cadres de pierre et de jade : un serpent de jade à crête de plumes, des cartouches de glyphes qui s’allument, une frise à gradins sous un soleil levant, un jaguar caché dans la jungle."
     }
   },
   "designs": {
@@ -169,7 +181,19 @@
     "collier-perles": "Collier de perles",
     "noeud-entrelace": "Nœud entrelacé",
     "spirale-triple": "Spirale triple",
-    "lierre-emeraude": "Lierre d’émeraude"
+    "lierre-emeraude": "Lierre d’émeraude",
+    "corbeaux-tournoyants": "Corbeaux tournoyants",
+    "aurore-boreale": "Aurore boréale",
+    "anneau-pierre-gravee": "Anneau de pierre gravée",
+    "proue-sculptee": "Proue sculptée",
+    "cobra-dore": "Cobra d’or",
+    "scarabee-aile": "Scarabée ailé",
+    "soleil-du-desert": "Soleil du désert",
+    "lotus-du-nil": "Lotus du Nil",
+    "serpent-de-jade": "Serpent de jade",
+    "cartouches-de-glyphes": "Cartouches de glyphes",
+    "frise-a-gradins": "Frise à gradins",
+    "jaguar-de-jungle": "Jaguar de la jungle"
   },
   "gamut": {
     "indigo": "Indigo Meeshy",

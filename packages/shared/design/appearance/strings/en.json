@@ -107,6 +107,18 @@
     "cadres-celtes": {
       "name": "Celtic frames",
       "description": "Three frames inspired by Celtic interlace: a knot that fades and redraws itself, a turning triple spiral and an emerald ivy whose leaves quiver."
+    },
+    "cadres-nordiques": {
+      "name": "Nordic frames",
+      "description": "Four frames from the far North: circling ravens, a rippling northern aurora, a carved stone ring that lights up and a carved prow riding the waves."
+    },
+    "cadres-egyptiens": {
+      "name": "Egyptian frames",
+      "description": "Four frames of gold and lapis: a rising cobra, a scarab opening its wings, a desert sun with a broad collar and Nile lotuses that bloom."
+    },
+    "cadres-mayas": {
+      "name": "Maya frames",
+      "description": "Four frames of stone and jade: a jade serpent with a feathered crest, glyph cartouches that light up, a stepped frieze under a rising sun and a jaguar hiding in the jungle."
     }
   },
   "designs": {
@@ -169,7 +181,19 @@
     "collier-perles": "Bead necklace",
     "noeud-entrelace": "Interlaced knot",
     "spirale-triple": "Triple spiral",
-    "lierre-emeraude": "Emerald ivy"
+    "lierre-emeraude": "Emerald ivy",
+    "corbeaux-tournoyants": "Circling ravens",
+    "aurore-boreale": "Northern lights",
+    "anneau-pierre-gravee": "Carved stone ring",
+    "proue-sculptee": "Carved prow",
+    "cobra-dore": "Golden cobra",
+    "scarabee-aile": "Winged scarab",
+    "soleil-du-desert": "Desert sun",
+    "lotus-du-nil": "Nile lotus",
+    "serpent-de-jade": "Jade serpent",
+    "cartouches-de-glyphes": "Glyph cartouches",
+    "frise-a-gradins": "Stepped frieze",
+    "jaguar-de-jungle": "Jungle jaguar"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",

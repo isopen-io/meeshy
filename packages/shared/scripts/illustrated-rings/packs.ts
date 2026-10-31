@@ -5,6 +5,9 @@
 import { CADRES_AFRICAINS } from './famille-africaine.js';
 import { CADRES_ASIATIQUES } from './famille-asiatique.js';
 import { CADRES_CELTES } from './famille-celte.js';
+import { CADRES_EGYPTIENS } from './famille-egyptienne.js';
+import { CADRES_MAYAS } from './famille-maya.js';
+import { CADRES_NORDIQUES } from './famille-nordique.js';
 import type { IllustratedFrame } from './frame.js';
 import { AILES_ANGE, AILES_DEMON } from './vitrine-ailes.js';
 import { MASQUE_FELIN, TOILE_ARAIGNEE } from './vitrine-masque-toile.js';
@@ -43,4 +46,4 @@ const VITRINE: IllustratedPack = {
   ],
 };
 
-export const ILLUSTRATED_PACKS: readonly IllustratedPack[] = [VITRINE, CADRES_ASIATIQUES, CADRES_AFRICAINS, CADRES_CELTES];
+export const ILLUSTRATED_PACKS: readonly IllustratedPack[] = [VITRINE, CADRES_ASIATIQUES, CADRES_AFRICAINS, CADRES_CELTES, CADRES_NORDIQUES, CADRES_EGYPTIENS, CADRES_MAYAS];

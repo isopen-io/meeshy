@@ -52,7 +52,7 @@ final class BuiltInLottieLayersTests: XCTestCase {
         let packs = AvatarRingCatalog.shared.packs.filter { $0.slug.hasPrefix("cadres-") }
         XCTAssertEqual(packs.first?.slug, "cadres-illustres")
         let films = packs.flatMap { $0.rings.flatMap { [$0.decor?.back, $0.decor?.front].compactMap { $0 } } }
-        XCTAssertEqual(films.count, 30)
+        XCTAssertEqual(films.count, 54)
         for ref in films {
             let data = try Data(contentsOf: shippedFolder.appendingPathComponent(ref.src))
             XCTAssertEqual(data.count, ref.bytes, ref.src)

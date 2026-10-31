@@ -107,6 +107,18 @@
     "cadres-celtes": {
       "name": "Molduras celtas",
       "description": "Três molduras inspiradas nos entrelaçados celtas: um nó que se apaga e se volta a traçar, uma espiral tripla que gira e uma hera esmeralda de folhas que estremecem."
+    },
+    "cadres-nordiques": {
+      "name": "Molduras nórdicas",
+      "description": "Quatro molduras do grande Norte: corvos que rodopiam, uma aurora boreal que ondula, um anel de pedra gravada que se acende e uma proa esculpida sobre as ondas."
+    },
+    "cadres-egyptiens": {
+      "name": "Molduras egípcias",
+      "description": "Quatro molduras de ouro e lápis-lazúli: uma naja que se ergue, um escaravelho que abre as asas, um sol do deserto com grande colar e lótus do Nilo que se abrem."
+    },
+    "cadres-mayas": {
+      "name": "Molduras maias",
+      "description": "Quatro molduras de pedra e jade: uma serpente de jade com crista de penas, cartuchos de glifos que se acendem, um friso em degraus sob um sol nascente e um jaguar escondido na selva."
     }
   },
   "designs": {
@@ -169,7 +181,19 @@
     "collier-perles": "Colar de contas",
     "noeud-entrelace": "Nó entrelaçado",
     "spirale-triple": "Espiral tripla",
-    "lierre-emeraude": "Hera esmeralda"
+    "lierre-emeraude": "Hera esmeralda",
+    "corbeaux-tournoyants": "Corvos em círculo",
+    "aurore-boreale": "Aurora boreal",
+    "anneau-pierre-gravee": "Anel de pedra gravada",
+    "proue-sculptee": "Proa esculpida",
+    "cobra-dore": "Naja dourada",
+    "scarabee-aile": "Escaravelho alado",
+    "soleil-du-desert": "Sol do deserto",
+    "lotus-du-nil": "Lótus do Nilo",
+    "serpent-de-jade": "Serpente de jade",
+    "cartouches-de-glyphes": "Cartuchos de glifos",
+    "frise-a-gradins": "Friso em degraus",
+    "jaguar-de-jungle": "Jaguar da selva"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",

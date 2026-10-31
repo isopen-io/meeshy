@@ -35,6 +35,9 @@ const FAMILIES = [
   { slug: 'cadres-asiatiques', order: 10, issue: 13962 },
   { slug: 'cadres-africains', order: 11, issue: 13963 },
   { slug: 'cadres-celtes', order: 12, issue: 13964 },
+  { slug: 'cadres-nordiques', order: 13, issue: 13965 },
+  { slug: 'cadres-egyptiens', order: 14, issue: 13966 },
+  { slug: 'cadres-mayas', order: 15, issue: 13967 },
 ] as const;
 
 const filmOf = (ref: Ref): { readonly film: Film; readonly bytes: Buffer } => {

@@ -107,6 +107,18 @@
     "cadres-celtes": {
       "name": "Keltische Rahmen",
       "description": "Drei von keltischen Flechtmustern inspirierte Rahmen: ein Knoten, der verblasst und sich neu zeichnet, eine kreisende Dreifachspirale und smaragdgrüner Efeu mit zitternden Blättern."
+    },
+    "cadres-nordiques": {
+      "name": "Nordische Rahmen",
+      "description": "Vier Rahmen aus dem hohen Norden: kreisende Raben, ein wogendes Nordlicht, ein gravierter Steinring, der aufleuchtet, und ein geschnitzter Bug auf den Wellen."
+    },
+    "cadres-egyptiens": {
+      "name": "Ägyptische Rahmen",
+      "description": "Vier Rahmen aus Gold und Lapislazuli: eine sich aufrichtende Kobra, ein Skarabäus, der die Flügel öffnet, eine Wüstensonne mit breitem Halskragen und aufblühende Nil-Lotusblüten."
+    },
+    "cadres-mayas": {
+      "name": "Maya-Rahmen",
+      "description": "Vier Rahmen aus Stein und Jade: eine Jadeschlange mit Federkamm, aufleuchtende Glyphenkartuschen, ein Stufenfries unter aufgehender Sonne und ein im Dschungel verborgener Jaguar."
     }
   },
   "designs": {
@@ -169,7 +181,19 @@
     "collier-perles": "Perlenkette",
     "noeud-entrelace": "Flechtknoten",
     "spirale-triple": "Dreifachspirale",
-    "lierre-emeraude": "Smaragdefeu"
+    "lierre-emeraude": "Smaragdefeu",
+    "corbeaux-tournoyants": "Kreisende Raben",
+    "aurore-boreale": "Nordlicht",
+    "anneau-pierre-gravee": "Gravierter Steinring",
+    "proue-sculptee": "Geschnitzter Bug",
+    "cobra-dore": "Goldene Kobra",
+    "scarabee-aile": "Geflügelter Skarabäus",
+    "soleil-du-desert": "Wüstensonne",
+    "lotus-du-nil": "Nil-Lotus",
+    "serpent-de-jade": "Jadeschlange",
+    "cartouches-de-glyphes": "Glyphenkartuschen",
+    "frise-a-gradins": "Stufenfries",
+    "jaguar-de-jungle": "Dschungeljaguar"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",
