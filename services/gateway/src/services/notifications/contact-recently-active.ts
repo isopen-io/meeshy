@@ -46,6 +46,7 @@ import { getCacheStore } from '../CacheStore.js';
 import { FANOUT_ROW_CAP } from './fanout/row-cap.js';
 import type { NotificationService } from './NotificationService.js';
 import { getSharedNotificationService } from './notification-service-registry.js';
+import { amisAcceptes } from '../friendship.js';
 
 const logger = enhancedLogger.child({ module: 'ContactRecentlyActive' });
 
@@ -131,13 +132,7 @@ async function senderPrivacy(prisma: PrismaClient, userId: string): Promise<Send
 }
 
 async function acceptedFriendIds(prisma: PrismaClient, userId: string): Promise<string[]> {
-  const rows = await prisma.friendRequest.findMany({
-    where: { status: 'accepted', OR: [{ senderId: userId }, { receiverId: userId }] },
-    select: { senderId: true, receiverId: true },
-    orderBy: { updatedAt: 'desc' },
-    take: FANOUT_ROW_CAP,
-  });
-  return rows.map((row) => (row.senderId === userId ? row.receiverId : row.senderId));
+  return amisAcceptes(prisma, userId, { limit: FANOUT_ROW_CAP });
 }
 
 async function addressBookHolders(

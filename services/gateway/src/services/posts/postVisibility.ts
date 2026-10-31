@@ -47,7 +47,7 @@ export type PostVisibilityRecord = {
  */
 export type PostAclPrisma = Pick<
   PrismaClient,
-  'post' | 'postComment' | 'friendRequest' | 'communityMember' | 'participant' | 'postMention'
+  'post' | 'postComment' | 'friendRequest' | 'userRelation' | 'communityMember' | 'participant' | 'postMention'
 >;
 
 /**

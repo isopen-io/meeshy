@@ -71,6 +71,7 @@ function prismaDouble() {
     post: { findUnique: async () => base.post },
     postComment: { findUnique: async () => base.commentaire },
     friendRequest: { findFirst: (args?: unknown) => findFirstHonouringWhere(base.demandesAmitie)(args) },
+    userRelation: { findUnique: async () => null, findMany: async () => [] },
   } as any;
 }
 

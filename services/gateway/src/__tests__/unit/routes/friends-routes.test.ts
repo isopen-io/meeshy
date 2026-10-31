@@ -16,6 +16,12 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+const mockFeedCacheDel = jest.fn<(key: string) => Promise<void>>();
+jest.mock('../../../services/CacheStore', () => ({
+  ...(jest.requireActual('../../../services/CacheStore') as object),
+  getCacheStore: () => ({ del: (key: string) => mockFeedCacheDel(key) }),
+}));
+
 jest.mock('../../../utils/logger', () => ({
   logError: jest.fn(),
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
@@ -1004,6 +1010,24 @@ describe('PATCH /friend-requests/:id — social events', () => {
     });
     expect(socialEvents.invalidateFriendsCache).toHaveBeenCalledWith(USER_ID);
     expect(socialEvents.invalidateFriendsCache).toHaveBeenCalledWith(RECEIVER_ID);
+    await app.close();
+  });
+
+  it('retire du cache du fil les amis des DEUX comptes à l\'acceptation (feed:friends:, TTL 300 s jamais invalidé avant #13927)', async () => {
+    mockFeedCacheDel.mockClear().mockResolvedValue(undefined);
+    const app = await buildApp({
+      authUserId: RECEIVER_ID,
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      socialEvents: makeSocialEvents(),
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(mockFeedCacheDel).toHaveBeenCalledWith(`feed:friends:${USER_ID}`);
+    expect(mockFeedCacheDel).toHaveBeenCalledWith(`feed:friends:${RECEIVER_ID}`);
     await app.close();
   });
 

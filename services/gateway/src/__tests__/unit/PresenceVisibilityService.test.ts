@@ -38,12 +38,19 @@ function makeMocks(opts: {
   const prisma = {
     user: { findFirst: jest.fn<any>().mockResolvedValue(opts.blocked ? { id: 'x' } : null) },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(opts.friend ? { id: 'fr' } : null) },
+    userRelation: noRelations(),
   } as any;
   const privacy = { getPreferences: jest.fn<any>().mockResolvedValue(makePrefs(opts.prefs)) } as any;
   return { prisma, privacy, service: new PresenceVisibilityService(prisma, privacy) };
 }
 
 const target = { id: TARGET, deactivatedAt: null as Date | null };
+
+/** Aucune ligne de niveau : la paire n'a que ses demandes (#13927, repli sur la demande acceptée). */
+const noRelations = () => ({
+  findUnique: jest.fn<any>().mockResolvedValue(null),
+  findMany: jest.fn<any>().mockResolvedValue([]),
+});
 
 describe('PresenceVisibilityService.resolveForTarget', () => {
   it('shows everything to the user themselves without any DB lookup', async () => {
@@ -150,6 +157,7 @@ function makeBatchMocks(state: {
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue((state.friendIds ?? []).map((id) => ({ senderId: id, receiverId: VIEWER }))),
     },
+    userRelation: noRelations(),
   } as any;
   const privacy = {
     getPreferencesForUsers: jest.fn<any>().mockImplementation((arr: Array<{ id: string }>) =>
@@ -211,6 +219,7 @@ describe('PresenceVisibilityService.acceptedFriendIds', () => {
   function svcWithFriendships(rows: Array<{ senderId: string; receiverId: string }>) {
     const prisma = {
       friendRequest: { findMany: jest.fn<any>().mockResolvedValue(rows) },
+      userRelation: noRelations(),
       // #13298 — la relation de blocage, vide ici (témoins dédiés :
       // `presence-blocked-audience-13298.test.ts`).
       user: {
@@ -234,13 +243,14 @@ describe('PresenceVisibilityService.acceptedFriendIds', () => {
   it("n'interroge que les demandes ACCEPTÉES du seul utilisateur — coût borné par ses amis", async () => {
     const { service, prisma } = svcWithFriendships([]);
     await service.acceptedFriendIds(VIEWER);
-    expect(prisma.friendRequest.findMany).toHaveBeenCalledWith({
-      where: {
-        status: 'accepted',
-        OR: [{ senderId: VIEWER }, { receiverId: VIEWER }],
-      },
-      select: { senderId: true, receiverId: true },
-    });
+    expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: 'accepted',
+          OR: [{ senderId: VIEWER }, { receiverId: VIEWER }],
+        },
+      }),
+    );
   });
 
   it("ne se rend jamais lui-même comme ami (ligne d'auto-amitié résiduelle)", async () => {
@@ -262,6 +272,7 @@ describe('PresenceVisibilityService.resolveForTarget — la loi d\'amitié attei
     const prisma = {
       user: { findFirst: jest.fn<any>().mockResolvedValue(null) },
       friendRequest: { findFirst: jest.fn<any>(findFirstHonouringWhere(rows)) },
+      userRelation: noRelations(),
     } as any;
     const privacy = { getPreferences: jest.fn<any>().mockResolvedValue(makePrefs()) } as any;
     return new PresenceVisibilityService(prisma, privacy);
@@ -290,5 +301,61 @@ describe('PresenceVisibilityService.resolveForTarget — la loi d\'amitié attei
     ]);
     const v = await service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
     expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+  });
+});
+
+
+/**
+ * #13927 — la présence se lit sur le NIVEAU effectif du lien (ligne UserRelation,
+ * minimum des deux accords), plus sur le seul booléen d'une demande acceptée.
+ * À ce lot, tout niveau >= Ami rend ce que rendait l'amitié (l'Ami binaire est
+ * le lot suivant) ; en dessous, rien.
+ */
+describe('PresenceVisibilityService — le niveau effectif atteint le verdict SERVI (#13927)', () => {
+  const LOW_ID = 'a'.repeat(24);
+  const HIGH_ID = 'b'.repeat(24);
+  const FULL = { showOnline: true, showLastSeenTimestamp: true };
+  const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+
+  function serviceWithRelation(row: { grantedByLow: string; grantedByHigh: string } | null, request = false) {
+    const prisma = {
+      user: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+      friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(request ? { id: 'fr' } : null) },
+      userRelation: {
+        findUnique: jest.fn<any>().mockResolvedValue(row ? { userLowId: LOW_ID, userHighId: HIGH_ID, ...row } : null),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    } as any;
+    const privacy = { getPreferences: jest.fn<any>().mockResolvedValue(makePrefs()) } as any;
+    return new PresenceVisibilityService(prisma, privacy);
+  }
+
+  const resolve = (service: PresenceVisibilityService) =>
+    service.resolveForTarget({ userId: LOW_ID, role: 'USER' }, { id: HIGH_ID, deactivatedAt: null });
+
+  it.each([
+    ['FRIEND', 'FRIEND'],
+    ['CLOSE', 'BLOOD'],
+    ['BLOOD', 'BLOOD'],
+  ])('un lien accordé %s / %s sert la présence', async (low, high) => {
+    await expect(resolve(serviceWithRelation({ grantedByLow: low, grantedByHigh: high }))).resolves.toEqual(FULL);
+  });
+
+  it.each([
+    ['ACQUAINTANCE', 'ACQUAINTANCE'],
+    ['BLOOD', 'PUBLIC'],
+    ['PUBLIC', 'BLOOD'],
+  ])('un lien accordé %s / %s ne sert rien (sous Ami, ou à sens unique)', async (low, high) => {
+    await expect(resolve(serviceWithRelation({ grantedByLow: low, grantedByHigh: high }))).resolves.toEqual(HIDDEN);
+  });
+
+  it('une baisse gravée l\'emporte sur une vieille demande acceptée', async () => {
+    await expect(
+      resolve(serviceWithRelation({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'FRIEND' }, true)),
+    ).resolves.toEqual(HIDDEN);
+  });
+
+  it('sans ligne, la demande acceptée se lit toujours Ami (aucune rétrogradation rétroactive)', async () => {
+    await expect(resolve(serviceWithRelation(null, true))).resolves.toEqual(FULL);
   });
 });
