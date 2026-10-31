@@ -469,8 +469,8 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
     /// gestionnaire : elle prenait le toucher et n'ouvrait rien.
     func test_host_feedsTheMoodTapToTheRowActions() throws {
         XCTAssertTrue(
-            try stripped(hostPath).contains("FocalRowActions(onMoodTap: statuses.moodTapHandler(for: senderId))"),
-            "l'hôte doit remettre à la rangée le toucher de l'humeur de l'auteur — la bulle d'humeur (StatusBubbleController) s'ouvre par lui"
+            try stripped(hostPath).contains("FocalRowActions(onMoodTap: statuses.moodSpotlightHandler(for: senderId))"),
+            "l'hôte doit remettre à la rangée le toucher de l'humeur de l'auteur — il ouvre sa page plein écran (#13987)"
         )
     }
 

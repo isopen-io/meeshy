@@ -36,17 +36,13 @@ final class StatusBubbleController: ObservableObject {
     /// Action de réponse à un mood : résout/ouvre la DM avec l'auteur et amorce
     /// le composer. Branchée une fois au niveau racine (RootView / iPadRootView).
     var onConfirmedReply: ((StatusEntry) -> Void)?
+    /// Ouvre la page plein écran de l'humeur (`Route.moodSpotlight`, #10814).
+    /// Branchée une fois au niveau racine (RootView / iPadRootView).
+    var onOpenSpotlight: ((StatusEntry) -> Void)?
 
-    /// Vrai quand le mood courant est affiché DANS la conversation directe de son
-    /// auteur (barre de conversation directe). La réponse est alors immédiate
-    /// (pas de pop-up) : on est déjà dans la bonne conversation. Posé par le site
-    /// d'appel à `show(...)`, jamais stale (chaque ouverture le réécrit).
-    var repliesInline = false
-
-    func show(entry: StatusEntry, anchor: CGPoint, repliesInline: Bool = false) {
+    func show(entry: StatusEntry, anchor: CGPoint) {
         currentEntry = entry
         self.anchor = anchor
-        self.repliesInline = repliesInline
 
         // Statut consommé : enregistrer la vue côté serveur (sauf le sien) pour
         // que la notification « X a publié un statut » (friend_new_mood) ne reste
@@ -76,10 +72,19 @@ final class StatusBubbleController: ObservableObject {
         Task { await EngagementTracker.shared.end(surface: .statusBubble) }
     }
 
+    /// En conversation, la boule de mood ouvre DIRECTEMENT la page plein écran
+    /// de l'humeur, sans bulle ni pop-up de réponse (#13987) : la page porte
+    /// déjà l'humeur entière et le champ qui répond dans la directe la plus
+    /// récente avec l'auteur. La vue y est comptée par `MoodSpotlightViewModel`.
+    func openSpotlight(entry: StatusEntry) {
+        currentEntry = nil
+        replyConfirmationEntry = nil
+        onOpenSpotlight?(entry)
+    }
+
     /// Déclenché quand l'utilisateur touche le CONTENU du mood affiché (pas la
-    /// zone extérieure de fermeture). Ouvre la réponse au mood :
-    /// - mood affiché dans la conversation directe courante ⇒ réponse immédiate ;
-    /// - sinon (groupe, story tray, …) ⇒ pop-up de confirmation Répondre / Quitter.
+    /// zone extérieure de fermeture) : pop-up de confirmation Répondre / Quitter.
+    /// En conversation, la bulle n'est plus montrée (`openSpotlight`).
     func requestReply() {
         guard let entry = currentEntry else { return }
         currentEntry = nil
@@ -88,11 +93,7 @@ final class StatusBubbleController: ObservableObject {
         // On ne répond pas à son propre mood.
         guard entry.userId != AuthManager.shared.currentUser?.id else { return }
 
-        if repliesInline {
-            onConfirmedReply?(entry)
-        } else {
-            replyConfirmationEntry = entry
-        }
+        replyConfirmationEntry = entry
     }
 
     var isPresented: Binding<Bool> {

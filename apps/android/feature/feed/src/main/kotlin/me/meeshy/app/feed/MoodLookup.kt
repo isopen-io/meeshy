@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.MoodStatusExpiry
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.ui.profile.PeerMood
 
 /**
  * L'humeur de chacun, lue par le rail de stories — iOS `statusViewModel.statusForUser(userId:)` :
@@ -26,6 +27,13 @@ data class MoodLookup(
 
     /** L'humeur vivante de [userId] — ce que sa bulle montre (#13662). */
     fun entryOf(userId: String): StatusEntry? = byUser[userId]
+
+    /** La boule de mood d'un pair en conversation : son emoji et la porte vers sa page (#13987). */
+    fun peerMoodOf(userId: String?): PeerMood? {
+        val entry = userId?.let(byUser::get) ?: return null
+        val emoji = entry.moodEmoji.takeIf { it.isNotBlank() } ?: return null
+        return PeerMood(statusId = entry.id, emoji = emoji)
+    }
 
     /** L'humeur du compte courant, présente même sans anneau de story. */
     val myEmoji: String? get() = mine?.moodEmoji?.takeIf { it.isNotBlank() }
