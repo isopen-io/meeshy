@@ -156,7 +156,6 @@ class PresenceTest {
         org.junit.Assert.assertEquals(UserPresence(true, null), UserPresence.served(true, null))
     }
 
-
     @Test
     fun `a served online entry without a date is online at any age, never away, idle or offline`() {
         val friend = UserPresence(isOnline = true, lastActiveAt = null)

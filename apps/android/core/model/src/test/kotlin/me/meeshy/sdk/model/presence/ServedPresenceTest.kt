@@ -83,7 +83,6 @@ class ServedPresenceTest {
         assertThat(plain.withoutServedPresence()).isSameInstanceAs(plain)
     }
 
-
     @Test
     fun `a friend served online without a date is served online and not masked`() {
         val served = listOf(conversation("c1", peer("u1", true, null))).servedPresence()
