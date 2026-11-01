@@ -59,6 +59,8 @@ function buildFakePrisma() {
     conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     messageAttachment: { create: jest.fn<any>().mockResolvedValue({ id: 'created-attachment' }) },
     postMedia: { create: jest.fn<any>().mockResolvedValue({ id: 'created-post-media' }) },
+    lensPack: { findUnique: jest.fn<any>().mockImplementation(async ({ where }: any) => (where.slug === 'aurore' ? { status: 'approved' } : null)) },
+    userStickerPack: { findFirst: jest.fn<any>().mockImplementation(async ({ where }: any) => (where.userId === USER_ID && where.packSlug === 'lens.aurore' ? { id: 'choice' } : null)) },
     userSession: {
       findFirst: jest.fn<any>().mockResolvedValue(liveSession()),
       update: jest.fn<any>().mockReturnValue({ catch: jest.fn() }),
@@ -112,7 +114,12 @@ describe('tus-handler — la file de médias (#11264)', () => {
     await fs.mkdir(tusTempPath, { recursive: true });
     await fs.writeFile(path.join(tusTempPath, 'upload-queue'), bytes);
     const result = await captured.onUploadFinish({}, { id: 'upload-queue', metadata: created.metadata, size: bytes.length, storage: undefined });
-    return { prisma, result, data: (prisma.postMedia.create as jest.Mock<any>).mock.calls[0]?.[0]?.data };
+    return {
+      prisma,
+      result,
+      data: (prisma.postMedia.create as jest.Mock<any>).mock.calls[0]?.[0]?.data,
+      attachmentData: (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0]?.[0]?.data,
+    };
   }
 
   it('PostMedia, worker vivant : vignette différée, ligne `pending`, une tâche en file, réponse `pending`', async () => {
@@ -167,5 +174,19 @@ describe('tus-handler — la file de médias (#11264)', () => {
 
     expect(data.alt).toBe('Un chat roux dort sur le canapé du salon');
     expect(data.altLanguage).toBe('fr');
+  }, 120_000);
+
+  it('la lens déclarée (métadonnée `lensslug`) voyage avec le média de story, publiée et installée (#11327)', async () => {
+    const { data } = await finishBigPhotoUpload({ workerAlive: async () => false, schedule: async () => undefined }, { lensslug: 'aurore' });
+
+    expect(data.lensSlug).toBe('aurore');
+  }, 120_000);
+
+  it('…et avec la pièce jointe d’un message ; une lens inconnue ne crédite rien (#11327)', async () => {
+    const credited = await finishBigPhotoUpload({ workerAlive: async () => false, schedule: async () => undefined }, { uploadcontext: 'message', lensslug: 'aurore' });
+    expect(credited.attachmentData.lensSlug).toBe('aurore');
+
+    const unknown = await finishBigPhotoUpload({ workerAlive: async () => false, schedule: async () => undefined }, { uploadcontext: 'message', lensslug: 'inconnue' });
+    expect(unknown.attachmentData).not.toHaveProperty('lensSlug');
   }, 120_000);
 });

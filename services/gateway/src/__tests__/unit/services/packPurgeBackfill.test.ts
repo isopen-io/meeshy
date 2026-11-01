@@ -56,7 +56,7 @@ describe('backfillPackPurge — les comptes déjà purgés (#10151)', () => {
     expect(report).toEqual({
       accountsScanned: 2,
       accountsWithData: 2,
-      totals: { choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 1, publishedAnonymized: 1, filesDeleted: 2, ownershipsDeleted: 1 },
+      totals: { choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 1, publishedAnonymized: 1, filesDeleted: 2, ownershipsDeleted: 1, partnerProfilesDeleted: 0 },
     });
     expect(JSON.stringify(db.tables)).toBe(before);
     expect(db.writes).toEqual([]);
@@ -68,7 +68,7 @@ describe('backfillPackPurge — les comptes déjà purgés (#10151)', () => {
 
     const report = await backfillPackPurge(db as never, { files: files.store, dryRun: false, batchSize: 1 });
 
-    expect(report.totals).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 1, publishedAnonymized: 1, filesDeleted: 2, ownershipsDeleted: 1 });
+    expect(report.totals).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 1, publishedAnonymized: 1, filesDeleted: 2, ownershipsDeleted: 1, partnerProfilesDeleted: 0 });
     expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
     expect(db.tables.userStickerPack.rows.map((row) => row.id)).toEqual(['c2']);
     expect(db.tables.userSticker.rows.map((row) => row.id)).toEqual(['s2']);
@@ -85,7 +85,7 @@ describe('backfillPackPurge — les comptes déjà purgés (#10151)', () => {
     expect(again).toEqual({
       accountsScanned: 2,
       accountsWithData: 0,
-      totals: { choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0 },
+      totals: { choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0, partnerProfilesDeleted: 0 },
     });
   });
 

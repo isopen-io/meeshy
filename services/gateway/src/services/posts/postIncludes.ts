@@ -126,6 +126,8 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   avifVariants: true,
   renditions: true,
   processingState: true,
+  // #11327 — la lens qui a produit le média de story/post : « Lens par X » à la lecture.
+  lensSlug: true,
   duration: true,
   order: true,
   caption: true,

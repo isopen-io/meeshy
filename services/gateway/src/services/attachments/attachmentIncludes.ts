@@ -131,6 +131,9 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   // sur l'attachement livré par la LISTE de messages pour décider si publier
   // demande confirmation. Absent d'ici, la garde ne se déclenche jamais.
   capturedInApp: true,
+  // #11327 — la lens qui a produit le média : le média reçu affiche « Lens par X »
+  // (`GET /lens/credits`). En clair, E2EE compris (décision #11251).
+  lensSlug: true,
   // BUG2 A' — réactions par-image (agrégées au mapping en reactionSummary + currentUserReactions)
   reactions: { select: { emoji: true, participantId: true } },
 });
@@ -303,6 +306,7 @@ export const attachmentServiceRowSelect = Prisma.validator<Prisma.MessageAttachm
   createdAt: true,
   isForwarded: true,
   capturedInApp: true,
+  lensSlug: true,
   isViewOnce: true,
   viewOnceCount: true,
   isBlurred: true,

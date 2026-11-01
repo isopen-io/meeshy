@@ -261,6 +261,8 @@ export function registerCoreRoutes(
         select: {
           id: true, messageId: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
           originalName: true, width: true, height: true, duration: true, codec: true, thumbHash: true,
+          // Le crédit de la lens (#11327) suit la copie vers le post.
+          lensSlug: true,
           // Protection au niveau PIÈCE JOINTE (lue par `maskedAttachment`).
           isViewOnce: true, isBlurred: true, effectFlags: true,
           // Protection au niveau MESSAGE PARENT (lue par `protectedPreview`) —

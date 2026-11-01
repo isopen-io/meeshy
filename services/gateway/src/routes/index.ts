@@ -146,6 +146,7 @@ import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
 import { captureFramePacksRoutes } from './packs-capture-frame';
 import { lensPacksRoutes } from './packs-lens';
+import { lensPartnerRoutes } from './lens-partners';
 import { packAssetsRoutes } from './pack-assets';
 import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
 import { packsShopRoutes } from './packs-shop';
@@ -380,6 +381,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'packs-banner-frame', prefix: `${API_PREFIX}/packs/banner-frame`, module: bannerFramePacksRoutes },
   // Les lens des partenaires (#11271, MeeshyLens v1) : proposer, modérer, installer, sur le MÊME moteur.
   { name: 'packs-lens', prefix: `${API_PREFIX}/packs/lens`, module: lensPacksRoutes },
+  // L'identité des partenaires, le crédit « Lens par X » et l'usage k-anonyme (#11327). Préfixe
+  // DISTINCT de `/packs/lens` : ses chemins statiques (`credits`, `partners`) y masqueraient des slugs.
+  { name: 'lens-partners', prefix: `${API_PREFIX}/lens`, module: lensPartnerRoutes },
   { name: 'packs-shop', prefix: `${API_PREFIX}/packs/shop`, module: packsShopRoutes },
   // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
   // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune
