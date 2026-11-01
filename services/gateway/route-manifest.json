@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 768,
+  "routeCount": 777,
   "routes": [
     {
       "method": "DELETE",
@@ -3683,6 +3683,77 @@
         "S1"
       ],
       "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/credits",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/partners/:userId/logo",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/partners/me",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/partners/pending",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/usage/:slug",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -8694,6 +8765,50 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/lens/partners/:userId/revoke",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lens/partners/:userId/verify",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lens/usage/:slug",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/links",
       "module": "linksRoutes",
       "mountPrefix": "/api/v1",
@@ -10417,6 +10532,20 @@
       "path": "/api/v1/e2ee/devices/:deviceId/keys",
       "module": "e2eeRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/lens/partners/me",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

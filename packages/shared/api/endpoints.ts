@@ -52,6 +52,7 @@ import * as healthGroup from './endpoints/health.js';
 import * as invitationsGroup from './endpoints/invitations.js';
 import * as lGroup from './endpoints/l.js';
 import * as languagesGroup from './endpoints/languages.js';
+import * as lensGroup from './endpoints/lens.js';
 import * as linksGroup from './endpoints/links.js';
 import * as meGroup from './endpoints/me.js';
 import * as mentionsGroup from './endpoints/mentions.js';
@@ -114,6 +115,7 @@ export const API_ENDPOINTS = {
   invitations: invitationsGroup,
   l: lGroup,
   languages: languagesGroup,
+  lens: lensGroup,
   links: linksGroup,
   me: meGroup,
   mentions: mentionsGroup,
@@ -472,6 +474,13 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/invitations/email',
   '/api/v1/l/:token',
   '/api/v1/languages',
+  '/api/v1/lens/credits',
+  '/api/v1/lens/partners/:userId/logo',
+  '/api/v1/lens/partners/:userId/revoke',
+  '/api/v1/lens/partners/:userId/verify',
+  '/api/v1/lens/partners/me',
+  '/api/v1/lens/partners/pending',
+  '/api/v1/lens/usage/:slug',
   '/api/v1/links',
   '/api/v1/links/:identifier',
   '/api/v1/links/:identifier/card',
@@ -1101,6 +1110,13 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/invitations/email': ['POST'],
   '/api/v1/l/:token': ['GET'],
   '/api/v1/languages': ['GET'],
+  '/api/v1/lens/credits': ['GET'],
+  '/api/v1/lens/partners/:userId/logo': ['GET'],
+  '/api/v1/lens/partners/:userId/revoke': ['POST'],
+  '/api/v1/lens/partners/:userId/verify': ['POST'],
+  '/api/v1/lens/partners/me': ['GET', 'PUT'],
+  '/api/v1/lens/partners/pending': ['GET'],
+  '/api/v1/lens/usage/:slug': ['GET', 'POST'],
   '/api/v1/links': ['GET', 'POST'],
   '/api/v1/links/:identifier': ['GET'],
   '/api/v1/links/:identifier/card': ['GET'],
