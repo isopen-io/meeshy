@@ -313,7 +313,7 @@ struct ComposerSceneFrise: View {
                             ComposerSceneFriseBarContent(kind: piste.kind,
                                                          url: timeline.loadedURL(for: piste.id),
                                                          publishedSamples: ondePubliee(piste),
-                                                         window: timeline.sourceWindow(for: piste.id))
+                                                         window: SceneFriseSourceWindow.window(of: piste, in: timeline.project))
                                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous))
                         }
                         .padding(.vertical, MeeshySpacing.xs)

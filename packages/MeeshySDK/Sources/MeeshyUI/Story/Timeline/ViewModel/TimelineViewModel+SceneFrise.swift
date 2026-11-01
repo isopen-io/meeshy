@@ -43,23 +43,23 @@ public nonisolated enum SceneFriseSourceWindow {
         guard fin > debut, fin.isFinite else { return nil }
         return debut...fin
     }
-}
 
-extension TimelineViewModel {
-
-    /// La fenêtre de source jouée par la piste vidéo ou sonore `id`, `nil`
+    /// La fenêtre de source jouée par la piste `track` (vidéo ou son), `nil`
     /// pour toute autre famille.
-    public func sourceWindow(for id: String) -> ClosedRange<Double>? {
-        guard let piste = sceneFriseTracks.first(where: { $0.id == id }) else { return nil }
-        let joue = Double(piste.end - piste.start)
-        if let media = project.mediaObjects.first(where: { $0.id == id }), media.kind == .video {
-            return SceneFriseSourceWindow.range(sourceStart: media.sourceStart, sourceEnd: media.sourceEnd, playedSeconds: joue)
+    @MainActor
+    public static func window(of track: SceneFriseTrack, in project: TimelineProject) -> ClosedRange<Double>? {
+        let joue = Double(track.end - track.start)
+        if let media = project.mediaObjects.first(where: { $0.id == track.id }), media.kind == .video {
+            return range(sourceStart: media.sourceStart, sourceEnd: media.sourceEnd, playedSeconds: joue)
         }
-        if let son = project.audioPlayerObjects.first(where: { $0.id == id }) {
-            return SceneFriseSourceWindow.range(sourceStart: son.sourceStart, sourceEnd: son.sourceEnd, playedSeconds: joue)
+        if let son = project.audioPlayerObjects.first(where: { $0.id == track.id }) {
+            return range(sourceStart: son.sourceStart, sourceEnd: son.sourceEnd, playedSeconds: joue)
         }
         return nil
     }
+}
+
+extension TimelineViewModel {
 
     /// Les pistes de la slide, dans l'ordre de la pile du plan : ce qu'on voit
     /// derrière d'abord. Le FOND n'a pas de piste — il ne se règle pas dans le
