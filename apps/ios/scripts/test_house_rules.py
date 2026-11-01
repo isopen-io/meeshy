@@ -181,6 +181,22 @@ class AsyncAfterRule(unittest.TestCase):
         self.assertEqual(count("async-after", "asyncAfterDelay(1)\n"), 0)
 
 
+class SinkTaskRule(unittest.TestCase):
+    def test_counts_unstored_task_launched_from_a_sink_closure(self):
+        self.assertEqual(count("sink-task", ".sink { _ in Task { await f() } }\n"), 1)
+        self.assertEqual(count("sink-task", ".sink { [weak self] in\n guard let self else { return }\n Task { @MainActor in a() }\n}\n"), 1)
+        self.assertEqual(count("sink-task", ".sink(receiveValue: { v in Task.detached(priority: .utility) { } })\n"), 1)
+        self.assertEqual(count("sink-task", ".sink { _ in _ = Task { } }\n"), 1)
+        self.assertEqual(count("sink-task", ".sink { v in if v { x() } else { y() }; Task { } }\n"), 1)
+
+    def test_ignores_stored_tasks_relays_yield_trailing_tasks_and_comments(self):
+        self.assertEqual(count("sink-task", ".sink { v in self.t?.cancel(); self.t = Task { } }\n"), 0)
+        self.assertEqual(count("sink-task", ".sink { v in apply(v) }\nTask { }\n"), 0)
+        self.assertEqual(count("sink-task", ".relay(through: lane) { await f() }\n"), 0)
+        self.assertEqual(count("sink-task", ".sink { _ in Task.yield() }\n"), 0)
+        self.assertEqual(count("sink-task", "// .sink { Task { } }\n"), 0)
+
+
 class SleepNanosecondsRule(unittest.TestCase):
     def test_counts_nanoseconds_and_ignores_duration_form(self):
         self.assertEqual(count("sleep-nanoseconds", "try await Task.sleep(nanoseconds: 1)\n"), 1)
