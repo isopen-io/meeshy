@@ -35,9 +35,16 @@ import MeeshyUI
 /// republication (story, post, réel), le studio et le partage hors de Meeshy ;
 /// « Republier » republie en story d'un tap. « Composer » est la republication
 /// qui passe par le composer — le type s'y choisit à l'envoi, statut compris.
+///
+/// **« Partager » y revient, et lui seul** (porteur, 2026-11-01, #14311) : le
+/// vocabulaire est le même sur la story, le réel et le post — « Envoyer » au
+/// rail reste DANS Meeshy, « Partager » au menu en SORT, par la feuille du
+/// système et le lien suivi de l'utilisateur.
 nonisolated enum StoryOptionsMenuEntry: Hashable {
     case fullscreen
     case transcript
+    /// « Partager » hors de Meeshy (#14311) : `StoryOutsideShare`.
+    case share
     case compose
     /// La feuille d'export au choix de la LANGUE (`StoryExportShareSheet`) :
     /// une vidéo avec tous les objets de la scène, son intro et sa sortie.
@@ -73,7 +80,7 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
         guard hasStory else {
             return StoryOptionsMenuPlan(sections: [reading, [.close]])
         }
-        let making: [StoryOptionsMenuEntry] = canCompose ? [.compose, .exportVideo, .imager] : [.exportVideo, .imager]
+        let making: [StoryOptionsMenuEntry] = canCompose ? [.share, .compose, .exportVideo, .imager] : [.share, .exportVideo, .imager]
         let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .makePrivate, .remove] : [.report])
         return StoryOptionsMenuPlan(sections: [reading, making, acting, [.close]])
     }
@@ -118,7 +125,8 @@ struct StoryHeaderView: View {
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var showReportSheet: Bool
 
-    /// Le partage INTERNE a quitté le menu (#9953) : « Envoyer » reste au rail.
+    /// « Envoyer » vit au rail ; le menu n'y pose que « Partager » hors de
+    /// Meeshy (#14311), la feuille du système portée par `outgoing`.
     @Binding var sharedContentWrapper: SharedContentWrapper?
 
     /// « Exporter en vidéo » (#9953) : la feuille d'export au choix
@@ -395,6 +403,21 @@ struct StoryHeaderView: View {
         )
     }
 
+    /// « Partager » hors de Meeshy (#14311) : le lien se frappe, puis le
+    /// LECTEUR présente la feuille du système — l'en-tête demande.
+    private func shareOutsideButton(story: StoryItem, group: StoryGroup) -> some View {
+        Button {
+            HapticFeedback.light()
+            pauseTimer()
+            Task {
+                guard let wrapper = await StoryOutsideShare.wrapper(story: story, group: group) else { return }
+                sharedContentWrapper = wrapper
+            }
+        } label: {
+            Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+        }
+    }
+
     @ViewBuilder
     private func optionsMenuItem(_ entry: StoryOptionsMenuEntry) -> some View {
         switch entry {
@@ -441,6 +464,10 @@ struct StoryHeaderView: View {
                     Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
                           systemImage: "wand.and.stars")
                 }
+            }
+        case .share:
+            if let story = currentStory, let group = currentGroup {
+                shareOutsideButton(story: story, group: group)
             }
         case .exportVideo:
             // La feuille d'export EXISTANTE, au choix de la langue, présentée
@@ -505,7 +532,7 @@ struct StoryHeaderView: View {
             }
         // Exhaustif, sans `default:` : une entrée nouvelle (#11535 a ajouté
         // `.makePrivate`) ne disparaît plus du menu en silence (#11151).
-        case .fullscreen, .transcript, .compose, .exportVideo, .imager, .close:
+        case .fullscreen, .transcript, .share, .compose, .exportVideo, .imager, .close:
             EmptyView()
         }
     }

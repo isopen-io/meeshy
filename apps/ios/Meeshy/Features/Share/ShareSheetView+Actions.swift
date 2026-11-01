@@ -119,9 +119,9 @@ extension ShareSheetView {
     private func toolChip(_ tool: ShareAction, plan: SharePlan) -> some View {
         switch tool {
         case .shareOut:
-            if model.republishableStory != nil {
-                // Une story : le lien suivi se frappe AU GESTE (#12644), puis la
-                // feuille du système part avec lui.
+            if model.linkableCard != nil {
+                // Une carte suivie : la feuille du système part avec le lien de
+                // l'utilisateur, frappé à l'ouverture (#14310) ou retenté ici.
                 Button {
                     Task {
                         guard let url = await model.ensureCardLink() else { return }
@@ -136,7 +136,7 @@ extension ShareSheetView {
             }
         case .copyLink:
             Button {
-                if model.republishableStory != nil {
+                if model.linkableCard != nil {
                     Task { copy(await model.ensureCardLink()?.absoluteString) }
                 } else {
                     copy(shareURL?.absoluteString ?? copyableText)

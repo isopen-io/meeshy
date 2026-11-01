@@ -90,16 +90,21 @@ struct StoryViewerSheets: ViewModifier {
             pendingComposeTarget = nil
             demanderComposer(cible)
         }) { wrapper in
-            ShareSheetView(
-                subject: wrapper.subject,
-                actions: ShareSheetHostActions(
-                    onOpenConversation: { router.navigateToConversation($0) },
-                    onCompose: composeCurrentStory()
-                ),
-                onDismiss: { sharedContentWrapper = nil }
-            )
-            .presentationDetents([.medium, .large] as Set<PresentationDetent>)
-            .presentationDragIndicator(.visible)
+            if let outgoing = wrapper.outgoing {
+                // « Partager » (menu « ⋯ », #14311) : la feuille du SYSTÈME.
+                ShareSheet(activityItems: outgoing.activityItems)
+            } else {
+                ShareSheetView(
+                    subject: wrapper.subject,
+                    actions: ShareSheetHostActions(
+                        onOpenConversation: { router.navigateToConversation($0) },
+                        onCompose: composeCurrentStory()
+                    ),
+                    onDismiss: { sharedContentWrapper = nil }
+                )
+                .presentationDetents([.medium, .large] as Set<PresentationDetent>)
+                .presentationDragIndicator(.visible)
+            }
         }
         .fullScreenCover(item: $readerFullscreenPlace, onDismiss: { resumeTimer() }) { wrapper in
             // Tap d'une pastille de lieu (Layer 6.6) : la story est déjà en

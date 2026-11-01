@@ -113,7 +113,7 @@ final class StoryImagerTests: XCTestCase {
 
     func test_storyMenu_offersImager_rightAfterTheVideoExport() {
         let plan = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: false, hasAudioTranscript: false, canCompose: true)
-        XCTAssertTrue(plan.sections.contains([.compose, .exportVideo, .imager]))
+        XCTAssertTrue(plan.sections.contains([.share, .compose, .exportVideo, .imager]))
         let bare = StoryOptionsMenuPlan.resolve(hasStory: false, isOwnStory: false, hasAudioTranscript: false, canCompose: true)
         XCTAssertFalse(bare.entries.contains(.imager), "sans story, rien à imager")
     }

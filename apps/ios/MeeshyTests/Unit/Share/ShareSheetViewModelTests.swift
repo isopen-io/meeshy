@@ -339,18 +339,55 @@ final class ShareSheetViewModelTests: XCTestCase {
         XCTAssertTrue(directory.searchedQueries.isEmpty)
     }
 
-    // MARK: - Une story (#12644) : republier, recomposer, lien frappé à l'envoi
+    // MARK: - Le lien de l'utilisateur se crée à l'ouverture (#14310, remplace « à l'envoi » de #12644)
 
-    func test_aStory_doesNotMintItsTrackedLink_whenTheSheetOpens() async {
+    func test_aPublicStory_mintsItsTrackedLink_whenTheSheetOpens() async {
         let (sut, _, dispatcher) = makeSUT(subject: .story(id: "s1", authorName: "Moussa", authorId: "author", isPublic: true))
         dispatcher.link = URL(string: "https://meeshy.me/l/abc")
 
         await sut.load()
 
-        XCTAssertEqual(dispatcher.linkMints, 0, "Un lien frappé pour rien compterait un partage qui n'a pas eu lieu.")
+        XCTAssertEqual(dispatcher.linkMints, 1, "« Envoyer » crée le lien de l'utilisateur dès l'ouverture de la feuille.")
         guard case .card(let card) = sut.subject else { return XCTFail("la story reste une carte") }
-        XCTAssertEqual(card.url?.absoluteString, "https://meeshy.me/story/s1")
+        XCTAssertEqual(card.url?.absoluteString, "https://meeshy.me/l/abc")
         XCTAssertEqual(sut.plan.title, .send)
+    }
+
+    func test_aPostOrAReel_mintsItsTrackedLink_whenTheSheetOpens() async {
+        for isReel in [false, true] {
+            let (sut, _, dispatcher) = makeSUT(subject: .publication(id: "p1", isReel: isReel, authorName: "Moussa"))
+            dispatcher.link = URL(string: "https://meeshy.me/l/post")
+
+            await sut.load()
+
+            XCTAssertEqual(dispatcher.linkMints, 1)
+            guard case .card(let card) = sut.subject else { return XCTFail("la publication reste une carte") }
+            XCTAssertEqual(card.kind, isReel ? .reel : .post)
+            XCTAssertEqual(card.messageText, "https://meeshy.me/l/post", "Le message envoyé porte le lien de l'utilisateur.")
+        }
+    }
+
+    func test_aPublication_offline_opensWithItsDirectAddress() async {
+        let (sut, _, dispatcher) = makeSUT(subject: .publication(id: "p1", isReel: false, authorName: "Moussa"))
+        dispatcher.link = nil
+
+        await sut.load()
+
+        guard case .card(let card) = sut.subject else { return XCTFail("la publication reste une carte") }
+        XCTAssertEqual(card.url?.absoluteString, "https://meeshy.me/feeds/post/p1")
+    }
+
+    func test_theSheetOpening_mintsOnce_andSendingReusesTheLink() async {
+        let (sut, _, dispatcher) = makeSUT(subject: .publication(id: "p1", isReel: true, authorName: "Moussa"))
+        dispatcher.link = URL(string: "https://meeshy.me/l/post")
+        sut.toggle(person("lea"))
+
+        await sut.load()
+        await sut.send()
+
+        XCTAssertEqual(dispatcher.linkMints, 1)
+        guard case .card(let card) = dispatcher.delivered.first?.request.subject else { return XCTFail("une carte part") }
+        XCTAssertEqual(card.url?.absoluteString, "https://meeshy.me/l/post")
     }
 
     func test_aStory_mintsItsTrackedLink_onceItIsSent_andTheMessageCarriesIt() async {
@@ -398,6 +435,7 @@ final class ShareSheetViewModelTests: XCTestCase {
         dispatcher.link = URL(string: "https://meeshy.me/l/abc")
         sut.toggle(person("lea"))
 
+        await sut.load()
         let copied = await sut.ensureCardLink()
         await sut.send()
 

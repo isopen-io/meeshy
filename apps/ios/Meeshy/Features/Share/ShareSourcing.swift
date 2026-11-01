@@ -79,7 +79,7 @@ protocol ShareDispatching: AnyObject {
     func createGroup(with people: [ShareRecipient]) async -> ShareRecipient?
     /// Publier la pièce désignée en story, post ou réel (D2).
     func publish(attachment: MessageAttachment, to target: PublicationTarget) async -> Bool
-    /// Le lien suivi d'une carte (story) — `nil` : l'adresse directe reste.
+    /// Le lien suivi d'une carte (`ShareCard.mintsTrackedLink`) — `nil` : l'adresse directe reste.
     func resolvedLink(for card: ShareCard) async -> URL?
     /// Republier une story en story, post ou réel (#12644) — la republication
     /// directe du rail, vers une autre cible.
