@@ -100,7 +100,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                 // journal déjà reçu reste dans le service et se réaffiche à
                 // la réouverture — seule resetForCallEnd le purge.
                 guard call.transcriptionService.isShowingOverlay else { return }
-                let segment = CallManager.makeTranscriptionSegment(from: event)
+                let segment = CallTranscriptionSegmentFactory.makeTranscriptionSegment(from: event)
                 call.transcriptionService.receiveTranslatedSegment(segment)
             }
             .store(in: &cancellables)

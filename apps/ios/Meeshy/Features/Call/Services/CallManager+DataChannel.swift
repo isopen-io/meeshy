@@ -30,7 +30,7 @@ extension CallManager {
                 // gateway fusionne dans CallTranscriptionService.
                 guard self.currentCallId == entry.callId else { return }
                 guard self.transcriptionService.isShowingOverlay else { return }
-                let segment = CallManager.makeTranscriptionSegment(from: entry)
+                let segment = CallTranscriptionSegmentFactory.makeTranscriptionSegment(from: entry)
                 self.transcriptionService.receivePeerEntry(segment)
             case .ignored:
                 break
