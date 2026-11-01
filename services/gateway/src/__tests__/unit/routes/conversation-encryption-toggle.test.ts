@@ -3,7 +3,9 @@
  * une écriture conditionnelle sur l'époque du régime (#12521), l'appartenance
  * jugée avant toute information sur la conversation (#12563). Une conversation
  * chiffrée de bout en bout ne repasse JAMAIS en clair (décision porteur du
- * 2026-10-25, #12949) ; seul le chiffrement au repos (server, hybrid) se quitte.
+ * 2026-10-25, #12949). Le serveur chiffre toujours au repos (directive porteur
+ * du 2026-11-01) : `server` et `hybrid` ne se désactivent plus, ils se quittent
+ * vers un autre mode — l'un vers l'autre, ou vers le bout en bout.
  *
  * Le double Prisma tient UN document de conversation en mémoire et évalue les
  * `where` avec la sémantique MongoDB (`matchesMongoWhere` : un champ absent
@@ -20,6 +22,7 @@ import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where
 jest.mock('../../../services/EncryptionService', () => ({
   getEncryptionService: jest.fn().mockResolvedValue({
     getOrCreateConversationKey: jest.fn().mockResolvedValue('server-key-id'),
+    activationKeyId: jest.fn(async (_conversationId: string, designated: string | null) => designated ?? 'server-key-id'),
   }),
 }));
 
@@ -74,6 +77,7 @@ function makeWorld(conversation: MongoDocument, members: Member[] = [ANALYST_ALI
     encryptionEnabledAt: row.encryptionEnabledAt ?? null,
     encryptionEnabledBy: row.encryptionEnabledBy ?? null,
     encryptionEpoch: row.encryptionEpoch,
+    serverEncryptionKeyId: row.serverEncryptionKeyId ?? null,
     participants: world.members,
   });
   Object.assign(world.prisma, {
@@ -127,8 +131,8 @@ const as = (userId: string) => {
   testAuthContext = { isAuthenticated: true, isAnonymous: false, userId };
 };
 
-const enable = (app: FastifyInstance, conversationId = CONV_ID) =>
-  app.inject({ method: 'POST', url: `/conversations/${conversationId}/encryption`, payload: { mode: 'e2ee' } });
+const enable = (app: FastifyInstance, conversationId = CONV_ID, mode = 'e2ee') =>
+  app.inject({ method: 'POST', url: `/conversations/${conversationId}/encryption`, payload: { mode } });
 const disable = (app: FastifyInstance, conversationId = CONV_ID) =>
   app.inject({ method: 'DELETE', url: `/conversations/${conversationId}/encryption` });
 const status = (app: FastifyInstance) => app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/encryption-status` });
@@ -207,42 +211,24 @@ describe('une conversation chiffrée de bout en bout ne repasse jamais en clair 
   });
 });
 
-describe('le chiffrement au repos (server, hybrid) se désactive encore (#12522)', () => {
+describe('le chiffrement au repos (server, hybrid) ne se désactive plus : il monte vers un autre mode (2026-11-01)', () => {
   beforeEach(() => as(ALICE));
 
   const SERVER = { ...ENABLED, encryptionMode: 'server', encryptionProtocol: 'aes-256-gcm', serverEncryptionKeyId: 'k1' };
 
-  it('désactive une conversation server jamais basculée : régime en clair, époque 1, clé serveur intacte', async () => {
-    const world = makeWorld({ ...SERVER });
+  it.each(['server', 'hybrid'])('désactiver une conversation %s : 409 ENCRYPTION_AT_REST_PERMANENT, rien n’est écrit, rien n’est annoncé', async (mode) => {
+    const world = makeWorld({ ...SERVER, encryptionMode: mode, encryptionEpoch: 3 });
+    const before = { ...world.conversation };
     const app = await buildApp(world);
 
     const res = await disable(app);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ isEncrypted: false, mode: null, enabledAt: null, epoch: 1, canDisableEncryption: false });
-    expect(world.conversation).toMatchObject({ encryptionMode: null, encryptionEnabledAt: null, encryptionEpoch: 1, serverEncryptionKeyId: 'k1' });
-    await app.close();
-  });
-
-  it('laisse dans le fil une ligne système nommant son auteur, et prévient chaque membre actif', async () => {
-    const world = makeWorld({ ...SERVER, encryptionMode: 'hybrid', encryptionEpoch: 3 });
-    const app = await buildApp(world);
-
-    await disable(app);
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(world.notices).toEqual([
-      expect.objectContaining({
-        conversationId: CONV_ID,
-        senderId: ALICE_PARTICIPANT,
-        messageType: 'system',
-        content: expect.stringContaining('Alice a désactivé le chiffrement de cette conversation'),
-        metadata: { kind: 'encryption-disabled', previousMode: 'hybrid', epoch: 4, actor: { participantId: ALICE_PARTICIPANT, displayName: 'Alice' } },
-      }),
-    ]);
-    const changes = world.emitted.filter((entry) => entry.event === 'conversation:encryption-changed');
-    expect(changes.map((entry) => entry.room).sort()).toEqual([`user:${ALICE}`, `user:${BOB}`]);
-    expect(changes[0].payload).toMatchObject({ isEncrypted: false, mode: null, epoch: 4 });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'ENCRYPTION_AT_REST_PERMANENT' });
+    expect(world.conversation).toEqual(before);
+    expect(world.notices).toEqual([]);
+    expect(world.emitted).toEqual([]);
     await app.close();
   });
 
@@ -263,25 +249,50 @@ describe('le chiffrement au repos (server, hybrid) se désactive encore (#12522)
     const world = makeWorld({ ...SERVER, type: 'group' });
     const app = await buildApp(world);
 
-    const res = await disable(app);
+    const res = await enable(app);
 
     expect(res.statusCode).toBe(403);
     expect(world.conversation.encryptionMode).toBe('server');
     await app.close();
   });
 
-  it('passe ensuite au bout en bout : époque 2, et la conversation ne se désactive plus', async () => {
+  it('passe d’un coup de server au bout en bout : époque 1, clé serveur gardée, et la conversation ne se quitte plus', async () => {
     const world = makeWorld({ ...SERVER });
     const app = await buildApp(world);
 
-    await disable(app);
     const res = await enable(app);
     const again = await disable(app);
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ isEncrypted: true, mode: 'e2ee', epoch: 2, canDisableEncryption: false, canToggleEncryption: false });
+    expect(res.json().data).toMatchObject({ isEncrypted: true, mode: 'e2ee', epoch: 1, canDisableEncryption: false, canToggleEncryption: false });
+    expect(world.conversation).toMatchObject({ encryptionMode: 'e2ee', encryptionProtocol: 'signal_v3', serverEncryptionKeyId: 'k1' });
     expect(again.statusCode).toBe(409);
-    expect(world.notices.map((notice) => (notice.metadata as { kind: string }).kind)).toEqual(['encryption-disabled', 'encryption-enabled']);
+    expect(again.json()).toMatchObject({ code: 'E2EE_IRREVERSIBLE' });
+    expect(world.notices.map((notice) => (notice.metadata as { kind: string }).kind)).toEqual(['encryption-enabled']);
+    await app.close();
+  });
+
+  it('passe de server à hybrid en reprenant la clé que la conversation désigne', async () => {
+    const world = makeWorld({ ...SERVER, encryptionEpoch: 2 });
+    const app = await buildApp(world);
+
+    const res = await enable(app, CONV_ID, 'hybrid');
+
+    expect(res.statusCode).toBe(200);
+    expect(world.conversation).toMatchObject({ encryptionMode: 'hybrid', serverEncryptionKeyId: 'k1', encryptionEpoch: 3 });
+    await app.close();
+  });
+
+  it('reposer le mode qu’elle a déjà : 400 ENCRYPTION_ALREADY_ENABLED, rien n’est écrit', async () => {
+    const world = makeWorld({ ...SERVER, encryptionEpoch: 2 });
+    const app = await buildApp(world);
+
+    const res = await enable(app, CONV_ID, 'server');
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'ENCRYPTION_ALREADY_ENABLED' });
+    expect(world.conversation.encryptionEpoch).toBe(2);
+    expect(world.notices).toEqual([]);
     await app.close();
   });
 
@@ -319,12 +330,12 @@ describe('la bascule est atomique (#12521)', () => {
     await app.close();
   });
 
-  it('deux désactivations concurrentes d’une conversation server ne posent qu’une bascule', async () => {
+  it('deux montées concurrentes d’une conversation server ne posent qu’une bascule', async () => {
     const world = makeWorld({ ...ENABLED, encryptionMode: 'server', encryptionEpoch: 5 });
     world.barrier = 2;
     const app = await buildApp(world);
 
-    const results = await Promise.all([disable(app), disable(app)]);
+    const results = await Promise.all([enable(app), enable(app)]);
 
     expect(results.map((res) => res.statusCode).sort()).toEqual([200, 409]);
     expect(world.conversation.encryptionEpoch).toBe(6);
@@ -403,13 +414,13 @@ describe('encryption-status sert l’époque et le droit de basculer (spec § 5.
     await app.close();
   });
 
-  it('un ANALYST membre d’un tête-à-tête server peut le désactiver', async () => {
+  it('un ANALYST membre d’un tête-à-tête server peut changer de mode, jamais le désactiver', async () => {
     as(ALICE);
     const app = await buildApp(makeWorld({ ...ENABLED, encryptionMode: 'server' }));
 
     const res = await status(app);
 
-    expect(res.json().data).toMatchObject({ mode: 'server', canToggleEncryption: true, canDisableEncryption: true });
+    expect(res.json().data).toMatchObject({ mode: 'server', canToggleEncryption: true, canDisableEncryption: false });
     await app.close();
   });
 

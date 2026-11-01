@@ -732,6 +732,8 @@ export interface CreateConversationRequest {
   readonly identifier?: string;
   /** Tête-à-tête seulement (#12966) : obtenir ou créer celui que le serveur lit, à côté d'un tête-à-tête chiffré de bout en bout. */
   readonly plaintext?: boolean;
+  /** Le mode de chiffrement choisi à la création ; absent : `server` (le serveur chiffre toujours au repos). */
+  readonly encryptionMode?: 'server' | 'hybrid' | 'e2ee';
 }
 
 /**

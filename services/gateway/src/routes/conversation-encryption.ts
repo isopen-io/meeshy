@@ -48,6 +48,8 @@ import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/type
 import {
   ENCRYPTION_ALREADY_ENABLED_CODE,
   ENCRYPTION_NOT_ENABLED_CODE,
+  ENCRYPTION_AT_REST_PERMANENT_CODE,
+  ENCRYPTION_AT_REST_PERMANENT_MESSAGE,
   encryptionStatusView,
   regimeEpochOf,
   regimeIsActive,
@@ -160,14 +162,6 @@ function encryptionChange(conversationId: string, switched: SwitchedRegime, acto
     changedByUserId: actorUserId,
     changedAt: new Date().toISOString(),
   };
-}
-
-/**
- * Le repli FRANÇAIS de l'avis de désactivation, pour les surfaces sans rendu
- * dédié (anciens clients). Seul le chiffrement au repos se désactive (#12949).
- */
-function disabledNoticeText(actorName: string): string {
-  return `🔓 ${actorName} a désactivé le chiffrement de cette conversation.`;
 }
 
 export default async function encryptionRoutes(fastify: FastifyInstance) {
@@ -345,7 +339,10 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           return irreversible(reply);
         }
 
-        if (regimeIsActive(conversation)) {
+        // Directive porteur du 2026-11-01 — le chiffrement au repos ne se
+        // désactive plus : `server` et `hybrid` se quittent vers un AUTRE mode.
+        // Seul le mode qu'elle porte déjà, ou une anomalie (date sans mode), refuse.
+        if (regimeIsActive(conversation) && (conversation.encryptionMode === mode || !regimeMayBeLeft(conversation))) {
           return sendBadRequest(reply, 'Encryption is already enabled for this conversation', {
             code: ENCRYPTION_ALREADY_ENABLED_CODE,
           });
@@ -482,28 +479,9 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           return irreversible(reply);
         }
 
-        const switched = await switchEncryptionRegime(fastify.prisma, {
-          conversationId,
-          observedEpoch: regimeEpochOf(conversation),
-          target: null,
-          at: new Date(),
-        });
-        if (!switched) {
-          return regimeChanged(reply);
-        }
-
-        const previousMode = conversation.encryptionMode;
-        await announceSwitch(conversation, switched, authContext.userId, (actor) => ({
-          content: disabledNoticeText(actor.displayName),
-          metadata: { kind: 'encryption-disabled', previousMode, epoch: switched.epoch, actor },
-        }));
-
-        logger.info('Encryption disabled for conversation', { conversationId, previousMode, epoch: switched.epoch });
-
-        return sendSuccess(reply, encryptionStatusView(
-          { encryptionMode: null, encryptionEnabledAt: null, encryptionEnabledBy: null, encryptionEpoch: switched.epoch },
-          { mayToggle: true },
-        ), { message: 'Encryption disabled' });
+        // Directive porteur du 2026-11-01 — le serveur chiffre toujours au
+        // repos : on change de mode, on ne repasse jamais en clair.
+        return sendError(reply, 409, ENCRYPTION_AT_REST_PERMANENT_MESSAGE, { code: ENCRYPTION_AT_REST_PERMANENT_CODE });
 
       } catch (error) {
         logger.error('Error disabling encryption', error as Error);
