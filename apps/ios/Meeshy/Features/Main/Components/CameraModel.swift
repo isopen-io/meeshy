@@ -78,6 +78,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated let liveFeed = ComposerCameraFeed()
     /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction.
     nonisolated let previewMirroring = ComposerPreviewMirroring()
+    /// L'horizon de l'objectif en service, posé sur la photo au déclenchement.
+    private let horizon = ComposerCaptureHorizon()
     /// La session est configurée (ou en cours de l'être sur sa file) : on ne la
     /// refait pas.
     private(set) var sessionIsPrepared = false
@@ -373,6 +375,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Ce que l'objectif installé change à l'écran — publié APRÈS le commit.
     private func adopt(_ installe: CameraInputInstaller.InstalledCamera) {
         activeVideoDevice = installe.device
+        horizon.follow(installe.device)
         currentPosition = installe.position
         liveFeed.setPosition(installe.position)
         zoomScale = installe.zoomScale
@@ -509,6 +512,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         if photoOutput.supportedFlashModes.contains(flash) {
             settings.flashMode = flash
         }
+        horizon.level(connection)
         isTakingPhoto = true
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
