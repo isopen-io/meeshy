@@ -71,7 +71,7 @@ struct ComposerSceneOverlayChrome: View {
                 .opacity(ComposerRestChrome.closeIsShown(state) ? 1 : 0)
                 .allowsHitTesting(ComposerRestChrome.closeIsShown(state))
                 .accessibilityHidden(!ComposerRestChrome.closeIsShown(state))
-            if ComposerRestChrome.showsSlideRow(slideCount: slideCount), let slideRow {
+            if ComposerRestChrome.slideRowIsShown(state, slideCount: slideCount), let slideRow {
                 slideRow.frame(maxWidth: .infinity)
             } else {
                 Spacer(minLength: 0)
