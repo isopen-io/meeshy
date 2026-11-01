@@ -17,6 +17,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Dp
@@ -147,7 +148,7 @@ class StorySceneFirstLayoutTest {
     }
 
     @Test
-    fun `undo and redo only appear with a history`() {
+    fun `an undo or redo with no step to replay is hidden, never greyed`() {
         var history by mutableStateOf<SceneHistory?>(null)
         compose.setContent {
             MeeshyTheme { SceneTopBar(onClose = {}, history = history, onUndo = {}, onRedo = {}) }
@@ -159,7 +160,49 @@ class StorySceneFirstLayoutTest {
         compose.waitForIdle()
 
         compose.onNodeWithContentDescription(UNDO).assertIsEnabled()
-        compose.onNodeWithContentDescription(REDO).assertExists()
+        compose.onNodeWithContentDescription(REDO).assertDoesNotExist()
+
+        history = SceneHistory(canUndo = false, canRedo = true)
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription(UNDO).assertDoesNotExist()
+        compose.onNodeWithContentDescription(REDO).assertIsEnabled()
+
+        history = SceneHistory(canUndo = true, canRedo = true)
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription(UNDO).assertIsEnabled()
+        compose.onNodeWithContentDescription(REDO).assertIsEnabled()
+    }
+
+    @Test
+    fun `each lifted finger over the composer closes the gesture of the history, once`() {
+        var lifts = 0
+        compose.setContent {
+            androidx.compose.foundation.layout.Box(
+                androidx.compose.ui.Modifier.size(200.dp).closesGestureOnLift { lifts++ }.testTag("composer"),
+            )
+        }
+
+        compose.onNodeWithTag("composer").performTouchInput {
+            down(center)
+            moveBy(androidx.compose.ui.geometry.Offset(30f, 0f))
+            moveBy(androidx.compose.ui.geometry.Offset(30f, 0f))
+            up()
+        }
+        compose.onNodeWithTag("composer").performTouchInput { down(center); up() }
+
+        assertThat(lifts).isEqualTo(2)
+    }
+
+    @Test
+    fun `the lane history hides the side with nothing to replay`() {
+        compose.setContent {
+            MeeshyTheme { androidx.compose.foundation.layout.Column { SceneLaneHistory(SceneHistory(canUndo = true, canRedo = false), onUndo = {}, onRedo = {}) } }
+        }
+
+        compose.onNodeWithContentDescription(UNDO).assertIsEnabled()
+        compose.onNodeWithContentDescription(REDO).assertDoesNotExist()
     }
 
     @Test

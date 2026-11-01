@@ -108,7 +108,7 @@ class ReelPostCardLayoutTest {
         val composed = reel.copy(reelCover = ReelCover.Scene(StoryItem(id = "reel1")))
         compose.setContent {
             MeeshyTheme {
-                CompositionLocalProvider(LocalReelSceneRenderer provides { _, _, _, modifier -> Box(modifier.testTag("scene")) }) {
+                CompositionLocalProvider(LocalReelSceneRenderer provides { _, _, _, _, modifier -> Box(modifier.testTag("scene")) }) {
                     Box(Modifier.width(240.dp)) {
                         PostCard(
                             post = composed, onLike = {}, onBookmark = {}, onFlagTap = {}, onClick = {}, onOpenPost = {},

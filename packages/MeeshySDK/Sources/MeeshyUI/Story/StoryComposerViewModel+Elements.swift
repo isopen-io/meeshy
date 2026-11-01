@@ -465,9 +465,7 @@ extension StoryComposerViewModel {
                 || effects.resolvedBackgroundMedia?.id == id
             let newValue = !current
             if newValue {
-                for i in effects.mediaObjects!.indices {
-                    effects.mediaObjects![i].isBackground = (i == idx) ? true : false
-                }
+                effects.promoteBackgroundMedia(at: idx)
             } else {
                 // Matérialise le flag à `false` pour neutraliser la règle legacy.
                 effects.mediaObjects![idx].isBackground = false

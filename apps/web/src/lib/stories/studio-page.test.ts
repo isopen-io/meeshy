@@ -352,6 +352,9 @@ describe('studioFailureKey — la cause se DIT dans la langue de l’interface, 
     expect(studioFailureKey(failure(503), 'publish')).toBe('story.studio.failure.unavailable');
     expect(studioFailureKey(failure(0, 'MEDIA_NOT_CLAIMED'), 'publish')).toBe('story.studio.failure.refused');
   });
+  test('le plafond des personnes choisies sans lien (#14169) se dit en clair, jamais comme une cadence à réessayer', () => {
+    expect(studioFailureKey(failure(429, 'ONLY_UNLINKED_RECIPIENTS_LIMIT'), 'publish')).toBe('story.studio.failure.onlyUnlinked');
+  });
 });
 
 describe('les éditions de base du fond (#9136)', () => {

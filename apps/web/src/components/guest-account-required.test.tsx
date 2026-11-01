@@ -54,7 +54,7 @@ describe('une @mention lue par un invité', () => {
 });
 
 function Publisher() {
-  usePublishMentionSource({ conversationId: 'c-world', messages: [] });
+  usePublishMentionSource({ conversationId: 'c-world', messages: [], conversation: { type: 'global', participants: [] } });
   return null;
 }
 

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,13 +40,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.SceneFraming
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.ui.component.media.MosaicArrangement
 import me.meeshy.ui.component.media.MosaicLayout
@@ -58,21 +60,32 @@ import me.meeshy.ui.theme.MeeshySpacing
 /**
  * **Un post composé sur la scène se lit scène par scène** (#13863 R7, iOS `PostSceneCard` / `PostSceneMosaic`) : chaque scène
  * passe par le moteur unique de la scène (le lecteur que l'application fournit), à la place des médias du post, dans la
- * disposition que l'auteur a choisie. Le carrousel, défaut, montre une scène par page ; les quatre mosaïques posent des scènes
- * ARRÊTÉES côte à côte, « +N » sur la dernière. Toucher une scène l'ouvre en plein écran, sur ELLE, avec son son.
+ * disposition que l'auteur a choisie, cadrée sur ce qu'elle MONTRE ([SceneCardFraming], #14199). Le carrousel, défaut, montre
+ * une scène par page ; les quatre mosaïques posent des scènes ARRÊTÉES côte à côte, « +N » sur la dernière. Toucher une scène
+ * l'ouvre en plein écran, sur ELLE, avec son son.
  *
  * Seule la page COURANTE du carrousel joue, et seulement quand l'hôte l'autorise ([live] : la carte élue du fil, ou le détail).
+ * Ce qu'on y entend dépend de l'HÔTE ([host], iOS `PostSceneMosaicHost`) : le fil est muet par construction, la fiche du post
+ * fait entendre ses scènes tant que [muted] ne les coupe pas (#13893). Chaque scène porte sa légende là où la place le permet,
+ * et dit dans son coin qu'elle a du son ou qu'elle bouge ([SceneCue], #14201).
  */
 @Composable
-internal fun PostScenesView(scenes: FeedPostScenes, live: Boolean, modifier: Modifier = Modifier) {
+internal fun PostScenesView(
+    scenes: FeedPostScenes,
+    live: Boolean,
+    modifier: Modifier = Modifier,
+    host: PostScenesHost = PostScenesHost.FEED,
+    muted: Boolean = false,
+) {
+    val sound = host.locksMute || muted
     var readerAt by rememberSaveable { mutableStateOf<Int?>(null) }
     val reader = LocalPostSceneReaderRenderer.current
     val open: (Int) -> Unit = { index -> if (reader != null) readerAt = index }
     Box(modifier.fillMaxWidth()) {
         when (val arrangement = MosaicLayout.arrange(scenes.items.size, scenes.layout)) {
             MosaicArrangement.Empty -> Unit
-            MosaicArrangement.Single, is MosaicArrangement.Paged -> PostScenePager(scenes, live, open)
-            is MosaicArrangement.Tiled -> PostSceneMosaicTiles(scenes, arrangement, open)
+            MosaicArrangement.Single, is MosaicArrangement.Paged -> PostScenePager(scenes, live, sound, host, open)
+            is MosaicArrangement.Tiled -> PostSceneMosaicTiles(scenes, arrangement, sound, open)
         }
     }
     val start = readerAt
@@ -82,8 +95,9 @@ internal fun PostScenesView(scenes: FeedPostScenes, live: Boolean, modifier: Mod
 }
 
 @Composable
-private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, onOpen: (Int) -> Unit) {
+private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean, host: PostScenesHost, onOpen: (Int) -> Unit) {
     val count = scenes.items.size
+    val boxAspect = host.cardAspect(scenes.carouselAspect)
     val pagerState = rememberPagerState(pageCount = { count })
     val scope = rememberCoroutineScope()
     val current = pagerState.currentPage
@@ -95,21 +109,36 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, onOpen: (Int) 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(SCENE_CARD_ASPECT)
+                .aspectRatio(boxAspect.toFloat())
                 .clip(RoundedCornerShape(MeeshyRadius.md))
                 .background(FEED_MEDIA_GROUND),
         ) {
             HorizontalPager(state = pagerState, key = { page -> scenes.items[page].id }, modifier = Modifier.fillMaxSize()) { page ->
-                val label = stringResource(R.string.feed_scene_tile, page + 1)
-                SceneSurface(
-                    item = scenes.items[page],
-                    accentHex = scenes.accentHex,
-                    live = live && page == current,
+                val moves = scenes.moving.getOrNull(page) == true
+                val label = sceneTileLabel(stringResource(R.string.feed_scene_tile, page + 1), moves)
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .semantics { contentDescription = label }
                         .clickable(onClickLabel = label) { onOpen(page) },
-                )
+                ) {
+                    val frame = scenes.frames.getOrNull(page)
+                    ScenePageFrame(
+                        focus = frame?.focus,
+                        modifier = Modifier.align(Alignment.Center).aspectRatio((frame?.pageAspect ?: boxAspect).toFloat()),
+                    ) {
+                        SceneSurface(item = scenes.items[page], accentHex = scenes.accentHex, live = live && page == current, muted = muted, modifier = Modifier.fillMaxSize())
+                    }
+                    scenes.captionAt(page, tileWidth = 1f)?.let { caption ->
+                        FeedMediaCaption(text = caption, maxLines = CAPTION_LINES, modifier = Modifier.align(Alignment.BottomStart))
+                    }
+                    SceneCue(
+                        playing = live && page == current,
+                        mutedSound = host.locksMute && scenes.offersSound,
+                        moves = moves,
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                    )
+                }
             }
             if (count > 1) {
                 PageCounter(position = current + 1, count = count, modifier = Modifier.align(Alignment.TopEnd))
@@ -136,7 +165,7 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, onOpen: (Int) 
 }
 
 @Composable
-private fun PostSceneMosaicTiles(scenes: FeedPostScenes, arrangement: MosaicArrangement.Tiled, onOpen: (Int) -> Unit) {
+private fun PostSceneMosaicTiles(scenes: FeedPostScenes, arrangement: MosaicArrangement.Tiled, muted: Boolean, onOpen: (Int) -> Unit) {
     val scroll = rememberScrollState()
     BoxWithConstraints(modifier = Modifier.fillMaxWidth().aspectRatio(1f / arrangement.aspectRatio)) {
         val boxWidth = maxWidth
@@ -150,7 +179,7 @@ private fun PostSceneMosaicTiles(scenes: FeedPostScenes, arrangement: MosaicArra
                 arrangement.tiles.forEach { tile ->
                     val item = scenes.items.getOrNull(tile.index) ?: return@forEach
                     key(item.id) {
-                        SceneTile(item = item, accentHex = scenes.accentHex, tile = tile, boxWidth = boxWidth, boxHeight = boxHeight, onOpen = onOpen)
+                        SceneTile(scenes, tile = tile, box = DpSize(boxWidth, boxHeight), muted = muted, onOpen = onOpen)
                     }
                 }
             }
@@ -159,12 +188,17 @@ private fun PostSceneMosaicTiles(scenes: FeedPostScenes, arrangement: MosaicArra
 }
 
 @Composable
-private fun SceneTile(item: StoryItem, accentHex: String?, tile: MosaicTile, boxWidth: Dp, boxHeight: Dp, onOpen: (Int) -> Unit) {
-    val label = if (tile.overflow > 0) {
+private fun SceneTile(scenes: FeedPostScenes, tile: MosaicTile, box: DpSize, muted: Boolean, onOpen: (Int) -> Unit) {
+    val item = scenes.items[tile.index]
+    val boxWidth = box.width
+    val boxHeight = box.height
+    val moves = scenes.moving.getOrNull(tile.index) == true
+    val place = if (tile.overflow > 0) {
         stringResource(R.string.feed_scene_more, tile.index + 1, tile.overflow)
     } else {
         stringResource(R.string.feed_scene_tile, tile.index + 1)
     }
+    val label = sceneTileLabel(place, moves)
     Box(
         modifier = Modifier
             .offset(x = boxWidth * tile.x, y = boxHeight * tile.y)
@@ -174,7 +208,15 @@ private fun SceneTile(item: StoryItem, accentHex: String?, tile: MosaicTile, box
             .semantics { contentDescription = label }
             .clickable(onClickLabel = label) { onOpen(tile.index) },
     ) {
-        SceneSurface(item = item, accentHex = accentHex, live = false, modifier = Modifier.fillMaxSize())
+        SceneTileFrame(focus = scenes.frames.getOrNull(tile.index)?.focus, modifier = Modifier.fillMaxSize()) {
+            SceneSurface(item = item, accentHex = scenes.accentHex, live = false, muted = muted, modifier = Modifier.fillMaxSize())
+        }
+        scenes.captionAt(tile.index, tile.width, tile.overflow)?.let { caption ->
+            FeedMediaCaption(text = caption, maxLines = CAPTION_LINES, modifier = Modifier.align(Alignment.BottomStart))
+        }
+        if (tile.overflow == 0) {
+            SceneCue(playing = false, mutedSound = false, moves = moves, modifier = Modifier.align(Alignment.BottomEnd))
+        }
         if (tile.overflow > 0) {
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
@@ -191,18 +233,51 @@ private fun SceneTile(item: StoryItem, accentHex: String?, tile: MosaicTile, box
     }
 }
 
-/** La scène peinte par le moteur que l'application fournit, muette, remplissant son cadre ; un aplat hors de l'application. */
+/** La scène peinte par le moteur que l'application fournit, remplissant son cadre ; un aplat hors de l'application. */
 @Composable
-private fun SceneSurface(item: StoryItem, accentHex: String?, live: Boolean, modifier: Modifier) {
+private fun SceneSurface(item: StoryItem, accentHex: String?, live: Boolean, muted: Boolean, modifier: Modifier) {
     val renderer = LocalReelSceneRenderer.current
     Box(modifier) {
-        renderer?.invoke(item, accentHex, live, Modifier.fillMaxSize())
+        renderer?.invoke(item, accentHex, live, muted, Modifier.fillMaxSize())
     }
 }
 
 /**
+ * Où les scènes d'un post sont montées — donc ce qu'on y entend (iOS `PostSceneMosaicHost`, #5593) : le fil, muet par
+ * construction (plusieurs cartes à l'écran, aucune n'a de son à piloter) ; la fiche du post, qui laisse le lecteur couper.
+ */
+internal enum class PostScenesHost {
+    FEED,
+    DETAIL,
+    ;
+
+    val locksMute: Boolean get() = this == FEED
+
+    /**
+     * La boîte du carrousel (iOS `PostSceneMosaic.carrousel`) : dans le fil, plafonnée en hauteur (`SceneCardHeightCap`), la page
+     * s'y ajustant sans être rognée ; dans la fiche, la forme de la page la plus haute, entière.
+     */
+    fun cardAspect(natural: Double): Double = if (this == FEED) SceneFraming.clampedCardAspect(natural) else natural
+}
+
+/**
+ * La légende que la scène [index] porte sur sa tuile (iOS `PostSceneMosaic.bandeauDeLegende`) : la sienne, là où la place le
+ * permet ([MosaicLayout.tileCarriesCaption]), bornée en mots ; jamais sur le « +N », qui porte déjà son voile et son compteur.
+ */
+private fun FeedPostScenes.captionAt(index: Int, tileWidth: Float, overflow: Int = 0): String? {
+    if (overflow > 0) return null
+    val text = captions.getOrNull(index) ?: return null
+    if (!MosaicLayout.tileCarriesCaption(layout, index, items.size)) return null
+    return MosaicLayout.truncateWords(text, MosaicLayout.captionWordLimit(layout, items.size, tileWidth))
+}
+
+private const val CAPTION_LINES = 2
+private const val READER_CAPTION_LINES = 4
+
+/**
  * Le plein écran des scènes, ouvert sur celle qu'on a touchée : une page par scène, seule la page montrée joue, son compris. Son
- * menu « … » exporte le post entier en vidéo (#13896).
+ * menu « … » exporte le post entier en vidéo (#13896). La légende de la scène LUE se pose en bas, bornée en lignes, sous les
+ * contrôles du haut qu'elle ne couvre jamais (#14200).
  */
 @Composable
 private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, onDismiss: () -> Unit) {
@@ -214,6 +289,13 @@ private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSc
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             HorizontalPager(state = pagerState, key = { page -> scenes.items[page].id }, modifier = Modifier.fillMaxSize()) { page ->
                 renderer(scenes.items[page], scenes.accentHex, page == pagerState.currentPage, Modifier.fillMaxSize())
+            }
+            PostSceneCaptions.reader(scenes, pagerState.currentPage)?.let { caption ->
+                FeedMediaCaption(
+                    text = caption,
+                    maxLines = READER_CAPTION_LINES,
+                    modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(bottom = MeeshySpacing.sm),
+                )
             }
             if (scenes.items.size > 1) {
                 PageCounter(position = pagerState.currentPage + 1, count = scenes.items.size, modifier = Modifier.align(Alignment.TopStart))
@@ -235,6 +317,3 @@ private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSc
         }
     }
 }
-
-/** La carte d'une scène dans le fil : son 9:16, borné à 1,4 fois la largeur (iOS `SceneCardHeightCap`). */
-private const val SCENE_CARD_ASPECT = 1f / 1.4f

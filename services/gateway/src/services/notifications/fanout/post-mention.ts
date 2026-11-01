@@ -6,6 +6,7 @@ import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger } from '../../../utils/logger-enhanced';
 import { truncateMessage } from '../notification-preview';
 import type { FanoutDependencies } from './dependencies';
+import { mentionReceivers } from './entourage';
 
 export type PostMentionFanoutParams = {
   postId: string;
@@ -83,7 +84,15 @@ export async function createPostMentionNotificationsBatch(
   // l'auteur d'ouvrir son contenu sans le vouloir. Il n'est pas la garde.
   // Retirer le grant persisté ou `includeReferenced`, EN REVANCHE, rouvrirait
   // une vraie fuite.
-  const audience = params.mentionedUserIds;
+  //
+  // Être AUTORISÉ à lire n'est pas être PRÉVENU (#14168) : la notification ne
+  // part qu'à une personne LIÉE à l'auteur (Connaissance et plus, ou conversation
+  // directe où elle a écrit — la règle des choisis d'un `ONLY`, #14105). Un
+  // inconnu nommé garde l'accès au post, rien ne le lui pousse.
+  const audience = await mentionReceivers(deps.prisma, {
+    mentionerId: params.posterId,
+    mentionedUserIds: params.mentionedUserIds,
+  });
   if (audience.length === 0) return;
 
   const excerpt = params.postExcerpt

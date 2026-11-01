@@ -26,9 +26,10 @@ val LocalStoryOpener = staticCompositionLocalOf<((authorId: String, storyId: Str
  * Comment la scène d'un RÉEL se dessine sur sa carte (iOS `ReelCardSceneBackdrop`) : non plus une carte de story 9:16 centrée,
  * mais la scène qui REMPLIT le cadre reçu (cadrage « fill », rognée au centre), sur du noir, muette, sans geste ni libellé propres
  * — la carte porte l'ouverture et son libellé. Arguments : le réel composé, la couleur de son auteur, [live] (élu par le fil),
- * le cadre à remplir.
+ * [muted] (le fil est muet par construction ; la fiche d'un post laisse le lecteur couper ou rétablir le son, #13893), le
+ * cadre à remplir.
  */
-typealias ReelSceneRenderer = @Composable (item: StoryItem, accentHex: String?, live: Boolean, modifier: Modifier) -> Unit
+typealias ReelSceneRenderer = @Composable (item: StoryItem, accentHex: String?, live: Boolean, muted: Boolean, modifier: Modifier) -> Unit
 
 /** `null` hors de l'application (tests, aperçus) : la couverture retombe alors sur l'aplat d'accent. */
 val LocalReelSceneRenderer = staticCompositionLocalOf<ReelSceneRenderer?> { null }

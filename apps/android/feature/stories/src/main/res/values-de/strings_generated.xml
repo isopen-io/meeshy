@@ -55,7 +55,11 @@
     <string name="composer_frise_earlier">Früher</string>
     <string name="composer_frise_empty">Füge einen Text oder Sticker hinzu: Jedes Objekt wird zu einer Spur.</string>
     <string name="composer_frise_entry">Tritt hier ein</string>
+    <string name="composer_frise_entryEarlier">Früher einblenden</string>
+    <string name="composer_frise_entryLater">Später einblenden</string>
     <string name="composer_frise_exit">Tritt hier aus</string>
+    <string name="composer_frise_exitEarlier">Früher ausblenden</string>
+    <string name="composer_frise_exitLater">Später ausblenden</string>
     <string name="composer_frise_later">Später</string>
     <string name="composer_frise_media">Medium</string>
     <string name="composer_frise_panel">Zeitplan</string>
@@ -82,6 +86,7 @@
     <string name="composer_object_editor_effects_grain">Körnung</string>
     <string name="composer_object_editor_end">Ende</string>
     <string name="composer_object_editor_permanent">Von Anfang bis Ende sichtbar</string>
+    <string name="composer_object_editor_split">Teilen</string>
     <string name="composer_object_editor_start">Anfang</string>
     <string name="composer_object_editor_window">Von %1$s bis %2$s</string>
     <string name="composer_object_editor_window_permanent">Von %1$s bis zum Ende</string>
