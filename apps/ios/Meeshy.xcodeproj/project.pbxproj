@@ -3998,7 +3998,8 @@
 		F26072EC24F4508EF84D818B /* MessageViewsConsumptionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88EEBE105BCF3015B826164 /* MessageViewsConsumptionCard.swift */; };
 		F26718CB224CEF2B4B829F4F /* KeyboardTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12F9E56F692CD5F88A6B6148 /* KeyboardTransition.swift */; };
 		F273AED9F4C7CF468E88AF85 /* VitrineLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8FCC558951BA451F0F87DC /* VitrineLaunchTests.swift */; };
-		F27CA51AB40A9C6C2D863063 /* ImagerLengthPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5BD04D2A59A18719D7D03D3 /* ImagerLengthPresenter.swift */; };
+		F27CA51AB40A9C6C2D863063 /* ImagerPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5BD04D2A59A18719D7D03D3 /* ImagerPresenter.swift */; };
+		DA492414E78E0E0AECB8506F /* ImagerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 584D8B2850155980A8A4401B /* ImagerSheet.swift */; };
 		F290FDD641BC68D076FEA0E8 /* glauque_prison_back.webp in Resources */ = {isa = PBXBuildFile; fileRef = 05FDE9B3AF25A8293160E3DD /* glauque_prison_back.webp */; };
 		F2A031096C21E43E641ECF67 /* CallFrameSpotlightRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C1C2961CA902063F17EB583 /* CallFrameSpotlightRuleTests.swift */; };
 		F2AA7133413498D8343A7942 /* BubbleMetaBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB19637A56751C12F1C1E3A5 /* BubbleMetaBadges.swift */; };
@@ -7002,7 +7003,8 @@
 		A5891E84396D3C823F97F449 /* OutboxDispatcherUpdateProfileEncodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxDispatcherUpdateProfileEncodingTests.swift; sourceTree = "<group>"; };
 		A59DB15BA7D3CBD1AAEF0D32 /* PushedMediaAutoSaveQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushedMediaAutoSaveQueue.swift; sourceTree = "<group>"; };
 		A5A0FD294A7909AE772A3B10 /* OptimisticRollback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimisticRollback.swift; sourceTree = "<group>"; };
-		A5BD04D2A59A18719D7D03D3 /* ImagerLengthPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagerLengthPresenter.swift; sourceTree = "<group>"; };
+		A5BD04D2A59A18719D7D03D3 /* ImagerPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagerPresenter.swift; sourceTree = "<group>"; };
+		584D8B2850155980A8A4401B /* ImagerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagerSheet.swift; sourceTree = "<group>"; };
 		A5EBC9A9F0837544B3B33696 /* WorldGuestEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorldGuestEntryView.swift; sourceTree = "<group>"; };
 		A5F96C5DDD1B0EB8FA86A7E1 /* VitrineFixtures-fr.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "VitrineFixtures-fr.json"; sourceTree = "<group>"; };
 		A6088E04C440652CC1D61E16 /* PostDetailReachAndVisibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailReachAndVisibilityTests.swift; sourceTree = "<group>"; };
@@ -12515,7 +12517,8 @@
 		A33F7E337BAEA7C88E3D5CD7 /* Export */ = {
 			isa = PBXGroup;
 			children = (
-				A5BD04D2A59A18719D7D03D3 /* ImagerLengthPresenter.swift */,
+				A5BD04D2A59A18719D7D03D3 /* ImagerPresenter.swift */,
+				584D8B2850155980A8A4401B /* ImagerSheet.swift */,
 				973056FAC47A6DDE7837C632 /* ImagerMenuButton.swift */,
 				5E96FE88CE7862BD8D6D27A0 /* MessageCardDiscussion.swift */,
 				59EFF2347F6E0A92CCA6C00D /* MessageCardExcerptStrip.swift */,
@@ -15656,7 +15659,8 @@
 				CABE4803E96579A327E0F8CB /* HashtagResultsView.swift in Sources */,
 				E019C5EB6854458AC2A31FF2 /* HashtagResultsViewModel.swift in Sources */,
 				F924D0E40498CC6DD4A6A1B7 /* ImageDownsamplingConfig.swift in Sources */,
-				F27CA51AB40A9C6C2D863063 /* ImagerLengthPresenter.swift in Sources */,
+				F27CA51AB40A9C6C2D863063 /* ImagerPresenter.swift in Sources */,
+				DA492414E78E0E0AECB8506F /* ImagerSheet.swift in Sources */,
 				4DAA8EF7CBFF15039112E717 /* ImagerMenuButton.swift in Sources */,
 				BAC9792070D68BA63DA3F3D9 /* ImpressionBatcher.swift in Sources */,
 				C96062E4078299EA04964513 /* InAppLinks.swift in Sources */,
