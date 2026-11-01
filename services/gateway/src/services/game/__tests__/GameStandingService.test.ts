@@ -54,12 +54,20 @@ const standing = async (service: GameStandingService, viewer: Parameters<GameSta
 
 beforeEach(() => hidingFromSearch.clear());
 
-describe('la Flamme n’est servie qu’aux AMIS (#9541)', () => {
-  it('un ami la voit', async () => {
+describe('la Flamme n’est servie qu’à Proche et au-dessus (#9541, GAM-01 #13930)', () => {
+  it('un Proche la voit', async () => {
+    const { db, service } = setup();
+    closeLink(db);
+    const result = await standing(service, stranger);
+    expect(result.standing?.flame).not.toBeNull();
+  });
+
+  it('un simple Ami ne la voit pas : du jeu, il ne voit que le niveau, les titres et le rang', async () => {
     const { db, service } = setup();
     befriend(db);
     const result = await standing(service, stranger);
-    expect(result.standing?.flame).not.toBeNull();
+    expect(result.visible).toBe(true);
+    expect(result.standing?.flame).toBeNull();
   });
 
   it('un inconnu ne la voit pas, même quand le membre a réglé son rang sur « tout le monde »', async () => {
@@ -81,9 +89,9 @@ describe('la Flamme n’est servie qu’aux AMIS (#9541)', () => {
     expect((await standing(service, { userId: READER, role: 'ADMIN' as const })).standing?.flame).not.toBeNull();
   });
 
-  it('une Flamme éteinte se tait pour tout le monde, amis compris', async () => {
+  it('une Flamme éteinte se tait pour tout le monde, Proches compris', async () => {
     const { db, service } = setup({}, { lastStreakDate: new Date('2026-09-01T00:00:00Z'), flameFreezes: 0 });
-    befriend(db);
+    closeLink(db);
     expect((await standing(service, stranger)).standing?.flame).toBeNull();
   });
 });

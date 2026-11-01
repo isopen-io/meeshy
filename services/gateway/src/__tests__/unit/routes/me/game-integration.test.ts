@@ -291,7 +291,7 @@ describe('GET /users/:userId/game', () => {
     const db = fakeGameDb();
     veteran(db, USER, { lastStreakDate: new Date('2026-01-05T00:00:00Z'), flameFreezes: 0 });
     veteran(db, OTHER);
-    befriend(db);
+    relateAt(db, USER, OTHER, 'CLOSE');
     const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
     expect(data.standing?.flame).toBeNull();
   });
@@ -301,7 +301,7 @@ describe('GET /users/:userId/game', () => {
     const yesterday = new Date(TODAY.getTime() - 24 * 3600 * 1000);
     veteran(db, USER, { lastStreakDate: yesterday });
     veteran(db, OTHER);
-    befriend(db);
+    relateAt(db, USER, OTHER, 'CLOSE');
     const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
     expect(data.standing?.flame).toBe('brasier');
   });

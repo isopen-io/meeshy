@@ -3,22 +3,24 @@
  * du trésor d'un compte, selon SON réglage. La LOI vient de `@meeshy/shared`
  * (`levelFromScore`, `levelCapForRank`, `gloryStanding`, `treasuryTier`, `flameForm`) ; la décision de
  * voir, de `GameProfileService.facetsVisibleTo` — une porte, dans l'ordre : le blocage,
- * soi / ADMIN / ami accepté, le réglage du membre plafonné par « caché de la
+ * soi / ADMIN / le cercle (`GameProfileService.viewerReach`), le réglage du membre plafonné par « caché de la
  * recherche » et « Jeu masqué ».
  *
  * ## Ce que les AMIS voient de plus (décision porteur 2026-10-06, #9541) — et les PROCHES (2026-10-31, #13930)
  *
- * La Flamme n'est servie qu'à ses AMIS (niveau effectif >= Ami, et à soi, et à ADMIN/BIGBOSS) : plus jamais à
- * « tout le monde », même quand le membre a ouvert son rang à tous. Le NOMBRE de ses trophées suit, avec en plus
- * le réglage de la VITRINE. Ses POINTS (étincelles) et sa GLOIRE ne sont servis qu'à PROCHE et au-dessus
- * (`game.sparksGlory`) : un simple Ami ne voit du jeu que le niveau, les titres et le rang (RG-25). Le niveau, les étoiles,
- * le rang et la division (Légende, Mythe) restent ceux du réglage du rang.
+ * Le NOMBRE de ses trophées (ses titres) n'est servi qu'à ses AMIS (niveau effectif >= Ami, `game.basic`), à soi et à
+ * ADMIN/BIGBOSS, avec en plus le réglage de la VITRINE. Ses POINTS (étincelles), sa GLOIRE et sa FLAMME ne sont servis
+ * qu'à PROCHE et au-dessus (`game.sparksGlory`, GAM-02) : un simple Ami ne voit du jeu que le niveau, les titres et le
+ * rang — « c'est tout ce que voit un Ami du jeu » (GAM-01, RG-25). La Flamme dit si le membre a joué aujourd'hui ou
+ * hier : un signal d'activité que la présence d'un Ami (« en ligne » ou rien) ne lui donne pas. Plus jamais à « tout le
+ * monde », même quand le membre a ouvert son rang à tous. Le niveau, les étoiles, le rang et la division (Légende,
+ * Mythe) restent ceux du réglage du rang.
  *
  * ## Ce qui ne part JAMAIS (conformité D-1 à D-5, leçon 275)
  *
  * Un PALIER, jamais un compte — sauf les points, la Gloire (#10913) et le nombre de trophées de la ligne ci-dessus : le niveau
  * et son palier, les étoiles de Prestige, la FORME de la Flamme (jamais ses jours, jamais son bonus), le rang de
- * Gloire et sa division (la Gloire aux seuls proches), le palier du trésor (jamais les Meeshes). Aucune date, aucune
+ * Gloire et sa division (la Gloire à Proche et au-dessus), le palier du trésor (jamais les Meeshes). Aucune date, aucune
  * présence : la Flamme « à risque » d'hier se montre comme celle d'aujourd'hui, et une Flamme éteinte se
  * tait (`flame: null`) sans dire depuis quand.
  *
@@ -46,7 +48,7 @@ import { visitorTrophyBound } from './TrophyService';
 
 const CLOSED: UserGameProfileResponse = { visible: false, standing: null, treasury: null };
 
-/** Le membre, un lien d'au moins Ami ou un administrateur : ceux à qui la Flamme et les trophées se montrent (#9541). */
+/** Le membre, un lien d'au moins Ami ou un administrateur : ceux à qui le nombre de trophées se montre (#9541, GAM-01). */
 const isFriendly = (kind: GameReach['kind']): boolean => kind === 'self' || kind === 'friend' || kind === 'admin';
 
 const STANDING_USER_SELECT = { ...FLAME_USER_SELECT, ...SPARKS_USER_SELECT, prestige: true } as const;
@@ -92,10 +94,9 @@ export class GameStandingService {
     return { visible: true, standing, treasury };
   }
 
-  /**
-   * `friendly` : le lecteur est le membre lui-même, un lien d'au moins Ami ou un administrateur — lui seul reçoit la
-   * Flamme. `sparksGlory` : le cercle ouvre aussi les étincelles et la gloire (Proche et au-dessus, `game.sparksGlory`,
-   * #13930). `trophies` : la vitrine est ouverte à ce lecteur — lui seul reçoit le nombre.
+  /**   * `friendly` : le lecteur est le membre lui-même, un lien d'au moins Ami ou un administrateur — lui seul reçoit le
+   * nombre de trophées. `sparksGlory` : le cercle ouvre aussi les étincelles, la gloire et la Flamme (Proche et au-dessus,
+   * `game.sparksGlory`, #13930). `trophies` : la vitrine est ouverte à ce lecteur — lui seul reçoit le nombre.
    */
   private async standing(
     userId: string,
@@ -136,7 +137,7 @@ export class GameStandingService {
       ladder: { level, tier: levelTierKey(level), levelMaxLifetime: levelMax },
       levelMaxLifetime: levelMax,
       prestige: Math.min(GAME_PRESTIGE_MAX, Math.max(0, Math.trunc(user.prestige ?? 0))),
-      flame: reader.friendly ? shownFlame(user, now) : null,
+      flame: reader.sparksGlory ? shownFlame(user, now) : null,
       rank: rank.rank,
       division: rank.division,
       division5: rank.division5,

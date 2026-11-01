@@ -1,8 +1,8 @@
 /**
  * LE JEU SUIT LE CERCLE (#13930, RG-25, RG-28) — visibilité servie = minimum(réglage du jeu, droits du cercle).
  * Ami : niveau, nomination (titres), rang. Proche et au-dessus : + étincelles et gloire. Sous Ami : le public seulement.
- * Le réglage du jeu ne peut jamais ouvrir plus que le cercle. La Flamme et le nombre de trophées restent à Ami+ (#9541,
- * défaut du cadrage : la spec est muette).
+ * Le réglage du jeu ne peut jamais ouvrir plus que le cercle. GAM-01 : « c'est tout ce que voit un Ami du jeu » — le
+ * nombre de trophées (ses titres) lui reste, la Flamme (un signal d'activité du jour) part avec les étincelles, à Proche+.
  *
  * @jest-environment node
  */
@@ -73,11 +73,19 @@ describe('Ami : niveau, nomination (titres), rang — et rien de plus du compteu
     expect(view.items.length).toBeGreaterThan(0);
   });
 
-  it('garde la Flamme et le nombre de trophées (défaut du cadrage, #9541)', async () => {
+  it('reçoit le nombre de ses trophées (ses titres), jamais la Flamme : un signal d’activité du jour, réservé à Proche+ (GAM-01)', async () => {
     const { standing } = setup({}, 'FRIEND');
     const served = (await standingOf(standing)).standing;
-    expect(served?.flame).not.toBeNull();
+    expect(served?.flame).toBeNull();
     expect(served?.trophyCount).toBe(2);
+  });
+
+  it('un jeu ouvert à « tout le monde » ne lui ouvre ni étincelles, ni gloire, ni Flamme : le réglage n’ouvre jamais plus que le cercle', async () => {
+    const { standing } = setup(EVERYONE, 'FRIEND');
+    const served = (await standingOf(standing)).standing;
+    expect(served).toMatchObject({ level: 20, trophyCount: 2 });
+    expect(served?.flame).toBeNull();
+    SPARKS_AND_GLORY.forEach((key) => expect(served).not.toHaveProperty(key));
   });
 
   it('un ami rattrapé par une demande acceptée, sans ligne de cercle, reste Ami', async () => {
@@ -141,7 +149,22 @@ describe('le réglage du jeu ne peut jamais ouvrir plus que le cercle', () => {
     expect((await standingOf(friend)).visible).toBe(false);
   });
 
-  it('même un Proche ne reçoit pas les étincelles si le rang est fermé, et « Jeu masqué » ferme tout, Sang compris', async () => {
+  it('un rang réglé sur « moi seul » ferme aussi les étincelles à un Proche', async () => {
+    const { standing } = setup({ rankVisibility: 'me', treasuryVisibility: 'me' }, 'CLOSE');
+    expect(await standingOf(standing)).toEqual({ visible: false, standing: null, treasury: null });
+  });
+
+  it('« caché de la recherche » ramène « tout le monde » aux Amis : une Connaissance ne lit plus rien, un Ami garde le niveau', async () => {
+    hidingFromSearch.add(MEMBER);
+    const { standing: acquaintance } = setup(EVERYONE, 'ACQUAINTANCE');
+    expect((await standingOf(acquaintance)).visible).toBe(false);
+    const { standing: friend } = setup(EVERYONE, 'FRIEND');
+    const served = (await standingOf(friend)).standing;
+    expect(served).toMatchObject({ level: 20 });
+    SPARKS_AND_GLORY.forEach((key) => expect(served).not.toHaveProperty(key));
+  });
+
+  it('« Jeu masqué » ferme tout, Sang compris', async () => {
     const { standing } = setup({ gameHiddenAt: new Date() }, 'BLOOD');
     expect((await standingOf(standing)).visible).toBe(false);
   });
