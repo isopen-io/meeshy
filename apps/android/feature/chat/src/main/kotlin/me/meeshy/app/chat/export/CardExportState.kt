@@ -110,10 +110,12 @@ internal class CardExportState(
     /** La vitrine : l'état de la carte (sans son template) nomme la clé d'une vignette. */
     fun thumbSource(store: CardThumbnailStore, subject: CardSubject): CardThumbSource {
         val neutral = format.copy(template = CardTemplates.defaultId).serialized
+        val shown = pictures
         return CardThumbSource(
             store = store,
-            keyOf = { id -> "${id.rawValue}|$neutral|${exportLanguage.orEmpty()}" },
+            keyOf = { id -> "${id.rawValue}|$neutral|${exportLanguage.orEmpty()}|${shown.keys.sorted().joinToString(",")}" },
             inputOf = { id -> inputFor(format.copy(template = id), subject) },
+            pictures = shown,
         )
     }
 

@@ -89,11 +89,11 @@ object CardRenderer {
     }
 
     /** La VIGNETTE d'un template : la même carte, peinte à [width] pixels, traits portés à une épaisseur lisible. */
-    fun thumbnail(input: CardInput, width: Int): Bitmap {
+    fun thumbnail(input: CardInput, width: Int, pictures: Map<String, Bitmap> = emptyMap()): Bitmap {
         val fonts = Fonts()
         val full = layout(input, fonts)
         val scale = width / full.width
-        return draw(full.legible(scale), input, scale, fonts)
+        return draw(full.legible(scale), input, scale, fonts, pictures)
     }
 
     private fun draw(layout: CardLayout, input: CardInput, scale: Double, fonts: Fonts, pictures: Map<String, Bitmap> = emptyMap()): Bitmap {

@@ -127,7 +127,7 @@ internal fun CardThumb(
     val pixels = with(androidx.compose.ui.platform.LocalDensity.current) { (width * 2).roundToPx() }
     val image: ImageBitmap? by produceState<ImageBitmap?>(source.store.cached(key)?.asImageBitmap(), key) {
         value = source.store.cached(key)?.asImageBitmap()
-            ?: source.store.image(key, source.inputOf(id), pixels).asImageBitmap()
+            ?: source.store.image(key, source.inputOf(id), pixels, source.pictures).asImageBitmap()
     }
     val shape = RoundedCornerShape(12.dp)
     Box(
@@ -149,4 +149,6 @@ class CardThumbSource(
     val store: CardThumbnailStore,
     val keyOf: (CardTemplateId) -> String,
     val inputOf: (CardTemplateId) -> CardInput,
+    /** Les images des médias de la carte (#14330) : une vignette les peint comme l'aperçu. */
+    val pictures: Map<String, android.graphics.Bitmap> = emptyMap(),
 )

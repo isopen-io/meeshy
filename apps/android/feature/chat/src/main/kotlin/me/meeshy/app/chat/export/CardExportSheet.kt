@@ -160,7 +160,7 @@ private fun CardExportSheet(
     val thumbnails = remember { CardThumbnailStore() }
     DisposableEffect(thumbnails) { onDispose { thumbnails.clear() } }
     val permissions = rememberPermissionFlow()
-    val thumbs = remember(state.format.copy(template = CardTemplates.defaultId), state.exportLanguage, subject) {
+    val thumbs = remember(state.format.copy(template = CardTemplates.defaultId), state.exportLanguage, subject, state.pictures) {
         state.thumbSource(thumbnails, subject)
     }
     val haptic = LocalHapticFeedback.current
