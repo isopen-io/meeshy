@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.app.R
+import me.meeshy.app.onboarding.hiddenBehindOnboarding
 import me.meeshy.sdk.model.net.UpgradeRequirement
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.icons.MeeshyIcons
@@ -44,8 +45,9 @@ import me.meeshy.ui.theme.MeeshyTheme
  * propos** : la passerelle refuse ce binaire, laisser croire qu'on peut « continuer quand même » ferait perdre ce que
  * l'utilisateur compose. Le retour système met l'application en arrière-plan sans rien naviguer dessous.
  *
- * TalkBack : titre (en-tête) puis message et version minimale lus ensemble, puis l'unique bouton « Mettre à jour » ; l'icône
- * est décorative. Le calque consomme les touches, et l'hôte retire le contenu dessous de l'arbre d'accessibilité.
+ * Disposition iOS : le propos centré (icône, titre, message, version minimale), l'unique bouton « Mettre à jour » posé en
+ * bas. TalkBack : titre (en-tête), message, version, puis le bouton ; l'icône est décorative. Le calque consomme les touches,
+ * et [UpgradeGateHost] retire tout ce qui est dessous de l'arbre d'accessibilité.
  */
 @Composable
 fun UpgradeRequiredScreen(requirement: UpgradeRequirement, modifier: Modifier = Modifier) {
@@ -59,39 +61,43 @@ fun UpgradeRequiredScreen(requirement: UpgradeRequirement, modifier: Modifier = 
             .background(tokens.backgroundPrimary)
             .pointerInput(Unit) {}
             .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = MeeshySpacing.xxl)
-            .padding(bottom = MeeshySpacing.xxl),
+            .padding(bottom = MeeshySpacing.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xl, Alignment.CenterVertically),
     ) {
-        Icon(
-            imageVector = MeeshyIcons.ArrowCircleUpFilled,
-            contentDescription = null,
-            tint = MeeshyPalette.Indigo500,
-            modifier = Modifier.size(64.dp),
-        )
-        Text(
-            text = stringResource(R.string.upgrade_required_title),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = tokens.textPrimary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.semantics { heading() },
-        )
-        Text(
-            text = stringResource(R.string.upgrade_required_message),
-            style = MaterialTheme.typography.bodyLarge,
-            color = tokens.textSecondary,
-            textAlign = TextAlign.Center,
-        )
-        requirement.shownMinVersion?.let { minVersion ->
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg, Alignment.CenterVertically),
+        ) {
+            Icon(
+                imageVector = MeeshyIcons.ArrowCircleUpFilled,
+                contentDescription = null,
+                tint = MeeshyPalette.Indigo500,
+                modifier = Modifier.size(64.dp),
+            )
             Text(
-                text = stringResource(R.string.upgrade_required_min_version, minVersion),
-                style = MaterialTheme.typography.labelLarge,
+                text = stringResource(R.string.upgrade_required_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = tokens.textPrimary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = stringResource(R.string.upgrade_required_message),
+                style = MaterialTheme.typography.bodyLarge,
                 color = tokens.textSecondary,
                 textAlign = TextAlign.Center,
             )
+            requirement.shownMinVersion?.let { minVersion ->
+                Text(
+                    text = stringResource(R.string.upgrade_required_min_version, minVersion),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = tokens.textSecondary,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
         MeeshyPrimaryButton(
             text = stringResource(R.string.upgrade_required_action),
@@ -101,11 +107,15 @@ fun UpgradeRequiredScreen(requirement: UpgradeRequirement, modifier: Modifier = 
     }
 }
 
-/** La porte posée sur TOUTE la racine (iOS `.fullScreenCover` sur `RootView`). */
+/**
+ * La porte posée sur TOUTE la racine (iOS `.fullScreenCover` sur `RootView`) : tant que le serveur refuse ce binaire, rien
+ * de ce qui est dessous — navigation, bannières, parcours d'accueil, fin d'invité, appels — n'est lu par TalkBack ni
+ * touché. Le contenu reste COMPOSÉ (ses brouillons et ses effets survivent), il quitte seulement l'arbre d'accessibilité.
+ */
 @Composable
 fun UpgradeGateHost(requirement: UpgradeRequirement?, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize()) {
-        content()
+        Box(Modifier.fillMaxSize().hiddenBehindOnboarding(isPresented = requirement != null)) { content() }
         requirement?.let { UpgradeRequiredScreen(requirement = it) }
     }
 }
