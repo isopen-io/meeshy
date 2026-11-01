@@ -103,6 +103,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
         "Settings/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/FeedComposerPlaceholder.swift": "soi — l'avatar du compte connecté",
         "Stories/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": "entité — groupe, communauté, conversation, message sans compte",
