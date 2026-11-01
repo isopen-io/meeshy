@@ -65,6 +65,7 @@ import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle, p
 import { contentDetailCategory, contentDetailPushFields } from './content-detail';
 import { servedBannerBody } from './served-banner-body';
 import { reactedMessageSynthesis, reactionBody } from './reaction-body';
+import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 import {
   type MessagePrismSource,

@@ -88,7 +88,11 @@
     <string name="feed_translations_badge_hint">Muestra los idiomas disponibles</string>
     <string name="feed_unknown_author">Desconocido</string>
     <string name="feed_unlike">Ya no me gusta</string>
-    <string name="feed_view_comments">Ver los %1$d comentarios</string>
+    <plurals name="feed_view_comments">
+        <item quantity="one">Ver el comentario</item>
+        <item quantity="many">Ver los %1$d comentarios</item>
+        <item quantity="other">Ver los %1$d comentarios</item>
+    </plurals>
     <string name="hashtag_results_empty">Sin publicaciones con #%1$s</string>
     <string name="mood_bubble_react">Reacción %1$s</string>
     <string name="mood_bubble_reply">Responder</string>

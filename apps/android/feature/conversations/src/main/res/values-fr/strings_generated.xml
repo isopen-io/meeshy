@@ -144,6 +144,15 @@
     <string name="dialogs_report_title">Pourquoi signalez-vous cette conversation ?</string>
     <string name="dialogs_save">Enregistrer</string>
     <string name="dialogs_unblock_error">Impossible de débloquer cet utilisateur</string>
+    <string name="encryption_create_e2ee_soon_groups">Bientôt disponible pour les groupes</string>
+    <string name="encryption_create_footer">Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.</string>
+    <string name="encryption_create_header">Chiffrement</string>
+    <string name="encryption_mode_e2ee_description">Seuls vos appareils et ceux des participants lisent les messages. La traduction se fait sur votre appareil.</string>
+    <string name="encryption_mode_e2ee_label">Bout en bout</string>
+    <string name="encryption_mode_hybrid_description">Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt.</string>
+    <string name="encryption_mode_hybrid_label">Hybride</string>
+    <string name="encryption_mode_server_description">Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.</string>
+    <string name="encryption_mode_server_label">Serveur</string>
     <string name="global_search_back">Retour</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d membre</item>

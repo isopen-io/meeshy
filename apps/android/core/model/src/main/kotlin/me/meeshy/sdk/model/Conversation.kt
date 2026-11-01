@@ -296,6 +296,13 @@ data class CreateConversationRequest(
     val type: String,
     val title: String? = null,
     val participantIds: List<String>,
+    /**
+     * Le mode de chiffrement choisi sur l'écran de création (`server` | `hybrid` | `e2ee`,
+     * [CreationEncryptionMode.wire]). `null` = aucun choix : le champ part absent (encodeur
+     * `explicitNulls = false`) et la passerelle pose Serveur — c'est le cas de toute création hors
+     * de l'écran de création (profil, partage, transfert, réponse à une story).
+     */
+    val encryptionMode: String? = null,
 )
 
 /**

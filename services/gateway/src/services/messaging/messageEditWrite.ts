@@ -2,17 +2,24 @@ import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MessageEditorColumns } from '@meeshy/shared/utils/message-edit-attribution';
 import { editAttributionOf, type MessageEditAdmission } from './messageEditAdmission';
 import { applyMessageEditEffects, type EditedMessageRecord } from './messageEditEffects';
+import { gatewayEditCrypto, prepareEditedText, type AtRestEditCrypto, type EditedRowRegime } from './atRestEdit';
+import type { AtRestReadableRow } from './serverAtRest';
 
 export type GuardedMessageEdit = {
   readonly prisma: PrismaClient;
   readonly messageId: string;
+  /** Le texte modifié, en CLAIR : il ne se range dans `content` que hors repos (`prepareEditedText`). */
   readonly content: string;
+  /** La ligne LUE avant l'écriture : son régime décide si le texte se scelle, son chiffré rend le texte d'avant. */
+  readonly row: EditedRowRegime & AtRestReadableRow & { readonly conversationId: string };
+  /** Le coffre ; celui de la passerelle par défaut, construit au premier besoin. */
+  readonly crypto?: AtRestEditCrypto;
   readonly admission: MessageEditAdmission;
   readonly editorUserId: string;
   /** `{ metadata }` quand la réconciliation des liens a établi une carte, `{}` sinon. */
   readonly nextMetadata: { readonly metadata?: Prisma.MessageUpdateManyMutationInput['metadata'] };
   /** Le message d'AVANT l'écriture, tel que les effets durables le lisent. */
-  readonly previous: Omit<EditedMessageRecord, 'content' | 'editedAt'>;
+  readonly previous: Omit<EditedMessageRecord, 'content' | 'editedAt' | 'previousContent'>;
 };
 
 export type GuardedMessageEditResult = {
@@ -41,14 +48,19 @@ export type GuardedMessageEditResult = {
  * notifications, traductions partagées d'avant, #9899) la suivent ici même,
  * par `applyMessageEditEffects`, avec l'instant ÉCRIT — la version de source
  * d'une traduction partagée en est l'ISO.
+ *
+ * Décision 2026-11-01 — au repos (`server`/`hybrid`), le texte modifié se
+ * SCELLE avant l'écriture (`prepareEditedText`) : `content: ''` et le chiffré à
+ * côté, jamais le clair. Une clé absente lève AVANT l'`updateMany`.
  */
 export async function writeGuardedMessageEdit(edit: GuardedMessageEdit): Promise<GuardedMessageEditResult> {
+  const prepared = await prepareEditedText({ crypto: edit.crypto ?? gatewayEditCrypto(edit.prisma), row: edit.row, text: edit.content });
   const editedAt = new Date();
   const editedBy = editAttributionOf(edit.admission, edit.editorUserId);
   const result = await edit.prisma.message.updateMany({
     where: { id: edit.messageId, deletedAt: null },
     data: {
-      content: edit.content,
+      ...prepared.columns,
       isEdited: true,
       editedAt,
       ...editedBy,
@@ -57,6 +69,6 @@ export async function writeGuardedMessageEdit(edit: GuardedMessageEdit): Promise
     },
   });
   if (result.count === 0) return { written: false, editedAt, editedBy };
-  await applyMessageEditEffects(edit.prisma, { ...edit.previous, content: edit.content, editedAt });
+  await applyMessageEditEffects(edit.prisma, { ...edit.previous, previousContent: prepared.previousContent, content: edit.content, editedAt });
   return { written: true, editedAt, editedBy };
 }

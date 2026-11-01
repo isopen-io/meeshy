@@ -66,8 +66,9 @@ import {
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
-import { agentMayReadMessage, notifyAgentOfMessage } from './agentMessageNotification.js';
-import { isServerAtRestMode, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
+import { agentMayReadMessage, agentReadableMessage, notifyAgentOfMessage } from './agentMessageNotification.js';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
+import { isServerAtRestMode, isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { emitMessageNew } from '../messageNewEmission';
 import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
@@ -93,11 +94,8 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
-import {
-  reconcileEditedLinks,
-  mergeTrackingLinksIntoMetadata,
-  type LinkReconciler,
-} from '../../services/messaging/messageLinks';
+import { mergeTrackingLinksIntoMetadata, type LinkReconciler } from '../../services/messaging/messageLinks';
+import { editedLinksFor, editSealsAtRest } from '../../services/messaging/atRestEdit';
 import {
   admitMessageEdit,
   editRefusalCode,
@@ -725,7 +723,7 @@ export class MessageHandler {
               conversationId: true,
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
+              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true, serverEncryptionKeyId: true } },
               senderId: true,
               content: true,
               originalLanguage: true,
@@ -737,8 +735,7 @@ export class MessageHandler {
               createdAt: true,
               // #12881 — ce que la LIGNE porte : un message scellé sous e2ee ne
               // s'édite pas en clair après une désactivation.
-              isEncrypted: true,
-              encryptionMode: true,
+              isEncrypted: true, encryptionMode: true, encryptedContent: true, encryptionMetadata: true,
               // Lu pour la réconciliation des mentions : une mention ajoutée en
               // éditant un message éphémère ne doit pas survivre à ce message.
               expiresAt: true,
@@ -813,7 +810,7 @@ export class MessageHandler {
       // La seconde moitié — le mapping des URLs BRUTES (`metadata.trackingLinks`)
       // — n'était recomposée par aucun transport d'édition : une URL brute
       // ajoutée par édition restait intraçable pour toujours.
-      const editedLinks = await reconcileEditedLinks({
+      const editedLinks = await editedLinksFor(editSealsAtRest(message), {
         linkService: this.trackingLinkService,
         message: { id: validated.messageId, conversationId: message.conversationId, sender: message.sender },
         content: contentAdmission.content,
@@ -833,6 +830,7 @@ export class MessageHandler {
         prisma: this.prisma,
         messageId: validated.messageId,
         content: editedContent,
+        row: message,
         admission,
         editorUserId: userId,
         nextMetadata,
@@ -841,7 +839,6 @@ export class MessageHandler {
           conversationId: message.conversationId,
           senderId: message.senderId,
           senderUserId: message.sender?.userId ?? null,
-          previousContent: message.content,
         },
       });
 
@@ -985,7 +982,7 @@ export class MessageHandler {
       handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
     } catch (error: unknown) {
       handlerLogger.error('message:edit failed', { error });
-      this._sendGenericError(callback, 'Failed to edit message', socket);
+      this._sendGenericError(callback, isServerAtRestUnavailable(error) ? error.message : 'Failed to edit message', socket, isServerAtRestUnavailable(error) ? error.code : undefined);
     }
   }
 
@@ -2051,9 +2048,10 @@ export class MessageHandler {
     }
   }
 
-  /** #12822 — `notifyAgentOfMessage` tait tout message chiffré au repos, avant même la résolution des mentions. */
-  private async _notifyAgent(message: Message): Promise<void> {
-    if (!this.agentClient || !agentMayReadMessage(message)) return;
+  /** Décision 2026-11-01 — l'agent lit le repos DÉCHIFFRÉ, jamais le bout en bout (`agentMessageNotification`). */
+  private async _notifyAgent(served: Message): Promise<void> {
+    if (!this.agentClient || !agentMayReadMessage(served)) return;
+    const message = await agentReadableMessage(served, gatewayKeyring(this.prisma));
     notifyAgentOfMessage({
       agent: this.agentClient,
       message: {
@@ -2063,7 +2061,7 @@ export class MessageHandler {
         ...agentSenderIdentity(message.sender),
         content: message.content,
         originalLanguage: message.originalLanguage,
-        encryptionMode: message.encryptionMode,
+        encryptionMode: message.encryptionMode, isEncrypted: message.isEncrypted,
         replyToId: message.replyToId,
         mentionedUserIds: await this._resolveMentionUserIds((message.validatedMentions as string[] | undefined) ?? []),
         createdAt: message.createdAt,

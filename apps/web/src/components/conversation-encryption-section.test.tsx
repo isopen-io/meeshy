@@ -61,11 +61,13 @@ describe('la section dit le mode de la conversation ouverte, en mots simples', (
     expect(text('[data-conversation-encryption-fact="noEdit"]')).toBe('Un message envoyé ne peut pas être modifié.');
   });
 
-  test('bout en bout : la fiche dit qu’il ne se désactive pas et qu’il faut une nouvelle conversation pour le clair (#12949)', async () => {
+  test('bout en bout : la fiche dit EN TÊTE, sans rien déplier, qu’il ne se désactive jamais et qu’une autre conversation reste possible (#12949)', async () => {
     await mount({ type: 'group', encryptionMode: 'e2ee' });
-    expect(text('[data-conversation-encryption-fact="endToEndNeverTurnedOff"]')).toBe(
-      'Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, créez une nouvelle conversation.',
+    const rule = document.querySelector('[data-conversation-encryption-fact="endToEndNeverTurnedOff"]');
+    expect(rule?.textContent).toBe(
+      'Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.',
     );
+    expect(rule?.closest('details')).toBeNull();
     expect(facts()).not.toContain('switchNeverResendsInClear');
     expect(document.querySelector('[data-conversation-encryption] button')).toBeNull();
   });
@@ -90,8 +92,31 @@ describe('la section dit le mode de la conversation ouverte, en mots simples', (
     expect(facts()).not.toContain('onlyParticipantsRead');
   });
 
-  test('sans chiffrement : stocké sans chiffrement sur le serveur', async () => {
+  test('serveur : « chiffrée sur nos serveurs », et rien ne dit que le serveur lit (décision du 2026-11-01)', async () => {
+    await mount({ type: 'direct', encryptionMode: 'server' });
+    expect(text('[data-conversation-encryption-summary]')).toBe('Chiffrée sur nos serveurs');
+    expect(text('[data-conversation-encryption-fact="encryptedOnServerServerReads"]')).toBe(
+      'Vos messages sont chiffrés sur nos serveurs. La traduction, la transcription et la recherche restent disponibles.',
+    );
+    expect(text('[data-conversation-encryption]')).not.toMatch(/peut (les )?lire|Meeshy peut/u);
+  });
+
+  test('hybride : son résumé, et la promesse du double chiffrement à venir', async () => {
+    await mount({ type: 'direct', encryptionMode: 'hybrid' });
+    expect(text('[data-conversation-encryption-summary]')).toBe('Chiffrée sur nos serveurs (mode hybride)');
+    expect(text('[data-conversation-encryption-fact="hybridIsServerToday"]')).toBe(
+      'Le mode hybride chiffre aujourd’hui comme le mode Serveur ; le double chiffrement par vos appareils arrive bientôt.',
+    );
+  });
+
+  test('ancienne conversation sans mode : dite d’avant le chiffrement systématique', async () => {
     await mount({ type: 'direct', encryptionMode: null });
-    expect(text('[data-conversation-encryption-summary]')).toBe('Non chiffrée : les messages sont stockés sans chiffrement sur le serveur');
+    expect(text('[data-conversation-encryption-summary]')).toBe('Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés');
+  });
+
+  test('aucun mode ne montre de règle en tête ni de geste de désactivation', async () => {
+    await mount({ type: 'group', encryptionMode: 'server' });
+    expect(document.querySelector('[data-conversation-encryption-rule]')).toBeNull();
+    expect(document.querySelector('[data-conversation-encryption] button')).toBeNull();
   });
 });

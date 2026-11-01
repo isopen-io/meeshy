@@ -16,8 +16,11 @@ import { PlaintextDirectAction } from './plaintext-direct-action';
  * `ConversationEncryptionExplanationSections`) : en mots simples, le mode de la
  * conversation ouverte, qui peut la lire, ce qui fonctionne et ce qui manque,
  * ce qui n'est pas encore livré, les appareils et la bascule. Le web ne
- * bascule pas le chiffrement : il l'explique. Le résumé se lit d'emblée ; le
- * détail s'ouvre d'un geste (`<details>`, clavier et lecteur d'écran compris).
+ * bascule pas le chiffrement : il l'explique. Le résumé se lit d'emblée, et,
+ * pour le bout en bout, sa RÈGLE aussi (il ne se désactive jamais ; une autre
+ * conversation, sans chiffrement de bout en bout, reste toujours possible) ;
+ * le détail s'ouvre d'un geste (`<details>`, clavier et lecteur d'écran
+ * compris).
  *
  * CHARGÉE À LA DEMANDE avec son catalogue (`conversation-details-sheet.tsx`,
  * `lazy()`) : le fil et la liste n'en paient aucun octet.
@@ -54,6 +57,16 @@ export function ConversationEncryptionSection({
       <h4 id={headingId} className="px-4 pb-2 text-caption font-semibold uppercase" style={{ color: MUTED }}>
         {t('conversationEncryption.section')}
       </h4>
+      {explanation.rule === null ? null : (
+        <p
+          className="mx-4 mb-3 rounded-[14px] px-4 py-3 text-body font-medium"
+          style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
+          data-conversation-encryption-rule
+          data-conversation-encryption-fact={explanation.rule}
+        >
+          {t(FACT_KEY[explanation.rule])}
+        </p>
+      )}
       <details className="px-4">
         <summary className="cursor-pointer pb-3 text-body font-semibold" style={{ minHeight: 44 }} data-conversation-encryption-summary>
           {t(REGIME_SUMMARY_KEY[explanation.regime])}
