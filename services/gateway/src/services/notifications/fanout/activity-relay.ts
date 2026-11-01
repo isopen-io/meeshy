@@ -30,6 +30,8 @@ import { simpleRepostRootId } from '../../posts/postVisibility';
 import { getBlockedUserIdsAmong, isBlockedBetween } from '../../../utils/blocking';
 import { resolveEntourage, thirdPartyEntourage, type Entourage } from './entourage';
 import type { FanoutDependencies } from './dependencies';
+import { retractedNotificationOf, type RetractedNotificationAnnouncer } from '../retractedNotifications';
+import { getSharedNotificationService } from '../notification-service-registry';
 
 export type RelayedActivity = 'reaction' | 'share' | 'repost' | 'quote';
 
@@ -66,6 +68,8 @@ export type RelayThrottle = {
 
 export type ActivityRelayDependencies = Pick<FanoutDependencies, 'prisma' | 'createNotification'> & {
   readonly relayThrottle?: RelayThrottle;
+  /** Qui annonce le retrait d'un lot écrit pendant une suppression ; défaut : le service partagé du processus. */
+  readonly announcer?: RetractedNotificationAnnouncer;
 };
 
 const relayOnceKey = (params: { readonly activity: RelayedActivity; readonly actorId: string; readonly postId: string }): string => `notif:relay:${params.activity}:${params.actorId}:${params.postId}`;
@@ -179,7 +183,36 @@ type RelayDelivery = {
   readonly onceKey: string;
   readonly emoji?: string;
   readonly metadata?: Record<string, string>;
+  /** Les publications que la notification annonce, relues avant CHAQUE lot (#14253). */
+  readonly announcedPostIds: readonly string[];
 };
+
+/**
+ * Entre l'admission et l'envoi, le relais attend (entourage, admissions, débit,
+ * lots) : une publication supprimée, rendue privée ou expirée dans cette fenêtre
+ * laisserait une ligne `friend_content_*` que plus rien ne retire (le retrait a
+ * déjà eu lieu). Chaque lot relit donc ce qu'il annonce ; une lecture en échec
+ * jette, donc n'envoie rien.
+ */
+const stillRelayable = async (deps: ActivityRelayDependencies, postIds: readonly string[]): Promise<boolean> =>
+  (await Promise.all([...new Set(postIds)].map((id) => readRelayedPost(deps, id)))).every(relayable);
+
+/**
+ * Un lot déjà lancé quand la publication disparaît : le retrait de la
+ * suppression a pu lire la collection AVANT ces insertions. La suppression
+ * écrivant `deletedAt` avant de retirer, une relecture APRÈS l'écriture voit
+ * forcément le changement : ce lot retire alors ses propres lignes et annonce
+ * leur retrait (révocation push comprise), sans toucher aux autres
+ * notifications de la publication.
+ */
+async function withdrawBatch(deps: ActivityRelayDependencies, created: readonly { readonly id: string; readonly userId: string }[]): Promise<void> {
+  if (created.length === 0) return;
+  await deps.prisma.notification.deleteMany({ where: { id: { in: created.map((row) => row.id) } } });
+  const announcer = deps.announcer ?? getSharedNotificationService();
+  await announcer?.announceNotificationsRetracted(
+    created.map((row) => retractedNotificationOf({ id: row.id, userId: row.userId, delivery: { pushSent: true } }))
+  );
+}
 
 /** Débit, clé « une fois », puis l'envoi par lots — commun à toutes les activités. */
 async function deliver(deps: ActivityRelayDependencies, throttle: RelayThrottle, delivery: RelayDelivery): Promise<void> {
@@ -198,7 +231,8 @@ async function deliver(deps: ActivityRelayDependencies, throttle: RelayThrottle,
   const keys = RELAYS[delivery.activity];
 
   for (const batch of chunks(recipients, RELAY_BATCH_SIZE)) {
-    await Promise.allSettled(
+    if (!(await stillRelayable(deps, delivery.announcedPostIds))) return;
+    const settled = await Promise.allSettled(
       batch.map((userId) =>
         deps.createNotification({
           userId,
@@ -219,6 +253,10 @@ async function deliver(deps: ActivityRelayDependencies, throttle: RelayThrottle,
         })
       )
     );
+    if (!(await stillRelayable(deps, delivery.announcedPostIds))) {
+      await withdrawBatch(deps, settled.flatMap((result) => (result.status === 'fulfilled' && result.value ? [result.value] : [])));
+      return;
+    }
   }
 }
 
@@ -242,6 +280,7 @@ export async function relayActivityToEntourage(deps: ActivityRelayDependencies, 
       targetPostId: params.postId,
       recipients,
       onceKey,
+      announcedPostIds: [params.postId],
       ...(params.emoji ? { emoji: params.emoji } : {}),
     });
   } catch (error) {
@@ -297,6 +336,7 @@ export async function relayRepostToEntourage(deps: ActivityRelayDependencies, pa
       recipients,
       onceKey,
       metadata: { originalPostId, repostId: params.repostId },
+      announcedPostIds: [originalPostId, params.originalPostId, params.repostId],
     });
   } catch (error) {
     notificationLogger.error('Relais de republication abandonné : lecture illisible', { repostId: params.repostId, error });
