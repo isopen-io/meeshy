@@ -88,22 +88,24 @@ export function usePublishMentionSource(input: {
      conversation passe par un objet que l'hôte reconstruit à chaque rendu. */
   const conversationType = conversation?.type;
   const isMember = conversation?.isMember;
+  const currentUserRole = conversation?.currentUserRole;
   const participants = conversation?.participants;
+  /* UN INVITÉ NE DEMANDE PAS LES MEMBRES (#10205) : la passerelle ne les lui
+     sert plus. Il mentionne les auteurs qu'il LIT déjà dans le fil (`locals`),
+     sans requête. */
+  const speaksAsGuest = useSpeaksAsGuest();
   const reach = useMemo(
     () =>
       conversationMentionReach({
         conversation:
           conversationType === undefined || participants === undefined
             ? undefined
-            : { type: conversationType, participants, ...(isMember === undefined ? {} : { isMember }) },
-        locals,
+            : { type: conversationType, participants, isMember, currentUserRole },
+        viewerId: selfId,
+        isGuest: speaksAsGuest,
       }),
-    [conversationType, isMember, participants, locals],
+    [conversationType, isMember, currentUserRole, participants, selfId, speaksAsGuest],
   );
-  /* UN INVITÉ NE DEMANDE PAS LES MEMBRES (#10205) : la passerelle ne les lui
-     sert plus. Il mentionne les auteurs qu'il LIT déjà dans le fil (`locals`),
-     sans requête. */
-  const speaksAsGuest = useSpeaksAsGuest();
   const search = useMemo(
     () => (conversationId === undefined ? null : speaksAsGuest ? noSearch : contextSearch({ type: 'conversation', id: conversationId })),
     [conversationId, speaksAsGuest],

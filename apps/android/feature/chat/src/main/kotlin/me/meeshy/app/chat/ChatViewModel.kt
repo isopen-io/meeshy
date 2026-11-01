@@ -301,7 +301,7 @@ class ChatViewModel @Inject constructor(
                 )
                 composer.updateMentionRoster(
                     roster = roster,
-                    context = MentionContext.conversation(conversation.id, conversation.type),
+                    context = MentionContext.of(conversation, currentUserId),
                 )
                 avatarByUserId = conversation.participants
                     .associate { (it.userId ?: it.id) to it.avatar }

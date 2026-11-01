@@ -93,8 +93,7 @@ function mount(initial: {
     captured = useThreadCompose({
       store,
       scope: 'u_v1',
-      conversationId: 'c-1',
-      conversation: { type: 'group', participants: [] },
+      conversation: { id: 'c-1', type: 'group', participants: [] },
       messages: initial.messages,
       readerLanguages: ['fr'],
       send: initial.send,

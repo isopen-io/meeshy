@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   isMentionableIn,
@@ -116,5 +118,40 @@ describe('mergeMentionSuggestions — avec une portée, le local hors portée ne
   it('sans contrainte de conversation (un post), tout reste', () => {
     const merged = mergeMentionSuggestions({ local: [{ id: 'contact' }], remote: [{ id: 'x' }] });
     expect(merged.map((s) => s.id)).toEqual(['contact', 'x']);
+  });
+});
+
+describe('mentionable-scope.vectors.json — la table rejouée par les trois langages (#14071)', () => {
+  type ScopeVector = { readonly _label: string; readonly input: string | null; readonly expected: MentionableScope | null };
+  type AdmitVector = {
+    readonly _label: string;
+    readonly type: string;
+    readonly isMember: boolean;
+    readonly memberIds: readonly string[];
+    readonly selfId: string;
+    readonly candidateId: string;
+    readonly expected: boolean;
+  };
+  const raw = JSON.parse(readFileSync(resolve(__dirname, '../../fixtures/mentionable-scope.vectors.json'), 'utf8')) as {
+    readonly scopes: readonly ScopeVector[];
+    readonly admits: readonly AdmitVector[];
+  };
+
+  it('chaque type brut rend la portée attendue', () => {
+    expect(raw.scopes.length).toBeGreaterThan(10);
+    expect(raw.scopes.map((v) => [v._label, mentionableScope(v.input)])).toEqual(raw.scopes.map((v) => [v._label, v.expected]));
+  });
+
+  it('chaque lecteur admet exactement ce que la passerelle garderait', () => {
+    expect(
+      raw.admits.map((v) => [
+        v._label,
+        isMentionableIn({
+          reach: mentionReachOf({ type: v.type, isMember: v.isMember, memberIds: v.memberIds }),
+          candidateId: v.candidateId,
+          selfId: v.selfId,
+        }),
+      ]),
+    ).toEqual(raw.admits.map((v) => [v._label, v.expected]));
   });
 });

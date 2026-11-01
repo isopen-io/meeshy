@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
 import { protectedPreview } from '../notifications/notification-preview';
 
@@ -53,12 +54,16 @@ export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message
  * `userId: null` pour un expéditeur anonyme (aucun `User.id`) : il n'est aucun
  * des mentionnés, au pire une auto-mention passe, jamais un tiers rejeté.
  *
- * `OUTSIDER` (#14066) quand le participant expéditeur n'est pas un membre ACTIF
- * de CETTE conversation — absent, quitté, d'une autre conversation — ou que sa
- * lecture échoue : un non-membre ne cite personne, et une appartenance qu'on n'a
- * pas pu établir n'en est pas une (fail-closed, la mention perdue se réécrit).
- * C'est ici, et non dans `validateMentionPermissions`, que l'anonyme se vérifie :
- * seul son `Participant.id` le désigne.
+ * `OUTSIDER` (#14066) quand le participant expéditeur n'est pas une
+ * participation VIVANTE de CETTE conversation — absent, parti, banni, d'une
+ * autre conversation : un non-membre ne cite personne. C'est ici, et non dans
+ * `validateMentionPermissions`, que l'anonyme se vérifie : seul son
+ * `Participant.id` le désigne.
+ *
+ * Une lecture en ÉCHEC n'est PAS une réponse : elle LÈVE. Rendre `OUTSIDER`
+ * ferait conclure à l'édition que plus personne n'est mentionné et détruirait
+ * des mentions vivantes ; levée, elle laisse chaque appelant s'abstenir
+ * (`UNRESOLVED`) — à l'envoi aucune mention, à l'édition rien de détruit.
  */
 type SenderIdentity = { readonly kind: 'member'; readonly userId: string | null } | { readonly kind: 'outsider' };
 
@@ -66,22 +71,16 @@ const OUTSIDER: SenderIdentity = { kind: 'outsider' };
 
 async function resolveSender(
   prisma: Pick<MentionPrisma, 'participant'>,
-  message: MentionTargetMessage,
-  onError?: (error: unknown) => void
+  message: MentionTargetMessage
 ): Promise<SenderIdentity> {
-  try {
-    const participant = await prisma.participant.findUnique({
-      where: { id: message.senderId },
-      select: { userId: true, isActive: true, conversationId: true },
-    });
-    if (!participant || participant.isActive !== true || participant.conversationId !== message.conversationId) {
-      return OUTSIDER;
-    }
-    return { kind: 'member', userId: participant.userId ?? null };
-  } catch (error) {
-    onError?.(error);
+  const participant = await prisma.participant.findUnique({
+    where: { id: message.senderId },
+    select: { userId: true, isActive: true, bannedAt: true, conversationId: true },
+  });
+  if (!participant || !participationEstVivante(participant) || participant.conversationId !== message.conversationId) {
     return OUTSIDER;
   }
+  return { kind: 'member', userId: participant.userId ?? null };
 }
 
 /**
@@ -519,7 +518,7 @@ async function computeValidatedMentions(
 
   if (candidateUserIds.length === 0) return NOTHING;
 
-  const sender = await resolveSender(prisma, message, onError);
+  const sender = await resolveSender(prisma, message);
   if (sender.kind === 'outsider') return NOTHING;
 
   const { validUserIds } = await mentionService.validateMentionPermissions(

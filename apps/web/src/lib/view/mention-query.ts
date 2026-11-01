@@ -209,31 +209,46 @@ export function composeMentionList(input: LocalMentionInput & { readonly remote:
 }
 
 /**
- * LA PORTÉE DE LA CONVERSATION OUVERTE (#14071) — projetée par la loi partagée
- * (`mentionReachOf`) depuis son type et l'appartenance servie (`isMember`).
- * Les membres CONNUS sont les participants servis (la passerelle tronque cette
- * liste à cinq) et les expéditeurs du fil : un contact hors de ces deux listes
- * n'est pas proposé dans une conversation fermée — s'il en est membre, le
- * serveur, qui les connaît tous, le rend à la recherche distante.
+ * LA PORTÉE DE LA CONVERSATION OUVERTE (#14066, #14071) — projetée par la loi
+ * partagée (`mentionReachOf`) depuis son type et l'APPARTENANCE du lecteur.
+ *
+ * Un non-membre ne cite personne : la passerelle lui refuse la recherche et
+ * ignore ses mentions. L'appartenance se PROUVE — `isMember` servi, un rang
+ * (`currentUserRole`, servi au seul participant actif), le lecteur dans le
+ * roster servi, ou une session d'invité (qui est un participant). Sans preuve,
+ * elle n'existe pas (fail-closed) ; un `isMember: false` servi l'emporte.
+ *
+ * Les membres CONNUS sont les seuls participants SERVIS — jamais les auteurs
+ * de l'historique, dont certains sont partis et seraient proposés puis ignorés.
+ * Un membre absent de cette liste (la passerelle la tronque) n'est pas proposé
+ * en local dans une conversation fermée : le serveur, qui les connaît tous, le
+ * rend à la recherche distante.
  */
 export function conversationMentionReach(input: {
   readonly conversation:
     | {
         readonly type: string;
         readonly isMember?: boolean | undefined;
+        readonly currentUserRole?: string | null | undefined;
         readonly participants: readonly { readonly userId?: string | null | undefined }[];
       }
     | undefined;
-  readonly locals: readonly MentionCandidate[];
+  readonly viewerId: string | null;
+  readonly isGuest: boolean;
 }): MentionReach {
   const { conversation } = input;
   if (conversation === undefined) return { scope: null, memberIds: [] };
   const participantIds = conversation.participants.flatMap((p) => (p.userId ? [p.userId] : []));
-  const memberIds = [...new Set([...participantIds, ...input.locals.map((c) => c.id)])];
+  const memberIds = [...new Set(participantIds)];
+  const proven =
+    conversation.isMember === true ||
+    typeof conversation.currentUserRole === 'string' ||
+    input.isGuest ||
+    (input.viewerId !== null && participantIds.includes(input.viewerId));
   return mentionReachOf({
     type: conversation.type,
     memberIds,
-    ...(conversation.isMember === undefined ? {} : { isMember: conversation.isMember }),
+    isMember: conversation.isMember !== false && proven,
   });
 }
 

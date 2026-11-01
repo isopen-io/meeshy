@@ -84,9 +84,9 @@ public final class MentionComposerController: ObservableObject {
     private let currentUserId: String?
     private let debounceNanoseconds: UInt64
     private var participants: () -> [MentionCandidate]
-    /// Le type de la conversation et son interlocuteur (#14071), posés par
-    /// l'hôte qui les connaît ; `nil` hors conversation (post, brouillon).
-    private var conversationScope: (type: String, interlocutorId: String?)?
+    /// Ce qu'une mention ferait dans la conversation (#14066, #14071), posé par
+    /// l'hôte qui la connaît ; `nil` hors conversation (post, brouillon).
+    private(set) var target: ConversationMentionTarget?
     /// Les « autres » rendus par la DERNIÈRE recherche distante. Ils restent
     /// affichés, refiltrés par la requête courante, pendant que la suivante
     /// est en vol — c'est ce qui affine sans clignoter.
@@ -146,19 +146,27 @@ public final class MentionComposerController: ObservableObject {
     /// **Borne la liste à ce qu'une mention ferait ICI** (#14071) : le type de
     /// la conversation (`direct`, `group`, `public`…) et, pour une directe, son
     /// interlocuteur. Une suggestion sans effet à l'envoi n'est pas affichée ;
-    /// un type inconnu ne propose personne.
-    public func scope(toConversationType type: String?, interlocutorId: String?) {
-        conversationScope = type.map { (type: $0, interlocutorId: interlocutorId) }
+    /// un type inconnu, ou un lecteur qui n'est pas membre, ne propose personne
+    /// et n'interroge pas le réseau.
+    func scope(to target: ConversationMentionTarget) {
+        self.target = target
         recompute()
     }
 
-    /// Les membres que le fil CONNAÎT : soi, l'interlocuteur, et les personnes
-    /// du contexte. Un membre silencieux d'un groupe n'y est pas : la recherche
-    /// distante, que le serveur borne en connaissant tous les membres, le rend.
+    /// Les membres que le fil SAIT actifs : soi et l'interlocuteur. Jamais les
+    /// auteurs de l'historique, dont certains sont partis et seraient proposés
+    /// puis ignorés à l'envoi : dans un groupe, c'est la recherche distante,
+    /// que le serveur borne en connaissant tous les membres, qui les rend.
     private var reach: MentionReach? {
-        guard let scope = conversationScope else { return nil }
-        let known = [scope.interlocutorId, currentUserId].compactMap { $0 } + participants().map(\.id)
-        return MentionReach(conversationType: scope.type, memberIds: Set(known))
+        guard let target else { return nil }
+        let known = [target.interlocutorId, currentUserId].compactMap { $0 }
+        return MentionReach(conversationType: target.conversationType, isMember: target.isMember, memberIds: Set(known))
+    }
+
+    /// Sans portée (type inconnu, non-membre), la passerelle refuserait la recherche.
+    private var mayAskTheNetwork: Bool {
+        guard let reach else { return true }
+        return reach.scope != nil
     }
 
     /// Change le contexte distant d'un hôte qui SURVIT à son sujet (la barre
@@ -193,7 +201,7 @@ public final class MentionComposerController: ObservableObject {
         recompute()
         if opening { warmContacts() }
 
-        guard stage == .remote else {
+        guard stage == .remote, mayAskTheNetwork else {
             isResolving = false
             return
         }

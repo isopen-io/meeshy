@@ -59,15 +59,18 @@ export type ThreadComposeState = {
  * sorties du Résumé Vivant (`lib/view/summary-exits.ts`) l'appellent
  * directement, hors du geste d'envoi.
  */
+/** Ce que la composition lit de la conversation ouverte : son id et sa portée de mention. */
+export type ThreadComposeConversation = { readonly id: string } & NonNullable<Parameters<typeof usePublishMentionSource>[0]['conversation']>;
+
 export function useThreadCompose(params: {
   readonly store: DraftStore;
   /** `(lecteur, conversation)` — la MÊME clé que `useThreadReadingMode`. */
   readonly scope: string;
-  /** `conversation?.id`, JAMAIS un repli sur le paramètre de route
-   * (revue-correction #5793) — voir le doc-comment de `useThreadDraft`. */
-  readonly conversationId: string | undefined;
-  /** La conversation ouverte : sa portée de mention (#14071) en dérive. */
-  readonly conversation: Parameters<typeof usePublishMentionSource>[0]['conversation'];
+  /** La conversation OUVERTE (`threadData.conversation`). Son `id` est la clé
+   * du brouillon, JAMAIS un repli sur le paramètre de route (revue-correction
+   * #5793 — voir le doc-comment de `useThreadDraft`) ; sa portée de mention
+   * (#14066, #14071) en dérive. */
+  readonly conversation: ThreadComposeConversation | undefined;
   /** Le domaine FUSIONNÉ (confirmé + envois optimistes, `mergeTimeline`) —
    * c'est LUI que `replyToMessage` doit retrouver, la bulle citée pouvant
    * elle-même être un envoi encore local. */
@@ -86,7 +89,8 @@ export function useThreadCompose(params: {
    * elle l'admet. Jamais en bout en bout : le web ne chiffre pas. */
   readonly replyable: (message: Message) => boolean;
 }): ThreadComposeState {
-  const { store, scope, conversationId, messages, readerLanguages, send, replyable } = params;
+  const { store, scope, conversation, messages, readerLanguages, send, replyable } = params;
+  const conversationId = conversation?.id;
 
   /* LE MODE ÉDITION (#10581) — armer une réponse en sort : le composeur
      revient avec sa citation, on ne répond pas depuis le champ d'édition. */
@@ -109,7 +113,7 @@ export function useThreadCompose(params: {
   /* LA SOURCE DES MENTIONS (#7826) — ce hook possède déjà la conversation et
      ses messages : il les PUBLIE pour le composeur, qui ne les reçoit pas en
      props (`mention-source.ts`). */
-  usePublishMentionSource({ conversationId, messages, conversation: params.conversation });
+  usePublishMentionSource({ conversationId, messages, conversation });
 
   /* LA PIÈCE NOMMÉE (#6303) — posée par « Répondre » de la visionneuse, retirée
      par toute autre cible (menu, Résumé Vivant, envoi, annulation) : une

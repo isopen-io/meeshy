@@ -179,7 +179,7 @@ describe('resolveMessageMentions — chemin nominal', () => {
 
     expect(prisma.participant.findUnique).toHaveBeenCalledWith({
       where: { id: 'part-1' },
-      select: { userId: true, isActive: true, conversationId: true },
+      select: { userId: true, isActive: true, bannedAt: true, conversationId: true },
     });
     expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith('conv-1', ['u-alice'], 'u-sender');
   });

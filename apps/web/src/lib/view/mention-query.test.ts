@@ -258,16 +258,35 @@ describe('une suggestion sans effet ne s’affiche pas (#14071)', () => {
 });
 
 describe('conversationMentionReach — la portée projetée depuis la conversation ouverte (#14071)', () => {
-  test('les membres connus sont les participants servis ET les expéditeurs du fil', () => {
+  const viewer = { viewerId: 'me', isGuest: false };
+
+  test('les membres connus sont les seuls participants servis — jamais un auteur de l’historique (parti peut-être)', () => {
     const reach = conversationMentionReach({
-      conversation: { type: 'group', participants: [{ userId: 'p1' }, { userId: null }] },
-      locals: [candidate({ id: 'p9', username: 'nina' })],
+      conversation: { type: 'group', currentUserRole: 'member', participants: [{ userId: 'p1' }, { userId: null }] },
+      ...viewer,
     });
-    expect(reach).toEqual({ scope: 'members', memberIds: ['p1', 'p9'] });
+    expect(reach).toEqual({ scope: 'members', memberIds: ['p1'] });
   });
 
   test('sans conversation chargée, aucune portée — rien n’est proposé', () => {
-    expect(conversationMentionReach({ conversation: undefined, locals: [] }).scope).toBeNull();
+    expect(conversationMentionReach({ conversation: undefined, ...viewer }).scope).toBeNull();
+  });
+
+  test('un non-membre d’une conversation publique ne cite personne (#14066)', () => {
+    const served = (over: { readonly isMember?: boolean; readonly currentUserRole?: string | null }) =>
+      conversationMentionReach({ conversation: { type: 'public', participants: [{ userId: 'p1' }], ...over }, ...viewer }).scope;
+    expect(served({ isMember: false, currentUserRole: 'member' })).toBeNull();
+    expect(served({ currentUserRole: null })).toBeNull();
+    expect(served({})).toBeNull();
+    expect(served({ currentUserRole: 'member' })).toBe('directory');
+    expect(served({ isMember: true })).toBe('directory');
+  });
+
+  test('l’appartenance se lit aussi dans le roster servi, et un invité est membre par sa session', () => {
+    const roster = { type: 'public', participants: [{ userId: 'me' }] };
+    expect(conversationMentionReach({ conversation: roster, ...viewer }).scope).toBe('directory');
+    const guest = { type: 'public', participants: [] };
+    expect(conversationMentionReach({ conversation: guest, viewerId: null, isGuest: true }).scope).toBe('directory');
   });
 });
 

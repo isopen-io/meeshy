@@ -13,7 +13,6 @@ import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.mention.MentionLookupLaw
 import me.meeshy.sdk.model.mention.MentionLookupStage
-import me.meeshy.sdk.model.mention.MentionableScope
 
 /**
  * Runs the « @ » law of #14053 for one composer, whatever holds its [MentionAutocompleteState]:
@@ -23,6 +22,9 @@ import me.meeshy.sdk.model.mention.MentionableScope
  * found nobody locally. The debounced answer of [MentionSearch.suggest] for the [bind] context is
  * merged below the local matches, in the gateway's order, without duplicates or the caller; an
  * answer for a fragment the user has since left is dropped.
+ *
+ * Until a context is bound — or when it is `null` — nothing is offered and nothing is asked
+ * (#14071): a list whose scope is unknown would offer mentions the gateway ignores at send.
  *
  * The host keeps its state where it wants it: [read] and [write] are its accessors.
  */
@@ -63,7 +65,7 @@ public class MentionLookupDriver(
         }
         val local = localMatches(query)
         write { it.copy(activeQuery = query, suggestions = local) }
-        val asksNetwork = context.let { it == null || it.searchesRemotely }
+        val asksNetwork = context?.searchesRemotely == true
         if (asksNetwork && MentionLookupLaw.stage(query, localMatchCount = local.size) == MentionLookupStage.REMOTE) {
             lookUpRemote(query)
         }
@@ -88,7 +90,7 @@ public class MentionLookupDriver(
             context = roster,
             query = query,
             selfId = selfId(),
-            scope = context.let { if (it == null) MentionableScope.DIRECTORY else it.scope },
+            scope = context?.scope,
         )
 
     private fun lookUpRemote(query: String) {

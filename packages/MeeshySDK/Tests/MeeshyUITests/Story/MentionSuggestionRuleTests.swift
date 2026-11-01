@@ -215,6 +215,53 @@ struct MentionSuggestionRuleTests {
         #expect(result.map(\.id) == ["c1", "o1"])
     }
 
+    // MARK: - mentionable-scope.vectors.json — la table rejouée par les trois langages (#14071)
+
+    private struct ScopeVector: Decodable {
+        let _label: String
+        let input: String?
+        let expected: String?
+    }
+
+    private struct AdmitVector: Decodable {
+        let _label: String
+        let type: String
+        let isMember: Bool
+        let memberIds: [String]
+        let selfId: String
+        let candidateId: String
+        let expected: Bool
+    }
+
+    private struct ScopeVectors: Decodable {
+        let scopes: [ScopeVector]
+        let admits: [AdmitVector]
+    }
+
+    /// `packages/MeeshySDK/Tests/MeeshyUITests/Story/…` : **5** composants à retirer pour atteindre `packages/`.
+    private static func loadScopeVectors() throws -> ScopeVectors {
+        var url = URL(fileURLWithPath: #filePath)
+        for _ in 0..<5 { url.deleteLastPathComponent() }
+        let file = url.appendingPathComponent("shared/fixtures/mentionable-scope.vectors.json")
+        return try JSONDecoder().decode(ScopeVectors.self, from: Data(contentsOf: file))
+    }
+
+    @Test func test_scopeVectors_everyRawTypeGetsTheSharedScope() throws {
+        let vectors = try Self.loadScopeVectors().scopes
+        #expect(vectors.count > 10)
+        let failures = vectors.filter { MentionableScope(conversationType: $0.input)?.rawValue != $0.expected }.map(\._label)
+        #expect(failures.isEmpty, "divergences : \(failures)")
+    }
+
+    @Test func test_admitVectors_everyReaderAdmitsWhatTheGatewayKeeps() throws {
+        let vectors = try Self.loadScopeVectors().admits
+        let failures = vectors.filter { vector in
+            let reach = MentionReach(conversationType: vector.type, isMember: vector.isMember, memberIds: Set(vector.memberIds))
+            return reach.admits(vector.candidateId, selfId: vector.selfId) != vector.expected
+        }.map(\._label)
+        #expect(failures.isEmpty, "divergences : \(failures)")
+    }
+
     // MARK: - reach — une suggestion sans effet ne s'affiche pas (#14071)
 
     @Test func test_scope_mirrorsTheGatewayTable() {

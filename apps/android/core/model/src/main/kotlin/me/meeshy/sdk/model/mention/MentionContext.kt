@@ -1,5 +1,8 @@
 package me.meeshy.sdk.model.mention
 
+import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.isActiveMember
+
 /** Le `contextType` de `GET /mentions/suggestions` : un post couvre aussi story, réel et humeur. */
 enum class MentionContextType(val wire: String) {
     CONVERSATION("conversation"),
@@ -20,7 +23,7 @@ enum class MentionableScope {
 
     companion object {
         fun of(conversationType: String?): MentionableScope? =
-            when (conversationType?.trim()?.lowercase()) {
+            when (conversationType) {
                 "direct" -> INTERLOCUTOR
                 "group" -> MEMBERS
                 "public", "global", "broadcast" -> DIRECTORY
@@ -47,10 +50,19 @@ data class MentionContext(
     val searchesRemotely: Boolean get() = type != null && scope != null
 
     companion object {
-        fun conversation(id: String?, conversationType: String?): MentionContext? {
+        /**
+         * Un non-membre ne cite personne (#14066) : la passerelle lui refuse la recherche et ignore
+         * ses mentions à l'envoi, donc [isMember] faux ferme la portée — ni local, ni réseau.
+         */
+        fun conversation(id: String?, conversationType: String?, isMember: Boolean): MentionContext? {
             val key = id?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-            return MentionContext(key, MentionContextType.CONVERSATION, MentionableScope.of(conversationType))
+            val scope = if (isMember) MentionableScope.of(conversationType) else null
+            return MentionContext(key, MentionContextType.CONVERSATION, scope)
         }
+
+        /** Le contexte de la conversation ouverte, l'appartenance du lecteur lue par [isActiveMember]. */
+        fun of(conversation: ApiConversation, currentUserId: String?): MentionContext? =
+            conversation(conversation.id, conversation.type, conversation.isActiveMember(currentUserId))
 
         fun post(id: String?): MentionContext? {
             val key = id?.trim()?.takeIf { it.isNotEmpty() } ?: return null

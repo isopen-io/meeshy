@@ -35,6 +35,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { jetonRecherche } from '../../utils/search-tokens';
 import { mentionableScope, scopeIsClosed, type MentionableScope } from './mentionableScope';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { keepDiscoverable } from '../profile-discoverability';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { comptesLies, niveauxParmi, plusProchesDabord, type CompteLie } from '../friendship';
@@ -272,26 +273,29 @@ export class MentionSuggestionFinder {
   }
 
   private async resolveScope(conversationId: string, currentUserId: string): Promise<MentionableScope> {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { id: true, type: true }
-    });
-    const scope = conversation ? mentionableScope(conversation.type) : null;
-    if (!scope) throw new Error(ACCESS_DENIED);
-
     // #14066 — quelle que soit la portée, un non-membre ne cite personne : une
     // conversation ouverte n'énumère pas ses membres (ni l'annuaire) à un tiers.
-    const membership = await this.prisma.participant.findFirst({
-      where: { conversationId, userId: currentUserId, isActive: true },
-      select: { id: true }
-    });
-    if (!membership) throw new Error(ACCESS_DENIED);
+    // L'appartenance est une participation VIVANTE (active ET non bannie). Les
+    // deux lectures partent ensemble : « absente » et « non membre » coûtent la
+    // même attente et rendent le même refus.
+    const [conversation, membership] = await Promise.all([
+      this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { id: true, type: true }
+      }),
+      this.prisma.participant.findFirst({
+        where: { conversationId, userId: currentUserId, ...PARTICIPATION_VIVANTE },
+        select: { id: true }
+      })
+    ]);
+    const scope = conversation ? mentionableScope(conversation.type) : null;
+    if (!scope || !membership) throw new Error(ACCESS_DENIED);
     return scope;
   }
 
   private async rankedMembers(conversationId: string, currentUserId: string): Promise<SuggestedUser[]> {
     const members = await this.prisma.participant.findMany({
-      where: { conversationId, isActive: true, userId: { not: currentUserId } },
+      where: { conversationId, ...PARTICIPATION_VIVANTE, userId: { not: currentUserId } },
       include: { user: { select: USER_SELECT } }
     });
     const activity = await this.loadConversationActivity(conversationId);

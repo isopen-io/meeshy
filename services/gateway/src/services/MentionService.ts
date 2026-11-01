@@ -13,6 +13,7 @@ import type { MentionedUser } from '@meeshy/shared/types';
 import { MAX_MENTIONS_PER_MESSAGE } from '../validation/mention-list.js';
 import { MentionSuggestionFinder, type MentionSuggestion } from './mentions/mentionSuggestions';
 import { mentionableScope } from './mentions/mentionableScope';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 
 // Logger dédié pour MentionService
 const logger = enhancedLogger.child({ module: 'MentionService' });
@@ -267,7 +268,9 @@ export class MentionService {
       where: { id: conversationId },
       include: {
         participants: {
-          where: { isActive: true },
+          // #14066 — une participation VIVANTE (active ET non bannie) : un banni
+          // ne cite personne et ne se cite pas.
+          where: PARTICIPATION_VIVANTE,
           select: { userId: true }
         }
       }
