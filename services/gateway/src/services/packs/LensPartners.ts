@@ -165,7 +165,7 @@ export class LensPartners {
     const current = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: PROFILE_SELECT });
     if (current === null) return { kind: 'not-found' };
     const snapshot = { displayName: current.displayName, logoSha256: current.logoSha256 };
-    if (!(await this.journal(adminId, userId, 'PARTNER_PROFILE_VERIFY', snapshot))) return { kind: 'audit-unavailable' };
+    if (!(await this.journal({ adminId, userId, verified: true, metadata: snapshot }))) return { kind: 'audit-unavailable' };
     const written = await this.prisma.partnerProfile.updateMany({ where: { userId, ...snapshot }, data: { verifiedAt: this.now(), verifiedBy: adminId } });
     if (written.count === 0) return { kind: 'not-found' };
     return this.done(userId);
@@ -174,7 +174,7 @@ export class LensPartners {
   async revoke(adminId: string, userId: string, note: string | null): Promise<VerifyPartnerOutcome> {
     const current = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: PROFILE_SELECT });
     if (current === null) return { kind: 'not-found' };
-    if (!(await this.journal(adminId, userId, 'PARTNER_PROFILE_REVOKE', { note, displayName: current.displayName }))) return { kind: 'audit-unavailable' };
+    if (!(await this.journal({ adminId, userId, verified: false, metadata: { note, displayName: current.displayName } }))) return { kind: 'audit-unavailable' };
     await this.prisma.partnerProfile.updateMany({ where: { userId }, data: { verifiedAt: null, verifiedBy: null } });
     return this.done(userId);
   }
@@ -256,9 +256,10 @@ export class LensPartners {
     return row === null ? { kind: 'not-found' } : { kind: 'done', profile: viewOf(row) };
   }
 
-  private async journal(adminId: string, userId: string, action: 'PARTNER_PROFILE_VERIFY' | 'PARTNER_PROFILE_REVOKE', metadata: Readonly<Record<string, unknown>>): Promise<boolean> {
+  private async journal(params: { readonly adminId: string; readonly userId: string; readonly verified: boolean; readonly metadata: Readonly<Record<string, unknown>> }): Promise<boolean> {
+    const { adminId, userId, verified, metadata } = params;
     try {
-      await this.prisma.adminAuditLog.create({ data: { adminId, userId, action, entity: 'PartnerProfile', entityId: userId, metadata: JSON.stringify(metadata) } });
+      await this.prisma.adminAuditLog.create({ data: { adminId, userId, action: verified ? 'PARTNER_PROFILE_VERIFY' : 'PARTNER_PROFILE_REVOKE', entity: 'PartnerProfile', entityId: userId, metadata: JSON.stringify(metadata) } });
       return true;
     } catch {
       return false;
