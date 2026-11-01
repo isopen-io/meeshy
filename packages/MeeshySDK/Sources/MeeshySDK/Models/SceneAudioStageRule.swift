@@ -96,6 +96,18 @@ public enum SceneAudioStageRule {
             .sorted { ($0.element.zIndex ?? .max, $0.offset) < ($1.element.zIndex ?? .max, $1.offset) }
             .map(\.element)
     }
+
+    /// **L'empilement d'une scène, du plus bas au plus haut** (#14181) : les
+    /// objets de premier plan dans l'ordre du moteur de scène (`sceneObjects`),
+    /// les pastilles ENFOUIES à leur rang parmi eux. Les autres pastilles n'y
+    /// sont pas : elles se peignent au-dessus de tout (`overlaidAudios`). Une
+    /// vignette qui peint dans cet ordre rend l'empilement du lecteur.
+    public static func stackedObjects(in effects: StoryEffects) -> [MeeshySceneObject] {
+        effects.sceneObjects.filter { objet in
+            guard case .audio(let son) = objet else { return !objet.isBackground }
+            return isBuried(son, in: effects)
+        }
+    }
 }
 
 // MARK: - Le visuel d'un réel dont le média est un son

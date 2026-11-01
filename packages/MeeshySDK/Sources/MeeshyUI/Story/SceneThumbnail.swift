@@ -181,9 +181,15 @@ public enum SceneThumbnailRenderer {
         let fond = bgImage.map { reduced($0, tile: size, scale: scale, reductions: reductions) }
         let reduites = reducedImages(slide: slide, loadedImages: loadedImages, size: size, scale: scale,
                                      reductions: reductions)
-        let composite = StorySlideRenderer.renderComposite(slide: slide, bgImage: fond, loadedImages: reduites,
-                                                           size: size, scale: scale)
-        let pastilles = SceneAudioStageRule.stagedAudios(in: slide.effects.audioPlayerObjects ?? [])
+        // Une pastille qu'un objet recouvre se peint DANS le composite, à son
+        // rang ; les autres au-dessus de tout, comme le lecteur (#14181).
+        let composite = StorySlideRenderer.renderComposite(
+            slide: slide, bgImage: fond, loadedImages: reduites, size: size, scale: scale,
+            soundMarker: { son, taille in
+                drawAudioMarker(at: CGPoint(x: son.x * taille.width, y: son.y * taille.height),
+                                tileWidth: taille.width)
+            })
+        let pastilles = SceneAudioStageRule.overlaidAudios(in: slide.effects)
         guard !pastilles.isEmpty else {
             return composite ?? UIGraphicsImageRenderer(size: size, format: format).image { _ in }
         }

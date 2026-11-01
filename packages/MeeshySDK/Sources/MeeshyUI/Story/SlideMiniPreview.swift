@@ -77,6 +77,10 @@ public struct SlideMiniPreview: View {
     /// chaque tuile peignait le bitmap ENTIER de sa scène dans quelques points.
     /// Optionnel : un hôte qui ne monte qu'une tuile n'a rien à y gagner.
     let thumbnails: SceneThumbnailCache?
+    /// Le rang de chaque objet de premier plan dans l'empilement de la scène
+    /// (`SceneAudioStageRule.stackedObjects`, #14181) : la vignette empile
+    /// comme le lecteur, pastille de son enfouie comprise.
+    private let rangs: [String: Double]
     @Environment(\.displayScale) private var displayScale
 
     public init(effects: StoryEffects, bgImage: UIImage?, drawingData: Data?,
@@ -85,7 +89,14 @@ public struct SlideMiniPreview: View {
         self.effects = effects; self.bgImage = bgImage; self.drawingData = drawingData
         self.loadedImages = loadedImages; self.index = index
         self.thumbnails = thumbnails
+        self.rangs = Dictionary(SceneAudioStageRule.stackedObjects(in: effects).enumerated()
+            .map { ($0.element.id, Double($0.offset + 1)) }, uniquingKeysWith: { premier, _ in premier })
     }
+
+    /// Le rang d'un objet ; le dessin passe au-dessus de tous, les pastilles
+    /// que rien ne recouvre au-dessus du dessin, comme la surcouche du lecteur.
+    private func rang(_ id: String) -> Double { rangs[id] ?? Double(rangs.count + 2) }
+    private var rangDuDessin: Double { Double(rangs.count + 1) }
 
     /// L'image à peindre dans `tile` points : sa vignette si l'hôte fournit un
     /// cache, l'image elle-même sinon.
@@ -114,6 +125,7 @@ public struct SlideMiniPreview: View {
                 // `drawingLayer` était rendu en 2ᵉ position (sous média/texte) →
                 // mini-preview incohérente avec le rendu réel (2026-06-01).
                 drawingLayer
+                    .zIndex(rangDuDessin)
             }
             // Approximation des filtres `slide.effects.filter` via les
             // modifiers SwiftUI natifs (GPU, ~0 cost à cette taille). Le main
@@ -209,6 +221,7 @@ public struct SlideMiniPreview: View {
         // media en background via le menu contextuel.
         ForEach(effects.resolvedForegroundMediaObjects) { media in
             foregroundMediaItem(media, in: size)
+                .zIndex(rang(media.id))
         }
     }
 
@@ -242,6 +255,7 @@ public struct SlideMiniPreview: View {
         let texts = effects.textObjects
         ForEach(texts) { text in
             textItem(text, in: size)
+                .zIndex(rang(text.id))
         }
     }
 
@@ -295,55 +309,58 @@ public struct SlideMiniPreview: View {
     private func stickerLayer(in size: CGSize) -> some View {
         let stickers = effects.stickerObjects ?? []
         ForEach(stickers) { sticker in
-            if sticker.kind == .template,
-               let dessin = StickerTemplateRenderer.image(
-                   templateID: sticker.templateId,
-                   slots: sticker.slots,
-                   metrics: StickerTemplateMetrics.sticker(
-                       geometry: CanvasGeometry(renderSize: size),
-                       baseSize: sticker.baseSize,
-                       scale: sticker.scale),
-                   screenScale: displayScale)?.0 {
-                // **La vignette passe par le moteur QUI DESSINE la scène.**
-                // Peindre `Text(sticker.emoji)` y montrait le repli — 💕 pour
-                // deux cœurs, 🕐 pour un ruban d'heure — c'est-à-dire ce que
-                // voit un lecteur qui ne sait PAS rendre la décoration, pas ce
-                // que l'auteur a posé.
-                Image(uiImage: dessin)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: dessin.size.width, height: dessin.size.height)
-                    .rotationEffect(.degrees(Double(sticker.rotation)))
-                    .position(x: CGFloat(sticker.x) * size.width,
-                              y: CGFloat(sticker.y) * size.height)
-            } else if let bitmap = StoryStickerLayer.bitmapCacheKeys(for: sticker)
-                        .lazy.compactMap({ loadedImages[$0] }).first {
-                // **Un sticker IMAGE se peint dans la vignette** (#4852) — la
-                // même taille, la même rotation et la même position que le
-                // glyphe, le bitmap ajusté dans le carré du sticker comme sur
-                // la scène (`StoryStickerLayer`, gravité `.resizeAspect`).
-                let side = CanvasGeometry.stickerFontSize(
-                    baseSize: sticker.baseSize, scale: sticker.scale,
-                    canvasWidth: size.width)
-                Image(uiImage: bitmap)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: side, height: side)
-                    .rotationEffect(.degrees(Double(sticker.rotation)))
-                    .position(x: CGFloat(sticker.x) * size.width,
-                              y: CGFloat(sticker.y) * size.height)
-            } else {
-                // La MÊME règle de taille que la scène, le composite et
-                // l'export (`CanvasGeometry.stickerFontSize`, #4824) : la
-                // vignette ignorait `baseSize` et la largeur de scène.
-                Text(sticker.wireEmoji)
-                    .font(.system(size: CanvasGeometry.stickerFontSize(
+            Group {
+                if sticker.kind == .template,
+                   let dessin = StickerTemplateRenderer.image(
+                       templateID: sticker.templateId,
+                       slots: sticker.slots,
+                       metrics: StickerTemplateMetrics.sticker(
+                           geometry: CanvasGeometry(renderSize: size),
+                           baseSize: sticker.baseSize,
+                           scale: sticker.scale),
+                       screenScale: displayScale)?.0 {
+                    // **La vignette passe par le moteur QUI DESSINE la scène.**
+                    // Peindre `Text(sticker.emoji)` y montrait le repli — 💕 pour
+                    // deux cœurs, 🕐 pour un ruban d'heure — c'est-à-dire ce que
+                    // voit un lecteur qui ne sait PAS rendre la décoration, pas ce
+                    // que l'auteur a posé.
+                    Image(uiImage: dessin)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: dessin.size.width, height: dessin.size.height)
+                        .rotationEffect(.degrees(Double(sticker.rotation)))
+                        .position(x: CGFloat(sticker.x) * size.width,
+                                  y: CGFloat(sticker.y) * size.height)
+                } else if let bitmap = StoryStickerLayer.bitmapCacheKeys(for: sticker)
+                            .lazy.compactMap({ loadedImages[$0] }).first {
+                    // **Un sticker IMAGE se peint dans la vignette** (#4852) — la
+                    // même taille, la même rotation et la même position que le
+                    // glyphe, le bitmap ajusté dans le carré du sticker comme sur
+                    // la scène (`StoryStickerLayer`, gravité `.resizeAspect`).
+                    let side = CanvasGeometry.stickerFontSize(
                         baseSize: sticker.baseSize, scale: sticker.scale,
-                        canvasWidth: size.width)))
-                    .rotationEffect(.degrees(Double(sticker.rotation)))
-                    .position(x: CGFloat(sticker.x) * size.width,
-                              y: CGFloat(sticker.y) * size.height)
+                        canvasWidth: size.width)
+                    Image(uiImage: bitmap)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: side, height: side)
+                        .rotationEffect(.degrees(Double(sticker.rotation)))
+                        .position(x: CGFloat(sticker.x) * size.width,
+                                  y: CGFloat(sticker.y) * size.height)
+                } else {
+                    // La MÊME règle de taille que la scène, le composite et
+                    // l'export (`CanvasGeometry.stickerFontSize`, #4824) : la
+                    // vignette ignorait `baseSize` et la largeur de scène.
+                    Text(sticker.wireEmoji)
+                        .font(.system(size: CanvasGeometry.stickerFontSize(
+                            baseSize: sticker.baseSize, scale: sticker.scale,
+                            canvasWidth: size.width)))
+                        .rotationEffect(.degrees(Double(sticker.rotation)))
+                        .position(x: CGFloat(sticker.x) * size.width,
+                                  y: CGFloat(sticker.y) * size.height)
+                }
             }
+            .zIndex(rang(sticker.id))
         }
     }
 
@@ -354,21 +371,24 @@ public struct SlideMiniPreview: View {
     @ViewBuilder
     private func locationLayer(in size: CGSize) -> some View {
         ForEach(effects.locationObjects) { lieu in
-            if let dessin = StickerTemplateRenderer.image(
-                templateID: StoryLocationLayer.resolvedTemplateID(lieu.styleId),
-                slots: StoryLocationLayer.templateSlots(for: lieu.place),
-                metrics: StickerTemplateMetrics.location(
-                    geometry: CanvasGeometry(renderSize: size),
-                    scale: CGFloat(lieu.scale)),
-                screenScale: displayScale)?.0 {
-                Image(uiImage: dessin)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: dessin.size.width, height: dessin.size.height)
-                    .rotationEffect(.degrees(lieu.rotation))
-                    .position(x: CGFloat(lieu.x) * size.width,
-                              y: CGFloat(lieu.y) * size.height)
+            Group {
+                if let dessin = StickerTemplateRenderer.image(
+                    templateID: StoryLocationLayer.resolvedTemplateID(lieu.styleId),
+                    slots: StoryLocationLayer.templateSlots(for: lieu.place),
+                    metrics: StickerTemplateMetrics.location(
+                        geometry: CanvasGeometry(renderSize: size),
+                        scale: CGFloat(lieu.scale)),
+                    screenScale: displayScale)?.0 {
+                    Image(uiImage: dessin)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: dessin.size.width, height: dessin.size.height)
+                        .rotationEffect(.degrees(lieu.rotation))
+                        .position(x: CGFloat(lieu.x) * size.width,
+                                  y: CGFloat(lieu.y) * size.height)
+                }
             }
+            .zIndex(rang(lieu.id))
         }
     }
 
@@ -391,6 +411,7 @@ public struct SlideMiniPreview: View {
                 .background(Circle().fill(Color.black.opacity(0.55)))
                 .position(x: CGFloat(audio.x) * size.width,
                           y: CGFloat(audio.y) * size.height)
+                .zIndex(rang(audio.id))
         }
     }
 
