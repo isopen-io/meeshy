@@ -154,7 +154,7 @@ const lawFaithfulTargetResolver =
       ? resolvePresenceVisibility({
           isSelf: viewer.userId === target.id,
           viewerRole: viewer.role,
-          relationLevel: friendsOfViewer.has(target.id) ? 'FRIEND' : 'PUBLIC',
+          relationLevel: friendsOfViewer.has(target.id) ? 'CLOSE' : 'PUBLIC',
           targetShowOnlineStatus: true,
           targetShowLastSeen: true,
           targetIsDeactivated: false,
@@ -478,7 +478,7 @@ describe('GET …/profile — présence (régime strict)', () => {
     );
   });
 
-  it('ami accepté ⇒ présence servie', async () => {
+  it('Proche ⇒ présence détaillée servie', async () => {
     mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver(new Set([registeredRow.userId])));
 
     const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'USER' });

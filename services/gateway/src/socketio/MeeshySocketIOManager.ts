@@ -2720,9 +2720,8 @@ export class MeeshySocketIOManager {
    * `return` précoce sur cette préférence coupait les trois d'un coup. La
    * décision « quelle charge pour quel sous-ensemble » vit dans
    * `presenceStatusEmissions` (`./presence-audience`), pure et testée à part —
-   * `lastActiveAt` y tombe avec `showLastSeen` pour les amis seulement, car il
-   * voyage À CÔTÉ d'`isOnline` et un gate posé sur le seul drapeau le
-   * laisserait partir.
+   * `lastActiveAt` y est nul pour les AMIS (binaires, #13928) et tombe avec
+   * `showLastSeen` pour les proches : il voyage À CÔTÉ d'`isOnline`.
    *
    * Un sujet DÉSACTIVÉ n'émet AUCUNE charge — pas même la privilégiée. La loi
    * partagée (`resolvePresenceVisibility`) tranche `targetIsDeactivated` AVANT
@@ -2774,7 +2773,7 @@ export class MeeshySocketIOManager {
         for (const emission of presenceStatusEmissions({
           subjectId: participant.id,
           isAnonymous: true,
-          friendIds: [],
+          friendLevels: new Map(),
           adminIds,
           lastActiveAt: participant.lastActiveAt,
           showOnlineStatus: true,
@@ -2818,14 +2817,14 @@ export class MeeshySocketIOManager {
 
       // La requête d'amitiés n'est même pas lancée quand elle ne peut servir
       // personne : `showOnlineStatus = false` retire tout le sous-ensemble AMIS.
-      const friendIds = privacyPrefs.showOnlineStatus
-        ? [...await this.presenceVisibilityService.acceptedFriendIds(user.id, { blockRelated: blockedUserIds })]
-        : [];
+      const friendLevels = privacyPrefs.showOnlineStatus
+        ? await this.presenceVisibilityService.acceptedFriendLevels(user.id, { blockRelated: blockedUserIds })
+        : new Map();
 
       const emissions = presenceStatusEmissions({
         subjectId: user.id,
         isAnonymous: false,
-        friendIds,
+        friendLevels,
         adminIds,
         lastActiveAt: user.lastActiveAt,
         showOnlineStatus: privacyPrefs.showOnlineStatus,

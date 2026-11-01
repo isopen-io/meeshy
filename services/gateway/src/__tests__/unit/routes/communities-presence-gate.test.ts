@@ -78,7 +78,7 @@ const memberRow = (userId: string, isOnline: boolean) => ({
     displayName: userId,
     avatar: null,
     isOnline,
-    lastActiveAt: new Date('2026-08-22T10:00:00.000Z'),
+    lastActiveAt: new Date(Date.now() - 30_000),
   },
 });
 
@@ -667,7 +667,7 @@ async function fetchCommunityConversations(
 // La présence de la LIGNE `Participant` — distincte de `user.isOnline` — et
 // les secrets d'un participant anonyme. Des valeurs UNIQUES, pour qu'un
 // `not.toContain` sur le corps sérialisé les attrape où qu'elles ressortent.
-const ROW_LAST_ACTIVE = '2026-08-23T11:22:33.000Z';
+const ROW_LAST_ACTIVE = new Date(Date.now() - 30_000).toISOString();
 const ANON_IP = '203.0.113.7';
 const ANON_FINGERPRINT = 'fp-anonyme-0001';
 

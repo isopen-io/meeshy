@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
@@ -143,6 +144,24 @@ export class PresenceVisibilityService {
     const friendIds = await amisAcceptes(this.prisma, userId);
     const blocked = options.blockRelated ?? await getBlockedUserIdsAmong(this.prisma, userId, friendIds);
     return new Set(friendIds.filter((friendId) => !blocked.has(friendId)));
+  }
+
+  /**
+   * {@link acceptedFriendIds}, avec le NIVEAU effectif de chaque lien : l'éventail
+   * de `user:status` doit savoir QUI est Ami (en ligne seulement) et QUI est
+   * Proche ou Sang (présence détaillée) avant d'émettre (#13928). Même liste,
+   * même retrait du blocage ; une requête de niveaux de plus, bornée par les amis
+   * du sujet, jamais par la population connectée. Le niveau ne se lit qu'au site
+   * de la loi (`niveauxParmi`) ; ce qu'il autorise se décide dans `presence-audience`,
+   * par la loi de présence, jamais par une comparaison de niveaux ici.
+   */
+  async acceptedFriendLevels(
+    userId: string,
+    options: { readonly blockRelated?: ReadonlySet<string> } = {},
+  ): Promise<ReadonlyMap<string, RelationLevel>> {
+    const friendIds = [...await this.acceptedFriendIds(userId, options)];
+    const levels = await niveauxParmi(this.prisma, userId, friendIds);
+    return new Map(friendIds.map((id) => [id, levels.get(id) ?? 'PUBLIC'] as const));
   }
 
   /**
