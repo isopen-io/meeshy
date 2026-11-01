@@ -433,3 +433,9 @@ export const seedUser = (db: FakeGameDb, fields: Record<string, unknown> = {}, i
   db.user.rows.push(row);
   return row;
 };
+
+/** Un lien de cercle entre deux comptes, à un niveau accordé par les DEUX (la loi lit le minimum). */
+export const relateAt = (db: FakeGameDb, a: string, b: string, level: string): void => {
+  const [userLowId, userHighId] = a < b ? [a, b] : [b, a];
+  db.userRelation.rows.push({ id: `rel-${userLowId}-${userHighId}`, userLowId, userHighId, grantedByLow: level, grantedByHigh: level, transitions: [], updatedAt: new Date('2026-10-01T00:00:00Z') });
+};
