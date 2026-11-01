@@ -8,6 +8,11 @@ import MeeshySDK
 ///
 /// `unknown` est le repli fail-closed : une surface qui répond dans une
 /// conversation sans savoir laquelle ne propose personne.
+/// Lit les participants ACTIFS servis d'une conversation. `@concurrent` écrit :
+/// sans isolement, le type deviendrait `nonisolated(nonsending)`, absent du
+/// runtime d'iOS 16 et 17 (#8182).
+typealias ServedMembersLoader = @Sendable @concurrent (String) async -> [String]
+
 struct ConversationMentionTarget: Equatable, Sendable {
     let conversationId: String?
     let conversationType: String?
@@ -63,7 +68,7 @@ enum ConversationMentionScope {
     /// page `.stale` / expirée peut porter un lecteur PARTI et des partis ; elle
     /// n'ouvre rien, et la portée reste celle du rang servi (`currentUserRole`).
     /// Un échec n'en rend aucun — la recherche distante suit.
-    static let servedActiveMembers: @Sendable (String) async -> [String] = { conversationId in
+    static let servedActiveMembers: ServedMembersLoader = { conversationId in
         if let fresh = await freshParticipants(conversationId) { return activeUserIds(fresh) }
         _ = try? await ParticipantService.shared.loadFirstPage(for: conversationId, forceRefresh: true)
         return await freshParticipants(conversationId).map(activeUserIds) ?? []
@@ -94,7 +99,7 @@ enum ConversationMentionScope {
     static func apply(
         _ target: ConversationMentionTarget?,
         to controller: MentionComposerController,
-        servedMembers: @escaping @Sendable (String) async -> [String] = servedActiveMembers
+        servedMembers: @escaping ServedMembersLoader = servedActiveMembers
     ) {
         let resolved = target ?? .unknown
         if let conversationId = resolved.conversationId {
