@@ -4,6 +4,9 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.view.OrientationEventListener
+import android.view.Surface
+import android.view.WindowManager
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
@@ -29,6 +32,7 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 import me.meeshy.sdk.model.composer.capture.CaptureFlashMode
 import me.meeshy.sdk.model.composer.capture.CaptureLensFacing
+import me.meeshy.sdk.model.composer.capture.CaptureTargetRotation
 import me.meeshy.sdk.model.composer.capture.CaptureTorchMode
 
 /**
@@ -59,6 +63,18 @@ public class CameraXCaptureEngine(
     private var released = false
     private var minZoom = 1f
     private var maxZoom = 1f
+    private var targetRotation = displayRotation()
+
+    /** La gravité, pas l'écran : la photo et la vidéo sortent comme le téléphone est tenu. */
+    private val horizon = object : OrientationEventListener(context) {
+        override fun onOrientationChanged(orientation: Int) {
+            val rotation = CaptureTargetRotation.fromDegrees(orientation) ?: return
+            if (rotation == targetRotation) return
+            targetRotation = rotation
+            imageCapture?.targetRotation = rotation
+            videoCapture?.targetRotation = rotation
+        }
+    }
 
     override fun bind(facing: CaptureLensFacing) {
         if (released) return
@@ -74,16 +90,20 @@ public class CameraXCaptureEngine(
         val provider = provider ?: return
         val selector = if (facing == CaptureLensFacing.FRONT) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
         val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
-        val photo = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+        val photo = ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setTargetRotation(targetRotation)
+            .build()
         val recorder = Recorder.Builder()
             .setQualitySelector(QualitySelector.from(Quality.HD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
             .build()
-        val video = VideoCapture.withOutput(recorder)
+        val video = VideoCapture.Builder(recorder).setTargetRotation(targetRotation).build()
         provider.unbindAll()
         val bound = provider.bindToLifecycle(lifecycleOwner, selector, preview, photo, video)
         camera = bound
         imageCapture = photo
         videoCapture = video
+        if (horizon.canDetectOrientation()) horizon.enable()
         val zoom = bound.cameraInfo.zoomState.value
         minZoom = zoom?.minZoomRatio ?: 1f
         maxZoom = zoom?.maxZoomRatio ?: 1f
@@ -177,6 +197,7 @@ public class CameraXCaptureEngine(
     override fun release() {
         if (released) return
         released = true
+        horizon.disable()
         recording?.stop()
         recording = null
         runCatching { camera?.cameraControl?.enableTorch(false) }
@@ -185,6 +206,10 @@ public class CameraXCaptureEngine(
         imageCapture = null
         videoCapture = null
     }
+
+    @Suppress("DEPRECATION")
+    private fun displayRotation(): Int =
+        (context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager)?.defaultDisplay?.rotation ?: Surface.ROTATION_0
 
     @Composable
     override fun PreviewSurface(modifier: Modifier) {
