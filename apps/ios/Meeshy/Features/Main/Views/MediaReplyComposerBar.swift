@@ -58,15 +58,19 @@ struct MediaReplyComposerBar: View {
     /// reste. **Rien ne se referme** — c'est tout l'objet du lot.
     let onCancel: () -> Void
 
+    /// La conversation où la réponse part (#14066, #14071), posée par l'hôte qui
+    /// présente le plein écran : la liste `@` ne propose que ce qu'une mention y
+    /// ferait. Absente ⇒ fail-closed, personne.
+    @Environment(\.conversationMentionTarget) private var mentionTarget
+
     @State private var composerEffects: MessageEffects = .none
     @State private var composerBlurEnabled = false
     @State private var emojiToInject = ""
     @State private var focusTrigger = false
 
-    /// **La mention `@` d'une réponse à une pièce** (#7847) : la même liste
-    /// que partout — contacts depuis le cache, puis l'annuaire dès la deuxième
-    /// lettre. La galerie ne connaît pas l'id de la conversation, d'où
-    /// l'annuaire plutôt que l'endpoint contextuel.
+    /// **La mention `@` d'une réponse à une pièce** (#7847, #14071) : la même
+    /// liste que partout — contacts depuis le cache, puis les suggestions de LA
+    /// conversation où part la réponse, bornée par sa portée (`mentionTarget`).
     @StateObject private var mentionController = MentionComposerController(context: .composerDraft)
 
     private var secondaryColor: String {
@@ -136,6 +140,7 @@ struct MediaReplyComposerBar: View {
             // La barre monte PARCE QU'on a touché « répondre » : le clavier
             // suit, sans second geste. Chemin nominal ≤ 2 gestes (dimension 7).
             focusTrigger = true
+            ConversationMentionScope.apply(mentionTarget, to: mentionController)
         }
     }
 

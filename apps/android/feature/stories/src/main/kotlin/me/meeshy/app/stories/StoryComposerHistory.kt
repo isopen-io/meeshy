@@ -56,6 +56,9 @@ internal class ComposerHistory private constructor(
     /** Chaque étape réécrite par [transform] (un média en file reçu change d'identifiant partout, #13959), à la même place. */
     fun mapped(transform: (ComposerSnapshot) -> ComposerSnapshot): ComposerHistory = ComposerHistory(store.map(transform), openGesture)
 
+    /** Le doigt levé (#14209) : le geste continu en cours se referme, le prochain changement, même de la même clé, est un nouveau pas. */
+    fun closed(): ComposerHistory = if (openGesture == null) this else ComposerHistory(store, null)
+
     fun undone(): Pair<ComposerHistory, ComposerSnapshot>? =
         store.undo()?.let { ComposerHistory(it.store, null) to it.state }
 

@@ -10,6 +10,9 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { resolveMessageMentions, replaceMessageMentions, reconcileEditedMentions } from '../../../../services/messaging/messageMentions';
 
 const MESSAGE = { id: 'msg-1', conversationId: 'conv-1', senderId: 'part-1' };
+// #14066 — l'expéditeur est un membre ACTIF de la conversation du message :
+// sinon il ne cite personne.
+const ACTIVE_SENDER = { userId: 'u-sender', isActive: true, conversationId: 'conv-1' };
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
@@ -17,7 +20,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue([
         { userId: 'u-alice', displayName: 'Alice', user: { id: 'u-alice', username: 'alice', displayName: 'Alice' } },
       ]),
-      findUnique: jest.fn<any>().mockResolvedValue({ userId: 'u-sender' }),
+      findUnique: jest.fn<any>().mockResolvedValue(ACTIVE_SENDER),
     },
     user: { findMany: jest.fn<any>().mockResolvedValue([]) },
     // Cycle 123 bis — la notification d'un ENTRANT relit les drapeaux de
@@ -176,7 +179,7 @@ describe('resolveMessageMentions — chemin nominal', () => {
 
     expect(prisma.participant.findUnique).toHaveBeenCalledWith({
       where: { id: 'part-1' },
-      select: { userId: true },
+      select: { userId: true, isActive: true, bannedAt: true, conversationId: true },
     });
     expect(mentionService.validateMentionPermissions).toHaveBeenCalledWith('conv-1', ['u-alice'], 'u-sender');
   });
@@ -190,7 +193,7 @@ describe('resolveMessageMentions — chemin nominal', () => {
         findMany: jest.fn<any>().mockResolvedValue([
           { userId: 'u-alice', displayName: 'Alice', user: { id: 'u-alice', username: 'alice', displayName: 'Alice' } },
         ]),
-        findUnique: jest.fn<any>().mockResolvedValue({ userId: null }),
+        findUnique: jest.fn<any>().mockResolvedValue({ userId: null, isActive: true, conversationId: 'conv-1' }),
       },
     });
     const mentionService = makeMentionService();
@@ -276,7 +279,10 @@ describe('resolveMessageMentions — dégradations', () => {
   // le parseur reste appelé, avec la seule liste vide.
   it('dégrade vers une liste de participants vide quand leur lecture échoue', async () => {
     const prisma = makePrisma({
-      participant: { findMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+      participant: {
+        findMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
+        findUnique: jest.fn<any>().mockResolvedValue(ACTIVE_SENDER),
+      },
     });
     const mentionService = makeMentionService();
     const onError = jest.fn();
@@ -384,6 +390,7 @@ describe('replaceMessageMentions — réconciliation', () => {
         findMany: jest.fn<any>().mockResolvedValue([
           { userId: 'u-john', displayName: 'John Doe', user: { id: 'u-john', username: 'john', displayName: 'John Doe' } },
         ]),
+        findUnique: jest.fn<any>().mockResolvedValue(ACTIVE_SENDER),
       },
       mention: {
         findMany: jest.fn<any>().mockResolvedValue([{ mentionedUserId: 'u-john' }]),

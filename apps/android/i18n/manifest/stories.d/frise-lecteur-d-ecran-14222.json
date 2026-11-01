@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.entryEarlier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.entryLater",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.exitEarlier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.exitLater",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

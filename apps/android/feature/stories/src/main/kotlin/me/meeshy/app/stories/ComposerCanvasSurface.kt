@@ -60,7 +60,7 @@ import me.meeshy.ui.theme.hexColor
  * transform and clamp math lives in the pure, unit-tested [StoryCanvasTransform] /
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
  * the measured canvas size into normalised fractions), so this Composable stays
- * declarative glue. A tap on an object selects it — framed by [sceneSelectionFrame] —, a tap on the
+ * declarative glue. A tap on an object selects it — no frame, [sceneSelection] (#14207) —, a tap on the
  * empty canvas deselects ([onBackgroundTap], #13836).
  *
  * Only the scene's own objects are painted IN it. The editor's chrome (cross, tools, publish) is laid OVER it by

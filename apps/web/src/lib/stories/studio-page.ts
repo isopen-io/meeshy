@@ -38,6 +38,7 @@ export type StudioFailureKey =
   | 'story.studio.failure.tooLarge'
   | 'story.studio.failure.fileRefused'
   | 'story.studio.failure.rateLimited'
+  | 'story.studio.failure.onlyUnlinked'
   | 'story.studio.failure.refused'
   | 'story.studio.failure.unavailable';
 
@@ -348,6 +349,14 @@ export function readyAssetOf(
  * LA CAUSE D'UN ÉCHEC, dans le vocabulaire d'une STORY — `null` ⇒ rien à
  * dire : une annulation vient de l'auteur lui-même (retrait, remplacement).
  */
+/**
+ * LE PLAFOND DES PERSONNES CHOISIES SANS LIEN (#14105, #14169) — un 429 qui
+ * n'est pas une cadence : attendre une minute n'y change rien, l'auteur doit
+ * retirer ces personnes ou revenir demain. Le studio ne rejoue jamais un
+ * échec ; ce refus-là se dit avec sa cause, pas « réessayez dans un instant ».
+ */
+const ONLY_UNLINKED_RECIPIENTS_LIMIT = 'ONLY_UNLINKED_RECIPIENTS_LIMIT';
+
 export function studioFailureKey(failure: ApiFailure, stage: 'upload' | 'publish'): StudioFailureKey | null {
   if (failure.code === 'ABORTED') return null;
   if (failure.code === 'CANVAS_INVALID' || failure.code === 'MEDIA_NOT_CLAIMED') return 'story.studio.failure.refused';
@@ -356,6 +365,7 @@ export function studioFailureKey(failure: ApiFailure, stage: 'upload' | 'publish
   if (failure.status === 401) return 'story.studio.failure.session';
   if (failure.status === 403) return 'story.studio.failure.forbidden';
   if (failure.status === 413) return 'story.studio.failure.tooLarge';
+  if (failure.code === ONLY_UNLINKED_RECIPIENTS_LIMIT) return 'story.studio.failure.onlyUnlinked';
   if (failure.status === 429) return 'story.studio.failure.rateLimited';
   if (failure.status === 400 && stage === 'upload') return 'story.studio.failure.fileRefused';
   if (failure.status >= 400 && failure.status < 500) return 'story.studio.failure.refused';

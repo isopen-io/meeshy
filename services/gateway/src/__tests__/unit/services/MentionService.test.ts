@@ -1067,7 +1067,7 @@ describe('MentionService', () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'unknown_type',
-          participants: [],
+          participants: [{ userId: senderId }],
         });
 
         const result = await service.validateMentionPermissions(

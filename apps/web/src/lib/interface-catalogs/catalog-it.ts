@@ -778,6 +778,7 @@ const it = {
   'story.studio.failure.tooLarge': 'File troppo pesante.',
   'story.studio.failure.fileRefused': 'File rifiutato: il tipo non corrisponde al contenuto.',
   'story.studio.failure.rateLimited': 'Troppe pubblicazioni in una volta — riprova tra un attimo.',
+  'story.studio.failure.onlyUnlinked': 'Troppe persone scelte non hanno ancora alcun legame con te oggi. Rimuovile dall’elenco o riprova domani.',
   'story.studio.failure.refused': 'Pubblicazione rifiutata.',
   'story.studio.failure.unavailable': 'Il server non è disponibile.',
   'story.studio.text.add': 'Aggiungi testo',

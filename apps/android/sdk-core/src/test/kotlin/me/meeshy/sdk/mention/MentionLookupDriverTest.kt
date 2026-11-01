@@ -123,12 +123,55 @@ class MentionLookupDriverTest {
             contacts = FixedContacts(listOf(person("anna"), person("andre"))),
             selfId = { "me" },
         )
-        driverState.bind(MentionContext.conversation("c1", "group"))
+        driverState.bind(MentionContext.conversation("c1", "group", isMember = true))
         advanceUntilIdle()
 
         driverState.onTextChange("@a")
 
         assertThat(driverState.state.value.suggestions).isEmpty()
+    }
+
+    @Test
+    fun `before any context is bound, nothing is offered and nothing is asked (#14071)`() = runTest {
+        val search = RecordingSearch()
+        val mentions = autocomplete(search, contacts = FixedContacts(listOf(person("anna"))))
+        mentions.bind(null)
+        advanceUntilIdle()
+
+        mentions.onTextChange("@ann")
+        advanceUntilIdle()
+
+        assertThat(mentions.state.value.suggestions).isEmpty()
+        assertThat(search.asked).isEmpty()
+    }
+
+    @Test
+    fun `a conversation of unknown type offers nobody and asks the network nothing (#14071)`() = runTest {
+        val search = RecordingSearch()
+        val mentions = autocomplete(search, contacts = FixedContacts(listOf(person("anna"))))
+        mentions.bind(MentionContext.conversation("c1", "mystery", isMember = true))
+        advanceUntilIdle()
+
+        mentions.onTextChange("@ann")
+        advanceUntilIdle()
+
+        assertThat(mentions.state.value.suggestions).isEmpty()
+        assertThat(search.asked).isEmpty()
+    }
+
+    @Test
+    fun `a reply into a DM offers the interlocutor of the roster alone, without the network (#14071)`() = runTest {
+        val search = RecordingSearch()
+        val mentions = autocomplete(search, contacts = FixedContacts(listOf(person("anna"))))
+        mentions.updateRoster(listOf(person("annie")))
+        mentions.bind(MentionContext.interlocutor("u-annie"))
+        advanceUntilIdle()
+
+        mentions.onTextChange("@ann")
+        advanceUntilIdle()
+
+        assertThat(mentions.state.value.suggestions.map { it.username }).containsExactly("annie")
+        assertThat(search.asked).isEmpty()
     }
 
     @Test

@@ -122,6 +122,9 @@ class EditingLaneHistoryComposeTest {
     fun `an edited object's undo and redo sit in the lane the reduced scene cleared, never over the scene`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
+        vm.onAddSticker("🔥")
+        vm.onUndo()
+        vm.onSelectSticker(vm.state.value.deck.selectedSlide.stickers.single().id)
         show(vm)
         compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
 

@@ -20,3 +20,7 @@ Lus par les 3 plateformes : shared/web (Jest, import direct), iOS (XCTest, resso
 ## `relation-export-badge.vectors.json` (#13997)
 
 - Le logo de cercle de l'intro d'une story exportée (`utils/relation-export-badge.ts`, `relationExportBadge`) : niveau EFFECTIF servi (brut) → emoji ou `null`. Seuil `minLevel` = Proche. iOS (`MeeshySDK`, `RelationExportBadge.swift`) et Android (`:core:model`) rejouent le fichier par chemin relatif, comme `device-tier-vectors.json`.
+
+## `mentionable-scope.vectors.json` (#14066, #14071)
+
+- Qui peut-on mentionner dans une conversation : `scopes` (type BRUT servi → `interlocutor` / `members` / `directory` / `null`, correspondance exacte comme la passerelle) et `admits` (type + appartenance + membres connus → une mention de `candidateId` a-t-elle un effet ?), **écrits à la main**. Loi : `utils/mention-lookup.ts` (`mentionableScope`, `mentionReachOf`, `isMentionableIn`). Rejoués par `utils/__tests__/mention-lookup.test.ts`, iOS (`MentionSuggestionRuleTests`, `MentionReach`) et Android (`MentionableScopeVectorsTest`, `:core:model`), par chemin relatif.
