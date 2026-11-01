@@ -12,18 +12,11 @@ import os
 
 extension MessageSocketManager {
 
-    /// Lit un événement socket `error`. Une fin de session d'invité arrête
-    /// le transport — reconnexions comprises — et la signale ; toute autre
-    /// erreur n'est que journalisée, Socket.IO la retente.
+    /// Lit un événement socket `error`. Plancher de version (#13954) ou fin de session d'invité :
+    /// le transport s'arrête, reconnexions comprises ; toute autre erreur n'est que journalisée.
     @discardableResult
     func handleSocketError(_ data: [Any], center: NotificationCenter = .default) -> GuestSessionEnd? {
-        // #13954 — sous le plancher de version : le transport s'arrête, la porte « Mettre à jour » se pose.
-        if let requirement = UpgradeRequirement.fromSocketErrorPayload(data) {
-            Logger.socket.warning("MessageSocket: client below the version floor — reconnection stopped")
-            disconnect()
-            requirement.post(via: center)
-            return nil
-        }
+        if UpgradeRequirement.stopTransportIfBelowFloor(data, center: center, stop: { Logger.socket.warning("MessageSocket: client below the version floor — reconnection stopped"); disconnect() }) { return nil }
         guard let end = GuestSessionEnd.from(socketErrorPayload: data) else {
             // #10482 — un compte supprimé arrête aussi le transport.
             if handleAccountDeletedError(data, center: center) == nil { Logger.socket.error("MessageSocket error: \(data)") }
