@@ -227,7 +227,7 @@ final class ShareSheetViewModel: ObservableObject {
     }
 
     /// **Le lien suivi de l'utilisateur se crée dès l'OUVERTURE de la feuille**
-    /// (décision porteur 2026-11-01, #14310, qui remplace « au moment où elle
+    /// (décision porteur, #14310, qui remplace « au moment où elle
     /// PART » de #12644) : « Envoyer » crée le lien de l'utilisateur pour ce
     /// contenu s'il n'existe pas encore — la passerelle le retrouve s'il existe
     /// (un lien par contenu et par partageur, compteur compris). Une seule
