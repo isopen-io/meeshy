@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -97,6 +98,15 @@ fun UpgradeRequiredScreen(requirement: UpgradeRequirement, modifier: Modifier = 
             onClick = { runCatching { uriHandler.openUri(requirement.resolvedStoreUrl) } },
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         )
+    }
+}
+
+/** La porte posée sur TOUTE la racine (iOS `.fullScreenCover` sur `RootView`). */
+@Composable
+fun UpgradeGateHost(requirement: UpgradeRequirement?, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize()) {
+        content()
+        requirement?.let { UpgradeRequiredScreen(requirement = it) }
     }
 }
 
