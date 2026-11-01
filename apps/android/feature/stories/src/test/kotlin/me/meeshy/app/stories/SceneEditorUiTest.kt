@@ -71,7 +71,9 @@ class SceneEditorUiTest {
         }
 
         compose.onNodeWithText("Bring forward").assertDoesNotExist()
-        compose.onNodeWithText("Delete").performClick()
+        // Un seul mot pour retirer un objet (#14256) : celui du rail de sélection et de la frise, comme l'appui long iOS.
+        compose.onNodeWithText("Delete").assertDoesNotExist()
+        compose.onNodeWithText("Remove").performClick()
         assertThat(chosen).containsExactly(SceneObjectMenu.Action.DELETE)
     }
 

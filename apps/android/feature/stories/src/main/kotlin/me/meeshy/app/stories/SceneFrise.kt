@@ -17,7 +17,10 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -63,7 +67,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -219,6 +222,7 @@ internal fun SceneFrise(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FriseTransport(
     playing: Boolean,
@@ -233,17 +237,22 @@ private fun FriseTransport(
     onDuplicate: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Les réglages passent à la ligne quand la place manque (#14255) : sur 360 dp, l'horloge en `weight(1f)` n'avait plus
+    // que quelques points, se brisait caractère par caractère et creusait la frise au-dessus et au-dessous d'elle.
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         PlayPauseButton(playing, onPlayPause)
-        // L'horloge ne dit rien tant que la tête n'a pas quitté le début (#13838) ; sa place reste réservée, la frise ne saute pas.
+        // Au repos, la durée de la scène seule (#14255, #13838) : une scène sans média se lit quand même, sa durée par défaut.
         val clock = ComposerLimitNotice.showsPlanClock(playheadSeconds)
+        val total = ComposerObjectChips.timecode(duration.toDouble())
         Text(
-            text = "${ComposerObjectChips.timecode(playheadSeconds.toDouble())} / ${ComposerObjectChips.timecode(duration.toDouble())}",
+            text = if (clock) "${ComposerObjectChips.timecode(playheadSeconds.toDouble())} / $total" else total,
             style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier
-                .weight(1f)
-                .graphicsLayer { alpha = if (clock) 1f else 0f }
-                .then(if (clock) Modifier else Modifier.clearAndSetSemantics {}),
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp),
         )
         if (selected != null) {
             TextChip(stringResource(R.string.composer_frise_entry), onEntry)
@@ -411,10 +420,13 @@ private fun Ruler(view: FriseViewport, duration: Float, zoomed: Boolean, onScrub
 }
 
 @Composable
-private fun Playhead(fraction: Float, laneWidthPx: Int) {
+private fun BoxScope.Playhead(fraction: Float, laneWidthPx: Int) {
+    // La tête prend la hauteur de la règle et des pistes, jamais celle offerte (#14255) : `fillMaxHeight` étirait la
+    // frise à toute la feuille Temps et repoussait ses réglages hors champ.
     Box(
         modifier = Modifier
-            .fillMaxHeight()
+            .matchParentSize()
+            .wrapContentWidth(Alignment.Start)
             .width(2.dp)
             .offset { IntOffset(LABEL_LANE.roundToPx() + (fraction.coerceIn(0f, 1f) * laneWidthPx).roundToInt() - 1, 0) }
             .graphicsLayer { alpha = if (fraction in 0f..1f) 1f else 0f }
