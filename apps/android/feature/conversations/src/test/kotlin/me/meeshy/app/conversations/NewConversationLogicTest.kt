@@ -1,6 +1,8 @@
 package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.CreationEncryptionMode
+import me.meeshy.sdk.model.CreationEncryptionUnavailability
 import me.meeshy.sdk.model.directConversationRequest
 import me.meeshy.sdk.net.api.UserSearchResult
 import org.junit.Test
@@ -62,13 +64,47 @@ class NewConversationLogicTest {
     @Test
     fun a_single_peer_is_created_through_the_one_direct_request() {
         // Le titre saisi est ignoré : un direct n'a pas de titre propre.
-        assertThat(NewConversationLogic.request(listOf("u1"), rawTitle = "Ignoré"))
-            .isEqualTo(directConversationRequest("u1"))
+        assertThat(NewConversationLogic.request(listOf("u1"), rawTitle = "Ignoré", CreationEncryptionMode.SERVER))
+            .isEqualTo(directConversationRequest("u1").copy(encryptionMode = "server"))
+    }
+
+    @Test
+    fun the_creation_screen_sends_the_checked_mode_while_the_shared_direct_request_sends_none() {
+        assertThat(NewConversationLogic.request(listOf("u1"), rawTitle = "", CreationEncryptionMode.HYBRID).encryptionMode)
+            .isEqualTo("hybrid")
+        assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "", CreationEncryptionMode.SERVER).encryptionMode)
+            .isEqualTo("server")
+        assertThat(directConversationRequest("u1").encryptionMode).isNull()
+    }
+
+    @Test
+    fun this_phone_offers_end_to_end_as_soon_only() {
+        val offer = NewConversationLogic.encryptionOffer(platformRole = "ADMIN", selectedCount = 1)
+
+        assertThat(NewConversationLogic.END_TO_END_SUPPORTED).isFalse()
+        assertThat(offer.choices.last().unavailability).isEqualTo(CreationEncryptionUnavailability.CLIENT_NOT_YET)
+        assertThat(offer.defaultMode).isEqualTo(CreationEncryptionMode.SERVER)
+    }
+
+    @Test
+    fun a_group_offers_end_to_end_as_soon_for_groups() {
+        val offer = NewConversationLogic.encryptionOffer(platformRole = "ADMIN", selectedCount = 2)
+
+        assertThat(offer.choices.last().unavailability).isEqualTo(CreationEncryptionUnavailability.GROUPS_NOT_YET)
+    }
+
+    @Test
+    fun a_picked_mode_that_is_no_longer_available_falls_back_to_the_default() {
+        val offer = NewConversationLogic.encryptionOffer(platformRole = "ADMIN", selectedCount = 2)
+
+        assertThat(NewConversationLogic.resolvedEncryptionMode(offer, CreationEncryptionMode.HYBRID)).isEqualTo(CreationEncryptionMode.HYBRID)
+        assertThat(NewConversationLogic.resolvedEncryptionMode(offer, CreationEncryptionMode.E2EE)).isEqualTo(CreationEncryptionMode.SERVER)
+        assertThat(NewConversationLogic.resolvedEncryptionMode(offer, null)).isEqualTo(CreationEncryptionMode.SERVER)
     }
 
     @Test
     fun the_direct_request_has_no_title_and_only_the_peer() {
-        val request = NewConversationLogic.request(listOf("u1"), rawTitle = "")
+        val request = NewConversationLogic.request(listOf("u1"), rawTitle = "", CreationEncryptionMode.SERVER)
 
         assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_DIRECT)
         assertThat(request.title).isNull()
@@ -77,7 +113,7 @@ class NewConversationLogicTest {
 
     @Test
     fun several_peers_are_created_as_a_titled_group() {
-        val request = NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  Team  ")
+        val request = NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  Team  ", CreationEncryptionMode.SERVER)
 
         assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_GROUP)
         assertThat(request.title).isEqualTo("Team")
@@ -86,7 +122,7 @@ class NewConversationLogicTest {
 
     @Test
     fun a_group_without_a_typed_title_has_none() {
-        assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  ").title).isNull()
+        assertThat(NewConversationLogic.request(listOf("u1", "u2"), rawTitle = "  ", CreationEncryptionMode.SERVER).title).isNull()
     }
 
     @Test

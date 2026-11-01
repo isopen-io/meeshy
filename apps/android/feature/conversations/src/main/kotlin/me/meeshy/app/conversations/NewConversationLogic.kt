@@ -1,6 +1,9 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.ConversationCreationEncryption
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.CreationEncryptionMode
+import me.meeshy.sdk.model.CreationEncryptionOffer
 import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.UserPresence
@@ -55,18 +58,44 @@ object NewConversationLogic {
         rawTitle.trim().takeIf { it.isNotEmpty() && conversationType(selectedCount) == TYPE_GROUP }
 
     /**
+     * Ce téléphone ne sait encore ni lire ni écrire le bout en bout (pile libsignal, #13015) :
+     * l'écran de création le montre « bientôt » aux rôles qui pourraient le choisir, et le défaut
+     * reste Serveur. Passe à `true` le jour où l'Android natif chiffre un tête-à-tête.
+     */
+    const val END_TO_END_SUPPORTED: Boolean = false
+
+    /** Ce que la section Chiffrement propose pour [selectedCount] personnes choisies (`creationEncryptionOffer`). */
+    fun encryptionOffer(platformRole: String?, selectedCount: Int): CreationEncryptionOffer =
+        ConversationCreationEncryption.offer(platformRole, conversationType(selectedCount), END_TO_END_SUPPORTED)
+
+    /**
+     * Le mode qui partira : celui que l'utilisateur a touché s'il reste DISPONIBLE dans l'offre
+     * (un tête-à-tête devenu groupe retire le bout en bout), sinon le défaut de l'offre.
+     */
+    fun resolvedEncryptionMode(offer: CreationEncryptionOffer, picked: CreationEncryptionMode?): CreationEncryptionMode =
+        picked?.takeIf { mode -> offer.choices.any { it.mode == mode && it.available } } ?: offer.defaultMode
+
+    /**
      * The creation request for the picker's selection. A single peer is a DIRECT, built by the
      * very [directConversationRequest] that the story/mood reply and a profile's Message button
      * create through (`ConversationRepository.directConversationWith`, #11615) — so no two
      * entry points can ever describe a direct differently; two or more peers are a group.
+     * Seul cet écran choisit un mode de chiffrement : il part avec la demande, les autres
+     * chemins n'en envoient aucun (la passerelle pose Serveur).
      */
-    fun request(participantIds: List<String>, rawTitle: String): CreateConversationRequest =
-        participantIds.singleOrNull()?.let(::directConversationRequest)
-            ?: CreateConversationRequest(
-                type = conversationType(participantIds.size),
-                title = resolvedTitle(rawTitle, participantIds.size),
-                participantIds = participantIds,
-            )
+    fun request(
+        participantIds: List<String>,
+        rawTitle: String,
+        encryptionMode: CreationEncryptionMode,
+    ): CreateConversationRequest =
+        (
+            participantIds.singleOrNull()?.let(::directConversationRequest)
+                ?: CreateConversationRequest(
+                    type = conversationType(participantIds.size),
+                    title = resolvedTitle(rawTitle, participantIds.size),
+                    participantIds = participantIds,
+                )
+            ).copy(encryptionMode = encryptionMode.wire)
 
     fun displayName(result: UserSearchResult): String =
         result.displayName?.takeIf { it.isNotBlank() } ?: result.username

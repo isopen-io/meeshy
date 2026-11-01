@@ -144,6 +144,15 @@
     <string name="dialogs_report_title">Por que você está denunciando esta conversa?</string>
     <string name="dialogs_save">Salvar</string>
     <string name="dialogs_unblock_error">Não foi possível desbloquear este usuário</string>
+    <string name="encryption_create_e2ee_soon_groups">Em breve disponível para grupos</string>
+    <string name="encryption_create_footer">A criptografia de ponta a ponta nunca é desativada. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.</string>
+    <string name="encryption_create_header">Criptografia</string>
+    <string name="encryption_mode_e2ee_description">Só os seus aparelhos e os dos participantes leem as mensagens. A tradução acontece no seu aparelho.</string>
+    <string name="encryption_mode_e2ee_label">Ponta a ponta</string>
+    <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores, como Servidor. A criptografia dupla pelos seus aparelhos chega em breve.</string>
+    <string name="encryption_mode_hybrid_label">Híbrido</string>
+    <string name="encryption_mode_server_description">Suas mensagens são criptografadas em nossos servidores. Tradução, transcrição e busca funcionam.</string>
+    <string name="encryption_mode_server_label">Servidor</string>
     <string name="global_search_back">Voltar</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d membro</item>

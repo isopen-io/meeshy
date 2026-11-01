@@ -66,7 +66,7 @@ class ConversationEncryptionViewModelTest {
 
         assertThat(vm.state.value.isLoading).isFalse()
         assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.SERVER)
-        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = true))
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = true))
     }
 
     @Test
@@ -184,7 +184,7 @@ class ConversationEncryptionViewModelTest {
         val ledger = InMemoryEndToEndRegimeLedger()
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returnsMany listOf(ok("server"), ok("e2ee"))
-        coEvery { provider.disable("c1") } coAnswers {
+        coEvery { provider.enable("c1", ConversationEncryptionModeChoice.HYBRID) } coAnswers {
             ledger.learn("c1")
             failure(ConversationEncryptionRepository.IRREVERSIBLE, 409)
         }
@@ -192,44 +192,112 @@ class ConversationEncryptionViewModelTest {
         vm.load("c1", isDirect = true)
         advanceUntilIdle()
 
-        vm.requestDeactivation()
-        vm.confirmDeactivation()
+        vm.select(ConversationEncryptionModeChoice.HYBRID)
+        vm.switchMode()
         advanceUntilIdle()
 
         assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.IRREVERSIBLE)
         assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
-        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
     }
 
     @Test
-    fun `deactivation waits for an explicit yes, and only the at-rest regime offers it`() = runTest {
+    fun `an end to end conversation offers no mode change`() = runTest {
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returns ok("e2ee")
         val vm = viewModel(provider)
         vm.load("c1", isDirect = true)
         advanceUntilIdle()
 
-        vm.requestDeactivation()
+        vm.select(ConversationEncryptionModeChoice.SERVER)
+        vm.switchMode()
+        advanceUntilIdle()
 
-        assertThat(vm.state.value.confirmsDeactivation).isFalse()
+        assertThat(vm.state.value.canSwitchMode).isFalse()
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
     }
 
     @Test
-    fun `confirmed deactivation returns to the clear regime`() = runTest {
+    fun `a server conversation switches directly to hybrid, never through the clear`() = runTest {
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returns ok("server")
-        coEvery { provider.disable("c1") } returns ok(null)
+        coEvery { provider.enable("c1", ConversationEncryptionModeChoice.HYBRID) } returns ok("hybrid")
         val vm = viewModel(provider)
         vm.load("c1", isDirect = true)
         advanceUntilIdle()
 
-        vm.requestDeactivation()
-        assertThat(vm.state.value.confirmsDeactivation).isTrue()
-        vm.confirmDeactivation()
+        vm.select(ConversationEncryptionModeChoice.HYBRID)
+        assertThat(vm.state.value.canSwitchMode).isTrue()
+        vm.switchMode()
         advanceUntilIdle()
 
-        assertThat(vm.state.value.confirmsDeactivation).isFalse()
-        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.NONE)
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.HYBRID)
+        assertThat(vm.state.value.canSwitchMode).isFalse()
+        coVerify(exactly = 0) { provider.disable(any()) }
+    }
+
+    @Test
+    fun `a hybrid conversation switches back to server`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("hybrid")
+        coEvery { provider.enable("c1", ConversationEncryptionModeChoice.SERVER) } returns ok("server")
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.SERVER)
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.SERVER)
+    }
+
+    @Test
+    fun `the mode already in place is not a switch`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server")
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.SERVER)
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.canSwitchMode).isFalse()
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
+    }
+
+    @Test
+    fun `end to end is never a switch target from this phone`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("hybrid")
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.selected).isNotEqualTo(ConversationEncryptionModeChoice.E2EE)
+        coVerify(exactly = 0) { provider.enable(any(), ConversationEncryptionModeChoice.E2EE) }
+    }
+
+    @Test
+    fun `a role that may not toggle switches nothing`() = runTest {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server", canToggle = false)
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true)
+        advanceUntilIdle()
+
+        vm.select(ConversationEncryptionModeChoice.HYBRID)
+        vm.switchMode()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
     }
 
     @Test
@@ -249,23 +317,23 @@ class ConversationEncryptionViewModelTest {
     }
 
     @Test
-    fun `reopening the sheet after the conversation turned end to end never offers deactivation`() = runTest {
+    fun `reopening the sheet after the conversation turned end to end never offers a mode change`() = runTest {
         val ledger = InMemoryEndToEndRegimeLedger()
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returnsMany listOf(ok("server"), ok("e2ee", canToggle = false))
         val vm = viewModel(provider, ledger)
         vm.load("c1", isDirect = true)
         advanceUntilIdle()
-        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = true))
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = true))
 
         ledger.learn("c1")
         vm.load("c1", isDirect = true)
 
         assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
-        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
         advanceUntilIdle()
         assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
-        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
         coVerify(exactly = 2) { provider.status("c1") }
     }
 
@@ -282,8 +350,11 @@ class ConversationEncryptionViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
-        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
-        vm.requestDeactivation()
-        assertThat(vm.state.value.confirmsDeactivation).isFalse()
+        assertThat(vm.state.value.view().content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
+        vm.select(ConversationEncryptionModeChoice.HYBRID)
+        vm.switchMode()
+        advanceUntilIdle()
+        assertThat(vm.state.value.canSwitchMode).isFalse()
+        coVerify(exactly = 0) { provider.enable(any(), any()) }
     }
 }

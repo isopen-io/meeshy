@@ -144,6 +144,15 @@
     <string name="dialogs_report_title">Warum meldest du diese Unterhaltung?</string>
     <string name="dialogs_save">Sichern</string>
     <string name="dialogs_unblock_error">Dieser Benutzer konnte nicht entsperrt werden</string>
+    <string name="encryption_create_e2ee_soon_groups">Bald für Gruppen verfügbar</string>
+    <string name="encryption_create_footer">Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.</string>
+    <string name="encryption_create_header">Verschlüsselung</string>
+    <string name="encryption_mode_e2ee_description">Nur deine Geräte und die der Teilnehmenden lesen die Nachrichten. Die Übersetzung erfolgt auf deinem Gerät.</string>
+    <string name="encryption_mode_e2ee_label">Ende-zu-Ende</string>
+    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt, wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald.</string>
+    <string name="encryption_mode_hybrid_label">Hybrid</string>
+    <string name="encryption_mode_server_description">Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren.</string>
+    <string name="encryption_mode_server_label">Server</string>
     <string name="global_search_back">Zurück</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d Mitglied</item>

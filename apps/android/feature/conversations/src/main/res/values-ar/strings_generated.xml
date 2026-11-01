@@ -144,6 +144,15 @@
     <string name="dialogs_report_title">لماذا تبلغ عن هذه المحادثة؟</string>
     <string name="dialogs_save">حفظ</string>
     <string name="dialogs_unblock_error">تعذر إلغاء حظر هذا المستخدم</string>
+    <string name="encryption_create_e2ee_soon_groups">قريبًا للمجموعات</string>
+    <string name="encryption_create_footer">لا يُوقَف التشفير التام بين الطرفين أبدًا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.</string>
+    <string name="encryption_create_header">التشفير</string>
+    <string name="encryption_mode_e2ee_description">أجهزتك وأجهزة المشاركين وحدها تقرأ الرسائل. تتم الترجمة على جهازك.</string>
+    <string name="encryption_mode_e2ee_label">تام بين الطرفين</string>
+    <string name="encryption_mode_hybrid_description">مشفّر على خوادمنا مثل وضع الخادم. التشفير المزدوج عبر أجهزتك قادم قريبًا.</string>
+    <string name="encryption_mode_hybrid_label">هجين</string>
+    <string name="encryption_mode_server_description">تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث.</string>
+    <string name="encryption_mode_server_label">الخادم</string>
     <string name="global_search_back">رجوع</string>
     <plurals name="global_search_members">
         <item quantity="zero">لا أعضاء</item>

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.create.header",
+          "androidName": "encryption_create_header",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.server.label",
+          "androidName": "encryption_mode_server_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.server.description",
+          "androidName": "encryption_mode_server_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.hybrid.label",
+          "androidName": "encryption_mode_hybrid_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.hybrid.description",
+          "androidName": "encryption_mode_hybrid_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.e2ee.label",
+          "androidName": "encryption_mode_e2ee_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.mode.e2ee.description",
+          "androidName": "encryption_mode_e2ee_description",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.create.e2ee.soonGroups",
+          "androidName": "encryption_create_e2ee_soon_groups",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.create.footer",
+          "androidName": "encryption_create_footer",
+          "status": "adopted"
+        },
+        {
+          "androidName": "new_conversation_encryption_e2ee_soon_here",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -8,4 +8,5 @@
     <string name="encryption_read_failed">Impossibile leggere lo stato della crittografia. Riprova.</string>
     <string name="encryption_retry">Riprova</string>
     <string name="security_verify_description">I messaggi con %1$s sono crittografati end-to-end.</string>
+    <string name="encryption_detail_switch_mode">Cambia modalità</string>
 </resources>

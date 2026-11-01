@@ -120,6 +120,15 @@ fun NewConversationScreen(
                 )
             }
 
+            if (state.selected.isNotEmpty()) {
+                NewConversationEncryptionSection(
+                    offer = state.encryptionOffer,
+                    checked = state.encryptionMode,
+                    enabled = !state.isCreating,
+                    onSelect = viewModel::selectEncryptionMode,
+                )
+            }
+
             OutlinedTextField(
                 value = state.query,
                 onValueChange = viewModel::onQueryChange,
