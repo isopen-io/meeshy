@@ -59,8 +59,10 @@ class StoryPublishedSceneFloorTest {
 
     private val authorFloor = StoryBackgroundValue.Gradient(DynamicColorGenerator.colorForName(AUTHOR), "000000")
 
-    private fun viewModel(): StoryComposerViewModel {
-        every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = AUTHOR, systemLanguage = "fr"))
+    private fun viewModel(
+        author: MutableStateFlow<MeeshyUser?> = MutableStateFlow(MeeshyUser(id = "me", username = AUTHOR, systemLanguage = "fr")),
+    ): StoryComposerViewModel {
+        every { session.currentUser } returns author
         coEvery { repo.enqueuePublish(any(), any()) } answers { stories += firstArg<CreateStoryRequest>(); "cmid_story" }
         coEvery { publications.enqueuePost(any(), any()) } answers { posts += firstArg<CreatePostRequest>(); "cmid_post" }
         return StoryComposerViewModel(
@@ -94,6 +96,30 @@ class StoryPublishedSceneFloorTest {
     fun `the floor the composer paints is the gradient the document carries`() {
         assertThat(StorySceneFill.resolve(null, ACCENT).brush())
             .isEqualTo(StorySceneFill.resolve(StoryBackgroundValue.authorGradient(ACCENT), ACCENT).brush())
+    }
+
+    @Test
+    fun `a scene published before the author's identity is known carries no colour of its own`() = runTest {
+        val vm = viewModel(author = MutableStateFlow(null))
+        vm.onFormats(listOf(STORY, POST), layout = null)
+        vm.onAddSticker("😀")
+
+        vm.publish()
+
+        assertThat(stories.single().storyEffects?.background).isNull()
+        assertThat(readBack(posts.single())).containsExactly(null)
+    }
+
+    @Test
+    fun `the author gradient follows the identity as soon as it arrives`() {
+        val author = MutableStateFlow<MeeshyUser?>(null)
+        val vm = viewModel(author = author)
+        assertThat(vm.authorFloor).isNull()
+
+        author.value = MeeshyUser(id = "me", username = AUTHOR, systemLanguage = "fr")
+
+        assertThat(vm.authorAccentHex).isEqualTo(DynamicColorGenerator.colorForName(AUTHOR))
+        assertThat(vm.authorFloor).isEqualTo(authorFloor)
     }
 
     @Test

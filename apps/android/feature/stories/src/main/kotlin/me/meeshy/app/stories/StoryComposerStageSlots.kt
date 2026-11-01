@@ -58,13 +58,14 @@ internal fun StoryComposerScene(
     captureOffered: Boolean = false,
 ) {
     val armsCapture = capture?.takeIf { captureOffered }
+    val accentHex = viewModel.observedAuthorAccentHex()
     CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
                 backgroundModel = rememberStoryMediaLookModel(rememberComposerPicture(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl)), state.backgroundMediaLook(comparison.mediaId)),
-                sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
-                    StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
+                sceneBrush = remember(state.selectedSlideBackground, accentHex) {
+                    StorySceneFill.resolve(state.selectedSlideBackground, accentHex).brush()
                 },
                 look = state.selectedSlideLook(comparison.mediaId),
                 textElements = state.selectedSlideTextElements,
