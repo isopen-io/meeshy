@@ -269,9 +269,7 @@ private struct ReelRailAction: View {
     var accentHex: String = ""
     let action: () -> Void
 
-    private var caption: String? {
-        count > 0 ? CompactCountLabel.text(count) : nil
-    }
+    private var caption: String { ReelRailCaption.text(count: count, label: label) }
 
     var body: some View {
         FullscreenActionButton(
@@ -297,18 +295,24 @@ private struct ReelRailAction: View {
                 Image(systemName: outline)
                     .font(.system(size: FullscreenChromeMetrics.floatingGlyphSize, weight: .semibold))
                     .foregroundStyle(Color(hex: accentHex))
-                if let caption {
-                    Text(caption)
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .hidden()
-                }
+                Text(caption)
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .hidden()
             }
             .frame(width: FullscreenChromeMetrics.floatingCellWidth)
             .frame(minHeight: FullscreenChromeMetrics.tapTarget)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
+    }
+}
+
+/// Sous chaque bouton du rail des réels : le compte quand il y en a un, sinon
+/// le nom de l'action — comme le rail de la story (#14323).
+enum ReelRailCaption {
+    static func text(count: Int, label: String) -> String {
+        count > 0 ? CompactCountLabel.text(count) : label
     }
 }

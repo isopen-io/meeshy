@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -210,22 +211,33 @@ private fun FloatingActionCell(
             }
         }
         if (caption != null) {
+            // Un compte garde sa taille ; le NOM d'une action (« Enregistrer », « Commentaires ») prend la taille du rail de
+            // la story et déborde la cellule plutôt que d'être coupé (recette S8 2026-11-01).
+            val names = FloatingCaption.namesAction(caption)
             Text(
                 text = caption,
-                style = MaterialTheme.typography.labelMedium.copy(
+                style = (if (names) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium).copy(
                     fontWeight = FontWeight.SemiBold,
                     shadow = Shadow(color = Color.Black.copy(alpha = CAPTION_SHADOW_ALPHA), offset = Offset(0f, 1f), blurRadius = 4f),
                 ),
                 color = ink,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.clearAndSetSemantics { testTag = FLOATING_CAPTION_TAG },
+                softWrap = false,
+                overflow = TextOverflow.Visible,
+                modifier = Modifier
+                    .wrapContentWidth(unbounded = true)
+                    .clearAndSetSemantics { testTag = FLOATING_CAPTION_TAG },
             )
         }
     }
 }
 
 private const val CAPTION_SHADOW_ALPHA: Float = 0.45f
+
+/** Une légende sans chiffre NOMME l'action : elle tient en entier, à la taille du rail de la story ; un compte garde la sienne. */
+internal object FloatingCaption {
+    fun namesAction(caption: String): Boolean = caption.none(Char::isDigit)
+}
 
 /**
  * La légende est muette pour TalkBack (le compteur est lu en valeur du libellé) : sa sémantique est

@@ -363,7 +363,11 @@ final class ShareSheetViewModelTests: XCTestCase {
             XCTAssertEqual(dispatcher.linkMints, 1)
             guard case .card(let card) = sut.subject else { return XCTFail("la publication reste une carte") }
             XCTAssertEqual(card.kind, isReel ? .reel : .post)
-            XCTAssertEqual(card.messageText, "https://meeshy.me/l/post", "Le message envoyé porte le lien de l'utilisateur.")
+            let text = card.messageText ?? ""
+            XCTAssertTrue(text.hasPrefix("🔗"), "Le message part avec la phrase de la story (#14323) : \(text)")
+            XCTAssertTrue(text.contains("Moussa"), "La phrase nomme l'auteur : \(text)")
+            XCTAssertTrue(text.hasSuffix("https://meeshy.me/l/post"), "Le lien suivi remplace l'adresse dans la phrase : \(text)")
+            XCTAssertNotEqual(text, card.title, "La phrase porte le lien, pas le seul titre.")
         }
     }
 

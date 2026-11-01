@@ -64,6 +64,7 @@ import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle, p
 import { contentDetailCategory, contentDetailPushFields } from './content-detail';
 import { servedBannerBody } from './served-banner-body';
 import { reactedMessageSynthesis, reactionBody } from './reaction-body';
+import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 import {
   type MessagePrismSource,
@@ -1866,7 +1867,7 @@ export class NotificationService {
         select: {
           content: true, expiresAt: true, messageType: true, createdAt: true,
           isViewOnce: true, isBlurred: true, isEncrypted: true, effectFlags: true,
-          attachments: { select: { mimeType: true, fileName: true, originalName: true, pageCount: true, lineCount: true } },
+          attachments: { select: { mimeType: true, fileName: true, originalName: true, pageCount: true, lineCount: true }, orderBy: MESSAGE_ATTACHMENT_ORDER },
         },
       }),
     ]);

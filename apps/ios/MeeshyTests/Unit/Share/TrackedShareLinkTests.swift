@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 @testable import MeeshySDK
+import MeeshyUI
 
 /// « Envoyer » et « Partager » créent tous deux le lien suivi de l'utilisateur
 /// (#14310, #14311) — une seule frappe, une seule loi d'audience.
@@ -135,5 +136,18 @@ final class FeedPostSendWiringGuardTests: XCTestCase {
         XCTAssertTrue(card.contains("sendSubject: .publication(id: post.id, isReel: post.isReel"))
         let header = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
         XCTAssertTrue(header.contains("onShare?(post.id)"), "« Partager » (feuille système) reste dans ⋯.")
+    }
+}
+
+/// Le rail des réels nomme ses boutons comme celui de la story (#14323) : le
+/// compte quand il y en a un, sinon le nom de l'action.
+@MainActor
+final class ReelRailCaptionTests: XCTestCase {
+    func test_caption_isTheCount_whenThereIsOne() {
+        XCTAssertEqual(ReelRailCaption.text(count: 12, label: "Envoyer"), CompactCountLabel.text(12))
+    }
+
+    func test_caption_isTheActionName_withoutCount() {
+        XCTAssertEqual(ReelRailCaption.text(count: 0, label: "Envoyer"), "Envoyer")
     }
 }
