@@ -274,14 +274,14 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       );
     });
 
-    it('caps friendRequest query at the fan-out row cap plus its witness row', async () => {
+    it('reads friendRequest over the living window (twice the fan-out row cap) plus its witness row', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       friendships([]);
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 501 })
+        expect.objectContaining({ take: 1001 })
       );
     });
 
@@ -1109,7 +1109,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         expect.objectContaining({ take: 501 })
       );
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 501 })
+        expect.objectContaining({ take: 1001 })
       );
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ take: 501 })
