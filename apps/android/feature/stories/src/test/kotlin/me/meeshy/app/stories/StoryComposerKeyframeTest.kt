@@ -36,7 +36,7 @@ class StoryComposerKeyframeTest {
         assertThat(frame.time).isWithin(1e-4f).of(1.5f)
         assertThat(frame.x).isWithin(1e-4).of(0.3)
         assertThat(frame.y).isWithin(1e-4).of(0.7)
-        assertThat(frame.scale).isWithin(1e-4).of(1.5)
+        assertThat(frame.scale).isWithin(1e-4).of(1.0)
         assertThat(frame.opacity).isNull()
         assertThat(frame.easing).isEqualTo(StoryEasing.LINEAR)
         assertThat(StoryComposerKeyframeReducer.keyframeAtPlayhead(after, "t1")).isEqualTo(frame)
@@ -107,13 +107,24 @@ class StoryComposerKeyframeTest {
     }
 
     @Test
-    fun `a la reouverture l'echelle d'une image cle suit l'echelle de la taille de police`() {
+    fun `l'image cle figee multiplie l'echelle pincee par un, donc le texte ne saute pas a la lecture`() {
+        val element = StoryComposerKeyframeReducer.toggled(text(start = 1f, duration = 3f, playhead = 2.5f), "t1")
+            .deck.selectedSlide.elements.single()
+
+        val read = StoryTextObjectProjection.project(element.toTextObject("fr"), listOf("fr")).animated(atSeconds = 2.5f)
+
+        assertThat(read.scale).isWithin(1e-4).of(element.scale.toDouble())
+    }
+
+    @Test
+    fun `a la reouverture le facteur d'une image cle ne change pas, meme quand la taille de police reechelonne le texte`() {
         val frame = StoryKeyframe(id = "k", time = 1f, scale = 2.0)
         val wire = StoryTextObject(id = "t", text = "Salut", fontSize = 56.0, scale = 1.0, keyframes = listOf(frame))
 
         val element = wire.toElement()
 
-        assertThat(element.keyframes.single().scale!! / element.scale).isWithin(1e-4).of(2.0)
+        assertThat(element.keyframes.single().scale).isWithin(1e-4).of(2.0)
+        assertThat(element.toTextObject("fr").keyframes!!.single().scale).isWithin(1e-4).of(2.0)
     }
 
     @Test

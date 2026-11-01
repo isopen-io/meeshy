@@ -375,6 +375,11 @@ export type NotificationAttachmentSummary = {
   type: NotificationAttachmentType;
   filename?: string | null;
   contactName?: string | null;
+  /** #14309 — ce qui dit la NATURE de la pièce dans la synthèse du corps. */
+  mimeType?: string | null;
+  originalName?: string | null;
+  pageCount?: number | null;
+  lineCount?: number | null;
 };
 
 /**

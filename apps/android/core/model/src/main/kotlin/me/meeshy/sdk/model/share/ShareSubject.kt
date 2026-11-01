@@ -12,6 +12,8 @@ data class ShareCard(
     val messageText: String?,
     val imageUrl: String? = null,
     val authorId: String? = null,
+    /** Une story PUBLIQUE seulement reçoit un lien suivi ([TrackedShareCard]) : fermé par défaut. */
+    val isPublicStory: Boolean = false,
 )
 
 /**

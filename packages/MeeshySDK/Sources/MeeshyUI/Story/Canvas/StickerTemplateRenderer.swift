@@ -117,6 +117,14 @@ public struct StickerTemplateMetrics: Equatable, Sendable {
     }
 
     /// Les mesures d'une décoration de LIEU pour une géométrie et une échelle.
+    /// Les mêmes mesures, toutes multipliées par `facteur`.
+    func scaled(by facteur: CGFloat) -> StickerTemplateMetrics {
+        StickerTemplateMetrics(fontSize: fontSize * facteur,
+                               horizontalPadding: horizontalPadding * facteur,
+                               verticalPadding: verticalPadding * facteur,
+                               gap: gap * facteur)
+    }
+
     public static func location(geometry: CanvasGeometry, scale: CGFloat) -> StickerTemplateMetrics {
         StickerTemplateMetrics(
             fontSize: geometry.render(locationBaseFontSize * scale),
@@ -268,6 +276,35 @@ public enum StickerTemplateRenderer {
                               slots: [String: String],
                               metrics: StickerTemplateMetrics,
                               screenScale: CGFloat) -> (UIImage?, CGSize)? {
+        let mesure = dessinateur.measure(slots, metrics)
+        let petit = min(mesure.width, mesure.height)
+        guard petit.isFinite, petit > 0, petit < minimumDrawnSide else {
+            return drawnOnce(drawer: dessinateur, slots: slots, metrics: metrics, screenScale: screenScale)
+        }
+        let rendu = drawnOnce(drawer: dessinateur, slots: slots,
+                              metrics: metrics.scaled(by: minimumDrawnSide / petit),
+                              screenScale: screenScale)
+        guard let grande = rendu?.0, let cg = grande.cgImage,
+              let dessinée = rendu?.1, dessinée.width > 0, dessinée.height > 0 else { return rendu }
+        let réduction = max(dessinée.width / mesure.width, dessinée.height / mesure.height)
+        return (UIImage(cgImage: cg, scale: grande.scale * réduction,
+                        orientation: grande.imageOrientation), mesure)
+    }
+
+    /// **Un gabarit minuscule se dessine grand, puis se réduit** (#14299).
+    ///
+    /// Le plancher du geste laisse un objet de 5 pixels de la scène de
+    /// référence, moins de deux points à l'écran. Les dessinateurs tracent des
+    /// liserés d'au moins un point et demi : dessiné à cette taille, le liseré
+    /// mange le motif et l'image reste transparente. En dessous de ce côté, le
+    /// gabarit est dessiné à ce côté puis rendu à sa taille mesurée.
+    static let minimumDrawnSide: CGFloat = 24
+
+    @MainActor
+    private static func drawnOnce(drawer dessinateur: StickerTemplateDrawer,
+                                  slots: [String: String],
+                                  metrics: StickerTemplateMetrics,
+                                  screenScale: CGFloat) -> (UIImage?, CGSize)? {
         let densité = SceneRasterBudget.scale(for: dessinateur.measure(slots, metrics),
                                               preferred: screenScale)
         let clé = renderCacheKey(drawerID: dessinateur.id, slots: slots,

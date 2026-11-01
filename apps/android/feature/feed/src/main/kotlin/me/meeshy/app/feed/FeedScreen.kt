@@ -1,6 +1,5 @@
 package me.meeshy.app.feed
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +37,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.share.LocalShareLauncher
@@ -112,8 +112,8 @@ fun FeedScreen(
             }
             val clipboard = LocalClipboardManager.current
             val linkCopied = stringResource(R.string.feed_link_copied)
-            val shareContext = context
             val shareLauncher = LocalShareLauncher.current
+            val shareOut = rememberContentShareOut()
             var reportPostId by remember { mutableStateOf<String?>(null) }
             var deletePostId by remember { mutableStateOf<String?>(null) }
             reportPostId?.let { targetId ->
@@ -187,18 +187,13 @@ fun FeedScreen(
                             // Tapping an image tile opens the fullscreen media gallery on it.
                             onImageTap = { index -> viewModel.openImageViewer(post.id, index) },
                             isOwn = post.authorId != null && post.authorId == state.currentUserId,
-                            onShare = {
-                                viewModel.recordShare(post.id)
-                                // La feuille de partage unique (#13474) : conversations, copier le lien, partage système.
-                                shareLauncher?.open(
-                                    ShareSubject.Card(ShareCards.post(post.id, title = post.content, authorId = post.authorId)),
-                                ) ?: shareContext.startActivity(
-                                    Intent.createChooser(
-                                        Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(post.id)),
-                                        null,
-                                    ),
-                                )
+                            // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur ; « Partager »
+                            // (menu « ⋯ ») : la feuille du système, avec ce même lien.
+                            onSend = {
+                                val card = post.shareCard(context)
+                                shareLauncher?.open(ShareSubject.Card(card)) ?: shareOut(card)
                             },
+                            onShare = { shareOut(post.shareCard(context)) },
                             onCopyLink = {
                                 clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))
                                 scope.launch { snackbar.showSnackbar(linkCopied) }
@@ -272,3 +267,10 @@ private fun FeedHeadColumn(storyRail: @Composable () -> Unit, composerHead: @Com
 private const val FEED_POST_CONTENT_TYPE = "feed_post"
 private const val FEED_STORY_RAIL_KEY = "feed_story_rail"
 private const val FEED_COMPOSER_HEAD_KEY = "feed_composer_head"
+
+/** La carte d'un post pour ses deux gestes de partage : « 🔗 Publication de X : lien », la forme de la story. */
+private fun FeedPostPresentation.shareCard(context: android.content.Context): ShareCard {
+    val link = PostShareLink.webLink(id)
+    val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_post_text, it, link) } ?: link
+    return ShareCards.post(id, title = content, authorId = authorId, messageText = sentence)
+}

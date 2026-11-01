@@ -151,7 +151,10 @@
     <string name="stories_action_reply">Responder</string>
     <string name="stories_action_report">Denunciar</string>
     <string name="stories_action_repost">Republicar</string>
+    <string name="stories_action_send">Enviar</string>
+    <string name="stories_action_share">Compartilhar</string>
     <string name="stories_action_translations">Traduções</string>
+    <string name="stories_action_views">Visualizações</string>
     <string name="stories_add">Adicionar</string>
     <string name="stories_audience_picker_cancel">Cancelar</string>
     <string name="stories_audience_picker_done">Concluído</string>

@@ -200,7 +200,7 @@ describe('éventail — les TROIS bannières annoncent le MÊME message', () => 
     const { reply, mention } = await servedByEachFanOut();
 
     for (const served of [reply, mention]) {
-      expect(served.attachments).toEqual([{ type: 'audio', filename: 'vocal.m4a' }]);
+      expect(served.attachments).toEqual([expect.objectContaining({ type: 'audio', filename: 'vocal.m4a', mimeType: 'audio/mp4' })]);
       expect(served.firstAttachmentDuration).toBe(7);
       expect(served.firstAttachmentFileSize).toBe(12_000);
     }
@@ -290,7 +290,7 @@ describe('créateurs — un média sans légende ne pousse jamais un corps VIDE'
 
     const body = (sendToUser.mock.calls[0]?.[0] as any)?.payload?.body as string;
     expect(body.trim()).not.toBe('');
-    expect(body).toContain('1024×768');
+    expect(body).toBe('Image haute définition');
   });
 
   it('createMentionNotification aussi', async () => {
@@ -306,10 +306,10 @@ describe('créateurs — un média sans légende ne pousse jamais un corps VIDE'
 
     const body = (sendToUser.mock.calls[0]?.[0] as any)?.payload?.body as string;
     expect(body.trim()).not.toBe('');
-    expect(body).toContain('1024×768');
+    expect(body).toBe('Image haute définition');
   });
 
-  it('et un aperçu TEXTE reste servi tel quel, badges en suffixe', async () => {
+  it('et un aperçu TEXTE se dit par sa longueur, ses images par leur nombre (#14309)', async () => {
     // Mode d'échec du CORRECTIF : composer le corps ne doit pas écraser le texte
     // du message par le libellé de sa pièce jointe — `buildMessageNotificationBodyI18n`
     // ne substitue que sur un texte ABSENT.
@@ -328,10 +328,11 @@ describe('créateurs — un média sans légende ne pousse jamais un corps VIDE'
     } as any);
 
     const body = (sendToUser.mock.calls[0]?.[0] as any)?.payload?.body as string;
-    expect(body).toBe('Regarde ça +1📷');
+    expect(body).toBe('Petit message texte · 2 images');
+    expect(body).not.toContain('Regarde');
   });
 
-  it('et une bannière SANS pièce jointe garde exactement son texte', async () => {
+  it('et une bannière SANS pièce jointe ne dit que la longueur du texte (#14309)', async () => {
     const { service, sendToUser } = makeService();
 
     await service.createMentionNotification({
@@ -343,6 +344,7 @@ describe('créateurs — un média sans légende ne pousse jamais un corps VIDE'
     } as any);
 
     const body = (sendToUser.mock.calls[0]?.[0] as any)?.payload?.body as string;
-    expect(body).toBe('Coucou @bob');
+    expect(body).toBe('Petit message texte');
+    expect(body).not.toContain('@bob');
   });
 });

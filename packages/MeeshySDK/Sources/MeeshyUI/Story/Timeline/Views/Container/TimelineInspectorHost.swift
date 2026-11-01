@@ -363,7 +363,8 @@ public struct TimelineInspectorHost: View {
                 x: kf.x ?? 0.5,
                 y: kf.y ?? 0.5,
                 scale: kf.scale ?? 1.0,
-                opacity: kf.opacity ?? 1.0
+                opacity: kf.opacity ?? 1.0,
+                scaleFloor: TimelineScaleSetting.keyframeFloor(of: .media(media))
             )
             return (snapshot, media.id)
         }
@@ -377,7 +378,8 @@ public struct TimelineInspectorHost: View {
                 x: kf.x ?? 0.5,
                 y: kf.y ?? 0.5,
                 scale: kf.scale ?? 1.0,
-                opacity: kf.opacity ?? 1.0
+                opacity: kf.opacity ?? 1.0,
+                scaleFloor: TimelineScaleSetting.keyframeFloor(of: .text(text))
             )
             return (snapshot, text.id)
         }

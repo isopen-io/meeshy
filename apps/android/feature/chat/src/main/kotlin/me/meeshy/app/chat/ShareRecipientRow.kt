@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -120,7 +121,9 @@ private fun RowTrailing(selected: Boolean, delivery: ShareDelivery?, accentColor
             modifier = Modifier.size(24.dp),
         )
         delivery is ShareDelivery.Failed -> Icon(MeeshyIcons.Refresh, contentDescription = stringResource(R.string.share_status_retry), tint = MeeshyPalette.Error, modifier = Modifier.size(24.dp))
-        selected -> Icon(MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
-        else -> Icon(MeeshyIcons.CheckCircle, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(24.dp))
+        else -> Icon(shareRowMark(selected), contentDescription = null, tint = if (selected) accentColor else MeeshyTheme.tokens.textMuted, modifier = Modifier.size(24.dp))
     }
 }
+
+/** La marque d'une destination (iOS `checkmark.circle.fill` / `circle`) : cochée si choisie, sinon un cercle VIDE. */
+internal fun shareRowMark(selected: Boolean): ImageVector = if (selected) MeeshyIcons.CheckCircleFilled else MeeshyIcons.RadioUnchecked

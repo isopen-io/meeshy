@@ -40,6 +40,8 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.outbox.OutOfThreadAdmission
 import me.meeshy.sdk.outbox.OutOfThreadSendGate
+import me.meeshy.sdk.model.PostShareTarget
+import me.meeshy.sdk.post.PostShareLinkService
 import me.meeshy.sdk.session.SessionRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -80,6 +82,7 @@ class AppShareSheetViewModelTest {
         val mediaQueue: MediaUploadQueue,
         val blocks: BlockCache,
         val online: MutableStateFlow<Boolean>,
+        val links: PostShareLinkService,
     )
 
     private fun harness(
@@ -90,7 +93,11 @@ class AppShareSheetViewModelTest {
         resolution: DirectConversationResolution? = null,
         stream: kotlinx.coroutines.flow.Flow<CacheResult<List<ApiConversation>>> = flowOf(CacheResult.Fresh(list, ageMillis = 0)),
         outOfThread: OutOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
+        trackedLink: String? = null,
     ): Harness {
+        val links = mockk<PostShareLinkService>()
+        coEvery { links.resolve(any(), any()) } returns
+            if (trackedLink != null) PostShareTarget(trackedLink, tracked = true) else PostShareTarget("https://meeshy.me/feeds/post/x", tracked = false)
         val conversationRepo = mockk<ConversationRepository>(relaxed = true)
         every { conversationRepo.conversationsStream(any(), any()) } returns stream
         if (resolution != null) coEvery { conversationRepo.directConversationWith(any(), any()) } returns resolution
@@ -108,8 +115,8 @@ class AppShareSheetViewModelTest {
         val online = MutableStateFlow(true)
         val network = mockk<NetworkMonitor>(relaxed = true)
         every { network.isOnline } returns online
-        val vm = AppShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread)
-        return Harness(vm, messages, conversationRepo, mediaQueue, blocks, online)
+        val vm = AppShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread, links)
+        return Harness(vm, messages, conversationRepo, mediaQueue, blocks, online, links)
     }
 
     private fun Harness.model() = vm.model(vm.state.value)
@@ -153,6 +160,34 @@ class AppShareSheetViewModelTest {
         }
         assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Sent)
         assertThat(h.model().firstServed?.conversationId).isEqualTo("c1")
+    }
+
+    @Test
+    fun a_public_story_leaves_with_the_senders_tracked_link_minted_once_when_the_sheet_opens() = runTest(dispatcher) {
+        val h = harness(trackedLink = "https://meeshy.me/l/tok")
+        val publicStory = ShareSubject.Card(storyCard.card.copy(isPublicStory = true))
+        h.vm.bind(publicStory)
+        advanceUntilIdle()
+
+        assertThat(h.model().contentLines).containsExactly("Story de Léa : https://meeshy.me/l/tok")
+        h.vm.toggle(h.model().sections.recents.first())
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.links.resolve("s1", "meeshy") }
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(conversationId = "c1", content = "Story de Léa : https://meeshy.me/l/tok", originalLanguage = any(), sender = me, forwardedFromId = null, forwardedFromConversationId = null, effects = any())
+        }
+    }
+
+    @Test
+    fun a_friends_story_never_mints_a_link_that_opens_without_an_account() = runTest(dispatcher) {
+        val h = harness(trackedLink = "https://meeshy.me/l/tok")
+        h.vm.bind(storyCard)
+        advanceUntilIdle()
+
+        assertThat(h.model().contentLines).containsExactly("Story de Léa : https://meeshy.me/s/1")
+        coVerify(exactly = 0) { h.links.resolve(any(), any()) }
     }
 
     @Test

@@ -4,8 +4,9 @@ import kotlinx.serialization.Serializable
 
 /**
  * Place d'une piste dans le PLAN : position (normalisée, peut déborder de 0..1), taille, rotation en
- * DEGRÉS et rang de superposition. Miroir de `ClipTransform.swift`. Valeur pure, bornée : `applying(Field)` ne sort jamais des bornes ;
- * l'échelle n'a qu'un plancher, pas de plafond (#14298).
+ * DEGRÉS et rang de superposition. Miroir de `ClipTransform.swift`. Valeur pure, bornée : `applying(Field)` ne sort jamais des bornes.
+ * L'échelle suit la règle du pincement (#14298, #14304) : aucun plafond, et un plancher qui dépend du plus petit côté de
+ * l'OBJET à l'échelle 1 ([SceneObjectScalePolicy.entered]).
  */
 @Serializable
 data class ClipTransform(
@@ -24,11 +25,16 @@ data class ClipTransform(
         data class ZIndex(val value: Int) : Field
     }
 
-    /** Applique une édition en la bornant ; une valeur non finie laisse la transformation intacte. */
-    fun applying(field: Field): ClipTransform = when (field) {
+    /**
+     * Applique une édition en la bornant ; une valeur non finie laisse la transformation intacte. [smallestSideDesignPx]
+     * est le plus petit côté de l'objet à l'échelle 1, en pixels de la scène de référence 1080 × 1920 ; inconnu (0),
+     * une échelle saisie grandit encore et ne réduit plus.
+     */
+    fun applying(field: Field, smallestSideDesignPx: Double = 0.0): ClipTransform = when (field) {
         is Field.X -> if (field.value.isFinite()) copy(x = field.value.coerceIn(POSITION_RANGE)) else this
         is Field.Y -> if (field.value.isFinite()) copy(y = field.value.coerceIn(POSITION_RANGE)) else this
-        is Field.Scale -> if (field.value.isFinite()) copy(scale = field.value.coerceAtLeast(MIN_SCALE)) else this
+        is Field.Scale ->
+            if (field.value.isFinite()) copy(scale = SceneObjectScalePolicy.entered(field.value, scale, smallestSideDesignPx)) else this
         is Field.Rotation -> if (field.value.isFinite()) copy(rotation = field.value.coerceIn(ROTATION_RANGE)) else this
         is Field.ZIndex -> copy(zIndex = field.value.coerceIn(Z_INDEX_RANGE))
     }
@@ -36,7 +42,6 @@ data class ClipTransform(
     companion object {
         val IDENTITY = ClipTransform()
         val POSITION_RANGE = -0.5..1.5
-        const val MIN_SCALE: Double = 0.05
         val ROTATION_RANGE = -180.0..180.0
         val Z_INDEX_RANGE = -100..100
     }

@@ -64,10 +64,10 @@ struct ReelsPlayerView: View {
     /// action rail, scrub) is hidden for distraction-free viewing. Toggled on
     /// by a long-press; any tap restores it (mirrors the Story viewer).
     @State private var chromeHidden = false
-    /// Set once `ReelsViewModel.shareLink(for:)` returns — the `.sheet(item:)`
-    /// presents the system share UI (the same `meeshy.me/l/<token>` link the
-    /// feed shares) and clears it on dismiss. Aligns the reel share with the feed.
+    /// « Partager » (menu « … ») : la feuille du système, avec le lien suivi.
     @State private var shareableLink: ShareableLink?
+    /// « Envoyer » du rail (#14310) : la carte remise à la feuille Meeshy.
+    @State private var sentReel: SharedContentWrapper?
     /// Reel ids whose share request is currently in flight, so a double-tap of the
     /// share button can't fire two mints (mirrors the feed's `postShareInFlightIds`).
     @State private var shareInFlightIds: Set<String> = []
@@ -185,11 +185,7 @@ struct ReelsPlayerView: View {
                 onCommentSent: { viewModel.didSendComment(postId: $0) }, entity: .reel(reel.id)
             )
         }
-        .sheet(item: $shareableLink) { link in
-            // Same `meeshy.me/l/<token>` URL the feed shares — the gateway already
-            // recorded the (deduplicated) share + minted the caller's TrackingLink.
-            ShareSheet(activityItems: link.activityItems)
-        }
+        .modifier(ReelShareSheets(outgoing: $shareableLink, sent: $sentReel, onClose: onClose))
         .mediaSaveFlow(mediaSaveCoordinator)
         .postEditCover(item: $editingReel) { reel in
             EditPostSheet(
@@ -328,6 +324,7 @@ struct ReelsPlayerView: View {
                     pendingCommentParentTargetId = nil
                     commentsReel = reel
                 },
+                onSend: { sentReel = ReelSend.open(reel) },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) },
                 isWithinPreloadWindow: isWithinPreloadWindow(index, activeIndex: activeIndex)
@@ -523,6 +520,8 @@ struct ReelPageView: View {
     let chromeHidden: Bool
     var setChromeHidden: (Bool) -> Void
     var onComment: () -> Void
+    /// « Envoyer » du rail (#14310) — l'hôte présente la feuille Meeshy.
+    var onSend: () -> Void
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
     /// Avatar tap → story (if active) else profile.
@@ -994,7 +993,7 @@ struct ReelPageView: View {
         ReelActionRail(
             viewModel: viewModel,
             reel: reel,
-            onComment: onComment
+            onComment: onComment, onSend: onSend
         )
     }
 }

@@ -94,7 +94,7 @@ beforeEach(() => {
 
 describe('reproduceEditedMessageNotifications', () => {
   describe('la copie dénormalisée suit le nouveau texte', () => {
-    it('réécrit le corps et l’extrait d’un new_message', async () => {
+    it('réécrit le corps et l’extrait d’un new_message par la synthèse du nouveau texte (#14309)', async () => {
       findMany.mockResolvedValue([row()]);
 
       const reproduced = await reproduceEditedMessageNotifications(
@@ -105,9 +105,10 @@ describe('reproduceEditedMessageNotifications', () => {
 
       expect(reproduced).toBe(1);
       expect(updatedData()).toMatchObject({
-        content: 'nouveau texte',
-        metadata: expect.objectContaining({ messagePreview: 'nouveau texte' }),
+        content: 'Petit message texte',
+        metadata: expect.objectContaining({ messagePreview: 'Petit message texte' }),
       });
+      expect(JSON.stringify(updatedData())).not.toContain('nouveau texte');
     });
 
     /**
@@ -131,7 +132,7 @@ describe('reproduceEditedMessageNotifications', () => {
         announcer
       );
 
-      expect(updatedData().content).toBe('nouveau texte 📎 2 fichiers');
+      expect(updatedData().content).toBe('Petit message texte 📎 2 fichiers');
     });
 
     /**
@@ -140,7 +141,7 @@ describe('reproduceEditedMessageNotifications', () => {
      * exactement le nouveau texte.
      */
     it.each(['user_mentioned', 'message_reply'])(
-      'réécrit le corps verbatim d’un %s',
+      'réécrit le corps d’un %s par la synthèse du nouveau texte (#14309)',
       async (type) => {
         findMany.mockResolvedValue([row({ type })]);
 
@@ -150,7 +151,7 @@ describe('reproduceEditedMessageNotifications', () => {
           announcer
         );
 
-        expect(updatedData().content).toBe('nouveau texte');
+        expect(updatedData().content).toBe('Petit message texte');
       }
     );
 
@@ -161,7 +162,7 @@ describe('reproduceEditedMessageNotifications', () => {
      * est concernée. Réécrire `content` ici remplacerait la phrase par le
      * message lui-même.
      */
-    it('ne touche pas au corps d’un message_reaction, seulement à son extrait', async () => {
+    it('garde l’action d’un message_reaction et ne réécrit que la synthèse du message visé (#14309)', async () => {
       findMany.mockResolvedValue([
         row({
           type: 'message_reaction',
@@ -176,11 +177,8 @@ describe('reproduceEditedMessageNotifications', () => {
         announcer
       );
 
-      // Le corps n'est pas « réécrit à l'identique » : il n'est pas écrit DU
-      // TOUT. Une réécriture à l'identique dépendrait de la valeur relue, donc
-      // écraserait une phrase re-localisée entre-temps.
-      expect(updatedData()).not.toHaveProperty('content');
-      expect(updatedData().metadata).toMatchObject({ messageContent: 'nouveau texte' });
+      expect(updatedData().content).toBe('❤️ · Petit message texte');
+      expect(updatedData().metadata).toMatchObject({ messageContent: 'Petit message texte' });
     });
 
     /**
@@ -223,9 +221,9 @@ describe('reproduceEditedMessageNotifications', () => {
      * ligne à chaque édition d'un long message, et le client afficherait un
      * corps que rien ne borne.
      */
-    it('tronque le nouvel extrait comme la création le faisait', async () => {
+    it('un long texte édité se dit par son palier, jamais par son texte (#14309)', async () => {
       findMany.mockResolvedValue([row()]);
-      const long = 'x'.repeat(250);
+      const long = Array.from({ length: 250 }, (_, i) => `mot${i}`).join(' ');
 
       await reproduceEditedMessageNotifications(
         prisma,
@@ -233,9 +231,7 @@ describe('reproduceEditedMessageNotifications', () => {
         announcer
       );
 
-      const content: string = updatedData().content;
-      expect(content.length).toBeLessThanOrEqual(101);
-      expect(content.endsWith('…')).toBe(true);
+      expect(updatedData().content).toBe('Petit essai texte');
     });
   });
 

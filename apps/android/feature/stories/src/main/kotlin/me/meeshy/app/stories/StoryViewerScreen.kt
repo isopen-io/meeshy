@@ -35,7 +35,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -106,6 +105,8 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.app.feed.rememberContentShareOut
+import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.model.story.StoryReplyRules
@@ -200,12 +201,43 @@ fun StoryViewerScreen(
         slide = slide,
         author = { state.exportAuthor(accent) },
     )
+    val commentThread = rememberStoryCommentThread(state.currentStoryId)
+    val currentItem = state.currentStoryId?.let(viewModel::rawItem)
+    val commentCount = rememberStoryCommentCount(commentThread, currentItem?.commentCount ?: 0)
+    val keyboardVisible = storyKeyboardVisible()
+    val railPlan = StoryRailPlan.resolve(
+        isOwnStory = state.isOwnStory,
+        hasTranslatableContent = state.availableLanguages.isNotEmpty(),
+        canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
+        canCompose = onComposeStory != null && state.canCompose,
+        commentCount = commentCount,
+    )
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
         railBar = railOverlayActive,
         menu = showOptions,
         dialog = showReportDialog || showDeleteDialog || videoExport.busy,
+        composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread),
     )
+
+    val shareOut = rememberContentShareOut()
+
+    fun storyCard(): ShareCard? = state.currentStoryId?.let { storyId ->
+        ShareCards.story(
+            storyId = storyId,
+            authorId = null,
+            messageText = shareContext.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
+            isPublic = currentItem?.visibility.equals(PUBLIC_STORY_VISIBILITY, ignoreCase = true),
+        )
+    }
+
+    // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur pour une story publique.
+    fun openSendTo() {
+        val card = storyCard() ?: return
+        val launcher = shareLauncher ?: return shareOut(card)
+        showSendTo = true
+        launcher.open(ShareSubject.Card(card)) { showSendTo = false }
+    }
 
     fun closeRailBars() {
         reactionBarVisible = false
@@ -463,12 +495,15 @@ fun StoryViewerScreen(
 
         if (slide != null) StorySceneAudio(slide = slide, playing = playing, muted = state.isMuted)
 
-        if (slide != null && slide.text.isNotBlank()) {
-            StoryCaptionOverlay(
-                text = slide.text,
-                storyId = slide.id,
-                modifier = Modifier.align(Alignment.BottomStart),
-            )
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
+            if (slide != null && slide.text.isNotBlank()) {
+                StoryCaptionOverlay(text = slide.text, storyId = slide.id)
+            }
+            // #14313 — le composeur de commentaire épinglé sous la story d'autrui (iOS `composerLayer`).
+            if (commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed && (!state.isPaused || cover.composing)) {
+                StoryPinnedCommentComposer(thread = commentThread)
+                StoryCommentSentFeedback(thread = commentThread)
+            }
         }
 
         if (!state.isPaused) Column(
@@ -512,28 +547,6 @@ fun StoryViewerScreen(
                 if (slide?.isTranslated == true) {
                     TranslatedBadge()
                 }
-                if (state.isOwnStory && state.currentStoryId != null) {
-                    Text(
-                        text = stringResource(R.string.stories_viewers_title),
-                        color = MeeshyPalette.White,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.4f))
-                            .clickable { showViewers = true }
-                            .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp),
-                    )
-                }
-                if (state.currentStoryId != null) {
-                    IconButton(onClick = { showComments = true }) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.Comment,
-                            contentDescription = stringResource(R.string.stories_comments_open),
-                            tint = MeeshyPalette.White,
-                        )
-                    }
-                }
                 if (state.currentStoryId != null) {
                     Box {
                         IconButton(onClick = { showOptions = true }) {
@@ -544,23 +557,13 @@ fun StoryViewerScreen(
                             )
                         }
                         DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
+                            // « Partager » (#14315) : hors de Meeshy, par la feuille du système ; « Envoyer » est au rail.
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.stories_action_send_to)) },
+                                text = { Text(stringResource(R.string.stories_action_share)) },
+                                leadingIcon = { Icon(MeeshyIcons.Share, contentDescription = null) },
                                 onClick = {
                                     showOptions = false
-                                    val storyId = state.currentStoryId
-                                    if (storyId != null && shareLauncher != null) {
-                                        showSendTo = true
-                                        shareLauncher.open(
-                                            ShareSubject.Card(
-                                                ShareCards.story(
-                                                    storyId = storyId,
-                                                    authorId = null,
-                                                    messageText = shareContext.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
-                                                ),
-                                            ),
-                                        ) { showSendTo = false }
-                                    }
+                                    storyCard()?.let(shareOut)
                                 },
                             )
                             StoryVideoExportMenuEntries(onPick = { mode ->
@@ -592,6 +595,7 @@ fun StoryViewerScreen(
                                 }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) },
+                                    leadingIcon = { Icon(MeeshyIcons.Delete, contentDescription = null, tint = MeeshyPalette.Error) },
                                     onClick = {
                                         showOptions = false
                                         showDeleteDialog = true
@@ -601,6 +605,7 @@ fun StoryViewerScreen(
                                 state.currentStoryId?.let { storyId ->
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.stories_action_repost)) },
+                                        leadingIcon = { Icon(MeeshyIcons.Repeat, contentDescription = null) },
                                         onClick = {
                                             showOptions = false
                                             onRepost(storyId)
@@ -609,6 +614,7 @@ fun StoryViewerScreen(
                                 }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_report)) },
+                                    leadingIcon = { Icon(MeeshyIcons.Warning, contentDescription = null) },
                                     onClick = {
                                         showOptions = false
                                         showReportDialog = true
@@ -629,12 +635,21 @@ fun StoryViewerScreen(
         }
 
         val languageBadge = state.activeLanguageCode
-        if (slide != null && !state.isDismissed && !state.isPaused) {
+        if (slide != null && !state.isDismissed && !state.isPaused && !keyboardVisible) {
             StoryActionRail(
-                plan = StoryRailPlan.resolve(
-                    isOwnStory = state.isOwnStory,
-                    hasTranslatableContent = state.availableLanguages.isNotEmpty(),
-                    canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
+                plan = railPlan,
+                counts = StoryRailCounts(
+                    comments = commentCount,
+                    shares = currentItem?.shareCount ?: 0,
+                    reposts = currentItem?.repostCount ?: 0,
+                    views = currentItem?.viewCount ?: 0,
+                ),
+                taps = StoryRailTaps(
+                    onSend = { closeRailBars(); meeshyHaptics.light(); openSendTo() },
+                    onRepost = { closeRailBars(); state.currentStoryId?.let(onRepost) },
+                    onViews = { closeRailBars(); meeshyHaptics.light(); showViewers = true },
+                    onCompose = { closeRailBars(); meeshyHaptics.light(); state.currentStoryId?.let { id -> onComposeStory?.invoke(id) } },
+                    onComments = { closeRailBars(); meeshyHaptics.light(); showComments = true },
                 ),
                 reactionCount = state.reactionCount,
                 hasReacted = state.myReactions.isNotEmpty(),
@@ -791,11 +806,10 @@ fun StoryViewerScreen(
         )
     }
 
-    val commentsStoryId = state.currentStoryId
-    if (showComments && commentsStoryId != null) {
-        StoryCommentsSheet(
-            storyId = commentsStoryId,
-            accentHex = accent,
+    if (showComments && commentThread != null) {
+        StoryCommentsThreadSheet(
+            thread = commentThread,
+            serverCommentCount = currentItem?.commentCount ?: 0,
             onDismiss = { showComments = false },
         )
     }
@@ -940,3 +954,5 @@ private fun ReactionFlightOverlay(
     )
 }
 
+/** L'audience d'une story qui s'ouvre sans compte — la seule qui reçoit un lien suivi (#14315). */
+private const val PUBLIC_STORY_VISIBILITY = "PUBLIC"

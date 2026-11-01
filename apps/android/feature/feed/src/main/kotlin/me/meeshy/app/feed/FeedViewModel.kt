@@ -592,13 +592,6 @@ class FeedViewModel @Inject constructor(
         }
     }
 
-    /** Comptabilise un partage cote serveur — l'intent systeme part sans attendre. */
-    fun recordShare(postId: String) {
-        viewModelScope.launch {
-            postRepository.share(postId)
-        }
-    }
-
     /** Bookmark analogue of [toggleLike] — same durable-outbox toggle, same flush schedule. */
     fun toggleBookmark(postId: String) {
         viewModelScope.launch {

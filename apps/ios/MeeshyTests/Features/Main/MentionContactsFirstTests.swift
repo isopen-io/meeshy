@@ -26,7 +26,7 @@ final class MentionContactsFirstTests: XCTestCase {
         interlocutorId: String? = nil,
         isMember: Bool = true,
         isGuest: Bool = false,
-        servedMembers: (@Sendable (String) async -> [String])? = nil,
+        servedMembers: ServedMembersLoader? = nil,
         remote: [MentionSuggestion] = [],
         directory: [UserSearchResult] = []
     ) -> (sut: MentionComposerController, service: MockMentionService, annuaire: MockUserDirectorySearch) {

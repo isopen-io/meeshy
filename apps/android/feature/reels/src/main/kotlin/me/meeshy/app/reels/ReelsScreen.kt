@@ -1,6 +1,5 @@
 package me.meeshy.app.reels
 
-import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -24,14 +23,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import me.meeshy.app.feed.rememberContentShareOut
+import androidx.compose.ui.platform.LocalContext
+import me.meeshy.feature.reels.R
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.share.LocalShareLauncher
@@ -70,6 +72,7 @@ fun ReelsScreen(
     viewModel: ReelsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     // Le son est ouvert à l'entrée (iOS `ReelsPlayerView` : l'ouverture du lecteur est le geste) ; le bouton
     // muet vaut pour tous les réels de la session, et n'existe que pour un réel qui porte du son.
@@ -80,7 +83,6 @@ fun ReelsScreen(
     // Dans la fenêtre Picture-in-Picture, la vidéo seule : aucun chrome, aucun toast, aucune feuille (#13814).
     val inVideoWindow = rememberVideoWindowShown()
     val chromeOff = chromeHidden || inVideoWindow
-    val shareContext = LocalContext.current
     val shareLauncher = LocalShareLauncher.current
     val haptics = rememberMeeshyHaptics()
     // Commentaires en feuille superposee (issue #4815) : le lecteur ne quitte jamais
@@ -98,6 +100,10 @@ fun ReelsScreen(
         onDispose { viewModel.setCurrentReel(null) }
     }
 
+    val shareOut = rememberContentShareOut()
+    val shareOutNow by rememberUpdatedState(shareOut)
+    val launcherNow by rememberUpdatedState(shareLauncher)
+    val reelsNow by rememberUpdatedState(state.reels)
     val railActions = remember(viewModel) {
         ReelRailActions(
             onLike = viewModel::toggleLike,
@@ -105,6 +111,13 @@ fun ReelsScreen(
             onComments = { commentsReelId = it },
             onBookmark = viewModel::toggleBookmark,
             onRepost = viewModel::repost,
+            // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur.
+            onSend = { id ->
+                reelsNow.firstOrNull { it.id == id }?.let { reel ->
+                    val card = reel.shareCard(context)
+                    launcherNow?.open(ShareSubject.Card(card)) ?: shareOutNow(card)
+                }
+            },
         )
     }
     val openProfile by rememberUpdatedState(onOpenProfile)
@@ -153,34 +166,22 @@ fun ReelsScreen(
             onToggleMute = { muted = !muted },
             onReveal = { chromeHidden = false },
             onOpen = { id -> onOpenPost(id) },
-            onShare = { reel ->
-                viewModel.recordShare(reel.id)
-                // La feuille de partage unique (#13474) : conversations, copier le lien, partage système.
-                shareLauncher?.open(
-                    ShareSubject.Card(ShareCards.reel(reel.id, title = reel.caption.orEmpty(), authorId = reel.authorId)),
-                ) ?: shareContext.startActivity(
-                    Intent.createChooser(
-                        Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(reel.id)),
-                        null,
-                    ),
-                )
-            },
+            // « Partager » (menu « ⋯ ») : la feuille du système, avec le lien suivi de l'utilisateur.
+            onShare = { reel -> shareOut(reel.shareCard(context)) },
         )
         if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts)
     }
 
     val openCommentsReelId = commentsReelId
     if (openCommentsReelId != null && !inVideoWindow) {
-        ReelCommentsSheet(
+        ReelCommentsThread(
             reelId = openCommentsReelId,
+            serverCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
             onDismiss = { commentsReelId = null },
             onOpenPost = {
                 commentsReelId = null
                 onOpenPost(openCommentsReelId)
             },
-            // The reel row's own server-known total, so the sheet's title never regresses
-            // to "how many are loaded on screen" (a page-capped undercount).
-            initialCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
         )
     }
 }
@@ -260,4 +261,11 @@ private fun ReelsPager(
             onOpenAuthor = onOpenAuthor,
         )
     }
+}
+
+/** La carte d'un réel pour ses deux gestes de partage : « 🔗 Réel de X : lien », la forme de la story. */
+private fun ReelPresentation.shareCard(context: android.content.Context): ShareCard {
+    val link = PostShareLink.webLink(id)
+    val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_reel_text, it, link) } ?: link
+    return ShareCards.reel(id, title = caption.orEmpty(), authorId = authorId, messageText = sentence)
 }

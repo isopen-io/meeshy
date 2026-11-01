@@ -63,6 +63,7 @@ import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle, pushThreadFields } from './push-header';
 import { contentDetailCategory, contentDetailPushFields } from './content-detail';
 import { servedBannerBody } from './served-banner-body';
+import { reactedMessageSynthesis, reactionBody } from './reaction-body';
 import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 import {
   type MessagePrismSource,
@@ -75,7 +76,6 @@ import {
   EMPTY_PRISM_SOURCE,
   UNKNOWN_BANNER_SOURCE,
   MESSAGE_CONTENT_BASIS,
-  protectedPreview,
   truncateMessage,
 } from './notification-preview';
 import type { FanoutDependencies } from './fanout/dependencies';
@@ -1322,6 +1322,8 @@ export class NotificationService {
     /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`.
      *  Utilisé par l'extension pour choisir le UTI typeHint correct. */
     firstAttachmentMimeType?: string;
+    /** #14309 — `firstAttachmentUrl` désigne la VIGNETTE d'une image, pas le fichier. */
+    firstAttachmentIsThumbnail?: boolean;
     /** #10641 — l'identité de la pièce jointe, pour rapporter une écoute faite depuis la notification. */
     firstAttachmentId?: string;
     /**
@@ -1453,7 +1455,9 @@ export class NotificationService {
       originalUrl: params.firstAttachmentUrl,
       originalMimeType: params.firstAttachmentMimeType,
       originalDurationMs: params.firstAttachmentDuration,
-      originalFileSize: params.firstAttachmentFileSize,
+      // #14309 — une VIGNETTE remplace le fichier : la taille de l'original
+      // décrirait un autre fichier, et ferait refuser la vignette par la NSE.
+      originalFileSize: params.firstAttachmentIsThumbnail ? null : params.firstAttachmentFileSize,
     });
 
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
@@ -1467,6 +1471,8 @@ export class NotificationService {
       media: { ...params, firstAttachmentDuration: servedMedia.durationMs ?? null },
       detail: params.contentDetail,
       readerId: params.recipientUserId,
+      basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+      protectedByLocKey: !!params.notificationLocKey,
     });
 
     return this.createNotification({
@@ -1539,7 +1545,10 @@ export class NotificationService {
 
       metadata: {
         action: 'view_message',
-        messagePreview: params.messagePreview,
+        // #14309 — l'aperçu PERSISTÉ est le corps servi : les clients in-app
+        // le préfèrent au `content` (SDK iOS, Android), un ancien client
+        // afficherait sinon le texte que la bannière ne montre plus.
+        messagePreview: content,
         ...(params.hasAttachments && params.attachmentCount && {
           attachments: {
             count: params.attachmentCount,
@@ -1655,6 +1664,18 @@ export class NotificationService {
       prism.ordered
     );
 
+    // #14309 — la SYNTHÈSE du message, jamais son texte : cf. `servedBannerBody`.
+    const bannerBody = servedBannerBody({
+      lang: prism.lang,
+      preview: params.messagePreview,
+      translation: servedTranslation,
+      media: params,
+      detail: params.contentDetail,
+      readerId: params.mentionedUserId,
+      basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+      protectedByLocKey: !!params.notificationLocKey,
+    });
+
     return this.createNotification({
       userId: params.mentionedUserId,
       type: 'user_mentioned',
@@ -1663,14 +1684,7 @@ export class NotificationService {
       // les trois plateformes rendent, pas les champs de service du fil push.
       // Cycle 125 bis — et il se compose comme celui d'un message simple : le
       // libellé de la pièce jointe prend la place d'un texte absent.
-      content: servedBannerBody({
-        lang: prism.lang,
-        preview: params.messagePreview,
-        translation: servedTranslation,
-        media: params,
-        detail: params.contentDetail,
-        readerId: params.mentionedUserId,
-      }),
+      content: bannerBody,
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
       expiresAt: params.messageExpiresAt ?? undefined,
@@ -1719,7 +1733,7 @@ export class NotificationService {
 
       metadata: {
         action: 'view_message',
-        messagePreview: params.messagePreview,
+        messagePreview: bannerBody,
       } as any,
     });
   }
@@ -1852,6 +1866,7 @@ export class NotificationService {
         select: {
           content: true, expiresAt: true, messageType: true, createdAt: true,
           isViewOnce: true, isBlurred: true, isEncrypted: true, effectFlags: true,
+          attachments: { select: { mimeType: true, fileName: true, originalName: true, pageCount: true, lineCount: true } },
         },
       }),
     ]);
@@ -1859,46 +1874,13 @@ export class NotificationService {
     if (!reactor) return null;
 
     const lang = await this.resolveRecipientLang(params.messageAuthorId);
-
-    // Cycle 123 bis — un message PROTÉGÉ (éphémère / vue unique / flouté /
-    // chiffré) n'a pas d'extrait, et le corps se réduit à l'action.
-    //
-    // Le destinataire est ici l'AUTEUR du message : il connaît son texte, ce
-    // qui rend la fuite moins chère que celle des trois éventails — mais la
-    // protection ne parle pas de qui SAIT, elle parle de ce qui S'AFFICHE. Un
-    // message éphémère ou flouté n'a rien à faire sur un écran verrouillé, ni
-    // dans une ligne `Notification` que l'inbox in-app relit.
-    //
-    // Pas de `notificationLocKey` ici, contrairement à l'éventail : les clients
-    // s'en servent pour REMPLACER le corps, ce qui effacerait « a réagi 🔥 ».
-    // L'extrait est simplement omis — la branche existait déjà pour un message
-    // sans texte.
-    const isProtected = protectedPreview({
-      messageType: message?.messageType,
-      isEncrypted: message?.isEncrypted,
-      isViewOnce: message?.isViewOnce,
-      isBlurred: message?.isBlurred,
-      effectFlags: message?.effectFlags,
-      expiresAt: message?.expiresAt ?? null,
-    }) !== null;
-
-    const messagePreview = message?.content && !isProtected
-      ? truncateByCodePoints(message.content, 100, '…')
-      : null;
+    const synthesis = reactedMessageSynthesis(lang, message);
 
     return this.createNotification({
       userId: params.messageAuthorId,
       type: 'message_reaction',
       priority: 'low',
-      // Le corps porte l'action ET le message visé — contrairement aux
-      // réactions sociales, il n'a pas d'alternative : le sous-titre d'une
-      // notification DE CONVERSATION est déjà pris par le nom du groupe
-      // (recomposé côté client, Local-First) et purement ignoré par iOS en
-      // tête-à-tête. Le destinataire doit pouvoir dire À QUEL message on a
-      // réagi quand il en a écrit plusieurs.
-      content: messagePreview
-        ? `${notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji })} : « ${messagePreview} »`
-        : notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
+      content: reactionBody(lang, params.reactionEmoji, synthesis),
       lang,
       expiresAt: message?.expiresAt ?? undefined,
 
@@ -1919,7 +1901,7 @@ export class NotificationService {
       metadata: {
         action: 'view_message',
         reactionEmoji: params.reactionEmoji,
-        ...(messagePreview && { messageContent: messagePreview }),
+        ...(synthesis && { messageContent: synthesis }),
       },
     });
   }
@@ -2344,6 +2326,18 @@ export class NotificationService {
       prism.ordered
     );
 
+    // #14309 — la SYNTHÈSE du message, jamais son texte : cf. `servedBannerBody`.
+    const bannerBody = servedBannerBody({
+      lang: prism.lang,
+      preview: params.messagePreview,
+      translation: servedTranslation,
+      media: params,
+      detail: params.contentDetail,
+      readerId: params.recipientUserId,
+      basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+      protectedByLocKey: !!params.notificationLocKey,
+    });
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'message_reply',
@@ -2351,14 +2345,7 @@ export class NotificationService {
       // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
       // Prisme, les champs du fil push ne suffisent pas.
       // Cycle 125 bis — et il se compose comme celui d'un message simple.
-      content: servedBannerBody({
-        lang: prism.lang,
-        preview: params.messagePreview,
-        translation: servedTranslation,
-        media: params,
-        detail: params.contentDetail,
-        readerId: params.recipientUserId,
-      }),
+      content: bannerBody,
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
       expiresAt: params.messageExpiresAt ?? undefined,
@@ -2400,7 +2387,7 @@ export class NotificationService {
 
       metadata: {
         action: 'view_message',
-        messagePreview: params.messagePreview,
+        messagePreview: bannerBody,
       } as any,
     });
   }

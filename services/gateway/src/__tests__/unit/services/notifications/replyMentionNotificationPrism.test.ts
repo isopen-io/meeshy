@@ -206,7 +206,7 @@ describe.each([
     expect(data?.translatedLanguage).toBe('es');
   });
 
-  it('RÉÉCRIT le corps servi : c\'est le seul texte qu\'un lecteur voit', async () => {
+  it('le corps servi est la SYNTHÈSE (#14309) — il ne cite pas la traduction', async () => {
     // Ce témoin a d'abord gelé l'inverse (« le corps original reste le corps »)
     // sur deux prémisses, mesurées depuis :
     //
@@ -229,7 +229,7 @@ describe.each([
     });
 
     expect(data?.translatedContent).toBe('Hola');
-    expect(push?.body).toBe('Hola');
+    expect(push?.body).toBe('Una palabra');
   });
 
   it('tronque la traduction poussée à 200 caractères, quel que soit son rang', async () => {
@@ -443,24 +443,24 @@ describe.each([
     return { notification, push: servedPush(sendToUser) };
   };
 
-  it('compose la bannière avec la traduction du rang atteint', async () => {
+  it('ne compose plus la bannière avec la traduction du rang atteint (#14309)', async () => {
     const { push } = await runServed({
       recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
       translations: { es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Hola');
+    expect(push?.body).toBe('Ein Wort');
   });
 
-  it('DESCEND jusqu\'à la locale appareil — le rang 4', async () => {
+  it('la locale appareil ne fait pas parler le corps — la langue de CADRAGE reste le rang 1', async () => {
     const { push } = await runServed({
       recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
       translations: { pt: { text: 'Olá' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Olá');
+    expect(push?.body).toBe('Ein Wort');
   });
 
   it('persiste dans la ligne in-app le MÊME texte que la bannière', async () => {
@@ -470,18 +470,18 @@ describe.each([
       originalLanguage: 'en',
     });
 
-    expect((notification as any)?.content).toBe('Bonjour');
-    expect(push?.body).toBe('Bonjour');
+    expect((notification as any)?.content).toBe('Petit mot reçu');
+    expect(push?.body).toBe('Petit mot reçu');
   });
 
-  it('sert l\'ORIGINAL quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+  it('ne sert pas l\'original quand la langue d\'origine gagne à son rang — la synthèse', async () => {
     const { push } = await runServed({
       recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Hello');
+    expect(push?.body).toBe('Ein Wort');
   });
 
   it('ne substitue JAMAIS dans un aperçu PROTÉGÉ', async () => {

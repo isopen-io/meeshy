@@ -362,7 +362,9 @@ public final class StoryRendererCache: @unchecked Sendable {
     ///
     /// `position` / `scale` / `opacity` reflect keyframe interpolation when
     /// the item has keyframes; otherwise they fall back to the item's static
-    /// `x`/`y`/`scale` fields. `opacity` defaults to `1.0` when the item is
+    /// `x`/`y`/`scale` fields. A keyframe scale is a FACTOR of the item's
+    /// scale, as `StoryRenderer` paints it (#14316) : the signature carries
+    /// the rendered product. `opacity` defaults to `1.0` when the item is
     /// fully opaque (no keyframe opacity track). `visible` mirrors the
     /// `shouldRender` decision in `StoryRenderer` (timing window only — fade
     /// in/out is not yet animated, so it does not influence the signature).
@@ -382,7 +384,7 @@ public final class StoryRendererCache: @unchecked Sendable {
 
         let posX: Double = overrides.position.map { Double($0.x) } ?? item.x
         let posY: Double = overrides.position.map { Double($0.y) } ?? item.y
-        let scl: Double = overrides.scale ?? item.scale
+        let scl: Double = item.scale * (overrides.scale ?? 1)
         let rot: Double = item.rotation
         let opacity: Double = overrides.opacity ?? 1.0
         let visible: Bool = isVisible(item: item, at: time)

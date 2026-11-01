@@ -9,6 +9,7 @@ import { NOT_DELETED } from './posts/postIncludes';
 import { STORY_VIEW_RESET } from './posts/postCounters';
 import { readPostViews, readViewerInteractions, type ViewerListRequest } from './posts/viewerEngagement';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { claimPublicationMedia, publishableMedia } from './posts/siblingPublicationMedia';
 import { borrowedSoundReelEntries } from './posts/storyReelCompanion';
 import { applyMediaOrder } from './posts/mediaOrder';
 import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
@@ -306,12 +307,7 @@ export class PostService {
     if (!repostOfId) data = { ...data, mediaIds: withCanvasMedia(data.mediaIds, data.storyEffects) };
     let effectiveType = data.type;
     if (data.type === PostType.REEL) {
-      const claimableMedia = data.mediaIds?.length
-        ? await this.prisma.postMedia.findMany({
-            where: { id: { in: data.mediaIds }, ...claimableMediaWhere(userId) },
-            select: { mimeType: true, duration: true },
-          })
-        : [];
+      const claimableMedia = await publishableMedia(this.prisma, data.mediaIds ?? [], userId);
       // Un son EMPRUNTÉ à la bibliothèque (piste `soundId` de storyEffects)
       // compte comme audio dans la règle de composition : un réel « son de
       // bibliothèque seul » est légitime — c'est la réutilisation d'audio.
@@ -368,33 +364,20 @@ export class PostService {
     // Link pre-uploaded media if any
     // mediaIds contains PostMedia IDs (created directly by TUS handler with postId=null)
     if (data.mediaIds?.length) {
-      // Garde de propriété : seuls les médias LIBRES et téléversés par l'auteur
-      // (ou hérités, sans propriétaire connu — cf. `mediaOwnership.ts`).
-      const claimed = await this.prisma.postMedia.updateMany({
-        // `userId` — l'identité de la REQUÊTE — et non `post.authorId` relu de
-        // l'objet créé : la garde doit dépendre de qui appelle, pas de ce que
-        // l'écriture précédente a bien voulu renvoyer.
-        where: { id: { in: data.mediaIds }, ...claimableMediaWhere(userId) },
-        data: { postId: post.id },
-      });
-      const shortfall = describeClaimShortfall(data.mediaIds, claimed.count);
-      if (shortfall) {
-        // Jamais silencieux : un média écarté disparaît de la publication, et
-        // sans cette trace le symptôme est indiscernable d'un vol réussi.
-        enhancedLogger.warn(`[PostService] createPost: ${shortfall}`, {
-          postId: post.id, authorId: userId, requested: data.mediaIds.length,
-        });
-      }
+      // Libres : réclamés sous la garde de propriété, au nom de la REQUÊTE. Pris
+      // par une publication sœur du même geste : copiés (#14305).
+      data = await claimPublicationMedia({ prisma: this.prisma, storage: this.mediaService, authorId: userId, post, input: data });
+      const mediaIds = data.mediaIds ?? [];
 
-      await this.applyMediaAlt(post.id, data.mediaIds, data.mediaAlt);
-      await this.applyMediaCaption(post.id, data.mediaIds, data.mediaCaption);
+      await this.applyMediaAlt(post.id, mediaIds, data.mediaAlt);
+      await this.applyMediaCaption(post.id, mediaIds, data.mediaCaption);
       // L'ordre de `mediaIds` EST l'ordre de sélection de l'utilisateur : le
       // seul site qui le connaisse. Voir `posts/mediaOrder.ts`.
-      await applyMediaOrder(this.prisma, post.id, data.mediaIds);
+      await applyMediaOrder(this.prisma, post.id, mediaIds);
 
       // Locate the first audio PostMedia for transcription processing
       const audioMedia = await this.prisma.postMedia.findFirst({
-        where: { id: { in: data.mediaIds }, mimeType: { startsWith: 'audio/' } },
+        where: { id: { in: mediaIds }, postId: post.id, mimeType: { startsWith: 'audio/' } },
         orderBy: { order: 'asc' },
         select: { id: true, fileUrl: true },
       });

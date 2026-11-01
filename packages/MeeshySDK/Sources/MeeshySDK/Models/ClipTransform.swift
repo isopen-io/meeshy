@@ -24,8 +24,12 @@ public struct ClipTransform: Codable, Equatable, Sendable {
     /// Bornes de saisie. La position déborde volontairement de [0, 1] : un
     /// élément partiellement hors cadre est un effet recherché, l'interdire
     /// bloquerait des compositions légitimes.
+    ///
+    /// L'échelle n'a pas de borne ici (#14304) : son plancher dépend du côté
+    /// rendu de l'OBJET, que cette valeur ne connaît pas. Le site d'écriture la
+    /// fait passer par `SceneObjectScalePolicy.entered` avant de l'appliquer ;
+    /// seule une échelle finie et strictement positive franchit ce type.
     public static let positionRange: ClosedRange<Double> = -0.5...1.5
-    public static let scaleRange: ClosedRange<Double> = 0.05...8
     public static let rotationRange: ClosedRange<Double> = -180...180
     public static let zIndexRange: ClosedRange<Int> = -100...100
 
@@ -68,8 +72,8 @@ public struct ClipTransform: Codable, Equatable, Sendable {
             guard let c = clamped(v, Self.positionRange) else { return self }
             return ClipTransform(x: x, y: c, scale: scale, rotation: rotation, zIndex: zIndex)
         case .scale(let v):
-            guard let c = clamped(v, Self.scaleRange) else { return self }
-            return ClipTransform(x: x, y: y, scale: c, rotation: rotation, zIndex: zIndex)
+            guard v.isFinite, v > 0 else { return self }
+            return ClipTransform(x: x, y: y, scale: v, rotation: rotation, zIndex: zIndex)
         case .rotation(let v):
             guard let c = clamped(v, Self.rotationRange) else { return self }
             return ClipTransform(x: x, y: y, scale: scale, rotation: c, zIndex: zIndex)

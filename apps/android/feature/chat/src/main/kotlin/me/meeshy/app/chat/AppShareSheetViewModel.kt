@@ -45,10 +45,12 @@ import me.meeshy.sdk.model.share.ShareRecipient
 import me.meeshy.sdk.model.share.ShareRecipientListing
 import me.meeshy.sdk.model.share.ShareSheetState
 import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.sdk.model.share.TrackedShareCard
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.outbox.OutOfThreadAdmission
 import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.post.PostShareLinkService
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.share.ShareRecipientDirectory
@@ -88,6 +90,9 @@ internal data class AppShareState(
  *   clair vers un fil chiffré. Le cache ne suffit pas (#13820) : le mode de chaque destination est RELU au serveur
  *   ([OutOfThreadSendGate]) avant qu'une bulle ou un fichier n'entre en file ; illisible maintenant (hors ligne), la copie
  *   entre en file « en attente » et la file relit le mode avant tout clair, pièce comprise.
+ * - **« Envoyer » emporte le lien de l'utilisateur** (#14315, iOS `TrackedShareLink`) : pour un post, un réel ou une
+ *   story publique, le lien suivi est frappé (ou retrouvé) DÈS l'ouverture, en parallèle des destinataires, et la
+ *   carte le porte à sa place ; hors ligne ou en échec, l'adresse directe reste.
  */
 @HiltViewModel
 internal class AppShareSheetViewModel @Inject constructor(
@@ -101,6 +106,7 @@ internal class AppShareSheetViewModel @Inject constructor(
     private val blockCache: BlockCache,
     private val networkMonitor: NetworkMonitor,
     private val outOfThread: OutOfThreadSendGate,
+    private val trackedLinks: PostShareLinkService,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AppShareState())
@@ -110,6 +116,8 @@ internal class AppShareSheetViewModel @Inject constructor(
     private var friends: List<me.meeshy.sdk.model.FriendRequestUser> = emptyList()
     private var incomingItems: List<MediaUploadItem> = emptyList()
     private var loadJob: Job? = null
+    private var linkJob: Job? = null
+    private var bound: ShareSubject? = null
     private val inFlight = mutableSetOf<String>()
     private var activeSends = 0
     private var cleared = false
@@ -134,9 +142,22 @@ internal class AppShareSheetViewModel @Inject constructor(
 
     /** Pose le sujet (la porte) et charge les destinataires. Rappeler avec le même sujet ne change rien. */
     fun bind(subject: ShareSubject) {
-        if (_state.value.subject == subject) return
+        if (bound == subject && _state.value.subject != null) return
         incomingItems = emptyList()
         open(subject, lines = linesOf(subject))
+        bound = subject
+        mintTrackedLink(subject)
+    }
+
+    /** Le lien suivi remplace l'adresse directe de la carte dès qu'il est frappé, tant que la feuille montre ce sujet. */
+    private fun mintTrackedLink(subject: ShareSubject) {
+        val card = (subject as? ShareSubject.Card)?.card?.takeIf(TrackedShareCard::mints) ?: return
+        linkJob = viewModelScope.launch {
+            val target = trackedLinks.resolve(card.contentId, TrackedShareCard.Gesture.SEND.platform)
+            if (!target.tracked || _state.value.subject != subject) return@launch
+            val upgraded = ShareSubject.Card(TrackedShareCard.withLink(card, target.url))
+            _state.update { it.copy(subject = upgraded, contentLines = linesOf(upgraded)) }
+        }
     }
 
     /**
@@ -157,12 +178,16 @@ internal class AppShareSheetViewModel @Inject constructor(
     /** La feuille est fermée : rien n'est gardé, la prochaine porte repart d'un état neuf. */
     fun reset() {
         loadJob?.cancel()
+        linkJob?.cancel()
+        bound = null
         inFlight.clear()
         _state.update { it.copy(subject = null, sheet = ShareSheetState(), contentLines = emptyList(), notices = emptyList()) }
     }
 
     private fun open(subject: ShareSubject, lines: List<String>, notices: List<String> = emptyList()) {
         inFlight.clear()
+        linkJob?.cancel()
+        bound = null
         _state.update { it.copy(subject = subject, sheet = ShareSheetState(), contentLines = lines, notices = notices) }
         recompute()
         loadJob?.cancel()
