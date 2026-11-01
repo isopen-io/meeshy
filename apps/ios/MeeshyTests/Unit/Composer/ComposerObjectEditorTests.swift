@@ -174,8 +174,11 @@ final class ComposerObjectEditorTests: XCTestCase {
         let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("funcopenObjectEditor("),
                       "Le site unique est introuvable — re-pointer la garde.")
-        XCTAssertTrue(code.contains("openObjectEditor(id)"),
-                      "« Modifier » sur un média, un sticker ou un lieu ouvre l'éditeur d'objet.")
+        XCTAssertTrue(code.contains("onEditSceneObject:{openObjectEditor($0)}"),
+                      "Hors de la scène, éditer un objet passe par l'éditeur d'objet.")
+        XCTAssertTrue(code.contains("case.media,.sticker,.place:sceneSelectionRelay.modifySceneItem(id)"),
+                      "« Modifier » sur un média, un sticker ou un lieu l'édite EN PLACE, par le site "
+                      + "unique de la sélection (#9138, #13840).")
         XCTAssertTrue(code.contains("ifletobjet=viewModel.addText(){beginSceneTextEditing(objet.id)}"),
                       "Créer un texte ouvre la saisie sur scène.")
         XCTAssertTrue(code.contains("case.text:beginSceneTextEditing(id)"),
