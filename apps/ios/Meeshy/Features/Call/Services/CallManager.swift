@@ -667,6 +667,8 @@ final class CallManager: ObservableObject, Sendable {
     let videoSuspension: CallVideoSuspensionProviding
     /// La caméra : coupure, bascule, choix de l'appareil (`CallCameraActuator`).
     let cameraActuator: CallCameraActuatorProviding
+    /// La reconnexion : relance ICE et candidats en attente (`CallReconnector`).
+    let reconnector: CallReconnectorProviding
     /// Le chrono affiché et le battement de cœur (`CallLiveClock`).
     let liveClock: CallLiveClockProviding
 
@@ -685,6 +687,7 @@ final class CallManager: ObservableObject, Sendable {
         audio: CallAudioSessionControllerProviding = CallAudioSessionController(),
         videoSuspension: CallVideoSuspensionProviding = CallVideoSuspension(),
         cameraActuator: CallCameraActuatorProviding = CallCameraActuator(),
+        reconnector: CallReconnectorProviding = CallReconnector(),
         liveClock: CallLiveClockProviding = CallLiveClock()
     ) {
         self.signalingRouter = signalingRouter
@@ -701,6 +704,7 @@ final class CallManager: ObservableObject, Sendable {
         self.audio = audio
         self.videoSuspension = videoSuspension
         self.cameraActuator = cameraActuator
+        self.reconnector = reconnector
         self.audioSessionQueue = audio.audioSessionQueue
         self.liveClock = liveClock
         // Survival controller is created with no actuator yet; `attach(self)` wires
@@ -719,6 +723,7 @@ final class CallManager: ObservableObject, Sendable {
         self.videoSurvivalController.attach(actuator: videoSuspension)
         videoSuspension.attach(to: self)
         cameraActuator.attach(to: self)
+        reconnector.attach(to: self)
         videoSuspension.bindSurvivalFreeze()
 
         sdpSignaler.isCurrentCall = { [weak self] callId in self?.currentCallId == callId }

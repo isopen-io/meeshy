@@ -79,7 +79,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     func test_attemptReconnection_neverChasesADepartedPrimary() throws {
         let reconnect = try body(of: "func attemptReconnection(escalate: Bool = false) {", in: manager, length: 300)
 
-        XCTAssertTrue(reconnect.contains("guard !isGroupPrimaryVacated else { return }"))
+        XCTAssertTrue(reconnect.contains("guard !call.isGroupPrimaryVacated else { return }"))
     }
 
     func test_groupPrimaryDidVacate_settlesTheCallAsConnected() throws {

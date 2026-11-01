@@ -4092,7 +4092,7 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
         // The post-backoff guard must pattern-match on `.reconnecting` (not just
         // isActive) to detect a natural recovery during the sleep window.
         XCTAssertTrue(
-            fnBody.contains("case .reconnecting(let current) = self.callState"),
+            fnBody.contains("case .reconnecting(let current) = call.callState"),
             "Post-backoff guard must match .reconnecting(let current) = self.callState, " +
             "not callState.isActive — .connected is also active and would allow a stale " +
             "restart offer to disrupt a naturally recovered connection"
@@ -4396,7 +4396,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
             "set a local `interfaceChanged` flag when the active interface type changes."
         )
         XCTAssertTrue(
-            handlerBody.contains(".handoff") && (try callManagerSource()).contains("call.attemptReconnection()"),
+            handlerBody.contains(".handoff") && (try callManagerSource()).contains("call.reconnector.attemptReconnection()"),
             "networkMonitor.pathUpdateHandler must call attemptReconnection() on an " +
             "interface change — stale ICE candidates from the old interface require a " +
             "full ICE restart to re-negotiate valid candidates on the new interface."

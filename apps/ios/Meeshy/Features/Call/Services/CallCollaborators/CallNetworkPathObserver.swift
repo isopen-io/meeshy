@@ -111,7 +111,7 @@ final class CallNetworkPathObserver: CallNetworkPathObserverProviding {
             // candidates on the active interface and the call stays alive.
             Logger.calls.info("Network interface changed to \(String(describing: currentInterfaceType)) — ICE restart for handoff")
         }
-        call.attemptReconnection()
+        call.reconnector.attemptReconnection()
     }
 }
 

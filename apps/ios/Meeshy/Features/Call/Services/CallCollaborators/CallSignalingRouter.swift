@@ -294,7 +294,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                     if !ackResult.joined {
                         Logger.calls.warning("Socket reconnect — call:join ACK timed out (callId=\(callId)), proceeding anyway")
                     }
-                    call.flushPendingIceCandidates()
+                    call.reconnector.flushPendingIceCandidates()
                     // Re-sync video state with the peer. The gateway resets the peer's
                     // call:media-toggled view when our socket disconnects; after reconnect
                     // the peer defaults to assuming our camera is on, which is wrong if we
@@ -433,7 +433,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                 // relance, les allocations gardent des identifiants qui expirent.
                 switch TurnCredentialRefreshPolicy.iceAction(after: call.callState) {
                 case .inert: return
-                case .rearmReconnect: call.scheduleICERestart(attempt: call.reconnectAttempt, backoffSeconds: 0)
+                case .rearmReconnect: call.reconnector.scheduleICERestart(attempt: call.reconnectAttempt, backoffSeconds: 0)
                 case .restartIce: self?.restartIceOnLiveCall(for: call)
                 }
             }

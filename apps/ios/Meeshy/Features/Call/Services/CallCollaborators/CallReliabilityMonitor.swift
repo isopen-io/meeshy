@@ -96,7 +96,7 @@ final class CallReliabilityMonitor: CallReliabilityMonitorProviding {
             return true
         case .restartICE(let elapsed):
             Logger.calls.info(".connecting watchdog (\(Int(elapsed))s) → triggering ICE restart")
-            call.attemptReconnection()
+            call.reconnector.attemptReconnection()
             return true
         case .fail(let elapsed):
             Logger.calls.error(".connecting watchdog (\(Int(elapsed))s) — failing call")
@@ -122,7 +122,7 @@ final class CallReliabilityMonitor: CallReliabilityMonitorProviding {
             break
         case .healHalfOpen?:
             Logger.calls.warning("half-open detected (inbound delta stalled, epoch \(call.connectionEpoch)) — auto ICE restart")
-            call.attemptReconnection()
+            call.reconnector.attemptReconnection()
         }
     }
 
@@ -134,7 +134,7 @@ final class CallReliabilityMonitor: CallReliabilityMonitorProviding {
         // `.connected`. Escalate: `attemptReconnection` advances the counter
         // (or trips the cap → `.connectionLost`).
         Logger.calls.warning(".reconnecting watchdog (\(Int(elapsed))s, attempt \(attempt)) — ICE restart stalled, escalating")
-        call.attemptReconnection(escalate: true)
+        call.reconnector.attemptReconnection(escalate: true)
     }
 }
 

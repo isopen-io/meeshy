@@ -1964,7 +1964,7 @@ final class ICERestartTaskSerializationTests: XCTestCase {
         )
         // attemptReconnection must route every arm through that single seam.
         XCTAssertTrue(
-            src.contains("scheduleICERestart(attempt: reconnectAttempt"),
+            src.contains("scheduleICERestart(attempt: call.reconnectAttempt"),
             "attemptReconnection must delegate to scheduleICERestart — a second, direct " +
             "iceRestartTask assignment would bypass the cancel-before-arm contract."
         )

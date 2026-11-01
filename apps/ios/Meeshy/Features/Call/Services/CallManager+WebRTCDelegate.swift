@@ -116,7 +116,7 @@ extension CallManager: WebRTCServiceDelegate {
                        || self.webRTCService.connectionState == .closed
             switch self.callState {
             case .connected:
-                self.attemptReconnection()
+                self.reconnector.attemptReconnection()
             case .reconnecting where !isFatal:
                 // Transient ICE flap during renegotiation — in-flight Task owns the loop.
                 Logger.calls.info("WebRTC disconnected during ICE restart — ignoring transient flap")
@@ -125,7 +125,7 @@ extension CallManager: WebRTCServiceDelegate {
                 // in-flight attempt is dead — escalate (advance the budget)
                 // rather than coalesce into it.
                 Logger.calls.warning("WebRTC fatal disconnect during ICE restart — triggering next attempt")
-                self.attemptReconnection(escalate: true)
+                self.reconnector.attemptReconnection(escalate: true)
             default:
                 Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
             }
