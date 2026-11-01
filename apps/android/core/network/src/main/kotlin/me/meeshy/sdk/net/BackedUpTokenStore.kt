@@ -4,7 +4,8 @@ package me.meeshy.sdk.net
  * Le [TokenStore] qui recopie la session d'un compte dans un [SessionBackup] (#14058). C'est le SITE UNIQUE
  * où les jetons s'écrivent : la connexion (toutes ses portes), le renouvellement ([SessionRefresher]) et
  * l'adoption de l'identité y passent, donc la sauvegarde les suit sans qu'aucun d'eux n'en sache rien.
- * [clear] — déconnexion, refus du renouvellement, fin d'un invité — efface la sauvegarde avec la session.
+ * [clear] — déconnexion, refus du renouvellement, fin d'un invité — efface la sauvegarde avec la session, et
+ * l'entrée du compte au coffre des comptes gardés ([AccountShelf], #14079) : celle des AUTRES comptes reste.
  *
  * Seule une session COMPLÈTE de compte (identité, JWT, jeton de session) part : un invité de lien n'a pas de
  * JWT, et l'état transitoire d'une connexion (jetons posés avant l'identité) n'est pas une session. Écriture
@@ -14,6 +15,7 @@ package me.meeshy.sdk.net
 class BackedUpTokenStore(
     private val delegate: TokenStore,
     private val backup: SessionBackup,
+    private val shelf: AccountShelf = NoAccountShelf,
     private val consent: SessionBackupConsent = SessionBackupConsent { true },
 ) : TokenStore by delegate {
 
@@ -38,6 +40,7 @@ class BackedUpTokenStore(
 
     override fun clear() {
         synchronized(lock) {
+            delegate.userId?.let(shelf::erase)
             delegate.clear()
             mirrored = null
             refusedFor = null

@@ -11,6 +11,9 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.auth.SavedAccount
 import me.meeshy.sdk.model.auth.SessionOrigin
+import me.meeshy.sdk.net.AccountShelf
+import me.meeshy.sdk.net.BackedUpAccount
+import me.meeshy.sdk.net.NoAccountShelf
 import me.meeshy.sdk.net.BackedUpSession
 import me.meeshy.sdk.net.BackedUpTokenStore
 import me.meeshy.sdk.net.InMemoryTokenStore
@@ -67,24 +70,35 @@ class AuthRepositorySessionBackupTest {
     private val saved = BackedUpSession(userId = "u1", jwt = "old-jwt", sessionToken = "sess-1")
     private val user = MeeshyUser(id = "u1", username = "atabeth")
 
+    private class RecordingShelf : AccountShelf {
+        val erased = mutableListOf<String>()
+        override suspend fun readAll(): List<BackedUpAccount> = emptyList()
+        override fun save(account: BackedUpAccount) = Unit
+        override fun erase(userId: String) {
+            erased += userId
+        }
+    }
+
     private fun scenario(
         backup: FakeBackup = FakeBackup(held = saved),
         inner: TokenStore = InMemoryTokenStore(),
         accounts: SavedAccountsStore = InMemorySavedAccountsStore(),
+        shelf: AccountShelf = NoAccountShelf,
         configure: AuthApi.() -> Unit = {},
     ): Scenario {
         val api = mockk<AuthApi>(relaxed = true).apply(configure)
         val consent = KeepSignedInConsent(accounts)
-        val store = BackedUpTokenStore(inner, backup, consent)
+        val store = BackedUpTokenStore(inner, backup, consent = consent)
         val session = SessionRepository(api, store)
         val repository = AuthRepository(
             api, store, session, NoTeardown(), SyncSeqTracker(), sessionBackup = backup, keepSignedIn = consent,
+            accountShelf = shelf,
         )
         return Scenario(repository, api, store, session, backup)
     }
 
-    private fun refused(status: Int): HttpException =
-        HttpException(Response.error<Any>(status, """{"success":false,"error":"Session révoquée","code":"SESSION_REVOKED"}""".toResponseBody()))
+    private fun refused(status: Int, code: String = "SESSION_REVOKED"): HttpException =
+        HttpException(Response.error<Any>(status, """{"success":false,"error":"Refus","code":"$code"}""".toResponseBody()))
 
     @Test
     fun `la connexion ecrit la session dans la sauvegarde`() = runTest {
@@ -146,11 +160,44 @@ class AuthRepositorySessionBackupTest {
 
     @Test
     fun `un refus d'activation ou d'age efface aussi la sauvegarde`() = runTest {
-        val s = scenario { coEvery { refresh(any()) } throws refused(403) }
+        listOf(refused(401, "ACCOUNT_ACTIVATION_REQUIRED"), refused(403, "AGE_BELOW_MINIMUM")).forEach { refusal ->
+            val s = scenario { coEvery { refresh(any()) } throws refusal }
+
+            s.repository.restoreBackedUpSession()
+
+            assertThat(s.backup.held).isNull()
+        }
+    }
+
+    @Test
+    fun `un proxy ou un portail qui repond a la place de la passerelle garde la sauvegarde`() = runTest {
+        listOf(refused(404, "NOT_FOUND"), refused(407, "PROXY"), refused(403, "FORBIDDEN"), refused(400, "BAD")).forEach { answer ->
+            val s = scenario { coEvery { refresh(any()) } throws answer }
+
+            s.repository.restoreBackedUpSession()
+
+            assertThat(s.backup.held).isEqualTo(saved)
+        }
+    }
+
+    @Test
+    fun `un refus efface aussi l'entree du compte au coffre des comptes gardes, pas celle des autres`() = runTest {
+        val shelf = RecordingShelf()
+        val s = scenario(shelf = shelf) { coEvery { refresh(any()) } throws refused(401) }
 
         s.repository.restoreBackedUpSession()
 
-        assertThat(s.backup.held).isNull()
+        assertThat(shelf.erased).containsExactly("u1")
+    }
+
+    @Test
+    fun `hors ligne le coffre des comptes gardes n'est pas touche`() = runTest {
+        val shelf = RecordingShelf()
+        val s = scenario(shelf = shelf) { coEvery { refresh(any()) } throws IOException("offline") }
+
+        s.repository.restoreBackedUpSession()
+
+        assertThat(shelf.erased).isEmpty()
     }
 
     @Test
