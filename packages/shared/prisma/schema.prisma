@@ -2245,6 +2245,11 @@ model Notification {
   @@index([createdAt])
   @@index([type])
   @@index([userId, isRead, createdAt(sort: Desc)]) // Optimisation: pagination non-lus par user
+  // Les chemins `context.postId`, `metadata.repostId` et `metadata.originalPostId`
+  // (retrait des notifications d'une publication) sont indexés HORS du schéma —
+  // Prisma ne sait pas déclarer un index sur un chemin de `Json` : migration
+  // `2026-11-01-notification-post-link-indexes.mongodb.js` (#14254). Un
+  // `prisma db push` les retirerait : il est interdit (#9035).
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)
