@@ -28,18 +28,13 @@ nonisolated enum StoryVideoPoster {
     @concurrent
     static func frame(at url: URL, maximumSize: CGSize, look: StoryMediaLook?, adjustments: ImageAdjustments?,
                       startingAt start: @Sendable (Double) -> Double) async -> CGImage? {
-        let asset = AVURLAsset(url: url)
-        guard let duree = try? await asset.load(.duration) else { return nil }
+        guard let duree = try? await AVURLAsset(url: url).load(.duration) else { return nil }
         let secondes = CMTimeGetSeconds(duree)
         guard secondes.isFinite, secondes > 0 else { return nil }
-        let debut = start(secondes)
-        let generateur = AVAssetImageGenerator(asset: asset)
-        generateur.appliesPreferredTrackTransform = true
-        generateur.maximumSize = maximumSize
-        generateur.requestedTimeToleranceBefore = .zero
-        generateur.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
-        guard let image = try? await generateur.image(at: CMTime(seconds: debut, preferredTimescale: 600)).image
-        else { return nil }
+        // Instant EXACT : aucune image d'avant la coupe ne sert d'affiche.
+        let demande = VideoThumbnailRequest(url: url, instants: .start(atMost: start(secondes)),
+                                            maximumSize: maximumSize, tolerance: .exact, cachesResult: false)
+        guard let image = await VideoThumbnailGenerator.shared.image(for: demande)?.cgImage else { return nil }
         return StoryVideoAdjustmentsProcessor.apply(look: look, adjustments: adjustments, to: image)
     }
 
