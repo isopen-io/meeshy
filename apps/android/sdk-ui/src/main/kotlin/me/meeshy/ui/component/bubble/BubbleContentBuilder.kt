@@ -167,7 +167,7 @@ public object BubbleContentBuilder {
             replyToSenderName = quoted?.senderName,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
-            images = attachments.images,
+            images = attachments.images.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it },
             files = files,
             locations = listOfNotNull(messagePlace) + attachments.locations,
             audios = attachments.audios,

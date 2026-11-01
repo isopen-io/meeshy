@@ -77,12 +77,15 @@ object CardRenderer {
 
     fun layout(input: CardInput, fonts: Fonts = Fonts()): CardLayout = CardLayoutEngine.layout(input, fonts.measure)
 
-    /** L'aperçu et l'export : la carte peinte à [targetWidth] pixels de large (la taille de la carte si `null`). */
-    fun render(input: CardInput, targetWidth: Int? = null): CardImage {
+    /**
+     * L'aperçu et l'export : la carte peinte à [targetWidth] pixels de large (la taille de la carte si `null`). [pictures] porte
+     * l'image de chaque média déjà chargée, par identifiant ; une tuile sans la sienne se peint en attente.
+     */
+    fun render(input: CardInput, targetWidth: Int? = null, pictures: Map<String, Bitmap> = emptyMap()): CardImage {
         val fonts = Fonts()
         val layout = layout(input, fonts)
         val scale = targetWidth?.let { it / layout.width } ?: 1.0
-        return CardImage(draw(layout, input, scale, fonts), layout.width, layout.height, layout.regions, layout.truncated)
+        return CardImage(draw(layout, input, scale, fonts, pictures), layout.width, layout.height, layout.regions, layout.truncated)
     }
 
     /** La VIGNETTE d'un template : la même carte, peinte à [width] pixels, traits portés à une épaisseur lisible. */
@@ -93,7 +96,7 @@ object CardRenderer {
         return draw(full.legible(scale), input, scale, fonts)
     }
 
-    private fun draw(layout: CardLayout, input: CardInput, scale: Double, fonts: Fonts): Bitmap {
+    private fun draw(layout: CardLayout, input: CardInput, scale: Double, fonts: Fonts, pictures: Map<String, Bitmap> = emptyMap()): Bitmap {
         val bitmap = Bitmap.createBitmap(
             maxOf(1, (layout.width * scale).toInt()), maxOf(1, (layout.height * scale).toInt()), Bitmap.Config.ARGB_8888,
         )
@@ -102,7 +105,8 @@ object CardRenderer {
         val palette = input.template.palette.palette
         paintBackground(canvas, layout, palette)
         paintWatermark(canvas, layout, palette, fonts)
-        layout.ops.forEach { paint(canvas, it, fonts) }
+        val painter = OpPainter(fonts, palette, pictures)
+        layout.ops.forEach { painter.paint(canvas, it) }
         return bitmap
     }
 
@@ -151,21 +155,24 @@ object CardRenderer {
         canvas.restore()
     }
 
-    private fun paint(canvas: Canvas, op: CardOp, fonts: Fonts) {
-        when (op) {
-            is CardOp.Text -> paintText(canvas, op, fonts)
-            is CardOp.Bar -> roundRect(canvas, op.x, op.y, op.width, op.height, op.radius, op.color)
-            is CardOp.Panel -> roundRect(canvas, op.x, op.y, op.width, op.height, op.radius, op.color)
-            is CardOp.Dot -> canvas.drawCircle(
-                op.x.toFloat(), op.y.toFloat(), op.radius.toFloat(),
-                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = op.color.toArgb() },
-            )
-            is CardOp.Separator -> paintSeparator(canvas, op)
-            is CardOp.Group -> {
-                canvas.save()
-                canvas.rotate(Math.toDegrees(op.rotation).toFloat(), op.cx.toFloat(), op.cy.toFloat())
-                op.ops.forEach { paint(canvas, it, fonts) }
-                canvas.restore()
+    private class OpPainter(val fonts: Fonts, val palette: CardPalette, val pictures: Map<String, Bitmap>) {
+        fun paint(canvas: Canvas, op: CardOp) {
+            when (op) {
+                is CardOp.Text -> paintText(canvas, op, fonts)
+                is CardOp.Bar -> roundRect(canvas, op.x, op.y, op.width, op.height, op.radius, op.color)
+                is CardOp.Panel -> roundRect(canvas, op.x, op.y, op.width, op.height, op.radius, op.color)
+                is CardOp.Dot -> canvas.drawCircle(
+                    op.x.toFloat(), op.y.toFloat(), op.radius.toFloat(),
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = op.color.toArgb() },
+                )
+                is CardOp.Separator -> paintSeparator(canvas, op)
+                is CardOp.Picture -> CardPicturePainter.paint(canvas, op, pictures[op.media.id], palette, fonts)
+                is CardOp.Group -> {
+                    canvas.save()
+                    canvas.rotate(Math.toDegrees(op.rotation).toFloat(), op.cx.toFloat(), op.cy.toFloat())
+                    op.ops.forEach { paint(canvas, it) }
+                    canvas.restore()
+                }
             }
         }
     }

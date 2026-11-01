@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.MessageMenuEntries
 import me.meeshy.sdk.model.ObjectIdGuard
 import me.meeshy.sdk.model.PinAction
+import me.meeshy.app.chat.export.CardMediaPicking
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 
@@ -37,6 +38,8 @@ internal fun BubbleContent.actionContext(
     hasOpenableFile = !isDeleted && files.isNotEmpty(),
     isEdited = isEdited,
     hasText = text.isNotBlank(),
+    hasPaintableMedia = !isDeleted && !isEndToEndSealed && CardMediaPicking.paintable(this).isNotEmpty(),
+    holdsProtectedPiece = CardMediaPicking.isProtected(this),
     hasPlace = !isDeleted && !isEndToEndSealed && locations.any { it.hasCoordinates },
     hostedEntries = hostedEntries,
     exitOffer = exitOffer,

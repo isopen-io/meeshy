@@ -130,6 +130,8 @@ private fun CardExportSheet(
     }
     state.anonymousLabel = stringResource(R.string.export_card_anonymous)
     LaunchedEffect(state.renderKey) { state.renderPreview() }
+    val context = LocalContext.current
+    LaunchedEffect(source.key) { state.pictures = CardPictureLoader.load(context, subject.media) }
     val thumbnails = remember { CardThumbnailStore() }
     DisposableEffect(thumbnails) { onDispose { thumbnails.clear() } }
     val permissions = rememberPermissionFlow()
@@ -269,7 +271,7 @@ private fun ActionRow(
                 state.busy = true
                 scope.launch {
                     if (permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = false)) {
-                        run({ CardOutput.saveToGallery(context, it) }, CardOutcome.GALLERY)
+                        run({ CardOutput.saveToGallery(context, it, state.pictures) }, CardOutcome.GALLERY)
                     } else {
                         finish(CardOutcome.DENIED)
                     }
@@ -282,7 +284,7 @@ private fun ActionRow(
             Text(stringResource(R.string.export_card_save), modifier = Modifier.padding(start = MeeshySpacing.sm), fontWeight = FontWeight.SemiBold)
         }
         FilledTonalButton(
-            onClick = { run({ CardOutput.share(context, it, shareTitle) }, CardOutcome.SHARED) },
+            onClick = { run({ CardOutput.share(context, it, shareTitle, state.pictures) }, CardOutcome.SHARED) },
             enabled = enabled, modifier = Modifier.weight(1f).height(50.dp), shape = CircleShape,
         ) {
             Icon(MeeshyIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp))

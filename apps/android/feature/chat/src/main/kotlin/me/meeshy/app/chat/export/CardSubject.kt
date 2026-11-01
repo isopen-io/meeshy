@@ -15,6 +15,8 @@ data class CardSubject(
     /** L'heure d'envoi de la réponse — la date qu'une carte peut afficher. */
     val sentAtMillis: Long,
     val quotedAtMillis: Long? = null,
+    /** Les médias que la carte peint sous la réponse (#14330). */
+    val media: List<CardMedia> = emptyList(),
 ) {
     /** Les pseudos sont-ils connus ? « pseudo au lieu du nom » n'existe qu'alors. */
     val hasHandles: Boolean get() = reply.handle != null || quoted?.handle != null
@@ -28,7 +30,7 @@ enum class CardRefusal { DELETED, NOTICE, PROTECTED, SEALED, QUOTES_PROTECTED, E
 data class CardLanguage(val code: String, val text: String)
 
 /**
- * CE QU'UNE CARTE A LE DROIT DE MONTRER — miroir (texte) de `MessageCardSubject.swift`.
+ * CE QU'UNE CARTE A LE DROIT DE MONTRER — miroir (texte, photos, vidéos) de `MessageCardSubject.swift`.
  *
  * GARDE : un message protégé (vue unique, flouté, éphémère, supprimé, avis système, chiffré
  * illisible ici) ne s'exporte pas. Une image est une copie qu'on partage : ce qui ne se copie pas
@@ -45,8 +47,8 @@ object CardSubjects {
         if (!bubble.expiresAtIso.isNullOrBlank()) return CardRefusal.PROTECTED
         val offer = bubble.exitOffer
         if (offer.quotesProtectedContent) return CardRefusal.QUOTES_PROTECTED
-        if (!offer.offers(MessageExit.IMAGINE)) return CardRefusal.PROTECTED
-        if (CardText.nonBlank(bubble.text) == null) return CardRefusal.EMPTY
+        if (!offer.offers(MessageExit.IMAGINE) || CardMediaPicking.isProtected(bubble)) return CardRefusal.PROTECTED
+        if (CardText.nonBlank(bubble.text) == null && CardMediaPicking.paintable(bubble).isEmpty()) return CardRefusal.EMPTY
         return null
     }
 
@@ -77,6 +79,7 @@ object CardSubjects {
             quoted = quote(bubble, viewer),
             reply = reply,
             sentAtMillis = bubble.createdAtIso?.let { isoToEpochMillisOrNull(it) } ?: nowMillis,
+            media = CardMediaPicking.paintable(bubble),
         )
     }
 
