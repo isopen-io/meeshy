@@ -58,7 +58,7 @@ extension MessageCardExportSheet {
             }
             HStack(spacing: MeeshySpacing.smPlus) {
                 Button { save() } label: {
-                    Label(MessageCardExportText.text("export.card.save", "Sauvegarder"), systemImage: "square.and.arrow.down")
+                    Label(MessageCardExportText.text("export.card.save", "Enregistrer"), systemImage: "square.and.arrow.down")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, minHeight: 50)

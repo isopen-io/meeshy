@@ -236397,7 +236397,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sauvegarder"
+            "value": "Enregistrer"
           }
         },
         "it": {
@@ -236409,7 +236409,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guardar"
+            "value": "Salvar"
           }
         }
       }
@@ -236467,43 +236467,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تخيَّل"
+            "value": "حوِّل إلى صورة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stell dir vor"
+            "value": "Als Bild"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Imagine"
+            "value": "Picture it"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Imagina"
+            "value": "Crear imagen"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Imagine"
+            "value": "Imager"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Immagina"
+            "value": "Crea immagine"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Imagine"
+            "value": "Criar imagem"
           }
         }
       }

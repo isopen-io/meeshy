@@ -295,11 +295,31 @@ final class ImagineWorkshopTests: XCTestCase {
         XCTAssertNotEqual(one, three)
     }
 
-    func test_catalog_theActionIsImager_theWorkshopIsImagine() throws {
+    /// UN titre et UN bouton, ceux des menus, pour l'atelier d'une carte et la
+    /// vue Imager d'une œuvre, sur iOS comme sur Android (#14348, #14346) : la
+    /// vue porte le mot du menu, « Imager », et enregistre par le verbe des
+    /// menus d'export, « Enregistrer » — dans chacune des sept langues.
+    func test_catalog_theWorkshopIsTitledByTheMenuWord_andSavesWithTheExportVerb() throws {
         let strings = try Self.catalog()
-        XCTAssertEqual(Self.value(strings["message.menu.export"], "fr"), "Imager")
-        XCTAssertEqual(Self.value(strings["export.card.title"], "fr"), "Imagine")
+        XCTAssertEqual(Self.value(strings["export.card.title"], "fr"), "Imager")
+        XCTAssertEqual(Self.value(strings["export.card.save"], "fr"), "Enregistrer")
         XCTAssertEqual(Self.value(strings["export.card.tab.frame"], "fr"), "Frame")
+        for language in Self.languages {
+            XCTAssertEqual(Self.value(strings["export.card.title"], language),
+                           Self.value(strings["message.menu.export"], language), "titre [\(language)]")
+            XCTAssertEqual(Self.value(strings["export.card.save"], language),
+                           Self.value(strings["feed.post.save"], language), "bouton [\(language)]")
+        }
+    }
+
+    func test_theWorkshopAndTheImagerView_neverFallBackToTheOldWords() throws {
+        for file in ["Meeshy/Features/Export/ImagerSheet.swift",
+                     "Meeshy/Features/Export/MessageCardExportSheet.swift",
+                     "Meeshy/Features/Export/MessageCardExportSheet+Output.swift"] {
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(file))
+            XCTAssertFalse(source.contains("\"Imagine\")"), "\(file) : le titre est « Imager »")
+            XCTAssertFalse(source.contains("\"Sauvegarder\")"), "\(file) : le bouton est « Enregistrer »")
+        }
     }
 
     func test_catalog_everyImagineWordSpeaksTheSevenLanguages() throws {

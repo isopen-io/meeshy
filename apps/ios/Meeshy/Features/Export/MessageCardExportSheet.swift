@@ -183,7 +183,7 @@ struct MessageCardExportSheet: View {
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.bottom, MeeshySpacing.md)
             .background(ambient)
-            .navigationTitle(MessageCardExportText.text("export.card.title", "Imagine"))
+            .navigationTitle(MessageCardExportText.text("export.card.title", "Imager"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
         }

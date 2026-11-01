@@ -4,9 +4,9 @@ import MeeshySDK
 import MeeshyUI
 
 /// **LA VUE « IMAGER » D'UNE ŒUVRE COMPOSÉE** (#14325) — story, post à scène,
-/// réel, scène d'une galerie. Titrée « Imagine » comme l'atelier d'un message :
+/// réel, scène d'une galerie. Titrée « Imager » comme l'atelier d'un message :
 /// elle montre l'œuvre, offre au-delà d'une minute 1/4 · 2/4 · 3/4 · 4/4 depuis
-/// le début (#13871, tout par défaut), puis « Sauvegarder » range la part
+/// le début (#13871, tout par défaut), puis « Enregistrer » range la part
 /// choisie dans Photos et « Partager » la remet à la feuille du système.
 /// Rien ne se rend avant l'un de ces deux gestes ; « Annuler » arrête le rendu
 /// en vol. Sauvegarder emprunte l'anneau d'« Enregistrer » : la feuille peut se
@@ -44,7 +44,7 @@ struct ImagerSheet: View {
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md)
-            .navigationTitle(MessageCardExportText.text("export.card.title", "Imagine"))
+            .navigationTitle(MessageCardExportText.text("export.card.title", "Imager"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -93,7 +93,7 @@ struct ImagerSheet: View {
         .frame(width: Self.previewSize.width, height: Self.previewSize.height)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(MessageCardExportText.text("export.card.title", "Imagine"))
+        .accessibilityLabel(MessageCardExportText.text("export.card.title", "Imager"))
         .accessibilityValue(work.isStill ? "" : ImagerPresenter.clock(work.total))
     }
 
@@ -189,7 +189,7 @@ struct ImagerSheet: View {
     private var actions: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Button { save() } label: {
-                Label(MessageCardExportText.text("export.card.save", "Sauvegarder"), systemImage: "square.and.arrow.down")
+                Label(MessageCardExportText.text("export.card.save", "Enregistrer"), systemImage: "square.and.arrow.down")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 50)
