@@ -55,12 +55,27 @@ enum ConversationMentionScope {
         return viewModel
     }
 
-    /// Les participants ACTIFS servis de la conversation (première page, cache
-    /// d'abord) : les membres qu'un `@` propose en local, jamais les auteurs de
-    /// l'historique. Un échec n'en rend aucun — la recherche distante suit.
+    /// Les participants ACTIFS servis de la conversation (première page) : les
+    /// membres qu'un `@` propose en local, jamais les auteurs de l'historique.
+    ///
+    /// Seule une page FRAÎCHE compte — en cache `.fresh`, ou juste revalidée par
+    /// le réseau : elle prouve l'appartenance du lecteur et ouvre une portée. Une
+    /// page `.stale` / expirée peut porter un lecteur PARTI et des partis ; elle
+    /// n'ouvre rien, et la portée reste celle du rang servi (`currentUserRole`).
+    /// Un échec n'en rend aucun — la recherche distante suit.
     static let servedActiveMembers: @Sendable (String) async -> [String] = { conversationId in
-        let page = (try? await ParticipantService.shared.loadFirstPage(for: conversationId)) ?? []
-        return page.filter { $0.isActive != false }.compactMap(\.userId)
+        if let fresh = await freshParticipants(conversationId) { return activeUserIds(fresh) }
+        _ = try? await ParticipantService.shared.loadFirstPage(for: conversationId, forceRefresh: true)
+        return await freshParticipants(conversationId).map(activeUserIds) ?? []
+    }
+
+    private static func freshParticipants(_ conversationId: String) async -> [PaginatedParticipant]? {
+        guard case .fresh(let items, _) = await CacheCoordinator.shared.participants.load(for: conversationId) else { return nil }
+        return items
+    }
+
+    nonisolated private static func activeUserIds(_ page: [PaginatedParticipant]) -> [String] {
+        page.filter { $0.isActive != false }.compactMap(\.userId)
     }
 
     /// Le fil ouvert par son seul id (`conversation == nil` à l'ouverture) est
