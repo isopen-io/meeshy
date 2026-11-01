@@ -555,18 +555,14 @@ final class CallManager: ObservableObject, Sendable {
     /// lit, streaming) while `isVideoEnabled == false` — a privacy regression, not
     /// just a UI desync.
     var cameraSwitchTask: Task<Void, Never>?
-    /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
-    /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
-    var audioActivationFallbackTask: Task<Void, Never>?
-    /// L'app a activé la session elle-même pendant cet appel (sonnerie in-app,
-    /// filet « micro muet ») : elle devra la rendre, CallKit ou pas.
-    var audioSessionSelfActivated = false
     var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
     // here and replayed after the socket reconnects + emitCallJoin fires.
     var pendingIceCandidates: [[String: Any]] = []
     var cancellables = Set<AnyCancellable>()
-    let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
+    /// La file sérielle de la session audio, créée par `CallAudioSessionController` :
+    /// `let` Sendable, que le proxy CallKit lit depuis sa propre file privée.
+    let audioSessionQueue: DispatchQueue
 
     /// C3 — `true` quand la session de capture caméra a été INTERROMPUE par le
     /// système, donc que le pair doit voir notre avatar plutôt qu'un dernier
@@ -665,6 +661,8 @@ final class CallManager: ObservableObject, Sendable {
     let ringTimeouts: CallRingTimeoutsProviding
     /// Le PiP système (`CallSystemPiPController`).
     let systemPiP: CallSystemPiPControllerProviding
+    /// La session audio de l'appel (`CallAudioSessionController`).
+    let audio: CallAudioSessionControllerProviding
     /// Le chrono affiché et le battement de cœur (`CallLiveClock`).
     let liveClock: CallLiveClockProviding
 
@@ -680,6 +678,7 @@ final class CallManager: ObservableObject, Sendable {
         networkPathObserver: CallNetworkPathObserverProviding = CallNetworkPathObserver(),
         ringTimeouts: CallRingTimeoutsProviding = CallRingTimeouts(),
         systemPiP: CallSystemPiPControllerProviding = CallSystemPiPController(),
+        audio: CallAudioSessionControllerProviding = CallAudioSessionController(),
         liveClock: CallLiveClockProviding = CallLiveClock()
     ) {
         self.signalingRouter = signalingRouter
@@ -693,6 +692,8 @@ final class CallManager: ObservableObject, Sendable {
         self.networkPathObserver = networkPathObserver
         self.ringTimeouts = ringTimeouts
         self.systemPiP = systemPiP
+        self.audio = audio
+        self.audioSessionQueue = audio.audioSessionQueue
         self.liveClock = liveClock
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
@@ -733,6 +734,7 @@ final class CallManager: ObservableObject, Sendable {
         reliabilityMonitor.attach(to: self)
         ringTimeouts.attach(to: self)
         systemPiP.attach(to: self)
+        audio.attach(to: self)
         liveClock.attach(to: self)
         signalingRouter.start(routingTo: self)
         networkPathObserver.start(observing: self)

@@ -77,7 +77,7 @@ extension CallManager {
         isSpeaker.toggle()
         HapticFeedback.light()
         let intended = isSpeaker
-        applySpeakerRouteOffMain { [weak self] applied in
+        audio.applySpeakerRouteOffMain { [weak self] applied in
             guard let self, !applied, self.isSpeaker == intended else { return }
             self.isSpeaker = previousSpeaker
         }
@@ -122,7 +122,7 @@ extension CallManager {
                 }
                 guard !Task.isCancelled else { return }
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
-                self.updateAudioSessionModeForCurrentVideoState()
+                self.audio.updateAudioSessionModeForCurrentVideoState()
 
                 // User intent is authoritative: forget any survival state so the
                 // controller never fights a manual toggle (and re-evaluates fresh).

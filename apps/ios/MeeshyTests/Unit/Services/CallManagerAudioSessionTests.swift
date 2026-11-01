@@ -512,7 +512,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
 
         XCTAssertTrue(
-            newDevBody.contains("if !call.applySpeakerRoute()"),
+            newDevBody.contains("if !call.audio.applySpeakerRoute()"),
             ".newDeviceAvailable must check applySpeakerRoute()'s result and revert isSpeaker on " +
             "failure — same discipline as toggleSpeaker(), otherwise a route-priority failure leaves " +
             "isSpeaker desynced from the real audio route."

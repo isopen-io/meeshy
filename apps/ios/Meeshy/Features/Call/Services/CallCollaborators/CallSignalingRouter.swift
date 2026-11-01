@@ -367,7 +367,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                     // ViewController` exige `.videoChat` : sans cette ré-application
                     // la session reste en `.voiceChat` sur escalade unilatérale et
                     // le PiP peut refuser de démarrer.
-                    call.updateAudioSessionModeForCurrentVideoState()
+                    call.audio.updateAudioSessionModeForCurrentVideoState()
                     // Le capteur de proximité doit se désarmer/réarmer en miroir de
                     // `isVideoUIActive` — sans cette ligne il reste actif pendant tout
                     // un appel vidéo escaladé unilatéralement par le pair et bloque

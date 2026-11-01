@@ -58,7 +58,7 @@ extension CallManager: ThermalStateMonitorDelegate {
                         // real, avoidable flicker. Mirrors toggleVideo/handleHold, which
                         // both recheck cancellation immediately after this same await.
                         self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
-                        self.updateAudioSessionModeForCurrentVideoState()
+                        self.audio.updateAudioSessionModeForCurrentVideoState()
                         self.videoSurvivalController.reset()
                         // P0-3 — signal the peer (avatar placeholder, not a frozen frame).
                         if let callId = self.currentCallId {

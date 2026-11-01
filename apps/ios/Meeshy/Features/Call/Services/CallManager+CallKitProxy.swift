@@ -242,7 +242,7 @@ class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sendable {
         // ~200ms so the engine is up by the time we override.
         Task { @MainActor [weak self] in
             _ = await cancellableSleep(for: .milliseconds(200))
-            self?.manager?.applySpeakerRoute()
+            self?.manager?.audio.applySpeakerRoute()
         }
         let outputs = audioSession.currentRoute.outputs
             .map { $0.portType.rawValue }

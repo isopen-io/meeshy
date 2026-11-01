@@ -142,7 +142,7 @@ extension CallManager: WebRTCServiceDelegate {
             // `hasRemoteVideoTrack` était encore faux. Sans cette ligne la session
             // n'est jamais réalignée et le PiP peut refuser de démarrer.
             if !wasVideoUIActive && self.isVideoUIActive {
-                self.updateAudioSessionModeForCurrentVideoState()
+                self.audio.updateAudioSessionModeForCurrentVideoState()
                 self.updateProximityMonitoring()
             }
             // Robustesse — track distant recréé (ICE restart) : ré-attache le

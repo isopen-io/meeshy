@@ -127,7 +127,7 @@ final class CallAudioSessionActivationPolicyTests: XCTestCase {
     }
 
     func test_deactivateAudioSession_followsTheSelfActivationRule() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+AudioSession.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallAudioSessionController.swift")
         XCTAssertTrue(source.contains("CallAudioSessionPolicy.shouldDeactivateOnEnd("))
         XCTAssertTrue(source.contains("self.audioSessionSelfActivated = true"), "le filet « micro muet » note son activation")
         XCTAssertTrue(source.contains("if activation == true { audioSessionSelfActivated = true }"))
@@ -186,7 +186,7 @@ final class CallEndEmissionTests: XCTestCase {
     }
 
     func test_audioDeactivation_leavesTheMainThread() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+AudioSession.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallAudioSessionController.swift")
         guard let start = source.range(of: "func deactivateAudioSession() {") else { return XCTFail("missing") }
         let body = source[start.upperBound...]
         let end = body.range(of: "\n    }\n")?.lowerBound ?? body.endIndex

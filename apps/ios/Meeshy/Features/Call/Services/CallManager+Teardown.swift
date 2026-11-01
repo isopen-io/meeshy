@@ -166,7 +166,7 @@ extension CallManager {
         lastKnownStats = nil
         CallQualityStatsFeed.shared.reset()
         webRTCService.close()
-        deactivateAudioSession()
+        audio.deactivateAudioSession()
         callState = .ended(reason: reason)
         connectionQuality = .new
         liveVideoQualityLevel = nil
@@ -229,8 +229,7 @@ extension CallManager {
         signalOfferAnswerTask = nil
         cameraSwitchTask?.cancel()
         cameraSwitchTask = nil
-        audioActivationFallbackTask?.cancel()
-        audioActivationFallbackTask = nil
+        audio.cancelStuckMutedFallback()
         CallManager.callKitDidActivateFired = false
         incomingRing.cancelFreshnessCheck()
         analyticsSnapshotTask?.cancel()

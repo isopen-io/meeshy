@@ -283,7 +283,7 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
             call.turnCredentials.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? Int(QualityThresholds.turnDefaultCredentialTTLSeconds)))
             call.applyNegotiationRole()
             Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
-            call.configureAudioSession()
+            call.audio.configureAudioSession()
             call.reliabilityMonitor.startReliabilityMonitor()
             Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
             await call.performLocalMediaStart(isVideo: isVideo, callId: ack.callId)
@@ -390,7 +390,7 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
         }
         call.turnCredentials.armTurnCredentialsAfterConfigure(callId: callId, iceServers: nil)
         call.applyNegotiationRole()
-        call.configureAudioSession()
+        call.audio.configureAudioSession()
         call.reliabilityMonitor.startReliabilityMonitor()
 
         call.joinCallRoomReliably(callId: callId)
