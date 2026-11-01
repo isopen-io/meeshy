@@ -60,7 +60,7 @@ import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
-import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
+import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentOrder';
 import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle, pushThreadFields } from './push-header';
 import { contentDetailCategory, contentDetailPushFields } from './content-detail';
 import { servedBannerBody } from './served-banner-body';
