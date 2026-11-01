@@ -1,5 +1,10 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { truncateByCodePoints } from '../../utils/truncate-text';
+import {
+  RECIPIENT_LANG_SELECT,
+  recipientLanguage,
+  type RecipientLanguagePrefs,
+} from '../../utils/recipient-language';
+import { languageOfTextSynthesis, textSynthesis } from '../notifications/content-synthesis';
 import type {
   ReproducedNotification,
   ReproducedNotificationAnnouncer,
@@ -38,6 +43,10 @@ const log = enhancedLogger.child({ module: 'reproduceEditedSubjectNotifications'
  * qui ne porte pas l'extrait en métadonnée n'est pas réécrite : on ne devine
  * pas ce qu'il faudrait remplacer.
  *
+ * #14318 — l'aperçu rangé est désormais la SYNTHÈSE du texte (« Message
+ * texte »), dans la langue de cadrage du destinataire : l'édition la recalcule
+ * dans cette langue, et ne réécrit rien quand le palier ne change pas.
+ *
  * Le filtre de lecture est celui, éprouvé, des retraits jumeaux — mêmes chemins
  * JSON, même `$runCommandRaw` (Prisma ne filtre pas les chemins JSON sur
  * MongoDB), y compris les DEUX chemins de `commentId` : `context.commentId`
@@ -65,12 +74,7 @@ const SUBJECT_PATHS: Readonly<Record<EditedSubject['kind'], readonly string[]>> 
   comment: ['context.commentId', 'metadata.commentId'],
 };
 
-/**
- * Longueur d'extrait — celle de `truncateMessage`, le troncateur commun des
- * producteurs sociaux. Réécrire un extrait plus long que ne l'était l'original
- * gonflerait la ligne à chaque édition.
- */
-const PREVIEW_MAX_LENGTH = 100;
+const SEGMENT = ' · ';
 
 /** Taille d'un lot : même raison et même valeur que les retraits jumeaux. */
 export const SUBJECT_NOTIFICATION_REPRODUCTION_BATCH_SIZE = 200;
@@ -101,6 +105,13 @@ export interface EditedSubjectNotificationPrisma {
   notification: {
     update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
   };
+  /** Lu seulement pour les lignes d'avant #14318, dont l'aperçu ne dit pas sa langue. */
+  user?: {
+    findMany(args: {
+      where: { id: { in: string[] } };
+      select: typeof RECIPIENT_LANG_SELECT & { id: true };
+    }): Promise<ReadonlyArray<RecipientLanguagePrefs & { id: string }>>;
+  };
 }
 
 function objectId(raw: RawObjectId | undefined): string | undefined {
@@ -115,13 +126,46 @@ function asBlob(value: unknown): Record<string, unknown> {
 }
 
 /**
- * Remplace TOUTES les occurrences de l'ancien extrait — `split`/`join` plutôt
- * qu'une expression régulière, parce que l'extrait est du texte UTILISATEUR :
- * il contient couramment des caractères qui seraient interprétés comme des
- * métacaractères, et l'échapper serait une seconde règle à tenir juste.
+ * #14318 — l'aperçu rangé est une SYNTHÈSE (« Message texte ») : on la remplace
+ * SEGMENT par segment, jamais en sous-chaîne (« Message texte » est contenu
+ * dans « Long message texte » dans plus d'une langue). Une ligne d'AVANT la
+ * décision porte encore le texte, serti « : « … » » ou « « … » » : il cède la
+ * place à la synthèse au premier passage. `split`/`join` plutôt qu'une
+ * expression régulière : l'ancien extrait est du texte UTILISATEUR.
  */
 function substitute(text: string, previous: string, next: string): string {
-  return text.split(previous).join(next);
+  const segments = text.split(SEGMENT);
+  if (segments.includes(previous)) {
+    return segments.map((segment) => (segment === previous ? next : segment)).join(SEGMENT);
+  }
+  return text
+    .split(` : « ${previous} »`).join(`${SEGMENT}${next}`)
+    .split(`« ${previous} »`).join(next)
+    .split(previous).join(next);
+}
+
+/**
+ * La langue de la ligne : celle de la synthèse qu'elle porte ; à défaut (ligne
+ * d'avant la décision), celle de son destinataire ; en dernier recours 'fr'.
+ */
+function rowLanguage(previous: string, recipientLang: string | undefined): string {
+  return languageOfTextSynthesis(previous) ?? recipientLang ?? 'fr';
+}
+
+async function rowRecipientLanguages(
+  prisma: EditedSubjectNotificationPrisma,
+  userIds: readonly string[]
+): Promise<ReadonlyMap<string, string>> {
+  if (!prisma.user || userIds.length === 0) return new Map();
+  try {
+    const users = await prisma.user.findMany({
+      where: { id: { in: [...userIds] } },
+      select: { ...RECIPIENT_LANG_SELECT, id: true },
+    });
+    return new Map(users.map((user) => [user.id, recipientLanguage(user, 'fr')]));
+  } catch {
+    return new Map();
+  }
 }
 
 export async function reproduceEditedSubjectNotifications(
@@ -132,7 +176,6 @@ export async function reproduceEditedSubjectNotifications(
   if (!edited.subject.id) return 0;
 
   const previewKey = PREVIEW_KEY[edited.subject.kind];
-  const nextPreview = truncateByCodePoints((edited.content ?? '').trim(), PREVIEW_MAX_LENGTH, '…');
   const reproduced: ReproducedNotification[] = [];
   // Le drainage relit APRÈS écriture, or la réécriture ne retire pas les lignes
   // du prédicat : il faut donc paginer par `_id` croissant, sinon le premier
@@ -159,6 +202,10 @@ export async function reproduceEditedSubjectNotifications(
 
     const rows = raw?.cursor?.firstBatch ?? [];
     if (rows.length === 0) return reproduced.length;
+    const langs = await rowRecipientLanguages(
+      prisma,
+      rows.map((row) => objectId(row.userId)).filter((id): id is string => !!id),
+    );
 
     for (const row of rows) {
       const id = objectId(row._id);
@@ -174,7 +221,9 @@ export async function reproduceEditedSubjectNotifications(
       // Sans ancien extrait, rien ne dit QUELLE portion des phrases composées
       // décrivait le texte édité. On ne devine pas : la ligne est laissée
       // intacte plutôt que réécrite au jugé.
-      if (previousPreview === '' || previousPreview === nextPreview) continue;
+      if (previousPreview === '') continue;
+      const nextPreview = textSynthesis(rowLanguage(previousPreview, langs.get(userId)), edited.content);
+      if (nextPreview === '' || previousPreview === nextPreview) continue;
 
       metadata[previewKey] = nextPreview;
       const data: Record<string, unknown> = { metadata };

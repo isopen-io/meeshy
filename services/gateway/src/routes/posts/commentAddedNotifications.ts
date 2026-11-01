@@ -16,7 +16,6 @@ import type { Post } from '@meeshy/shared/prisma/client';
 import type { MentionService } from '../../services/MentionService';
 import type { ThreadAudience } from '../../services/posts/commentHome';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 type CommentedPost = Pick<Post, 'authorId' | 'type' | 'createdAt' | 'expiresAt' | 'visibility' | 'visibilityUserIds'>;
 
@@ -71,7 +70,7 @@ export async function notifyCommentAdded(params: {
           postId,
           commenterId,
           mentionedUserIds,
-          commentExcerpt: sliceCodePointsOrUndefined(content, 100),
+          commentExcerpt: content || undefined,
           // Discriminant d'entité → surface ouverte au tap côté client.
           postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
           // Un commentaire n'a pas d'audience propre : il hérite de celle du
@@ -105,7 +104,7 @@ export async function notifyCommentAdded(params: {
           commentId,
           parentCommentId: parentId,
           replyPreview: content,
-          parentCommentPreview: sliceCodePointsOrUndefined(parentComment.content, 80),
+          parentCommentPreview: parentComment.content ?? undefined,
           // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
           postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
           postCreatedAt: post?.createdAt ?? undefined,
@@ -139,7 +138,7 @@ export async function notifyCommentAdded(params: {
       commentId,
       storyAuthorId: post.authorId,
       commenterId,
-      commentExcerpt: sliceCodePointsOrUndefined(content, 100),
+      commentExcerpt: content || undefined,
       postType: post.type as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL',
       postCreatedAt: post.createdAt ?? undefined,
       postExpiresAt: post.expiresAt ?? undefined,

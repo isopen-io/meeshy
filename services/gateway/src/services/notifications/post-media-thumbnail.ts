@@ -8,8 +8,8 @@ import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 /**
  * Résout le 1er média d'un post → nature + miniature pour enrichir la
  * notification : la ligne in-app rend la vignette, le push iOS l'attache
- * (UNNotificationAttachment). Pour image on attache le fichier lui-même ;
- * pour vidéo/audio on attache la miniature générée (toujours une image).
+ * (UNNotificationAttachment). Seule la miniature générée voyage, jamais le
+ * fichier en haute définition (#14318).
  *
  * Défensif : retourne `null` (au lieu de jeter) si le modèle `postMedia`
  * est absent (tests) ou si le post n'a pas de média visuel — l'appelant
@@ -24,7 +24,7 @@ export async function resolvePostMedia(prisma: PrismaClient, postId: string): Pr
     const media = await prisma.postMedia.findFirst({
       where: { postId },
       orderBy: { order: 'asc' },
-      select: { mimeType: true, fileUrl: true, thumbnailUrl: true },
+      select: { mimeType: true, thumbnailUrl: true },
     });
     if (!media) return null;
 
@@ -35,15 +35,10 @@ export async function resolvePostMedia(prisma: PrismaClient, postId: string): Pr
           : null;
     if (!mediaType) return null;
 
-    // Vignette poussée au client/iOS : toujours une image téléchargeable.
-    // Image → le fichier ; vidéo/audio → la miniature générée (si présente).
-    const rawThumb = mediaType === 'image'
-      ? (media.fileUrl || media.thumbnailUrl || undefined)
-      : (media.thumbnailUrl || undefined);
-    const thumbnailUrl = rawThumb ? publicMediaUrlFromEnv(rawThumb) : undefined;
-    const thumbnailMimeType = thumbnailUrl
-      ? (mediaType === 'image' ? (media.mimeType ?? 'image/jpeg') : 'image/jpeg')
-      : undefined;
+    // #14318 — seule la VIGNETTE voyage, jamais le fichier en haute
+    // définition : une image sans vignette part sans image.
+    const thumbnailUrl = media.thumbnailUrl ? publicMediaUrlFromEnv(media.thumbnailUrl) : undefined;
+    const thumbnailMimeType = thumbnailUrl ? 'image/jpeg' : undefined;
 
     return { mediaType, thumbnailUrl, thumbnailMimeType };
   } catch {

@@ -11,6 +11,8 @@ import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 
+import { postSynthesis } from './content-synthesis';
+
 function formatDuration(ms: number): string {
   return formatClock(Math.round(ms / 1000));
 }
@@ -514,10 +516,10 @@ export function truncateMessage(message: string, maxWords: number = 25): string 
 }
 
 /**
- * Sous-titre « Votre {entité} » enrichi du détail du contenu visé : l'extrait
- * texte (« Votre story : « … » ») ou, à défaut, un résumé média localisé
- * (« Votre story · 📷 Photo »). Source unique pour réactions / partages —
- * aligné sur le wording des commentaires. SANS date (le client l'append).
+ * Sous-titre « Votre {entité} » enrichi de la SYNTHÈSE du contenu visé
+ * (« Votre story · Message texte · Image haute définition », #14318) — jamais
+ * son texte. Source unique pour réactions / partages / commentaires. SANS date
+ * (le client l'append).
  */
 export function buildOwnerSubtitleWithDetail(
   lang: string,
@@ -525,10 +527,8 @@ export function buildOwnerSubtitleWithDetail(
   detail: { textPreview?: string; mediaType?: 'image' | 'video' | 'audio' },
 ): string {
   const label = notificationString(lang, 'comment.subtitleOwner', { postType });
-  const text = detail.textPreview?.trim();
-  if (text) return `${label} : « ${truncateMessage(text)} »`;
-  const mediaSummary = mediaSummaryString(lang, detail.mediaType);
-  return mediaSummary ? `${label} · ${mediaSummary}` : label;
+  const synthesis = postSynthesis(lang, { text: detail.textPreview, mediaType: detail.mediaType });
+  return synthesis ? `${label} · ${synthesis}` : label;
 }
 
 /**
@@ -536,8 +536,8 @@ export function buildOwnerSubtitleWithDetail(
  * un partage. Le geste lui-même est déjà énoncé par le titre et par le
  * sous-titre de bannière (« a réagi ❤️ à votre publication ») : répéter cette
  * phrase dans le corps écrivait la même information deux fois sur trois
- * lignes. Le corps sert donc à identifier CE QUI a été visé — le début du
- * texte, ou le résumé média, ou les deux.
+ * lignes. Le corps sert donc à identifier CE QUI a été visé — par sa SYNTHÈSE
+ * (longueur du texte, nature du média, #14318), jamais par son texte.
  *
  * Le repli sur le libellé de l'entité (« Votre publication ») ne sert qu'aux
  * contenus sans texte NI média : un corps vide ferait disparaître la ligne.
@@ -547,12 +547,8 @@ export function targetPreviewBody(
   postType: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
   detail: { textPreview?: string; mediaType?: 'image' | 'video' | 'audio' },
 ): string {
-  const text = detail.textPreview?.trim();
-  const mediaSummary = mediaSummaryString(lang, detail.mediaType);
-  if (text && mediaSummary) return `${mediaSummary} · ${truncateMessage(text)}`;
-  if (text) return truncateMessage(text);
-  if (mediaSummary) return mediaSummary;
-  return notificationString(lang, 'comment.subtitleOwner', { postType });
+  const synthesis = postSynthesis(lang, { text: detail.textPreview, mediaType: detail.mediaType });
+  return synthesis || notificationString(lang, 'comment.subtitleOwner', { postType });
 }
 
 /** Résumé média localisé (« 📷 Photo » / « 🎬 Vidéo » / « 🎵 Audio ») ou ''. */

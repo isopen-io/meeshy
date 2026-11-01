@@ -166,3 +166,29 @@ export function contentSynthesis(lang: string, params: {
     params.detail?.sticker ? '' : attachmentsSynthesis(lang, params.attachments),
   ].filter((part) => part !== '').join(BODY_SEPARATOR);
 }
+
+/** La nature d'un média de post, telle que `resolvePostMedia` la lit. */
+export type PostMediaKind = 'image' | 'video' | 'audio';
+
+const POST_MEDIA_MIME: Readonly<Record<PostMediaKind, string>> = {
+  image: 'image/*',
+  video: 'video/*',
+  audio: 'audio/*',
+};
+
+/** #14318 — la synthèse d'un post, d'une story ou d'un commentaire : son texte, puis son média. */
+export function postSynthesis(lang: string, params: {
+  readonly text: string | null | undefined;
+  readonly mediaType?: PostMediaKind | null;
+}): string {
+  return contentSynthesis(lang, {
+    text: params.text,
+    attachments: params.mediaType ? [{ mimeType: POST_MEDIA_MIME[params.mediaType] }] : [],
+  });
+}
+
+/** La langue dont `label` est un palier de texte, ou `null` — pour réécrire un corps déjà servi. */
+export function languageOfTextSynthesis(label: string): string | null {
+  const match = Object.entries(SYNTHESIS_STRINGS).find(([, table]) => table.text.includes(label));
+  return match ? match[0] : null;
+}

@@ -11,6 +11,12 @@
  * au rang 1, la descente et un simple appariement au rang 1 rendent le même
  * verdict, donc le témoin ne pourrait pas tomber.
  *
+ * #14318 — l'extrait n'est plus MONTRÉ, il est COMPTÉ : la notification porte
+ * la SYNTHÈSE du texte servi (« Ein Wort », « Textnachricht ») dans la langue
+ * de cadrage. Les trois textes ci-dessous ont donc trois LONGUEURS distinctes
+ * (1, 2 et 6 mots) : le palier rendu dit lequel a été servi, et le témoin de
+ * rang reste un témoin.
+ *
  * @jest-environment node
  */
 import { NotificationService } from '../../../../services/notifications/NotificationService';
@@ -26,8 +32,13 @@ const POST_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const COMMENT_ID = 'bbbbbbbbbbbbbbbbbbbbbbbb';
 
 const ORIGINAL = 'Launch day for the new version';
-const FRENCH = 'Jour de lancement de la nouvelle version';
-const SPANISH = 'Día de lanzamiento de la nueva versión';
+const FRENCH = 'Lancement';
+const SPANISH = 'Gran lanzamiento';
+
+/** Les paliers, en langue de CADRAGE allemande (`systemLanguage: 'de'`). */
+const SERVED_ORIGINAL = 'Textnachricht';
+const SERVED_FRENCH = 'Ein Wort';
+const SERVED_SPANISH = 'Kurze Textnachricht';
 
 type PostRow = {
   content: string | null;
@@ -161,8 +172,9 @@ describe('l’extrait du post d’une notification sociale descend le Prisme du 
       await run(service);
 
       const data = createdOfType(type);
-      expect(data?.metadata?.postPreview).toBe(FRENCH);
+      expect(data?.metadata?.postPreview).toBe(SERVED_FRENCH);
       expect(allText(data)).not.toContain(ORIGINAL);
+      expect(allText(data)).not.toContain(FRENCH);
     });
 
     it('sert l’ORIGINAL quand sa langue précède toute traduction dans le prisme', async () => {
@@ -173,7 +185,7 @@ describe('l’extrait du post d’une notification sociale descend le Prisme du 
 
       await run(service);
 
-      expect(createdOfType(type)?.metadata?.postPreview).toBe(ORIGINAL);
+      expect(createdOfType(type)?.metadata?.postPreview).toBe(SERVED_ORIGINAL);
     });
 
     it('un post SUPPRIMÉ ne fait partir aucun texte, ni original ni traduit', async () => {
@@ -224,18 +236,19 @@ describe('l’extrait du post d’une notification sociale descend le Prisme du 
     });
 
     const data = createdOfType('post_like');
-    expect(data?.content).toContain(FRENCH);
-    expect(data?.metadata?.postPreview).toBe(FRENCH);
+    expect(data?.content).toContain(SERVED_FRENCH);
+    expect(data?.metadata?.postPreview).toBe(SERVED_FRENCH);
   });
 
-  it('le SOUS-TITRE d’un commentaire cite le post dans la langue servie', async () => {
+  it('le SOUS-TITRE d’un commentaire décrit le post servi par sa synthèse', async () => {
     const { service, createdOfType } = makeHarness({ post: livePost(), recipient: GERMAN_THEN_FRENCH });
 
     await service.createPostCommentNotification({
       actorId: ACTOR_ID, postId: POST_ID, postAuthorId: RECIPIENT_ID, commentId: COMMENT_ID, commentPreview: 'Bravo',
     });
 
-    expect(createdOfType('post_comment')?.subtitle).toContain(FRENCH);
+    expect(createdOfType('post_comment')?.subtitle).toContain(SERVED_FRENCH);
+    expect(createdOfType('post_comment')?.subtitle).not.toContain(FRENCH);
   });
 
   it('la locale APPAREIL (rang 4) élit sa traduction quand aucun rang in-app n’est servi', async () => {
@@ -248,7 +261,7 @@ describe('l’extrait du post d’une notification sociale descend le Prisme du 
       actorId: ACTOR_ID, postId: POST_ID, commentAuthorId: RECIPIENT_ID, commentId: COMMENT_ID, replyPreview: 'Merci',
     });
 
-    expect(createdOfType('comment_reply')?.metadata?.postPreview).toBe(SPANISH);
+    expect(createdOfType('comment_reply')?.metadata?.postPreview).toBe(SERVED_SPANISH);
   });
 
   it('sans traduction dans le prisme, l’original est servi', async () => {
@@ -261,11 +274,11 @@ describe('l’extrait du post d’une notification sociale descend le Prisme du 
       actorId: ACTOR_ID, postId: POST_ID, commentId: COMMENT_ID, commentAuthorId: RECIPIENT_ID, emoji: '🔥',
     });
 
-    expect(createdOfType('comment_like')?.metadata?.postPreview).toBe(ORIGINAL);
+    expect(createdOfType('comment_like')?.metadata?.postPreview).toBe(SERVED_ORIGINAL);
   });
 
-  it('une traduction longue est bornée comme l’original (80 points de code)', async () => {
-    const long = 'é'.repeat(200);
+  it('une traduction longue est COMPTÉE entière, jamais coupée à 80 caractères (#14318)', async () => {
+    const long = Array.from({ length: 200 }, (_, i) => `mot${i}`).join(' ');
     const { service, createdOfType } = makeHarness({
       post: livePost({ translations: { fr: { text: long } } }),
       recipient: GERMAN_THEN_FRENCH,
@@ -275,9 +288,7 @@ describe('l’extrait du post d’une notification sociale descend le Prisme du 
       commentAuthorId: RECIPIENT_ID, reactorUserId: ACTOR_ID, commentId: COMMENT_ID, postId: POST_ID, reactionEmoji: '👏',
     });
 
-    const served = createdOfType('comment_reaction')?.metadata?.postPreview as string;
-    expect(Array.from(served.replace(/…$/, '')).length).toBeLessThanOrEqual(80);
-    expect(served.startsWith('é')).toBe(true);
+    expect(createdOfType('comment_reaction')?.metadata?.postPreview).toBe('Kurzer Textessay');
   });
 
   it('un post sans texte ne pose aucune clé postPreview', async () => {

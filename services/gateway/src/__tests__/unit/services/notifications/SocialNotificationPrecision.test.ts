@@ -142,7 +142,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payload).toBeDefined();
       expect(payload.title).toBe('Bob Commentateur');
       expect(payload.subtitle).toBe('a commenté votre humeur');
-      expect(payload.content).toBe('Trop drôle !');
+      expect(payload.content).toBe('Petit message texte');
       // postCreatedAt voyage en contexte → le client en dérive « du JJ/MM/AAAA HH:MM ».
       expect(payload.context.postCreatedAt).toBe(createdAt.toISOString());
     });
@@ -197,7 +197,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       // Sous-titre = l'ENTITÉ portant le commentaire (« Story »), le client y
       // append la date locale. Le body reste la réponse.
       expect(created.subtitle).toBe('Story');
-      expect(payloadOfType(mockIO, 'comment_reply').content).toBe('Complètement d\'accord');
+      expect(payloadOfType(mockIO, 'comment_reply').content).toBe('Petit message texte');
     });
 
     it('replie sur « Publication » quand le type de contenu n\'est pas précisé', async () => {
@@ -272,7 +272,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'comment_like');
       // Le corps montre le commentaire visé ; la phrase d'action, portée par
       // le titre et le sous-titre, n'y est plus recopiée.
-      expect(payload.content).toBe('« Mon avis sur la question »');
+      expect(payload.content).toBe('Message texte');
       expect(payload.subtitle).toBe('a réagi 🔥 à votre commentaire');
     });
   });
@@ -323,7 +323,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   });
 
   describe('createPostRepostNotification', () => {
-    it('wording typé « a republié votre story » + extrait en subtitle', async () => {
+    it('wording typé « a republié votre story » + synthèse du post en corps (#14318)', async () => {
       prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Coucher de soleil à Douala')) };
       await service.createPostRepostNotification({
         actorId: ACTOR_ID,
@@ -334,7 +334,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       });
 
       const payload = payloadOfType(mockIO, 'post_repost');
-      expect(payload.content).toBe('Coucher de soleil à Douala');
+      expect(payload.content).toBe('Message texte');
       expect(payload.subtitle).toBe('a republié votre story');
     });
 
@@ -464,7 +464,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const ctx = prisma.notification.create.mock.calls[0][0].data.context;
       expect(ctx.postExpiresAt).toBe(expiresAt.toISOString());
       const meta = prisma.notification.create.mock.calls[0][0].data.metadata;
-      expect(meta.postPreview).toBe('Coucher de soleil');
+      expect(meta.postPreview).toBe('Petit message texte');
     });
   });
 
@@ -487,7 +487,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'friend_new_mood');
       expect(payload).toBeDefined();
       expect(payload.subtitle).toBe('a publié une nouvelle humeur');
-      expect(payload.content).toBe('Motivé comme jamais 💪');
+      expect(payload.content).toBe('Petit message texte');
     });
 
     it('« Nouvelle story » en subtitle pour une STORY sans texte', async () => {
@@ -568,7 +568,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
     it('comment_reaction porte postPreview et le média du post', async () => {
       prisma.postMedia = {
-        findFirst: jest.fn().mockResolvedValue({ mimeType: 'image/jpeg', fileUrl: '/u/p.jpg', thumbnailUrl: null }),
+        findFirst: jest.fn().mockResolvedValue({ mimeType: 'image/jpeg', fileUrl: '/u/p.jpg', thumbnailUrl: '/u/p_thumb.jpg' }),
       };
       prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('  Nouvelle version de Meeshy  ')) };
       await service.createCommentReactionNotification({
@@ -581,10 +581,10 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       });
 
       const metadata = persistedMetadata('comment_reaction');
-      expect(metadata.postPreview).toBe('Nouvelle version de Meeshy');
-      expect(metadata.commentPreview).toBe('Superbe features');
+      expect(metadata.postPreview).toBe('Petit message texte');
+      expect(metadata.commentPreview).toBe('Petit message texte');
       expect(metadata.mediaType).toBe('image');
-      expect(metadata.postThumbnailUrl).toEqual(expect.stringContaining('p.jpg'));
+      expect(metadata.postThumbnailUrl).toEqual(expect.stringContaining('p_thumb.jpg'));
     });
 
     it('comment_like porte postPreview', async () => {
@@ -599,7 +599,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         commentPreview: 'Mon avis',
       });
 
-      expect(persistedMetadata('comment_like').postPreview).toBe('Le post commenté');
+      expect(persistedMetadata('comment_like').postPreview).toBe('Petit message texte');
     });
 
     it('comment_reply porte postPreview', async () => {
@@ -613,7 +613,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         parentCommentPreview: 'Bravo',
       });
 
-      expect(persistedMetadata('comment_reply').postPreview).toBe('Lancement');
+      expect(persistedMetadata('comment_reply').postPreview).toBe('Petit mot reçu');
     });
 
     it('un post sans texte ne pose aucune clé postPreview', async () => {

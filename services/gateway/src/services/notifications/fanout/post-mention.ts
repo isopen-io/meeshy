@@ -4,7 +4,7 @@
  */
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger } from '../../../utils/logger-enhanced';
-import { truncateMessage } from '../notification-preview';
+import { textSynthesis } from '../content-synthesis';
 import type { FanoutDependencies } from './dependencies';
 import { mentionReceivers } from './entourage';
 
@@ -95,9 +95,6 @@ export async function createPostMentionNotificationsBatch(
   });
   if (audience.length === 0) return;
 
-  const excerpt = params.postExcerpt
-    ? truncateMessage(params.postExcerpt)
-    : '';
   const langs = await deps.resolveRecipientLangs(audience);
 
   const actorInfo = {
@@ -111,6 +108,9 @@ export async function createPostMentionNotificationsBatch(
 
   for (const userId of audience) {
     if (userId === params.posterId) continue;
+    const lang = langs.get(userId) ?? 'fr';
+    // #14318 — la SYNTHÈSE du post, dans la langue de cadrage du destinataire.
+    const excerpt = textSynthesis(lang, params.postExcerpt);
 
     if (!deps.shouldCreateMentionNotification(params.posterId, userId)) {
       notificationLogger.info('Post mention notification blocked (rate limit)', {
@@ -125,9 +125,9 @@ export async function createPostMentionNotificationsBatch(
         userId,
         type: 'user_mentioned',
         priority: 'high',
-        content: excerpt || notificationString(langs.get(userId) ?? 'fr', 'mention'),
+        content: excerpt || notificationString(lang, 'mention'),
         actor: actorInfo,
-        lang: langs.get(userId) ?? 'fr',
+        lang,
         context: {
           postId: params.postId,
         },

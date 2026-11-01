@@ -4,7 +4,7 @@
  */
 import { notificationLogger } from '../../../utils/logger-enhanced';
 import { filterPostConsumers } from '../../posts/postAudience';
-import { truncateMessage } from '../notification-preview';
+import { textSynthesis } from '../content-synthesis';
 import type { FanoutDependencies } from './dependencies';
 import { mentionReceivers } from './entourage';
 
@@ -92,9 +92,6 @@ export async function createCommentMentionNotificationsBatch(
   });
   if (linked.length === 0) return;
 
-  const content = params.commentExcerpt
-    ? truncateMessage(params.commentExcerpt)
-    : '';
   const langs = await deps.resolveRecipientLangs(linked);
 
   const actorInfo = {
@@ -108,6 +105,9 @@ export async function createCommentMentionNotificationsBatch(
 
   for (const userId of linked) {
     if (userId === params.commenterId) continue;
+    const lang = langs.get(userId) ?? 'fr';
+    // #14318 — la SYNTHÈSE du commentaire, dans la langue de cadrage du destinataire.
+    const content = textSynthesis(lang, params.commentExcerpt);
 
     if (!deps.shouldCreateMentionNotification(params.commenterId, userId)) {
       notificationLogger.info('Comment mention notification blocked (rate limit)', {
@@ -124,7 +124,7 @@ export async function createCommentMentionNotificationsBatch(
         priority: 'high',
         content,
         actor: actorInfo,
-        lang: langs.get(userId) ?? 'fr',
+        lang,
         context: {
           postId: params.postId,
           commentId: params.commentId,

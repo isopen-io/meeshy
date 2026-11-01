@@ -114,11 +114,12 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
 
       const created = createdDataOfType(prisma, 'story_reaction');
       expect(created.subtitle).toBe('Votre story');
-      expect(created.content).toBe('📷 Photo');
+      expect(created.content).toBe('Image haute définition');
       expect(created.metadata.mediaType).toBe('image');
-      // Image → on attache le fichier lui-même, absolutisé pour l'extension iOS.
-      expect(created.metadata.postThumbnailUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg.jpg');
-      expect(created.context.firstAttachmentUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg.jpg');
+      // #14318 — image → seule sa VIGNETTE voyage, absolutisée pour l'extension iOS.
+      expect(created.metadata.postThumbnailUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg-thumb.jpg');
+      expect(created.context.firstAttachmentUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg-thumb.jpg');
+      expect(JSON.stringify(created)).not.toContain('story-bg.jpg');
       expect(created.context.firstAttachmentMimeType).toBe('image/jpeg');
     });
 
@@ -139,14 +140,14 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
 
       const created = createdDataOfType(prisma, 'post_like');
       expect(created.subtitle).toBe('Votre réel');
-      expect(created.content).toBe('🎬 Vidéo');
+      expect(created.content).toBe('Vidéo haute définition');
       expect(created.metadata.mediaType).toBe('video');
       expect(created.metadata.postThumbnailUrl).toBe('https://cdn.meeshy.me/reel-thumb.jpg');
       expect(created.context.firstAttachmentUrl).toBe('https://cdn.meeshy.me/reel-thumb.jpg');
       expect(created.context.firstAttachmentMimeType).toBe('image/jpeg');
     });
 
-    it('texte présent : l\'extrait prime sur le résumé média dans le sous-titre', async () => {
+    it('texte présent : le corps dit la longueur du texte puis le média — et une image SANS vignette ne voyage pas (#14318)', async () => {
       prisma.postMedia.findFirst.mockResolvedValue({
         mimeType: 'image/jpeg',
         fileUrl: 'https://cdn.meeshy.me/p.jpg',
@@ -167,10 +168,10 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
       // contenu visé occupe le corps — texte ici, média sinon, les deux si
       // les deux existent.
       expect(payload.subtitle).toBe('a réagi 😍 à votre publication');
-      expect(payload.content).toBe('📷 Photo · Mon plus beau voyage');
-      // La vignette voyage quand même (push + in-app).
-      expect(payload.context.firstAttachmentUrl).toBe('https://cdn.meeshy.me/p.jpg');
-      expect(payload.metadata.postThumbnailUrl).toBe('https://cdn.meeshy.me/p.jpg');
+      expect(payload.content).toBe('Petit message texte · Image haute définition');
+      expect(payload.context.firstAttachmentUrl).toBeUndefined();
+      expect(JSON.stringify(payload)).not.toContain('cdn.meeshy.me/p.jpg');
+      expect(JSON.stringify(payload)).not.toContain('Mon plus beau voyage');
     });
 
     it('sans média ni texte : sous-titre = label nu (comportement historique préservé)', async () => {
@@ -190,7 +191,7 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
   });
 
   describe('createPostCommentNotification — post photo sans texte', () => {
-    it('retombe sur le résumé média quand le post n\'a pas de texte + attache la vignette', async () => {
+    it('décrit le média quand le post n\'a pas de texte ; sans vignette, aucune image ne part (#14318)', async () => {
       prisma.postMedia.findFirst.mockResolvedValue({
         mimeType: 'image/png',
         fileUrl: '/uploads/photo.png',
@@ -207,10 +208,10 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
       });
 
       const created = createdDataOfType(prisma, 'post_comment');
-      expect(created.subtitle).toBe('Votre publication · 📷 Photo');
-      expect(created.content).toBe('Magnifique !');
-      expect(created.metadata.postThumbnailUrl).toBe('https://gate.meeshy.me/uploads/photo.png');
-      expect(created.context.firstAttachmentUrl).toBe('https://gate.meeshy.me/uploads/photo.png');
+      expect(created.subtitle).toBe('Votre publication · Image haute définition');
+      expect(created.content).toBe('Petit mot reçu');
+      expect(created.metadata.postThumbnailUrl).toBeUndefined();
+      expect(created.context.firstAttachmentUrl).toBeUndefined();
     });
   });
 
