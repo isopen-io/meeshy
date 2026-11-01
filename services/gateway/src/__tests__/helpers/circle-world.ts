@@ -70,7 +70,7 @@ export const COMMUNAUTE_PAR_DEFAUT = { 'c-1': [AUTEUR, CO_MEMBRE] };
  * La règle de Prisma sur MongoDB (leçon 318) : un optionnel jamais écrit n'a PAS
  * de clé, `{ deletedAt: null }` ne l'apparie pas, `{ isSet: false }` si.
  */
-const deletedAtMatches = (doc: Record<string, unknown>, filter: unknown): boolean => {
+export const deletedAtMatches = (doc: Record<string, unknown>, filter: unknown): boolean => {
   const present = Object.prototype.hasOwnProperty.call(doc, 'deletedAt');
   if (filter === undefined) return true;
   if (filter === null) return present && doc.deletedAt === null;
@@ -100,6 +100,8 @@ export function monde(world: World = {}) {
         avatar: null,
         blockedUserIds: [...blockedOf(args.where.id)],
       }),
+      findFirst: async (args: { where: { OR?: ReadonlyArray<{ id: string; blockedUserIds: { has: string } }> } }) =>
+        (args.where.OR ?? []).find((clause) => blockedOf(clause.id).includes(clause.blockedUserIds.has)) ? { id: 'blocked' } : null,
       findMany: async (args: { where: { id: { in: string[] }; blockedUserIds?: { has: string }; deletedAt?: null; isActive?: boolean } }) => {
         const { blockedUserIds } = args.where;
         if (blockedUserIds) return args.where.id.in.filter((id) => blockedOf(id).includes(blockedUserIds.has)).map((id) => ({ id }));

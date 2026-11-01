@@ -20,6 +20,10 @@ export const NOTIFICATION_STRING_KEYS = [
   'activity.reactionFrom',
   'activity.share',
   'activity.shareFrom',
+  'activity.repost',
+  'activity.repostFrom',
+  'activity.quote',
+  'activity.quoteFrom',
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
@@ -559,6 +563,17 @@ export function buildNotificationDisplay(
         author
           ? notificationString(L, 'activity.shareFrom', { postType: kind ?? 'POST', author })
           : ns('activity.share', kind ?? 'POST'),
+        nounCap,
+      );
+    // ── Republication (#14070) et citation (#14072), relayées à l'entourage de l'auteur ──
+    case 'friend_content_repost':
+      return framed(
+        author ? notificationString(L, 'activity.repostFrom', { postType: kind ?? 'POST', author }) : ns('activity.repost', kind ?? 'POST'),
+        nounCap,
+      );
+    case 'friend_content_quote':
+      return framed(
+        author ? notificationString(L, 'activity.quoteFrom', { postType: kind ?? 'POST', author }) : ns('activity.quote', kind ?? 'POST'),
         nounCap,
       );
     case 'story_thread_reply':

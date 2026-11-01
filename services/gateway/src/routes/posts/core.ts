@@ -571,6 +571,7 @@ export function registerCoreRoutes(
           source: repostedSource,
           sourcePostId,
           repostId: post.id,
+          reposterEntourageNotified: true,
         }).catch((err: unknown) => logWarn(fastify.log, '[POST /posts]: notify post repost failed', err));
       }
 

@@ -350,6 +350,12 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
     expect(buildNotificationDisplay('fr', { type: 'friend_content_share', actorName: 'E', postType: 'POST' }).action).toBe('a partagé une publication');
   });
 
+  it('la republication et la citation relayées nomment l’auteur republié (#14070, #14072)', () => {
+    expect(buildNotificationDisplay('fr', { type: 'friend_content_repost', actorName: 'E', postType: 'STORY', authorName: 'Awa' }).action).toBe('a republié une story de Awa');
+    expect(buildNotificationDisplay('en', { type: 'friend_content_quote', actorName: 'E', postType: 'POST', authorName: 'Awa' }).action).toBe('quoted Awa’s post');
+    expect(buildNotificationDisplay('fr', { type: 'friend_content_quote', actorName: 'E', postType: 'POST' }).action).toBe('a cité une publication');
+  });
+
   it('le relais d’une réaction sans auteur lisible reste indéfini, jamais « votre » (#14068)', () => {
     for (const authorName of [undefined, '', '   ']) {
       expect(buildNotificationDisplay('fr', {

@@ -545,8 +545,10 @@ describe('#10525 — republier le contenu de quelqu’un prévient son auteur, p
     await settle();
 
     expect(notif.createPostRepostNotification).toHaveBeenCalledTimes(2);
-    const [viaCreation, viaRepost] = notif.createPostRepostNotification.mock.calls.map((call) => call[0]);
-    expect(viaCreation).toEqual(viaRepost);
+    const [viaCreation, viaRepost] = notif.createPostRepostNotification.mock.calls.map((call) => call[0] as Record<string, unknown>);
+    // Seule différence (#14070) : la porte `POST /posts` a prévenu l'entourage du republieur.
+    expect({ ...viaCreation, reposterEntourageNotified: false }).toEqual(viaRepost);
+    expect(viaCreation.reposterEntourageNotified).toBe(true);
 
     await app.close();
   });

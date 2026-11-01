@@ -4,7 +4,7 @@
 
 export interface CreateNotificationData {
   userId: string;
-  type: 'new_message' | 'new_conversation_direct' | 'new_conversation_group' | 'message_reply' | 'member_joined' | 'contact_request' | 'contact_accepted' | 'user_mentioned' | 'message_reaction' | 'comment_reaction' | 'missed_call' | 'system' | 'new_conversation' | 'message_edited' | 'story_new_comment' | 'friend_story_comment' | 'friend_content_reaction' | 'friend_content_share' | 'story_thread_reply' | 'friend_new_story' | 'friend_new_post' | 'friend_new_mood';
+  type: 'new_message' | 'new_conversation_direct' | 'new_conversation_group' | 'message_reply' | 'member_joined' | 'contact_request' | 'contact_accepted' | 'user_mentioned' | 'message_reaction' | 'comment_reaction' | 'missed_call' | 'system' | 'new_conversation' | 'message_edited' | 'story_new_comment' | 'friend_story_comment' | 'friend_content_reaction' | 'friend_content_share' | 'friend_content_repost' | 'friend_content_quote' | 'story_thread_reply' | 'friend_new_story' | 'friend_new_post' | 'friend_new_mood';
   title: string;
   content: string;
   priority?: 'low' | 'normal' | 'high' | 'urgent';

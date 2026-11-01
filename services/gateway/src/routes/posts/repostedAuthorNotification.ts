@@ -75,7 +75,14 @@ export function noteRepostInteraction(
 
 export async function notifyRepostedAuthor(
   notifier: Pick<NotificationService, 'createPostRepostNotification'> | null | undefined,
-  params: { readonly actorId: string; readonly source: RepostedSource | null; readonly sourcePostId: string; readonly repostId: string },
+  params: {
+    readonly actorId: string;
+    readonly source: RepostedSource | null;
+    readonly sourcePostId: string;
+    readonly repostId: string;
+    /** La porte a lancé l'éventail `friend_new_post` (`POST /posts`) : l'entourage du republieur sait déjà. */
+    readonly reposterEntourageNotified?: boolean;
+  },
 ): Promise<void> {
   const authorId = repostedAuthorToNotify(params.source, params.actorId);
   if (!notifier || authorId === null || params.source === null) return;
@@ -87,5 +94,6 @@ export async function notifyRepostedAuthor(
     postType: params.source.type,
     postCreatedAt: params.source.createdAt,
     postExpiresAt: params.source.expiresAt,
+    reposterEntourageNotified: params.reposterEntourageNotified === true,
   });
 }
