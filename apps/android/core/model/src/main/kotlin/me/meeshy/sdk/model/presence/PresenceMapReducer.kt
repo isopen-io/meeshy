@@ -42,11 +42,14 @@ object PresenceMapReducer {
      * Preuve d'activité observée côté client (`typing:start`) : elle DATE l'activité et rien de
      * plus — `lastActiveAt = maintenant`, `isOnline` reste ce que le serveur a dit (faux par défaut).
      * Le pair est vert 60 s puis décroît orange -> gris -> rien. Sa propre activité n'écrit jamais
-     * la carte.
+     * la carte. Un « en ligne » servi SANS date (l'Ami, #13928) est tenu par le serveur jusqu'à son
+     * `user:status` : le dater le livrerait à la garde anti-stale, qui l'éteindrait cinq minutes plus
+     * tard alors que le serveur le sert toujours en ligne. Miroir de `PresenceManager.noteActivity` iOS.
      */
     fun noteActivity(map: PresenceMap, userId: String, currentUserId: String?, nowMillis: Long): PresenceMap {
         if (userId.isBlank() || userId == currentUserId) return map
         val known = map[userId]
+        if (known != null && known.isOnline && known.lastActiveAt == null) return map
         return map + (
             userId to UserPresence(
                 isOnline = known?.isOnline ?: false,
