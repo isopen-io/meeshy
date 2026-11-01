@@ -2,7 +2,6 @@ package me.meeshy.sdk.media.scene
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
 import java.io.File
 import kotlin.math.max
 
@@ -30,15 +29,26 @@ internal interface SceneContentLuma {
     fun imageRegion(file: File, region: SceneRegion): SceneColor? = null
     fun bitmapRegion(bitmap: Bitmap, region: SceneRegion): SceneColor? = null
     fun videoRegion(file: File, atMillis: Long, region: SceneRegion): SceneColor? = null
+
+    /** La relecture est finie : ce que les mesures gardaient (images décodées, lecteurs ouverts) part. */
+    fun release() {}
 }
 
 /**
  * Relit [SceneExportContent.SAMPLES] instants du rendu et les confronte à leurs sources ([SceneExportContent.verdict]),
  * puis, à ces mêmes instants, le cadre de chaque vidéo posée à l'écran ([PlacedVideoContent.verdict]).
  */
-internal class RenderedContentProof(private val luma: SceneContentLuma = AndroidSceneContentLuma) : SceneExportProof {
+internal class RenderedContentProof(private val luma: SceneContentLuma = AndroidSceneContentLuma()) : SceneExportProof {
 
     override suspend fun verify(job: SceneExportJob) {
+        try {
+            reread(job)
+        } finally {
+            luma.release()
+        }
+    }
+
+    private fun reread(job: SceneExportJob) {
         val planned = SceneCompositionPlanner.of(job)
         val times = SceneExportContent.sampleTimes(planned.durationMillis)
         val samples = times.map { at ->
@@ -98,8 +108,13 @@ internal class RenderedContentProof(private val luma: SceneContentLuma = Android
     }
 }
 
-/** Les mesures sur l'appareil, à une image réduite (quelques dizaines de pixels de côté) : la même réduction des deux côtés. */
-internal object AndroidSceneContentLuma : SceneContentLuma {
+/**
+ * Les mesures sur l'appareil, à une image réduite (quelques dizaines de pixels de côté) : la même réduction des deux côtés.
+ * Une image de vidéo ne se décode qu'une fois par relecture, quel que soit le nombre de mesures qu'on y prend (#14088).
+ */
+internal class AndroidSceneContentLuma(source: SceneVideoFrameSource = RetrieverVideoFrames()) : SceneContentLuma {
+
+    private val frames = SceneVideoFrameReadings(source, measure = ::bitmap, reduce = ::reduceForRegions)
 
     override fun image(file: File): Int? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -124,9 +139,7 @@ internal object AndroidSceneContentLuma : SceneContentLuma {
         }
     }
 
-    override fun videoFrame(file: File, atMillis: Long): Int? = frameOf(file, atMillis)?.let { frame ->
-        try { bitmap(frame) } finally { frame.recycle() }
-    }
+    override fun videoFrame(file: File, atMillis: Long): Int? = frames.of(file, atMillis)?.luma
 
     override fun imageRegion(file: File, region: SceneRegion): SceneColor? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -152,29 +165,19 @@ internal object AndroidSceneContentLuma : SceneContentLuma {
         }
     }
 
-    override fun videoRegion(file: File, atMillis: Long, region: SceneRegion): SceneColor? = frameOf(file, atMillis)?.let { frame ->
+    override fun videoRegion(file: File, atMillis: Long, region: SceneRegion): SceneColor? =
+        frames.of(file, atMillis)?.let { bitmapRegion(it.reduced, region) }
+
+    override fun release() = frames.release()
+
+    /** Ce qu'une image de vidéo garde pour les régions : sa réduction à [REGION_SIDE], ou elle-même si elle est plus petite. */
+    private fun reduceForRegions(frame: Bitmap): Bitmap {
         val scale = REGION_SIDE.toFloat() / max(frame.width, frame.height)
-        val small = if (scale >= 1f) frame else Bitmap.createScaledBitmap(frame, max(1, (frame.width * scale).toInt()), max(1, (frame.height * scale).toInt()), true)
-        try { bitmapRegion(small, region) } finally {
-            if (small !== frame) small.recycle()
-            frame.recycle()
-        }
+        return if (scale >= 1f) frame else Bitmap.createScaledBitmap(frame, max(1, (frame.width * scale).toInt()), max(1, (frame.height * scale).toInt()), true)
     }
 
-    private fun frameOf(file: File, atMillis: Long): Bitmap? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(file.absolutePath)
-            retriever.getFrameAtTime(atMillis * MICROS_PER_MILLI, MediaMetadataRetriever.OPTION_CLOSEST)
-        } catch (unreadable: RuntimeException) {
-            SceneExportLog.warn("image illisible (${file.name} à $atMillis ms)", unreadable)
-            null
-        } finally {
-            retriever.release()
-        }
+    private companion object {
+        const val SIDE = 64
+        const val REGION_SIDE = 256
     }
-
-    private const val SIDE = 64
-    private const val REGION_SIDE = 256
-    private const val MICROS_PER_MILLI = 1000L
 }
