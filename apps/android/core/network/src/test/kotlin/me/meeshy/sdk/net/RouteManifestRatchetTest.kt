@@ -87,11 +87,11 @@ class RouteManifestRatchetTest {
          * catalogue généré (`ApiRoutesStickerPacks`, `ApiRoutesConversations`) : le scanner ne lisait que les chemins
          * écrits en littéral et les croyait donc « à porter ». Il résout désormais `ApiRoutesX.NOM` (#13998, qui
          * branche `RelationsApi` par `ApiRoutesRelations.BY_USER_ID`).
-         * 203 : plus les quatre routes des cercles que la passerelle sert (`GET /relations`, `GET /relations/config`,
+         * 202 : plus les trois routes des cercles que la passerelle sert (`GET /relations`,
          * `POST /relations/:userId/level`, `POST /relations/:userId/ritual`, #13933) et que l'écran des cercles d'Android
          * portera (ui-cercles) : à porter, pas hors périmètre.
          */
-        const val TO_PORT_CEILING = 203
+        const val TO_PORT_CEILING = 202
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
