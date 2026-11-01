@@ -148,7 +148,7 @@ extension PostDetailView {
             storyCanvasOrPlaceholder(renderedItem: renderedItem,
                                      onOpen: { openDetailScene(at: 0) }) {
                 StoryReaderRepresentable(
-                    story: renderedItem,
+                    story: renderedItem, sceneFloorHex: post.storyAccentHex,
                     preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                     mute: isCanvasMuted,
                     isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,

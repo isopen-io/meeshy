@@ -38,4 +38,29 @@ public enum StoryBackgroundValue: Equatable, Sendable {
         case .gradient(let a, let b): return "\(Self.gradientPrefix)\(a):\(b)"
         }
     }
+
+    /// **Le dégradé de l'auteur** (#14258) : sa couleur vers le noir, dans la
+    /// forme `gradient:RRGGBB:000000` qu'Android écrit sous une scène publiée
+    /// sans fond choisi (#14244). `nil` quand la couleur n'est pas un hex à six
+    /// chiffres : aucun sol, le lecteur garde le sien.
+    public static func authorGradient(_ accentHex: String) -> StoryBackgroundValue? {
+        let trimmed = accentHex.trimmingCharacters(in: .whitespaces).uppercased()
+        let digits = trimmed.hasPrefix("#") ? String(trimmed.dropFirst()) : trimmed
+        guard digits.count == 6, digits.allSatisfy(\.isHexDigit) else { return nil }
+        return .gradient(digits, authorGradientEnd)
+    }
+
+    private static let authorGradientEnd = "000000"
+}
+
+public extension StoryEffects {
+    /// Une scène qui ne déclare aucun fond se lit sur le dégradé de son auteur,
+    /// jamais sur du noir (#14258) ; un fond choisi garde la main.
+    func flooredOnAuthorGradient(_ accentHex: String?) -> StoryEffects {
+        guard background?.isEmpty ?? true,
+              let floor = accentHex.flatMap(StoryBackgroundValue.authorGradient) else { return self }
+        var floored = self
+        floored.background = floor.serialized
+        return floored
+    }
 }

@@ -393,7 +393,7 @@ extension Array where Element == APIPost {
 
         var groups = grouped.map { (authorId, data) in
             StoryGroup(id: authorId, username: data.author.name,
-                       avatarColor: DynamicColorGenerator.colorForName(data.author.name),
+                       avatarColor: data.author.storyAccentHex,
                        avatarURL: data.author.avatar,
                        stories: data.stories.sorted { $0.createdAt < $1.createdAt },
                        // Présence embarquée par le payload stories (nil sur les
