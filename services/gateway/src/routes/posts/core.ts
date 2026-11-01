@@ -69,6 +69,7 @@ import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../servi
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { logError, logWarn } from '../../utils/logger.js';
+import { isBlockedWithAny } from '../../utils/blocking';
 import { OnlyUnlinkedBudgetRefused, refuseOnlyUnlinkedBudget, releaseOnlyUnlinkedBudget, spendOnlyUnlinkedBudget } from './onlyUnlinkedBudget';
 import { spendOnlyUnlinkedBudgetOnEdit } from './onlyUnlinkedBudgetOnEdit';
 
@@ -273,6 +274,8 @@ export function registerCoreRoutes(
           // sortir EN CLAIR vers un post.
           message: { select: {
             conversationId: true,
+            // #14242 — `senderId` est un Participant.id : le blocage se lit sur son `userId`.
+            sender: { select: { userId: true } },
             conversation: { select: { identifier: true } },
             messageType: true, isViewOnce: true, isBlurred: true, isEncrypted: true,
             effectFlags: true, expiresAt: true, createdAt: true,
@@ -338,6 +341,10 @@ export function registerCoreRoutes(
         if (reason === 'unpublishable-media') {
           return sendBadRequest(reply, 'This media cannot be published', { code: 'UNPUBLISHABLE_MEDIA' });
         }
+        return sendNotFound(reply, 'Attachment not found', { code: 'ATTACHMENT_NOT_FOUND' });
+      }
+      // #14242 — publier la pièce d'un expéditeur avec qui un blocage existe se refuse comme une pièce introuvable.
+      if (await isBlockedWithAny(prisma, authContext.registeredUser.id, [attachment?.message?.sender?.userId])) {
         return sendNotFound(reply, 'Attachment not found', { code: 'ATTACHMENT_NOT_FOUND' });
       }
 

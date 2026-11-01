@@ -37,6 +37,7 @@ jest.mock('../services/notifications/fanout/activity-relay', () => ({
   relayActivityToEntourage: (...args: unknown[]) => relayActivityToEntourage(...args),
 }));
 const createNotification = jest.fn();
+const blockBetween = jest.fn<(...a: unknown[]) => Promise<{ id: string } | null>>().mockResolvedValue(null);
 jest.mock('../services/MentionService', () => ({ resolveMentionedUsers: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]) }));
 
 const POST_ID = '507f1f77bcf86cd799439011';
@@ -62,8 +63,12 @@ async function buildApp(authed: boolean): Promise<FastifyInstance> {
         visibility: 'PUBLIC',
         visibilityUserIds: [] as string[],
         expiresAt: null,
+        repostOfId: null,
+        originalRepostOfId: null,
       }),
+      findMany: () => Promise.resolve([]),
     },
+    user: { findFirst: (...args: unknown[]) => blockBetween(...args) },
   } as unknown as PrismaClient;
   const mw = authed ? auth : noAuth;
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');
@@ -126,6 +131,17 @@ describe('POST /posts/:postId/share', () => {
     relayActivityToEntourage.mockClear();
     shareWithTrackingLink.mockResolvedValueOnce(null);
     await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
+    expect(relayActivityToEntourage).not.toHaveBeenCalled();
+  });
+
+  it("partager le contenu d'un auteur avec qui un blocage existe se refuse comme un contenu introuvable, sans frappe ni relais (#14242)", async () => {
+    sharePost.mockClear();
+    relayActivityToEntourage.mockClear();
+    blockBetween.mockResolvedValueOnce({ id: 'author-1' });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, code: 'POST_NOT_FOUND' });
+    expect(sharePost).not.toHaveBeenCalled();
     expect(relayActivityToEntourage).not.toHaveBeenCalled();
   });
 

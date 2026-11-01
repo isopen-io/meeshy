@@ -152,7 +152,7 @@ export async function getBlockRelatedUserIds(
  * « bloqué » — commenter ou réagir se refuse, jamais ne s'ouvre, sur une panne.
  */
 export async function isBlockedWithAny(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   actorId: string,
   authorIds: readonly (string | null | undefined)[]
 ): Promise<boolean> {

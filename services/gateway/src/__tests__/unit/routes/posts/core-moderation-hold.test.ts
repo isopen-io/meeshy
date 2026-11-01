@@ -238,3 +238,24 @@ describe('POST /posts — republier une source hors ligne (#10315)', () => {
     await app.close();
   });
 });
+
+describe('POST /posts { repostOfId } — republier ou citer un auteur avec qui un blocage existe (#14242)', () => {
+  const source = { authorId: '507f1f77bcf86cd799439044', visibility: 'PUBLIC', visibilityUserIds: [], expiresAt: null, deletedAt: null, moderationHiddenAt: null, repostOfId: null, originalRepostOfId: null };
+
+  it.each([[{}], [{ isQuote: true, content: 'regardez' }]])('refuse sans rien créer (%o)', async (extra) => {
+    mockCreatePost.mockClear();
+    const prisma = {
+      post: { findFirst: jest.fn<any>().mockResolvedValue(source), findMany: jest.fn<any>().mockResolvedValue([]) },
+      user: {
+        findFirst: jest.fn<any>(async (args: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
+          args.where.OR.some((c) => c.id === source.authorId && c.blockedUserIds.has === USER_ID) ? { id: source.authorId } : null),
+      },
+    };
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { type: 'POST', visibility: 'PUBLIC', repostOfId: '507f1f77bcf86cd799439033', ...extra } });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('POST_NOT_FOUND');
+    expect(mockCreatePost).not.toHaveBeenCalled();
+    await app.close();
+  });
+});

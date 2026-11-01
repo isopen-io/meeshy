@@ -8,6 +8,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { mayConsumePost } from './postConsumptionGate';
+import { isBlockedWithContentAuthors } from '../../services/posts/contentAuthorBlock';
 import { creditPostEngagement } from '../../services/posts/postEngagementCredits';
 import { notePairInteraction } from '../../services/relations/pairInteractionRecorder';
 import { relayActivityToEntourage } from '../../services/notifications/fanout/activity-relay';
@@ -95,6 +96,11 @@ export function registerShareRoutes(
       // contourne pas l'ACL de son destinataire, mais il n'aurait jamais dû
       // être frappé : l'audience se vérifie AVANT la frappe, pas au clic.
       if (!(await mayConsumePost(prisma, postId, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      // #14242 — un blocage avec l'auteur, dans un sens ou dans l'autre, refuse le
+      // partage comme un contenu introuvable : ni compteur, ni lien, ni relais.
+      if (await isBlockedWithContentAuthors(prisma, { actorId: authContext.registeredUser.id, postId })) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
