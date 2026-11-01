@@ -73,7 +73,7 @@ enum EditClockThrottle {
 /// la scène se figeait quatre secondes après la dernière touche. Or la scène du
 /// compositeur EST le player (loi 6, `meeshy-reader-modele.md`) : la vidéo de
 /// fond, les vidéos posées et les sons jouent en continu dans leur fenêtre
-/// coupée, sans attendre une touche (directive porteur du 2026-10-31, #13864).
+/// coupée, sans attendre une touche (directive porteur, #13864).
 /// Les players bouclent d'eux-mêmes (`AVPlayerLooper`, l'observateur de fin
 /// de la couche) ; le lien des gestes n'y est pour rien.
 nonisolated enum EditIdleSuspension: Equatable, Sendable {
