@@ -224,4 +224,26 @@ class PresenceMapReducerTest {
 
         assertThat(PresenceMapReducer.expireReadBack(map, setOf("young"), now).entries).isSameInstanceAs(map)
     }
+
+    @Test
+    fun `typing on a friend served online without a date keeps the very same map`() {
+        val before: PresenceMap = mapOf("friend" to UserPresence(isOnline = true, lastActiveAt = null))
+
+        val after = PresenceMapReducer.noteActivity(before, "friend", currentUserId = "me", nowMillis = now)
+
+        assertThat(after).isSameInstanceAs(before)
+        assertThat(after["friend"]?.lastActiveAt).isNull()
+    }
+
+    @Test
+    fun `a friend served online without a date stays online long after the typing`() {
+        val typed = PresenceMapReducer.noteActivity(
+            mapOf("friend" to UserPresence(isOnline = true, lastActiveAt = null)),
+            "friend",
+            currentUserId = "me",
+            nowMillis = now,
+        )
+
+        assertThat(typed.getValue("friend").state(now + 600_000L)).isEqualTo(PresenceState.ONLINE)
+    }
 }
