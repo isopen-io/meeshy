@@ -112,4 +112,14 @@ class FriseBarDragTest {
         )
         assertThat(drag.snapped).isFalse()
     }
+
+    @Test
+    fun `une piste se coupe seulement quand la tete est dedans, loin des bords`() {
+        val w = ClipWindowResolver.Window(start = 1f, duration = 3f)
+        assertThat(FriseBarDrag.canSplit(w, 2f)).isTrue()
+        assertThat(FriseBarDrag.canSplit(w, 1f)).isFalse()
+        assertThat(FriseBarDrag.canSplit(w, 4f)).isFalse()
+        assertThat(FriseBarDrag.canSplit(w, 5f)).isFalse()
+        assertThat(FriseBarDrag.canSplit(w, Float.NaN)).isFalse()
+    }
 }

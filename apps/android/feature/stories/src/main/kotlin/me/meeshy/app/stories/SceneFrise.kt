@@ -96,6 +96,8 @@ internal fun SceneFrise(
     onScrub: (Float) -> Unit,
     onWindow: (id: String, startSeconds: Float, durationSeconds: Float) -> Unit,
     modifier: Modifier = Modifier,
+    splittableIds: Set<String> = emptySet(),
+    onSplit: (id: String) -> Unit = {},
 ) {
     val duration = maxOf(slideDurationSeconds, ClipWindowResolver.MINIMUM_DURATION)
     var laneWidthPx by remember { mutableStateOf(0) }
@@ -112,6 +114,11 @@ internal fun SceneFrise(
             selected = tracks.firstOrNull { it.id == selectedId }?.takeIf { it.id in editableIds },
             onEntry = { selectedId?.let { onEntryAt(tracks, it, playheadSeconds, duration, onWindow) } },
             onExit = { selectedId?.let { onExitAt(tracks, it, playheadSeconds, duration, onWindow) } },
+            canSplit = selectedId != null && selectedId in splittableIds &&
+                barOf(tracks, selectedId, duration).let { (s, e) ->
+                    FriseBarDrag.canSplit(ClipWindowResolver.Window(s, e - s), playheadSeconds)
+                },
+            onSplit = { selectedId?.let(onSplit) },
         )
         // L'axe du temps se lit de gauche à droite dans toutes les langues (#14219) : en RTL, `offset` est miroité mais
         // la position du doigt ne l'est pas — la tête et les barres fuyaient le doigt. Les noms gardent l'interface.
@@ -162,6 +169,8 @@ private fun FriseTransport(
     selected: Plan2DTrack?,
     onEntry: () -> Unit,
     onExit: () -> Unit,
+    canSplit: Boolean,
+    onSplit: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         // L'horloge ne dit rien tant que la tête n'a pas quitté le début (#13838) ; sa place reste réservée, la frise ne saute pas.
@@ -177,6 +186,7 @@ private fun FriseTransport(
         if (selected != null) {
             TextChip(stringResource(R.string.composer_frise_entry), onEntry)
             TextChip(stringResource(R.string.composer_frise_exit), onExit)
+            if (canSplit) TextChip(stringResource(R.string.composer_object_editor_split), onSplit)
         }
     }
 }
