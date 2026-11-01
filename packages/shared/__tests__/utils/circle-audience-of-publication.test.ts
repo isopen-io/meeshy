@@ -47,11 +47,15 @@ describe('le repartage suit l\'échelle des cercles (RG-18)', () => {
 
   it('un contenu Connaissances se repartage vers lui-même ou plus étroit, jamais en Public ni en Communauté', () => {
     expect(allowed('ACQUAINTANCES')).toEqual(
-      new Set<PostVisibility>(['ACQUAINTANCES', 'FRIENDS', 'CLOSE', 'BLOOD', 'PRIVATE']),
+      new Set<PostVisibility>(['ACQUAINTANCES', 'CLOSE', 'BLOOD', 'PRIVATE']),
     );
     (['PUBLIC', 'COMMUNITY', 'EXCEPT', 'ONLY'] as const).forEach((requested) =>
       expect(isRepostVisibilityAllowed('ACQUAINTANCES', requested)).toBe(false),
     );
+  });
+
+  it('un contenu Connaissances ne se repartage pas en Amis : « Amis » admet les contacts de message direct, qui ne sont pas tous des Connaissances', () => {
+    expect(isRepostVisibilityAllowed('ACQUAINTANCES', 'FRIENDS')).toBe(false);
   });
 
   it('un contenu Amis se repartage en Amis, Proches, Sang ou privé, jamais en Connaissances ni plus large', () => {

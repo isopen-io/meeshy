@@ -164,7 +164,7 @@ describe('createPost — loi d\'audience de la republication', () => {
     );
   });
 
-  it.each(['ACQUAINTANCES', 'FRIENDS', 'CLOSE', 'BLOOD', 'PRIVATE'])(
+  it.each(['ACQUAINTANCES', 'CLOSE', 'BLOOD', 'PRIVATE'])(
     'RG-18 — un contenu Connaissances se repartage en %s, jamais plus large',
     async (requested) => {
       prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'ACQUAINTANCES' }));
@@ -176,6 +176,18 @@ describe('createPost — loi d\'audience de la republication', () => {
       );
     },
   );
+
+  it('RG-18 — un contenu Connaissances ne se repartage pas en Amis, qui admet les contacts de message direct', async () => {
+    prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'ACQUAINTANCES' }));
+
+    const err: any = await service
+      .createPost({ visibility: 'FRIENDS', repostOfId: 'source-1', content: 'hop' }, 'user-2')
+      .catch((e) => e);
+
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
 
   it.each(['PUBLIC', 'COMMUNITY', 'EXCEPT'])('RG-18 — un contenu Proches ne se repartage pas en %s', async (requested) => {
     prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'CLOSE' }));

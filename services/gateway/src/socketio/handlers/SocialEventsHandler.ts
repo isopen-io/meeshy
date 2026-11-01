@@ -14,7 +14,7 @@ import { withAudienceListFor, withoutAudienceList } from '../../services/posts/a
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
-import { postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
+import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 import type {
   Post,
   PostLikedEventData,
@@ -779,9 +779,12 @@ export class SocialEventsHandler {
   // ==============================================
 
   /**
-   * Invalide le cache des amis (par ex. après un nouvel ami accepté)
+   * Invalide les audiences en cache de `userId` après un changement de lien : ses
+   * amis ET chacun de ses cercles (`<visibilité>:<id>`). Un Proche baissé en Ami ne
+   * doit plus recevoir, même 30 s, la diffusion d'un post `CLOSE` (#13931).
    */
   invalidateFriendsCache(userId: string): void {
     this.friendsCache.delete(userId);
+    POST_CIRCLE_VISIBILITIES.forEach((visibility) => this.friendsCache.delete(`${visibility}:${userId}`));
   }
 }

@@ -189,9 +189,12 @@ function withNestedRepostMentions<T>(post: T, reader?: WireReader): T {
   // contenu, ses médias et ses traductions ne survivent pas dans les reposts.
   // `originalRepostOfId` / `repostOfId` restent sur le repost : le client y lit
   // « ce contenu n'est plus disponible ».
+  // #13931 — idem pour un original passé en Sang APRÈS sa republication : un
+  // contenu `BLOOD` n'est jamais repartageable (RG-18), il ne voyage donc dans
+  // aucune republication, quelle que soit l'audience de celle-ci.
   const { visibility, moderationHiddenAt, deletedAt, ...stripped } = loaded as { visibility?: unknown; moderationHiddenAt?: unknown; deletedAt?: unknown };
   const set = (v: unknown) => v !== null && v !== undefined;
-  if (visibility === 'PRIVATE' || set(moderationHiddenAt) || set(deletedAt)) return { ...post, repostOf: null };
+  if (visibility === 'PRIVATE' || visibility === 'BLOOD' || set(moderationHiddenAt) || set(deletedAt)) return { ...post, repostOf: null };
   const carried = 'visibility' in loaded || 'moderationHiddenAt' in loaded || 'deletedAt' in loaded;
   const repostOf = withServedAuthors(carried ? stripped : loaded);
 

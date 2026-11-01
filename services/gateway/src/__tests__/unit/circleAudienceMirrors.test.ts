@@ -17,6 +17,7 @@ import { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler
 import { StoryTextObjectTranslationService } from '../../services/posts/StoryTextObjectTranslationService';
 import { verifierCible } from '../../routes/reports/target';
 import { relationStore } from '../helpers/user-relation-store';
+import { withMentions } from '../../services/posts/postReferences';
 
 const hex = (letter: string): string => letter.repeat(24);
 const AUTHOR = hex('a');
@@ -73,6 +74,33 @@ describe('le temps réel social — broadcastPostCreated', () => {
 
   it('FRIENDS reste « Amis et au-dessus » : la Connaissance n\'est pas servie', async () => {
     expect(await broadcast('FRIENDS')).toEqual(feeds(FRI, CLS, BLD, AUTHOR));
+  });
+
+  it('un Proche baissé en Ami ne reçoit plus la diffusion CLOSE dès l\'invalidation du lien, sans attendre le cache', async () => {
+    const store = relationStore({
+      relations: [link(FRI, 'FRIEND'), link(CLS, 'CLOSE'), link(BLD, 'BLOOD')],
+    });
+    const prisma = {
+      ...store.prisma,
+      communityMember: { findMany: jest.fn<any>(async () => []) },
+      user: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => null) },
+    };
+    const first = makeIo();
+    const handler = new SocialEventsHandler({ io: first as never, prisma: prisma as never });
+    const post = { id: POST_ID, authorId: AUTHOR, type: 'POST', visibility: 'CLOSE', visibilityUserIds: [] } as never;
+    await handler.broadcastPostCreated(post, AUTHOR);
+    expect(roomsOf(first)).toEqual(feeds(CLS, BLD, AUTHOR));
+
+    const [userLowId, userHighId] = AUTHOR < CLS ? [AUTHOR, CLS] : [CLS, AUTHOR];
+    await store.prisma.userRelation.updateMany({
+      where: { userLowId, userHighId },
+      data: { grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND' },
+    });
+    handler.invalidateFriendsCache(AUTHOR);
+    first.to.mockClear();
+    await handler.broadcastPostCreated(post, AUTHOR);
+
+    expect(roomsOf(first)).toEqual(feeds(BLD, AUTHOR));
   });
 });
 
@@ -157,5 +185,26 @@ describe('l\'atteignabilité d\'un signalement', () => {
   it('une Connaissance atteint un post ACQUAINTANCES ; un inconnu non', async () => {
     expect(await reach('ACQUAINTANCES', ACQ)).toEqual({ atteignable: true });
     expect(await reach('ACQUAINTANCES', STR)).toEqual({ atteignable: false, raison: 'inaccessible' });
+  });
+});
+
+describe('l\'original imbriqué d\'une republication (RG-18)', () => {
+  const repost = (visibility: string) => ({
+    id: 'r-1',
+    postMentions: [] as unknown[],
+    repostOf: { id: 'o-1', content: 'secret de famille', visibility, moderationHiddenAt: null, deletedAt: null, media: [{ id: 'm-1', fileUrl: 'https://x/sang.jpg' }] },
+  });
+
+  it('un original passé en Sang APRÈS avoir été republié ne voyage plus dans les republications, rien de son contenu', () => {
+    const served = withMentions(repost('BLOOD'));
+    expect(served.repostOf).toBeNull();
+    expect(JSON.stringify(served)).not.toContain('secret');
+    expect(JSON.stringify(served)).not.toContain('sang.jpg');
+  });
+
+  it('un original Proches voyage, sans sa colonne de décision', () => {
+    const served = withMentions(repost('CLOSE')).repostOf as Record<string, unknown>;
+    expect(served.content).toBe('secret de famille');
+    expect('visibility' in served).toBe(false);
   });
 });
