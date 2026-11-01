@@ -149439,6 +149439,53 @@
         }
       }
     },
+    "post.audience.only_unlinked_limit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عدد كبير من الأشخاص الذين اخترتهم ليست لهم أي صلة بك بعد اليوم. أزلهم من القائمة، أو أعد المحاولة غدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu viele der ausgewählten Personen haben heute noch keine Verbindung zu dir. Entferne sie aus der Liste oder versuche es morgen erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many of the people you chose have no connection with you yet today. Remove them from the list, or try again tomorrow."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiadas personas elegidas aún no tienen ningún vínculo contigo hoy. Quítalas de la lista o inténtalo de nuevo mañana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop de personnes choisies n’ont encore aucun lien avec vous aujourd’hui. Retirez-les de la liste, ou réessayez demain."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Troppe persone scelte non hanno ancora alcun legame con te oggi. Rimuovile dall’elenco o riprova domani."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muitas das pessoas escolhidas ainda não têm nenhum vínculo com você hoje. Remova-as da lista ou tente novamente amanhã."
+          }
+        }
+      }
+    },
     "post.bookmark.added": {
       "localizations": {
         "ar": {
