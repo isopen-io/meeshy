@@ -125,10 +125,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   performanceLogger: mockPerformanceLogger,
 }));
 
-// Now import the SUT
-import { MessageHandler } from '../../../socketio/handlers/MessageHandler';
-import type { MessageHandlerDependencies } from '../../../socketio/handlers/MessageHandler';
-
 
 // Le coffre de la passerelle, doublé au plus près : sceller rend un chiffré qui
 // ne contient pas le clair, ouvrir le relit ; `vault` simule la clé absente.
@@ -217,7 +213,7 @@ function setup(conversationMode: string) {
   };
   const socket: any = { id: 'socket-1', emit: jest.fn(), broadcast: { to: () => ({ emit: jest.fn() }), emit: jest.fn() } };
   const handler = new MessageHandler(deps);
-  const retranslate = jest.fn(async () => undefined);
+  const retranslate = jest.fn(async (_messageId: string, _message: unknown) => undefined);
   (handler as any).translationService = { retranslateMessageAsync: retranslate };
   const edited = () => emitted.find((e) => e.event === 'message:edited')?.payload;
   return { handler, prisma, socket, edited, retranslate };
