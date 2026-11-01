@@ -6,11 +6,12 @@
  * soi / ADMIN / ami accepté, le réglage du membre plafonné par « caché de la
  * recherche » et « Jeu masqué ».
  *
- * ## Ce que les AMIS voient de plus (décision porteur 2026-10-06, #9541)
+ * ## Ce que les AMIS voient de plus (décision porteur 2026-10-06, #9541) — et les PROCHES (2026-10-31, #13930)
  *
- * La Flamme n'est servie qu'à ses AMIS acceptés (et à soi, et à ADMIN/BIGBOSS) : plus jamais à « tout le
- * monde », même quand le membre a ouvert son rang à tous. Ses POINTS et le NOMBRE de ses trophées ne sont
- * servis qu'à eux aussi ; le nombre de trophées suit en plus le réglage de la VITRINE. Le niveau, les étoiles,
+ * La Flamme n'est servie qu'à ses AMIS (niveau effectif >= Ami, et à soi, et à ADMIN/BIGBOSS) : plus jamais à
+ * « tout le monde », même quand le membre a ouvert son rang à tous. Le NOMBRE de ses trophées suit, avec en plus
+ * le réglage de la VITRINE. Ses POINTS (étincelles) et sa GLOIRE ne sont servis qu'à PROCHE et au-dessus
+ * (`game.sparksGlory`) : un simple Ami ne voit du jeu que le niveau, les titres et le rang (RG-25). Le niveau, les étoiles,
  * le rang et la division (Légende, Mythe) restent ceux du réglage du rang.
  *
  * ## Ce qui ne part JAMAIS (conformité D-1 à D-5, leçon 275)
@@ -37,7 +38,7 @@ import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import type { PresenceViewer } from '../PresenceVisibilityService';
 import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
-import { GameProfileService } from './GameProfileService';
+import { GameProfileService, type GameReach } from './GameProfileService';
 import { gloryTotalFromLedger } from './GloryService';
 import { MythicSeatService } from './MythicSeatService';
 import { countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
@@ -45,9 +46,8 @@ import { visitorTrophyBound } from './TrophyService';
 
 const CLOSED: UserGameProfileResponse = { visible: false, standing: null, treasury: null };
 
-/** Le membre, un ami accepté ou un administrateur : ceux à qui le jeu se montre de près (#9541). */
-const isIntimate = (kind: Awaited<ReturnType<GameProfileService['viewerKind']>>): boolean =>
-  kind === 'self' || kind === 'friend' || kind === 'admin';
+/** Le membre, un lien d'au moins Ami ou un administrateur : ceux à qui la Flamme et les trophées se montrent (#9541). */
+const isFriendly = (kind: GameReach['kind']): boolean => kind === 'self' || kind === 'friend' || kind === 'admin';
 
 const STANDING_USER_SELECT = { ...FLAME_USER_SELECT, ...SPARKS_USER_SELECT, prestige: true } as const;
 
@@ -69,7 +69,8 @@ export class GameStandingService {
     const { viewer, targetId } = params;
     const now = params.now ?? new Date();
 
-    const allowed = await this.profile.facetsVisibleTo({ viewer, targetId, facets: ['rank', 'treasury', 'showcase'] });
+    const reach = await this.profile.viewerReach(viewer, targetId);
+    const allowed = await this.profile.facetsVisibleTo({ viewer, targetId, facets: ['rank', 'treasury', 'showcase'], reach });
     const mayStanding = allowed.rank === true;
     const mayTreasury = allowed.treasury === true;
     if (!mayStanding && !mayTreasury) return CLOSED;
@@ -77,10 +78,14 @@ export class GameStandingService {
     const user = await this.prisma.user.findUnique({ where: { id: targetId }, select: STANDING_USER_SELECT });
     if (user === null) return CLOSED;
 
-    const intimate = mayStanding && isIntimate(await this.profile.viewerKind(viewer, targetId));
     const [standing, treasury] = await Promise.all([
       mayStanding
-        ? this.standing(targetId, user, now, { intimate, trophies: allowed.showcase === true, self: viewer?.userId === targetId })
+        ? this.standing(targetId, user, now, {
+            friendly: isFriendly(reach.kind),
+            sparksGlory: reach.sparksGlory,
+            trophies: allowed.showcase === true,
+            self: viewer?.userId === targetId,
+          })
         : Promise.resolve(null),
       mayTreasury ? this.treasury(targetId) : Promise.resolve(null),
     ]);
@@ -88,14 +93,15 @@ export class GameStandingService {
   }
 
   /**
-   * `intimate` : le lecteur est le membre lui-même, un ami accepté ou un administrateur — lui seul reçoit la
-   * Flamme et les points. `trophies` : la vitrine est ouverte à ce lecteur — lui seul reçoit le nombre.
+   * `friendly` : le lecteur est le membre lui-même, un lien d'au moins Ami ou un administrateur — lui seul reçoit la
+   * Flamme. `sparksGlory` : le cercle ouvre aussi les étincelles et la gloire (Proche et au-dessus, `game.sparksGlory`,
+   * #13930). `trophies` : la vitrine est ouverte à ce lecteur — lui seul reçoit le nombre.
    */
   private async standing(
     userId: string,
     user: Parameters<typeof sparksOf>[0] & { readonly levelRecord?: number | null; readonly levelMaxLifetime?: number | null; readonly prestige?: number | null } & Parameters<typeof flameFactsOf>[0],
     now: Date,
-    reader: { readonly intimate: boolean; readonly trophies: boolean; readonly self: boolean },
+    reader: { readonly friendly: boolean; readonly sparksGlory: boolean; readonly trophies: boolean; readonly self: boolean },
   ): Promise<GameStanding> {
     const [glory, mythicSeat, meesh, missionsDone, trophyCount] = await Promise.all([
       gloryTotalFromLedger(this.prisma, userId),
@@ -104,13 +110,13 @@ export class GameStandingService {
       meeshTotalsFromLedger(this.prisma, userId),
       countMissionsDone(this.prisma, userId),
       // Le membre lit son compte en direct ; un ami ou ADMIN, figé au 1er du mois comme la vitrine (#10240).
-      !(reader.intimate && reader.trophies)
+      !(reader.friendly && reader.trophies)
         ? Promise.resolve(null)
         : reader.self
           ? this.prisma.gameTrophy.count({ where: { userId } })
           : this.prisma.gameTrophy.count({ where: { userId, awardedAt: { lt: visitorTrophyBound(now) } } }),
     ]);
-    // Le niveau se lit sur la POCHE (#10892) ; son nombre exact (`points`, `sparks`) n'est servie qu'aux proches.
+    // Le niveau se lit sur la POCHE (#10892) ; son nombre exact (`points`, `sparks`) n'est servi qu'à Proche et au-dessus (#13930).
     const sparks = sparksOf(user);
     const rank = gloryStanding({ glory, mythicSeat });
     // Le niveau s'ouvre selon le rang (#9688) et les étapes RÉELLES (#9706, #10903) — Meeshes, missions, record de Flamme,
@@ -130,14 +136,14 @@ export class GameStandingService {
       ladder: { level, tier: levelTierKey(level), levelMaxLifetime: levelMax },
       levelMaxLifetime: levelMax,
       prestige: Math.min(GAME_PRESTIGE_MAX, Math.max(0, Math.trunc(user.prestige ?? 0))),
-      flame: reader.intimate ? shownFlame(user, now) : null,
+      flame: reader.friendly ? shownFlame(user, now) : null,
       rank: rank.rank,
       division: rank.division,
       division5: rank.division5,
       mythic: rank.mythic,
       // Les clés sont ABSENTES, jamais nulles, pour un lecteur qui n'y a pas droit : rien à lire, rien à deviner.
       // `points` reste servi, aligné sur la poche ; `sparks`, `sparksLifetime` et `glory` sont additifs, même visibilité (#10846, #10913).
-      ...(reader.intimate ? { points: sparks.pocket, sparks: sparks.pocket, sparksLifetime: sparks.lifetime, glory } : {}),
+      ...(reader.sparksGlory ? { points: sparks.pocket, sparks: sparks.pocket, sparksLifetime: sparks.lifetime, glory } : {}),
       ...(trophyCount === null ? {} : { trophyCount }),
     };
   }
