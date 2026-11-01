@@ -7,7 +7,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
@@ -17,7 +23,9 @@ import me.meeshy.app.feed.PostCommentsComposerBar
 import me.meeshy.app.feed.PostCommentsThreadSheet
 import me.meeshy.app.feed.PostCommentsViewModel
 import me.meeshy.app.feed.rememberPostCommentsViewModel
+import me.meeshy.app.feed.PostCommentsUiState
 import me.meeshy.feature.stories.R
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
 /**
  * **LES COMMENTAIRES D'UNE STORY** (#14313) — iOS `StoryComposerBarView` + `StoryCommentsOverlay` : une story est un
@@ -59,11 +67,53 @@ internal fun StoryPinnedCommentComposer(thread: PostCommentsViewModel, modifier:
 /** La liste des commentaires de la story, ouverte par le rail ; son composeur est le même que celui épinglé. */
 @Composable
 internal fun StoryCommentsThreadSheet(thread: PostCommentsViewModel, serverCommentCount: Int, onDismiss: () -> Unit) {
-    val state by thread.state.collectAsStateWithLifecycle()
-    val count = maxOf(serverCommentCount, state.comments.size)
+    val count = rememberStoryCommentCount(thread, serverCommentCount)
     PostCommentsThreadSheet(
         viewModel = thread,
         title = if (count == 0) stringResource(R.string.stories_comments_title) else pluralStringResource(R.plurals.stories_comments_count, count, count),
         onDismiss = onDismiss,
     )
+}
+
+/** Le clavier est ouvert : le rail s'efface pour ne pas couvrir le composeur (iOS `composerLift`). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun storyKeyboardVisible(): Boolean = WindowInsets.isImeVisible
+
+/**
+ * Le nombre de commentaires que le rail affiche (iOS `storyCommentCountReconciledPulse`) : celui servi, réconcilié à la
+ * hausse par le fil vivant, donc un commentaire envoyé fait apparaître « Commentaires » sans attendre le serveur.
+ */
+@Composable
+internal fun rememberStoryCommentCount(thread: PostCommentsViewModel?, served: Int): Int {
+    if (thread == null) return served
+    val state by thread.state.collectAsStateWithLifecycle()
+    return StoryCommentCount.live(served, state.comments.size)
+}
+
+internal object StoryCommentCount {
+    fun live(served: Int, threadCount: Int): Int = maxOf(served, threadCount)
+}
+
+/** Un commentaire parti (iOS `sendComment`) : retour haptique de succès, clavier refermé, la story reprend. */
+@Composable
+internal fun StoryCommentSentFeedback(thread: PostCommentsViewModel) {
+    val state by thread.state.collectAsStateWithLifecycle()
+    val haptics = rememberMeeshyHaptics()
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    var wasSubmitting by remember(thread) { mutableStateOf(false) }
+    LaunchedEffect(state.isSubmitting) {
+        if (StoryCommentSent.justSent(wasSubmitting, state)) {
+            haptics.success()
+            keyboard?.hide()
+            focus.clearFocus()
+        }
+        wasSubmitting = state.isSubmitting
+    }
+}
+
+internal object StoryCommentSent {
+    fun justSent(wasSubmitting: Boolean, state: PostCommentsUiState): Boolean =
+        wasSubmitting && !state.isSubmitting && state.notice == null && state.errorMessage == null
 }

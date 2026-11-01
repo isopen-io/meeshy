@@ -41,6 +41,7 @@ internal object ScenePostRequest {
             allowSoundExtraction = draft.allowSoundExtraction,
             mentions = mentions.ifEmpty { null },
             mediaCaption = MediaDescriptionLaw.wire(draft.mediaCaption, mediaIds),
+            repostOfId = draft.repostOfId,
         )
     }
 

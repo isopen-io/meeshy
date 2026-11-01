@@ -203,12 +203,14 @@ fun StoryViewerScreen(
     )
     val commentThread = rememberStoryCommentThread(state.currentStoryId)
     val currentItem = state.currentStoryId?.let(viewModel::rawItem)
+    val commentCount = rememberStoryCommentCount(commentThread, currentItem?.commentCount ?: 0)
+    val keyboardVisible = storyKeyboardVisible()
     val railPlan = StoryRailPlan.resolve(
         isOwnStory = state.isOwnStory,
         hasTranslatableContent = state.availableLanguages.isNotEmpty(),
         canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
         canCompose = onComposeStory != null && state.canCompose,
-        commentCount = currentItem?.commentCount ?: 0,
+        commentCount = commentCount,
     )
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
@@ -500,6 +502,7 @@ fun StoryViewerScreen(
             // #14313 — le composeur de commentaire épinglé sous la story d'autrui (iOS `composerLayer`).
             if (commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed && (!state.isPaused || cover.composing)) {
                 StoryPinnedCommentComposer(thread = commentThread)
+                StoryCommentSentFeedback(thread = commentThread)
             }
         }
 
@@ -557,6 +560,7 @@ fun StoryViewerScreen(
                             // « Partager » (#14315) : hors de Meeshy, par la feuille du système ; « Envoyer » est au rail.
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.stories_action_share)) },
+                                leadingIcon = { Icon(MeeshyIcons.Share, contentDescription = null) },
                                 onClick = {
                                     showOptions = false
                                     storyCard()?.let(shareOut)
@@ -591,6 +595,7 @@ fun StoryViewerScreen(
                                 }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) },
+                                    leadingIcon = { Icon(MeeshyIcons.Delete, contentDescription = null, tint = MeeshyPalette.Error) },
                                     onClick = {
                                         showOptions = false
                                         showDeleteDialog = true
@@ -600,6 +605,7 @@ fun StoryViewerScreen(
                                 state.currentStoryId?.let { storyId ->
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.stories_action_repost)) },
+                                        leadingIcon = { Icon(MeeshyIcons.Repeat, contentDescription = null) },
                                         onClick = {
                                             showOptions = false
                                             onRepost(storyId)
@@ -608,6 +614,7 @@ fun StoryViewerScreen(
                                 }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_report)) },
+                                    leadingIcon = { Icon(MeeshyIcons.Warning, contentDescription = null) },
                                     onClick = {
                                         showOptions = false
                                         showReportDialog = true
@@ -628,11 +635,11 @@ fun StoryViewerScreen(
         }
 
         val languageBadge = state.activeLanguageCode
-        if (slide != null && !state.isDismissed && !state.isPaused) {
+        if (slide != null && !state.isDismissed && !state.isPaused && !keyboardVisible) {
             StoryActionRail(
                 plan = railPlan,
                 counts = StoryRailCounts(
-                    comments = currentItem?.commentCount ?: 0,
+                    comments = commentCount,
                     shares = currentItem?.shareCount ?: 0,
                     reposts = currentItem?.repostCount ?: 0,
                     views = currentItem?.viewCount ?: 0,

@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.share.LocalShareLauncher
@@ -189,10 +190,10 @@ fun FeedScreen(
                             // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur ; « Partager »
                             // (menu « ⋯ ») : la feuille du système, avec ce même lien.
                             onSend = {
-                                val card = ShareCards.post(post.id, title = post.content, authorId = post.authorId)
+                                val card = post.shareCard(context)
                                 shareLauncher?.open(ShareSubject.Card(card)) ?: shareOut(card)
                             },
-                            onShare = { shareOut(ShareCards.post(post.id, title = post.content, authorId = post.authorId)) },
+                            onShare = { shareOut(post.shareCard(context)) },
                             onCopyLink = {
                                 clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))
                                 scope.launch { snackbar.showSnackbar(linkCopied) }
@@ -266,3 +267,10 @@ private fun FeedHeadColumn(storyRail: @Composable () -> Unit, composerHead: @Com
 private const val FEED_POST_CONTENT_TYPE = "feed_post"
 private const val FEED_STORY_RAIL_KEY = "feed_story_rail"
 private const val FEED_COMPOSER_HEAD_KEY = "feed_composer_head"
+
+/** La carte d'un post pour ses deux gestes de partage : « 🔗 Publication de X : lien », la forme de la story. */
+private fun FeedPostPresentation.shareCard(context: android.content.Context): ShareCard {
+    val link = PostShareLink.webLink(id)
+    val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_post_text, it, link) } ?: link
+    return ShareCards.post(id, title = content, authorId = authorId, messageText = sentence)
+}

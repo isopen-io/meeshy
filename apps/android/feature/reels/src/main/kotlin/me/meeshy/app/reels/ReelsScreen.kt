@@ -30,6 +30,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import me.meeshy.app.feed.rememberContentShareOut
+import androidx.compose.ui.platform.LocalContext
+import me.meeshy.feature.reels.R
+import me.meeshy.sdk.model.PostShareLink
+import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.share.LocalShareLauncher
@@ -68,6 +72,7 @@ fun ReelsScreen(
     viewModel: ReelsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     // Le son est ouvert à l'entrée (iOS `ReelsPlayerView` : l'ouverture du lecteur est le geste) ; le bouton
     // muet vaut pour tous les réels de la session, et n'existe que pour un réel qui porte du son.
@@ -109,7 +114,7 @@ fun ReelsScreen(
             // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur.
             onSend = { id ->
                 reelsNow.firstOrNull { it.id == id }?.let { reel ->
-                    val card = reel.shareCard()
+                    val card = reel.shareCard(context)
                     launcherNow?.open(ShareSubject.Card(card)) ?: shareOutNow(card)
                 }
             },
@@ -162,7 +167,7 @@ fun ReelsScreen(
             onReveal = { chromeHidden = false },
             onOpen = { id -> onOpenPost(id) },
             // « Partager » (menu « ⋯ ») : la feuille du système, avec le lien suivi de l'utilisateur.
-            onShare = { reel -> shareOut(reel.shareCard()) },
+            onShare = { reel -> shareOut(reel.shareCard(context)) },
         )
         if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts)
     }
@@ -258,5 +263,9 @@ private fun ReelsPager(
     }
 }
 
-/** La carte d'un réel pour ses deux gestes de partage. */
-private fun ReelPresentation.shareCard() = ShareCards.reel(id, title = caption.orEmpty(), authorId = authorId)
+/** La carte d'un réel pour ses deux gestes de partage : « 🔗 Réel de X : lien », la forme de la story. */
+private fun ReelPresentation.shareCard(context: android.content.Context): ShareCard {
+    val link = PostShareLink.webLink(id)
+    val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_reel_text, it, link) } ?: link
+    return ShareCards.reel(id, title = caption.orEmpty(), authorId = authorId, messageText = sentence)
+}
