@@ -54,6 +54,12 @@ function seed() {
         effectFlags: 0,
         originalName: 'plage.jpg',
         transcription: { text: 'chut' },
+        caption: 'à la plage',
+        alt: 'une plage',
+        captionTranslations: { en: { text: 'at the beach' } },
+        altTranslations: { en: { text: 'a beach' } },
+        thumbHash: 'abc',
+        metadata: { width: 10 },
       },
     ],
   });
@@ -105,6 +111,34 @@ describe('purge d’une vue unique — des octets qui survivent à leur effaceme
     expect(state.messages[0].viewOnceBurnedAt).toEqual(now);
     expect(await resolveFileRouteVerdict(FILE_KEY, prisma, now)).toEqual({ kind: 'gone' });
     expect(await resolveFileRouteVerdict(THUMB_KEY, prisma, now)).toEqual({ kind: 'gone' });
+  });
+
+  it('une pièce dont les octets résistent perd tout ce qui en DÉRIVE : transcription, traductions, légendes, nom, empreinte, métadonnées (F2)', async () => {
+    await uploadRootWithFiles();
+    const { prisma, state } = seed();
+    const service = new AttachmentService(prisma as unknown as PrismaClient);
+    jest.spyOn(fs, 'unlink').mockRejectedValue(busy());
+
+    await purgeDueViewOnceContent(prisma as unknown as Parameters<typeof purgeDueViewOnceContent>[0], {
+      now: new Date(),
+      attachmentRemover: service,
+    });
+
+    expect(state.attachments).toHaveLength(1);
+    expect(state.attachments[0]).toMatchObject({
+      filePath: FILE_KEY,
+      originalName: '',
+      transcription: null,
+      translations: null,
+      captionTranslations: null,
+      altTranslations: null,
+      caption: null,
+      alt: null,
+      thumbHash: null,
+      metadata: null,
+    });
+    expect(JSON.stringify(state.attachments[0])).not.toContain('chut');
+    expect(JSON.stringify(state.attachments[0])).not.toContain('plage');
   });
 
   it('la passe suivante, le disque libéré, efface les octets et clôt la purge', async () => {
