@@ -8,12 +8,11 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.SystemClock
 import java.io.File
-import java.nio.ByteBuffer
 
 /**
  * **Le décodeur d'une vidéo posée** (#13897) : `MediaExtractor` + `MediaCodec` en sortie mémoire (YUV 4:2:0 flexible), lu
  * dans l'ordre par [SequentialVideoFrames]. Une image ne se convertit que si on la montre ([YuvFrameConverter], à
- * [maxLongSide] pixels au plus, debout). [next] ne tient jamais le fil plus de [NEXT_BUDGET_MILLIS] : au-delà il rend `null`,
+ * [maxLongSide] pixels au plus, debout), et toujours dans les mêmes tampons ([VideoFrameBuffers] : un bitmap réécrit). [next] ne tient jamais le fil plus de [NEXT_BUDGET_MILLIS] : au-delà il rend `null`,
  * et la vidéo garde sa dernière image plutôt que d'arrêter le muxer. Un fichier sans piste vidéo lisible lève à l'ouverture.
  */
 internal class CodecVideoFrameDecoder(file: File, private val maxLongSide: Int) : VideoFrameDecoder {
@@ -28,7 +27,7 @@ internal class CodecVideoFrameDecoder(file: File, private val maxLongSide: Int) 
     private val info = MediaCodec.BufferInfo()
     private var inputEnded = false
     private var outputEnded = false
-    private var pixels: IntArray? = null
+    private val buffers = VideoFrameBuffers()
 
     init {
         extractor.selectTrack(track)
@@ -70,6 +69,7 @@ internal class CodecVideoFrameDecoder(file: File, private val maxLongSide: Int) 
         runCatching { codec.stop() }
         codec.release()
         extractor.release()
+        buffers.release()
     }
 
     private fun feed() {
@@ -92,9 +92,7 @@ internal class CodecVideoFrameDecoder(file: File, private val maxLongSide: Int) 
 
         override fun render(): Bitmap? {
             val image = codec.getOutputImage(index) ?: return null
-            val converted = YuvFrameConverter.convert(planesOf(image), rotation, maxLongSide, pixels)
-            pixels = converted.pixels
-            return Bitmap.createBitmap(converted.pixels, converted.width, converted.height, Bitmap.Config.ARGB_8888)
+            return buffers.render(planesOf(image), rotation, maxLongSide)
         }
 
         override fun release() {
@@ -112,22 +110,16 @@ internal class CodecVideoFrameDecoder(file: File, private val maxLongSide: Int) 
         return YuvPlanes(
             width = crop.width(),
             height = crop.height(),
-            y = bytes(y.buffer, crop.top * y.rowStride + crop.left * y.pixelStride),
+            y = buffers.plane(Y_PLANE, y.buffer, crop.top * y.rowStride + crop.left * y.pixelStride),
             yRowStride = y.rowStride,
             yPixelStride = y.pixelStride,
-            u = bytes(u.buffer, chromaTop * u.rowStride + chromaLeft * u.pixelStride),
+            u = buffers.plane(U_PLANE, u.buffer, chromaTop * u.rowStride + chromaLeft * u.pixelStride),
             uRowStride = u.rowStride,
             uPixelStride = u.pixelStride,
-            v = bytes(v.buffer, chromaTop * v.rowStride + chromaLeft * v.pixelStride),
+            v = buffers.plane(V_PLANE, v.buffer, chromaTop * v.rowStride + chromaLeft * v.pixelStride),
             vRowStride = v.rowStride,
             vPixelStride = v.pixelStride,
         )
-    }
-
-    private fun bytes(buffer: ByteBuffer, offset: Int): ByteArray {
-        val view = buffer.duplicate()
-        view.position(minOf(offset, view.limit()))
-        return ByteArray(view.remaining()).also { view.get(it) }
     }
 
     private companion object {
@@ -136,5 +128,8 @@ internal class CodecVideoFrameDecoder(file: File, private val maxLongSide: Int) 
         const val MICROS_PER_MILLI = 1000L
         const val DEQUEUE_MICROS = 10_000L
         const val NEXT_BUDGET_MILLIS = 2_000L
+        const val Y_PLANE = 0
+        const val U_PLANE = 1
+        const val V_PLANE = 2
     }
 }

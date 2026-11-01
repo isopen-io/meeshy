@@ -503,7 +503,10 @@ export const callersIn = (contents, nsNames) => {
 // conversation e2ee). La passerelle la sert, iOS l'appelle ; le web l'appellera quand il parlera
 // libsignal (#13201, décision #12975). Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE
 // le 2026-10-26 en CI (Gardes du dépôt, PR #13207) : une seule entrée nouvelle.
-const BASELINE_DEAD_ENTRIES = 277;
+// 277 -> 281 (#13933, 2026-10-31) : `relations.byUserIdLevel`, `byUserIdRitual`, `config`, `root`, les quatre routes
+// des cercles que la passerelle sert et que les clients appelleront avec l'écran des cercles (#13933, ui-cercles).
+// Entrées PRÉMATURÉES, pas de faux morts (#5427). Valeur MESURÉE en CI (Gardes du dépôt, PR #14082) : quatre nouvelles.
+const BASELINE_DEAD_ENTRIES = 281;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

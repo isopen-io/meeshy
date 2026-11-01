@@ -76,7 +76,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 const PDF_BYTES = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\nreste du document...\n', 'binary');
 const SVG_BYTES = Buffer.from('<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf8');
-const VIDEO_BYTES = Buffer.from('contenu vidéo quelconque, aucune signature vérifiée pour cette famille');
+const PLAIN_TEXT_BYTES = Buffer.from('un texte quelconque, aucune signature vérifiée pour cette famille');
 
 const JWT_SECRET = 'test-secret-tus-mime-verification';
 const ORIGINAL_JWT_SECRET = process.env.JWT_SECRET;
@@ -209,15 +209,16 @@ describe('tus-handler — vérification globale de signature (#5615)', () => {
     expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
   });
 
-  it("n'exige aucune signature pour une famille sans vérification connue (vidéo, texte…) — décision produit", async () => {
+  // La vidéo a quitté cette famille au lot #11266 : ses conteneurs courants sont sniffés.
+  it("n'exige aucune signature pour une famille sans vérification connue (texte, code…) — décision produit", async () => {
     const prisma = buildFakePrisma();
 
     const result = await runFullUpload({
       prisma,
       headers: registeredHeaders(),
-      filename: 'clip.mp4',
-      filetype: 'video/mp4',
-      bytes: VIDEO_BYTES,
+      filename: 'notes.txt',
+      filetype: 'text/plain',
+      bytes: PLAIN_TEXT_BYTES,
     });
 
     expect(result.status_code).toBe(200);

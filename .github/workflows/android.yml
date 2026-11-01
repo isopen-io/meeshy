@@ -44,6 +44,11 @@ on:
       # Les tests de parité Kotlin rejouent ces vecteurs (loi d'actions, traduction, lecture) :
       # un vecteur qui change sans que la CI Android tourne laisse le miroir diverger en silence (#12822).
       - 'packages/shared/fixtures/**'
+      # Le miroir des cercles relit aussi la TABLE TypeScript (seuils, ensembles, échelle) : un seuil
+      # assoupli sans que les cas communs bougent doit faire tourner la CI Android (#13927).
+      - 'packages/shared/utils/relation-levels.ts'
+      - 'packages/shared/utils/relation-access.ts'
+      - 'packages/shared/types/relation.ts'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
       - 'packages/design-tokens/**'
@@ -64,6 +69,11 @@ on:
       # Les tests de parité Kotlin rejouent ces vecteurs (loi d'actions, traduction, lecture) :
       # un vecteur qui change sans que la CI Android tourne laisse le miroir diverger en silence (#12822).
       - 'packages/shared/fixtures/**'
+      # Le miroir des cercles relit aussi la TABLE TypeScript (seuils, ensembles, échelle) : un seuil
+      # assoupli sans que les cas communs bougent doit faire tourner la CI Android (#13927).
+      - 'packages/shared/utils/relation-levels.ts'
+      - 'packages/shared/utils/relation-access.ts'
+      - 'packages/shared/types/relation.ts'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
       - 'packages/design-tokens/**'

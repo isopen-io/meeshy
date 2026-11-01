@@ -1,0 +1,219 @@
+[
+  {
+    "id": "public-to-acquaintance",
+    "input": {
+      "targetLevel": "ACQUAINTANCE",
+      "currentLevel": "PUBLIC",
+      "eligibleFor": null,
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "community-to-acquaintance",
+    "input": {
+      "targetLevel": "ACQUAINTANCE",
+      "currentLevel": "COMMUNITY",
+      "eligibleFor": null,
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "acquaintance-to-friend",
+    "input": {
+      "targetLevel": "FRIEND",
+      "currentLevel": "ACQUAINTANCE",
+      "eligibleFor": null,
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "public-to-friend-is-a-skip",
+    "input": {
+      "targetLevel": "FRIEND",
+      "currentLevel": "PUBLIC",
+      "eligibleFor": null,
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_PHASE_SKIP"
+    }
+  },
+  {
+    "id": "acquaintance-to-close-is-a-skip",
+    "input": {
+      "targetLevel": "CLOSE",
+      "currentLevel": "ACQUAINTANCE",
+      "eligibleFor": "CLOSE",
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_PHASE_SKIP"
+    }
+  },
+  {
+    "id": "friend-to-blood-is-a-skip",
+    "input": {
+      "targetLevel": "BLOOD",
+      "currentLevel": "FRIEND",
+      "eligibleFor": "BLOOD",
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_PHASE_SKIP"
+    }
+  },
+  {
+    "id": "same-level-is-a-skip",
+    "input": {
+      "targetLevel": "FRIEND",
+      "currentLevel": "FRIEND",
+      "eligibleFor": null,
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_PHASE_SKIP"
+    }
+  },
+  {
+    "id": "friend-to-close-needs-the-series",
+    "input": {
+      "targetLevel": "CLOSE",
+      "currentLevel": "FRIEND",
+      "eligibleFor": null,
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_NOT_ELIGIBLE"
+    }
+  },
+  {
+    "id": "friend-to-close-with-the-series",
+    "input": {
+      "targetLevel": "CLOSE",
+      "currentLevel": "FRIEND",
+      "eligibleFor": "CLOSE",
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "close-to-blood-needs-the-blood-series",
+    "input": {
+      "targetLevel": "BLOOD",
+      "currentLevel": "CLOSE",
+      "eligibleFor": "CLOSE",
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_NOT_ELIGIBLE"
+    }
+  },
+  {
+    "id": "close-to-blood-with-the-series",
+    "input": {
+      "targetLevel": "BLOOD",
+      "currentLevel": "CLOSE",
+      "eligibleFor": "BLOOD",
+      "cooldownUntil": null,
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "cooldown-running",
+    "input": {
+      "targetLevel": "FRIEND",
+      "currentLevel": "ACQUAINTANCE",
+      "eligibleFor": null,
+      "cooldownUntil": "2026-11-05T12:00:00Z",
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_COOLDOWN"
+    }
+  },
+  {
+    "id": "cooldown-over",
+    "input": {
+      "targetLevel": "FRIEND",
+      "currentLevel": "ACQUAINTANCE",
+      "eligibleFor": null,
+      "cooldownUntil": "2026-10-01T12:00:00Z",
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "cooldown-ends-now",
+    "input": {
+      "targetLevel": "FRIEND",
+      "currentLevel": "ACQUAINTANCE",
+      "eligibleFor": null,
+      "cooldownUntil": "2026-10-31T12:00:00Z",
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": true
+    }
+  },
+  {
+    "id": "skip-is-said-before-cooldown",
+    "input": {
+      "targetLevel": "CLOSE",
+      "currentLevel": "ACQUAINTANCE",
+      "eligibleFor": "CLOSE",
+      "cooldownUntil": "2026-11-05T12:00:00Z",
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_PHASE_SKIP"
+    }
+  },
+  {
+    "id": "cooldown-is-said-before-eligibility",
+    "input": {
+      "targetLevel": "CLOSE",
+      "currentLevel": "FRIEND",
+      "eligibleFor": null,
+      "cooldownUntil": "2026-11-05T12:00:00Z",
+      "now": "2026-10-31T12:00:00Z"
+    },
+    "expected": {
+      "allowed": false,
+      "code": "RELATION_COOLDOWN"
+    }
+  }
+]

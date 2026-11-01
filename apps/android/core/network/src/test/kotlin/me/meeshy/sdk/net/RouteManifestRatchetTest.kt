@@ -89,8 +89,11 @@ class RouteManifestRatchetTest {
          * branche `RelationsApi` par `ApiRoutesRelations.BY_USER_ID`).
          * 198 : moins `GET /mentions/suggestions` (#14053 : la liste « @ » fait remonter les personnes du
          * contexte d'une conversation ou d'un post), que porte `MentionsApi.suggestions`.
+         * 201 : plus les trois routes des cercles que la passerelle sert (`GET /relations`,
+         * `POST /relations/:userId/level`, `POST /relations/:userId/ritual`, #13933) et que l'écran des cercles d'Android
+         * portera (ui-cercles) : à porter, pas hors périmètre.
          */
-        const val TO_PORT_CEILING = 198
+        const val TO_PORT_CEILING = 201
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

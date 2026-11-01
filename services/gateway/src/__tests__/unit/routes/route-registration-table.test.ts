@@ -261,10 +261,13 @@ describe('ROUTE_TABLE (#4278)', () => {
     // d'une conversation e2ee (`POST /api/v1/e2ee/conversations/:id/signals`).
     // Aucun alias, aucune route retirée ni renommée ; le manifeste gagne
     // exactement cette route.
-    // 95 : #13998 ajoute `relations-level` — le niveau EFFECTIF du lien avec une
+    // 96 : #13998 ajoute `relations-level` — le niveau EFFECTIF du lien avec une
     // personne (`GET /api/v1/relations/:userId`). Aucun alias, aucune route
     // retirée ni renommée ; le manifeste gagne exactement cette route.
-    expect(ROUTE_TABLE.length).toBe(95);
+    //     #13933 ajoute `relations` — les cercles (`/api/v1/relations` : lecture, baisse
+    // silencieuse, rituel du Sang). Aucun alias, aucune route retirée ni renommée ; le
+    // manifeste gagne exactement les quatre routes de ce montage (le GET /:userId reste celui de #13998).
+    expect(ROUTE_TABLE.length).toBe(96);
   });
 });
 

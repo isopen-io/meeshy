@@ -55,6 +55,12 @@ export function relationStore(seed: { friendRequests?: readonly Row[]; relations
       const [removed] = state.friendRequests.splice(index, 1);
       return Promise.resolve({ ...removed });
     },
+    create: (args: { data: Row; include?: unknown }): Promise<Row> => {
+      const now = new Date();
+      const row: Row = { id: nextId('bb'), status: 'pending', createdAt: now, updatedAt: now, ...args.data };
+      state.friendRequests.push(row);
+      return Promise.resolve({ ...row });
+    },
     findFirst: (args?: unknown) => findFirstHonouringWhere(state.friendRequests)(args),
     findMany: (args: {
       where?: Row; orderBy?: { id: 'asc' } | { updatedAt: 'desc' }; take?: number; cursor?: { id: string }; skip?: number;

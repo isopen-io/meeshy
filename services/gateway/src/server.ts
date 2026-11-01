@@ -18,6 +18,7 @@ import jwt from '@fastify/jwt';
 import sensible from '@fastify/sensible'; // Ajout pour httpErrors
 import multipart from '@fastify/multipart';
 import { MAX_DIRECT_UPLOAD_FILES } from '@meeshy/shared/types/attachment';
+import { largestUploadCeiling, uploadLimitPolicyFromEnv } from './services/attachments/upload-admission';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { configureAtRestFileAccess } from './services/attachments/atRest/atRestFiles';
@@ -373,7 +374,8 @@ class MeeshyServer {
     // Register multipart plugin for file uploads
     await this.server.register(multipart, {
       limits: {
-        fileSize: 4294967296, // 4GB max file size
+        // #11266 — le plus grand plafond par type ; celui du rôle se juge dans la route.
+        fileSize: largestUploadCeiling(uploadLimitPolicyFromEnv()),
         files: MAX_DIRECT_UPLOAD_FILES,
       },
     });
@@ -552,7 +554,7 @@ class MeeshyServer {
       if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
         return reply.code(413).send({
           error: 'File Too Large',
-          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`
+          message: `File size exceeds the largest allowed upload size. Please reduce the file size.`
         });
       }
 

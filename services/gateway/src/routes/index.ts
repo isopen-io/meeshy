@@ -156,6 +156,7 @@ import { directoryPersonRoutes } from './directory/person';
 import { directoryPresenceRoutes } from './directory/presence';
 import { directoryBlocksRoutes } from './directory/blocks';
 import { directoryFriendRequestsRoutes } from './directory/friend-requests';
+import { relationsRoutes } from './relations';
 import { directoryContactsRoutes } from './directory/contacts';
 import { relationsLevelRoutes } from './relations/level';
 import { contactsResolveRoutes } from './contacts/resolve';
@@ -392,6 +393,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'directory-presence', prefix: `${API_PREFIX}/directory`, module: directoryPresenceRoutes },
   { name: 'directory-blocks', prefix: `${API_PREFIX}/directory`, module: directoryBlocksRoutes },
   { name: 'directory-friend-requests', prefix: `${API_PREFIX}/directory`, module: directoryFriendRequestsRoutes },
+  { name: 'relations', prefix: `${API_PREFIX}/relations`, module: relationsRoutes },
   { name: 'directory-contacts', prefix: `${API_PREFIX}/directory`, module: directoryContactsRoutes },
   // Le niveau EFFECTIF du lien avec une personne (#13998) — lecture seule, niveauEffectif pour seule loi.
   { name: 'relations-level', prefix: `${API_PREFIX}/relations`, module: relationsLevelRoutes },
