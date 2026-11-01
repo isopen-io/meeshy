@@ -65,6 +65,9 @@ on:
       # Le logo de cercle d'une story exportée (#13997) : RelationExportBadgeVectorTests
       # rejoue ces vecteurs, partagés avec la loi TypeScript et le miroir Kotlin.
       - 'packages/shared/fixtures/relation-export-badge.vectors.json'
+      # L'échelle d'une image clé multiplie celle de l'objet (#14316) : StoryKeyframeScaleVectorTests
+      # rejoue ces vecteurs, partagés avec le web et Android.
+      - 'packages/shared/fixtures/keyframe-scale.vectors.json'
       # Le contrat MeeshyLens v1 (#11270) : LensFormatVectorsTests rejoue ses vecteurs.
       - 'packages/shared/fixtures/lens-v1/**'
       - '.github/workflows/sdk-tests.yml'
@@ -108,6 +111,9 @@ on:
       # Le logo de cercle d'une story exportée (#13997) : RelationExportBadgeVectorTests
       # rejoue ces vecteurs, partagés avec la loi TypeScript et le miroir Kotlin.
       - 'packages/shared/fixtures/relation-export-badge.vectors.json'
+      # L'échelle d'une image clé multiplie celle de l'objet (#14316) : StoryKeyframeScaleVectorTests
+      # rejoue ces vecteurs, partagés avec le web et Android.
+      - 'packages/shared/fixtures/keyframe-scale.vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
       - '.github/workflows/sdk-tests.yml'
       - 'scripts/ci/**'
