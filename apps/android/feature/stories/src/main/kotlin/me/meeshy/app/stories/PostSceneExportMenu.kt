@@ -1,7 +1,6 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +41,7 @@ fun PostSceneExportMenu(
             onClick = { expanded = true },
             isActive = expanded,
         )
-        DropdownMenu(expanded = expanded && !export.busy, onDismissRequest = { expanded = false }) {
+        SceneOverflowMenu(expanded = expanded && !export.busy, onDismissRequest = { expanded = false }) {
             StoryVideoExportMenuEntries(onPick = { mode ->
                 expanded = false
                 export.start(mode)
