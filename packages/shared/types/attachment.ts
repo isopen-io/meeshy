@@ -14,10 +14,9 @@ import type {
 } from './attachment-audio.js';
 import { UPLOAD_SIZE_CEILINGS, uploadSizeLimit, type UploaderRole } from './upload-limits.js';
 
-/**
- * Types d'attachements supportés
- */
-export type AttachmentType = 'image' | 'document' | 'audio' | 'video' | 'text' | 'code';
+import type { AttachmentType } from './attachment-type.js';
+
+export type { AttachmentType };
 
 /**
  * Statuts de progression d'upload

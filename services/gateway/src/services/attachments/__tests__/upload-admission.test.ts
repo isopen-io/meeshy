@@ -65,7 +65,7 @@ describe('dailyQuotaRefusal', () => {
 });
 
 describe('tusUploadRefusal', () => {
-  it('rend l’enveloppe d’erreur de l’API, lisible par les trois clients', () => {
+  it('rend l’enveloppe d’erreur de l’API, délai compris (tus n’écrit aucun en-tête d’erreur)', () => {
     const tus = tusUploadRefusal({
       status: 429,
       code: UPLOAD_REFUSAL_CODES.DAILY_QUOTA_EXCEEDED,
@@ -73,12 +73,12 @@ describe('tusUploadRefusal', () => {
       retryAfterSeconds: 60,
     });
     expect(tus.status_code).toBe(429);
-    expect(tus.headers).toEqual({ 'Retry-After': '60' });
     expect(JSON.parse(tus.body)).toEqual({
       success: false,
       error: 'Daily upload quota exceeded',
       message: 'Daily upload quota exceeded',
       code: 'UPLOAD_DAILY_QUOTA_EXCEEDED',
+      retryAfterSeconds: 60,
     });
   });
 });

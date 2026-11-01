@@ -13,7 +13,7 @@
  * défaut laisse passer cinq vidéos au plafond par jour, la passerelle la rend
  * configurable (`UPLOAD_DAILY_QUOTA_*_BYTES`).
  */
-import type { AttachmentType } from './attachment.js';
+import type { AttachmentType } from './attachment-type.js';
 
 const MIB = 1024 * 1024;
 const GIB = 1024 * MIB;

@@ -201,7 +201,7 @@ describe('tus-handler — la limite d’envoi dépend du rôle, un quota journal
     expect(refusal?.status_code).toBe(413);
   });
 
-  it('refuse AVANT le premier octet un envoi qui dépasserait le quota du jour, en 429 typé avec Retry-After', async () => {
+  it('refuse AVANT le premier octet un envoi qui dépasserait le quota du jour, en 429 typé qui porte son délai', async () => {
     const quota = fakeQuota({ allowed: false, usedBytes: 20 * GIB, quotaBytes: 20 * GIB, retryAfterSeconds: 600 });
     const { tus } = await register(quota);
 
@@ -211,8 +211,10 @@ describe('tus-handler — la limite d’envoi dépend du rôle, un quota journal
     });
 
     expect(refusal?.status_code).toBe(429);
-    expect(refusal?.headers).toEqual({ 'Retry-After': '600' });
-    expect(JSON.parse(refusal?.body ?? '{}')).toMatchObject({ code: UPLOAD_REFUSAL_CODES.DAILY_QUOTA_EXCEEDED });
+    expect(JSON.parse(refusal?.body ?? '{}')).toMatchObject({
+      code: UPLOAD_REFUSAL_CODES.DAILY_QUOTA_EXCEEDED,
+      retryAfterSeconds: 600,
+    });
     expect(quota.checks).toEqual([{ userId: '5f00000000000000000000a1', role: 'registered', incomingBytes: 5 * MIB }]);
   });
 

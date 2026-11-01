@@ -234,8 +234,8 @@ describe('UploadProcessor', () => {
 
       expect(result.valid).toBe(false);
       expect(result.error).toBeDefined();
-      expect(result.error).toContain('Fichier trop volumineux');
-      expect(result.error).toContain('GB');
+      expect(result.error).toContain('File too large');
+      expect(result.error).toContain('100 MB');
     });
 
     it('should validate different file types with appropriate limits', () => {
@@ -507,7 +507,7 @@ describe('UploadProcessor', () => {
       });
 
       await expect(processor.uploadFile(file, testUserId, false)).rejects.toThrow(
-        'Fichier trop volumineux'
+        'File too large'
       );
     });
 
@@ -573,7 +573,7 @@ describe('UploadProcessor', () => {
 
       await expect(
         processor.uploadEncryptedFile(file, testUserId, 'e2ee' as any)
-      ).rejects.toThrow('Fichier trop volumineux');
+      ).rejects.toThrow('File too large');
     });
 
     it('should encrypt file using encryption service', async () => {
