@@ -25,7 +25,12 @@ export const CREATION_ENCRYPTION_MODES = ['server', 'hybrid', 'e2ee'] as const;
 
 export type CreationEncryptionMode = (typeof CREATION_ENCRYPTION_MODES)[number];
 
-/** Le mode qu'un appelant SANS choix (ancien client) reçoit : le serveur chiffre toujours. */
+/**
+ * Le mode d'une création SANS choix : un ancien client, et toute création qui
+ * ne passe pas par l'écran de création (ouvrir la conversation depuis un
+ * profil, un partage, un transfert). Jamais `e2ee` d'office : ces chemins
+ * portent des pièces jointes que le bout en bout ne scelle pas encore.
+ */
 export const IMPLICIT_CREATION_ENCRYPTION_MODE: CreationEncryptionMode = 'server';
 
 export const END_TO_END_MINIMUM_PLATFORM_ROLE = GlobalUserRole.ANALYST;
@@ -78,13 +83,4 @@ export function creationEncryptionOffer(context: CreationEncryptionContext): Cre
     choices: [...readable, { mode: 'e2ee', available: unavailability === null, unavailability }],
     defaultMode: unavailability === null ? 'e2ee' : 'server',
   };
-}
-
-/**
- * Le mode d'une création qui ne passe pas par l'écran de création (ouvrir la
- * conversation avec quelqu'un depuis son profil, un partage, une réponse) :
- * le défaut de l'offre.
- */
-export function implicitCreationEncryptionMode(context: CreationEncryptionContext): CreationEncryptionMode {
-  return creationEncryptionOffer(context).defaultMode;
 }

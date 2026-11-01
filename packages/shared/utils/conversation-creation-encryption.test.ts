@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   creationEncryptionOffer,
-  implicitCreationEncryptionMode,
   isCreationEncryptionMode,
   mayChooseEndToEnd,
   IMPLICIT_CREATION_ENCRYPTION_MODE,
@@ -76,14 +75,8 @@ describe('creationEncryptionOffer — le mode de chiffrement se choisit à la cr
   });
 });
 
-describe('implicitCreationEncryptionMode — une création hors de l’écran de création', () => {
-  it('reprend le défaut de l’offre', () => {
-    expect(implicitCreationEncryptionMode(context({ platformRole: 'ANALYST' }))).toBe('e2ee');
-    expect(implicitCreationEncryptionMode(context({ platformRole: 'USER' }))).toBe('server');
-    expect(implicitCreationEncryptionMode(context({ platformRole: 'ADMIN', endToEndSupported: false }))).toBe('server');
-  });
-
-  it('un ancien client qui ne dit rien reçoit Serveur : le serveur chiffre toujours au repos', () => {
+describe('une création hors de l’écran de création', () => {
+  it('reçoit Serveur, même pour un rôle qui peut choisir le bout en bout : le serveur chiffre toujours au repos', () => {
     expect(IMPLICIT_CREATION_ENCRYPTION_MODE).toBe('server');
   });
 });
