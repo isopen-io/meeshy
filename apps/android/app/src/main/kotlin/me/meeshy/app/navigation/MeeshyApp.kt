@@ -49,6 +49,8 @@ import me.meeshy.app.notifications.NotificationBannerHost
 import me.meeshy.app.startup.AppExtensionsViewModel
 import me.meeshy.app.startup.AppOverlayStack
 import me.meeshy.app.startup.ProvideAppLocals
+import me.meeshy.app.upgrade.UpgradeRequiredScreen
+import me.meeshy.app.upgrade.UpgradeRequiredViewModel
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.net.SessionExpiryNotifier
@@ -100,6 +102,10 @@ fun MeeshyApp(
     LaunchedEffect(guestEnded) {
         if (guestEnded != null) authViewModel.onExternalSessionOpened()
     }
+    // Ce binaire est sous le plancher de version (426 REST ou `error` socket) : l'écran « Mettre à jour Meeshy » couvre tout,
+    // sans sortie, et le contenu dessous quitte l'arbre d'accessibilité comme sous le parcours d'accueil (#13954).
+    val upgradeViewModel: UpgradeRequiredViewModel = hiltViewModel()
+    val upgradeRequirement by upgradeViewModel.requirement.collectAsStateWithLifecycle()
     // Seule la PHASE de l'appel est lue ici : l'etat complet change chaque seconde (le chrono),
     // et le lire a la racine recomposerait MeeshyApp et redonnerait au `builder` du NavHost une
     // identite neuve chaque seconde — le graphe reconstruit pendant tout l'appel. La pastille
@@ -120,6 +126,7 @@ fun MeeshyApp(
         onboardingViewModel.state.map { it.isPresented }.distinctUntilChanged()
     }.collectAsStateWithLifecycle(initialValue = onboardingViewModel.isPresented)
     val onboardingCovers = OnboardingRootRules.coversRoot(onboardingPresented, currentRoute)
+    val coveredForAccessibility = onboardingCovers || upgradeRequirement != null
     val showMenuFab = floatingChromeVisible(currentRoute, isOnboardingPresented = onboardingCovers)
     val onCallScreen = currentRoute == CallRoute.PATTERN
 
@@ -190,7 +197,7 @@ fun MeeshyApp(
             // insets, ce qui laisse le fond de marque plein ecran (edge-to-edge).
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().rootPresentationContent().hiddenBehindOnboarding(onboardingCovers)) {
+            Box(modifier = Modifier.fillMaxSize().rootPresentationContent().hiddenBehindOnboarding(coveredForAccessibility)) {
                 val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
                 // The minimised-call pill PUSHES the destination down instead of floating
                 // over it: pinned under the status bar, it would lie under the system status
@@ -259,7 +266,7 @@ fun MeeshyApp(
         }
 
         // Les calques posés SOUS le parcours d'accueil ne sont ni lus ni atteignables par TalkBack tant qu'il couvre l'écran.
-        BeneathOnboarding(isCovered = onboardingCovers) {
+        BeneathOnboarding(isCovered = coveredForAccessibility) {
             // #4457 — la banniere in-app se monte UNE fois, ICI, par-dessus la navigation (une
             // banniere SUIT le lecteur : une instance par ecran en ferait autant de rivales).
             NotificationBannerHost(
@@ -309,6 +316,8 @@ fun MeeshyApp(
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
 
         LoggingOutVeil(visible = authState.isLoggingOut)
+
+        upgradeRequirement?.let { UpgradeRequiredScreen(requirement = it) }
 
         SplashOverlay()
     }

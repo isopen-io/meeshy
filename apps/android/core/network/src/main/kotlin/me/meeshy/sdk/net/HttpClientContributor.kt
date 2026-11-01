@@ -40,6 +40,9 @@ object HttpPriority {
 
     /** Un morceau tus attend la réponse de la passerelle à sa mesure, jamais les 10 s par défaut (#13959). */
     const val UPLOAD_TIMEOUTS = 60
+
+    /** Voit la réponse FINALE, après relance et authentification : un 426 n'est jamais rejoué, il ferme l'application (#13954). */
+    const val UPGRADE_REQUIRED = 70
     const val URL_GUARD = 100
     const val ENDPOINT_POLICY = 200
 
