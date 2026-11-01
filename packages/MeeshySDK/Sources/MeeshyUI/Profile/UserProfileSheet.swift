@@ -38,16 +38,22 @@ public struct UserProfileSheet: View {
     @State var connectionStatus: ConnectionStatus = .none
     @State private var pendingRequestId: String?
 
+    public let dependencies: UserProfileDependencies
+
     var currentUserId: String {
-        AuthManager.shared.currentUser?.id ?? ""
+        dependencies.currentUser()?.id ?? ""
     }
 
     var isCurrentUser: Bool {
         guard !currentUserId.isEmpty else { return false }
         if user.userId == currentUserId { return true }
-        if let currentUsername = AuthManager.shared.currentUser?.username,
+        if let currentUsername = dependencies.currentUser()?.username,
            user.username == currentUsername { return true }
         return false
+    }
+
+    var connectionActions: ProfileConnectionActions {
+        ProfileConnectionActions(relationships: dependencies.relationships, social: dependencies.social)
     }
 
     /// Injected by the app (Phase E) to render the rich posts list
@@ -86,8 +92,10 @@ public struct UserProfileSheet: View {
         storyRingState: StoryRingState? = nil,
         onViewStory: (() -> Void)? = nil,
         postsContent: ((String) -> AnyView)? = nil,
-        onCall: ((ProfileCallRequest) -> Void)? = nil
+        onCall: ((ProfileCallRequest) -> Void)? = nil,
+        dependencies: UserProfileDependencies
     ) {
+        self.dependencies = dependencies
         self.user = user
         self.onDismiss = onDismiss
         self.onNavigateToConversation = onNavigateToConversation
@@ -154,10 +162,10 @@ public struct UserProfileSheet: View {
         .task {
             await resolveInitialState()
         }
-        .onReceive(FriendshipCache.shared.objectWillChange) { _ in
+        .onReceive(dependencies.relationships.changes) { _ in
             resolveConnectionStatus()
         }
-        .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
+        .onReceive(dependencies.userUpdates.receive(on: DispatchQueue.main)) { event in
             guard let repainted = Self.repaintedProfile(loader.profile, with: event) else { return }
             loader.repaint(repainted)
         }
@@ -315,7 +323,7 @@ public struct UserProfileSheet: View {
         resolveConnectionStatus()
     }
 
-    private var profileLoading: any ProfileLoading { injectedProfileLoading ?? UncachedProfileLoading() }
+    private var profileLoading: any ProfileLoading { injectedProfileLoading ?? dependencies.fallbackProfileLoading }
 
     var resolvedUserId: String? {
         user.userId ?? loader.profile?.id
@@ -332,25 +340,20 @@ public struct UserProfileSheet: View {
 
     private func resolveInitialState() async {
         guard let userId = resolvedUserId, !userId.isEmpty, userId != currentUserId else { return }
-        isBlocked = BlockService.shared.isBlocked(userId: userId)
+        isBlocked = dependencies.relationships.isBlocked(userId: userId)
         resolveConnectionStatus()
     }
 
     private func resolveConnectionStatus() {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
-        let status = FriendshipCache.shared.status(for: userId)
-        switch status {
-        case .friend:
-            connectionStatus = .connected
-        case .pendingSent(let requestId):
+        let resolved = ConnectionStatus(friendship: dependencies.relationships.status(for: userId))
+        switch resolved {
+        case .pendingSent(let requestId), .pendingReceived(let requestId):
             pendingRequestId = requestId
-            connectionStatus = .pendingSent(requestId: requestId)
-        case .pendingReceived(let requestId):
-            pendingRequestId = requestId
-            connectionStatus = .pendingReceived(requestId: requestId)
-        case .none:
-            connectionStatus = .none
+        case .none, .connected:
+            break
         }
+        connectionStatus = resolved
     }
 
     // MARK: - Toast Helper
@@ -367,101 +370,94 @@ public struct UserProfileSheet: View {
 
     func sendConnectionRequest() async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
-        do {
-            let request = try await FriendService.shared.sendFriendRequest(receiverId: userId)
-            FriendshipCache.shared.didSendRequest(to: userId, requestId: request.id)
-            pendingRequestId = request.id
-            connectionStatus = .pendingSent(requestId: request.id)
-            HapticFeedback.success()
-            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module), isSuccess: true)
-        } catch {
+        guard let requestId = await connectionActions.sendRequest(to: userId) else {
             HapticFeedback.error()
             postToast(String(localized: "profile.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module), isSuccess: false)
+            return
         }
+        pendingRequestId = requestId
+        connectionStatus = .pendingSent(requestId: requestId)
+        HapticFeedback.success()
+        postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module), isSuccess: true)
     }
 
     func cancelRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        FriendshipCache.shared.didCancelRequest(to: userId)
-        pendingRequestId = nil
-        connectionStatus = .none
-        HapticFeedback.medium()
-        do {
-            try await FriendService.shared.deleteRequest(requestId: requestId)
-            postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulée", bundle: .module), isSuccess: true)
-        } catch {
-            FriendshipCache.shared.didSendRequest(to: userId, requestId: requestId)
+        let cancelled = await connectionActions.cancelRequest(requestId: requestId, userId: userId) {
+            pendingRequestId = nil
+            connectionStatus = .none
+            HapticFeedback.medium()
+        }
+        guard cancelled else {
             resolveConnectionStatus()
             postToast(String(localized: "profile.toast.cancelFailed", defaultValue: "Impossible d'annuler", bundle: .module), isSuccess: false)
+            return
         }
+        postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulée", bundle: .module), isSuccess: true)
     }
 
     func resendRequest() async {
         if let requestId = pendingRequestId {
-            try? await FriendService.shared.deleteRequest(requestId: requestId)
+            await connectionActions.discardRequest(requestId)
         }
         await sendConnectionRequest()
     }
 
     func acceptRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        FriendshipCache.shared.didAcceptRequest(from: userId)
-        connectionStatus = .connected
-        pendingRequestId = nil
-        HapticFeedback.success()
-        do {
-            let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
-            postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptée", bundle: .module), isSuccess: true)
-        } catch {
-            FriendshipCache.shared.rollbackAccept(senderId: userId, requestId: requestId)
+        let accepted = await connectionActions.acceptRequest(requestId: requestId, senderId: userId) {
+            connectionStatus = .connected
+            pendingRequestId = nil
+            HapticFeedback.success()
+        }
+        guard accepted else {
             resolveConnectionStatus()
             HapticFeedback.error()
             postToast(String(localized: "profile.toast.acceptFailed", defaultValue: "Impossible d'accepter", bundle: .module), isSuccess: false)
+            return
         }
+        postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptée", bundle: .module), isSuccess: true)
     }
 
     func declineRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        FriendshipCache.shared.didRejectRequest(from: userId)
-        connectionStatus = .none
-        pendingRequestId = nil
-        HapticFeedback.medium()
-        do {
-            let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
-            postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusée", bundle: .module), isSuccess: true)
-        } catch {
-            FriendshipCache.shared.rollbackReject(senderId: userId, requestId: requestId)
+        let declined = await connectionActions.declineRequest(requestId: requestId, senderId: userId) {
+            connectionStatus = .none
+            pendingRequestId = nil
+            HapticFeedback.medium()
+        }
+        guard declined else {
             resolveConnectionStatus()
             HapticFeedback.error()
             postToast(String(localized: "profile.toast.declineFailed", defaultValue: "Impossible de refuser", bundle: .module), isSuccess: false)
+            return
         }
+        postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusée", bundle: .module), isSuccess: true)
     }
 
     // MARK: - Block Actions
 
     func blockUser() async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
-        do {
-            try await BlockService.shared.blockUser(userId: userId)
-            isBlocked = true
-            HapticFeedback.medium()
-            postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloqué", bundle: .module), isSuccess: true)
-        } catch {
+        guard await connectionActions.block(userId: userId) else {
             postToast(String(localized: "profile.toast.blockFailed", defaultValue: "Impossible de bloquer", bundle: .module), isSuccess: false)
+            return
         }
+        isBlocked = true
+        HapticFeedback.medium()
+        postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloqué", bundle: .module), isSuccess: true)
     }
 
     func unblockUser() async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
-        do {
-            try await BlockService.shared.unblockUser(userId: userId)
-            isBlocked = false
-            resolveConnectionStatus()
-            HapticFeedback.light()
-            postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur débloqué", bundle: .module), isSuccess: true)
-        } catch {
+        guard await connectionActions.unblock(userId: userId) else {
             postToast(String(localized: "profile.toast.unblockFailed", defaultValue: "Impossible de débloquer", bundle: .module), isSuccess: false)
+            return
         }
+        isBlocked = false
+        resolveConnectionStatus()
+        HapticFeedback.light()
+        postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur débloqué", bundle: .module), isSuccess: true)
     }
 
     // MARK: - Bio Card

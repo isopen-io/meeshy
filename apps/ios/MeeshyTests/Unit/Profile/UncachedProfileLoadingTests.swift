@@ -1,6 +1,6 @@
 import XCTest
 import MeeshySDK
-@testable import MeeshyUI
+@testable import Meeshy
 
 @MainActor
 final class UncachedProfileLoadingTests: XCTestCase {

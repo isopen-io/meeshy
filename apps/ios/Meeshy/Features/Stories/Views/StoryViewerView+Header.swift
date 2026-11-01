@@ -365,7 +365,7 @@ struct StoryHeaderView: View {
                     userId: uid,
                     onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
                     onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }
+                )) }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)

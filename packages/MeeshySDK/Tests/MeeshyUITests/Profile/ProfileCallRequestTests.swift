@@ -55,7 +55,7 @@ final class ProfileCallRequestTests: XCTestCase {
     func test_sheet_offersTheCallOnlyWhenTheAppWiresIt() {
         let user = ProfileSheetUser(userId: peer, username: "alice")
 
-        XCTAssertFalse(UserProfileSheet(user: user).offersCall)
-        XCTAssertTrue(UserProfileSheet(user: user, onCall: { _ in }).offersCall)
+        XCTAssertFalse(UserProfileSheet(user: user, dependencies: ProfileDependencyDoubles.make()).offersCall)
+        XCTAssertTrue(UserProfileSheet(user: user, onCall: { _ in }, dependencies: ProfileDependencyDoubles.make()).offersCall)
     }
 }
