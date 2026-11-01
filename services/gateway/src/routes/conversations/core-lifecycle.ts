@@ -114,7 +114,7 @@ export function registerCreateConversationRoute(
       // une conversation ne naît jamais sans mode (`creationRegime.ts`).
       const regimeRequest = { requestedMode, plaintext: plaintext === true, platformRole: authContext.registeredUser.role };
       const regime = decideCreationRegime(regimeRequest);
-      if (!regime.allowed) {
+      if (regime.kind === 'refused') {
         return refuseCreationRegime(reply, regime.refusal);
       }
 

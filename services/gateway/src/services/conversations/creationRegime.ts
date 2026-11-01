@@ -36,17 +36,17 @@ export type CreationRegimeRequest = {
 export type CreationRegimeRefusal = 'plaintext-with-end-to-end' | 'end-to-end-restricted';
 
 export type CreationRegimeDecision =
-  | { readonly allowed: true; readonly mode: CreationEncryptionMode }
-  | { readonly allowed: false; readonly refusal: CreationRegimeRefusal };
+  | { readonly kind: 'allowed'; readonly mode: CreationEncryptionMode }
+  | { readonly kind: 'refused'; readonly refusal: CreationRegimeRefusal };
 
 export function decideCreationRegime(request: CreationRegimeRequest): CreationRegimeDecision {
   if (request.requestedMode === 'e2ee' && request.plaintext) {
-    return { allowed: false, refusal: 'plaintext-with-end-to-end' };
+    return { kind: 'refused', refusal: 'plaintext-with-end-to-end' };
   }
   if (request.requestedMode === 'e2ee' && !mayChooseEndToEnd(request.platformRole)) {
-    return { allowed: false, refusal: 'end-to-end-restricted' };
+    return { kind: 'refused', refusal: 'end-to-end-restricted' };
   }
-  return { allowed: true, mode: request.requestedMode ?? IMPLICIT_CREATION_ENCRYPTION_MODE };
+  return { kind: 'allowed', mode: request.requestedMode ?? IMPLICIT_CREATION_ENCRYPTION_MODE };
 }
 
 /**
