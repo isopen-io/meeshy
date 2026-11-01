@@ -5,11 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  getAttachmentType,
-  getSizeLimit,
-  UPLOAD_LIMITS,
-} from '@meeshy/shared/types/attachment';
+import { getAttachmentType } from '@meeshy/shared/types/attachment';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import type { Prisma } from '@meeshy/shared/prisma/client';
@@ -51,6 +47,15 @@ import { triggerMediaAltTranslations } from '../../services/posts/mediaAltWrites
 import { triggerMessageAttachmentAltTranslation } from '../../services/attachments/MessageAttachmentAltTranslationService';
 import { originIsAllowed } from '../../config/cors-origins';
 import { TUS_COLLECTION_METHODS, TUS_UPLOAD_METHODS } from './tus-methods';
+import { createUploadQuota, type UploadQuota, type UploadQuotaRedis } from '../../services/attachments/upload-quota';
+import {
+  dailyQuotaRefusal,
+  largestUploadCeiling,
+  tusUploadRefusal,
+  uploaderRole,
+  uploadLimitPolicyFromEnv,
+  uploadSizeRefusal,
+} from '../../services/attachments/upload-admission';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
 
@@ -98,11 +103,9 @@ export type TusRoutesOptions = {
    * envoi (il naît avec le temps réel, après l'enregistrement des routes).
    */
   readonly localMediaRenderer?: () => LocalMediaRenderer | null;
+  /** #11266 — le quota journalier ; absent : celui de la passerelle, sur `fastify.redis`. */
+  readonly uploadQuota?: UploadQuota;
 };
-
-function getMaxFileSize(): number {
-  return Math.max(...Object.values(UPLOAD_LIMITS));
-}
 
 type UploadCallerIdentity = {
   readonly userId: string;
@@ -232,6 +235,14 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
   const localMediaRenderer = opts.localMediaRenderer
     ?? (() => fastify.socketIOHandler?.getLocalMediaRenderer?.() ?? null);
 
+  // #11266 — plafonds par type et par rôle, quota journalier : une politique
+  // lue de `@meeshy/shared/types/upload-limits`, que l'environnement remplace.
+  const uploadPolicy = uploadLimitPolicyFromEnv();
+  const uploadQuota = opts.uploadQuota ?? createUploadQuota({
+    redis: ((fastify as { redis?: UploadQuotaRedis | null }).redis ?? null),
+    quotas: uploadPolicy.quotas,
+  });
+
   const metadataManager = new MetadataManager(UPLOAD_PATH);
   // Référence conservée séparément (plutôt que lue depuis `tusServer` une
   // fois construit) : `onIncomingRequest`, ci-dessous, doit pouvoir
@@ -327,7 +338,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
   const tusServer = new Server({
     path: uploadsPath,
     datastore: uploadDataStore,
-    maxSize: getMaxFileSize(),
+    // Le plus grand plafond (la vidéo d'un inscrit) : la limite du RÔLE se
+    // juge à `onUploadCreate` quand la taille est annoncée, à la fin sinon.
+    maxSize: largestUploadCeiling(uploadPolicy),
     respectForwardedHeaders: true,
     // #5298 — sans cette option, `@tus/server` 2.4.4 rend `'*'` sur CHAQUE
     // réponse (`getCorsOrigin` : `if (!allowedOrigins) return '*';`), et
@@ -429,14 +442,16 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       const mimeType = canonicalMediaMimeType({ mimeType: upload.metadata?.filetype, fileName: upload.metadata?.filename })
         || 'application/octet-stream';
       const attachmentType = getAttachmentType(mimeType, upload.metadata?.filename ?? undefined);
-      const sizeLimit = getSizeLimit(attachmentType);
+      const role = uploaderRole(isAnonymous);
 
-      if (upload.size && upload.size > sizeLimit) {
-        throw {
-          status_code: 413,
-          body: `File too large. Max size for ${attachmentType}: ${(sizeLimit / (1024 * 1024 * 1024)).toFixed(1)} GB\n`,
-        };
+      // #11266 — la limite du RÔLE (anonymes ÷10) et le quota du jour, avant
+      // le premier octet quand la taille est annoncée.
+      if (upload.size) {
+        const tooLarge = uploadSizeRefusal({ policy: uploadPolicy, type: attachmentType, role, size: upload.size });
+        if (tooLarge) throw tusUploadRefusal(tooLarge);
       }
+      const overQuota = dailyQuotaRefusal(await uploadQuota.check({ userId, role, incomingBytes: upload.size ?? 0 }));
+      if (overQuota) throw tusUploadRefusal(overQuota);
 
       // #10001 — un invité d'un lien à familles (World Wide) ne téléverse pas
       // au-delà de `GUEST_ATTACHMENT_MAX_BYTES` : refusé avant le premier
@@ -511,6 +526,19 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       }
 
       const attachmentType = getAttachmentType(mimeType, filename);
+      // #11266 — un envoi à longueur différée n'a pas été jugé à la création :
+      // la limite de son rôle s'applique ici, sur la taille réellement reçue.
+      const receivedTooLarge = uploadSizeRefusal({
+        policy: uploadPolicy,
+        type: attachmentType,
+        role: uploaderRole(isAnonymous),
+        size: upload.size ?? (await fs.stat(destPath)).size,
+      });
+      if (receivedTooLarge) {
+        await fs.unlink(destPath).catch((err) => logger.debug('[TUS] Oversized upload cleanup failed', { destPath, err }));
+        logger.warn(`[TUS] Upload REFUSED — ${receivedTooLarge.message} (userId=${userId})`);
+        throw tusUploadRefusal(receivedTooLarge);
+      }
       // #3627, #11258 — GPS et métadonnées retirés des photos ET des vidéos
       // AVANT toute persistance : `destPath` est servi tel quel par
       // `GET /attachments/:id`. Décidé par le TYPE, pas par la catégorie : un
@@ -728,6 +756,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         if ('alt' in description) triggerMessageAttachmentAltTranslation(attachment.id);
         logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
+      // #11266 — compté dans le quota du jour une fois l'envoi admis et persisté.
+      await uploadQuota.record({ userId, bytes: upload.size ?? fileSize });
 
       return {
         status_code: 200,

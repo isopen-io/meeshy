@@ -10,7 +10,7 @@ import { MAX_POST_MEDIA } from '../types/attachment.js';
  *   `ShareLimits.swift`).
  *
  * Ce sont des plafonds de PARTAGE, pas de la passerelle : un fichier y reste
- * borné par `UPLOAD_LIMITS` (4 Go, `types/attachment.ts`) et un message par
+ * borné par les plafonds par type et par rôle (`types/upload-limits.ts`, #11266) et un message par
  * `MAX_ATTACHMENTS_PER_MESSAGE` (199) ;
  * - `maxRecipients` : 10 destinataires, publications comprises ;
  * - `maxPublicationMedia` : une publication porte au plus 10 médias — la borne
