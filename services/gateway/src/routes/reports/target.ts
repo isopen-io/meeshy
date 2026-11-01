@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { amitieAcceptee } from '../../services/friendship';
+import { circleAudienceAdmits } from '../../services/posts/postVisibility';
 
 /**
  * La cible d'un signalement EXISTE-t-elle, et le signalant pouvait-il la voir ?
@@ -116,6 +117,10 @@ async function postAtteignable(
     case 'EXCEPT':
       return !post.visibilityUserIds.includes(viewerId)
         && (await amitieAcceptee(prisma, post.authorId, viewerId));
+    case 'ACQUAINTANCES':
+    case 'CLOSE':
+    case 'BLOOD':
+      return circleAudienceAdmits(prisma, post.authorId, viewerId, post.visibility);
     case 'FRIENDS':
     case 'COMMUNITY':
     default:

@@ -15,6 +15,7 @@ import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post'
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from './communityVisibility';
+import { circleAudienceIds } from './postAudience';
 import {
   composeStoryContentForLanguage,
   isContentDerivedFromTextObjects,
@@ -269,6 +270,14 @@ export class StoryTextObjectTranslationService {
     // (`case 'PRIVATE': return []`). Without this guard the story falls through to the friend
     // fan-out below and leaks the translated overlay text to every friend of the author.
     if (visibility === 'PRIVATE') {
+      return [...recipients];
+    }
+
+    // Un cercle (Connaissances, Proches, Sang — #13931) ne se replie JAMAIS sur
+    // « tous les amis » : seuls les comptes du niveau voulu reçoivent la traduction.
+    const circle = await circleAudienceIds(this.prisma, authorId, visibility);
+    if (circle) {
+      for (const id of circle) recipients.add(id);
       return [...recipients];
     }
 

@@ -602,7 +602,7 @@ describe('les audiences de cercle — un seul schéma d\'audience pour les quatr
   const SOURCE_ID = '507f1f77bcf86cd799439011';
 
   const entrances: ReadonlyArray<readonly [string, (visibility: string) => { success: boolean }]> = [
-    ['CreatePostSchema', (visibility) => CreatePostSchema.safeParse({ type: 'POST', visibility })],
+    ['CreatePostSchema', (visibility) => CreatePostSchema.safeParse({ type: 'POST', content: 'Bonjour', visibility })],
     ['UpdatePostSchema', (visibility) => UpdatePostSchema.safeParse({ visibility })],
     ['RepostSchema', (visibility) => RepostSchema.safeParse({ visibility })],
     ['PublishAttachmentSchema', (visibility) => PublishAttachmentSchema.safeParse({ attachmentId: SOURCE_ID, visibility })],
