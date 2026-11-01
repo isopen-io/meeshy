@@ -51,7 +51,7 @@ describe('purgeDueViewOnceContent', () => {
     const result = await purgeDueViewOnceContent(prisma as any, { now: NOW, attachmentRemover: attachments });
 
     expect(result).toEqual({ purged: 1 });
-    expect(attachments.deleteAttachment).toHaveBeenCalledWith('att-1');
+    expect(attachments.deleteAttachment).toHaveBeenCalledWith('att-1', { requireBytesGone: true });
     const { data } = prisma.message.update.mock.calls[0][0] as { data: Record<string, unknown> };
     expect(data).toMatchObject({ content: '', translations: null, metadata: null, viewOnceBurnedAt: NOW, viewOnceBurnAt: null });
     expect(data).not.toHaveProperty('deletedAt');

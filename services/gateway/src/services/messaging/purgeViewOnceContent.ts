@@ -30,7 +30,7 @@ import { computeViewOnceStates, type ViewOnceAudiencePrisma } from './viewOnceAu
 const DEFAULT_PURGE_BATCH = 200;
 
 export interface ViewOncePurgeAttachmentRemover {
-  deleteAttachment(attachmentId: string): Promise<void>;
+  deleteAttachment(attachmentId: string, options?: { readonly requireBytesGone?: boolean }): Promise<void>;
 }
 
 export type ViewOncePurgePrisma = Pick<PrismaClient, 'message'>;
@@ -113,8 +113,13 @@ export async function purgeDueViewOnceContent(
       // (#11269) : la loi du porteur continue de refuser ses octets, et la
       // passe suivante la reprend. La remettre à `null` rendait la pièce de
       // nouveau lisible, et plus aucune passe ne la revoyait.
+      // `requireBytesGone` (audit F1) : une pièce dont un octet survit (EBUSY,
+      // seau muet) garde sa LIGNE, donc sa clé — c'est elle que la reprise
+      // relit, et elle seule fait reconnaître le fichier comme pièce jointe.
       await Promise.allSettled(
-        message.attachments.map((attachment) => options.attachmentRemover.deleteAttachment(attachment.id)),
+        message.attachments.map((attachment) =>
+          options.attachmentRemover.deleteAttachment(attachment.id, { requireBytesGone: true }),
+        ),
       );
       const filesPending = message.attachments.length > 0 && !(await attachmentsGone(prisma, message.id));
       const firstPurge = !(message.viewOnceBurnedAt instanceof Date);

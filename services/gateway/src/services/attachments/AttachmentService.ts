@@ -30,6 +30,14 @@ import { unsetOrNull } from '../../utils/prisma-unset';
 import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
 import { conventionalDerivedPaths, derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
 import { eraseMirroredCopy } from '../storage/objects/mirroredErasure';
+import { AttachmentBytesSurvivedError, eraseBytesOnlyThisRowCites } from './eraseBytesBeforeRow';
+
+/**
+ * `requireBytesGone` (#11269) : les octets que cette ligne est seule à citer
+ * partent AVANT elle, et elle ne part que s'ils ont vraiment disparu — sinon
+ * `AttachmentBytesSurvivedError`, la ligne gardant la clé pour la reprise.
+ */
+export type DeleteAttachmentOptions = { readonly requireBytesGone?: boolean };
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -375,7 +383,7 @@ export class AttachmentService {
    * éternel que rien ne ramasse — `MaintenanceService` ne balaie que les LIGNES
    * sans message, jamais les fichiers.
    */
-  async deleteAttachment(attachmentId: string): Promise<void> {
+  async deleteAttachment(attachmentId: string, options: DeleteAttachmentOptions = {}): Promise<void> {
     const attachment = await this.prisma.messageAttachment.findUnique({
       where: { id: attachmentId },
     });
@@ -385,6 +393,11 @@ export class AttachmentService {
     }
     // #13100 — lues AVANT les effacements, qui retirent les lignes de scellement.
     const replacing = await this.replacingRecordsOf(attachmentId);
+
+    if (options.requireBytesGone === true) {
+      const survivors = await eraseBytesOnlyThisRowCites(this.prisma, this.uploadBasePath, attachment);
+      if (survivors.length > 0) throw new AttachmentBytesSurvivedError(survivors);
+    }
 
     await this.prisma.messageAttachment.delete({
       where: { id: attachmentId },
@@ -540,7 +553,7 @@ export class AttachmentService {
     try {
       await fs.unlink(fullPath);
     } catch (error) {
-      logger.error('Erreur suppression fichiers', error as Error);
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') logger.error('Erreur suppression fichiers', error as Error);
     }
     await eraseMirroredCopy(fullPath, this.uploadBasePath);
     await forgetSealing(fullPath, this.uploadBasePath);
