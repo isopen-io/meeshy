@@ -37,10 +37,25 @@ describe('le minutage de la marque (miroir de StoryExportBranding.makePlan et de
     expect(timeline.totalMs).toBe(3_500);
   });
 
-  test("le jingle d'ouverture entre à zéro et s'estompe sur le fondu ; celui de fermeture suit le décalage de la 2e phase", () => {
+  test("le jingle d'ouverture entre à zéro et joue en entier ; celui de fermeture suit le décalage de la 2e phase", () => {
     const timeline = brandedTimeline({ plan: makeBrandingPlan({ hasIntro: true, hasAuthorOutro: true }), storyMs: 10_000 });
-    expect(timeline.introJingle).toEqual({ whenMs: 0, fadeOut: { startMs: 1_200, durationMs: 500 } });
+    expect(timeline.introJingle).toEqual({ whenMs: 0 });
     expect(timeline.outroJingle.whenMs).toBe(timeline.outroStartMs + 1_500);
+  });
+
+  test("le son de la story monte sous la queue du jingle d'ouverture et s'éteint sous la carte d'auteur, muet à l'entrée de son jingle", () => {
+    const timeline = brandedTimeline({ plan: makeBrandingPlan({ hasIntro: true, hasAuthorOutro: true }), storyMs: 10_000 });
+    expect(BRANDING_TIMING.introJingleMs).toBe(2_200);
+    expect(timeline.storyAudioRise).toEqual({ startMs: 1_200, durationMs: 1_000 });
+    expect(timeline.storyAudioFall).toEqual({ startMs: timeline.outroStartMs, durationMs: 1_500 });
+    expect(timeline.storyAudioFall.startMs + timeline.storyAudioFall.durationMs).toBe(timeline.outroJingle.whenMs);
+  });
+
+  test('une story courte : la montée et l\'extinction ne se chevauchent jamais', () => {
+    const timeline = brandedTimeline({ plan: makeBrandingPlan({ hasIntro: true, hasAuthorOutro: false }), storyMs: 1_500 });
+    const rise = timeline.storyAudioRise!;
+    expect(timeline.storyAudioFall.startMs).toBeGreaterThanOrEqual(rise.startMs + rise.durationMs);
+    expect(timeline.storyAudioFall.startMs + timeline.storyAudioFall.durationMs).toBeLessThanOrEqual(1_200 + 1_500);
   });
 
   test("sans intro, aucun jingle d'ouverture", () => {
