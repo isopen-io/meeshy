@@ -1,9 +1,5 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -17,8 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -41,8 +35,8 @@ import me.meeshy.ui.sticker.stickerTemplateName
  * One on-canvas sticker — emoji, template or image ([ComposerStickerArt]): placed at its normalised ([StoryStickerElement.x],
  * [StoryStickerElement.y]) of the measured canvas (centred on that point), draggable,
  * pinch/rotate-able with one gesture, tappable to select and long-pressable for its menu
- * (vue `1d`) — TalkBack reaches the same menu by its long-click action. Selected, it carries the dashed
- * frame of the selection ([sceneSelectionFrame], #13836); its actions ride the selection bar, the menu a shortcut of them. Lifting the finger closes the gesture (one undo step). The pointer handlers
+ * (vue `1d`) — TalkBack reaches the same menu by its long-click action. Selected, it draws no frame
+ * ([sceneSelection], #14207); its actions ride the selection bar, the menu a shortcut of them. Lifting the finger closes the gesture (one undo step). The pointer handlers
  * read the callbacks through [rememberUpdatedState], so a recomposition never leaves a
  * gesture holding a stale canvas size. The normalised→pixel placement and the pixel→normalised
  * drag delta are the only arithmetic here; the clamp lives in the pure [StoryStickerElement].
@@ -70,6 +64,8 @@ internal fun StickerLayer(
     val currentDrag by rememberUpdatedState(onDrag)
     val currentDragEnd by rememberUpdatedState(onDragEnd)
     val currentTransform by rememberUpdatedState(onTransform)
+    val currentScale by rememberUpdatedState(sticker.scale)
+    val currentRotation by rememberUpdatedState(sticker.rotationDeg)
     Box(
         modifier = Modifier
             .offset {
@@ -84,36 +80,26 @@ internal fun StickerLayer(
                 rotationZ = sticker.rotationDeg
             }
             .onSizeChanged { sizePx = it }
-            .pointerInput(sticker.id) {
-                detectTapGestures(
-                    onLongPress = {
-                        haptics.medium()
-                        currentLongPress()
-                    },
-                    onTap = { currentTap() },
-                )
-            }
-            .pointerInput(sticker.id) {
-                detectTransformGestures { _, pan, zoom, rotation ->
+            .sceneObjectGestures(
+                key = sticker.id,
+                pose = { SceneObjectPose(currentScale, currentRotation) },
+                onTap = { currentTap() },
+                onLongPress = {
+                    haptics.medium()
+                    currentLongPress()
+                },
+                onMove = { pan, zoom, rotation ->
                     currentDrag(pan.x, pan.y)
                     currentTransform(zoom, rotation)
-                }
-            }
-            .pointerInput(sticker.id) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Final)
-                    } while (event.changes.any { it.pressed })
-                    currentDragEnd()
-                }
-            }
+                },
+                onEnd = { currentDragEnd() },
+            )
             .semantics {
                 contentDescription = label
                 onClick { currentTap(); true }
                 onLongClick { currentLongPress(); true }
             }
-            .sceneSelectionFrame(selected, sticker.scale)
+            .sceneSelection(selected)
             .padding(4.dp),
         contentAlignment = Alignment.Center,
     ) {
