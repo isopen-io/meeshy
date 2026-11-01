@@ -98,6 +98,7 @@ async function mount(options: {
   readonly cache: 'fresh' | 'stale' | 'empty';
   readonly selfId?: string;
   readonly remote?: (query: string) => readonly MentionCandidate[];
+  readonly reach?: MentionSource['reach'];
 }): Promise<Fixture> {
   if (options.cache !== 'empty') {
     const age = options.cache === 'fresh' ? 1_000 : 60 * 60_000;
@@ -117,6 +118,7 @@ async function mount(options: {
       searches.push(query);
       return options.remote?.(query) ?? [];
     },
+    ...(options.reach === undefined ? {} : { reach: options.reach }),
   };
   cleanups.push(publishMentionSource(source));
   container = document.createElement('div');
@@ -280,5 +282,21 @@ describe('trois caractères et plus — la recherche réseau, débouncée, sans 
     await passDebounce();
     expect(fx.searches).toEqual(['cla', 'claud']);
     expect(fx.network()).toBe(2);
+  });
+});
+
+describe('une suggestion sans effet ne s’affiche pas (#14071)', () => {
+  test('dans un groupe, le contact qui n’en est pas membre n’est pas proposé', async () => {
+    const reach = { scope: 'members' as const, memberIds: ['u-me', 'u-clovis', 'u-marc', 'u-albert'] };
+    const fx = await mount({ cache: 'fresh', reach });
+    typeText(fx.el, '@');
+    expect(names(fx.el)).toEqual(['marc', 'clovis', 'albert']);
+  });
+
+  test('un non-membre ne voit personne, et la recherche ne rend rien non plus', async () => {
+    const fx = await mount({ cache: 'fresh', reach: { scope: null, memberIds: [] }, remote: () => [olga] });
+    typeText(fx.el, '@cla');
+    await passDebounce();
+    expect(names(fx.el)).toEqual([]);
   });
 });

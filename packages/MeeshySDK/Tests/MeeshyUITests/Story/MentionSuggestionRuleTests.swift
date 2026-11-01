@@ -214,4 +214,74 @@ struct MentionSuggestionRuleTests {
         )
         #expect(result.map(\.id) == ["c1", "o1"])
     }
+
+    // MARK: - reach — une suggestion sans effet ne s'affiche pas (#14071)
+
+    @Test func test_scope_mirrorsTheGatewayTable() {
+        #expect(MentionableScope(conversationType: "direct") == .interlocutor)
+        #expect(MentionableScope(conversationType: "group") == .members)
+        #expect(MentionableScope(conversationType: "public") == .directory)
+        #expect(MentionableScope(conversationType: "global") == .directory)
+        #expect(MentionableScope(conversationType: "broadcast") == .directory)
+        #expect(MentionableScope(conversationType: "channel") == nil)
+        #expect(MentionableScope(conversationType: nil) == nil)
+    }
+
+    @Test func test_reach_nonMember_hasNoScope() {
+        let reach = MentionReach(conversationType: "public", isMember: false, memberIds: ["a"])
+        #expect(reach.scope == nil)
+    }
+
+    @Test func test_ordered_group_dropsLocalContactOutsideMembers_keepsServer() {
+        let reach = MentionReach(conversationType: "group", memberIds: ["me", "p1"])
+        let result = MentionSuggestionRule.ordered(
+            contacts: [person("c1", "alba"), person("p1", "albert")],
+            participants: [],
+            others: [person("o1", "alberto")],
+            othersQuery: "alb",
+            query: "alb",
+            excludingUserId: "me",
+            reach: reach
+        )
+        #expect(result.map(\.id) == ["p1", "o1"])
+    }
+
+    @Test func test_localMatches_direct_keepsOnlyTheInterlocutor_andCountsOnlyHim() {
+        let reach = MentionReach(conversationType: "direct", memberIds: ["me", "p1"])
+        let result = MentionSuggestionRule.localMatches(
+            contacts: [person("c1", "alba"), person("p1", "albert")],
+            participants: [],
+            query: "al",
+            excludingUserId: "me",
+            reach: reach
+        )
+        #expect(result.map(\.id) == ["p1"])
+    }
+
+    @Test func test_ordered_withoutScope_showsNothing_evenFromServer() {
+        let reach = MentionReach(scope: nil, memberIds: ["p1"])
+        let result = MentionSuggestionRule.ordered(
+            contacts: [person("p1", "albert")],
+            participants: [],
+            others: [person("o1", "alberto")],
+            othersQuery: "alb",
+            query: "alb",
+            excludingUserId: "me",
+            reach: reach
+        )
+        #expect(result.isEmpty)
+    }
+
+    @Test func test_ordered_publicConversation_keepsEveryone() {
+        let reach = MentionReach(conversationType: "public", memberIds: ["me"])
+        let result = MentionSuggestionRule.ordered(
+            contacts: [person("c1", "alba")],
+            participants: [],
+            others: [],
+            query: "",
+            excludingUserId: "me",
+            reach: reach
+        )
+        #expect(result.map(\.id) == ["c1"])
+    }
 }

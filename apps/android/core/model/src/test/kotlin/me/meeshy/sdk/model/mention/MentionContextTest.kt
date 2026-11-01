@@ -6,22 +6,27 @@ import org.junit.Test
 class MentionContextTest {
 
     @Test
-    fun `a direct or group conversation only offers its members`() {
-        assertThat(MentionContext.conversation("c1", "direct")?.membersOnly).isTrue()
-        assertThat(MentionContext.conversation("c1", "GROUP")?.membersOnly).isTrue()
+    fun `a direct conversation offers the interlocutor, a group its members`() {
+        assertThat(MentionContext.conversation("c1", "direct")?.scope).isEqualTo(MentionableScope.INTERLOCUTOR)
+        assertThat(MentionContext.conversation("c1", "GROUP")?.scope).isEqualTo(MentionableScope.MEMBERS)
+        assertThat(MentionContext.conversation("c1", "group")?.membersOnly).isTrue()
     }
 
     @Test
     fun `a public, global or broadcast conversation opens to the directory`() {
         listOf("public", "global", "broadcast").forEach { type ->
+            assertThat(MentionContext.conversation("c1", type)?.scope).isEqualTo(MentionableScope.DIRECTORY)
             assertThat(MentionContext.conversation("c1", type)?.membersOnly).isFalse()
         }
     }
 
     @Test
-    fun `an unknown conversation type fails closed to its members`() {
-        assertThat(MentionContext.conversation("c1", null)?.membersOnly).isTrue()
-        assertThat(MentionContext.conversation("c1", "mystery")?.membersOnly).isTrue()
+    fun `an unknown conversation type has no scope and asks nothing (#14071)`() {
+        listOf(null, "mystery", "channel").forEach { type ->
+            val context = MentionContext.conversation("c1", type)
+            assertThat(context?.scope).isNull()
+            assertThat(context?.searchesRemotely).isFalse()
+        }
     }
 
     @Test
@@ -29,6 +34,7 @@ class MentionContextTest {
         val context = MentionContext.conversation("c1", "group")
         assertThat(context?.id).isEqualTo("c1")
         assertThat(context?.type?.wire).isEqualTo("conversation")
+        assertThat(context?.searchesRemotely).isTrue()
     }
 
     @Test
@@ -40,9 +46,18 @@ class MentionContextTest {
     }
 
     @Test
+    fun `a reply into the author's DM offers the author alone and asks the network nothing (#14071)`() {
+        val context = MentionContext.interlocutor(" author ")
+        assertThat(context?.id).isEqualTo("author")
+        assertThat(context?.scope).isEqualTo(MentionableScope.INTERLOCUTOR)
+        assertThat(context?.searchesRemotely).isFalse()
+    }
+
+    @Test
     fun `a blank id is no context at all`() {
         assertThat(MentionContext.post("")).isNull()
         assertThat(MentionContext.post(null)).isNull()
         assertThat(MentionContext.conversation("  ", "group")).isNull()
+        assertThat(MentionContext.interlocutor(" ")).isNull()
     }
 }

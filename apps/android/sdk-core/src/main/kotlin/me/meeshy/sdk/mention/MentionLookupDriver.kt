@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.mention.MentionLookupLaw
 import me.meeshy.sdk.model.mention.MentionLookupStage
+import me.meeshy.sdk.model.mention.MentionableScope
 
 /**
  * Runs the « @ » law of #14053 for one composer, whatever holds its [MentionAutocompleteState]:
@@ -62,7 +63,8 @@ public class MentionLookupDriver(
         }
         val local = localMatches(query)
         write { it.copy(activeQuery = query, suggestions = local) }
-        if (MentionLookupLaw.stage(query, localMatchCount = local.size) == MentionLookupStage.REMOTE) {
+        val asksNetwork = context.let { it == null || it.searchesRemotely }
+        if (asksNetwork && MentionLookupLaw.stage(query, localMatchCount = local.size) == MentionLookupStage.REMOTE) {
             lookUpRemote(query)
         }
     }
@@ -86,7 +88,7 @@ public class MentionLookupDriver(
             context = roster,
             query = query,
             selfId = selfId(),
-            membersOnly = context?.membersOnly == true,
+            scope = context.let { if (it == null) MentionableScope.DIRECTORY else it.scope },
         )
 
     private fun lookUpRemote(query: String) {
@@ -159,6 +161,9 @@ public class MentionAutocomplete(
     )
 
     public fun bind(context: MentionContext?): Unit = driver.bind(context)
+
+    /** The people of the context known locally — for a reply into a DM, the author alone (#14071). */
+    public fun updateRoster(roster: List<MentionCandidate>): Unit = driver.updateRoster(roster)
 
     public fun onTextChange(text: String): Unit = driver.onTextChange(text)
 

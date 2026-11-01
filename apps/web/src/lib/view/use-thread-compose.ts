@@ -66,6 +66,8 @@ export function useThreadCompose(params: {
   /** `conversation?.id`, JAMAIS un repli sur le paramètre de route
    * (revue-correction #5793) — voir le doc-comment de `useThreadDraft`. */
   readonly conversationId: string | undefined;
+  /** La conversation ouverte : sa portée de mention (#14071) en dérive. */
+  readonly conversation: Parameters<typeof usePublishMentionSource>[0]['conversation'];
   /** Le domaine FUSIONNÉ (confirmé + envois optimistes, `mergeTimeline`) —
    * c'est LUI que `replyToMessage` doit retrouver, la bulle citée pouvant
    * elle-même être un envoi encore local. */
@@ -107,7 +109,7 @@ export function useThreadCompose(params: {
   /* LA SOURCE DES MENTIONS (#7826) — ce hook possède déjà la conversation et
      ses messages : il les PUBLIE pour le composeur, qui ne les reçoit pas en
      props (`mention-source.ts`). */
-  usePublishMentionSource({ conversationId, messages });
+  usePublishMentionSource({ conversationId, messages, conversation: params.conversation });
 
   /* LA PIÈCE NOMMÉE (#6303) — posée par « Répondre » de la visionneuse, retirée
      par toute autre cible (menu, Résumé Vivant, envoi, annulation) : une

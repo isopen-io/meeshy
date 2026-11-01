@@ -18,7 +18,8 @@
  *
  * La PORTÉE vient de `mentionableScope` (partagée avec la validation à
  * l'envoi) : la recherche ne propose jamais quelqu'un que l'envoi refuserait,
- * et propose tous ceux qu'il accepterait (#7852).
+ * et propose tous ceux qu'il accepterait (#7852). Seul un membre ACTIF reçoit
+ * une liste, quelle que soit la portée (#14066).
  *
  * L'annuaire se lit comme `/users/search` : par jeton (`searchTokens`, indexé),
  * à partir de deux caractères, et `deletedAt` apparié dans ses DEUX états
@@ -33,7 +34,7 @@ import type { CacheStore } from '../CacheStore';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { jetonRecherche } from '../../utils/search-tokens';
-import { mentionableScope, scopeRequiresMembership, type MentionableScope } from './mentionableScope';
+import { mentionableScope, scopeIsClosed, type MentionableScope } from './mentionableScope';
 import { keepDiscoverable } from '../profile-discoverability';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { comptesLies, niveauxParmi, plusProchesDabord, type CompteLie } from '../friendship';
@@ -277,8 +278,9 @@ export class MentionSuggestionFinder {
     });
     const scope = conversation ? mentionableScope(conversation.type) : null;
     if (!scope) throw new Error(ACCESS_DENIED);
-    if (!scopeRequiresMembership(scope)) return scope;
 
+    // #14066 — quelle que soit la portée, un non-membre ne cite personne : une
+    // conversation ouverte n'énumère pas ses membres (ni l'annuaire) à un tiers.
     const membership = await this.prisma.participant.findFirst({
       where: { conversationId, userId: currentUserId, isActive: true },
       select: { id: true }
@@ -466,7 +468,7 @@ export class MentionSuggestionFinder {
     if (cached) return cached.filter(s => !blocked.has(s.id));
 
     const matches = (user: SuggestedUser): boolean => !blocked.has(user.id) && queryMatcher(query)(user);
-    const suggestions = scopeRequiresMembership(scope)
+    const suggestions = scopeIsClosed(scope)
       ? await this.closedConversation(conversationId, currentUserId, matches)
       : await this.openConversation(conversationId, currentUserId, query, blocked, matches);
 

@@ -94,6 +94,7 @@ function mount(initial: {
       store,
       scope: 'u_v1',
       conversationId: 'c-1',
+      conversation: { type: 'group', participants: [] },
       messages: initial.messages,
       readerLanguages: ['fr'],
       send: initial.send,

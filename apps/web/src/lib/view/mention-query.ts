@@ -1,4 +1,4 @@
-import { mergeMentionSuggestions } from '@meeshy/shared/utils/mention-lookup';
+import { isMentionableIn, mentionReachOf, mergeMentionSuggestions, type MentionReach } from '@meeshy/shared/utils/mention-lookup';
 
 import type { FriendRequestRecord } from '@/lib/api/friend-requests';
 import type { MentionCandidate } from '@/lib/api/mention-suggestions';
@@ -173,6 +173,8 @@ type LocalMentionInput = {
   readonly participants: readonly MentionCandidate[];
   readonly query: string;
   readonly selfId: string | null;
+  /** La portée de la CONVERSATION (#14071) ; absente hors conversation (post, annuaire). */
+  readonly reach?: MentionReach;
 };
 
 /**
@@ -185,7 +187,10 @@ type LocalMentionInput = {
  */
 export function localMentionMatches(input: LocalMentionInput): readonly MentionCandidate[] {
   const groups = [rankMentionCandidates(input.contacts, input.query), rankMentionCandidates(input.participants, input.query)];
-  return mergeMentionCandidates({ groups, selfId: input.selfId });
+  const merged = mergeMentionCandidates({ groups, selfId: input.selfId });
+  const { reach } = input;
+  if (reach === undefined) return merged;
+  return merged.filter((candidate) => isMentionableIn({ reach, candidateId: candidate.id, selfId: input.selfId }));
 }
 
 /**
@@ -199,7 +204,37 @@ export function localMentionMatches(input: LocalMentionInput): readonly MentionC
 export function composeMentionList(input: LocalMentionInput & { readonly remote: readonly MentionCandidate[] }): readonly MentionCandidate[] {
   const local = localMentionMatches(input);
   const self = input.selfId === null ? {} : { selfId: input.selfId };
-  return mergeMentionSuggestions({ local, remote: input.remote, ...self }).slice(0, MENTION_SUGGESTION_LIMIT);
+  const reach = input.reach === undefined ? {} : { reach: input.reach };
+  return mergeMentionSuggestions({ local, remote: input.remote, ...self, ...reach }).slice(0, MENTION_SUGGESTION_LIMIT);
+}
+
+/**
+ * LA PORTÉE DE LA CONVERSATION OUVERTE (#14071) — projetée par la loi partagée
+ * (`mentionReachOf`) depuis son type et l'appartenance servie (`isMember`).
+ * Les membres CONNUS sont les participants servis (la passerelle tronque cette
+ * liste à cinq) et les expéditeurs du fil : un contact hors de ces deux listes
+ * n'est pas proposé dans une conversation fermée — s'il en est membre, le
+ * serveur, qui les connaît tous, le rend à la recherche distante.
+ */
+export function conversationMentionReach(input: {
+  readonly conversation:
+    | {
+        readonly type: string;
+        readonly isMember?: boolean | undefined;
+        readonly participants: readonly { readonly userId?: string | null | undefined }[];
+      }
+    | undefined;
+  readonly locals: readonly MentionCandidate[];
+}): MentionReach {
+  const { conversation } = input;
+  if (conversation === undefined) return { scope: null, memberIds: [] };
+  const participantIds = conversation.participants.flatMap((p) => (p.userId ? [p.userId] : []));
+  const memberIds = [...new Set([...participantIds, ...input.locals.map((c) => c.id)])];
+  return mentionReachOf({
+    type: conversation.type,
+    memberIds,
+    ...(conversation.isMember === undefined ? {} : { isMember: conversation.isMember }),
+  });
 }
 
 type MentionablePerson = {

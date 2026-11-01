@@ -5,10 +5,13 @@ import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 
 import type { FriendRequestRecord } from '@/lib/api/friend-requests';
 
+import { mentionReachOf } from '@meeshy/shared/utils/mention-lookup';
+
 import {
   activeMentionQuery,
   composeMentionList,
   contactMentionCandidates,
+  conversationMentionReach,
   filterMentionCandidates,
   insertMention,
   localMentionCandidates,
@@ -219,6 +222,52 @@ describe('composeMentionList — contacts, puis participants, puis autres, sans 
     const list = composeMentionList({ contacts, participants, remote: [], query: 'p', selfId: 'me' });
     expect(list.map((c) => c.id)).toEqual(['p1', 'p2']);
     expect(list[0]?.badge).toBe('friend');
+  });
+});
+
+describe('une suggestion sans effet ne s’affiche pas (#14071)', () => {
+  const contacts = [candidate({ id: 'c1', username: 'claire', badge: 'friend' }), candidate({ id: 'p1', username: 'paula', badge: 'friend' })];
+  const participants = [candidate({ id: 'p1', username: 'paula' }), candidate({ id: 'p2', username: 'pierre' })];
+  const groupReach = mentionReachOf({ type: 'group', memberIds: ['me', 'p1', 'p2'] });
+
+  test('dans un groupe, le contact qui n’en est pas membre est retiré — et ne compte pas pour la loi de déclenchement', () => {
+    expect(localMentionMatches({ contacts, participants, query: 'c', selfId: 'me', reach: groupReach })).toEqual([]);
+    const list = composeMentionList({ contacts, participants, remote: [], query: '', selfId: 'me', reach: groupReach });
+    expect(list.map((c) => c.id)).toEqual(['p1', 'p2']);
+  });
+
+  test('dans une conversation directe, seul l’interlocuteur reste', () => {
+    const reach = mentionReachOf({ type: 'direct', memberIds: ['me', 'p1'] });
+    const list = composeMentionList({ contacts, participants, remote: [], query: '', selfId: 'me', reach });
+    expect(list.map((c) => c.id)).toEqual(['p1']);
+  });
+
+  test('un non-membre, ou un type inconnu, ne voit rien', () => {
+    const remote = [candidate({ id: 'o1', username: 'olga' })];
+    const outsider = mentionReachOf({ type: 'public', isMember: false, memberIds: [] });
+    expect(composeMentionList({ contacts, participants, remote, query: '', selfId: 'me', reach: outsider })).toEqual([]);
+    const unknown = mentionReachOf({ type: 'channel', memberIds: ['p1'] });
+    expect(composeMentionList({ contacts, participants, remote, query: '', selfId: 'me', reach: unknown })).toEqual([]);
+  });
+
+  test('une conversation ouverte garde tout le monde', () => {
+    const reach = mentionReachOf({ type: 'public', memberIds: ['me'] });
+    const list = composeMentionList({ contacts, participants, remote: [], query: '', selfId: 'me', reach });
+    expect(list.map((c) => c.id)).toEqual(['c1', 'p1', 'p2']);
+  });
+});
+
+describe('conversationMentionReach — la portée projetée depuis la conversation ouverte (#14071)', () => {
+  test('les membres connus sont les participants servis ET les expéditeurs du fil', () => {
+    const reach = conversationMentionReach({
+      conversation: { type: 'group', participants: [{ userId: 'p1' }, { userId: null }] },
+      locals: [candidate({ id: 'p9', username: 'nina' })],
+    });
+    expect(reach).toEqual({ scope: 'members', memberIds: ['p1', 'p9'] });
+  });
+
+  test('sans conversation chargée, aucune portée — rien n’est proposé', () => {
+    expect(conversationMentionReach({ conversation: undefined, locals: [] }).scope).toBeNull();
   });
 });
 

@@ -11,7 +11,9 @@ import type { Message } from '@/lib/api/types';
 import { searchUsers } from '@/lib/api/users-search';
 import { resolveViewer } from '@/lib/api/viewer';
 
-import { localMentionCandidates, peopleMentionCandidates } from './mention-query';
+import type { MentionReach } from '@meeshy/shared/utils/mention-lookup';
+
+import { conversationMentionReach, localMentionCandidates, peopleMentionCandidates } from './mention-query';
 
 /**
  * LA SOURCE DES MENTIONS DU FIL OUVERT (#7826).
@@ -41,6 +43,9 @@ export type MentionSource = {
    * propre cache (`mention-contacts.ts`), communs à tous les champs. */
   readonly locals: readonly MentionCandidate[];
   readonly search: (query: string, signal: AbortSignal) => Promise<readonly MentionCandidate[]>;
+  /** La portée de la conversation (#14071) : une suggestion qui n'y aurait aucun
+   * effet n'est pas affichée. Absente hors conversation (post, annuaire). */
+  readonly reach?: MentionReach;
 };
 
 const NO_PARTICIPANTS: readonly MentionCandidate[] = [];
@@ -74,10 +79,27 @@ export function useSelfId(): string | null {
 export function usePublishMentionSource(input: {
   readonly conversationId: string | undefined;
   readonly messages: readonly Message[];
+  readonly conversation: Parameters<typeof conversationMentionReach>[0]['conversation'];
 }): void {
-  const { conversationId, messages } = input;
+  const { conversationId, messages, conversation } = input;
   const selfId = useSelfId();
   const locals = useMemo(() => localMentionCandidates(messages, selfId), [messages, selfId]);
+  /* LA PORTÉE (#14071) — dérivée des TROIS primitives qu'elle lit : la
+     conversation passe par un objet que l'hôte reconstruit à chaque rendu. */
+  const conversationType = conversation?.type;
+  const isMember = conversation?.isMember;
+  const participants = conversation?.participants;
+  const reach = useMemo(
+    () =>
+      conversationMentionReach({
+        conversation:
+          conversationType === undefined || participants === undefined
+            ? undefined
+            : { type: conversationType, participants, ...(isMember === undefined ? {} : { isMember }) },
+        locals,
+      }),
+    [conversationType, isMember, participants, locals],
+  );
   /* UN INVITÉ NE DEMANDE PAS LES MEMBRES (#10205) : la passerelle ne les lui
      sert plus. Il mentionne les auteurs qu'il LIT déjà dans le fil (`locals`),
      sans requête. */
@@ -89,8 +111,8 @@ export function usePublishMentionSource(input: {
 
   useEffect(() => {
     if (search === null) return undefined;
-    return publishMentionSource({ selfId, locals, search });
-  }, [search, selfId, locals]);
+    return publishMentionSource({ selfId, locals, search, reach });
+  }, [search, selfId, locals, reach]);
 }
 
 type MentionablePeople = Parameters<typeof peopleMentionCandidates>[0];

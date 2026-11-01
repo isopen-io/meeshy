@@ -295,7 +295,7 @@ struct ConversationView: View {
             closedAt: conversation?.closedAt,
             anonymousSession: anonymousSession
         )
-        _viewModel = StateObject(wrappedValue: vm)
+        _viewModel = StateObject(wrappedValue: ConversationMentionScope.applying(conversation, to: vm))
 
         // WS-7 (F-086, A6) — décision de l'orchestrateur, ICI, UNE SEULE
         // FOIS. `identity`/`capabilities`/`isFlagEnabled` sont les mêmes

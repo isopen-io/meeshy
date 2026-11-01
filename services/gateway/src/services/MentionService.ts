@@ -283,6 +283,20 @@ export class MentionService {
     }
 
     const memberIds = conversation.participants.map(m => m.userId).filter(Boolean) as string[];
+
+    // #14066 — un expéditeur inscrit qui n'est pas membre actif ne cite
+    // personne, quelle que soit la portée. Un anonyme (`null`) n'a pas de
+    // `User.id` : son appartenance se vérifie par son `Participant.id`, chez le
+    // transport (`resolveMessageMentions`).
+    if (senderId !== null && !memberIds.includes(senderId)) {
+      return {
+        isValid: false,
+        validUserIds: [],
+        invalidUsernames: [],
+        errors: ['Seul un membre de la conversation peut mentionner']
+      };
+    }
+
     const validUserIds: string[] = [];
     const invalidUserIds: string[] = [];
     const errors: string[] = [];

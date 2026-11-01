@@ -84,6 +84,9 @@ public final class MentionComposerController: ObservableObject {
     private let currentUserId: String?
     private let debounceNanoseconds: UInt64
     private var participants: () -> [MentionCandidate]
+    /// Le type de la conversation et son interlocuteur (#14071), posés par
+    /// l'hôte qui les connaît ; `nil` hors conversation (post, brouillon).
+    private var conversationScope: (type: String, interlocutorId: String?)?
     /// Les « autres » rendus par la DERNIÈRE recherche distante. Ils restent
     /// affichés, refiltrés par la requête courante, pendant que la suivante
     /// est en vol — c'est ce qui affine sans clignoter.
@@ -138,6 +141,24 @@ public final class MentionComposerController: ObservableObject {
     public func updateParticipants(_ list: [MentionCandidate]) {
         participants = { list }
         recompute()
+    }
+
+    /// **Borne la liste à ce qu'une mention ferait ICI** (#14071) : le type de
+    /// la conversation (`direct`, `group`, `public`…) et, pour une directe, son
+    /// interlocuteur. Une suggestion sans effet à l'envoi n'est pas affichée ;
+    /// un type inconnu ne propose personne.
+    public func scope(toConversationType type: String?, interlocutorId: String?) {
+        conversationScope = type.map { (type: $0, interlocutorId: interlocutorId) }
+        recompute()
+    }
+
+    /// Les membres que le fil CONNAÎT : soi, l'interlocuteur, et les personnes
+    /// du contexte. Un membre silencieux d'un groupe n'y est pas : la recherche
+    /// distante, que le serveur borne en connaissant tous les membres, le rend.
+    private var reach: MentionReach? {
+        guard let scope = conversationScope else { return nil }
+        let known = [scope.interlocutorId, currentUserId].compactMap { $0 } + participants().map(\.id)
+        return MentionReach(conversationType: scope.type, memberIds: Set(known))
     }
 
     /// Change le contexte distant d'un hôte qui SURVIT à son sujet (la barre
@@ -281,7 +302,8 @@ public final class MentionComposerController: ObservableObject {
             contacts: contacts.snapshot,
             participants: participants(),
             query: query,
-            excludingUserId: currentUserId
+            excludingUserId: currentUserId,
+            reach: reach
         ).count
     }
 
@@ -293,7 +315,8 @@ public final class MentionComposerController: ObservableObject {
             others: others,
             othersQuery: othersQuery,
             query: query,
-            excludingUserId: currentUserId
+            excludingUserId: currentUserId,
+            reach: reach
         )
     }
 }

@@ -80,7 +80,7 @@ class MentionLookupLawTest {
             context = listOf(person("annie"), person("anna")),
             query = "an",
             selfId = null,
-            membersOnly = false,
+            scope = MentionableScope.DIRECTORY,
         )
         assertThat(local.map { it.username }).containsExactly("anna", "annie").inOrder()
     }
@@ -92,7 +92,7 @@ class MentionLookupLawTest {
             context = listOf(person("annie"), person("andre")),
             query = "an",
             selfId = null,
-            membersOnly = true,
+            scope = MentionableScope.MEMBERS,
         )
         assertThat(local.map { it.username }).containsExactly("andre", "annie").inOrder()
     }
@@ -104,8 +104,32 @@ class MentionLookupLawTest {
             context = listOf(person("atlas")),
             query = "at",
             selfId = "me",
-            membersOnly = false,
+            scope = MentionableScope.DIRECTORY,
         )
         assertThat(local.map { it.username }).containsExactly("atlas")
+    }
+
+    @Test
+    fun `a reply into a DM offers the interlocutor alone, never a contact (#14071)`() {
+        val local = MentionLookupLaw.localMatches(
+            contacts = listOf(person("anna"), person("andre")),
+            context = listOf(person("annie")),
+            query = "an",
+            selfId = null,
+            scope = MentionableScope.INTERLOCUTOR,
+        )
+        assertThat(local.map { it.username }).containsExactly("annie")
+    }
+
+    @Test
+    fun `without a scope nobody is offered, not even the context (#14071)`() {
+        val local = MentionLookupLaw.localMatches(
+            contacts = listOf(person("anna")),
+            context = listOf(person("annie")),
+            query = "",
+            selfId = null,
+            scope = null,
+        )
+        assertThat(local).isEmpty()
     }
 }
