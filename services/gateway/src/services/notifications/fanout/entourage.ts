@@ -47,6 +47,14 @@ export type Entourage = { readonly ids: string[]; readonly truncated: boolean };
 
 const NOBODY: Entourage = { ids: [], truncated: false };
 
+/**
+ * La fenêtre de LECTURE de l'entourage (#14252) : deux fois la borne de diffusion.
+ * La vivacité filtre AVANT la troncature, de sorte que des liens supprimés ou
+ * désactivés plus récents ne prennent pas la place d'un lien vivant ; la lecture
+ * reste bornée (une lecture des liens, une des comptes vivants).
+ */
+const LIVING_READ_WINDOW = 2 * FANOUT_ROW_CAP;
+
 const widensToCommunity = (choice: RelationAudienceChoice): boolean => choice === 'COMMUNITY' || choice === 'PUBLIC';
 
 /**
@@ -181,33 +189,36 @@ async function readEntourage(prisma: EntourageDb, params: EntourageParams): Prom
 
   const plancher: RelationLevel = widensToCommunity(setting) ? 'ACQUAINTANCE' : setting;
   const [comptes, coMembers] = await Promise.all([
-    comptesAuMoins(prisma, ownerId, plancher, { limit: FANOUT_ROW_CAP + 1 }),
-    widensToCommunity(setting) ? getCommunityCoMemberIdsBounded(prisma, ownerId, FANOUT_ROW_CAP + 1) : Promise.resolve([]),
+    comptesAuMoins(prisma, ownerId, plancher, { limit: LIVING_READ_WINDOW + 1 }),
+    widensToCommunity(setting) ? getCommunityCoMemberIdsBounded(prisma, ownerId, LIVING_READ_WINDOW + 1) : Promise.resolve([]),
   ]);
 
   const excluded = new Set([ownerId, ...(params.excludeUserIds ?? [])]);
   const known = new Map(comptes.map((c) => [c.id, c.niveau]));
-  const ordered = [...new Set([...comptes.map((c) => c.id), ...coMembers])].filter((id) => !excluded.has(id));
-  const truncated = comptes.length > FANOUT_ROW_CAP || coMembers.length > FANOUT_ROW_CAP || ordered.length > FANOUT_ROW_CAP;
-  const candidates = ordered.slice(0, FANOUT_ROW_CAP);
+  const read = [...new Set([...comptes.map((c) => c.id), ...coMembers])].filter((id) => !excluded.has(id));
+  const ordered = read.slice(0, LIVING_READ_WINDOW);
+  const alive = await livingAmong(prisma, [ownerId, ...mustBeAlive, ...ordered]);
+  if (![ownerId, ...mustBeAlive].every((id) => alive.has(id))) return NOBODY;
+
+  const living = ordered.filter((id) => alive.has(id));
+  const truncated =
+    comptes.length > LIVING_READ_WINDOW || coMembers.length > LIVING_READ_WINDOW || read.length > LIVING_READ_WINDOW || living.length > FANOUT_ROW_CAP;
+  const candidates = living.slice(0, FANOUT_ROW_CAP);
   if (truncated) notificationLogger.warn('Entourage tronqué à la borne', { ownerId, key, cap: FANOUT_ROW_CAP });
   if (candidates.length === 0) return { ids: [], truncated };
 
   const coMemberSet = new Set(coMembers);
   const unknownLevels = candidates.filter((id) => !known.has(id));
-  const [levels, blocked, alive] = await Promise.all([
+  const [levels, blocked] = await Promise.all([
     unknownLevels.length === 0 ? Promise.resolve(known) : niveauxParmi(prisma, ownerId, unknownLevels),
     getBlockedUserIdsAmong(prisma, ownerId, candidates),
-    livingAmong(prisma, [ownerId, ...mustBeAlive, ...candidates]),
   ]);
-  if (![ownerId, ...mustBeAlive].every((id) => alive.has(id))) return { ids: [], truncated };
 
   const levelOf = (id: string): RelationLevel => known.get(id) ?? levels.get(id) ?? 'PUBLIC';
   const feature = CIRCLE_NOTIFY_KEY_FEATURE[key];
   // Le niveau lu est déjà le MINIMUM des deux accords : le passer des deux côtés le rend tel quel.
   const ids = candidates.filter(
     (id) =>
-      alive.has(id) &&
       resolveRelationAccess({
         viewerId: id,
         targetId: ownerId,
