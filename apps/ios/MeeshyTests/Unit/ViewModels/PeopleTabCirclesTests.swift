@@ -3,6 +3,7 @@ import XCTest
 
 /// L'onglet « Cercles » du hub People (#13938) : il ÉTEND le hub existant, il n'en crée
 /// pas un second. Les trois onglets historiques gardent leur rang.
+@MainActor
 final class PeopleTabCirclesTests: XCTestCase {
 
     func test_circlesIsTheFourthTab_theOthersKeepTheirRank() {
