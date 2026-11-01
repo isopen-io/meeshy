@@ -137,30 +137,15 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// (à poser AVANT le premier accès à `historyTrigger`, lazy figé).
     var historyDebounceInterval: TimeInterval = 0.5
 
-    /// Publisher STABLE (lazy stored — même piège que `autosaveTrigger` :
-    /// un debounce inline dans `body` serait re-souscrit à chaque render et
-    /// ne tirerait jamais) : émet ~0,5 s après la DERNIÈRE mutation du VM —
-    /// « l'édition s'est posée, capture une étape d'annulation ». Couverture
-    /// TOTALE par construction (toute mutation passe par objectWillChange) ;
-    /// la dédup du HistoryStore absorbe les émissions sans changement de
-    /// `slides` (sélections, états d'UI…).
-    ///
-    /// **Le DOCUMENT seul le réarme** (#14208) : `slides`, la sortie du dessin, et
-    /// la fin d'un geste du canvas. Toute autre publication — l'horloge de
-    /// lecture, la sélection, la progression d'un envoi — repoussait la capture
-    /// tant qu'elle publiait, et plusieurs actions finissaient en un seul pas.
-    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = $slides.map { _ in () }
-        .merge(with: $drawingEditingMode.map { _ in () }, historyNudge.eraseToAnyPublisher())
-        .debounce(for: .seconds(historyDebounceInterval), scheduler: DispatchQueue.main)
-        .eraseToAnyPublisher()
+    /// Publisher STABLE (lazy stored — même piège que `autosaveTrigger`) :
+    /// « l'édition s'est posée, capture une étape d'annulation », au rythme
+    /// de `StoryComposerHistoryPace` (#14208).
+    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = historyPace.trigger(
+        document: $slides.map { _ in () }.eraseToAnyPublisher(),
+        drawing: $drawingEditingMode.map { _ in () }.eraseToAnyPublisher(),
+        interval: historyDebounceInterval)
 
-    /// Réarme la capture sans changement du document : la fin d'un geste.
-    let historyNudge = PassthroughSubject<Void, Never>()
-    /// Un geste du canvas est en cours : ses états intermédiaires ne sont pas des pas.
-    var historyCaptureHeld = false
-    /// Un instantané est en cours d'application : ce n'est pas une action.
-    var isApplyingHistory = false
-    var historyObservers: Set<AnyCancellable> = []
+    let historyPace = StoryComposerHistoryPace()
 
     /// C9 Inc.3 — purge PARESSEUSE : les bitmaps/URLs des médias supprimés
     /// sont mis de côté (au lieu d'être jetés) tant que l'historique peut les

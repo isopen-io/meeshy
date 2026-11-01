@@ -36,11 +36,11 @@ final class CircleNotifySettingsViewModel: ObservableObject {
     private var pending: [CircleNotifyKey: RelationAudienceChoice] = [:]
 
     init(
-        service: CircleNotifyServiceProviding = CircleNotifyService.shared,
-        networkMonitor: any NetworkMonitorProviding = NetworkMonitor.shared,
+        service: CircleNotifyServiceProviding,
+        networkMonitor: any NetworkMonitorProviding,
         defaults: UserDefaults = .standard,
-        accountId: String? = AuthManager.shared.currentUser?.id,
-        onRefusal: @escaping @MainActor (String) -> Void = { FeedbackToastManager.shared.showError($0) }
+        accountId: String?,
+        onRefusal: @escaping @MainActor (String) -> Void
     ) {
         self.service = service
         self.networkMonitor = networkMonitor

@@ -53,7 +53,7 @@ import MeeshySDK
 ///
 /// ## Plus aucun cadre (#14206)
 ///
-/// Le porteur l'a retiré le 2026-11-01 : la sélection change déjà le rail et le
+/// Le porteur l'a retiré : la sélection change déjà le rail et le
 /// toucher amène l'objet au premier plan. Seul le badge d'envoi reste, posé
 /// au-dessus de l'objet.
 ///
