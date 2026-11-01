@@ -112,6 +112,31 @@ fun CommentCardExportSheet(
     CardExportSheet(source, viewModel.viewer, conversationTitle = null, onDismiss = onDismiss)
 }
 
+/**
+ * « Imager la discussion » (#14331, iOS `MessageCardDiscussion.request`) : la discussion chargée jusqu'au message choisi,
+ * dans les mots que le lecteur lit, passe par le MÊME atelier qu'un message. Rien à peindre : l'atelier se ferme.
+ */
+@Composable
+internal fun DiscussionCardExportSheet(
+    messages: List<BubbleContent>,
+    endingAt: String,
+    conversationTitle: String?,
+    onDismiss: () -> Unit,
+    viewModel: CardExportViewModel = hiltViewModel(),
+) {
+    val defaultTitle = stringResource(R.string.export_discussion_title)
+    val viewer = viewModel.viewer
+    val source = remember(endingAt) {
+        val window = CardDiscussion.window(messages, endingAt, System.currentTimeMillis())
+        CardDiscussion.subject(window, viewer, conversationTitle, defaultTitle)?.let { ComposedCardSource("discussion:$endingAt", it) }
+    }
+    if (source == null) {
+        LaunchedEffect(Unit) { onDismiss() }
+        return
+    }
+    CardExportSheet(source, viewer, conversationTitle, onDismiss)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CardExportSheet(

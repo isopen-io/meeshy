@@ -290,6 +290,8 @@
     <string name="export_card_typeface_plume">Plume</string>
     <string name="export_card_typeface_rond">Ronde</string>
     <string name="export_card_typeface_systeme">Système</string>
+    <string name="export_discussion_title">Discussion</string>
+    <string name="forward_image_discussion">Imager la discussion</string>
     <string name="guest_attach_cancel">Annuler</string>
     <string name="guest_attach_create_account">Créez un compte pour partager le reste.</string>
     <string name="guest_attach_inline_audio">audio</string>

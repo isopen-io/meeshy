@@ -289,6 +289,8 @@
     <string name="export_card_typeface_plume">Feder</string>
     <string name="export_card_typeface_rond">Rund</string>
     <string name="export_card_typeface_systeme">System</string>
+    <string name="export_discussion_title">Unterhaltung</string>
+    <string name="forward_image_discussion">Unterhaltung als Bild</string>
     <string name="guest_attach_cancel">Abbrechen</string>
     <string name="guest_attach_create_account">Erstelle ein Konto, um alles andere zu teilen.</string>
     <string name="guest_attach_inline_audio">Audio</string>
