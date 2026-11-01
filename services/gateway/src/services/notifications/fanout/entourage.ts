@@ -55,7 +55,7 @@ const widensToCommunity = (choice: RelationAudienceChoice): boolean => choice ==
  * nul. Un compte jamais supprimé n'a PAS de clé `deletedAt` : `{ deletedAt: null }`
  * seul l'écarterait (leçon 318), d'où `unsetOrNull`.
  */
-async function livingAmong(prisma: Pick<PrismaClient, 'user'>, ids: readonly string[]): Promise<Set<string>> {
+export async function livingAmong(prisma: Pick<PrismaClient, 'user'>, ids: readonly string[]): Promise<Set<string>> {
   const rows = await prisma.user.findMany({
     where: { id: { in: [...new Set(ids)] }, isActive: true, ...unsetOrNull('deletedAt') },
     select: { id: true },

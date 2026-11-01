@@ -11,7 +11,7 @@ import { truncateMessage } from '../notification-preview';
 import { FANOUT_ROW_CAP } from './row-cap';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import type { FanoutDependencies } from './dependencies';
-import { mentionReceivers, resolveEntourage, thirdPartyEntourage, type Entourage } from './entourage';
+import { livingAmong, mentionReceivers, resolveEntourage, thirdPartyEntourage, type Entourage } from './entourage';
 
 /** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
 export type FanoutBucket = 'previousComments' | 'entourage' | 'reactors';
@@ -166,6 +166,35 @@ async function commentEntourage(
     : thirdPartyEntourage(prisma, { authorId, actorId: commenterId, onMyContent: 'circleOnMyContentComment', elsewhere: 'circleElsewhereComment' });
 }
 
+type FanoutGates = { readonly blocked: ReadonlySet<string>; readonly alive: ReadonlySet<string> };
+
+/**
+ * Ce qui sort des seaux d'éventail, en DEUX lectures groupées (#13350, #14251) :
+ *  - une personne en relation de blocage avec l'AUTEUR de la story — la garde de
+ *    dernier recours de `createNotification` ne compare le destinataire qu'à
+ *    l'ACTEUR, alors que le nom de l'auteur et l'extrait de son fil voyagent
+ *    dans la charge ;
+ *  - un compte supprimé ou désactivé (`livingAmong`). Un auteur ou un
+ *    commentateur mort ne prévient PERSONNE (`'dead-party'`).
+ * Une lecture qui échoue (`null`) n'envoie rien à ces seaux.
+ */
+async function readFanoutGates(
+  prisma: PrismaClient,
+  params: { readonly postId: string; readonly storyAuthorId: string; readonly commenterId: string; readonly candidates: readonly string[] }
+): Promise<FanoutGates | 'dead-party' | null> {
+  try {
+    const [blocked, alive] = await Promise.all([
+      getBlockedUserIdsAmong(prisma, params.storyAuthorId, [...params.candidates]),
+      livingAmong(prisma, [params.storyAuthorId, params.commenterId, ...params.candidates]),
+    ]);
+    if (!alive.has(params.storyAuthorId) || !alive.has(params.commenterId)) return 'dead-party';
+    return { blocked, alive };
+  } catch (error) {
+    notificationLogger.error('Fan-out de commentaire restreint à l’auteur : blocage ou comptes illisibles', { postId: params.postId, error });
+    return null;
+  }
+}
+
 export type StoryCommentFanoutParams = {
   postId: string;
   commentId: string;
@@ -285,23 +314,18 @@ export async function createStoryCommentNotificationsBatch(
     candidateUserIds: previousCommenterIds,
   });
 
-  // #13350 — le blocage ne rompt pas l'amitié en base : une personne en
-  // relation de blocage avec l'AUTEUR de la story sort des deux seaux
-  // d'éventail, en une lecture groupée. La garde de dernier recours de
-  // `createNotification` ne compare le destinataire qu'à l'ACTEUR (le
-  // commentateur) ; le nom de l'auteur et l'extrait de son fil voyagent
-  // pourtant dans la charge. Une lecture qui échoue n'envoie rien à ces seaux.
+  // #13350, #14251 — blocage avec l'auteur et comptes morts : `readFanoutGates`.
   const fanoutCandidates = [...new Set([...engagedAudience, ...friendAudience])];
-  let blockedWithAuthor: Set<string> | null;
-  try {
-    blockedWithAuthor = await getBlockedUserIdsAmong(deps.prisma, params.storyAuthorId, fanoutCandidates);
-  } catch (error) {
-    notificationLogger.error('Fan-out de commentaire restreint à l’auteur : blocage illisible', { postId: params.postId, error });
-    blockedWithAuthor = null;
-  }
-  const notBlockedWithAuthor = (id: string): boolean => blockedWithAuthor !== null && !blockedWithAuthor.has(id);
-  const engagedRecipients = engagedAudience.filter(notBlockedWithAuthor);
-  const friendRecipients = friendAudience.filter(notBlockedWithAuthor);
+  const gates = await readFanoutGates(deps.prisma, {
+    postId: params.postId,
+    storyAuthorId: params.storyAuthorId,
+    commenterId: params.commenterId,
+    candidates: fanoutCandidates,
+  });
+  if (gates === 'dead-party') return;
+  const reachable = (id: string): boolean => gates !== null && gates.alive.has(id) && !gates.blocked.has(id);
+  const engagedRecipients = engagedAudience.filter(reachable);
+  const friendRecipients = friendAudience.filter(reachable);
 
   const excerpt = params.commentExcerpt
     ? truncateMessage(params.commentExcerpt)

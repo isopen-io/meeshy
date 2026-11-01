@@ -61,6 +61,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     user: {
       findUnique: jest.fn(),
       findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn(async (args: any) => (args?.where?.isActive === true ? (args.where.id?.in ?? []).map((id: string) => ({ id })) : [])), // #14251 comptes vivants
     },
     conversation: {
       findUnique: jest.fn(),

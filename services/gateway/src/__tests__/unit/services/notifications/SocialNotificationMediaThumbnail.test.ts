@@ -14,6 +14,7 @@
  */
 import { NotificationService } from '../../../../services/notifications/NotificationService';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { aliveAndUnblocked } from '../../../helpers/linked-to-everyone';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   notificationLogger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -46,7 +47,7 @@ const makePrismaMock = () => ({
   },
   user: {
     findUnique: jest.fn(),
-    findMany: jest.fn().mockResolvedValue([]),
+    findMany: jest.fn(aliveAndUnblocked()) as any, // #14251 comptes vivants
     findFirst: jest.fn().mockResolvedValue(null),
   },
   conversation: { findUnique: jest.fn() },
