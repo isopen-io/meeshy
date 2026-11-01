@@ -61,12 +61,25 @@ final class ConversationViewModelStickerTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: messageSocket,
-            dependencies: ConversationDependencies(persistence: MessagePersistenceActor(dbWriter: pool)),
+            // Un registre du régime NEUF : celui de `.shared` est persistant, et
+            // un autre témoin qui y a appris ce fil chiffré scellerait l'envoi.
+            dependencies: makeDependencies(pool: pool, messageService: messageService),
             networkMonitor: FakeNetworkMonitor(isOnline: isOnline),
             offlineQueue: offlineQueue
         )
         sut.start()
         return Fixture(sut: sut, messageService: messageService, messageSocket: messageSocket, offlineQueue: offlineQueue)
+    }
+
+    private func makeDependencies(pool: DatabaseQueue, messageService: MockMessageService) -> ConversationDependencies {
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        return ConversationDependencies(
+            persistence: persistence,
+            collaborators: ConversationCollaborators(
+                persistence: persistence, syncEngine: ConversationSyncEngine.shared,
+                messageService: messageService, regimeLedger: EndToEndRegimeLedger()
+            )
+        )
     }
 
     /// Un sticker GABARIT du catalogue réel — id, emplacements figés, mouvement
