@@ -48,7 +48,8 @@ struct ComposerBackgroundModifySheet: View {
     var body: some View {
         if Content.of(path, isBackground: isBackground) == .framingBand {
             ComposerFrameBand(fitMode: framing.fitMode, backdrop: framing.backdrop, plateauTint: plateauTint,
-                              onPickFitMode: framing.onPickFitMode, onPickBackdrop: framing.onPickBackdrop)
+                              onPickFitMode: framing.onPickFitMode, onPickBackdrop: framing.onPickBackdrop,
+                              header: header)
                 .accessibilityIdentifier("composer.background.modify.framing")
         } else {
             ComposerPropertiesSheetPlate(plateauTint: plateauTint) {

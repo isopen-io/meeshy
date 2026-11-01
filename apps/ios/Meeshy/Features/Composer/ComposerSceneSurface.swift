@@ -226,7 +226,7 @@ struct ComposerSceneSurface: View {
     var bandBackdrop: StoryBackdrop = .blur
     var onPickBandFitMode: ((String) -> Void)?
     var onPickBandBackdrop: ((StoryBackdrop) -> Void)?
-
+    var onCloseBand: (() -> Void)?
 
     /// **Le repos posé sur la scène** (#13839) : le nombre de diapos (la
     /// rangée paraît dès deux), les boutons de la colonne, le menu ⋯ et
@@ -978,7 +978,8 @@ struct ComposerSceneSurface: View {
                               backdrop: bandBackdrop,
                               plateauTint: plateauTint,
                               onPickFitMode: onPickBandFitMode,
-                              onPickBackdrop: onPickBandBackdrop)
+                              onPickBackdrop: onPickBandBackdrop,
+                              onCloseBand: onCloseBand)
     }
 
     // **Le champ PERMANENT est absent** :

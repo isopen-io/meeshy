@@ -261,6 +261,7 @@ struct ComposerSceneBandView: View {
     var plateauTint: Color = .clear
     var onPickFitMode: ((String) -> Void)?
     var onPickBackdrop: ((StoryBackdrop) -> Void)?
+    var onCloseBand: (() -> Void)?
 
     var body: some View {
         switch band {
@@ -271,7 +272,8 @@ struct ComposerSceneBandView: View {
                               backdrop: backdrop,
                               plateauTint: plateauTint,
                               onPickFitMode: { onPickFitMode?($0) },
-                              onPickBackdrop: { onPickBackdrop?($0) })
+                              onPickBackdrop: { onPickBackdrop?($0) },
+                              header: onCloseBand.map { ComposerPropertiesHeader(title: ComposerFrameCopy.title, onDone: $0) })
         }
     }
 
