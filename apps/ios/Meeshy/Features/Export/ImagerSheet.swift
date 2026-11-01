@@ -105,11 +105,15 @@ struct ImagerSheet: View {
         }
         preview = paint([:], nil)
         let sources = ImagerPreviewSources.of(slide, media: work.stickerMedia)
-        guard !sources.layers.isEmpty || sources.background != nil else { return }
+        guard !sources.isEmpty else { return }
         let loader = DiskCacheImageLoader()
         var images: [String: UIImage] = [:]
         for (key, url) in sources.layers {
             if let image = await loader.image(for: url) { images[key] = image }
+        }
+        for (key, url) in sources.videoFrames where images[key] == nil {
+            guard let file = URL(string: url) else { continue }
+            images[key] = await VideoThumbnailGenerator.shared.image(for: .firstFrame(of: file, maxDimension: 1080))
         }
         var background: UIImage?
         if let url = sources.background { background = await loader.image(for: url) }
@@ -248,29 +252,39 @@ private struct ImagerSharedFile: Identifiable {
 }
 
 /// **Les images que l'aperçu peint, par calque** : un fond legacy, chaque média
-/// posé (une vidéo par sa vignette) et chaque sticker image, depuis les médias
-/// que l'œuvre transporte.
+/// posé et chaque sticker image, depuis les médias que l'œuvre transporte. Une
+/// vidéo se peint par sa vignette, sinon par sa première image (`videoFrames`).
+/// Un média publié porte une CLÉ de stockage que le cache d'images ne charge
+/// pas telle quelle : chaque source est rendue à son adresse (#14338).
 nonisolated struct ImagerPreviewSources: Equatable {
     let background: String?
     let layers: [String: String]
+    let videoFrames: [String: String]
+
+    var isEmpty: Bool { background == nil && layers.isEmpty && videoFrames.isEmpty }
 
     static func of(_ slide: StorySlide, media: [FeedMedia]) -> ImagerPreviewSources {
         let byId = Dictionary(media.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let objects = (slide.effects.mediaObjects ?? []).compactMap { object -> (String, String)? in
+        let objects = slide.effects.mediaObjects ?? []
+        let pictures = objects.compactMap { object -> (String, String)? in
             let item = byId[object.postMediaId]
             let raw = object.kind == .video ? item?.thumbnailUrl : (object.mediaURL ?? item?.url)
-            return usable(raw).map { (object.id, $0) }
+            return address(raw).map { (object.id, $0) }
+        }
+        let videos = objects.filter { $0.kind == .video }.compactMap { object -> (String, String)? in
+            address(object.mediaURL ?? byId[object.postMediaId]?.url).map { (object.id, $0) }
         }
         let stickers = (slide.effects.stickerObjects ?? []).compactMap { sticker -> (String, String)? in
-            usable(byId[sticker.postMediaId]?.url).map { (sticker.id, $0) }
+            address(byId[sticker.postMediaId]?.url).map { (sticker.id, $0) }
         }
         return ImagerPreviewSources(
-            background: usable(slide.mediaURL),
-            layers: Dictionary(objects + stickers, uniquingKeysWith: { first, _ in first }))
+            background: address(slide.mediaURL),
+            layers: Dictionary(pictures + stickers, uniquingKeysWith: { first, _ in first }),
+            videoFrames: Dictionary(videos, uniquingKeysWith: { first, _ in first }))
     }
 
-    private static func usable(_ raw: String?) -> String? {
+    private static func address(_ raw: String?) -> String? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
-        return raw
+        return MeeshyConfig.resolveMediaURL(raw)?.absoluteString
     }
 }

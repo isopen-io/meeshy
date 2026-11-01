@@ -169,6 +169,42 @@ final class StoryImagerTests: XCTestCase {
                                         "posee": "https://cdn/posee.png", "s1": "https://cdn/sticker.png"])
     }
 
+    /// Un réel publié porte des CLÉS de stockage (`2026/10/<id>/clip.mp4`), que
+    /// le cache d'images ne sait pas charger telles quelles (#14338) : l'aperçu
+    /// d'un réel dont le visuel est une vidéo restait noir. Il peint la vignette
+    /// à son adresse, et garde la vidéo pour en tirer la première image quand la
+    /// vignette manque.
+    func test_thePreview_ofAVideoReel_paintsItsPosterByAddress_andKeepsTheVideoForItsFirstFrame() throws {
+        let clip = FeedMedia(id: "m-clip", type: .video, url: "2026/10/u/clip.mp4",
+                             thumbnailUrl: "2026/10/u/clip_thumb.jpg", duration: 16)
+        let reel = StoryItem(id: "reel", content: "Réel", media: [clip], storyEffects: nil, createdAt: Date())
+        let slide = reel.toRenderableSlide(preferredLanguages: ["fr"])
+        let carrier = try XCTUnwrap(slide.effects.mediaObjects?.first, "la vidéo d'un réel en est le fond")
+
+        let sources = ImagerPreviewSources.of(slide, media: [clip])
+
+        let poster = try XCTUnwrap(sources.layers[carrier.id])
+        let video = try XCTUnwrap(sources.videoFrames[carrier.id])
+        XCTAssertEqual(poster, MeeshyConfig.resolveMediaURL("2026/10/u/clip_thumb.jpg")?.absoluteString)
+        XCTAssertEqual(video, MeeshyConfig.resolveMediaURL("2026/10/u/clip.mp4")?.absoluteString)
+        XCTAssertTrue(poster.hasPrefix("https://"), "une clé nue ne se charge pas : \(poster)")
+    }
+
+    /// Une vidéo posée sans vignette se peint par sa première image.
+    func test_thePreview_ofAVideoWithoutPoster_paintsItsFirstFrame() {
+        var slide = StorySlide()
+        slide.effects.mediaObjects = [
+            StoryMediaObject(id: "clip", mediaURL: "/api/v1/static/clip.mp4", kind: .video, aspectRatio: nil),
+            StoryMediaObject(id: "photo", mediaURL: "2026/10/u/photo.jpg", kind: .image, aspectRatio: nil)
+        ]
+
+        let sources = ImagerPreviewSources.of(slide, media: [])
+
+        XCTAssertNil(sources.layers["clip"])
+        XCTAssertEqual(sources.videoFrames, ["clip": MeeshyConfig.resolveMediaURL("/api/v1/static/clip.mp4")?.absoluteString])
+        XCTAssertEqual(sources.layers["photo"], MeeshyConfig.resolveMediaURL("2026/10/u/photo.jpg")?.absoluteString)
+    }
+
     func test_choiceLabel_saysTheQuarterAndItsDuration() {
         XCTAssertEqual(ImagerPresenter.label(for: ImagerLengthChoice(quarter: .two, duration: 120)), "2/4 · 2:00")
         XCTAssertEqual(ImagerPresenter.label(for: ImagerLengthChoice(quarter: .one, duration: 75.4)), "1/4 · 1:15")
