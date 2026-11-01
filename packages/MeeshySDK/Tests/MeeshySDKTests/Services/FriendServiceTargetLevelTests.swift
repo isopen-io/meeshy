@@ -10,14 +10,19 @@ final class FriendServiceTargetLevelTests: XCTestCase {
         return (FriendService(api: api), api)
     }
 
-    private func stubRequest(_ api: MockAPIClient, targetLevel: String?) throws {
-        let json = """
-        {"id":"fr-1","senderId":"me","receiverId":"u2","status":"pending","createdAt":"2026-11-01T10:00:00Z"
-        \(targetLevel.map { #","targetLevel":"\#($0)""# } ?? "")}
-        """
+    private func decodeRequest(targetLevel: String?) throws -> FriendRequest {
+        var fields = [
+            "\"id\":\"fr-1\"", "\"senderId\":\"me\"", "\"receiverId\":\"u2\"",
+            "\"status\":\"pending\"", "\"createdAt\":\"2026-11-01T10:00:00Z\"",
+        ]
+        if let targetLevel { fields.append("\"targetLevel\":\"\(targetLevel)\"") }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let request = try decoder.decode(FriendRequest.self, from: Data(json.utf8))
+        return try decoder.decode(FriendRequest.self, from: Data(("{" + fields.joined(separator: ",") + "}").utf8))
+    }
+
+    private func stubRequest(_ api: MockAPIClient, targetLevel: String?) throws {
+        let request = try decodeRequest(targetLevel: targetLevel)
         api.stub("/directory/friend-requests", result: APIResponse<FriendRequest>(success: true, data: request, error: nil))
     }
 
@@ -45,11 +50,7 @@ final class FriendServiceTargetLevelTests: XCTestCase {
     }
 
     func test_anUnreadableTargetLevelIsNotACrane() throws {
-        let json = #"{"id":"fr-1","senderId":"a","receiverId":"b","status":"pending","createdAt":"2026-11-01T10:00:00Z","targetLevel":"ATOM"}"#
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let request = try decoder.decode(FriendRequest.self, from: Data(json.utf8))
-        XCTAssertNil(request.requestedLevel)
+        XCTAssertNil(try decodeRequest(targetLevel: "ATOM").requestedLevel)
     }
 
     func test_theOutboxPayloadCarriesTheLevel_andAnOldRowStillDecodes() throws {

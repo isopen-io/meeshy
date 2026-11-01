@@ -13,6 +13,16 @@ public struct FriendRequest: Codable, CacheIdentifiable, Identifiable, Sendable,
     public let respondedAt: Date?
     public let createdAt: Date
     public let updatedAt: Date?
+    /// Le cran visé (#13933) : `nil` = Ami, le sens historique d'une demande sans niveau.
+    public let targetLevel: String?
+
+    /// Le cran que cette demande vise, ou `nil` quand la valeur servie est illisible : une
+    /// demande qu'on ne sait pas lire reste une demande simple, jamais un cran inventé.
+    public var requestedLevel: RelationLevel? {
+        guard let targetLevel else { return .friend }
+        let level = RelationLevel(wire: targetLevel)
+        return level == .public ? nil : level
+    }
 
     public init(
         id: String,
@@ -24,7 +34,8 @@ public struct FriendRequest: Codable, CacheIdentifiable, Identifiable, Sendable,
         receiver: FriendRequestUser? = nil,
         respondedAt: Date? = nil,
         createdAt: Date,
-        updatedAt: Date? = nil
+        updatedAt: Date? = nil,
+        targetLevel: String? = nil
     ) {
         self.id = id
         self.senderId = senderId
@@ -36,6 +47,7 @@ public struct FriendRequest: Codable, CacheIdentifiable, Identifiable, Sendable,
         self.respondedAt = respondedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.targetLevel = targetLevel
     }
 }
 
@@ -102,10 +114,14 @@ public struct FriendRequestUser: Codable, CacheIdentifiable, Sendable, ProfileDe
 public struct SendFriendRequest: Encodable {
     public let receiverId: String
     public let message: String?
+    /// Le cran visé (`ACQUAINTANCE|FRIEND|CLOSE|BLOOD`) ; absent = Ami. Omis du corps quand `nil`,
+    /// donc une demande simple part exactement comme avant.
+    public let targetLevel: String?
 
-    public init(receiverId: String, message: String? = nil) {
+    public init(receiverId: String, message: String? = nil, targetLevel: String? = nil) {
         self.receiverId = receiverId
         self.message = message
+        self.targetLevel = targetLevel
     }
 }
 

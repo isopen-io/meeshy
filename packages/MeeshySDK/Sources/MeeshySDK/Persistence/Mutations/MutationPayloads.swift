@@ -168,10 +168,13 @@ public struct UpdateConversationPayload: Codable, Sendable, Equatable {
 public struct SendFriendRequestPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let targetUserId: String
+    /// Le cran visé (#13938) : une ligne gravée avant ce champ se relit sans (`nil` = Ami).
+    public let targetLevel: String?
 
-    public init(clientMutationId: String, targetUserId: String) {
+    public init(clientMutationId: String, targetUserId: String, targetLevel: String? = nil) {
         self.clientMutationId = clientMutationId
         self.targetUserId = targetUserId
+        self.targetLevel = targetLevel
     }
 }
 

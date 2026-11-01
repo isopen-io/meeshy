@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8E36FA6855A823D07DECD389 /* CirclesLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DEBB999EA71343F4B68A2B /* CirclesLive.swift */; };
+		508F49595C58102D1E265EC5 /* BloodRitualView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB47286F187C24DDD017BE62 /* BloodRitualView.swift */; };
+		7545FA95F8689F5F09A7C685 /* CircleLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92C197C511D2097C25DB8C4D /* CircleLinkSheet.swift */; };
+		A41CD4883F036BFD91C8EC90 /* CircleRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = E320F7C41EE8842615339547 /* CircleRows.swift */; };
+		314A7885365EC87AE95ABF5C /* CirclesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FDD4C55760E793B3B45DD4F /* CirclesTab.swift */; };
+		B2D436DB2643DD3AA6A72A18 /* BloodRitualViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600C32C277873049991801DA /* BloodRitualViewModel.swift */; };
+		AD265C0D0609D20967339DF0 /* CirclesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229C4BAB2C30F49E88AFDC34 /* CirclesViewModel.swift */; };
+		FB1A1EEB77EC0D63EBA2A887 /* CirclePeopleDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1889FEE0B4A7609F156BE8 /* CirclePeopleDirectory.swift */; };
+		ACAB83981AE901F44D93D208 /* CirclesPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09FA35A5B5B9666F4E15BEF1 /* CirclesPresentation.swift */; };
 		AF95643B51EA79C39BFA2A9C /* MockRelationsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D309E88A9237E50B133D10F9 /* MockRelationsService.swift */; };
 		146CDFFDB3EB6792153046CD /* MeeshyFeatureFlagsCirclesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580E2249114FE362291B2FB5 /* MeeshyFeatureFlagsCirclesTests.swift */; };
 		6A54814636CF8053385533A8 /* PeopleTabCirclesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FEA2ED672462353857B853 /* PeopleTabCirclesTests.swift */; };
@@ -4284,6 +4293,15 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		33DEBB999EA71343F4B68A2B /* CirclesLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclesLive.swift; sourceTree = "<group>"; };
+		BB47286F187C24DDD017BE62 /* BloodRitualView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodRitualView.swift; sourceTree = "<group>"; };
+		92C197C511D2097C25DB8C4D /* CircleLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleLinkSheet.swift; sourceTree = "<group>"; };
+		E320F7C41EE8842615339547 /* CircleRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleRows.swift; sourceTree = "<group>"; };
+		7FDD4C55760E793B3B45DD4F /* CirclesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclesTab.swift; sourceTree = "<group>"; };
+		600C32C277873049991801DA /* BloodRitualViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodRitualViewModel.swift; sourceTree = "<group>"; };
+		229C4BAB2C30F49E88AFDC34 /* CirclesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclesViewModel.swift; sourceTree = "<group>"; };
+		2F1889FEE0B4A7609F156BE8 /* CirclePeopleDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclePeopleDirectory.swift; sourceTree = "<group>"; };
+		09FA35A5B5B9666F4E15BEF1 /* CirclesPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclesPresentation.swift; sourceTree = "<group>"; };
 		D309E88A9237E50B133D10F9 /* MockRelationsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockRelationsService.swift; sourceTree = "<group>"; };
 		580E2249114FE362291B2FB5 /* MeeshyFeatureFlagsCirclesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyFeatureFlagsCirclesTests.swift; sourceTree = "<group>"; };
 		A5FEA2ED672462353857B853 /* PeopleTabCirclesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleTabCirclesTests.swift; sourceTree = "<group>"; };
@@ -12477,6 +12495,15 @@
 				D7F67E1CA426ECC52EABA9B3 /* AffiliatesViewModel.swift */,
 				357BB0F569723D49EC2E11A2 /* BlockedTab.swift */,
 				69AC0463A77E232994BF17C8 /* BlockedViewModel.swift */,
+				33DEBB999EA71343F4B68A2B /* CirclesLive.swift */,
+				BB47286F187C24DDD017BE62 /* BloodRitualView.swift */,
+				92C197C511D2097C25DB8C4D /* CircleLinkSheet.swift */,
+				E320F7C41EE8842615339547 /* CircleRows.swift */,
+				7FDD4C55760E793B3B45DD4F /* CirclesTab.swift */,
+				600C32C277873049991801DA /* BloodRitualViewModel.swift */,
+				229C4BAB2C30F49E88AFDC34 /* CirclesViewModel.swift */,
+				2F1889FEE0B4A7609F156BE8 /* CirclePeopleDirectory.swift */,
+				09FA35A5B5B9666F4E15BEF1 /* CirclesPresentation.swift */,
 				DFBA10FA9A6175B462A3F43D /* CallBackDialer.swift */,
 				EE03AE1D5EBB16689D496245 /* CallBackRequest.swift */,
 				1D8E192C85D95654D21A886F /* CallDetailSheet.swift */,
@@ -14500,6 +14527,15 @@
 				6A92254A0BF3B83EBB80D6AD /* BlockedTab.swift in Sources */,
 				A79807AE27336358C59F70D6 /* BlockedUsersView.swift in Sources */,
 				978AE2541624C5CCA84FB950 /* BlockedViewModel.swift in Sources */,
+				8E36FA6855A823D07DECD389 /* CirclesLive.swift in Sources */,
+				508F49595C58102D1E265EC5 /* BloodRitualView.swift in Sources */,
+				7545FA95F8689F5F09A7C685 /* CircleLinkSheet.swift in Sources */,
+				A41CD4883F036BFD91C8EC90 /* CircleRows.swift in Sources */,
+				314A7885365EC87AE95ABF5C /* CirclesTab.swift in Sources */,
+				B2D436DB2643DD3AA6A72A18 /* BloodRitualViewModel.swift in Sources */,
+				AD265C0D0609D20967339DF0 /* CirclesViewModel.swift in Sources */,
+				FB1A1EEB77EC0D63EBA2A887 /* CirclePeopleDirectory.swift in Sources */,
+				ACAB83981AE901F44D93D208 /* CirclesPresentation.swift in Sources */,
 				2EC8F4F3D5711399FA6335B2 /* BookmarksView.swift in Sources */,
 				5C91B9F748C5BDEAAAA2271B /* BookmarksViewModel.swift in Sources */,
 				7D9E8BC18BE85A6BFBF47573 /* BorrowedSoundPost.swift in Sources */,
