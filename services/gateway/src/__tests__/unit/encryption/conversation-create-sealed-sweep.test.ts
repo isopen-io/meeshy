@@ -26,8 +26,12 @@ const SYSTEM_CONVERSATIONS: Readonly<Record<string, string>> = {
   'services/world/worldConversation.ts': 'conversation monde, créée au démarrage — migration des conversations sans mode',
 };
 
-const SEALERS = /\b(nascentRegime|implicitConversationRegime)\s*\(/;
-const CREATES = /\.conversation\.(create|upsert)\s*\(/;
+const SEALERS = /\b(nascentRegime|implicitConversationRegime)\s*\(/g;
+// Les formes qui font NAÎTRE une conversation : appel direct, en lot, et
+// création imbriquée sous un autre modèle (`conversation: { create }`).
+const CREATES = /\.conversation\.(create|createMany|upsert)\s*\(|\bconversation\s*:\s*\{\s*(create|connectOrCreate)\b/g;
+
+const count = (pattern: RegExp, text: string): number => (text.match(pattern) ?? []).length;
 
 function productionFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -39,7 +43,7 @@ function productionFiles(dir: string): string[] {
 
 const creators = productionFiles(SRC)
   .map((path) => ({ file: relative(SRC, path), text: readFileSync(path, 'utf8') }))
-  .filter(({ text }) => CREATES.test(text));
+  .filter(({ text }) => count(CREATES, text) > 0);
 
 describe('tout conversation.create de production pose son régime', () => {
   it('le balayage voit bien les sites de création (une garde qui ne voit rien reste verte)', () => {
@@ -50,12 +54,21 @@ describe('tout conversation.create de production pose son régime', () => {
     ]));
   });
 
-  it('chaque site scelle sa conversation, ou figure parmi les conversations système déclarées', () => {
+  it('chaque création scelle sa conversation, ou figure parmi les conversations système déclarées', () => {
+    // Compté par APPEL : un second `create` non scellé dans un fichier qui en
+    // scelle déjà un passerait un jugement par fichier.
     const unsealed = creators
       .filter(({ file }) => !(file in SYSTEM_CONVERSATIONS))
-      .filter(({ text }) => !SEALERS.test(text))
-      .map(({ file }) => file);
+      .filter(({ text }) => count(SEALERS, text) < count(CREATES, text))
+      .map(({ file, text }) => `${file} : ${count(CREATES, text)} création(s), ${count(SEALERS, text)} régime(s)`);
     expect(unsealed).toEqual([]);
+  });
+
+  it('le comptage voit une seconde création non scellée et une création imbriquée', () => {
+    const scelle = 'const r = await nascentRegime(d, p); await prisma.conversation.create({ data: { ...r } });';
+    expect(count(SEALERS, scelle)).toBe(count(CREATES, scelle));
+    expect(count(CREATES, `${scelle} await prisma.conversation.create({ data: {} });`)).toBeGreaterThan(count(SEALERS, scelle));
+    expect(count(CREATES, 'prisma.participant.create({ data: { conversation: { create: {} } } })')).toBe(1);
   });
 
   it('une exception déclarée qui ne crée plus rien quitte la liste', () => {

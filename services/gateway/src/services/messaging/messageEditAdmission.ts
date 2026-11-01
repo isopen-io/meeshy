@@ -46,6 +46,7 @@
 import { isDeclaredMinor } from '@meeshy/shared/utils/age';
 import { AUTHOR_EDIT, type MessageEditorColumns } from '@meeshy/shared/utils/message-edit-attribution';
 import { editContentRefusal, type EditContentRefusal } from '@meeshy/shared/utils/message-action-policy';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 import { messageContentKind } from '@meeshy/shared/utils/message-content-kind';
 import { GLOBAL_CONVERSATION_TYPE } from '@meeshy/shared/utils/global-minor-restriction';
 import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
@@ -58,7 +59,6 @@ import {
 import {
   E2EE_PLAINTEXT_REFUSAL_MESSAGE,
   E2EE_PLAINTEXT_REFUSED,
-  isEndToEndMode,
   messageRowSealedFromServer,
 } from './e2eePlaintextAdmission.js';
 
@@ -327,6 +327,9 @@ async function readActiveMembership(
  * qui aurait été admis sans elle : aucun transport n'a de vocabulaire à
  * inventer pour la cacher, et chacun peut en dire le vrai motif.
  */
+const conversationReadByServer = (mode: string | null | undefined): boolean =>
+  sharedTranslationServerReadsMessage({ conversationEncryptionMode: mode, messageIsEncrypted: false, messageEncryptionMode: null });
+
 export async function admitMessageEdit(
   params: MessageEditAdmissionParams
 ): Promise<MessageEditAdmission> {
@@ -334,7 +337,10 @@ export async function admitMessageEdit(
 
   if (!decision.admitted) return decision;
   if (isConversationClosed(params.message.conversation)) return REFUSE('conversation-closed');
-  if (isEndToEndMode(params.message.conversation?.encryptionMode)) return REFUSE('end-to-end-encrypted');
+  // Un régime que le serveur ne LIT pas — `e2ee` quelle que soit sa forme, ou
+  // un mode inconnu — refuse : la même loi que la traduction partagée, fermée
+  // par défaut. Rescellé ou en clair, seul un régime lu peut recevoir le texte.
+  if (!conversationReadByServer(params.message.conversation?.encryptionMode)) return REFUSE('end-to-end-encrypted');
   if (messageRowSealedFromServer(params.message)) return REFUSE('end-to-end-encrypted');
   const contentRefusal = contentRefusalOf(params.message);
   if (contentRefusal) return REFUSE(contentRefusal);

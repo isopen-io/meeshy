@@ -39,3 +39,16 @@ describe.each([' e2ee', 'e2ee ', 'signal_v3'])('régime de conversation illisibl
     expect(prepared.columns).not.toEqual({ content: 'secret modifié' });
   });
 });
+
+describe('un régime lu mais écrit avec des espaces se scelle', () => {
+  it.each([' server', 'SERVER ', ' hybrid '])('%p : le texte modifié part chiffré, jamais dans content', async (mode) => {
+    const sealer = { sealAtRest: jest.fn(async () => ({ ciphertext: 'c1pher', metadata: { iv: 'i', authTag: 't', keyId: 'k' } })), openAtRest: jest.fn() };
+    const prepared = await prepareEditedText({
+      crypto: sealer as never,
+      row: { conversationId: 'c', content: '', isEncrypted: false, encryptionMode: null, conversation: { encryptionMode: mode } } as never,
+      text: 'secret modifié',
+    });
+    expect(JSON.stringify(prepared.columns)).not.toContain('secret modifié');
+    expect(sealer.sealAtRest).toHaveBeenCalled();
+  });
+});
