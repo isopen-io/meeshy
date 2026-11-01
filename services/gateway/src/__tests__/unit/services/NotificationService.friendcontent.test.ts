@@ -404,7 +404,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
         [{ data: { content: string; userId: string } }]
       >;
       const call = calls.find((c) => c[0].data.userId === FRIEND_1);
-      expect(call![0].data.content).toBe('Look at this sunset');
+      expect(call![0].data.content).toBe('Petit message texte');
     });
   });
 
@@ -1289,7 +1289,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       });
 
       const payload = lastPushPayload();
-      expect(payload.body).toBe('Mon voyage à Douala');
+      expect(payload.body).toBe('Petit message texte');
       expect(payload.subtitle).toBe('a publié une nouvelle story');
     });
   });

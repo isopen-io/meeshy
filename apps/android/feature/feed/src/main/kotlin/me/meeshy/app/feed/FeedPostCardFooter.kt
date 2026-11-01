@@ -18,6 +18,7 @@ internal fun FeedPostCardFooter(
     onComments: () -> Unit,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    onSend: (() -> Unit)? = null,
 ) {
     Spacer(Modifier.height(MeeshySpacing.sm))
     PostStatsRow(
@@ -27,5 +28,6 @@ internal fun FeedPostCardFooter(
         onComments = onComments,
         onRepost = onRepost,
         onQuote = onQuote,
+        onSend = onSend,
     )
 }

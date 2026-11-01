@@ -45,6 +45,8 @@ data class ReelPresentation(
     val repostCount: Int,
     val isBookmarked: Boolean,
     val bookmarkCount: Int,
+    /** Les envois du réel (iOS `reel.shareCount`), compte d'« Envoyer » au rail. */
+    val shareCount: Int = 0,
     /**
      * La scène que ce réel REJOUE (iOS `reelSceneDocument`) : la même projection que le lecteur de stories.
      * Quand elle existe, le fichier média du post n'en est que le fond ou le son — jamais un second lecteur.
@@ -109,6 +111,7 @@ object ReelBuilder {
                     repostCount = post.repostCount ?: 0,
                     isBookmarked = post.isBookmarkedByMe == true,
                     bookmarkCount = post.bookmarkCount ?: 0,
+                    shareCount = post.shareCount ?: 0,
                     scene = scene,
                     export = ReelScene.export(post, scene, layout, mediaBaseUrl, preferences),
                 )

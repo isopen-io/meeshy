@@ -20,17 +20,18 @@
  * introuvable ou illisible ne pousse AUCUN texte. La notification part quand
  * même (elle nomme le contenu par son type ou son média) ; un extrait poussé,
  * lui, ne se rappelle pas.
+ *
+ * #14318 — le texte servi n'est plus MONTRÉ : il est COMPTÉ, pour la synthèse
+ * (« Message texte »). Il se rend donc ENTIER — une coupe à 80 caractères
+ * classerait tout post comme court — et ne quitte jamais le bâtisseur.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   buildPostTranslationRecord,
   resolvePrismTranslation,
 } from '@meeshy/shared/utils/conversation-helpers';
-import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { derivedContentWithoutCredits } from '../posts/storyContentComposition';
 
-/** La borne historique des appelants — un extrait IDENTIFIE, il ne raconte pas. */
-export const POST_EXCERPT_MAX_CODE_POINTS = 80;
 
 const POST_EXCERPT_SELECT = {
   content: true,
@@ -84,7 +85,7 @@ export function servePostExcerpt(params: {
     preferredLanguages: params.preferredLanguages,
   });
   const served = (translation?.text ?? original).trim();
-  return served === '' ? undefined : sliceCodePoints(served, POST_EXCERPT_MAX_CODE_POINTS);
+  return served === '' ? undefined : served;
 }
 
 /** Relit le post puis descend le Prisme du lecteur — fail-closed sur la panne. */

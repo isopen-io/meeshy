@@ -99,11 +99,7 @@ final class LiveShareDispatcher: ShareDispatching {
     }
 
     func resolvedLink(for card: ShareCard) async -> URL? {
-        guard card.kind == .story, isOnline() else { return nil }
-        let body = StoryShareLinkRequest(platform: "system", generateLink: true)
-        guard let response: APIResponse<PostShareResult> = try? await api.post(PostsEndpoint.byPostIdShare(postId: card.contentId), body: body),
-              let short = response.data.shortUrl else { return nil }
-        return URL(string: short)
+        await TrackedShareLink.mint(for: card, gesture: .send, service: postService, isOnline: isOnline())
     }
 
     // MARK: - Transfert
@@ -329,13 +325,6 @@ final class LiveShareDispatcher: ShareDispatching {
 
     private static var unreachable: String {
         String(localized: "forward.error.contact-offline", defaultValue: "Cette personne ne peut pas être jointe hors connexion.", bundle: .meeshyShare)
-    }
-
-    /// Corps du POST `/posts/<id>/share` qui mint le lien suivi d'une story ;
-    /// `generateLink` réutilise le lien existant du partageur.
-    private struct StoryShareLinkRequest: Encodable {
-        let platform: String
-        let generateLink: Bool
     }
 
     private struct CreateGroupBody: Encodable {

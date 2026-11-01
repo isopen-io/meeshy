@@ -81,11 +81,36 @@ describe('admitMessageEdit — aucune édition en clair dans une conversation e2
     expect(admission.admitted).toBe(true);
   });
 
-  it.each(['server', 'hybrid', 'Hybrid'])('#11381 — mode %s : refusée tant qu’aucun transport ne rechiffre, jamais écrite en clair', async (mode) => {
+  it.each(['server', 'hybrid', 'Hybrid'])('décision 2026-11-01 — mode %s : admise, les quatre transports rescellent le texte modifié (`atRestEdit`)', async (mode) => {
     const admission = await edit({ encryptionMode: mode });
-    expect(isEditRefused(admission) && admission.reason).toBe('server-encrypted-at-rest');
-    expect(editRefusalCode('server-encrypted-at-rest')).toBe('SERVER_AT_REST_EDIT_REFUSED');
-    expect(describeEditRefusalForSocket('server-encrypted-at-rest')).toContain('chiffré sur le serveur');
+    expect(admission.admitted).toBe(true);
+  });
+
+  it('décision 2026-11-01 — un modérateur plateforme corrige aussi un message au repos', async () => {
+    const admission = await edit({ encryptionMode: 'server', editor: 'user-mod', globalRole: 'MODERATOR' });
+    expect(admission).toMatchObject({ admitted: true, asModerator: true });
+  });
+
+  it('décision 2026-11-01 — une LIGNE scellée au repos (isEncrypted, mode server) n’est pas un chiffré de bout en bout : admise', async () => {
+    const admission = await admitMessageEdit({
+      prisma: buildPrisma() as never,
+      editorUserId: AUTHOR,
+      message: {
+        authorUserId: AUTHOR,
+        conversationId: CONV,
+        conversation: { isActive: true, closedAt: null, type: 'group', encryptionMode: 'server' },
+        createdAt: new Date(NOW - 60_000),
+        messageType: 'text',
+        metadata: null,
+        isViewOnce: false,
+        effectFlags: 0,
+        isEncrypted: true,
+        encryptionMode: 'server',
+        attachments: [],
+      },
+      now: NOW,
+    });
+    expect(admission.admitted).toBe(true);
   });
 
   it('le socket dit la phrase claire et porte le code stable', () => {

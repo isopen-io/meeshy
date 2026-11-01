@@ -173,8 +173,24 @@ object ComposeLanguageDetector {
      * Jamais la langue de l'auteur par défaut (#14284) : un texte français trop court pour l'identifieur partait
      * étiqueté dans la langue primaire de son auteur, et s'affichait badgé dans une langue qu'il ne parle pas.
      */
-    suspend fun authoredLanguage(text: String, identifier: LanguageIdentifying): String? =
-        detect(text, fallback = NOT_IDENTIFIED, identifier = identifier).takeIf { it != NOT_IDENTIFIED }
+    suspend fun authoredLanguage(text: String, identifier: LanguageIdentifying): String? {
+        val strict = if (wordCount(text) < SHORT_TEXT_WORDS) strictly(identifier) else identifier
+        return detect(text, fallback = NOT_IDENTIFIED, identifier = strict).takeIf { it != NOT_IDENTIFIED }
+    }
+
+    /** Sous [SHORT_TEXT_WORDS] mots, l'identifieur se trompe de langue avec aplomb : il lui faut [SHORT_TEXT_CONFIDENCE]. */
+    private const val SHORT_TEXT_WORDS: Int = 5
+
+    private const val SHORT_TEXT_CONFIDENCE: Double = 0.95
+
+    private val WORD: Regex = Regex("""\p{L}+""")
+
+    private fun wordCount(text: String): Int = WORD.findAll(URL.replace(text, " ")).count()
+
+    private fun strictly(identifier: LanguageIdentifying): LanguageIdentifying = LanguageIdentifying { text ->
+        identifier.identify(text)?.takeIf { it.confidence >= SHORT_TEXT_CONFIDENCE }
+            ?: LanguageIdentification(UNDETERMINED, 1.0)
+    }
 
     /**
      * Détection à l'envoi par [identifier] (ML Kit) : au moins 4 lettres une fois les URL retirées

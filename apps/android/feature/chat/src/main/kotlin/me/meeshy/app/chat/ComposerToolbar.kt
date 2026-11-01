@@ -111,6 +111,7 @@ internal fun ComposerToolbar(
     accentColor: Color,
     onFold: (() -> Unit)? = null,
     configuration: ComposerConfiguration = ComposerConfiguration.CONVERSATION,
+    onSticker: (() -> Unit)? = null,
 ) {
     val iconTint = composerIconTint(effects.flags)
     val flags = effects.flags
@@ -205,6 +206,11 @@ internal fun ComposerToolbar(
                     description = stringResource(R.string.chat_effects_open),
                     onClick = onEffects,
                 )
+            }
+            // Le sticker après les bascules (iOS `UniversalComposerBar+Toolbar`, #9082) : rendu seulement si l'hôte sait
+            // ouvrir la feuille (loi 4).
+            if (configuration.offers(ComposerCapability.STICKER) && onSticker != null) {
+                ComposerGlassDoor(MeeshyIcons.EmojiFilled, stringResource(R.string.composer_attach_sticker), iconTint, onSticker)
             }
         }
         if (configuration.offers(ComposerCapability.LANGUAGE)) {

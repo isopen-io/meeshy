@@ -235,7 +235,7 @@ describe('NotificationService — message push title/body', () => {
         messagePreview: 'Salut, comment ça va ?',
       });
 
-      expect(lastPushPayload().body).toBe('Salut, comment ça va ?');
+      expect(lastPushPayload().body).toBe('Petit message texte');
     });
   });
 
@@ -288,7 +288,8 @@ describe('NotificationService — message push title/body', () => {
       });
 
       const body = lastPushPayload().body;
-      expect(body).toBe('On démarre le sprint demain');
+      expect(body).toBe('Message texte');
+      expect(body).not.toContain('sprint');
       expect(body).not.toContain('Alice Martin');
     });
 
@@ -359,7 +360,7 @@ describe('NotificationService — message push title/body', () => {
         ],
       });
 
-      expect(lastPushPayload().body).toBe('Regardez ça ! +2📷 +2🎵 +1🎬 📄 PDF · 2');
+      expect(lastPushPayload().body).toBe('Petit message texte · 3 images, 2 audios, 2 PDF, 1 vidéo');
     });
 
     it('test_body_textWithSingleAttachment_hasNoBadges', async () => {
@@ -368,7 +369,7 @@ describe('NotificationService — message push title/body', () => {
         attachments: [{ type: 'image', filename: 'a.jpg' }],
       });
 
-      expect(lastPushPayload().body).toBe('Une seule photo');
+      expect(lastPushPayload().body).toBe('Petit message texte · Image haute définition');
     });
 
     it('test_body_noText_usesFirstAttachmentLabelThenBadges', async () => {
@@ -388,7 +389,7 @@ describe('NotificationService — message push title/body', () => {
         firstAttachmentHeight: 1080,
       });
 
-      expect(lastPushPayload().body).toBe('📷 Photo · 1920×1080 +2📷 +2🎵 +1🎬 📄 PDF · 2');
+      expect(lastPushPayload().body).toBe('3 images, 2 audios, 2 PDF, 1 vidéo');
     });
 
     it('test_body_noText_singleAttachment_isJustTheLabel', async () => {
@@ -400,7 +401,7 @@ describe('NotificationService — message push title/body', () => {
         firstAttachmentDuration: 34000,
       });
 
-      expect(lastPushPayload().body).toBe('🎵 Audio · 0:34');
+      expect(lastPushPayload().body).toBe('Vocal haute définition');
     });
 
     it('test_body_mixedDocumentExtensions_fallBackToGenericPaperclip', async () => {
@@ -413,7 +414,7 @@ describe('NotificationService — message push title/body', () => {
         ],
       });
 
-      expect(lastPushPayload().body).toBe('Les fichiers 📎 2 fichiers');
+      expect(lastPushPayload().body).toBe('Petit message texte · 1 image, 1 PDF, 1 document');
     });
 
     it('test_body_group_titleIsSenderName_subtitleIsConversation_withBadges', async () => {
@@ -433,7 +434,7 @@ describe('NotificationService — message push title/body', () => {
       const payload = lastPushPayload();
       expect(payload.title).toBe('Alice Martin');
       expect((payload as { subtitle?: string }).subtitle).toBe('Équipe Dev');
-      expect(payload.body).toBe('Sprint +1🎬');
+      expect(payload.body).toBe('Petit mot reçu · 1 image, 1 vidéo');
     });
   });
 
@@ -965,7 +966,7 @@ describe('NotificationService — message push title/body', () => {
 
       const payload = lastPushPayload() as { title: string; body: string };
       expect(payload.title).toBe('Meeshy');
-      expect(payload.body).toBe('Salut, comment ça va ?');
+      expect(payload.body).toBe('Petit message texte');
     });
 
     describe('tz-aware DND (shared isWithinDnd)', () => {

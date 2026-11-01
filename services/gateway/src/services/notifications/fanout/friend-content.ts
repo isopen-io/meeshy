@@ -5,7 +5,7 @@
 import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { circleNotifyKey, type CircleNotifyKey } from '@meeshy/shared/utils/relation-levels';
 import { filterPostConsumers } from '../../posts/postAudience';
-import { truncateMessage } from '../notification-preview';
+import { postSynthesis, textSynthesis } from '../content-synthesis';
 import { resolvePostMedia } from '../post-media-thumbnail';
 import { mentionReceivers, resolveChosenAudience, resolveEntourage } from './entourage';
 import type { FanoutDependencies } from './dependencies';
@@ -104,7 +104,6 @@ export async function createFriendContentNotificationsBatch(
     mentionedUserIds: params.mentionedUserIds ?? [],
   });
   const excludeSet = new Set([...(params.excludeUserIds ?? []), ...mentioned]);
-  const excerpt = params.excerpt ? truncateMessage(params.excerpt) : '';
   // Vignette du contenu publié → rendue in-app + attachée au push iOS. Le
   // mediaType explicite de l'appelant prime ; sinon on le dérive du média.
   const media = await resolvePostMedia(deps.prisma, params.postId);
@@ -176,12 +175,15 @@ export async function createFriendContentNotificationsBatch(
 
   for (const recipientId of uniqueRecipientIds) {
     const fLang = langs.get(recipientId) ?? 'fr';
+    // #14318 — le contenu publié se dit par sa SYNTHÈSE (texte puis média).
+    const excerpt = textSynthesis(fLang, params.excerpt);
+    const synthesis = postSynthesis(fLang, { text: params.excerpt, mediaType: mediaType === 'text' ? null : mediaType });
     tasks.push(
       deps.createNotification({
         userId: recipientId,
         type: notificationType,
         priority: 'normal',
-        content: excerpt || notificationString(fLang, contentKey),
+        content: synthesis || notificationString(fLang, contentKey),
         subtitle: notificationString(fLang, 'friend.subtitleNew', {
           postType: params.contentType,
         }),

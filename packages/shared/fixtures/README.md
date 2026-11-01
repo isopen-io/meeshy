@@ -24,3 +24,7 @@ Lus par les 3 plateformes : shared/web (Jest, import direct), iOS (XCTest, resso
 ## `mentionable-scope.vectors.json` (#14066, #14071)
 
 - Qui peut-on mentionner dans une conversation : `scopes` (type BRUT servi → `interlocutor` / `members` / `directory` / `null`, correspondance exacte comme la passerelle) et `admits` (type + appartenance + membres connus → une mention de `candidateId` a-t-elle un effet ?), **écrits à la main**. Loi : `utils/mention-lookup.ts` (`mentionableScope`, `mentionReachOf`, `isMentionableIn`). Rejoués par `utils/__tests__/mention-lookup.test.ts`, iOS (`MentionSuggestionRuleTests`, `MentionReach`) et Android (`MentionableScopeVectorsTest`, `:core:model`), par chemin relatif.
+
+## `keyframe-scale.vectors.json` (#14316)
+
+- L'échelle d'une image clé MULTIPLIE celle de l'objet : `{ _label, objectScale, startTime, at, keyframes, renderedScale }`, **écrits à la main**, rendu = `objectScale × facteur` interpolé au temps local, un canal sans image clé (ou avant sa première) comptant pour 1. Rejoués par iOS (`StoryKeyframeScaleVectorTests` : `StoryRenderer`, description Core Animation, signature de `StoryRendererCache`), Android (`KeyframeScaleVectorsTest` dans `:core:model`, `StoryKeyframeScaleVectorsTest` dans `:feature:stories`) et le web (`apps/web/src/lib/canvas/pose-keyframe-scale.test.ts`, `objectPose`), par chemin relatif. Règle écrite dans `docs/product/meeshy-reader-modele.md`.

@@ -1,4 +1,4 @@
-import { GlobalUserRole, globalRoleLevel } from '@meeshy/shared/types/role-types';
+import { END_TO_END_MINIMUM_PLATFORM_ROLE, mayChooseEndToEnd } from '@meeshy/shared/utils/conversation-creation-encryption';
 
 /**
  * **Qui peut activer le chiffrement d'une conversation — politique UNIQUE (#12517, #12588).**
@@ -18,14 +18,16 @@ import { GlobalUserRole, globalRoleLevel } from '@meeshy/shared/types/role-types
  * `MODERATOR` le rôle de plateforme n'apporte, DANS un groupe, aucun rang de
  * conversation ; `MODERATOR`, `ADMIN` et `BIGBOSS` membres y agissent avec les
  * droits du créateur (`conversation-authority.ts`, #11217). La relâcher se fait ICI, et
- * nulle part ailleurs ; son miroir iOS est `ConversationEncryptionActivationPolicy`.
+ * nulle part ailleurs ; le seuil vit dans `@meeshy/shared/utils/conversation-creation-encryption`
+ * (le même rôle CHOISIT le bout en bout à la création) ; son miroir iOS est
+ * `ConversationEncryptionActivationPolicy`.
  *
  * Fermée par défaut : un rôle absent ou illisible vaut le niveau 0
  * (`globalRoleLevel`) et n'accorde rien.
  */
 export const ENCRYPTION_ACTIVATION_POLICY = 'platform-analysts-and-above' as const;
 
-export const ENCRYPTION_ACTIVATION_MINIMUM_PLATFORM_ROLE = GlobalUserRole.ANALYST;
+export const ENCRYPTION_ACTIVATION_MINIMUM_PLATFORM_ROLE = END_TO_END_MINIMUM_PLATFORM_ROLE;
 
 export const ENCRYPTION_ACTIVATION_RESTRICTED_CODE = 'ENCRYPTION_ACTIVATION_RESTRICTED' as const;
 
@@ -34,5 +36,5 @@ export type EncryptionActivationActor = {
 };
 
 export function mayActivateConversationEncryption(actor: EncryptionActivationActor): boolean {
-  return globalRoleLevel(actor.platformRole ?? '') >= globalRoleLevel(ENCRYPTION_ACTIVATION_MINIMUM_PLATFORM_ROLE);
+  return mayChooseEndToEnd(actor.platformRole);
 }

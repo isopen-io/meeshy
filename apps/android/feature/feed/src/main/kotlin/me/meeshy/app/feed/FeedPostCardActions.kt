@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -51,6 +52,7 @@ internal fun PostStatsRow(
     onQuote: () -> Unit,
     modifier: Modifier = Modifier,
     overMedia: Boolean = false,
+    onSend: (() -> Unit)? = null,
 ) {
     val neutral = if (overMedia) MeeshyPalette.White else MeeshyTheme.tokens.textSecondary
     Row(
@@ -90,6 +92,18 @@ internal fun PostStatsRow(
             countColor = neutral,
             onClick = onBookmark,
         )
+        // « Envoyer » (#14315, iOS `FeedPostActionsBar`) : la feuille Meeshy, avec le lien de l'utilisateur ;
+        // « Partager », hors de Meeshy, vit dans le menu « ⋯ ».
+        onSend?.let { send ->
+            StatAction(
+                icon = MeeshyIcons.Send,
+                count = 0,
+                contentDescription = stringResource(R.string.feed_action_send),
+                tint = neutral,
+                countColor = neutral,
+                onClick = send,
+            )
+        }
     }
 }
 

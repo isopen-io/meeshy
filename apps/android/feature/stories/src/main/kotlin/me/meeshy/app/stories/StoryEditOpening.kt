@@ -192,7 +192,7 @@ internal fun StoryTextObject.toElement(): StoryTextElement {
         rotationDeg = rotation.toFloat(),
         referenceUserId = referenceUserId,
         zIndex = zIndex,
-        // L'échelle d'une image clé vit dans l'espace de la police du fil : elle suit l'échelle de l'élément.
-        keyframes = keyframes.orEmpty().map { frame -> frame.copy(scale = frame.scale?.times(ratio)) },
+        // L'échelle d'une image clé est un facteur de celle de l'élément (#14316) : elle ne se rééchelonne pas.
+        keyframes = keyframes.orEmpty(),
     ).normalised()
 }

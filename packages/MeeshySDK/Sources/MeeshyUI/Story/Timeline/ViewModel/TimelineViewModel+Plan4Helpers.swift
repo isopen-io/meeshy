@@ -141,14 +141,14 @@ extension TimelineViewModel {
         }
     }
 
-    /// Règle UN champ de la transformation, en préservant les autres. Le
-    /// bornage vit dans `ClipTransform.applying(_:)`, et l'écriture passe par
-    /// le `CommandStack` comme toute autre édition : une entrée d'annulation
+    /// Règle UN champ en préservant les autres, bornés par `ClipTransform` et,
+    /// pour l'échelle, par `TimelineScaleSetting` (#14304) ; l'écriture passe
+    /// par le `CommandStack` comme toute autre édition : une entrée d'annulation
     /// par réglage, et un réglage sans effet n'en pose aucune.
     public func setClipTransform(id: String, field: ClipTransform.Field) {
         guard let kind = clipKind(forId: id),
               let current = clipTransform(id: id) else { return }
-        let updated = current.applying(field)
+        let updated = current.applying(TimelineScaleSetting.settled(field, from: current, object: project.sceneObject(id: id)))
         guard updated != current else { return }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
                                          property: .transform(old: current, new: updated))
@@ -587,7 +587,7 @@ extension TimelineViewModel {
             oldY: position != nil ? snapshot.y : nil,
             newY: position?.y,
             oldScale: scale != nil ? snapshot.scale : nil,
-            newScale: scale,
+            newScale: scale.map { TimelineScaleSetting.keyframeScale($0, from: snapshot.scale, object: project.sceneObject(id: clipId)) },
             oldOpacity: opacity != nil ? snapshot.opacity : nil,
             newOpacity: opacity,
             oldEasing: easing != nil ? snapshot.easing : nil,

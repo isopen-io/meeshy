@@ -206,14 +206,14 @@ describe('l’état final d’un tête-à-tête chiffré sur le web : lisible, s
   const action = (host: Element) => host.querySelector<HTMLButtonElement>('[data-write-restriction-open-plaintext]');
   const status = (host: Element) => host.querySelector('[data-write-restriction-open-plaintext-status]')?.textContent ?? '';
 
-  test('le bandeau dit d’écrire depuis l’app, et offre d’ouvrir la conversation non chiffrée avec le contact', async () => {
+  test('le bandeau dit d’écrire depuis l’app, et offre d’ouvrir la conversation sans chiffrement de bout en bout avec le contact', async () => {
     const id = 'c-direct-sealed';
     const { calls, value } = gesture('opened');
     const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: 'e2ee' })} plaintextDirect={value} />);
 
     expect(host.querySelector('textarea, input, [contenteditable]')).toBeNull();
     expect(host.querySelector('[data-write-restriction]')?.textContent).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
-    expect(action(host)?.textContent).toBe('Ouvrir une conversation non chiffrée avec Ana');
+    expect(action(host)?.textContent).toBe('Ouvrir une conversation sans chiffrement de bout en bout avec Ana');
 
     await act(async () => {
       action(host)?.click();
@@ -223,8 +223,8 @@ describe('l’état final d’un tête-à-tête chiffré sur le web : lisible, s
 
   test('l’ouverture échoue ou le réseau manque : le bandeau le dit, rien ne s’ouvre dans ce fil', async () => {
     for (const [outcome, said] of [
-      ['failed', 'La conversation non chiffrée n’a pas pu être ouverte. Réessayez.'],
-      ['offline', 'Hors connexion : reconnectez-vous pour ouvrir la conversation non chiffrée.'],
+      ['failed', 'La conversation sans chiffrement de bout en bout n’a pas pu être ouverte. Réessayez.'],
+      ['offline', 'Hors connexion : reconnectez-vous pour ouvrir la conversation sans chiffrement de bout en bout.'],
     ] as const) {
       const id = `c-direct-${outcome}`;
       const { value } = gesture(outcome);
@@ -253,7 +253,7 @@ describe('l’état final d’un tête-à-tête chiffré sur le web : lisible, s
         <textarea data-probe-field />
       </ThreadWriteLock>,
     );
-    expect(action(host)?.textContent).toBe('Ouvrir une conversation non chiffrée avec Bea');
+    expect(action(host)?.textContent).toBe('Ouvrir une conversation sans chiffrement de bout en bout avec Bea');
   });
 
   test('un groupe chiffré, ou une restriction d’âge : aucun geste, même fourni', async () => {

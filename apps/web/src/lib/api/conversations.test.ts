@@ -8,6 +8,7 @@ import {
   conversationsInfiniteOptions,
   conversationsQuery,
   createDirectConversation,
+  createGroupConversation,
   findCachedConversation,
   loadConversation,
   loadConversationsPage,
@@ -532,6 +533,15 @@ describe('createDirectConversation', () => {
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ type: 'direct', participantIds: ['u-amina'], plaintext: true });
   });
 
+  test('le mode choisi à l’écran de création part dans le corps (décision du 2026-11-01)', async () => {
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'c-hybrid', title: null } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, credential: () => ({ kind: 'registered', token: 'jwt-1' }) });
+
+    await createDirectConversation({ source: 'gateway', transport }, 'u-amina', { encryptionMode: 'hybrid' });
+
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ type: 'direct', participantIds: ['u-amina'], encryptionMode: 'hybrid' });
+  });
+
   test('en fixtures, rend le direct existant avec ce participant', async () => {
     const target = CONVERSATIONS.find((c) => c.type === 'direct' && !PAGINATION_CONVERSATIONS.includes(c));
     if (target === undefined) return; // pas de fixture directe dans ce corpus — rien à prouver ici
@@ -541,5 +551,25 @@ describe('createDirectConversation', () => {
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
     const result = await createDirectConversation({ source: 'fixtures', transport }, participant);
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('createGroupConversation', () => {
+  test('sans mode, aucun `encryptionMode` ne part : la passerelle pose Serveur', async () => {
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'g-1', title: 'Équipe' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, credential: () => ({ kind: 'registered', token: 'jwt-1' }) });
+
+    await createGroupConversation({ source: 'gateway', transport }, { title: 'Équipe', participantIds: ['u-a', 'u-b'] });
+
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ type: 'group', title: 'Équipe', participantIds: ['u-a', 'u-b'] });
+  });
+
+  test('le mode choisi à l’écran de création part dans le corps (décision du 2026-11-01)', async () => {
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'g-2', title: 'Équipe' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, credential: () => ({ kind: 'registered', token: 'jwt-1' }) });
+
+    await createGroupConversation({ source: 'gateway', transport }, { title: 'Équipe', participantIds: ['u-a'], encryptionMode: 'server' });
+
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ type: 'group', title: 'Équipe', participantIds: ['u-a'], encryptionMode: 'server' });
   });
 });

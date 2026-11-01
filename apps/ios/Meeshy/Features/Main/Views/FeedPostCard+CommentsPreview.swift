@@ -56,7 +56,7 @@ extension FeedPostCard {
                             }
                         }
 
-                        Text(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
+                        Text(PostStatAccessibility.viewCommentsLabel(post.servedCommentTotal))
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(theme.accentText(accentColor))
 
@@ -73,7 +73,7 @@ extension FeedPostCard {
             }
         }
         .buttonStyle(PlainButtonStyle())
-        .accessibilityLabel(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
+        .accessibilityLabel(PostStatAccessibility.viewCommentsLabel(post.servedCommentTotal))
         .accessibilityHint(String(localized: "feed.post.view_comments.hint", defaultValue: "Ouvre la liste des commentaires", bundle: .main))
     }
 
@@ -239,4 +239,10 @@ extension FeedPostCard {
             }
         }
     }
+}
+
+extension FeedPost {
+    /// Le nombre que nomme « Voir les N commentaires » : le total servi par la
+    /// passerelle, jamais moins que les commentaires que la carte a reçus (#14324).
+    var servedCommentTotal: Int { max(commentCount, comments.count) }
 }

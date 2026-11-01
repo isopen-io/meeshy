@@ -151,7 +151,10 @@
     <string name="stories_action_reply">Antworten</string>
     <string name="stories_action_report">Melden</string>
     <string name="stories_action_repost">Erneut posten</string>
+    <string name="stories_action_send">Senden</string>
+    <string name="stories_action_share">Teilen</string>
     <string name="stories_action_translations">Übersetzungen</string>
+    <string name="stories_action_views">Aufrufe</string>
     <string name="stories_add">Hinzufügen</string>
     <string name="stories_audience_picker_cancel">Abbrechen</string>
     <string name="stories_audience_picker_done">Fertig</string>

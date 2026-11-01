@@ -124,6 +124,8 @@ data class FeedPostPresentation(
     val scenes: FeedPostScenes? = null,
     /** Le post tel qu'« Imager » un de ses commentaires le met en tête (#13922) : son texte servi, son audience, ses médias. */
     val commentCardSupport: PostCommentCardPost? = null,
+    /** Les premiers commentaires que la carte montre sous ses actions (#14314) ; `null` : aucun à montrer. */
+    val commentsPreview: FeedCommentsPreviewState? = null,
 ) {
     /**
      * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
@@ -247,6 +249,7 @@ object FeedPostBuilder {
                 )
             },
             commentCardSupport = CommentCardReading.support(post, content),
+            commentsPreview = FeedCommentsPreviewBuilder.build(post.comments, post.commentCount ?: 0, preferences, mediaBaseUrl),
         )
     }
 

@@ -39,7 +39,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * The « @ » suggestion list above a composer (#14053), shared by every surface that writes a
- * mention — the comment bar's [MeeshyCommentComposer] `topSlot`, the post thread, the chat. It shows
+ * mention — the universal composer's `topSlot` (comments, mood replies), the chat. It shows
  * what the [MentionAutocompleteState] serves, in its order (local contacts first, then the server's),
  * and a tap hands the person to [onSelect], which inserts the handle. Neutral input-assistance
  * chrome, like the keyboard's suggestion bar; rows are capped in height and scroll. Nothing is drawn

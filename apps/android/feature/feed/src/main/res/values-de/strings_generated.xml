@@ -9,6 +9,7 @@
     <string name="feed_action_quote">Zitieren</string>
     <string name="feed_action_report">Melden</string>
     <string name="feed_action_repost">Erneut teilen</string>
+    <string name="feed_action_send">Senden</string>
     <string name="feed_action_share">Teilen</string>
     <string name="feed_action_view_profile">Profil ansehen</string>
     <string name="feed_comment_card_folded">+%1$d Antworten</string>
@@ -85,6 +86,10 @@
     <string name="feed_translations_badge_hint">Zeigt die verfügbaren Sprachen an</string>
     <string name="feed_unknown_author">Unbekannt</string>
     <string name="feed_unlike">Gefällt mir nicht mehr</string>
+    <plurals name="feed_view_comments">
+        <item quantity="one">Kommentar ansehen</item>
+        <item quantity="other">Alle %1$d Kommentare ansehen</item>
+    </plurals>
     <string name="hashtag_results_empty">Keine Beiträge mit #%1$s</string>
     <string name="mood_bubble_react">Reaktion %1$s</string>
     <string name="mood_bubble_reply">Antworten</string>

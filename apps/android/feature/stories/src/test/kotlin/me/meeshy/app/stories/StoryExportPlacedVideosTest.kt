@@ -75,7 +75,7 @@ class StoryExportPlacedVideosTest {
         },
         probeMillis = { file -> mapOf("fg.mp4" to 8_200L)[file.readText()] },
         blankPicture = { it.writeText("noir") },
-        chooseLength = { null },
+        decideImager = { null },
         paint = { request ->
             recorder.paints += request
             request.frames.mapIndexed { i, _ -> File(request.directory, "calque-$i.png").also { it.writeText("png") } }

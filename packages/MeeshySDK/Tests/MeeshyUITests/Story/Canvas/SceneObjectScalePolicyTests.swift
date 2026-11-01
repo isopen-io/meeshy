@@ -82,4 +82,36 @@ final class SceneObjectScalePolicyTests: XCTestCase {
         XCTAssertEqual(SceneObjectScalePolicy.settledBackground(base: 1, gestureScale: 0.01), 0.3)
         XCTAssertEqual(SceneObjectScalePolicy.settledBackground(base: 1, gestureScale: 2), 2)
     }
+    /// Une valeur SAISIE (champ, pas ±, curseur) suit la règle du geste :
+    /// aucun plafond, et rien sous le plancher de l'objet.
+    func test_uneSaisie_naAucunPlafond() {
+        XCTAssertEqual(SceneObjectScalePolicy.entered(250, current: 1, unitSide: 140), 250)
+        XCTAssertEqual(SceneObjectScalePolicy.entered(1e6, current: 30, unitSide: 72), 1e6)
+    }
+
+    func test_uneSaisieSousLePlancher_sArreteAuPlancher() {
+        XCTAssertEqual(SceneObjectScalePolicy.entered(0.0001, current: 1, unitSide: 140), 5.0 / 140, accuracy: 1e-12)
+        XCTAssertEqual(SceneObjectScalePolicy.entered(0.02, current: 1, unitSide: 72), 5.0 / 72, accuracy: 1e-12)
+        XCTAssertEqual(SceneObjectScalePolicy.entered(0.04, current: 1, unitSide: 140), 0.04, accuracy: 1e-12)
+    }
+
+    /// Un pas « − » qui passe sous zéro, ou un « 0 » tapé, veut dire « le plus
+    /// petit possible » : la saisie s'arrête au plancher, elle n'est pas ignorée.
+    func test_uneSaisieNulleOuNegative_sArreteAuPlancher() {
+        XCTAssertEqual(SceneObjectScalePolicy.entered(0, current: 1, unitSide: 140), 5.0 / 140, accuracy: 1e-12)
+        XCTAssertEqual(SceneObjectScalePolicy.entered(-0.02, current: 0.08, unitSide: 140), 5.0 / 140, accuracy: 1e-12)
+    }
+
+    func test_uneSaisieNonFinie_neChangeRien() {
+        XCTAssertEqual(SceneObjectScalePolicy.entered(.nan, current: 2, unitSide: 140), 2)
+        XCTAssertEqual(SceneObjectScalePolicy.entered(.infinity, current: 2, unitSide: 140), 2)
+    }
+
+    /// Sans côté mesurable, le plancher ne se prouve pas : la saisie grandit
+    /// encore, elle ne réduit plus — comme le geste.
+    func test_uneSaisieSansCoteMesurable_neReduitPas() {
+        XCTAssertEqual(SceneObjectScalePolicy.entered(0.5, current: 1, unitSide: 0), 1)
+        XCTAssertEqual(SceneObjectScalePolicy.entered(3, current: 1, unitSide: .nan), 3)
+        XCTAssertEqual(SceneObjectScalePolicy.entered(0, current: 1, unitSide: 0), 1)
+    }
 }

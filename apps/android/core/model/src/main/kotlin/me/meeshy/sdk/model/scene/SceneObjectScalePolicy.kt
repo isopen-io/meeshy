@@ -44,6 +44,20 @@ object SceneObjectScalePolicy {
     }
 
     /**
+     * L'échelle retenue pour une valeur SAISIE (champ « Taille » de la frise, pas ±, curseur d'une image clé) depuis
+     * [current] : la règle du geste, sans plafond et au même plancher (#14304, iso iOS `SceneObjectScalePolicy.entered`).
+     * Une saisie nulle ou négative (un « 0 » tapé, un pas « − » qui passe sous zéro) veut dire « le plus petit
+     * possible » et s'arrête au plancher ; une saisie non finie ne change rien. Sans côté mesurable, la saisie grandit
+     * encore et ne réduit plus.
+     */
+    fun entered(requested: Double, current: Double, smallestSideDesignPx: Double): Double {
+        val start = served(current)
+        if (!requested.isFinite()) return start
+        if (!(smallestSideDesignPx > 0.0 && smallestSideDesignPx.isFinite())) return max(start, requested)
+        return max(requested, floorFor(smallestSideDesignPx))
+    }
+
+    /**
      * Une échelle écrite (modèle, brouillon, charge décodée) telle que tout lecteur la rend : finie et positive,
      * elle passe telle quelle ; nulle, négative, NaN ou infinie, elle se ramène à l'IDENTITÉ — zéro fait disparaître
      * l'objet, un négatif le retourne, et aucun geste ne produit ces valeurs.

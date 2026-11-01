@@ -44,6 +44,7 @@ function media(overrides: Partial<Row> & { id: string }): Row {
     codec: 'h264',
     uploaderId: AUTHOR,
     postId: null,
+    createdAt: new Date(Date.now() - 3_600_000),
     ...overrides,
   };
 }
@@ -57,7 +58,7 @@ function world(options: {
   const posts: MongoDoc[] = (options.posts ?? [
     { id: STORY, authorId: AUTHOR },
     { id: POST, authorId: AUTHOR },
-  ]).map((post) => ({ ...post }));
+  ]).map((post) => ({ createdAt: new Date(), ...post }));
   let created = 0;
   const prisma = {
     postMedia: {

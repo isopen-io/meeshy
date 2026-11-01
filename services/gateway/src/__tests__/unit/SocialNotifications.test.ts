@@ -359,7 +359,7 @@ describe('Social Notification Methods', () => {
       expect(result).toBeNull();
     });
 
-    it('should create post_comment notification with commentPreview in content', async () => {
+    it('should create post_comment notification with the comment synthesis in content (#14318)', async () => {
       setupSuccessMocks(mockPrisma, { type: 'post_comment' });
 
       const result = await service.createPostCommentNotification({
@@ -375,8 +375,8 @@ describe('Social Notification Methods', () => {
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.type).toBe('post_comment');
       expect(createArg.data.priority).toBe('normal');
-      // Content should contain the comment preview (possibly truncated)
-      expect(createArg.data.content).toContain('This is really insightful!');
+      // #14318 — le corps dit la longueur du commentaire, jamais son texte.
+      expect(createArg.data.content).toBe('Petit message texte');
     });
 
     it('should include commentId in metadata', async () => {
@@ -411,7 +411,7 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.metadata.commentPreview).toBeDefined();
     });
 
-    it('should truncate long comment previews', async () => {
+    it('counts a long comment entire (#14318)', async () => {
       setupSuccessMocks(mockPrisma, { type: 'post_comment' });
 
       // Build a comment with more than 25 words
@@ -426,8 +426,8 @@ describe('Social Notification Methods', () => {
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      // The content is passed through truncateMessage (max 25 words)
-      expect(createArg.data.content.endsWith('...')).toBe(true);
+      // #14318 — 30 mots : le palier « Long message texte », compté sur le texte entier.
+      expect(createArg.data.content).toBe('Long message texte');
     });
   });
 
@@ -488,7 +488,7 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.title).toContain('republié');
     });
 
-    it('montre l\'extrait du contenu partagé dans le corps quand il y en a un', async () => {
+    it('décrit le contenu partagé par sa synthèse dans le corps (#14318)', async () => {
       const repostPrefs = { repostEnabled: true };
       setupSuccessMocks(mockPrisma, { type: 'post_repost', priority: 'normal' }, repostPrefs);
 
@@ -501,7 +501,7 @@ describe('Social Notification Methods', () => {
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createArg.data.content).toContain('Le texte du post repris');
+      expect(createArg.data.content).toBe('Message texte');
     });
 
     it('should include repostId and originalPostId in metadata', async () => {
@@ -618,7 +618,7 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.context.postId).toBe(POST_ID);
     });
 
-    it('should use truncated replyPreview as content', async () => {
+    it('uses the reply synthesis as content (#14318)', async () => {
       setupSuccessMocks(mockPrisma, { type: 'comment_reply' });
 
       const longReply = Array.from({ length: 30 }, (_, i) => `reply${i}`).join(' ');
@@ -632,7 +632,7 @@ describe('Social Notification Methods', () => {
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createArg.data.content.endsWith('...')).toBe(true);
+      expect(createArg.data.content).toBe('Long message texte');
     });
   });
 
@@ -834,7 +834,7 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.content).not.toContain('🎉');
     });
 
-    it('montre l\'extrait du commentaire aimé dans le corps', async () => {
+    it('décrit le commentaire aimé par sa synthèse dans le corps (#14318)', async () => {
       const commentLikePrefs = { commentLikeEnabled: true };
       setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' }, commentLikePrefs);
 
@@ -848,7 +848,7 @@ describe('Social Notification Methods', () => {
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createArg.data.content).toContain('Bien vu pour la migration');
+      expect(createArg.data.content).toBe('Message texte');
     });
   });
 });

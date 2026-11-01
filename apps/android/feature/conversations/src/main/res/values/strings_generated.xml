@@ -144,6 +144,15 @@
     <string name="dialogs_report_title">Why are you reporting this conversation?</string>
     <string name="dialogs_save">Save</string>
     <string name="dialogs_unblock_error">Unable to unblock this user</string>
+    <string name="encryption_create_e2ee_soon_groups">Coming soon for groups</string>
+    <string name="encryption_create_footer">End-to-end encryption can never be turned off. You can always open another conversation, without end-to-end encryption, with the same people.</string>
+    <string name="encryption_create_header">Encryption</string>
+    <string name="encryption_mode_e2ee_description">Only your devices and those of the participants read the messages. Translation happens on your device.</string>
+    <string name="encryption_mode_e2ee_label">End-to-end</string>
+    <string name="encryption_mode_hybrid_description">Encrypted on our servers, like Server. Double encryption by your devices is coming soon.</string>
+    <string name="encryption_mode_hybrid_label">Hybrid</string>
+    <string name="encryption_mode_server_description">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
+    <string name="encryption_mode_server_label">Server</string>
     <string name="global_search_back">Back</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d member</item>

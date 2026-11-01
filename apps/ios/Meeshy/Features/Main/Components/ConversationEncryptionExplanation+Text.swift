@@ -16,7 +16,7 @@ extension ConversationEncryptionExplanation.Topic {
         case .devices:
             String(localized: "conversation.encryption.topic.devices", defaultValue: "Vos appareils", bundle: .main)
         case .switching:
-            String(localized: "conversation.encryption.topic.switching", defaultValue: "Activer ou désactiver", bundle: .main)
+            String(localized: "conversation.encryption.topic.switching", defaultValue: "Changer de mode", bundle: .main)
         case .permanence:
             String(localized: "conversation.encryption.topic.permanence", defaultValue: "Définitif", bundle: .main)
         }
@@ -65,13 +65,13 @@ extension ConversationEncryptionExplanation.Fact {
         case .transitProtected:
             String(localized: "conversation.encryption.fact.transitProtected", defaultValue: "Entre votre appareil et le serveur, les messages voyagent toujours protégés.", bundle: .main)
         case .storedWithoutEncryption:
-            String(localized: "conversation.encryption.fact.storedWithoutEncryption", defaultValue: "Sur le serveur, les messages sont stockés sans chiffrement : Meeshy peut les lire.", bundle: .main)
+            String(localized: "conversation.encryption.fact.storedWithoutEncryption", defaultValue: "Cette conversation a été créée avant le chiffrement systématique : ses messages sont stockés sans chiffrement.", bundle: .main)
         case .encryptedOnServerServerReads:
-            String(localized: "conversation.encryption.fact.encryptedOnServerServerReads", defaultValue: "Sur le serveur, les messages sont chiffrés avec une clé que Meeshy détient : Meeshy peut les lire pour les traduire et les transcrire.", bundle: .main)
+            String(localized: "conversation.encryption.fact.encryptedOnServerServerReads", defaultValue: "Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.", bundle: .main)
         case .hybridIsServerToday:
-            String(localized: "conversation.encryption.fact.hybridIsServerToday", defaultValue: "Le mode hybride fonctionne aujourd’hui comme le mode Serveur : les appareils n’ajoutent aucun chiffrement de bout en bout.", bundle: .main)
+            String(localized: "conversation.encryption.fact.hybridIsServerToday", defaultValue: "Le mode hybride chiffre aujourd’hui comme Serveur. Le double chiffrement par vos appareils arrive bientôt.", bundle: .main)
         case .onlyParticipantsRead:
-            String(localized: "conversation.encryption.fact.onlyParticipantsRead", defaultValue: "Seuls les appareils des participants peuvent lire les messages. Meeshy n’a pas les clés et ne peut pas les lire.", bundle: .main)
+            String(localized: "conversation.encryption.fact.onlyParticipantsRead", defaultValue: "Seuls vos appareils et ceux des participants lisent les messages.", bundle: .main)
         case .everyServerFeature:
             String(localized: "conversation.encryption.fact.everyServerFeature", defaultValue: "Toutes les fonctions sont disponibles : traduction automatique, transcription des vocaux, aperçu des notifications, recherche.", bundle: .main)
         case .translatedOnDevice:
@@ -112,11 +112,11 @@ extension ConversationEncryptionExplanation.Fact {
         case .restoredDeviceIsNew:
             String(localized: "conversation.encryption.fact.restoredDeviceIsNew", defaultValue: "Un appareil réinstallé ou restauré compte comme un nouvel appareil : il ne lit pas les messages chiffrés reçus avant.", bundle: .main)
         case .whoMayToggle:
-            String(localized: "conversation.encryption.fact.whoMayToggle", defaultValue: "Pendant la phase de test, seuls les membres de la conversation qui ont un rôle d’équipe Meeshy (analyste ou plus) peuvent activer ou désactiver le chiffrement ; dans un groupe, il faut aussi en être modérateur.", bundle: .main)
+            String(localized: "conversation.encryption.fact.whoMayToggle", defaultValue: "Pendant la phase de test, seuls les membres de la conversation qui ont un rôle d’équipe Meeshy (analyste ou plus) peuvent changer de mode ; dans un groupe, il faut aussi en être modérateur. Le chiffrement ne se désactive pas.", bundle: .main)
         case .switchKeepsHistory:
             String(localized: "conversation.encryption.fact.switchKeepsHistory", defaultValue: "Une bascule ne change que les nouveaux messages : ceux déjà chiffrés de bout en bout le restent, lisibles sur les appareils qui les ont reçus.", bundle: .main)
         case .switchIsShownInThread:
-            String(localized: "conversation.encryption.fact.switchIsShownInThread", defaultValue: "Chaque activation ou désactivation s’affiche dans le fil, pour tous les membres.", bundle: .main)
+            String(localized: "conversation.encryption.fact.switchIsShownInThread", defaultValue: "Chaque changement de mode s’affiche dans le fil, pour tous les membres.", bundle: .main)
         default: permanenceText
         }
     }
@@ -127,11 +127,11 @@ extension ConversationEncryptionExplanation.Fact {
         case .endToEndIsFinal:
             String(localized: "conversation.encryption.fact.endToEndIsFinal", defaultValue: "Une fois activé, le chiffrement de bout en bout ne se désactive plus.", bundle: .main)
         case .endToEndNeverTurnedOff:
-            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOff", defaultValue: "Le chiffrement de bout en bout ne se désactive pas. Pour échanger en clair, créez une nouvelle conversation.", bundle: .main)
+            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOff", defaultValue: "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.", bundle: .main)
         case .endToEndNeverTurnedOffDirect:
-            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOffDirect", defaultValue: "Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré. Pour échanger en clair avec cette personne, ouvrez une conversation non chiffrée à côté : les deux sont dans la liste, celle-ci marquée d’un cadenas.", bundle: .main)
+            String(localized: "conversation.encryption.fact.endToEndNeverTurnedOffDirect", defaultValue: "Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.", bundle: .main)
         case .serverCannotTurnItOff:
-            String(localized: "conversation.encryption.fact.serverCannotTurnItOff", defaultValue: "Sur cet appareil, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais en clair, même si le serveur la présentait ensuite autrement.", bundle: .main)
+            String(localized: "conversation.encryption.fact.serverCannotTurnItOff", defaultValue: "Sur cet appareil, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais sans chiffrement de bout en bout, même si le serveur la présentait ensuite autrement.", bundle: .main)
         default: nil
         }
     }

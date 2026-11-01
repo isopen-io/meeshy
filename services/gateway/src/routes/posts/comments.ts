@@ -37,7 +37,6 @@ import {
   resolveInteractionTarget,
   resolveConsumptionTarget,
 } from '../../services/posts/postVisibility';
-import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 import { servedPerson } from '../../services/appearance/authorProfileDecor';
 
 /**
@@ -753,7 +752,7 @@ export function registerCommentRoutes(
           commentId,
           commentAuthorId: result.authorId,
           emoji,
-          commentPreview: sliceCodePointsOrUndefined(likedComment?.content, 80),
+          commentPreview: likedComment?.content ?? undefined,
           postType: likedPost?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments/:commentId/like]: notify comment like failed', { err }));
       }

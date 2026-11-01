@@ -13,11 +13,16 @@ import type { ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-e
  * `e2ee` (#10788) — son composeur s'y efface (`write-restriction.ts`).
  *
  * Le bout en bout ne se désactive pas (#12949, décision porteur du
- * 2026-10-25) : la fiche d'une conversation e2ee le dit — avec, pour un
- * groupe, la seule façon de revenir au clair (une nouvelle conversation) ; un
- * tête-à-tête mène à la conversation non chiffrée qui existe à côté de lui
- * (#12966, `PLAINTEXT_DIRECT_KEY`) — et celle d'une conversation que le
- * serveur lit prévient avant d'activer.
+ * 2026-10-25) : la fiche d'une conversation e2ee le dit EN TÊTE (`rule`) —
+ * avec, pour un groupe, l'autre conversation qu'on peut toujours ouvrir sans
+ * chiffrement de bout en bout ; un tête-à-tête mène à celle qui existe à côté
+ * de lui (#12966, `PLAINTEXT_DIRECT_KEY`) — et celle d'une conversation
+ * chiffrée sur nos serveurs prévient avant d'activer.
+ *
+ * Les mots ne disent jamais que le serveur « peut lire » (décision du
+ * 2026-11-01) : `server` et `hybrid` sont « chiffrés sur nos serveurs » ; le
+ * régime `none` ne désigne plus qu'une conversation créée avant le
+ * chiffrement systématique, aucune création n'y menant plus.
  *
  * Toute évolution touche les deux.
  */
@@ -36,7 +41,17 @@ export type ExplanationFact =
 
 export type ExplanationSection = { readonly topic: ExplanationTopic; readonly facts: readonly ExplanationFact[] };
 
-export type EncryptionExplanation = { readonly regime: EncryptionRegime; readonly sections: readonly ExplanationSection[] };
+/**
+ * `rule` : la règle dite EN TÊTE, hors du détail replié — le bout en bout ne
+ * se désactive jamais, et l'on peut toujours ouvrir une autre conversation,
+ * sans chiffrement de bout en bout, avec les mêmes personnes. `null` hors du
+ * bout en bout.
+ */
+export type EncryptionExplanation = {
+  readonly regime: EncryptionRegime;
+  readonly rule: ExplanationFact | null;
+  readonly sections: readonly ExplanationSection[];
+};
 
 export function encryptionRegime(mode: string | null | undefined): EncryptionRegime {
   const normalized = (mode ?? '').trim().toLowerCase();
@@ -63,7 +78,7 @@ const endToEnd = (isDirect: boolean): readonly ExplanationSection[] => [
     facts: ['webCannotReadYet', 'notYetAttachments', 'notYetDecryptedNotifications', 'notYetGroups', ...(isDirect ? [] : ['groupSendingUnavailable' as const]), 'notYetSafetyNumbers'],
   },
   { topic: 'devices', facts: ['oneKeyPerDevice', 'deviceLimit', 'restoredDeviceIsNew'] },
-  { topic: 'permanence', facts: [isDirect ? 'endToEndNeverTurnedOffDirect' : 'endToEndNeverTurnedOff', 'serverCannotTurnItOff'] },
+  { topic: 'permanence', facts: ['serverCannotTurnItOff'] },
 ];
 
 const SECTIONS: Readonly<Record<EncryptionRegime, (isDirect: boolean) => readonly ExplanationSection[]>> = {
@@ -75,7 +90,8 @@ const SECTIONS: Readonly<Record<EncryptionRegime, (isDirect: boolean) => readonl
 
 export function encryptionExplanation(params: { readonly mode: string | null | undefined; readonly isDirect: boolean }): EncryptionExplanation {
   const regime = encryptionRegime(params.mode);
-  return { regime, sections: SECTIONS[regime](params.isDirect) };
+  const rule = regime === 'end-to-end' ? (params.isDirect ? 'endToEndNeverTurnedOffDirect' : 'endToEndNeverTurnedOff') : null;
+  return { regime, rule, sections: SECTIONS[regime](params.isDirect) };
 }
 
 export const REGIME_SUMMARY_KEY = {

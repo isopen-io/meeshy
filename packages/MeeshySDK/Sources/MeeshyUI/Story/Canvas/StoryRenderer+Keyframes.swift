@@ -11,6 +11,8 @@ extension StoryRenderer {
     /// Interpolated overrides produced by `applyKeyframes`.
     public struct KeyframeOverrides: Sendable {
         public nonisolated let position: CGPoint?
+        /// A FACTOR of the object's own scale, never a replacement (#14316,
+        /// `packages/shared/fixtures/keyframe-scale.vectors.json`).
         public nonisolated let scale: Double?
         public nonisolated let opacity: Double?
 

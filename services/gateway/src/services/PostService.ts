@@ -377,7 +377,7 @@ export class PostService {
 
       // Locate the first audio PostMedia for transcription processing
       const audioMedia = await this.prisma.postMedia.findFirst({
-        where: { id: { in: mediaIds }, mimeType: { startsWith: 'audio/' } },
+        where: { id: { in: mediaIds }, postId: post.id, mimeType: { startsWith: 'audio/' } },
         orderBy: { order: 'asc' },
         select: { id: true, fileUrl: true },
       });

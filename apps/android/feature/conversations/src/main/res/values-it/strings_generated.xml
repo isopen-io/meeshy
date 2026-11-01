@@ -144,6 +144,15 @@
     <string name="dialogs_report_title">Perché segnali questa conversazione?</string>
     <string name="dialogs_save">Salva</string>
     <string name="dialogs_unblock_error">Impossibile sbloccare questo utente</string>
+    <string name="encryption_create_e2ee_soon_groups">Presto disponibile per i gruppi</string>
+    <string name="encryption_create_footer">La crittografia end-to-end non si disattiva mai. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone.</string>
+    <string name="encryption_create_header">Crittografia</string>
+    <string name="encryption_mode_e2ee_description">Solo i tuoi dispositivi e quelli dei partecipanti leggono i messaggi. La traduzione avviene sul tuo dispositivo.</string>
+    <string name="encryption_mode_e2ee_label">End-to-end</string>
+    <string name="encryption_mode_hybrid_description">Crittografato sui nostri server, come Server. La doppia crittografia dai tuoi dispositivi arriva presto.</string>
+    <string name="encryption_mode_hybrid_label">Ibrido</string>
+    <string name="encryption_mode_server_description">I tuoi messaggi sono crittografati sui nostri server. Traduzione, trascrizione e ricerca funzionano.</string>
+    <string name="encryption_mode_server_label">Server</string>
     <string name="global_search_back">Indietro</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d membro</item>

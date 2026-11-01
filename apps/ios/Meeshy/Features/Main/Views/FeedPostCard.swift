@@ -715,7 +715,7 @@ struct FeedPostCard: View {
                     onRepost: onRepost,
                     onQuote: onQuote,
                     onBookmark: onBookmark,
-                    onShare: onShare
+                    sendSubject: .publication(post)
                 )
                 .equatable()
             }

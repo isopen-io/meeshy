@@ -21,10 +21,8 @@ import { messageValidationHook } from '../../middleware/rate-limiter';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { editedMessageResponseSchema, patchedMessageResponseSchema } from './messages-advanced-shared';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
-import {
-  reconcileEditedLinks,
-  mergeTrackingLinksIntoMetadata,
-} from '../../services/messaging/messageLinks';
+import { mergeTrackingLinksIntoMetadata } from '../../services/messaging/messageLinks';
+import { editedLinksFor, editSealsAtRest, gatewayEditCrypto, prepareEditedText, servedEditedRow } from '../../services/messaging/atRestEdit';
 import {
   admitMessageEdit,
   isEditRefused,
@@ -47,7 +45,7 @@ import {
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
-import { queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
+import { isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { buildMessageEditedCore } from '../../socketio/messageEditedPayload';
 import type {
   ConversationParams,
@@ -198,7 +196,7 @@ export function registerEditMessagePutRoute(
             },
             // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
             // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-            conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
+            conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true, serverEncryptionKeyId: true } },
             // #12792 — la protection PROPRE de chaque pièce, lue par `admitMessageEdit`.
             attachments: { select: { id: true, mimeType: true, ...attachmentProtectionSelect } }
           }
@@ -275,7 +273,11 @@ export function registerEditMessagePutRoute(
       // BRUTES (`metadata.trackingLinks`), n'était recomposée par AUCUN
       // transport : elle n'existait qu'à la création. Les deux sont désormais
       // soudées dans une unité que tous les écrivains appellent.
-      const editedLinks = await reconcileEditedLinks({
+      //
+      // Décision 2026-11-01 — au repos (`server`/`hybrid`), aucune adresse ne se
+      // range en clair à côté du chiffré, et le texte modifié se SCELLE avant
+      // l'écriture (`atRestEdit`) : une clé absente échoue ici, rien d'écrit.
+      const editedLinks = await editedLinksFor(editSealsAtRest(existingMessage), {
         linkService: trackingLinkService,
         message: { id: messageId, conversationId, sender: existingMessage.sender },
         content: editedContent.content,
@@ -283,6 +285,8 @@ export function registerEditMessagePutRoute(
         onError: (err) => logger.error('Error processing tracking links in edit', err),
       });
       const processedContent = editedLinks.processedContent;
+      const editCrypto = gatewayEditCrypto(prisma);
+      const preparedText = await prepareEditedText({ crypto: editCrypto, row: existingMessage, text: processedContent });
 
       // `metadata` est un blob PARTAGÉ (`postReplyTo`, `location`) : fusion, pas
       // affectation. Et il n'est réécrit que si la réconciliation a établi
@@ -314,10 +318,10 @@ export function registerEditMessagePutRoute(
       // `applyMessageEditEffects` : la version de source d'une traduction
       // partagée en est l'ISO, et un second `new Date()` désignerait une autre.
       const editedAt = new Date();
-      const updatedMessage = await prisma.message.update({
+      const writtenMessage = await prisma.message.update({
         where: { id: messageId, deletedAt: null },
         data: {
-          content: processedContent,
+          ...preparedText.columns,
           ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
           editedAt,
@@ -373,6 +377,9 @@ export function registerEditMessagePutRoute(
           }
         }
       });
+      // La ligne écrite porte le chiffré au repos : elle part avec le texte
+      // modifié en clair, citation ouverte, sans chiffré sur le fil.
+      const updatedMessage = await servedEditedRow(writtenMessage, { prepared: preparedText, text: processedContent }, editCrypto);
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition : le lot de
       // mentions doit être RECOMPOSÉ, pas complété. Le corps vivait ici, en
@@ -476,7 +483,7 @@ export function registerEditMessagePutRoute(
         conversationId,
         senderId: existingMessage.senderId,
         senderUserId: existingMessage.sender?.userId ?? null,
-        previousContent: existingMessage.content,
+        previousContent: preparedText.previousContent,
         content: processedContent,
         editedAt,
       });
@@ -555,6 +562,10 @@ export function registerEditMessagePutRoute(
       // Même traduction que sur le sibling `PATCH /messages/:messageId`.
       if ((error as { code?: string })?.code === 'P2025') {
         return sendNotFound(reply, 'Message not found');
+      }
+      // Décision 2026-11-01 — sans clé maîtresse, un texte au repos ne se rescelle pas : refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
       }
       logger.error('Error updating message', error);
       sendInternalError(reply, 'Erreur lors de la modification du message');
@@ -738,7 +749,7 @@ export function registerEditMessagePatchRoute(
       // celui du client ANDROID (`OutboxFlushWorker`, lane `EDIT_MESSAGE`) : il
       // écrivait les crochets en dur, pour toujours, là où le même texte ENVOYÉ
       // produit un lien.
-      const patchedLinks = await reconcileEditedLinks({
+      const patchedLinks = await editedLinksFor(editSealsAtRest(message), {
         linkService: trackingLinkService,
         message: { id: messageId, conversationId: message.conversationId, sender: message.sender },
         content: editedContent.content,
@@ -746,6 +757,9 @@ export function registerEditMessagePatchRoute(
         onError: (err) => logger.error('Error processing tracking links in patch edit', err),
       });
       const processedContent = patchedLinks.processedContent;
+      // Décision 2026-11-01 — le texte modifié au repos se scelle AVANT l'écriture (`atRestEdit`).
+      const editCrypto = gatewayEditCrypto(prisma);
+      const preparedText = await prepareEditedText({ crypto: editCrypto, row: message, text: processedContent });
       const patchedMetadata = patchedLinks.reconciled
         ? { metadata: mergeTrackingLinksIntoMetadata(message.metadata, patchedLinks.trackingLinks) }
         : {};
@@ -758,10 +772,10 @@ export function registerEditMessagePatchRoute(
       // accepte un filtre non-unique aux côtés de l'id et lève P2025 quand rien
       // ne matche — traduit en 404 plus bas, pas en 500.
       const editedAt = new Date();
-      const updatedMessage = await prisma.message.update({
+      const writtenMessage = await prisma.message.update({
         where: { id: messageId, deletedAt: null },
         data: {
-          content: processedContent,
+          ...preparedText.columns,
           isEdited: true,
           editedAt,
           // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
@@ -782,6 +796,7 @@ export function registerEditMessagePatchRoute(
           }
         }
       });
+      const updatedMessage = await servedEditedRow(writtenMessage, { prepared: preparedText, text: processedContent }, editCrypto);
 
       // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
       // les compteurs. Même unité que les trois autres transports.
@@ -790,7 +805,7 @@ export function registerEditMessagePatchRoute(
         conversationId: message.conversationId,
         senderId: message.senderId,
         senderUserId: message.sender?.userId ?? null,
-        previousContent: message.content,
+        previousContent: preparedText.previousContent,
         content: processedContent,
         editedAt,
       });
@@ -899,6 +914,9 @@ export function registerEditMessagePatchRoute(
       // le rendre en 500 ferait retenter un client qui n'a rien à retenter.
       if ((error as { code?: string })?.code === 'P2025') {
         return sendNotFound(reply, 'Message introuvable');
+      }
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
       }
       logger.error('Error updating message', error);
       sendInternalError(reply, 'Erreur lors de la modification du message');

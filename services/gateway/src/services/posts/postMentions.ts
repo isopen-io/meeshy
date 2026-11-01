@@ -3,7 +3,6 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { collectMentionableText } from './mentionableText';
 import { retractMentionNotifications } from './retractMentionNotifications';
 import { NOT_DELETED } from './softDelete';
-import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 /**
  * Le contenu mentionnant, tel que la résolution le lit. Structural et minimal :
@@ -140,9 +139,6 @@ const UNRESOLVED: ResolvedPostMentions = {
 
 /** Établi, et vide : ce post ne nomme personne. */
 const NO_MENTIONS: ResolvedPostMentions = { ...UNRESOLVED, reconciled: true };
-
-/** Longueur de l'extrait embarqué dans la notification — parité avec les routes. */
-const EXCERPT_LENGTH = 100;
 
 export interface PostMentionParams {
   prisma: PostMentionPrisma;
@@ -526,7 +522,7 @@ function notifyNewlyMentioned(
       postId: post.id,
       posterId: post.authorId,
       mentionedUserIds: [...newlyMentionedUserIds],
-      postExcerpt: sliceCodePointsOrUndefined(content, EXCERPT_LENGTH),
+      postExcerpt: content || undefined,
       postType: post.type,
       visibility: post.visibility,
       visibilityUserIds: post.visibilityUserIds,

@@ -21,6 +21,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -158,6 +162,9 @@ fun PostDetailScreen(
             },
             snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Color.Transparent,
+            // #14313 — le bas appartient au composeur épinglé : il porte lui-même la barre de navigation et le clavier
+            // (`ComposerShellLayout`). Laissé à l'échafaudage, l'encart bas était compté deux fois (~140 px de vide).
+            contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
         ) { padding ->
             PullToRefreshBox(
                 isRefreshing = state.isRefreshing,

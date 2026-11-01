@@ -132,7 +132,7 @@ describe('Socket.IO notification:new payload — title / subtitle', () => {
     expect(payload.subtitle).toBeUndefined();
   });
 
-  it('keeps the audio attachment label in the body (content) so the in-app toast can show "🎵 Audio · 0:34"', async () => {
+  it('describes the voice note in the body (content) without showing it — #14309', async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       id: 'sender_id',
       username: 'carol',
@@ -160,8 +160,7 @@ describe('Socket.IO notification:new payload — title / subtitle', () => {
 
     const payload = findNotificationNewEmit(mockIO);
     expect(payload).toBeDefined();
-    expect(payload.content).toContain('🎵 Audio');
-    expect(payload.content).toContain('0:34');
+    expect(payload.content).toBe('Vocal haute définition');
     expect(payload.title).toBe('Carol');
     expect(payload.subtitle).toBe('Voice Notes');
   });

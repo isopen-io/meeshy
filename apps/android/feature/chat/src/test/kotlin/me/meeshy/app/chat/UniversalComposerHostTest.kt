@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
@@ -10,6 +11,8 @@ import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.ui.component.composer.ComposerStickerSheet
+import me.meeshy.ui.component.composer.LocalComposerStickerSheet
 import me.meeshy.ui.component.composer.UniversalComposerSpec
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -47,6 +50,38 @@ class UniversalComposerHostTest {
 
     private fun show(spec: UniversalComposerSpec) {
         compose.setContent { MeeshyTheme(darkTheme = false) { UniversalComposerHost(spec, Modifier) } }
+    }
+
+    private fun showWithStickers(spec: UniversalComposerSpec, sheet: ComposerStickerSheet) {
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                CompositionLocalProvider(LocalComposerStickerSheet provides sheet) { UniversalComposerHost(spec, Modifier) }
+            }
+        }
+    }
+
+    @Test fun `#14320 en commentaire, la porte sticker ouvre la feuille, et le sticker choisi rejoint les pièces en PNG`() {
+        val attached = mutableListOf<String?>()
+        val base = spec(ComposerConfiguration.COMMENT)
+        var opened = 0
+        showWithStickers(base.copy(onAttachFile = { file, _, mime -> attached += mime; file.delete() })) { onPick, _ ->
+            opened += 1
+            androidx.compose.runtime.LaunchedEffect(Unit) { onPick("🔥") }
+        }
+        compose.onNodeWithContentDescription(string(R.string.composer_attach_sticker)).performClick()
+        compose.waitUntil(timeoutMillis = 5_000) { attached.isNotEmpty() }
+        assertThat(opened).isAtLeast(1)
+        assertThat(attached).containsExactly("image/png")
+    }
+
+    @Test fun `#14320 sans feuille de stickers fournie, ou sans pièces reçues, aucune porte sticker`() {
+        show(spec(ComposerConfiguration.COMMENT))
+        compose.onNodeWithContentDescription(string(R.string.composer_attach_sticker)).assertDoesNotExist()
+    }
+
+    @Test fun `#14320 un hôte qui ne reçoit pas de pièce n'offre pas le sticker`() {
+        showWithStickers(spec(ComposerConfiguration.COMMENT, attaches = false)) { _, _ -> }
+        compose.onNodeWithContentDescription(string(R.string.composer_attach_sticker)).assertDoesNotExist()
     }
 
     @Test fun `en commentaire, le champ dit Commenter, la photothèque, la caméra et le vocal sont là`() {
