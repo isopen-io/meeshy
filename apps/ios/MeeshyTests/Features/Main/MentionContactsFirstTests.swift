@@ -25,6 +25,8 @@ final class MentionContactsFirstTests: XCTestCase {
         conversationType: String? = nil,
         interlocutorId: String? = nil,
         isMember: Bool = true,
+        isGuest: Bool = false,
+        servedMembers: (@Sendable (String) async -> [String])? = nil,
         remote: [MentionSuggestion] = [],
         directory: [UserSearchResult] = []
     ) -> (sut: MentionComposerController, service: MockMentionService, annuaire: MockUserDirectorySearch) {
@@ -43,7 +45,8 @@ final class MentionContactsFirstTests: XCTestCase {
         )
         if let conversationType {
             sut.scope(to: ConversationMentionTarget(conversationId: "conv-1", conversationType: conversationType,
-                                                    interlocutorId: interlocutorId, isMember: isMember))
+                                                    interlocutorId: interlocutorId, isMember: isMember, isGuest: isGuest),
+                      servedMembers: servedMembers)
         }
         return (sut, service, annuaire)
     }
@@ -369,7 +372,7 @@ final class MentionContactsFirstTests: XCTestCase {
     func test_apply_withoutTarget_failsClosed() {
         let (sut, _, _) = makeSUT(context: .composerDraft, contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]))
 
-        ConversationMentionScope.apply(nil, to: sut)
+        ConversationMentionScope.apply(nil, to: sut, servedMembers: { _ in [] })
         sut.handleQuery(in: "@")
 
         XCTAssertTrue(sut.suggestions.isEmpty)
@@ -380,14 +383,48 @@ final class MentionContactsFirstTests: XCTestCase {
                                                contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]),
                                                remote: [suggestion("m1", "zola")])
         let target = ConversationMentionTarget(conversationId: "conv-9", conversationType: "group",
-                                               interlocutorId: nil, isMember: true)
+                                               interlocutorId: nil, isMember: true, isGuest: false)
 
-        ConversationMentionScope.apply(target, to: sut)
+        ConversationMentionScope.apply(target, to: sut, servedMembers: { _ in [] })
         sut.handleQuery(in: "@zo")
         await waitUntil { service.suggestionsCallCount == 1 }
 
         XCTAssertEqual(service.lastContextId, "conv-9")
         XCTAssertEqual(annuaire.callCount, 0, "l'annuaire n'est pas la portée d'un groupe")
         await waitUntil { sut.suggestions.map(\.username) == ["zola"] }
+    }
+
+    // MARK: - Les membres SERVIS, l'invité, et le rang absent de la ligne
+
+    func test_handleQuery_group_offersTheServedMembers_neverTheHistoryAuthors() async {
+        let contacts = MockMentionContacts(snapshot: [person("m1", "mila"), person("c1", "zoe")])
+        let (sut, _, _) = makeSUT(contacts: contacts, participants: [person("gone", "gaston")],
+                                  conversationType: "group", servedMembers: { _ in ["m1", "m2"] })
+
+        sut.handleQuery(in: "@")
+
+        await waitUntil { sut.suggestions.map(\.username) == ["mila"] }
+    }
+
+    func test_handleQuery_guestInAGroup_citesTheThreadAuthors_withoutTheNetwork() async {
+        let (sut, service, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]),
+                                        participants: [person("a1", "alice")],
+                                        conversationType: "group", isGuest: true)
+
+        sut.handleQuery(in: "@al")
+        await settle()
+
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice"])
+        XCTAssertEqual(service.suggestionsCallCount, 0, "la passerelle refuse la recherche à un invité")
+    }
+
+    func test_handleQuery_rowWithoutRole_isProvenMemberByTheServedParticipants() async {
+        let (sut, _, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("m1", "mila")]),
+                                  conversationType: "public", isMember: false,
+                                  servedMembers: { _ in ["moi", "m1"] })
+
+        sut.handleQuery(in: "@")
+
+        await waitUntil { sut.suggestions.map(\.username) == ["mila"] }
     }
 }

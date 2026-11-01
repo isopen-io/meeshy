@@ -282,6 +282,27 @@ describe('conversationMentionReach — la portée projetée depuis la conversati
     expect(served({ isMember: true })).toBe('directory');
   });
 
+  test('un INVITÉ de lien dans un groupe cite les auteurs du fil que la passerelle lui a servis', () => {
+    const author = candidate({ id: 'u-author', username: 'alice' });
+    const reach = conversationMentionReach({
+      conversation: { type: 'group', participants: [] },
+      viewerId: null,
+      isGuest: true,
+      threadAuthorIds: [author.id],
+    });
+    const list = composeMentionList({ contacts: [], participants: [author], remote: [], query: '', selfId: null, reach });
+    expect(list.map((c) => c.id)).toEqual(['u-author']);
+  });
+
+  test('pour un membre inscrit, les auteurs du fil ne sont PAS des membres connus (partis peut-être)', () => {
+    const reach = conversationMentionReach({
+      conversation: { type: 'group', currentUserRole: 'member', participants: [{ userId: 'p1' }] },
+      ...viewer,
+      threadAuthorIds: ['u-gone'],
+    });
+    expect(reach.memberIds).toEqual(['p1']);
+  });
+
   test('l’appartenance se lit aussi dans le roster servi, et un invité est membre par sa session', () => {
     const roster = { type: 'public', participants: [{ userId: 'me' }] };
     expect(conversationMentionReach({ conversation: roster, ...viewer }).scope).toBe('directory');

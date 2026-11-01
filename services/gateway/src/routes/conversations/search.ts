@@ -401,6 +401,10 @@ export function registerSearchRoutes(
           // public de cinquante membres, où elle écartait à tort le salon d'un
           // membre légitime.
           isMember,
+          // #14183 — le rang, comme la liste et le détail : un client qui ouvre
+          // la conversation depuis cette charge lit son appartenance par lui.
+          // `null` = pas membre (sémantique de `conversationMinimalSchema`).
+          currentUserRole: memberRoleByConversation.get(conversation.id) ?? null,
           // Déjà chargés par le `include` ci-dessus (au plus 5) : sans cette
           // recopie, une conversation DIRECTE trouvée par la recherche arrive
           // sans titre (forcé à `null` pour les directs) ET sans personne —

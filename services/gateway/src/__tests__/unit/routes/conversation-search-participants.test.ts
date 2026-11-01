@@ -151,6 +151,24 @@ describe('GET /conversations/search — participants réservés aux membres', ()
     expect(foreign.participants).toEqual([]);
   });
 
+  // #14183 — un client qui ouvre la conversation depuis cette charge lit son
+  // appartenance par le rang, comme sur la liste et le détail : sans lui, un
+  // vrai membre perdait ses mentions pour la session. Champ ADDITIF.
+  it('sert currentUserRole : le rang du membre, null pour un salon dont on n’est pas membre', async () => {
+    app = await buildApp(
+      makePrisma({
+        conversations: [MOCK_DIRECT_CONVERSATION, MOCK_FOREIGN_PUBLIC_CONVERSATION],
+        memberships: [{ conversationId: 'c1', role: 'admin' }],
+      })
+    );
+
+    const res = await app.inject({ method: 'GET', url: '/conversations/search?q=photo' });
+    const body = JSON.parse(res.body);
+
+    expect(body.data.find((c: { id: string }) => c.id === 'c1').currentUserRole).toBe('admin');
+    expect(body.data.find((c: { id: string }) => c.id === 'c2').currentUserRole).toBeNull();
+  });
+
   it('résout l’appartenance en UNE requête pour la page entière, sur la colonne userId pour un compte', async () => {
     const prisma = makePrisma({
       conversations: [MOCK_DIRECT_CONVERSATION, MOCK_FOREIGN_PUBLIC_CONVERSATION],

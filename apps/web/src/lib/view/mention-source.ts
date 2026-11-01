@@ -103,8 +103,9 @@ export function usePublishMentionSource(input: {
             : { type: conversationType, participants, isMember, currentUserRole },
         viewerId: selfId,
         isGuest: speaksAsGuest,
+        threadAuthorIds: locals.map((candidate) => candidate.id),
       }),
-    [conversationType, isMember, currentUserRole, participants, selfId, speaksAsGuest],
+    [conversationType, isMember, currentUserRole, participants, selfId, speaksAsGuest, locals],
   );
   const search = useMemo(
     () => (conversationId === undefined ? null : speaksAsGuest ? noSearch : contextSearch({ type: 'conversation', id: conversationId })),

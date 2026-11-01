@@ -148,25 +148,53 @@ public final class MentionComposerController: ObservableObject {
     /// interlocuteur. Une suggestion sans effet à l'envoi n'est pas affichée ;
     /// un type inconnu, ou un lecteur qui n'est pas membre, ne propose personne
     /// et n'interroge pas le réseau.
-    func scope(to target: ConversationMentionTarget) {
+    ///
+    /// `servedMembers` lit les participants ACTIFS servis de la conversation
+    /// (cache d'abord), à la première frappe du `@` : ce sont les membres que la
+    /// liste propose en local — et le lecteur parmi eux prouve son appartenance
+    /// quand la ligne ouverte ne portait pas son rang.
+    func scope(to target: ConversationMentionTarget, servedMembers: (@Sendable (String) async -> [String])? = nil) {
+        if target.conversationId != self.target?.conversationId { servedMemberIds = [] }
         self.target = target
+        self.servedMembersLoader = servedMembers
         recompute()
     }
 
-    /// Les membres que le fil SAIT actifs : soi et l'interlocuteur. Jamais les
-    /// auteurs de l'historique, dont certains sont partis et seraient proposés
-    /// puis ignorés à l'envoi : dans un groupe, c'est la recherche distante,
-    /// que le serveur borne en connaissant tous les membres, qui les rend.
+    /// Les participants actifs servis, lus par `servedMembersLoader`.
+    private var servedMemberIds: Set<String> = []
+    private var servedMembersLoader: (@Sendable (String) async -> [String])?
+    private var membersTask: Task<Void, Never>?
+
+    /// Les membres que le fil SAIT actifs : soi, l'interlocuteur et les
+    /// participants servis. Jamais les auteurs de l'historique, dont certains
+    /// sont partis et seraient proposés puis ignorés à l'envoi — sauf pour un
+    /// INVITÉ de lien, à qui la passerelle ne sert que ces auteurs (#10205).
     private var reach: MentionReach? {
         guard let target else { return nil }
-        let known = [target.interlocutorId, currentUserId].compactMap { $0 }
-        return MentionReach(conversationType: target.conversationType, isMember: target.isMember, memberIds: Set(known))
+        let guestAuthors = target.isGuest ? participants().map(\.id) : []
+        let known = [target.interlocutorId, currentUserId].compactMap { $0 } + guestAuthors
+        let member = target.isMember || currentUserId.map(servedMemberIds.contains) == true
+        return MentionReach(conversationType: target.conversationType, isMember: member,
+                            memberIds: Set(known).union(servedMemberIds))
     }
 
-    /// Sans portée (type inconnu, non-membre), la passerelle refuserait la recherche.
+    /// Sans portée (type inconnu, non-membre), la passerelle refuserait la
+    /// recherche ; un invité n'y a pas accès (`allowAnonymous: false`).
     private var mayAskTheNetwork: Bool {
         guard let reach else { return true }
-        return reach.scope != nil
+        return reach.scope != nil && target?.isGuest != true
+    }
+
+    private func loadServedMembers() {
+        guard let loader = servedMembersLoader, let conversationId = target?.conversationId,
+              target?.isGuest != true else { return }
+        membersTask?.cancel()
+        membersTask = Task { [weak self] in
+            let ids = await loader(conversationId)
+            guard let self, !Task.isCancelled, self.target?.conversationId == conversationId else { return }
+            self.servedMemberIds = Set(ids)
+            self.recompute()
+        }
     }
 
     /// Change le contexte distant d'un hôte qui SURVIT à son sujet (la barre
@@ -199,7 +227,7 @@ public final class MentionComposerController: ObservableObject {
         let stage = MentionLookupRule.stage(for: query, localMatchCount: localMatchCount(for: query))
         if stage != .remote { dropOthers() }
         recompute()
-        if opening { warmContacts() }
+        if opening { warmContacts(); loadServedMembers() }
 
         guard stage == .remote, mayAskTheNetwork else {
             isResolving = false

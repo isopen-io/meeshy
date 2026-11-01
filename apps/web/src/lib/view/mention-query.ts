@@ -223,6 +223,12 @@ export function composeMentionList(input: LocalMentionInput & { readonly remote:
  * Un membre absent de cette liste (la passerelle la tronque) n'est pas proposé
  * en local dans une conversation fermée : le serveur, qui les connaît tous, le
  * rend à la recherche distante.
+ *
+ * UNE exception, l'INVITÉ de lien : la passerelle ne lui sert que sa propre
+ * participation (#10205) et ne lui ouvre aucune recherche. Les auteurs du fil
+ * qu'elle lui a servis (`threadAuthorIds`) sont alors ses membres connus — sans
+ * eux, il ne pourrait citer personne alors que la passerelle accepte ses
+ * mentions de membres.
  */
 export function conversationMentionReach(input: {
   readonly conversation:
@@ -235,11 +241,13 @@ export function conversationMentionReach(input: {
     | undefined;
   readonly viewerId: string | null;
   readonly isGuest: boolean;
+  readonly threadAuthorIds?: readonly string[];
 }): MentionReach {
   const { conversation } = input;
   if (conversation === undefined) return { scope: null, memberIds: [] };
   const participantIds = conversation.participants.flatMap((p) => (p.userId ? [p.userId] : []));
-  const memberIds = [...new Set(participantIds)];
+  const guestKnown = input.isGuest ? (input.threadAuthorIds ?? []) : [];
+  const memberIds = [...new Set([...participantIds, ...guestKnown])];
   const proven =
     conversation.isMember === true ||
     typeof conversation.currentUserRole === 'string' ||

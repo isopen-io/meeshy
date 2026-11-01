@@ -13,8 +13,14 @@ struct ConversationMentionTarget: Equatable, Sendable {
     let conversationType: String?
     let interlocutorId: String?
     let isMember: Bool
+    /// Un invité de lien : la passerelle ne lui sert ni les membres ni la
+    /// recherche (#10205) ; les auteurs du fil qu'elle lui a servis sont ses
+    /// membres connus.
+    let isGuest: Bool
 
-    static let unknown = ConversationMentionTarget(conversationId: nil, conversationType: nil, interlocutorId: nil, isMember: false)
+    static let unknown = ConversationMentionTarget(
+        conversationId: nil, conversationType: nil, interlocutorId: nil, isMember: false, isGuest: false
+    )
 }
 
 /// **La liste `@` d'un fil ne propose que ce qu'une mention ferait ICI.**
@@ -32,7 +38,8 @@ enum ConversationMentionScope {
             conversationId: conversation.id,
             conversationType: conversation.type.rawValue,
             interlocutorId: conversation.participantUserId,
-            isMember: anonymousSession != nil || conversation.currentUserRole != nil
+            isMember: anonymousSession != nil || conversation.currentUserRole != nil,
+            isGuest: anonymousSession != nil
         )
     }
 
@@ -41,26 +48,44 @@ enum ConversationMentionScope {
         anonymousSession: AnonymousSessionContext?,
         to viewModel: ConversationViewModel
     ) -> ConversationViewModel {
-        viewModel.mentionController.scope(to: target(for: conversation, anonymousSession: anonymousSession))
+        viewModel.mentionController.scope(
+            to: target(for: conversation, anonymousSession: anonymousSession),
+            servedMembers: servedActiveMembers
+        )
         return viewModel
+    }
+
+    /// Les participants ACTIFS servis de la conversation (première page, cache
+    /// d'abord) : les membres qu'un `@` propose en local, jamais les auteurs de
+    /// l'historique. Un échec n'en rend aucun — la recherche distante suit.
+    static let servedActiveMembers: @Sendable (String) async -> [String] = { conversationId in
+        let page = (try? await ParticipantService.shared.loadFirstPage(for: conversationId)) ?? []
+        return page.filter { $0.isActive != false }.compactMap(\.userId)
     }
 
     /// Le fil ouvert par son seul id (`conversation == nil` à l'ouverture) est
     /// fail-closed jusqu'à ce que la conversation arrive ; elle se relit à
     /// chaque repeinte (`admitRepainted`), rang du lecteur compris.
     static func rescope(_ viewModel: ConversationViewModel, to conversation: Conversation, anonymousSession: AnonymousSessionContext?) {
-        viewModel.mentionController.scope(to: target(for: conversation, anonymousSession: anonymousSession))
+        viewModel.mentionController.scope(
+            to: target(for: conversation, anonymousSession: anonymousSession),
+            servedMembers: servedActiveMembers
+        )
     }
 
     /// Une barre qui répond DANS une conversation hors du fil (la réponse à une
     /// pièce, depuis la galerie) : elle interroge les suggestions de CETTE
     /// conversation et en prend la portée. Sans cible connue, personne.
-    static func apply(_ target: ConversationMentionTarget?, to controller: MentionComposerController) {
+    static func apply(
+        _ target: ConversationMentionTarget?,
+        to controller: MentionComposerController,
+        servedMembers: @escaping @Sendable (String) async -> [String] = servedActiveMembers
+    ) {
         let resolved = target ?? .unknown
         if let conversationId = resolved.conversationId {
             controller.retarget(.conversation(id: conversationId))
         }
-        controller.scope(to: resolved)
+        controller.scope(to: resolved, servedMembers: resolved.conversationId == nil ? nil : servedMembers)
     }
 }
 
