@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import MeeshySDK
 
@@ -224,5 +225,67 @@ final class BlockServiceTests: XCTestCase {
 
         let postReset = await MainActor.run { svc.isBlocked(userId: "u1") }
         XCTAssertFalse(postReset, "blockedUserIds should be empty after reset()")
+    }
+
+    // MARK: - ObservableObject contract
+
+    func test_blockUser_sendsObjectWillChangeOnMainBeforeTheIdIsVisible() async throws {
+        mock.stub("/directory/blocks/t1", result: APIResponse<BlockActionResponse>(success: true, data: BlockActionResponse(message: nil), error: nil))
+        let svc = service!
+        let observed = Locked<[(onMain: Bool, visible: Bool)]>(uncheckedState: [])
+        let cancellable = svc.objectWillChange.sink {
+            let onMain = Thread.isMainThread
+            let visible = svc.isBlocked(userId: "t1")
+            observed.mutateUnchecked { $0.append((onMain, visible)) }
+        }
+
+        try await svc.blockUser(userId: "t1")
+
+        let signals = observed.read { $0.map { [$0.onMain, $0.visible] } }
+        XCTAssertEqual(signals, [[true, false]])
+        XCTAssertTrue(svc.isBlocked(userId: "t1"))
+        cancellable.cancel()
+    }
+
+    @MainActor
+    func test_setBlockedOptimistic_andReset_eachSendOneWillChange() async {
+        let svc = service!
+        var signals = 0
+        let cancellable = svc.objectWillChange.sink { signals += 1 }
+
+        svc.setBlockedOptimistic(userId: "a", blocked: true)
+        svc.setBlockedOptimistic(userId: "a", blocked: false)
+        await svc.reset()
+
+        XCTAssertEqual(signals, 3)
+        XCTAssertEqual(svc.blockedUserIds, [])
+        cancellable.cancel()
+    }
+
+    @MainActor
+    func test_listBlockedUsers_replacesTheSetWithOneWillChange() async throws {
+        let svc = service!
+        svc.setBlockedOptimistic(userId: "a", blocked: true)
+        let users = [BlockedUser(id: "b", username: "b"), BlockedUser(id: "c", username: "c")]
+        mock.stub("/directory/blocks", result: APIResponse<[BlockedUser]>(success: true, data: users, error: nil))
+        var signals = 0
+        let cancellable = svc.objectWillChange.sink { signals += 1 }
+
+        _ = try await svc.listBlockedUsers()
+
+        XCTAssertEqual(svc.blockedUserIds, ["b", "c"])
+        XCTAssertEqual(signals, 1)
+        cancellable.cancel()
+    }
+
+    func test_isBlocked_concurrentReadsWhileMainActorMutates_isConsistent() async {
+        let svc = service!
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<100 {
+                group.addTask { _ = svc.isBlocked(userId: "u\(index)"); _ = svc.blockedUserIds }
+                group.addTask { @MainActor in svc.setBlockedOptimistic(userId: "u\(index)", blocked: true) }
+            }
+        }
+        XCTAssertEqual(svc.blockedUserIds.count, 100)
     }
 }
