@@ -32,6 +32,9 @@ public nonisolated struct HistoryStore<S: Equatable & Sendable>: Sendable {
     /// ressources mises de côté doit encore pouvoir ressusciter.
     public var states: [S] { entries }
 
+    /// L'état courant de la trajectoire — ce que l'écran montre une fois capturé.
+    public var current: S? { entries.indices.contains(index) ? entries[index] : nil }
+
     public var canUndo: Bool { index > 0 }
     public var canRedo: Bool { index >= 0 && index < entries.count - 1 }
 

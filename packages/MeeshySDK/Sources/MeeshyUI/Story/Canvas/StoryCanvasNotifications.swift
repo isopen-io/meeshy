@@ -34,4 +34,12 @@ public extension Notification.Name {
     static let timelineDidStartPlaying = Notification.Name("timelineDidStartPlaying")
     /// Posted by the timeline when playback stops inside the composer.
     static let timelineDidStopPlaying = Notification.Name("timelineDidStopPlaying")
+    /// Un geste de manipulation commence ou finit sur un canvas d'édition (#14208) :
+    /// l'historique du compositeur n'en capture que l'état final.
+    static let storyCanvasManipulationDidChange = Notification.Name("storyCanvasManipulationDidChange")
+}
+
+/// La clé de `storyCanvasManipulationDidChange` : `true` au début du geste, `false` à sa fin.
+public nonisolated enum StoryCanvasManipulation {
+    public static let activeKey = "active"
 }

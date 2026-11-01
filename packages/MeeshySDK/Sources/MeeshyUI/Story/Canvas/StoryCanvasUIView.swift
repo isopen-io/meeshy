@@ -445,7 +445,13 @@ public final class StoryCanvasUIView: UIView {
 
     /// Item currently being dragged/scaled/rotated. Reset on .ended/.cancelled.
     var manipulatedItemId: String? {
-        didSet { if manipulatedItemId == nil, oldValue != nil { lastManipulationEndedAt = Date() } }
+        didSet {
+            if manipulatedItemId == nil, oldValue != nil { lastManipulationEndedAt = Date() }
+            if (manipulatedItemId == nil) != (oldValue == nil) {
+                NotificationCenter.default.post(name: .storyCanvasManipulationDidChange, object: self,
+                                                userInfo: [StoryCanvasManipulation.activeKey: manipulatedItemId != nil])
+            }
+        }
     }
     /// La fin du dernier geste : un appui long qui la suit n'ouvre aucun menu (L5).
     var lastManipulationEndedAt: Date?
