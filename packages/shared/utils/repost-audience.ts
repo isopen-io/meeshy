@@ -1,4 +1,4 @@
-import type { PostVisibility } from '../types/post.js';
+import { POST_VISIBILITIES, type PostVisibility } from '../types/post.js';
 
 /**
  * Loi d'audience de la republication : **même audience, ou plus restreinte,
@@ -59,19 +59,27 @@ import type { PostVisibility } from '../types/post.js';
  * d'audience du composeur : c'est une affordance, jamais la garantie.
  */
 
-const ALL_VISIBILITIES: readonly PostVisibility[] = [
-  'PUBLIC',
-  'COMMUNITY',
-  'FRIENDS',
-  'EXCEPT',
-  'ONLY',
-  'PRIVATE',
-];
+const ALL_VISIBILITIES: readonly PostVisibility[] = POST_VISIBILITIES;
+
+/**
+ * Les audiences de CERCLE forment, elles, une échelle totale (#13931, RG-18) :
+ * Connaissances ⊇ Amis ⊇ Proches ⊇ Sang, chacune étant « le niveau effectif
+ * atteint AU MOINS tel cran ». Un cercle plus étroit est donc toujours un
+ * rétrécissement d'un cercle plus large, contrairement à `COMMUNITY`, `EXCEPT`
+ * et `ONLY` qui restent incomparables à tout le reste.
+ *
+ * Un contenu `BLOOD` n'est JAMAIS repartageable (RG-18) : aucune audience ne lui
+ * est permise, pas même `PRIVATE`.
+ */
+const CIRCLE_LADDER: readonly PostVisibility[] = ['ACQUAINTANCES', 'FRIENDS', 'CLOSE', 'BLOOD'];
 
 /** Audiences qu'un republieur peut choisir, l'original étant donné. */
 export function allowedRepostVisibilities(original: PostVisibility): PostVisibility[] {
   if (original === 'PUBLIC') return [...ALL_VISIBILITIES];
+  if (original === 'BLOOD') return [];
   if (original === 'PRIVATE') return ['PRIVATE'];
+  const rung = CIRCLE_LADDER.indexOf(original);
+  if (rung >= 0) return [...CIRCLE_LADDER.slice(rung), 'PRIVATE'];
   return [original, 'PRIVATE'];
 }
 
