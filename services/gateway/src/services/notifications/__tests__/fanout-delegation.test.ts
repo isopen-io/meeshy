@@ -109,6 +109,7 @@ describe("les éventails passent par les méthodes de l'instance, résolues à l
     const prisma = makePrisma();
     const service = new NotificationService(asClient(prisma));
     const spy = jest.spyOn(service, 'createNotification').mockResolvedValue(null);
+    prisma.user.findMany.mockImplementation(aliveAndUnblocked());
 
     await service.createFriendContentNotificationsBatch({
       postId: POST_ID,

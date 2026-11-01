@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntries
 import me.meeshy.sdk.model.composer.scene.ComposerOverflowEntry
@@ -18,8 +19,13 @@ internal object ComposerSceneExport {
         ComposerOverflowEntries.served(hasScene = state.deck.publishableSlides.isNotEmpty())
 
     /** [project] : la projection que le lecteur peint, celle de l'aperçu plein écran. */
-    fun scenes(state: StoryComposerUiState, language: String, project: (StoryItem) -> StorySlideView): List<Pair<StoryItem, StorySlideView>> =
-        StoryComposerPreview.items(state, language).map { it to project(it) }
+    fun scenes(
+        state: StoryComposerUiState,
+        language: String,
+        floor: StoryBackgroundValue?,
+        project: (StoryItem) -> StorySlideView,
+    ): List<Pair<StoryItem, StorySlideView>> =
+        StoryComposerPreview.items(state, language, floor).map { it to project(it) }
 
     fun mode(destination: SceneExportDestination): StoryExportMode = when (destination) {
         SceneExportDestination.GALLERY -> StoryExportMode.SAVE

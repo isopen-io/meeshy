@@ -107,7 +107,7 @@ import { NotificationService } from '../../../services/notifications/Notificatio
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
 import { sharedFriendships } from '../../helpers/shared-friendships';
-import { everyoneLinkedInThisBlock } from '../../helpers/linked-to-everyone';
+import { aliveAndUnblocked, everyoneLinkedInThisBlock } from '../../helpers/linked-to-everyone';
 
 /** Entourage de l'AUTEUR réglé à « Ami » (#13929) ; les défauts : `notifs-cercles-13929.test.ts`. */
 const AUTHOR_ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
@@ -153,8 +153,8 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
     prisma.userPreferences.findUnique.mockImplementation(authorEntourageFriend);
     friendships = sharedFriendships(prisma.friendRequest.findMany, AUTHOR_ID, COMMENTER_ID);
-    // By default no reactors (override in individual tests)
-    prisma.postReaction.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockImplementation(aliveAndUnblocked()); // #14234 : tout candidat est un compte vivant
+    prisma.postReaction.findMany.mockResolvedValue([]); // aucun réacteur par défaut
   });
 
   afterEach(() => {

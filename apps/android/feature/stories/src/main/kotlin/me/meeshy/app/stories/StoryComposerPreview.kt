@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.UploadedMedia
 
@@ -13,8 +14,8 @@ import me.meeshy.sdk.model.UploadedMedia
  */
 internal object StoryComposerPreview {
 
-    fun items(state: StoryComposerUiState, language: String): List<StoryItem> =
-        publishPlans(state, language).mapIndexed { index, plan ->
+    fun items(state: StoryComposerUiState, language: String, floor: StoryBackgroundValue?): List<StoryItem> =
+        publishPlans(state, language, floor = floor).mapIndexed { index, plan ->
             val request = plan.request
             StoryItem(
                 id = "$PREVIEW_ID_PREFIX$index",

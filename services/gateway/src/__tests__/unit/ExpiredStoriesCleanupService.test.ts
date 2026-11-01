@@ -414,6 +414,7 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
           $or: [
             { 'context.postId': { $in: ['story1', 'repost1'] } },
             { 'metadata.repostId': { $in: ['story1', 'repost1'] } },
+            { 'metadata.originalPostId': { $in: ['story1', 'repost1'] } },
           ],
         },
       })

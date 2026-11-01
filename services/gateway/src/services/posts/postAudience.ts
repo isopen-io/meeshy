@@ -1,4 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
+import { postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
+import { comptesAuMoins, niveauxParmi } from '../friendship';
 import { filterCommunityCoMembersAmong } from './communityVisibility';
 import { filterDirectContactIdsAmong } from './directContactVisibility';
 
@@ -10,7 +13,7 @@ import { filterDirectContactIdsAmong } from './directContactVisibility';
  */
 export type PostAudiencePrisma = Pick<
   PrismaClient,
-  'friendRequest' | 'communityMember' | 'participant'
+  'friendRequest' | 'userRelation' | 'communityMember' | 'participant'
 >;
 
 export interface PostAudienceParams {
@@ -64,15 +67,23 @@ export interface PostAudienceParams {
  *
  * Correspondance visibilité → admission :
  *
- * | `visibility` | qui est admis                                           |
- * |--------------|---------------------------------------------------------|
- * | `PUBLIC`     | tout le monde (aucune requête)                          |
- * | `FRIENDS`    | amis ∪ contacts DM de l'auteur                          |
- * | `EXCEPT`     | amis ∪ contacts DM, moins `visibilityUserIds`           |
- * | `ONLY`       | exactement `visibilityUserIds`                          |
- * | `COMMUNITY`  | les co-membres de communauté de l'auteur                |
- * | `PRIVATE`    | personne                                                |
- * | inconnue     | comme `FRIENDS` — jamais comme publique                 |
+ * | `visibility`    | qui est admis                                         |
+ * |-----------------|-------------------------------------------------------|
+ * | `PUBLIC`        | tout le monde (aucune requête)                        |
+ * | `FRIENDS`       | amis ∪ contacts DM de l'auteur                        |
+ * | `EXCEPT`        | amis ∪ contacts DM, moins `visibilityUserIds`         |
+ * | `ONLY`          | exactement `visibilityUserIds`                        |
+ * | `COMMUNITY`     | les co-membres de communauté de l'auteur              |
+ * | `ACQUAINTANCES` | niveau effectif Connaissance et au-dessus (#13931)    |
+ * | `CLOSE`         | niveau effectif Proche et au-dessus                   |
+ * | `BLOOD`         | niveau effectif Sang                                  |
+ * | `PRIVATE`       | personne                                              |
+ * | inconnue        | comme `FRIENDS` — jamais comme publique               |
+ *
+ * Les trois audiences de CERCLE ne lisent que le NIVEAU EFFECTIF (le minimum des
+ * deux accords, `niveauxParmi`) : un contact de message direct n'y entre JAMAIS,
+ * et la lecture du lien DM n'est pas même tentée. Même table que le verdict
+ * unitaire (`canUserViewPost`) et le filtre de liste (`buildPostVisibilityOrFilter`).
  *
  * **L'auteur est toujours admis**, y compris sur un `PRIVATE` : il possède le
  * post. Rien dans le graphe ne l'affirme (on n'est pas ami avec soi-même), donc
@@ -109,6 +120,13 @@ export async function filterPostConsumers(params: PostAudienceParams): Promise<s
     return admit((id) => coMemberIds.has(id));
   }
 
+  const circleFloor = postCircleAudienceFloor(visibility);
+  if (circleFloor) {
+    if (others.length === 0) return admit(() => false);
+    const levels = await levelsAmong(prisma, authorId, others);
+    return admit((id) => levels !== null && relationLevelIfAtLeast(levels.get(id), circleFloor) !== null);
+  }
+
   // Restent `FRIENDS`, `EXCEPT`, et toute valeur inconnue — toutes adossées au
   // graphe social. Une visibilité que ce code ne connaît pas retombe ICI et non
   // sur `PUBLIC` : un mode ajouté demain au schéma sans passer par cette table
@@ -122,8 +140,11 @@ export async function filterPostConsumers(params: PostAudienceParams): Promise<s
   const judged = others.filter((id) => !excluded(id));
   if (judged.length === 0) return admit(() => false);
 
-  const friendIds = await loadFriendIdsAmong(prisma, authorId, judged);
-  if (!friendIds) return admit(() => false);
+  const levels = await levelsAmong(prisma, authorId, judged);
+  if (!levels) return admit(() => false);
+  const friendIds = new Set(
+    [...levels].filter(([, level]) => relationLevelIfAtLeast(level, 'FRIEND') !== null).map(([id]) => id)
+  );
 
   // Le lien DM n'est interrogé que pour le RÉSIDU — les candidats dont
   // l'amitié n'a rien dit. Un lot entièrement composé d'amis ne coûte donc
@@ -142,35 +163,50 @@ export async function filterPostConsumers(params: PostAudienceParams): Promise<s
 }
 
 /**
- * Les amis de `authorId` PARMI `candidates` — l'intersection, jamais le graphe
- * entier. Un auteur à 5 000 contacts nommant une personne ne doit pas coûter
- * 5 000 lignes : la borne `in` fait faire l'intersection à la base.
+ * Le niveau effectif de `authorId` avec CHACUN des `candidates` — l'intersection,
+ * jamais le graphe entier. Un auteur à 5 000 contacts nommant une personne ne
+ * doit pas coûter 5 000 lignes : `niveauxParmi` borne la lecture aux candidats.
  *
- * Rend `null` — et non `Set()` — quand la lecture échoue, pour que l'appelant
- * distingue « aucun ami parmi les candidats » de « on ne sait pas ». Les deux
- * mènent au refus, mais seul le second est une panne.
+ * Rend `null` — et non une carte vide — quand la lecture échoue, pour que
+ * l'appelant distingue « aucun lien parmi les candidats » de « on ne sait pas ».
+ * Les deux mènent au refus, mais seul le second est une panne.
  */
-async function loadFriendIdsAmong(
+async function levelsAmong(
   prisma: PostAudiencePrisma,
   authorId: string,
   candidates: readonly string[]
-): Promise<Set<string> | null> {
+): Promise<ReadonlyMap<string, RelationLevel> | null> {
   try {
-    const links = await prisma.friendRequest.findMany({
-      where: {
-        status: 'accepted',
-        OR: [
-          { senderId: authorId, receiverId: { in: [...candidates] } },
-          { receiverId: authorId, senderId: { in: [...candidates] } },
-        ],
-      },
-      select: { senderId: true, receiverId: true },
-    });
-
-    return new Set(
-      links.map((link) => (link.senderId === authorId ? link.receiverId : link.senderId))
-    );
+    return await niveauxParmi(prisma, authorId, candidates);
   } catch {
     return null;
+  }
+}
+
+/** Borne de l'énumération d'une audience de cercle — au-delà, la diffusion est tronquée aux liens les plus proches. */
+const CIRCLE_AUDIENCE_LIMIT = 5000;
+
+/**
+ * L'ÉNUMÉRATEUR d'une audience de cercle : les comptes de niveau effectif AU MOINS
+ * celui de `visibility`, du plus proche au plus lointain, pour les diffusions qui
+ * demandent « à qui pousser ? » (temps réel, traductions de story) plutôt que
+ * « celui-là a-t-il le droit ? ».
+ *
+ * Rend `null` pour toute valeur qui n'est PAS une audience de cercle — l'appelant
+ * garde alors son chemin historique —, et `[]` quand la lecture échoue : une
+ * diffusion en panne n'atteint personne, elle n'ouvre jamais sur les amis.
+ */
+export async function circleAudienceIds(
+  prisma: PostAudiencePrisma,
+  authorId: string,
+  visibility: string | null | undefined
+): Promise<string[] | null> {
+  const floor = postCircleAudienceFloor(visibility);
+  if (!floor) return null;
+  try {
+    const linked = await comptesAuMoins(prisma, authorId, floor, { limit: CIRCLE_AUDIENCE_LIMIT });
+    return linked.map((account) => account.id);
+  } catch {
+    return [];
   }
 }

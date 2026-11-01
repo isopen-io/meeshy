@@ -62,6 +62,30 @@ class ProfileLivePresenceTest {
     }
 
     @Test
+    fun `un Ami servi en ligne sans date reste vert meme sous un cliche REST date d'une heure`() {
+        val state = ProfileLivePresence.state(
+            live = live(isOnline = true, lastActiveAt = null),
+            restIsOnline = false,
+            restLastActiveAt = ago(3_600),
+            nowEpochMillis = now,
+        )
+
+        assertThat(state).isEqualTo(PresenceState.ONLINE)
+    }
+
+    @Test
+    fun `une entree temps reel hors ligne sans date ne reprend pas la decroissance du cliche`() {
+        val state = ProfileLivePresence.state(
+            live = live(isOnline = false, lastActiveAt = null),
+            restIsOnline = false,
+            restLastActiveAt = ago(30),
+            nowEpochMillis = now,
+        )
+
+        assertThat(state).isEqualTo(PresenceState.OFFLINE)
+    }
+
+    @Test
     fun `une entree temps reel sans date garde la date du cliche`() {
         val line = ProfileLivePresence.line(live(isOnline = false, lastActiveAt = null), false, ago(120), now)
 

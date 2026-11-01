@@ -136,6 +136,8 @@ function makePrisma(opts: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     postComment: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun ici.
+    user: { findFirst: async () => null },
     postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 0 }),

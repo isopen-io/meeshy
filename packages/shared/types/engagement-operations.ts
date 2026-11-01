@@ -318,7 +318,9 @@ export function conversationTypeVariant(type: string | null | undefined): Conver
 
 /**
  * Visibilité d'une publication, telle que la base l'écrit, en variante de points.
- * Une audience restreinte (`EXCEPT`, `ONLY`, brouillon `PRIVATE`) ⇒ `other` ; une
+ * Une audience restreinte (`EXCEPT`, `ONLY`, brouillon `PRIVATE`, et les cercles
+ * `CLOSE` / `BLOOD`, plus étroits qu'Ami — #13931) ⇒ `other` ; `ACQUAINTANCES`, plus
+ * large qu'Ami, vaut `friends` ; une
  * visibilité inconnue ⇒ `friends`, la plus basse des audiences ouvertes, jamais
  * la plus haute (#9667).
  */
@@ -331,7 +333,11 @@ export function visibilityVariant(visibility: string | null | undefined): Visibi
     case 'EXCEPT':
     case 'ONLY':
     case 'PRIVATE':
+    case 'CLOSE':
+    case 'BLOOD':
       return 'other';
+    case 'ACQUAINTANCES':
+      return 'friends';
     default:
       return 'friends';
   }

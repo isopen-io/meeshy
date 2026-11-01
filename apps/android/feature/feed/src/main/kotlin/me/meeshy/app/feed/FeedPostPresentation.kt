@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.theme.authorAccentHex
+import me.meeshy.sdk.theme.storyAccentHex
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MosaicLayoutMode
@@ -236,7 +237,7 @@ object FeedPostBuilder {
                 FeedPostScenes(
                     items = read.items,
                     layout = read.layout,
-                    accentHex = post.authorAccentHex(),
+                    accentHex = post.author.storyAccentHex(),
                     captions = PostSceneCaptions.of(read.items, media),
                     offersSound = PostSceneSound.offers(read.items),
                     frames = PostSceneFrames.of(documents),

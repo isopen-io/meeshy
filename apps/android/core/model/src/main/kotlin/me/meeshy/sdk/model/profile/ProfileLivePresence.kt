@@ -18,13 +18,17 @@ data class ProfilePresenceLine(val lastActiveAtEpochMillis: Long, val tone: Prof
  */
 object ProfileLivePresence {
 
-    /** L'état du point de l'avatar ; `null` = la passerelle n'a rien servi, aucun point. */
+    /**
+     * L'état du point de l'avatar ; `null` = la passerelle n'a rien servi, aucun point. L'entrée temps
+     * réel décide SEULE (miroir de `knownPresenceState` iOS) : un Ami servi « en ligne » sans date
+     * (#13928) ne reprend jamais la date d'un cliché REST, qui le livrerait à la garde anti-stale.
+     */
     fun state(
         live: UserPresence?,
         restIsOnline: Boolean?,
         restLastActiveAt: String?,
         nowEpochMillis: Long,
-    ): PresenceState? = presence(live, restIsOnline, restLastActiveAt)?.state(nowEpochMillis)
+    ): PresenceState? = (live ?: presence(null, restIsOnline, restLastActiveAt))?.state(nowEpochMillis)
 
     /**
      * La ligne datée après le pseudo, rendue seulement si un instant de dernière activité est connu

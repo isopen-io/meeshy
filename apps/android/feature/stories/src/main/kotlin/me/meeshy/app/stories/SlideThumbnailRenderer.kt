@@ -82,7 +82,7 @@ internal object SlideThumbnailRenderer {
             is StorySceneFill.Linear ->
                 paint.shader = LinearGradient(0f, 0f, width, height, argb(fill.start), argb(fill.end), Shader.TileMode.CLAMP)
             is StorySceneFill.AuthorGradient ->
-                paint.shader = LinearGradient(0f, 0f, 0f, height, argb(fill.accentHex), Color.Black.toArgb(), Shader.TileMode.CLAMP)
+                paint.shader = LinearGradient(0f, 0f, width, height, argb(fill.accentHex), Color.Black.toArgb(), Shader.TileMode.CLAMP)
         }
         canvas.drawRect(0f, 0f, width, height, paint)
     }

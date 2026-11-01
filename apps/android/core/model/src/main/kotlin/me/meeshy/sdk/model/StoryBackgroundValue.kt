@@ -50,6 +50,20 @@ sealed interface StoryBackgroundValue {
             return Hex(raw)
         }
 
+        /**
+         * The author gradient as the document carries it — the author colour down to black, in the gradient form iOS and the
+         * web already read. A scene published without a chosen background is written with it, so the story and the post of
+         * one gesture read on the floor the composer showed, on every client. `null` when the colour is not a six-digit hex:
+         * nothing is written and each reader keeps its own floor.
+         */
+        fun authorGradient(accentHex: String): Gradient? {
+            val digits = accentHex.trim().removePrefix("#").uppercase()
+            if (digits.length != 6 || !digits.all(::isHexDigit)) return null
+            return Gradient(digits, AUTHOR_GRADIENT_END)
+        }
+
+        private const val AUTHOR_GRADIENT_END = "000000"
+
         private fun isHexDigit(c: Char): Boolean =
             c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
     }

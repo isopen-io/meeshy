@@ -164,6 +164,58 @@ describe('createPost — loi d\'audience de la republication', () => {
     );
   });
 
+  it.each(['ACQUAINTANCES', 'CLOSE', 'BLOOD', 'PRIVATE'])(
+    'RG-18 — un contenu Connaissances se repartage en %s, jamais plus large',
+    async (requested) => {
+      prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'ACQUAINTANCES' }));
+
+      await service.createPost({ visibility: requested as never, repostOfId: 'source-1', content: 'hop' }, 'user-2');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ visibility: requested }) }),
+      );
+    },
+  );
+
+  it('RG-18 — un contenu Connaissances ne se repartage pas en Amis, qui admet les contacts de message direct', async () => {
+    prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'ACQUAINTANCES' }));
+
+    const err: any = await service
+      .createPost({ visibility: 'FRIENDS', repostOfId: 'source-1', content: 'hop' }, 'user-2')
+      .catch((e) => e);
+
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['PUBLIC', 'COMMUNITY', 'EXCEPT'])('RG-18 — un contenu Proches ne se repartage pas en %s', async (requested) => {
+    prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'CLOSE' }));
+
+    const err: any = await service
+      .createPost({ visibility: requested as never, visibilityUserIds: ['507f1f77bcf86cd799439011'], repostOfId: 'source-1', content: 'hop' }, 'user-2')
+      .catch((e) => e);
+
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['BLOOD', 'CLOSE', 'PRIVATE', 'PUBLIC'])(
+    'RG-18 — un contenu Sang n\'est jamais repartageable, pas même en %s',
+    async (requested) => {
+      prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'BLOOD' }));
+
+      const err: any = await service
+        .createPost({ visibility: requested as never, repostOfId: 'source-1', content: 'hop' }, 'user-2')
+        .catch((e) => e);
+
+      expect(err.statusCode).toBe(403);
+      expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+      expect(prisma.post.create).not.toHaveBeenCalled();
+    },
+  );
+
   it('leaves an ordinary creation (no repostOfId) untouched by the law', async () => {
     await service.createPost(
       { visibility: PostVisibility.PUBLIC, content: 'un post normal' },

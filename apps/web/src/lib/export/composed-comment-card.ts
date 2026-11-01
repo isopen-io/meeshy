@@ -12,7 +12,7 @@ import {
   type PostCommentCardSource,
   type PostCommentCardSubject,
 } from '@meeshy/shared/utils/comment-card-composition';
-import type { PostVisibility } from '@meeshy/shared/types/post';
+import { POST_VISIBILITIES, type PostVisibility } from '@meeshy/shared/types/post';
 
 import type { FeedAuthor, FeedPost } from '@/lib/api/feed-pages';
 import type { PostComment } from '@/lib/api/publication-comments';
@@ -174,8 +174,6 @@ export function composingPostOf(post: FeedPost | null | undefined, now: number =
     ? headless
     : { ...post, media: [{ id: `${post.id}-thumbnail`, fileUrl: thumbnail, mimeType: 'image/jpeg', width: piece.width ?? null, height: piece.height ?? null }] };
 }
-
-const POST_VISIBILITIES: readonly PostVisibility[] = ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY'];
 
 const visibilityOf = (value: string | null | undefined): PostVisibility | null => POST_VISIBILITIES.find((known) => known === value?.toUpperCase()) ?? null;
 

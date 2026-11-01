@@ -219,7 +219,7 @@ class StoryComposerMoreActionsTest {
         vm.pick("m1")
         vm.onAddSlide()
 
-        val items = StoryComposerPreview.items(vm.state.value, language = "fr")
+        val items = StoryComposerPreview.items(vm.state.value, language = "fr", floor = null)
 
         assertThat(items).hasSize(1)
         assertThat(items.single().content).isEqualTo("bonjour")
@@ -232,6 +232,6 @@ class StoryComposerMoreActionsTest {
 
     @Test
     fun `a blank composer has nothing to preview`() {
-        assertThat(StoryComposerPreview.items(StoryComposerUiState(), language = "fr")).isEmpty()
+        assertThat(StoryComposerPreview.items(StoryComposerUiState(), language = "fr", floor = null)).isEmpty()
     }
 }

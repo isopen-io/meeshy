@@ -12,8 +12,11 @@ import me.meeshy.ui.theme.hexColor
 /**
  * What paints a story scene — ONE law for the composer and the reader (loi 6, #12314): the
  * slide's chosen colour or gradient, and without a readable one the author gradient (the
- * author's colour down to black), exactly what the reader shows. iOS previews the chosen
- * colour on the composer scene from the first frame (`StoryComposerView+Canvas.swift`).
+ * author's colour down to black, on the diagonal of every authored gradient), exactly what the
+ * reader shows. The composer writes that floor into the published scene
+ * ([StoryBackgroundValue.authorGradient], #14244), so it paints like the gradient it becomes.
+ * iOS previews the chosen colour on the composer scene from the first frame
+ * (`StoryComposerView+Canvas.swift`).
  */
 sealed interface StorySceneFill {
     /** Le sol noir d'un réel (iOS `ReelCardSceneBackdrop`) : sans fond déclaré, la scène se lit sur du noir. */
@@ -59,5 +62,5 @@ internal fun StorySceneFill.brush(): Brush = when (this) {
     is StorySceneFill.Solid -> SolidColor(hexColor(hex))
     is StorySceneFill.Linear -> Brush.linearGradient(listOf(hexColor(start), hexColor(end)))
     StorySceneFill.Black -> SolidColor(Color.Black)
-    is StorySceneFill.AuthorGradient -> Brush.verticalGradient(listOf(hexColor(accentHex, Color.Black), Color.Black))
+    is StorySceneFill.AuthorGradient -> Brush.linearGradient(listOf(hexColor(accentHex, Color.Black), Color.Black))
 }

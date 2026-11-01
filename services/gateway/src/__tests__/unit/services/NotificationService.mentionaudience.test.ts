@@ -61,11 +61,12 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       findUnique: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
     },
-    userRelation: {
-      findMany: jest.fn(),
-    },
     userPreferences: {
       findUnique: jest.fn(),
+    },
+    userRelation: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     friendRequest: {
       findMany: jest.fn(),
@@ -320,7 +321,10 @@ describe('NotificationService — les mentions respectent l’audience du post',
       });
 
       expect(notifiedUserIds()).toEqual([FRIEND_ID]);
-      const where = prisma.friendRequest.findMany.mock.calls[0][0].where;
+      // Le graphe de niveaux (`userRelation`) porte désormais le lien FRIEND,
+      // et répond sans repli sur `friendRequest` (#13931) — c'est lui qu'il
+      // faut voir interrogé depuis l'AUTEUR, pas `friendRequest`.
+      const where = prisma.userRelation.findMany.mock.calls[0][0].where;
       expect(JSON.stringify(where)).toContain(AUTHOR_ID);
     });
 
