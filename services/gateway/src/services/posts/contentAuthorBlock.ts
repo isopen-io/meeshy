@@ -4,7 +4,8 @@
  * réaction (`PostReactionService`) et le commentaire (`commentHome`) appliquent
  * déjà. Les auteurs mesurés : celui de la publication et, si elle republie,
  * ceux de sa source et de sa racine (une republication porte le contenu d'un
- * autre). Le refus se sert comme un contenu introuvable (`POST_NOT_FOUND`) : il
+ * autre), et l'auteur d'ORIGINE d'un contenu copié (`snapshotAuthorId`), qui
+ * survit au détachement de la source éphémère (#14247). Le refus se sert comme un contenu introuvable (`POST_NOT_FOUND`) : il
  * ne révèle pas le blocage, et un ancien client l'affiche déjà.
  *
  * FERMÉ sur l’échec : une lecture qui ne conclut pas, ou une publication
@@ -23,7 +24,7 @@ export async function isBlockedWithContentAuthors(
   try {
     const post = await prisma.post.findFirst({
       where: { id: params.postId },
-      select: { authorId: true, repostOfId: true, originalRepostOfId: true },
+      select: { authorId: true, repostOfId: true, originalRepostOfId: true, snapshotAuthorId: true },
     });
     if (post === null) return true;
     const carried = [...new Set([post.repostOfId, post.originalRepostOfId])].filter(
@@ -31,8 +32,9 @@ export async function isBlockedWithContentAuthors(
     );
     const sources = carried.length === 0
       ? []
-      : await prisma.post.findMany({ where: { id: { in: carried } }, select: { authorId: true } });
-    return isBlockedWithAny(prisma, params.actorId, [post.authorId, ...sources.map((source) => source.authorId)]);
+      : await prisma.post.findMany({ where: { id: { in: carried } }, select: { authorId: true, snapshotAuthorId: true } });
+    const authors = [post, ...sources].flatMap((row) => (row.snapshotAuthorId ? [row.authorId, row.snapshotAuthorId] : [row.authorId]));
+    return isBlockedWithAny(prisma, params.actorId, authors);
   } catch {
     return true;
   }

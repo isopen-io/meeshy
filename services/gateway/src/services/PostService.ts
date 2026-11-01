@@ -2129,7 +2129,7 @@ export class PostService {
             content: snapshotContent ?? undefined,
             originalLanguage: snapshotOriginalLanguage,
             repostOfId: postId,
-            originalRepostOfId,
+            originalRepostOfId, snapshotAuthorId: (original.snapshotAuthorId as string | null | undefined) ?? original.authorId,
             isQuote,
             ...(sourceMoodEmoji !== undefined ? { moodEmoji: sourceMoodEmoji } : {}),
             ...(expiresAt !== undefined ? { expiresAt } : {}),

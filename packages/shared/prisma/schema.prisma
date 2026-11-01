@@ -4219,6 +4219,11 @@ model Post {
   /// le post intermédiaire (repostOf) est lui-même un repost.
   /// null si ce post n'est pas un repost.
   originalRepostOfId String?  @db.ObjectId
+  /// Auteur d'ORIGINE du contenu copié dans ce post — l'instantané d'une source
+  /// éphémère (`repostPost`). Survit au détachement de `repostOfId` par le
+  /// balayage des stories expirées : la garde de blocage le lit (#14247).
+  /// Absent sur les anciennes lignes et sur tout post qui ne copie rien.
+  snapshotAuthorId   String?  @db.ObjectId
   /// true = quote (avec contenu ajouté), false = repost simple
   isQuote    Boolean  @default(false)
 
