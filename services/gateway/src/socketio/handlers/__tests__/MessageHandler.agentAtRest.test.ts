@@ -1,13 +1,18 @@
 /**
  * @jest-environment node
  *
- * #12822 (H1) — un message `server`/`hybrid` est servi en CLAIR par la
- * passerelle (`servedClearAtRest`). Il ne doit pas partir pour autant vers
- * l'agent IA (`agent:new-message`) : `services/agent` range une fenêtre de 250
- * messages dans Redis (AOF), peut l'envoyer à un fournisseur LLM et écrit des
- * résumés dans MongoDB — trois disques où le texte d'une conversation chiffrée
- * au repos se poserait en clair. Les deux transports socket (texte, pièces
- * jointes) sont gardés.
+ * Décision porteur du 2026-11-01 (directive #9224 : « sans E2EE, toutes les
+ * features serveur ») — l'agent IA (`agent:new-message`) revient dans les
+ * conversations `server`/`hybrid`, et il y reçoit le texte DÉCHIFFRÉ : une
+ * ligne au repos porte `content: ''`, la passerelle l'ouvre avant de notifier.
+ * Il reste ABSENT de tout message chiffré de bout en bout (`e2ee`), où le
+ * serveur ne détient aucun clair. Les deux transports socket (texte, pièces
+ * jointes) suivent la même règle.
+ *
+ * Ce qui sort du modèle de menace du repos, et le porteur l'a tranché : le
+ * texte transmis à `services/agent` se pose dans sa fenêtre Redis, chez le
+ * fournisseur LLM et dans ses résumés MongoDB, hors du chiffrement au repos
+ * de la passerelle (#12822 H1, levé par la décision du 2026-11-01).
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -87,6 +92,13 @@ jest.mock('../../../services/ConversationMessageStatsService', () => ({
   conversationMessageStatsService: { onNewMessage: async () => undefined },
 }));
 
+const encode = (text: string): string => Buffer.from(`sealed:${text}`, 'utf8').toString('base64');
+jest.mock('../../../services/EncryptionService', () => ({
+  getEncryptionService: async () => ({
+    openAtRest: async (envelope: { ciphertext: string }) => Buffer.from(envelope.ciphertext, 'base64').toString('utf8').replace(/^sealed:/, ''),
+  }),
+}));
+
 import { MessageHandler, type MessageHandlerDependencies } from '../MessageHandler';
 
 const CONVERSATION_ID = 'a1b2c3d4e5f6a1b2c3d4e5f6';
@@ -108,23 +120,35 @@ const makePrisma = (): PrismaClient => ({
   post: { findUnique: async () => null },
 }) as unknown as PrismaClient;
 
-const makeSavedMessage = (encryptionMode: string | null) => ({
+type SavedShape = { readonly content: string; readonly isEncrypted: boolean; readonly encryptedContent?: string; readonly encryptionMetadata?: unknown };
+
+/** Ce que `saveMessage` rend d'ordinaire : la ligne déjà servie en clair (`servedClearAtRest`). */
+const SERVED_CLEAR: SavedShape = { content: SECRET, isEncrypted: false };
+
+/** Une ligne restée SCELLÉE (le chemin d'envoi n'a pas encore ouvert le repos) : l'agent doit recevoir le clair quand même. */
+const STILL_SEALED: SavedShape = {
+  content: '',
+  isEncrypted: true,
+  encryptedContent: encode(SECRET),
+  encryptionMetadata: { mode: 'server', keyId: 'key-conv', iv: 'aXY=', authTag: 'dGFn', aad: 'conversation:v1' },
+};
+
+const makeSavedMessage = (encryptionMode: string | null, shape: SavedShape = SERVED_CLEAR) => ({
   id: 'msg0011223344556677889900',
   conversationId: CONVERSATION_ID,
   senderId: PARTICIPANT_ID,
-  content: SECRET,
   originalLanguage: 'fr',
-  isEncrypted: false,
   encryptionMode,
   createdAt: new Date('2026-10-25T08:00:00Z'),
+  ...shape,
 });
 
-const makeWorld = (encryptionMode: string | null) => {
+const makeWorld = (encryptionMode: string | null, shape: SavedShape = SERVED_CLEAR) => {
   const sendEvent = jest.fn(async (_event: Record<string, unknown>) => undefined);
   const deps = {
     io: makeIO(),
     prisma: makePrisma(),
-    messagingService: { handleMessage: async () => ({ success: true, data: makeSavedMessage(encryptionMode) }) },
+    messagingService: { handleMessage: async () => ({ success: true, data: makeSavedMessage(encryptionMode, shape) }) },
     translationService: {},
     statusService: { updateLastSeen: () => undefined },
     notificationService: { createMessageNotification: async () => undefined },
@@ -150,8 +174,8 @@ const makeWorld = (encryptionMode: string | null) => {
   return { handler: new MessageHandler(deps), socket, sendEvent };
 };
 
-const sendText = async (encryptionMode: string | null) => {
-  const world = makeWorld(encryptionMode);
+const sendText = async (encryptionMode: string | null, shape: SavedShape = SERVED_CLEAR) => {
+  const world = makeWorld(encryptionMode, shape);
   await world.handler.handleMessageSend(world.socket as never, { conversationId: CONVERSATION_ID, content: SECRET } as never, () => undefined);
   return world.sendEvent;
 };
@@ -166,14 +190,25 @@ const sendWithAttachment = async (encryptionMode: string | null) => {
   return world.sendEvent;
 };
 
-describe('#12822 — l’agent IA ne reçoit aucun message chiffré au repos', () => {
-  it.each(['server', 'hybrid', 'SERVER'])('texte, mode %s : aucun agent:new-message', async (mode) => {
+describe('décision 2026-11-01 — l’agent IA lit les conversations chiffrées au repos, jamais le bout en bout', () => {
+  it.each(['server', 'hybrid', 'SERVER'])('texte, mode %s : agent:new-message porte le texte en clair', async (mode) => {
     const sendEvent = await sendText(mode);
-    expect(sendEvent).not.toHaveBeenCalled();
+    expect(sendEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'agent:new-message', content: SECRET }));
   });
 
-  it.each(['server', 'hybrid'])('pièce jointe, mode %s : aucun agent:new-message', async (mode) => {
+  it.each(['server', 'hybrid'])('pièce jointe, mode %s : agent:new-message part', async (mode) => {
     const sendEvent = await sendWithAttachment(mode);
+    expect(sendEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'agent:new-message', content: SECRET }));
+  });
+
+  it('une ligne restée scellée (content vide) : l’agent reçoit le texte DÉCHIFFRÉ, jamais la chaîne vide ni le chiffré', async () => {
+    const sendEvent = await sendText('server', STILL_SEALED);
+    expect(sendEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'agent:new-message', content: SECRET }));
+    expect(JSON.stringify(sendEvent.mock.calls)).not.toContain(encode(SECRET));
+  });
+
+  it.each(['e2ee', 'E2EE'])('mode %s : aucun agent:new-message — le serveur ne détient aucun clair', async (mode) => {
+    const sendEvent = await sendText(mode, { content: '[Encrypted]', isEncrypted: true });
     expect(sendEvent).not.toHaveBeenCalled();
   });
 

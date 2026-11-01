@@ -19,7 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -103,7 +103,7 @@ object FeedCommentsPreviewBuilder {
 /** L'aperçu sous la carte : un toucher n'importe où ouvre le fil des commentaires du post. */
 @Composable
 internal fun FeedCommentsPreview(preview: FeedCommentsPreviewState, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val label = stringResource(R.string.feed_view_comments, preview.total)
+    val label = pluralStringResource(R.plurals.feed_view_comments, preview.total, preview.total)
     Column(
         modifier
             .fillMaxWidth()

@@ -40,6 +40,7 @@ import { diffTranslationTargets } from '../../utils/translation-targets';
 import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type VoiceCloneParameters } from '../../types/translation.types';
 import { isEmojiOnly } from '../../utils/emoji-only';
 import { guardedInterval } from '../../utils/guarded-timer';
+import { implicitConversationRegime } from '../conversations/creationRegime';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -340,6 +341,7 @@ export class MessageTranslationService extends EventEmitter {
 
         await this.prisma.conversation.create({
           data: {
+            ...(await implicitConversationRegime(this.prisma, { enabledBy: messageData.senderId ?? 'system', conversationId: messageData.conversationId })),
             id: messageData.conversationId,
             identifier: conversationIdentifier,
             title: `Conversation ${messageData.conversationId}`,

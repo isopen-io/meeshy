@@ -9,9 +9,20 @@ public struct CreateConversationRequest: Encodable {
     /// Un tête-à-tête que le serveur lit, à côté du chiffré de bout en bout de
     /// la paire (#12966) ; absent du corps quand il n'est pas demandé.
     public let plaintext: Bool?
+    /// Le mode choisi sur l'écran de création (directive porteur) ;
+    /// absent du corps quand rien n'est choisi, et la passerelle
+    /// pose alors `server` (`ConversationCreationEncryption.implicitMode`).
+    public let encryptionMode: ConversationCreationEncryption.Mode?
 
-    public init(type: String, title: String? = nil, participantIds: [String], plaintext: Bool? = nil) {
+    public init(
+        type: String,
+        title: String? = nil,
+        participantIds: [String],
+        plaintext: Bool? = nil,
+        encryptionMode: ConversationCreationEncryption.Mode? = nil
+    ) {
         self.type = type; self.title = title; self.participantIds = participantIds; self.plaintext = plaintext
+        self.encryptionMode = encryptionMode
     }
 }
 

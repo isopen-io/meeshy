@@ -4,5 +4,5 @@
     <string name="chat_action_history">Edit history</string>
     <string name="chat_action_sentiment">Sentiment</string>
     <string name="chat_action_select">Select</string>
-    <string name="chat_action_export_card">Export as card</string>
+    <string name="chat_action_export_card">Picture it</string>
 </resources>

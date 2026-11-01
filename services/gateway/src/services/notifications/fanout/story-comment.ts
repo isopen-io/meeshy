@@ -7,7 +7,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger } from '../../../utils/logger-enhanced';
 import { filterPostConsumers } from '../../posts/postAudience';
-import { truncateMessage } from '../notification-preview';
+import { textSynthesis } from '../content-synthesis';
 import { FANOUT_ROW_CAP } from './row-cap';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import type { FanoutDependencies } from './dependencies';
@@ -327,9 +327,9 @@ export async function createStoryCommentNotificationsBatch(
   const engagedRecipients = engagedAudience.filter(reachable);
   const friendRecipients = friendAudience.filter(reachable);
 
-  const excerpt = params.commentExcerpt
-    ? truncateMessage(params.commentExcerpt)
-    : '';
+  // #14318 — le commentaire se dit par sa SYNTHÈSE, dans la langue de cadrage
+  // de chaque destinataire.
+  const excerptFor = (lang: string): string => textSynthesis(lang, params.commentExcerpt);
 
   // Wording typé : le destinataire doit savoir SUR QUOI porte le commentaire
   // (story / publication / humeur) et, pour les buckets fan-out, la
@@ -355,14 +355,14 @@ export async function createStoryCommentNotificationsBatch(
     ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
     ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
   };
-  const commonMetadata = {
+  const metadataFor = (lang: string) => ({
     action: 'view_post' as const,
     postId: params.postId,
     commentId: params.commentId,
-    commentPreview: excerpt,
+    commentPreview: excerptFor(lang),
     postType,
     ...(authorName ? { contentAuthorName: authorName } : {}),
-  };
+  });
   const actorInfo = {
     id: params.commenterId,
     username: actor.username,
@@ -389,11 +389,11 @@ export async function createStoryCommentNotificationsBatch(
         userId: authorId,
         type: 'story_new_comment',
         priority: 'normal',
-        content: excerpt || notificationString(aLang, 'comment.your', { postType: i18nPostType }),
+        content: excerptFor(aLang) || notificationString(aLang, 'comment.your', { postType: i18nPostType }),
         subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType: i18nPostType }),
         actor: actorInfo,
         context: commonContext,
-        metadata: commonMetadata,
+        metadata: metadataFor(aLang),
         lang: aLang,
       })
     );
@@ -408,14 +408,14 @@ export async function createStoryCommentNotificationsBatch(
         userId: recipientId,
         type: 'story_thread_reply',
         priority: 'low',
-        content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
+        content: excerptFor(rLang) || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
         // Pas de `subtitle` explicite : l'auteur du contenu est désormais
         // DANS l'action (« a répondu dans une story de Alice »), et le
         // répéter en sous-titre écrirait deux fois la même chose.
         ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
         actor: actorInfo,
         context: commonContext,
-        metadata: commonMetadata,
+        metadata: metadataFor(rLang),
         lang: rLang,
       })
     );
@@ -430,11 +430,11 @@ export async function createStoryCommentNotificationsBatch(
         userId: recipientId,
         type: 'friend_story_comment',
         priority: 'low',
-        content: excerpt || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
+        content: excerptFor(rLang) || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
         ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
         actor: actorInfo,
         context: commonContext,
-        metadata: commonMetadata,
+        metadata: metadataFor(rLang),
         lang: rLang,
       })
     );

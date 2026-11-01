@@ -715,7 +715,7 @@ struct FeedPostCard: View {
                     onRepost: onRepost,
                     onQuote: onQuote,
                     onBookmark: onBookmark,
-                    sendSubject: .publication(id: post.id, isReel: post.isReel, authorName: post.authorUsername ?? post.author, authorId: post.authorId)
+                    sendSubject: .publication(post)
                 )
                 .equatable()
             }

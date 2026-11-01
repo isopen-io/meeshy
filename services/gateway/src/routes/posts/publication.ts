@@ -528,7 +528,7 @@ export async function runPublicationEffects(
       postId,
       authorId,
       contentType: writtenType,
-      excerpt: postSignals?.slice(0, 100),
+      excerpt: postSignals || undefined,
       postCreatedAt: (post.createdAt ?? undefined) as Date | undefined,
       postExpiresAt: (post.expiresAt ?? undefined) as Date | undefined,
       excludeUserIds: repostedAuthorId ? [repostedAuthorId] : [],

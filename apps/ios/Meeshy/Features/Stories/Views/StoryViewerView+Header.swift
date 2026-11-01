@@ -36,7 +36,7 @@ import MeeshyUI
 /// « Republier » republie en story d'un tap. « Composer » est la republication
 /// qui passe par le composer — le type s'y choisit à l'envoi, statut compris.
 ///
-/// **« Partager » y revient, et lui seul** (porteur, 2026-11-01, #14311) : le
+/// **« Partager » y revient, et lui seul** (porteur, #14311) : le
 /// vocabulaire est le même sur la story, le réel et le post — « Envoyer » au
 /// rail reste DANS Meeshy, « Partager » au menu en SORT, par la feuille du
 /// système et le lien suivi de l'utilisateur.

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// La feuille d'« Envoyer » (#14310) : l'écran de partage Meeshy unique, qui
@@ -22,5 +23,14 @@ struct MeeshySendSheet: ViewModifier {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+    }
+}
+
+extension ShareSubject {
+    /// La carte d'un post ou d'un réel du fil : son auteur s'y nomme par son
+    /// NOM AFFICHÉ (`FeedPost.author`, repli pseudo), comme la story et
+    /// Android (#14324) — le pseudo seul y partait.
+    static func publication(_ post: FeedPost, isReel: Bool? = nil) -> ShareSubject {
+        .publication(id: post.id, isReel: isReel ?? post.isReel, authorName: post.author, authorId: post.authorId)
     }
 }

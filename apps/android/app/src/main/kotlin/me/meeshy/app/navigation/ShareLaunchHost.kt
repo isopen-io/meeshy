@@ -32,6 +32,9 @@ import me.meeshy.app.stories.RepostSceneCard
 import me.meeshy.app.stories.rememberStoryItemExport
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.component.composer.LocalUniversalComposer
+import me.meeshy.ui.component.composer.ComposerStickerSheet
+import me.meeshy.ui.component.composer.LocalComposerStickerSheet
+import me.meeshy.app.stories.ComposerEmojiStickerSheet
 import me.meeshy.ui.component.composer.UniversalComposer
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.ShareLauncher
@@ -64,6 +67,8 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     val commentCardExport: CommentCardExporter = remember { { key, card, onDismiss -> CommentCardExportSheet(key, card, onDismiss) } }
     // Les commentaires s'écrivent dans le composeur des conversations, réglé pour un commentaire (#14265).
     val universalComposer: UniversalComposer = remember { { spec, modifier -> UniversalComposerHost(spec, modifier) } }
+    // Sa porte sticker ouvre la feuille de la scène des stories, que la conversation ne connaît pas (#14320).
+    val composerStickerSheet: ComposerStickerSheet = remember { { onPick, onDismiss -> ComposerEmojiStickerSheet(onPick, onDismiss) } }
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
     val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigate(Routes.story(authorId, storyId)) } }
     CompositionLocalProvider(
@@ -77,6 +82,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
         LocalCommentCardExporter provides commentCardExport,
         LocalStoryOpener provides openStory,
         LocalUniversalComposer provides universalComposer,
+        LocalComposerStickerSheet provides composerStickerSheet,
     ) { content() }
     pending?.let { share ->
         AppShareSheetHost(

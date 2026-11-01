@@ -33,19 +33,19 @@ class ConversationEncryptionViewTest {
     }
 
     @Test
-    fun `a server regime lets the allowed role deactivate it`() {
+    fun `a server regime lets the allowed role switch it to another mode`() {
         val shown = view()
 
         assertThat(shown.regime).isEqualTo(ConversationEncryptionRegime.SERVER)
-        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = true))
+        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = true))
     }
 
     @Test
-    fun `end to end is never deactivated, even for the role that can toggle`() {
+    fun `end to end never offers a mode change, even for the role that can toggle`() {
         val shown = view(status = status(mode = "e2ee", canToggle = true))
 
         assertThat(shown.regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
-        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
     }
 
     @Test
@@ -55,7 +55,7 @@ class ConversationEncryptionViewTest {
         assertThat(shown.regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
         assertThat(shown.servedGap).isTrue()
         assertThat(shown.mayToggle).isFalse()
-        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
     }
 
     @Test
@@ -105,6 +105,22 @@ class ConversationEncryptionViewTest {
         val shown = view(status = anomaly)
 
         assertThat(shown.regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
-        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersDeactivation = false))
+        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
+    }
+
+    @Test
+    fun `a hybrid regime also offers a mode change to the allowed role, never to the others`() {
+        assertThat(view(status = status(mode = "hybrid")).content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = true))
+        assertThat(view(status = status(mode = "hybrid", canToggle = false)).content)
+            .isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
+    }
+
+    @Test
+    fun `an at-rest regime switches directly to every other mode, end to end to none`() {
+        assertThat(ConversationEncryptionModeChoice.switchTargets(ConversationEncryptionRegime.SERVER))
+            .containsExactly(ConversationEncryptionModeChoice.E2EE, ConversationEncryptionModeChoice.HYBRID).inOrder()
+        assertThat(ConversationEncryptionModeChoice.switchTargets(ConversationEncryptionRegime.HYBRID))
+            .containsExactly(ConversationEncryptionModeChoice.E2EE, ConversationEncryptionModeChoice.SERVER).inOrder()
+        assertThat(ConversationEncryptionModeChoice.switchTargets(ConversationEncryptionRegime.END_TO_END)).isEmpty()
     }
 }

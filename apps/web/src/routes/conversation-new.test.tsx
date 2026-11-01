@@ -128,6 +128,42 @@ describe('l’écran s’ouvre en DIRECT', () => {
   });
 });
 
+/**
+ * **LE CHIFFREMENT SE CHOISIT ICI** (décision du 2026-11-01) — et seulement
+ * ici : les autres créations n'envoient aucun mode. Sous `bun test` la source
+ * est `fixtures` : aucun rôle n'est servi, l'écran offre donc ce qu'il offre à
+ * un utilisateur ordinaire (ce qu'un ANALYST voit est tenu par
+ * `creation-encryption-picker.test.tsx`, ce qui part par `api/conversations.test.ts`).
+ */
+describe('le choix du chiffrement', () => {
+  const encryption = (el: HTMLElement) => el.querySelector('[data-creation-encryption]');
+  const encryptionRadio = (el: HTMLElement, mode: string) => el.querySelector<HTMLInputElement>(`[data-creation-encryption] input[value="${mode}"]`);
+  const waitForEncryption = async (el: HTMLElement) => {
+    for (let tries = 0; tries < 50 && encryption(el) === null; tries += 1) await settle();
+  };
+
+  test('en direct, AVANT les personnes : Serveur et Hybride, Serveur coché', async () => {
+    const el = await mount();
+    await waitForEncryption(el);
+    expect(encryption(el)).not.toBeNull();
+    expect([...el.querySelectorAll<HTMLInputElement>('[data-creation-encryption] input')].map((input) => input.value)).toEqual(['server', 'hybrid']);
+    expect(encryptionRadio(el, 'server')?.checked).toBe(true);
+    const person = firstPerson(el);
+    const position = person === null ? 0 : (encryption(el)?.compareDocumentPosition(person) ?? 0);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  test('le choix fait en direct survit au passage en groupe', async () => {
+    const el = await mount();
+    await waitForEncryption(el);
+    await click(encryptionRadio(el, 'hybrid'));
+    await click(modeButton(el, 'group'));
+    await waitForEncryption(el);
+    expect(encryptionRadio(el, 'hybrid')?.checked).toBe(true);
+    expect(encryptionRadio(el, 'server')?.checked).toBe(false);
+  });
+});
+
 describe('passer en GROUPE change ce qu’un tap produit', () => {
   test('le composeur paraît, le titre de l’écran suit', async () => {
     const el = await mount();

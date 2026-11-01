@@ -31,6 +31,12 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
+
 type PrismaOpts = {
   existingDirect: boolean;
 };
@@ -70,6 +76,8 @@ function createMockPrisma(opts: PrismaOpts) {
     conversation: {
       findFirst: conversationFindFirst,
       create: conversationCreate,
+      // Rouvrir un tête-à-tête sans mode le chiffre au repos (2026-11-01).
+      updateMany: jest.fn(async () => ({ count: 1 })),
     },
     user: {
       findMany: jest.fn(async () => [

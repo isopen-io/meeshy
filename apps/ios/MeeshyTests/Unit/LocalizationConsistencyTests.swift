@@ -478,6 +478,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Cells/LoadMoreRepliesCell.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift",  // 1
+        // 2026-11-01 — le mode se choisit à la création : les mots d'un mode,
+        // partagés par la fiche et l'écran de création, et la section de choix.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionModeText.swift",
+        "apps/ios/Meeshy/Features/Main/Views/NewConversationEncryptionSection.swift",
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",  // 1
         // Cohésion de `MessageViewsDetailView` : les cartes et le badge ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsConsumptionCard.swift",

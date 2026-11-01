@@ -4,5 +4,5 @@
     <string name="chat_action_history">Cronologia</string>
     <string name="chat_action_sentiment">Sentiment</string>
     <string name="chat_action_select">Seleziona</string>
-    <string name="chat_action_export_card">Esporta come scheda</string>
+    <string name="chat_action_export_card">Crea immagine</string>
 </resources>

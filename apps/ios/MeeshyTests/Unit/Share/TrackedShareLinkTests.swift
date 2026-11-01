@@ -133,7 +133,7 @@ final class FeedPostSendWiringGuardTests: XCTestCase {
         XCTAssertFalse(bar.contains("onShare"), "La barre n'ouvre plus la feuille système.")
 
         let card = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedPostCard.swift")
-        XCTAssertTrue(card.contains("sendSubject: .publication(id: post.id, isReel: post.isReel"))
+        XCTAssertTrue(card.contains("sendSubject: .publication(post)"))
         let header = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
         XCTAssertTrue(header.contains("onShare?(post.id)"), "« Partager » (feuille système) reste dans ⋯.")
     }
@@ -149,5 +149,34 @@ final class ReelRailCaptionTests: XCTestCase {
 
     func test_caption_isTheActionName_withoutCount() {
         XCTAssertEqual(ReelRailCaption.text(count: 0, label: "Envoyer"), "Envoyer")
+    }
+}
+
+/// Un post ou un réel envoyé nomme son auteur par son NOM AFFICHÉ, comme la
+/// story et Android — le pseudo n'en est que le repli (#14324).
+@MainActor
+final class PublicationSendAuthorTests: XCTestCase {
+    private func post(displayed: String, username: String?, comments: Int = 0, commentCount: Int? = nil) -> FeedPost {
+        FeedPost(id: "p1", author: displayed, authorId: "a1", authorUsername: username, content: "",
+                 comments: (0..<comments).map { FeedComment(id: "c\($0)", author: "x", content: "c") },
+                 commentCount: commentCount)
+    }
+
+    private func authorName(_ subject: ShareSubject) -> String? {
+        guard case .card(let card) = subject else { return nil }
+        return card.authorName
+    }
+
+    func test_aSentPost_namesItsAuthorByDisplayName() {
+        XCTAssertEqual(authorName(.publication(post(displayed: "Recette Retrait", username: "recretrait_b"))), "Recette Retrait")
+    }
+
+    func test_aSentReel_namesItsAuthorByDisplayName() {
+        XCTAssertEqual(authorName(ReelSend.subject(for: post(displayed: "Recette Retrait", username: "recretrait_b"))), "Recette Retrait")
+    }
+
+    func test_theCommentsLink_countsTheServedTotal_notTheLoadedPreview() {
+        XCTAssertEqual(post(displayed: "A", username: nil, comments: 3, commentCount: 10).servedCommentTotal, 10)
+        XCTAssertEqual(post(displayed: "A", username: nil, comments: 3, commentCount: 1).servedCommentTotal, 3)
     }
 }

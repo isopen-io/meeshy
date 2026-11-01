@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "stories_imager_preparing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_imager_save",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_imager_share",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_imager_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "stories_imager_duration",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

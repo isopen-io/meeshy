@@ -281,7 +281,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 1001 })
+        expect.objectContaining({ take: 501 })
       );
     });
 
@@ -769,7 +769,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
     });
 
-    it('uses the comment excerpt as content when present', async () => {
+    it('uses the comment synthesis as content when present (#14318)', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       friendships([]);
       prisma.notification.create.mockResolvedValue(makeNotif('story_new_comment'));
@@ -778,7 +778,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; content: string } }]>;
       const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
-      expect(authorCall![0].data.content).toBe('Great story!');
+      expect(authorCall![0].data.content).toBe('Petit message texte');
     });
 
     it('falls back to a per-bucket phrase when the comment has no text excerpt', async () => {
@@ -1109,7 +1109,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         expect.objectContaining({ take: 501 })
       );
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 1001 })
+        expect.objectContaining({ take: 501 })
       );
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ take: 501 })
@@ -1358,7 +1358,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         [{ data: { userId: string; content: string } }]
       >;
       const aliceCall = calls.find((c) => c[0].data.userId === ALICE_ID);
-      expect(aliceCall![0].data.content).toBe('Check this out @alice');
+      expect(aliceCall![0].data.content).toBe('Petit message texte');
     });
 
     it('test_createPostMentionNotificationsBatch_noExcerpt_usesFallbackPhrase', async () => {

@@ -17,6 +17,8 @@ import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.BlockedListRepository
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
+import me.meeshy.sdk.model.CreationEncryptionMode
+import me.meeshy.sdk.model.CreationEncryptionOffer
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.net.NetworkResult
@@ -38,8 +40,20 @@ data class NewConversationUiState(
     val createdConversationId: String? = null,
     val contacts: List<SelectableUser> = emptyList(),
     val isLoadingContacts: Boolean = false,
+    /** Le `User.role` brut de l'utilisateur connecté : il décide si le bout en bout s'offre. */
+    val platformRole: String? = null,
+    /** Le mode touché dans la section Chiffrement ; `null` = le défaut de l'offre. */
+    val pickedEncryptionMode: CreationEncryptionMode? = null,
 ) {
     val isGroup: Boolean get() = selected.size >= 2
+
+    /** La section Chiffrement (décision du 2026-11-01) : les modes offerts pour ce rôle et ce type. */
+    val encryptionOffer: CreationEncryptionOffer
+        get() = NewConversationLogic.encryptionOffer(platformRole, selected.size)
+
+    /** Le mode coché, celui qui partira avec la demande. */
+    val encryptionMode: CreationEncryptionMode
+        get() = NewConversationLogic.resolvedEncryptionMode(encryptionOffer, pickedEncryptionMode)
 
     /** Before a searchable query, the picker shows « Your contacts » (iOS `NewConversationView`). */
     val showsContacts: Boolean get() = query.trim().length < NewConversationLogic.MIN_QUERY_LENGTH
@@ -90,6 +104,9 @@ class NewConversationViewModel @Inject constructor(
     private var blockedIds: Set<String> = emptySet()
 
     init {
+        viewModelScope.launch {
+            sessionRepository.currentUser.collect { user -> _state.update { it.copy(platformRole = user?.role) } }
+        }
         viewModelScope.launch { loadContacts() }
         viewModelScope.launch { loadBlocked() }
         viewModelScope.launch {
@@ -109,6 +126,12 @@ class NewConversationViewModel @Inject constructor(
         _state.update { it.copy(groupTitle = value) }
     }
 
+    /** Coche un mode de la section Chiffrement ; un mode « bientôt » ne se coche pas. */
+    fun selectEncryptionMode(mode: CreationEncryptionMode) {
+        val available = _state.value.encryptionOffer.choices.any { it.mode == mode && it.available }
+        if (available) _state.update { it.copy(pickedEncryptionMode = mode) }
+    }
+
     fun toggleSelection(userId: String) {
         val existing = selectedById.remove(userId)
         if (existing == null) {
@@ -124,11 +147,11 @@ class NewConversationViewModel @Inject constructor(
         val current = _state.value
         if (!current.canCreate) return
         val participants = selectedById.keys.toList()
-        val request = NewConversationLogic.request(participants, current.groupTitle)
+        val request = NewConversationLogic.request(participants, current.groupTitle, current.encryptionMode)
         _state.update { it.copy(isCreating = true, error = null) }
         viewModelScope.launch {
             try {
-                when (val result = conversationRepository.create(request.type, request.title, request.participantIds)) {
+                when (val result = conversationRepository.create(request.type, request.title, request.participantIds, request.encryptionMode)) {
                     is NetworkResult.Success ->
                         _state.update { it.copy(isCreating = false, createdConversationId = result.data.id) }
                     is NetworkResult.Failure ->

@@ -66,15 +66,22 @@ final class NewConversationViewModel: ObservableObject {
     /// `false` when cached contacts are already on screen (Cache-First: no
     /// spinner over existing data).
     @Published private(set) var isLoadingContacts = false
+    /// Le mode de chiffrement que l'utilisateur a touché, s'il en a touché un
+    /// (directive porteur). `nil` : le défaut de l'offre.
+    @Published private(set) var chosenEncryptionMode: ConversationCreationEncryption.Mode?
 
     // MARK: - Dependencies
 
     private let api: APIClientProviding
     private let friendService: FriendServiceProviding
     private let currentUserIdProvider: @MainActor () -> String?
+    private let platformRoleProvider: @MainActor () -> String?
     private var searchTask: Task<Void, Never>?
 
     static let searchDebounce: UInt64 = 350_000_000  // ns
+    /// iOS lit ET écrit le bout en bout d'un tête-à-tête : là où la règle le
+    /// permet, il est choisissable dès la création.
+    static let endToEndSupported = true
     /// Taille de page des relations acceptées — même valeur que
     /// `ContactsListViewModel`, le budget `limit` étant plafonné à 100 côté
     /// gateway.
@@ -93,11 +100,39 @@ final class NewConversationViewModel: ObservableObject {
     init(
         api: APIClientProviding = APIClient.shared,
         friendService: FriendServiceProviding = FriendService.shared,
-        currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id }
+        currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id },
+        platformRoleProvider: @MainActor @escaping () -> String? = { ConversationEncryptionActivationPolicy.currentPlatformRole() }
     ) {
         self.api = api
         self.friendService = friendService
         self.currentUserIdProvider = currentUserIdProvider
+        self.platformRoleProvider = platformRoleProvider
+    }
+
+    // MARK: - Encryption
+
+    /// Ce que l'écran propose pour un tête-à-tête ou un groupe : la règle
+    /// partagée (`ConversationCreationEncryption`), lue, jamais réécrite.
+    func encryptionOffer(isGroup: Bool) -> ConversationCreationEncryption.Offer {
+        ConversationCreationEncryption.offer(
+            platformRole: platformRoleProvider(),
+            conversationType: isGroup ? "group" : "direct",
+            endToEndSupported: Self.endToEndSupported
+        )
+    }
+
+    /// Le mode qui partira : celui touché s'il reste choisissable (un groupe
+    /// n'a pas encore le bout en bout), sinon le défaut de l'offre.
+    func encryptionMode(isGroup: Bool) -> ConversationCreationEncryption.Mode {
+        let offer = encryptionOffer(isGroup: isGroup)
+        if let chosenEncryptionMode, offer.isAvailable(chosenEncryptionMode) { return chosenEncryptionMode }
+        return offer.defaultMode
+    }
+
+    /// Un mode « bientôt » ou absent de l'offre ne se choisit pas.
+    func chooseEncryptionMode(_ mode: ConversationCreationEncryption.Mode, isGroup: Bool) {
+        guard encryptionOffer(isGroup: isGroup).isAvailable(mode) else { return }
+        chosenEncryptionMode = mode
     }
 
     // MARK: - Search
@@ -254,10 +289,11 @@ final class NewConversationViewModel: ObservableObject {
         errorMessage = nil
 
         let isGroup = selectedUsers.count > 1
-        let body = CreateConversationBody(
+        let body = CreateConversationRequest(
             type: isGroup ? "group" : "direct",
             title: isGroup ? groupTitle.trimmingCharacters(in: .whitespaces) : nil,
-            participantIds: selectedUsers.map(\.id)
+            participantIds: selectedUsers.map(\.id),
+            encryptionMode: encryptionMode(isGroup: isGroup)
         )
 
         do {
@@ -307,13 +343,5 @@ final class NewConversationViewModel: ObservableObject {
         searchResults = []
         isSearching = false
         searchFailed = false
-    }
-
-    // MARK: - Body
-
-    private struct CreateConversationBody: Encodable {
-        let type: String
-        let title: String?
-        let participantIds: [String]
     }
 }

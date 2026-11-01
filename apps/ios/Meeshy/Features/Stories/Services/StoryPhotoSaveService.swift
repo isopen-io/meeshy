@@ -85,9 +85,10 @@ final class StoryPhotoSaveService: ObservableObject {
     /// @atabeth sortait signé « @atabeth ».
     private let watermark: @MainActor (String?) -> StoryExportWatermark?
 
-    /// Le choix de longueur d'« Imager » (#13871), posé AVANT le rendu.
-    typealias ImagerLengthPick = @MainActor ([ImagerLengthChoice], @escaping @MainActor (ImagerQuarter) -> Void) -> Void
-    private let pickImagerLength: ImagerLengthPick
+    /// La vue « Imager » (#14325) : c'est elle qui montre l'œuvre, offre la
+    /// longueur (#13871), puis enregistre ou partage — jamais l'entrée du menu.
+    typealias ImagerPresent = @MainActor (ImagerWork, StoryPhotoSaveService) -> Void
+    private let presentImager: ImagerPresent
 
     /// L'image tirée du MP4 d'une scène fixe et muette (#13871) — `StoryExportStill`.
     typealias StillFrame = @MainActor (URL) async -> URL?
@@ -103,10 +104,10 @@ final class StoryPhotoSaveService: ObservableObject {
         authorIntro: StoryExportDressingResolver.AuthorIntro? = nil,
         concatenate: (@MainActor ([URL], URL) async -> Bool)? = nil,
         watermark: (@MainActor (String?) -> StoryExportWatermark?)? = nil,
-        pickImagerLength: ImagerLengthPick? = nil,
+        presentImager: ImagerPresent? = nil,
         stillFrame: StillFrame? = nil
     ) {
-        self.pickImagerLength = pickImagerLength ?? { ImagerLengthPresenter.present($0, choose: $1) }
+        self.presentImager = presentImager ?? { ImagerPresenter.present($0, service: $1) }
         self.stillFrame = stillFrame ?? { @MainActor video in await StoryExportStill.frame(ofVideoAt: video) }
         // `StoryVideoExportService.shared` et `FeedbackToastManager.shared`
         // sont `@MainActor`-isolés : impossible en expression de valeur par
@@ -222,10 +223,12 @@ final class StoryPhotoSaveService: ObservableObject {
 
     // MARK: - Imager (#13871)
 
-    /// **« Imager » rend la MÊME composition qu'« Enregistrer »** — calques, son,
-    /// habillage — et la range dans Photos ; au-delà d'une minute, la longueur
-    /// rendue (1/4 · 2/4 · 3/4 · 4/4 depuis le début) se choisit d'abord.
-    /// « Enregistrer » et « Partager » ne coupent jamais.
+    /// **« Imager » OUVRE LA VUE IMAGER** (#14325) : elle montre l'œuvre, offre
+    /// au-delà d'une minute 1/4 · 2/4 · 3/4 · 4/4 depuis le début, puis
+    /// « Sauvegarder » ou « Partager » rendent la MÊME composition
+    /// qu'« Enregistrer » — calques, son, habillage —, coupée à la part choisie.
+    /// Rien ne se rend ni ne s'enregistre avant ce geste. « Enregistrer » et
+    /// « Partager » hors de la vue ne coupent jamais.
     func image(story: StoryItem, author: StoryExportAuthor?) {
         let languages = exportLanguages(of: story)
         image(jobKey: story.id,
@@ -258,15 +261,32 @@ final class StoryPhotoSaveService: ObservableObject {
     /// Une image n'a pas de longueur : une scène fixe et muette ne propose aucun quart.
     private func image(jobKey: String, slides: [StorySlide], languages: [String],
                        stickerMedia: [FeedMedia], dressing: StoryExportDressing) {
-        let render: @MainActor (ImagerQuarter?) -> Void = { [weak self] quarter in
-            self?.bakeThenSave(jobKey: jobKey, slides: ImagerLength.cut(slides, quarter: quarter),
-                               languages: languages, stickerMedia: stickerMedia, dressing: dressing)
-        }
-        let choices = StoryExportStill.isStill(slides)
-            ? []
-            : StoryExportMode.imager.lengthChoices(total: ImagerLength.total(of: slides))
-        guard !choices.isEmpty else { return render(nil) }
-        pickImagerLength(choices) { render($0) }
+        let isStill = StoryExportStill.isStill(slides)
+        let work = ImagerWork(
+            id: jobKey, slides: slides, languages: languages, stickerMedia: stickerMedia, dressing: dressing,
+            isStill: isStill,
+            choices: isStill ? [] : StoryExportMode.imager.lengthChoices(total: ImagerLength.total(of: slides)))
+        presentImager(work, self)
+    }
+
+    /// « Sauvegarder » depuis la vue : la part choisie, par le MÊME corps
+    /// qu'« Enregistrer » — anneau, annulation, Photos, toast.
+    func saveImaged(_ work: ImagerWork, quarter: ImagerQuarter?) {
+        bakeThenSave(jobKey: work.id, slides: work.slides(for: quarter), languages: work.languages,
+                     stickerMedia: work.stickerMedia, dressing: work.dressing)
+    }
+
+    /// « Partager » depuis la vue : le fichier de la part choisie, que la feuille
+    /// du système emporte. L'appelant le rend par `discardImaged(_:)`.
+    func renderImaged(_ work: ImagerWork, quarter: ImagerQuarter?,
+                      onProgress: ((Double) -> Void)? = nil) async -> URL? {
+        let plan = await dressings.plan(for: work.dressing)
+        return await render(slides: work.slides(for: quarter), languages: work.languages,
+                            stickerMedia: work.stickerMedia, plan: plan, onProgress: onProgress)?.url
+    }
+
+    func discardImaged(_ url: URL) {
+        exporter.cleanupExport(at: url)
     }
 
     // MARK: - Une scène fixe sort en image (#13871)

@@ -94,7 +94,14 @@
     <string name="feed_translations_badge_hint">يعرض اللغات المتاحة</string>
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
-    <string name="feed_view_comments">عرض %1$d تعليقات</string>
+    <plurals name="feed_view_comments">
+        <item quantity="zero">لا توجد تعليقات</item>
+        <item quantity="one">عرض التعليق</item>
+        <item quantity="two">عرض التعليقين</item>
+        <item quantity="few">عرض %1$d تعليقات</item>
+        <item quantity="many">عرض %1$d تعليقًا</item>
+        <item quantity="other">عرض %1$d تعليق</item>
+    </plurals>
     <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%1$s</string>
     <string name="mood_bubble_react">تفاعل %1$s</string>
     <string name="mood_bubble_reply">رد</string>

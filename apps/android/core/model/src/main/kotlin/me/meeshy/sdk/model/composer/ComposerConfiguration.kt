@@ -49,9 +49,10 @@ public data class ComposerConfiguration(
 
         /**
          * Le commentaire (iOS `ComposerMode.comment` + `voiceDoor: .open` + `forceShowAttachment`) : texte borné à 2 000,
-         * emoji, vocal, photothèque, caméra. iOS n'y a ni éphémère, ni vue unique, ni feuille d'effets, ni sticker, ni
-         * carte de contact, ni emojis rapides. Le fichier, le lieu, la langue, le flou et les effets permanents d'iOS
-         * attendent que le fil Android sache les envoyer et les afficher (#14265).
+         * emoji, vocal, photothèque, caméra, et le sticker, qui part comme une image du commentaire (porteur 2026-11-01,
+         * #14320). Ni éphémère, ni vue unique, ni feuille d'effets, ni carte de contact, ni emojis rapides. Le fichier, le
+         * lieu, la langue, le flou et les effets permanents d'iOS attendent que le fil Android sache les envoyer et les
+         * afficher (#14265).
          */
         public val COMMENT: ComposerConfiguration = ComposerConfiguration(
             capabilities = setOf(
@@ -59,6 +60,7 @@ public data class ComposerConfiguration(
                 ComposerCapability.VOICE,
                 ComposerCapability.PHOTO_LIBRARY,
                 ComposerCapability.CAMERA,
+                ComposerCapability.STICKER,
             ),
             maxLength = ComposerMode.COMMENT.maxLength,
         )

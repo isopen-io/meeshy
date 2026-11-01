@@ -126,6 +126,22 @@ final class PostStatAccessibilityTests: XCTestCase {
         XCTAssertEqual(try label(replies, 0, in: "fr"), "0 réponse")
     }
 
+    // MARK: - « Voir les N commentaires » sous un post du fil (#14324)
+    //
+    // La clé était plate : « View all 1 comments » à la recette staging.
+
+    func test_viewCommentsLabel_namesTheSingleComment_withoutCount() throws {
+        let link = PostStatAccessibility.viewCommentsLabel
+        XCTAssertEqual(try label(link, 1, in: "en"), "View the comment")
+        XCTAssertEqual(try label(link, 1, in: "fr"), "Voir le commentaire")
+    }
+
+    func test_viewCommentsLabel_countsThemAll_whenSeveral() throws {
+        let link = PostStatAccessibility.viewCommentsLabel
+        XCTAssertEqual(try label(link, 12, in: "en"), "View all 12 comments")
+        XCTAssertEqual(try label(link, 12, in: "fr"), "Voir les 12 commentaires")
+    }
+
     // MARK: - Chaque compteur nomme sa propre sémantique (pas de confusion)
 
     func test_labels_areDistinctPerStatType() {

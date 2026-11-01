@@ -641,6 +641,9 @@ export const ConversationSchemas = {
     // chiffré de bout en bout avec la même personne. Absent : la demande d'un
     // ancien client, inchangée.
     plaintext: z.boolean().optional(),
+    // Directive porteur du 2026-11-01 — le mode se choisit à la création ;
+    // absent : `server`, le serveur chiffre toujours au repos.
+    encryptionMode: z.enum(['server', 'hybrid', 'e2ee']).optional(),
   }),
   
   // Mettre à jour une conversation

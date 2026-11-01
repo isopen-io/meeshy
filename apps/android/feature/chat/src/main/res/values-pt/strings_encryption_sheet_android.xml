@@ -8,4 +8,5 @@
     <string name="encryption_read_failed">Não foi possível ler o estado da encriptação. Tente novamente.</string>
     <string name="encryption_retry">Tentar novamente</string>
     <string name="security_verify_description">As mensagens com %1$s estão encriptadas ponto a ponto.</string>
+    <string name="encryption_detail_switch_mode">Mudar de modo</string>
 </resources>

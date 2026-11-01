@@ -147,13 +147,13 @@ describe('contenu localisé par destinataire', () => {
     expect(created[0].content).toBe('Sur l’humeur de Bob');
     expect(created[0].metadata.postType).toBe('STATUS');
   });
-  it('comment_reaction : le corps est l’extrait du commentaire, jamais la phrase d’action répétée (#9049)', async () => {
+  it('comment_reaction : le corps est la synthèse du commentaire, jamais la phrase d’action répétée (#9049, #14318)', async () => {
     const { svc, created } = makeContentHarness({ r: { systemLanguage: 'fr' } });
     await svc.createCommentReactionNotification({
       commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
       reactionEmoji: '❤️', postAuthorName: 'Bob', postType: 'POST', commentPreview: 'Superbe features',
     });
-    expect(created[0].content).toBe('« Superbe features »');
+    expect(created[0].content).toBe('Petit message texte');
     expect(created[0].content).not.toContain('a réagi');
   });
   it('comment_reaction sans postType retombe sur POST (rétro-compat)', async () => {

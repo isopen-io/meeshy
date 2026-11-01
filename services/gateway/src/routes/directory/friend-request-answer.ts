@@ -12,6 +12,7 @@ import { parseRequestLevel, type RelationRequestLevel } from '@meeshy/shared/typ
 import { forgetFriends } from '../../services/relations/relationCaches';
 import { isBlockedBetween } from '../../utils/blocking';
 import { INCLUDE_PARTIES, servirParties, type Resultat } from './friend-request-parties';
+import { implicitConversationRegime } from '../../services/conversations/creationRegime';
 
 export const isRecordNotFound = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2025';
@@ -329,8 +330,12 @@ async function conversationDirecte(
   // venait d'ouvrir.
   const permissions = { ...FOUNDING_MEMBER_PERMISSIONS };
 
+  // 2026-11-01 — le serveur chiffre toujours au repos : le fil d'une amitié naît `server`.
+  const regime = await implicitConversationRegime(fastify.prisma, { enabledBy: aId });
+
   const conversation = await fastify.prisma.conversation.create({
     data: {
+      ...regime,
       identifier: generateCompactConversationIdentifier(),
       type: 'direct',
       participants: {

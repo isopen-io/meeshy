@@ -144,6 +144,15 @@
     <string name="dialogs_report_title">¿Por qué denuncias esta conversación?</string>
     <string name="dialogs_save">Guardar</string>
     <string name="dialogs_unblock_error">No se pudo desbloquear a este usuario</string>
+    <string name="encryption_create_e2ee_soon_groups">Pronto disponible para grupos</string>
+    <string name="encryption_create_footer">El cifrado de extremo a extremo nunca se desactiva. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.</string>
+    <string name="encryption_create_header">Cifrado</string>
+    <string name="encryption_mode_e2ee_description">Solo tus dispositivos y los de los participantes leen los mensajes. La traducción se hace en tu dispositivo.</string>
+    <string name="encryption_mode_e2ee_label">Extremo a extremo</string>
+    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores, como Servidor. El doble cifrado por tus dispositivos llegará pronto.</string>
+    <string name="encryption_mode_hybrid_label">Híbrido</string>
+    <string name="encryption_mode_server_description">Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan.</string>
+    <string name="encryption_mode_server_label">Servidor</string>
     <string name="global_search_back">Atrás</string>
     <plurals name="global_search_members">
         <item quantity="one">%1$d miembro</item>

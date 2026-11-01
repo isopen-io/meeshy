@@ -34,13 +34,15 @@ final class NewConversationViewModelTests: XCTestCase {
     private func makeSUT(
         api: MockAPIClientForApp? = nil,
         friendService: MockFriendService? = nil,
-        currentUserId: String = "current-user"
+        currentUserId: String = "current-user",
+        platformRole: String? = "USER"
     ) -> (sut: NewConversationViewModel, api: MockAPIClientForApp) {
         let api = api ?? MockAPIClientForApp()
         let sut = NewConversationViewModel(
             api: api,
             friendService: friendService ?? MockFriendService(),
-            currentUserIdProvider: { currentUserId }
+            currentUserIdProvider: { currentUserId },
+            platformRoleProvider: { platformRole }
         )
         return (sut, api)
     }
@@ -234,6 +236,100 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertNil(sut.errorMessage)
         XCTAssertEqual(sut.createdConversation?.id, "conv-1")
         XCTAssertEqual(api.postCount, 1)
+    }
+
+    // MARK: - Encryption (directive porteur du 2026-11-01)
+
+    private func lastPostedBody(_ api: MockAPIClientForApp) -> [String: Any]? {
+        api.lastPostBodies.last.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    }
+
+    func test_encryptionOffer_ordinaryUser_offersServerAndHybrid_serverByDefault() {
+        let (sut, _) = makeSUT(platformRole: "USER")
+
+        let offer = sut.encryptionOffer(isGroup: false)
+
+        XCTAssertEqual(offer.choices.map(\.mode), [.server, .hybrid])
+        XCTAssertEqual(sut.encryptionMode(isGroup: false), .server)
+    }
+
+    func test_encryptionOffer_analystInADirect_preselectsEndToEnd() {
+        let (sut, _) = makeSUT(platformRole: "ANALYST")
+
+        XCTAssertEqual(sut.encryptionOffer(isGroup: false).choices.map(\.mode), [.server, .hybrid, .e2ee])
+        XCTAssertEqual(sut.encryptionMode(isGroup: false), .e2ee)
+    }
+
+    func test_encryptionOffer_analystInAGroup_endToEndIsSoon_serverByDefault() {
+        let (sut, _) = makeSUT(platformRole: "ADMIN")
+
+        let offer = sut.encryptionOffer(isGroup: true)
+
+        XCTAssertEqual(offer.choices.last, ConversationCreationEncryption.Choice(mode: .e2ee, available: false, unavailability: .groupsNotYet))
+        XCTAssertEqual(sut.encryptionMode(isGroup: true), .server)
+    }
+
+    func test_chooseEncryptionMode_unavailableMode_isIgnored() {
+        let (sut, _) = makeSUT(platformRole: "USER")
+
+        sut.chooseEncryptionMode(.e2ee, isGroup: false)
+
+        XCTAssertNil(sut.chosenEncryptionMode)
+        XCTAssertEqual(sut.encryptionMode(isGroup: false), .server)
+    }
+
+    func test_encryptionMode_chosenEndToEnd_fallsBackToServerInAGroup_andReturnsInADirect() {
+        let (sut, _) = makeSUT(platformRole: "ANALYST")
+
+        sut.chooseEncryptionMode(.e2ee, isGroup: false)
+
+        XCTAssertEqual(sut.encryptionMode(isGroup: true), .server)
+        XCTAssertEqual(sut.encryptionMode(isGroup: false), .e2ee)
+    }
+
+    func test_encryptionMode_chosenHybrid_survivesTheSwitchToAGroup() {
+        let (sut, _) = makeSUT(platformRole: "ANALYST")
+
+        sut.chooseEncryptionMode(.hybrid, isGroup: false)
+
+        XCTAssertEqual(sut.encryptionMode(isGroup: true), .hybrid)
+    }
+
+    func test_createConversation_analystDirect_sendsEndToEnd() async {
+        let (sut, api) = makeSUT(platformRole: "ANALYST")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+
+        await sut.createConversation(selectedUsers: [Self.makeUser(id: "u-1", username: "alice")], groupTitle: "")
+
+        XCTAssertEqual(lastPostedBody(api)?["encryptionMode"] as? String, "e2ee")
+        XCTAssertEqual(lastPostedBody(api)?["type"] as? String, "direct")
+    }
+
+    func test_createConversation_ordinaryUserGroup_sendsServer() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-2", type: "group"))
+
+        await sut.createConversation(
+            selectedUsers: [Self.makeUser(id: "u-1", username: "alice"), Self.makeUser(id: "u-2", username: "bob")],
+            groupTitle: " Amis "
+        )
+
+        let body = lastPostedBody(api)
+        XCTAssertEqual(body?["encryptionMode"] as? String, "server")
+        XCTAssertEqual(body?["type"] as? String, "group")
+        XCTAssertEqual(body?["title"] as? String, "Amis")
+        XCTAssertEqual(body?["participantIds"] as? [String], ["u-1", "u-2"])
+    }
+
+    func test_createConversation_chosenHybrid_sendsHybrid() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-3"))
+        sut.chooseEncryptionMode(.hybrid, isGroup: false)
+
+        await sut.createConversation(selectedUsers: [Self.makeUser(id: "u-1", username: "alice")], groupTitle: "")
+
+        XCTAssertEqual(lastPostedBody(api)?["encryptionMode"] as? String, "hybrid")
+        XCTAssertNil(lastPostedBody(api)?["title"], "un tête-à-tête n'envoie pas de titre")
     }
 
     func test_createConversation_failure_surfacesErrorMessage() async {

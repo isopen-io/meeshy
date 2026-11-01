@@ -20,18 +20,19 @@ enum ConversationEncryptionRegime: Equatable {
         }
     }
 
-    /// Une phrase, sans jargon : le régime et qui peut lire.
+    /// Une phrase, sans jargon : le régime et ce qu'il fait des messages
+    /// (directive porteur — jamais qui détient une clé).
     var summary: String {
         switch self {
         case .none:
             String(localized: "conversation.encryption.summary.none",
-                   defaultValue: "Non chiffrée : les messages sont stockés sans chiffrement sur le serveur", bundle: .main)
+                   defaultValue: "Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés", bundle: .main)
         case .server:
             String(localized: "conversation.encryption.summary.server",
-                   defaultValue: "Chiffrée sur le serveur : Meeshy peut lire les messages", bundle: .main)
+                   defaultValue: "Chiffrée sur nos serveurs", bundle: .main)
         case .hybrid:
             String(localized: "conversation.encryption.summary.hybrid",
-                   defaultValue: "Chiffrée sur le serveur (mode hybride) : Meeshy peut lire les messages", bundle: .main)
+                   defaultValue: "Chiffrée sur nos serveurs (mode hybride)", bundle: .main)
         case .endToEnd:
             String(localized: "conversation.encryption.summary.endToEnd",
                    defaultValue: "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages", bundle: .main)
@@ -56,7 +57,8 @@ enum ConversationEncryptionRegime: Equatable {
 /// - bascule : `mayActivateConversationEncryption`, avis système ; le bout en
 ///   bout ne se désactive pas (#12949) : un tête-à-tête renvoie à une
 ///   conversation non chiffrée avec le même contact (#12966), un groupe à une
-///   nouvelle conversation. Le chiffrement au repos se désactive encore.
+///   nouvelle conversation. Le chiffrement au repos ne se désactive plus
+///   `server` et `hybrid` changent de mode, rien d'autre.
 struct ConversationEncryptionExplanation: Equatable {
 
     enum Topic: CaseIterable, Equatable {

@@ -4,7 +4,7 @@
     ":feature:feed": {
       "resDir": "feature/feed/src/main/res",
       "entries": [
-        { "catalog": "app", "iosKey": "feed.post.view_comments", "androidName": "feed_view_comments", "status": "adopted" }
+        { "catalog": "app", "iosKey": "feed.post.view_comments", "androidName": "feed_view_comments", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" }
       ]
     }
   }

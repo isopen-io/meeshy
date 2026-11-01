@@ -33,6 +33,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import me.meeshy.ui.component.composer.LocalComposerStickerSheet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.composer.ComposerAffordances
@@ -269,6 +270,25 @@ internal fun ChatComposer(
         configuration.offers(ComposerCapability.VOICE)
     val canCapture = affordances.canSendImages || affordances.canSendVideos
     val interact = hostCallbacks.onAnyInteraction
+    val stickerSheet = LocalComposerStickerSheet.current
+    var stickerSheetOpen by rememberSaveable { mutableStateOf(false) }
+    val openStickers: (() -> Unit)? = if (stickerSheet != null && affordances.canSendImages) {
+        { interact(); haptics.light(); stickerSheetOpen = true }
+    } else {
+        null
+    }
+    if (stickerSheetOpen && stickerSheet != null) {
+        stickerSheet(
+            { glyph ->
+                stickerSheetOpen = false
+                ioScope.launch {
+                    val file = withContext(Dispatchers.IO) { ComposerEmojiSticker.render(glyph, context.cacheDir) }
+                    onPickFile(file, file.name, ComposerEmojiSticker.MIME)
+                }
+            },
+            { stickerSheetOpen = false },
+        )
+    }
     // Le ⌄ (iOS `CommentComposerFoldModifier.fold`) : ferme le clavier et ce qui est ouvert dans le
     // verre, haptique légère, puis replie. Brouillon, réponse et pièces jointes vivent au-dessus.
     val fold: () -> Unit = {
@@ -402,6 +422,7 @@ internal fun ChatComposer(
                         accentColor = accentColor,
                         onFold = if (foldable && ConversationComposerFold.offersFoldButton(minimized, isComposing)) fold else null,
                         configuration = configuration,
+                        onSticker = openStickers,
                     )
                 }
                 when {

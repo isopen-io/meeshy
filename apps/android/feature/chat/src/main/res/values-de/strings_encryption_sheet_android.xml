@@ -8,4 +8,5 @@
     <string name="encryption_read_failed">Der Verschlüsselungsstatus konnte nicht gelesen werden. Versuche es erneut.</string>
     <string name="encryption_retry">Erneut versuchen</string>
     <string name="security_verify_description">Nachrichten mit %1$s sind Ende-zu-Ende-verschlüsselt.</string>
+    <string name="encryption_detail_switch_mode">Modus wechseln</string>
 </resources>

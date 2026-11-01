@@ -162,7 +162,8 @@ describe('NotificationService - Structure Groupée', () => {
       expect(notificationData.userId).toBe('user_recipient');
       expect(notificationData.type).toBe('new_message');
       expect(notificationData.priority).toBe('normal');
-      expect(notificationData.content).toBe('Salut! Comment vas-tu?');
+      expect(notificationData.content).toBe('Petit message texte');
+      expect(notificationData.content).not.toContain('Salut');
 
       // Le titre n'est plus « absent » mais explicitement `null` : le service
       // persiste désormais `title`/`subtitle` comme source unique pour le push
@@ -197,7 +198,7 @@ describe('NotificationService - Structure Groupée', () => {
       // `attachments` : la clé est omise plutôt que posée à vide.
       expect(notificationData.metadata).toEqual({
         action: 'view_message',
-        messagePreview: 'Salut! Comment vas-tu?',
+        messagePreview: 'Petit message texte',
       });
 
       // STATE
@@ -274,9 +275,9 @@ describe('NotificationService - Structure Groupée', () => {
       // l'action que le tap doit déclencher côté client.
       expect(createCall.data.metadata).toEqual({
         action: 'view_message',
-        messagePreview: 'Merci @alice pour ton aide!',
+        messagePreview: 'Message texte',
       });
-      expect(createCall.data.content).toContain('Merci @alice');
+      expect(createCall.data.content).toBe('Message texte');
     });
   });
 
@@ -320,7 +321,7 @@ describe('NotificationService - Structure Groupée', () => {
       // une réaction cite le message d'autrui, elle n'en est pas l'aperçu).
       expect(createCall.data.metadata).toEqual({
         action: 'view_message',
-        messageContent: 'Super idée!',
+        messageContent: 'Petit message texte',
         reactionEmoji: '❤️',
       });
     });

@@ -2,6 +2,7 @@ package me.meeshy.sdk.media.scene
 
 import android.graphics.Bitmap
 import java.io.File
+import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import me.meeshy.sdk.model.scene.export.StoryExportBrandingPlan
 import me.meeshy.sdk.model.scene.export.StoryExportClipRange
 import me.meeshy.sdk.model.scene.export.StoryExportPlacedVideoClock
@@ -115,6 +116,8 @@ public class SceneExportJob(
     public val branding: SceneExportBranding? = null,
     /** Les vidéos posées sur les scènes, vivantes dans leur cadre (#13897) ; leurs sons sont dans le plan. */
     public val placedVideos: List<SceneExportPlacedVideo> = emptyList(),
+    /** Où la vue Imager a décidé de remettre le rendu (#14326) ; `null` : la destination du lancement. */
+    public val destination: SceneExportDestination? = null,
 )
 
 /** Le moteur de rendu derrière [SceneExportCoordinator] : annulable, il rend la fraction rendue à mesure. */
