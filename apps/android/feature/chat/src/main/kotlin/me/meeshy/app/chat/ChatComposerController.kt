@@ -108,7 +108,7 @@ internal class ChatComposerController(
      */
     fun updateMentionRoster(roster: List<MentionCandidate>, context: MentionContext? = null) {
         mentions.updateRoster(roster)
-        mentions.bind(context ?: MentionContext.conversation(conversationId, conversationType = null))
+        mentions.bind(context ?: MentionContext.conversation(conversationId, conversationType = null, isMember = false))
     }
 
     /**

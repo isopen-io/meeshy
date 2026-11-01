@@ -20,6 +20,12 @@ internal object PostSceneCaptions {
         return shown.map { id -> (id ?: fallback)?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.caption?.trim()?.takeIf(String::isNotEmpty) } }
     }
 
+    /**
+     * La légende du PLEIN ÉCRAN de la scène [index] (iOS `SceneCaption.resolve`, `carrierFallback: true`) : la sienne, ou le texte
+     * du post, que rien d'autre n'y affiche. `null` quand rien ne la légende : aucun bandeau n'est alors peint.
+     */
+    fun reader(scenes: FeedPostScenes, index: Int): String? = scenes.captions.getOrNull(index) ?: scenes.carrierText
+
     private fun carrierMediaId(scene: StoryItem): String? =
         scene.storyEffects?.mediaObjects.orEmpty().filter { it.postMediaId.isNotBlank() }.minByOrNull { it.zIndex }?.postMediaId
 }

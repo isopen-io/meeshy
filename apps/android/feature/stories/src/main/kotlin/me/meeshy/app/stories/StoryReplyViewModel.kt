@@ -66,7 +66,11 @@ class StoryReplyViewModel @Inject constructor(
     private val _state = MutableStateFlow(StoryReplyUiState())
     val state: StateFlow<StoryReplyUiState> = _state.asStateFlow()
 
-    /** The « @ » list of the reply (#14053): cached contacts at once, the quoted story's suggestions (`contextType=post`) by the law. */
+    /**
+     * The « @ » list of the reply (#14053, #14071): the reply lands in the author's DM, where only
+     * the interlocutor can be mentioned — so the list offers the author alone, and never asks the
+     * story's context, whose commenters would be mentions without effect.
+     */
     private val mentions = MentionAutocomplete(
         scope = viewModelScope,
         search = mentionSearch,
@@ -75,8 +79,16 @@ class StoryReplyViewModel @Inject constructor(
     )
     val mention: StateFlow<MentionAutocompleteState> = mentions.state
 
-    /** The story the sheet quotes: the context the network is asked about for the « @ » list. */
-    fun attachStory(storyId: String) = mentions.bind(MentionContext.post(storyId))
+    /** The author the reply goes to — the only person the « @ » list may offer. */
+    fun attachAuthor(authorId: String, authorUsername: String) {
+        mentions.updateRoster(
+            listOfNotNull(
+                authorUsername.trim().takeIf { it.isNotEmpty() }
+                    ?.let { MentionCandidate(id = authorId, username = it, displayName = it) },
+            ),
+        )
+        mentions.bind(MentionContext.interlocutor(authorId))
+    }
 
     fun onTextChange(text: String) {
         _state.update { it.copy(text = text) }

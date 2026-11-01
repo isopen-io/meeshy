@@ -116,18 +116,24 @@ internal fun SceneTopBar(
     ) {
         EditingChromeVisibility(showsClose) { SceneRoundButton(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose) }
         Spacer(Modifier.weight(1f))
-        history?.let {
-            SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = it.canUndo)
-            SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = it.canRedo)
-        }
+        history?.let { SceneHistoryButtons(it, onUndo, onRedo) }
     }
 }
 
 /** ↶ ↷ rangés l'un sous l'autre au pied du couloir que la scène réduite cède aux options de l'objet en édition (#14197). */
 @Composable
 internal fun SceneLaneHistory(history: SceneHistory, onUndo: () -> Unit, onRedo: () -> Unit) {
-    SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = history.canUndo)
-    SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = history.canRedo)
+    SceneHistoryButtons(history, onUndo, onRedo)
+}
+
+/**
+ * ↶ et ↷ (#14209, décision porteur du 2026-11-01) : un bouton sans pas à annuler ou à rétablir est MASQUÉ, jamais grisé,
+ * et réapparaît dès qu'il a un pas à rejouer.
+ */
+@Composable
+internal fun SceneHistoryButtons(history: SceneHistory, onUndo: () -> Unit, onRedo: () -> Unit) {
+    if (history.canUndo) SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo)
+    if (history.canRedo) SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo)
 }
 
 /**

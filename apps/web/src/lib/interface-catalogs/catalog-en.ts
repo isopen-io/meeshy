@@ -778,6 +778,7 @@ const en = {
   'story.studio.failure.tooLarge': 'File too large.',
   'story.studio.failure.fileRefused': 'File rejected: its type does not match its content.',
   'story.studio.failure.rateLimited': 'Too many posts at once — try again in a moment.',
+  'story.studio.failure.onlyUnlinked': 'Too many of the people you chose have no connection with you yet today. Remove them from the list, or try again tomorrow.',
   'story.studio.failure.refused': 'Publication rejected.',
   'story.studio.failure.unavailable': 'The server is unavailable.',
   'story.studio.text.add': 'Add text',

@@ -62,7 +62,7 @@ internal fun ComposerAudioChipLayer(
                 contentDescription = spoken
                 onClick { currentTap(); true }
             }
-            .sceneSelectionFrame(selected, 1f),
+            .sceneSelection(selected),
     )
 }
 

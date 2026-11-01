@@ -22,6 +22,11 @@ final class MentionContactsFirstTests: XCTestCase {
         context: MentionComposerController.Context = .conversation(id: "conv-1"),
         contacts: MockMentionContacts = MockMentionContacts(),
         participants: [MentionCandidate] = [],
+        conversationType: String? = nil,
+        interlocutorId: String? = nil,
+        isMember: Bool = true,
+        isGuest: Bool = false,
+        servedMembers: (@Sendable (String) async -> [String])? = nil,
         remote: [MentionSuggestion] = [],
         directory: [UserSearchResult] = []
     ) -> (sut: MentionComposerController, service: MockMentionService, annuaire: MockUserDirectorySearch) {
@@ -38,6 +43,11 @@ final class MentionContactsFirstTests: XCTestCase {
             currentUserId: "moi",
             debounceNanoseconds: 20_000_000
         )
+        if let conversationType {
+            sut.scope(to: ConversationMentionTarget(conversationId: "conv-1", conversationType: conversationType,
+                                                    interlocutorId: interlocutorId, isMember: isMember, isGuest: isGuest),
+                      servedMembers: servedMembers)
+        }
         return (sut, service, annuaire)
     }
 
@@ -290,5 +300,131 @@ final class MentionContactsFirstTests: XCTestCase {
 
         XCTAssertEqual(contacts.refreshCallCount, 0, "amorcer au montage ne coûte aucun réseau")
         XCTAssertEqual(sut.suggestions.map(\.username), ["zoe"], "…et le `@` sert les contacts à l'instant")
+    }
+
+    // MARK: - #14071 — une suggestion sans effet ne s'affiche pas
+
+    func test_handleQuery_group_hidesTheContactAndTheHistoryAuthors_theServerServesTheMembers() async {
+        let (sut, service, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]),
+                                        participants: [person("p1", "zora")], conversationType: "group",
+                                        remote: [suggestion("m1", "zola")])
+
+        sut.handleQuery(in: "@")
+        XCTAssertTrue(sut.suggestions.isEmpty,
+                      "zoé n'est pas membre, zora a écrit ici mais peut être partie : aucune n'est proposée en local")
+
+        sut.handleQuery(in: "@zo")
+        await waitUntil { service.suggestionsCallCount == 1 }
+        await waitUntil { sut.suggestions.map(\.username) == ["zola"] }
+    }
+
+    func test_handleQuery_direct_offersTheInterlocutorEvenBeforeHeWrote() {
+        let contacts = MockMentionContacts(snapshot: [person("c1", "zoe"), person("peer", "paul")])
+        let (sut, _, _) = makeSUT(contacts: contacts, conversationType: "direct", interlocutorId: "peer")
+
+        sut.handleQuery(in: "@")
+
+        XCTAssertEqual(sut.suggestions.map(\.username), ["paul"])
+    }
+
+    func test_handleQuery_group_contactOutsideMembers_doesNotHoldBackTheEarlyRemoteLookup() async {
+        let (sut, service, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]),
+                                        conversationType: "group", remote: [suggestion("m1", "zola")])
+
+        sut.handleQuery(in: "@zo")
+        await waitUntil { service.suggestionsCallCount == 1 }
+        await waitUntil { sut.suggestions.map(\.username) == ["zola"] }
+    }
+
+    func test_handleQuery_unknownConversationType_showsNobody() {
+        let (sut, _, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("p1", "adam")]),
+                                  participants: [person("p1", "adam")], conversationType: "channel")
+
+        sut.handleQuery(in: "@")
+
+        XCTAssertTrue(sut.suggestions.isEmpty)
+    }
+
+    // MARK: - #14066 — un non-membre ne cite personne
+
+    func test_handleQuery_nonMemberOfAPublicConversation_showsNobody_andAsksNothing() async {
+        let (sut, service, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]),
+                                        conversationType: "public", isMember: false,
+                                        remote: [suggestion("m1", "zola")])
+
+        sut.handleQuery(in: "@zol")
+        await settle()
+
+        XCTAssertTrue(sut.suggestions.isEmpty)
+        XCTAssertEqual(service.suggestionsCallCount, 0, "la passerelle refuserait la recherche : rien ne part")
+    }
+
+    func test_target_withoutServedRole_isNotAMember_butAGuestSessionIs() {
+        let publicRow = MeeshyConversation(id: "c-pub", identifier: "c-pub", type: .public)
+        XCTAssertFalse(ConversationMentionScope.target(for: publicRow, anonymousSession: nil).isMember)
+        let memberRow = MeeshyConversation(id: "c-pub", identifier: "c-pub", type: .public, currentUserRole: "member")
+        XCTAssertTrue(ConversationMentionScope.target(for: memberRow, anonymousSession: nil).isMember)
+        XCTAssertEqual(ConversationMentionScope.target(for: nil, anonymousSession: nil), .unknown)
+    }
+
+    // MARK: - #14071 — la réponse à une pièce prend la portée de SA conversation
+
+    func test_apply_withoutTarget_failsClosed() {
+        let (sut, _, _) = makeSUT(context: .composerDraft, contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]))
+
+        ConversationMentionScope.apply(nil, to: sut, servedMembers: { _ in [] })
+        sut.handleQuery(in: "@")
+
+        XCTAssertTrue(sut.suggestions.isEmpty)
+    }
+
+    func test_apply_withTarget_asksTheConversationAndKeepsItsMembers() async {
+        let (sut, service, annuaire) = makeSUT(context: .composerDraft,
+                                               contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]),
+                                               remote: [suggestion("m1", "zola")])
+        let target = ConversationMentionTarget(conversationId: "conv-9", conversationType: "group",
+                                               interlocutorId: nil, isMember: true, isGuest: false)
+
+        ConversationMentionScope.apply(target, to: sut, servedMembers: { _ in [] })
+        sut.handleQuery(in: "@zo")
+        await waitUntil { service.suggestionsCallCount == 1 }
+
+        XCTAssertEqual(service.lastContextId, "conv-9")
+        XCTAssertEqual(annuaire.callCount, 0, "l'annuaire n'est pas la portée d'un groupe")
+        await waitUntil { sut.suggestions.map(\.username) == ["zola"] }
+    }
+
+    // MARK: - Les membres SERVIS, l'invité, et le rang absent de la ligne
+
+    func test_handleQuery_group_offersTheServedMembers_neverTheHistoryAuthors() async {
+        let contacts = MockMentionContacts(snapshot: [person("m1", "mila"), person("c1", "zoe")])
+        let (sut, _, _) = makeSUT(contacts: contacts, participants: [person("gone", "gaston")],
+                                  conversationType: "group", servedMembers: { _ in ["m1", "m2"] })
+
+        sut.handleQuery(in: "@")
+
+        await waitUntil { sut.suggestions.map(\.username) == ["mila"] }
+    }
+
+    func test_handleQuery_guestInAGroup_citesTheThreadAuthors_withoutTheNetwork() async {
+        let (sut, service, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("c1", "zoe")]),
+                                        participants: [person("a1", "alice")],
+                                        conversationType: "group", isGuest: true)
+
+        sut.handleQuery(in: "@al")
+        await settle()
+
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice"])
+        XCTAssertEqual(service.suggestionsCallCount, 0, "la passerelle refuse la recherche à un invité")
+    }
+
+    func test_handleQuery_rowWithoutRole_isProvenMemberByTheServedParticipants() async {
+        let (sut, _, _) = makeSUT(contacts: MockMentionContacts(snapshot: [person("m1", "mila")]),
+                                  conversationType: "public", isMember: false,
+                                  servedMembers: { _ in ["moi", "m1"] })
+
+        sut.handleQuery(in: "@")
+
+        await waitUntil { sut.suggestions.map(\.username) == ["mila"] }
     }
 }

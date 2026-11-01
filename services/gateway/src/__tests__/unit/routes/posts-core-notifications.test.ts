@@ -226,7 +226,8 @@ describe('POST /posts — friend content fan-out uses fastify.notificationServic
       })
     );
     expect(notificationService.createFriendContentNotificationsBatch).toHaveBeenCalledWith(
-      expect.objectContaining({ excludeUserIds: [FRIEND_ID] })
+      // #14168 : un nommé n'est retiré de l'éventail que si la mention le prévient — le lot en juge.
+      expect.objectContaining({ excludeUserIds: [], mentionedUserIds: [FRIEND_ID] })
     );
 
     await app.close();

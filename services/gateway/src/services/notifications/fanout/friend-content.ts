@@ -7,7 +7,7 @@ import { circleNotifyKey, type CircleNotifyKey } from '@meeshy/shared/utils/rela
 import { filterPostConsumers } from '../../posts/postAudience';
 import { truncateMessage } from '../notification-preview';
 import { resolvePostMedia } from '../post-media-thumbnail';
-import { resolveChosenAudience, resolveEntourage } from './entourage';
+import { mentionReceivers, resolveChosenAudience, resolveEntourage } from './entourage';
 import type { FanoutDependencies } from './dependencies';
 
 export type FriendContentFanoutParams = {
@@ -21,11 +21,14 @@ export type FriendContentFanoutParams = {
   postExpiresAt?: string | Date;
   /** Nature du média principal — affiché quand le contenu n'a pas de texte. */
   mediaType?: 'image' | 'video' | 'audio' | 'text';
-  /**
-   * User IDs to exclude from fan-out.
-   * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
-   */
+  /** User IDs to exclude from fan-out, unconditionally (the reposted author, who gets `post_repost`). */
   excludeUserIds?: string[];
+  /**
+   * Les personnes que le post NOMME : celles que la mention prévient réellement
+   * (les liens de l'auteur, #14168) ne reçoivent que `user_mentioned` ; un nommé
+   * sans lien reste dans l'éventail.
+   */
+  mentionedUserIds?: readonly string[];
   /**
    * Post visibility — used to filter recipients (same rules as Socket.IO broadcast).
    *
@@ -69,8 +72,8 @@ const publicationKey = (params: Pick<FriendContentFanoutParams, 'contentType' | 
  * Rate-limit: none in v1. These are once-per-publish events so burst risk is low.
  * Aggregation: none in v1. Duplicate suppression (author vs friend) is enforced via excludeUserIds.
  *
- * Dedup with mentions: pass mentionedUserIds as `excludeUserIds`.
- * user_mentioned takes priority over friend_new_post for the same recipient.
+ * Dedup with mentions: pass `mentionedUserIds`; those the mention actually notifies
+ * get only user_mentioned (priority over friend_new_post).
  *
  * Cap: `FANOUT_ROW_CAP` named recipients, closest first (`resolveEntourage`).
  */
@@ -96,7 +99,11 @@ export async function createFriendContentNotificationsBatch(
 
   if (!author) return;
 
-  const excludeSet = new Set(params.excludeUserIds ?? []);
+  const mentioned = await mentionReceivers(deps.prisma, {
+    mentionerId: params.authorId,
+    mentionedUserIds: params.mentionedUserIds ?? [],
+  });
+  const excludeSet = new Set([...(params.excludeUserIds ?? []), ...mentioned]);
   const excerpt = params.excerpt ? truncateMessage(params.excerpt) : '';
   // Vignette du contenu publié → rendue in-app + attachée au push iOS. Le
   // mediaType explicite de l'appelant prime ; sinon on le dérive du média.

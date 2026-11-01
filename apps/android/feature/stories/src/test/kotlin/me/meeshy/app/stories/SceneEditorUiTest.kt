@@ -1,9 +1,16 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasContentDescription
@@ -90,6 +97,97 @@ class SceneEditorUiTest {
         compose.onNodeWithText("0:04 / 0:10").assertIsDisplayed()
         compose.onNodeWithText("Exits here").performClick()
         assertThat(windows.single()).isEqualTo(Triple("s1", 2f, 2f))
+    }
+
+    @Test
+    fun `en arabe la frise garde le temps de gauche a droite, ses noms a gauche de l'axe`() {
+        val state = stickerState()
+        compose.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                MeeshyTheme {
+                    SceneFrise(
+                        tracks = state.sceneTracks,
+                        editableIds = state.sceneEditableTrackIds,
+                        selectedId = "s1",
+                        slideDurationSeconds = 10f,
+                        playheadSeconds = 0f,
+                        onSelectTrack = { _, _ -> },
+                        onScrub = {},
+                        onWindow = { _, _, _ -> },
+                        modifier = Modifier.width(360.dp),
+                    )
+                }
+            }
+        }
+
+        val label = compose.onNodeWithText("😀").getUnclippedBoundsInRoot()
+        assertThat(label.left.value).isLessThan(90f)
+    }
+
+    @Test
+    fun `TalkBack deplace une piste et regle son entree et sa sortie par demi-seconde`() {
+        val state = stickerState()
+        val windows = mutableListOf<Triple<String, Float, Float>>()
+        compose.setContent {
+            MeeshyTheme {
+                SceneFrise(
+                    tracks = state.sceneTracks,
+                    editableIds = state.sceneEditableTrackIds,
+                    selectedId = "s1",
+                    slideDurationSeconds = 10f,
+                    playheadSeconds = 0f,
+                    onSelectTrack = { _, _ -> },
+                    onScrub = {},
+                    onWindow = { id, s, d -> windows += Triple(id, s, d) },
+                )
+            }
+        }
+
+        val actions = compose.onNodeWithText("😀").fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions].associateBy { it.label }
+        assertThat(actions.keys).containsAtLeast(
+            "Earlier", "Later", "Enter earlier", "Enter later", "Exit earlier", "Exit later",
+        )
+        compose.runOnIdle {
+            actions.getValue("Exit later").action()
+            actions.getValue("Earlier").action()
+            actions.getValue("Enter later").action()
+        }
+
+        assertThat(windows).containsExactly(
+            Triple("s1", 2f, 6.5f),
+            Triple("s1", 1.5f, 6f),
+            Triple("s1", 2.5f, 5.5f),
+        ).inOrder()
+    }
+
+    @Test
+    fun `Couper n'apparait que pour un objet coupable dont la tete est dans la fenetre`() {
+        val state = stickerState()
+        val split = mutableListOf<String>()
+        var playhead by mutableStateOf(4f)
+        compose.setContent {
+            MeeshyTheme {
+                SceneFrise(
+                    tracks = state.sceneTracks,
+                    editableIds = state.sceneEditableTrackIds,
+                    selectedId = "s1",
+                    slideDurationSeconds = 10f,
+                    playheadSeconds = playhead,
+                    onSelectTrack = { _, _ -> },
+                    onScrub = {},
+                    onWindow = { _, _, _ -> },
+                    splittableIds = setOf("s1"),
+                    onSplit = { split += it },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Split").performClick()
+        assertThat(split).containsExactly("s1")
+        playhead = 9f
+        compose.waitForIdle()
+        compose.onNodeWithText("Split").assertDoesNotExist()
     }
 
     @Test

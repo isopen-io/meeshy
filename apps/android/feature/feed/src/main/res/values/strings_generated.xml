@@ -68,8 +68,11 @@
     <string name="feed_scene_previous">Previous scene</string>
     <string name="feed_scene_resume">Resumes the scene playback</string>
     <string name="feed_scene_sound_mute">Mute the sound</string>
+    <string name="feed_scene_sound_muted">Sound off — open full screen to hear it</string>
+    <string name="feed_scene_sound_track">Background sound</string>
     <string name="feed_scene_sound_unmute">Turn the sound back on</string>
     <string name="feed_scene_tile">Scene %1$d</string>
+    <string name="feed_scene_video">video</string>
     <string name="feed_secondary_translation_a11y">Translation in %1$s: %2$s</string>
     <string name="feed_translated">Translation available</string>
     <string name="feed_translation_available">Available translations</string>

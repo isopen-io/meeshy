@@ -113,8 +113,12 @@ class ReducedSceneBareComposeTest {
         }
     }
 
-    /** Deux diapos et un historique : au repos, ✕, ↶ ↷, la rangée des diapos et les outils sont sur la scène. */
-    private fun twoSlidesWithHistory(): StoryComposerViewModel = viewModel().also { it.onAddSlide() }
+    /** Deux diapos, un pas à annuler et un à rétablir (un bouton sans pas se masque, #14209) : au repos, ✕, ↶ ↷, la rangée des diapos et les outils sont sur la scène. */
+    private fun twoSlidesWithHistory(): StoryComposerViewModel = viewModel().also {
+        it.onAddSlide()
+        it.onAddSlide()
+        it.onUndo()
+    }
 
     @Test
     fun `at rest close, undo, the slide strip and the tools are on the scene`() {
