@@ -81,7 +81,8 @@ public enum VideoThumbnailInstants {
             let fin = known.map { min(end, $0) } ?? end
             guard fin > debut, fin.isFinite else { return [] }
             let tranches = max(1, count)
-            return (0..<tranches).map { debut + (fin - debut) * (Double($0) + 0.5) / Double(tranches) }
+            let pas: Double = (fin - debut) / Double(tranches)
+            return (0..<tranches).map { (rang: Int) -> Double in debut + pas * (Double(rang) + 0.5) }
         }
     }
 
