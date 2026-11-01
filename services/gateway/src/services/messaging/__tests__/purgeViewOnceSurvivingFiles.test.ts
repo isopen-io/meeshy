@@ -161,4 +161,24 @@ describe('purge d’une vue unique — des octets qui survivent à leur effaceme
     expect(state.attachments).toEqual([]);
     expect(state.messages[0].viewOnceBurnAt).toBeNull();
   });
+
+  it('deux passes concurrentes sur la même échéance n’annoncent la purge qu’UNE fois (F5)', async () => {
+    await uploadRootWithFiles();
+    const { prisma } = seed();
+    const service = new AttachmentService(prisma as unknown as PrismaClient);
+    const announced: string[] = [];
+    const purge = () =>
+      purgeDueViewOnceContent(prisma as unknown as Parameters<typeof purgeDueViewOnceContent>[0], {
+        now: new Date(),
+        attachmentRemover: service,
+        announce: ({ id }) => {
+          announced.push(id);
+        },
+      });
+
+    const results = await Promise.all([purge(), purge()]);
+
+    expect(announced).toEqual([MESSAGE_ID]);
+    expect(results.reduce((sum, { purged }) => sum + purged, 0)).toBe(1);
+  });
 });
