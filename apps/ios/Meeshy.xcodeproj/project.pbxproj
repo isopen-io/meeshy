@@ -2115,6 +2115,12 @@
 		7E943BB0302E3DF38328F0C8 /* EncryptedDevicesViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD0BF87C91AA0D75854EA5F /* EncryptedDevicesViewModelTests.swift */; };
 		7E9A3E62668E323504DAB220 /* SendEligibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97CAD7986A65852807CABFA0 /* SendEligibility.swift */; };
 		7E9B900280A08A3E0C0A5D42 /* ContactFilterTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA97FAB9CE9C4CE9042BFDFB /* ContactFilterTitleTests.swift */; };
+		075C065F4C48989D55A00BE5 /* UserProfileDependencies+Live.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F6F30257BBFE6D60C0FA31 /* UserProfileDependencies+Live.swift */; };
+		5E74DF26C8673118A0595B95 /* LiveProfileSocialActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1242C68C79ACDEC9627CFED /* LiveProfileSocialActions.swift */; };
+		9BD0812212E3BDB98B22BCC9 /* LiveProfileRelationshipState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E3B3FE8B76E0DE242E6748E /* LiveProfileRelationshipState.swift */; };
+		B1CAAD8BA93F2D578FDD262D /* ConnectionActionView+Live.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E4BFB9EB97B8D30DF32F2C /* ConnectionActionView+Live.swift */; };
+		CD0DC9D3149881FE71BD22D2 /* UncachedProfileLoading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D7D8219168FE3CFECEF5F99 /* UncachedProfileLoading.swift */; };
+		CAFF91D43F23C1CAC1C9E8EB /* UncachedProfileLoadingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1811BF2035569A1E6B008C4B /* UncachedProfileLoadingTests.swift */; };
 		7EA1CCF384FF7A736FA813B7 /* EphemeralExpiryLawTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F57B7EEB89DC33163190291 /* EphemeralExpiryLawTests.swift */; };
 		7EA2FA8F3D001DC0DE7021DE /* BubbleWindowMetricsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC6EDF394B8D272DB56C364 /* BubbleWindowMetricsTests.swift */; };
 		7EC1983A2EBE0E57E44D9934 /* SessionOpeningGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A1840B1DEA26DA8982DFEF /* SessionOpeningGate.swift */; };
@@ -7878,6 +7884,12 @@
 		DF369EF6EC2EF7B49A43D751 /* BubbleExpandableTextStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleExpandableTextStateTests.swift; sourceTree = "<group>"; };
 		DF3DA7F5BBDCAD70F5A1B184 /* SocialMediaGalleryPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialMediaGalleryPresentation.swift; sourceTree = "<group>"; };
 		DF520A061D26154FE6A74AC3 /* LiveProfileLoading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveProfileLoading.swift; sourceTree = "<group>"; };
+		85F6F30257BBFE6D60C0FA31 /* UserProfileDependencies+Live.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserProfileDependencies+Live.swift"; sourceTree = "<group>"; };
+		A1242C68C79ACDEC9627CFED /* LiveProfileSocialActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveProfileSocialActions.swift; sourceTree = "<group>"; };
+		1E3B3FE8B76E0DE242E6748E /* LiveProfileRelationshipState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveProfileRelationshipState.swift; sourceTree = "<group>"; };
+		25E4BFB9EB97B8D30DF32F2C /* ConnectionActionView+Live.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConnectionActionView+Live.swift"; sourceTree = "<group>"; };
+		6D7D8219168FE3CFECEF5F99 /* UncachedProfileLoading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UncachedProfileLoading.swift; sourceTree = "<group>"; };
+		1811BF2035569A1E6B008C4B /* UncachedProfileLoadingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UncachedProfileLoadingTests.swift; sourceTree = "<group>"; };
 		DF531A57A7106A3372E87E73 /* TypingWave.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingWave.swift; sourceTree = "<group>"; };
 		DF5A8C547224B31A4EDC3F68 /* morbide_faire-part_back.webp */ = {isa = PBXFileReference; path = "morbide_faire-part_back.webp"; sourceTree = "<group>"; };
 		DF6B9018EACF9AD874943389 /* ConversationForMeRemoval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationForMeRemoval.swift; sourceTree = "<group>"; };
@@ -9969,6 +9981,14 @@
 			path = Main;
 			sourceTree = "<group>";
 		};
+		66BCBBA205ADBCFFB2D513EB /* Profile */ = {
+			isa = PBXGroup;
+			children = (
+				1811BF2035569A1E6B008C4B /* UncachedProfileLoadingTests.swift */,
+			);
+			path = Profile;
+			sourceTree = "<group>";
+		};
 		436788948E036A2F718F9A59 /* Unit */ = {
 			isa = PBXGroup;
 			children = (
@@ -10017,6 +10037,7 @@
 				0D84F8ADB66F6FE7CE49623D /* Views */,
 				1A05BD6489C319E726C5AE7D /* Vitrine */,
 				9F920AAD16F0EA20DBB2D689 /* Widgets */,
+				66BCBBA205ADBCFFB2D513EB /* Profile */,
 			);
 			path = Unit;
 			sourceTree = "<group>";
@@ -12900,6 +12921,11 @@
 			isa = PBXGroup;
 			children = (
 				DF520A061D26154FE6A74AC3 /* LiveProfileLoading.swift */,
+				85F6F30257BBFE6D60C0FA31 /* UserProfileDependencies+Live.swift */,
+				A1242C68C79ACDEC9627CFED /* LiveProfileSocialActions.swift */,
+				1E3B3FE8B76E0DE242E6748E /* LiveProfileRelationshipState.swift */,
+				25E4BFB9EB97B8D30DF32F2C /* ConnectionActionView+Live.swift */,
+				6D7D8219168FE3CFECEF5F99 /* UncachedProfileLoading.swift */,
 				02C7A6C7F1696175BE9C51C2 /* ViewModels */,
 				22A26865F9BC23B9D4D27642 /* Views */,
 			);
@@ -15722,6 +15748,11 @@
 				18272492CA6CB86C84ADBF20 /* LiveCallJoiner.swift in Sources */,
 				B7B1251310301402699C2813 /* LivePresence.swift in Sources */,
 				1012E341C7805C4F3AF96D4A /* LiveProfileLoading.swift in Sources */,
+				075C065F4C48989D55A00BE5 /* UserProfileDependencies+Live.swift in Sources */,
+				5E74DF26C8673118A0595B95 /* LiveProfileSocialActions.swift in Sources */,
+				9BD0812212E3BDB98B22BCC9 /* LiveProfileRelationshipState.swift in Sources */,
+				B1CAAD8BA93F2D578FDD262D /* ConnectionActionView+Live.swift in Sources */,
+				CD0DC9D3149881FE71BD22D2 /* UncachedProfileLoading.swift in Sources */,
 				5A3BA17305F0F53436A6FD0B /* LivingSummaryAssembly.swift in Sources */,
 				AF7A66C0F5111BB175C47786 /* LivingSummaryHost.swift in Sources */,
 				F1F28AEB3A9720BE77978065 /* LivingSummaryModels.swift in Sources */,
@@ -17180,6 +17211,7 @@
 				652A4BFE57F1AC6BDE0F9593 /* ContactCardViewModelTests.swift in Sources */,
 				B956497994D363F9F92FBF76 /* ContactCardViewTests.swift in Sources */,
 				7E9B900280A08A3E0C0A5D42 /* ContactFilterTitleTests.swift in Sources */,
+				CAFF91D43F23C1CAC1C9E8EB /* UncachedProfileLoadingTests.swift in Sources */,
 				0423C4683E89DA3DB4905763 /* ContactRecentlyActiveRoutingTests.swift in Sources */,
 				E0C2C7F2B3FE3AFF4B678648 /* ContactSearchPhonePromptGuardTests.swift in Sources */,
 				6AC05B79D8952CE8F76F0D90 /* ContactSyncServiceTests.swift in Sources */,

@@ -779,7 +779,8 @@ struct FeedPostCard: View {
                     }, onOpenReel: { reel, reels in
                         ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
                     }))
-                }
+                },
+                dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)

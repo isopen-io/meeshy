@@ -109,7 +109,8 @@ struct StoryTrayView: View {
                     userId: uid,
                     onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
                     onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }
+                )) },
+                dependencies: .live
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -676,7 +677,8 @@ struct PinnedStoryTrailBand: View {
                     userId: uid,
                     onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
                     onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }
+                )) },
+                dependencies: .live
                     )
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
