@@ -11,6 +11,13 @@
 - **Les créations hors de l'écran de création** (ouvrir la conversation depuis un profil, un partage, un transfert, une réponse depuis une notification) ne choisissent rien : la passerelle pose Serveur. Jamais Bout en bout d'office, ces chemins portant des pièces jointes que le bout en bout ne scelle pas encore.
 - **Le chiffrement au repos ne se désactive plus** (`409 ENCRYPTION_AT_REST_PERMANENT`). Serveur et Hybride passent directement à un autre mode, Bout en bout compris. Bout en bout ne se quitte jamais (#12949).
 - **Le contrat** : `POST /conversations` accepte `encryptionMode: 'server' | 'hybrid' | 'e2ee'`. Absent, ou avec `plaintext: true` : `server`. `e2ee` : 403 `ENCRYPTION_ACTIVATION_RESTRICTED` sous ANALYST, 400 `ENCRYPTION_MODE_CONFLICT` avec `plaintext`, et il rouvre le tête-à-tête chiffré de la paire s'il existe. Le régime est écrit par le `create`, sous une clé obtenue AVANT : sans clé maîtresse, 503 `SERVER_AT_REST_UNAVAILABLE` et rien n'est créé.
+- **Revue adversariale du lot (2026-11-01)** — ce qu'elle a fait changer :
+  - **La règle de la paire (#12966) juge aussi la montée server/hybrid → e2ee** : une paire garde un seul tête-à-tête chiffré de bout en bout.
+  - **Tout `conversation.create` de production pose son régime** : amitié acceptée, lien de partage (deux branches), création implicite de la traduction. Une garde de balayage l'impose. Seules exceptions déclarées : les conversations SYSTÈME de démarrage (Meeshy Global, conversation monde), laissées à la migration pour que la passerelle démarre sans dépendre de la clé maîtresse.
+  - **Un tête-à-tête ancien sans mode, rouvert, est chiffré au repos** sous sa clé (sans clé maîtresse : 503, jamais rouvert en clair).
+  - **Bout en bout à la création : tête-à-tête seulement** (400 `ENCRYPTION_MODE_UNSUPPORTED`) — aucun client n'écrit encore dans un groupe chiffré, et le bout en bout ne se quitte pas.
+  - **Le mode Serveur garde les fonctions serveur** (#9224) : l'édition et l'agent sont rétablis en `server`/`hybrid`. La recherche serveur (le texte au repos est rangé chiffré) est un suivi, et **la promotion en production l'attend**.
+  - **Anciens clients** : ceux qui proposaient « Désactiver » (ANALYST et plus seulement) reçoivent un 409 lisible au lieu d'une désactivation.
 - **Une règle, trois miroirs** : `packages/shared/utils/conversation-creation-encryption.ts` (`creationEncryptionOffer`), iOS `ConversationCreationEncryption`, Android `ConversationCreationEncryption.kt`.
 
 **Les mots** (source française ; l'utilisateur lit ce qui le concerne, jamais qui détient une clé) :
@@ -18,7 +25,7 @@
 | où | texte |
 |---|---|
 | en-tête du choix | Chiffrement |
-| Serveur | **Serveur** — Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent. |
+| Serveur | **Serveur** — Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent. (La recherche serveur revient avant la promotion en production.) |
 | Hybride | **Hybride** — Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt. |
 | Bout en bout | **Bout en bout** — Seuls vos appareils et ceux des participants lisent les messages. La traduction se fait sur votre appareil. |
 | Bout en bout, groupe | Bientôt disponible pour les groupes |
