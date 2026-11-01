@@ -86,5 +86,18 @@ object MentionLookupLaw {
         return mergeCandidates(filter(pool, query), emptyList(), selfId)
     }
 
+    /**
+     * Les personnes du contexte que la liste peut proposer (#14183) : le roster SERVI (participants
+     * actifs), jamais les auteurs du fil — partis peut-être, ils seraient proposés puis ignorés.
+     * Sauf pour un INVITÉ de lien : la passerelle ne lui sert que sa propre ligne (#10205), et les
+     * auteurs du fil qu'elle lui a servis sont alors ses membres connus — miroir de web et iOS.
+     */
+    fun knownRoster(
+        roster: List<MentionCandidate>,
+        threadAuthors: List<MentionCandidate>,
+        isGuest: Boolean,
+    ): List<MentionCandidate> =
+        if (isGuest) merge(roster, threadAuthors, selfId = null) { it.id } else roster
+
     private fun MentionCandidate.handleKey(): String = username.trim().lowercase()
 }

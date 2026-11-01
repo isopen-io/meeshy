@@ -122,6 +122,27 @@ class MentionLookupLawTest {
     }
 
     @Test
+    fun `a guest in a group cites the thread authors it was served, a registered member never does (#14183)`() {
+        val author = person("alice")
+        val guestRoster = MentionLookupLaw.knownRoster(roster = emptyList(), threadAuthors = listOf(author), isGuest = true)
+        val guestLocal = MentionLookupLaw.localMatches(
+            contacts = emptyList(),
+            context = guestRoster,
+            query = "",
+            selfId = null,
+            scope = MentionableScope.MEMBERS,
+        )
+        assertThat(guestLocal.map { it.username }).containsExactly("alice")
+
+        val memberRoster = MentionLookupLaw.knownRoster(
+            roster = listOf(person("bob")),
+            threadAuthors = listOf(author),
+            isGuest = false,
+        )
+        assertThat(memberRoster.map { it.username }).containsExactly("bob")
+    }
+
+    @Test
     fun `without a scope nobody is offered, not even the context (#14071)`() {
         val local = MentionLookupLaw.localMatches(
             contacts = listOf(person("anna")),

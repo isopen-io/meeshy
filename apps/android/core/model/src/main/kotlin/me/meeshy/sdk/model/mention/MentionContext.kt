@@ -60,9 +60,19 @@ data class MentionContext(
             return MentionContext(key, MentionContextType.CONVERSATION, scope)
         }
 
-        /** Le contexte de la conversation ouverte, l'appartenance du lecteur lue par [isActiveMember]. */
-        fun of(conversation: ApiConversation, currentUserId: String?): MentionContext? =
-            conversation(conversation.id, conversation.type, conversation.isActiveMember(currentUserId))
+        /**
+         * Le contexte de la conversation ouverte, l'appartenance du lecteur lue par [isActiveMember].
+         * Un invité de lien ([isGuest]) est membre par sa session, et la passerelle lui refuse la
+         * recherche (`allowAnonymous: false`) : son contexte n'interroge pas le réseau.
+         */
+        fun of(conversation: ApiConversation, currentUserId: String?, isGuest: Boolean = false): MentionContext? {
+            val context = conversation(
+                conversation.id,
+                conversation.type,
+                isMember = isGuest || conversation.isActiveMember(currentUserId),
+            ) ?: return null
+            return if (isGuest) context.copy(type = null) else context
+        }
 
         fun post(id: String?): MentionContext? {
             val key = id?.trim()?.takeIf { it.isNotEmpty() } ?: return null

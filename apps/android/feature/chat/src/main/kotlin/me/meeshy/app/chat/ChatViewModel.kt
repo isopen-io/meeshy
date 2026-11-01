@@ -45,6 +45,7 @@ import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.mention.MentionContext
+import me.meeshy.sdk.model.mention.MentionLookupLaw
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
@@ -291,6 +292,26 @@ class ChatViewModel @Inject constructor(
 
         reactions.start()
 
+        // #14071, #14183 — la liste « @ » : le roster SERVI et la portée de la conversation ; pour un
+        // invité de lien, les auteurs du fil qui lui sont servis (son roster ne porte que sa ligne).
+        viewModelScope.launch {
+            combine(
+                conversationRepository.conversationStream(conversationId).filterNotNull(),
+                latestMessages,
+            ) { conversation, messages -> conversation to messages }.collect { (conversation, messages) ->
+                val currentUser = sessionRepository.currentUser.value
+                val isGuest = currentUser?.isAnonymous == true
+                composer.updateMentionRoster(
+                    roster = MentionLookupLaw.knownRoster(
+                        roster = MentionRoster.fromParticipants(conversation.participants, excludeUserId = currentUser?.id),
+                        threadAuthors = MentionRoster.fromMessageAuthors(messages.map { it.message }, excludeUserId = currentUser?.id),
+                        isGuest = isGuest,
+                    ),
+                    context = MentionContext.of(conversation, currentUser?.id, isGuest),
+                )
+            }
+        }
+
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
                 if (conversation == null) return@collect
@@ -298,10 +319,6 @@ class ChatViewModel @Inject constructor(
                 val roster = MentionRoster.fromParticipants(
                     participants = conversation.participants,
                     excludeUserId = currentUserId,
-                )
-                composer.updateMentionRoster(
-                    roster = roster,
-                    context = MentionContext.of(conversation, currentUserId),
                 )
                 avatarByUserId = conversation.participants
                     .associate { (it.userId ?: it.id) to it.avatar }

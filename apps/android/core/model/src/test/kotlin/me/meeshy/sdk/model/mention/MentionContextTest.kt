@@ -77,6 +77,15 @@ class MentionContextTest {
     }
 
     @Test
+    fun `a share-link guest is a member by its session and never asks the network (#14183)`() {
+        val group = ApiConversation(id = "c1", type = "group")
+        val context = MentionContext.of(group, currentUserId = "p-guest", isGuest = true)
+        assertThat(context?.scope).isEqualTo(MentionableScope.MEMBERS)
+        assertThat(context?.searchesRemotely).isFalse()
+        assertThat(MentionContext.of(group.copy(currentUserRole = "member"), "me")?.searchesRemotely).isTrue()
+    }
+
+    @Test
     fun `a blank id is no context at all`() {
         assertThat(MentionContext.post("")).isNull()
         assertThat(MentionContext.post(null)).isNull()
