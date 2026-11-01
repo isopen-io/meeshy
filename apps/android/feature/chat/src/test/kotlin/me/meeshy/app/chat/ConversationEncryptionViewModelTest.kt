@@ -272,6 +272,8 @@ class ConversationEncryptionViewModelTest {
     fun `end to end is never a switch target from this phone`() = runTest {
         val provider = mockk<ConversationEncryptionProviding>()
         coEvery { provider.status("c1") } returns ok("hybrid")
+        // Le choix refusé laisse le mode valide d'avant, que le changement peut viser.
+        coEvery { provider.enable("c1", any()) } returns ok("server")
         val vm = viewModel(provider)
         vm.load("c1", isDirect = true)
         advanceUntilIdle()

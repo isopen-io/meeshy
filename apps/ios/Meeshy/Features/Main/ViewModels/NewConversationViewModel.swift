@@ -67,7 +67,7 @@ final class NewConversationViewModel: ObservableObject {
     /// spinner over existing data).
     @Published private(set) var isLoadingContacts = false
     /// Le mode de chiffrement que l'utilisateur a touché, s'il en a touché un
-    /// (directive porteur du 2026-11-01). `nil` : le défaut de l'offre.
+    /// (directive porteur). `nil` : le défaut de l'offre.
     @Published private(set) var chosenEncryptionMode: ConversationCreationEncryption.Mode?
 
     // MARK: - Dependencies
@@ -101,7 +101,7 @@ final class NewConversationViewModel: ObservableObject {
         api: APIClientProviding = APIClient.shared,
         friendService: FriendServiceProviding = FriendService.shared,
         currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id },
-        platformRoleProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.role }
+        platformRoleProvider: @MainActor @escaping () -> String? = { ConversationEncryptionActivationPolicy.currentPlatformRole() }
     ) {
         self.api = api
         self.friendService = friendService

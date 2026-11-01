@@ -3,7 +3,7 @@ import MeeshySDK
 
 /// QUI peut activer le chiffrement d'une conversation (#12517, #12588,
 /// directives du porteur) — le bout en bout ne se désactive pas (#12949), le
-/// chiffrement au repos non plus (2026-11-01) — miroir de `mayActivateConversationEncryption`
+/// chiffrement au repos non plus — miroir de `mayActivateConversationEncryption`
 /// (`services/gateway/src/utils/encryption-activation-policy.ts`). Tant que
 /// l'E2EE n'est pas opérationnel, l'activation est réservée à un rôle de
 /// plateforme ANALYST ou supérieur (ANALYST, AUDIT, MODERATOR, ADMIN, BIGBOSS),
@@ -16,6 +16,12 @@ import MeeshySDK
 /// jamais réécrite.
 enum ConversationEncryptionActivationPolicy {
     static let minimumPlatformRole: PlatformRole = ConversationCreationEncryption.endToEndMinimumPlatformRole
+
+    /// Le rôle de plateforme de la session ouverte : la source par défaut des
+    /// écrans qui proposent le bout en bout (écran de création compris).
+    @MainActor static func currentPlatformRole() -> String? {
+        AuthManager.shared.currentUser?.role
+    }
 
     static func mayActivate(platformRole: String?) -> Bool {
         ConversationCreationEncryption.mayChooseEndToEnd(platformRole: platformRole)
@@ -46,8 +52,8 @@ enum ConversationSecurityRowContent: Equatable {
     }
 }
 
-/// Ce que la feuille de détail du chiffrement rend (directive porteur du
-/// 2026-11-01) : le chiffrement au repos ne se désactive plus
+/// Ce que la feuille de détail du chiffrement rend (directive porteur) :
+/// le chiffrement au repos ne se désactive plus
 /// (`409 ENCRYPTION_AT_REST_PERMANENT`) ; une conversation `server` ou `hybrid`
 /// passe directement à un autre mode, bout en bout compris, au rôle autorisé ;
 /// le bout en bout ne se quitte jamais (#12949).

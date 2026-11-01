@@ -1,7 +1,7 @@
 import Foundation
 import MeeshySDK
 
-/// Les mots d'un mode de chiffrement (directive porteur du 2026-11-01) : les
+/// Les mots d'un mode de chiffrement (directive porteur) : les
 /// mêmes sur l'écran de création et sur la fiche Chiffrement. L'utilisateur lit
 /// ce que le mode fait de ses messages, jamais qui détient une clé ni un nom
 /// d'algorithme.

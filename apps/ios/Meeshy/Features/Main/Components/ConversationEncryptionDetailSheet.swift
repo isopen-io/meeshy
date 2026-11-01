@@ -184,7 +184,7 @@ struct ConversationEncryptionDetailSheet: View {
 
     }
 
-    // MARK: - Le chiffrement au repos ne se désactive plus : il change de mode (2026-11-01)
+    // MARK: - Le chiffrement au repos ne se désactive plus : il change de mode
 
     /// Une conversation `server` ou `hybrid` passe directement à un autre mode,
     /// bout en bout compris ; ce dernier se confirme, on n'en revient pas.
@@ -476,7 +476,7 @@ struct ConversationEncryptionDetailSheet: View {
     }
 
     /// Activer ou changer de mode : `POST /conversations/:id/encryption` passe
-    /// directement de `server` / `hybrid` au mode demandé (2026-11-01).
+    /// directement de `server` / `hybrid` au mode demandé.
     private func switchMode(to mode: ConversationEncryptionModeChoice) async {
         await switchRegime { try await service.enable(conversationId: conversationId, mode: mode.rawValue) }
     }

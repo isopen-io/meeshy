@@ -1,8 +1,8 @@
 import Foundation
 
 /// **Le mode de chiffrement d'une conversation se choisit à sa CRÉATION**
-/// (directive porteur du 2026-11-01,
-/// `packages/shared/decisions/2026-11-01-le-mode-de-chiffrement-se-choisit-a-la-creation.md`).
+/// (directive porteur ; décision « le mode de chiffrement se choisit à la
+/// création » sous `packages/shared/decisions/`).
 ///
 /// Miroir de `creationEncryptionOffer`
 /// (`packages/shared/utils/conversation-creation-encryption.ts`) et d'Android

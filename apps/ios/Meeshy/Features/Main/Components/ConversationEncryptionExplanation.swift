@@ -21,7 +21,7 @@ enum ConversationEncryptionRegime: Equatable {
     }
 
     /// Une phrase, sans jargon : le régime et ce qu'il fait des messages
-    /// (directive porteur du 2026-11-01 — jamais qui détient une clé).
+    /// (directive porteur — jamais qui détient une clé).
     var summary: String {
         switch self {
         case .none:
@@ -58,7 +58,7 @@ enum ConversationEncryptionRegime: Equatable {
 ///   bout ne se désactive pas (#12949) : un tête-à-tête renvoie à une
 ///   conversation non chiffrée avec le même contact (#12966), un groupe à une
 ///   nouvelle conversation. Le chiffrement au repos ne se désactive plus
-///   (2026-11-01) : `server` et `hybrid` changent de mode, rien d'autre.
+///   `server` et `hybrid` changent de mode, rien d'autre.
 struct ConversationEncryptionExplanation: Equatable {
 
     enum Topic: CaseIterable, Equatable {

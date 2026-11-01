@@ -317,7 +317,7 @@ struct NewConversationView: View {
         }
     }
 
-    // MARK: - Encryption (directive porteur du 2026-11-01)
+    // MARK: - Encryption
 
     /// Le mode se choisit à la création : l'offre suit le rôle et la forme
     /// (tête-à-tête ou groupe) que la sélection dessine.
