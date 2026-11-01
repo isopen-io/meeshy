@@ -99,7 +99,7 @@ final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
         let block = String(source[revalidateRange.lowerBound..<endRange.lowerBound])
 
         XCTAssertFalse(
-            block.contains("if enabled && (self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption)"),
+            block.contains("if enabled && (self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption)"),
             "The in-Task re-validation guard must not restrict the OS-suspension check to the resume " +
             "direction either — it re-applies the exact same pre-flight guard after the serialization " +
             "await, and must stay symmetric with it."

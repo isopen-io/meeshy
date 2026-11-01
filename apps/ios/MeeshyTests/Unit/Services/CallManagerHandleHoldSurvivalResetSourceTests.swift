@@ -56,7 +56,7 @@ final class CallManagerHandleHoldSurvivalResetSourceTests: XCTestCase {
             "Sanity check: this must be handleHold's generic catch branch, which disables video."
         )
         XCTAssertTrue(
-            block.contains("self.videoSurvivalController.reset()"),
+            block.contains("call.videoSurvivalController.reset()"),
             "handleHold's generic catch (any upgradeToVideo() failure besides camera-permission-denied) " +
             "must reset the survival controller, exactly like its cameraPermissionDenied sibling above " +
             "it — both disable video for the rest of the call, and skipping the reset can leave a stale " +

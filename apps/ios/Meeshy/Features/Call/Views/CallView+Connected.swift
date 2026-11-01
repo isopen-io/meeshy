@@ -57,7 +57,7 @@ extension CallView {
         // §7.1 — populate the camera list when video turns on so the « mon
         // image » actions can decide flip vs device picker (Continuity/USB).
         .task(id: callManager.isVideoEnabled) {
-            if callManager.isVideoEnabled { callManager.refreshAvailableCameras() }
+            if callManager.isVideoEnabled { callManager.cameraActuator.refreshAvailableCameras() }
         }
         .onAppear { showEffectsToolbar = false }
         .onDisappear {

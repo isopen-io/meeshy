@@ -665,6 +665,8 @@ final class CallManager: ObservableObject, Sendable {
     let audio: CallAudioSessionControllerProviding
     /// La vidéo sortante qui s'arrête ou se fige : attente, survie, chaleur (`CallVideoSuspension`).
     let videoSuspension: CallVideoSuspensionProviding
+    /// La caméra : coupure, bascule, choix de l'appareil (`CallCameraActuator`).
+    let cameraActuator: CallCameraActuatorProviding
     /// Le chrono affiché et le battement de cœur (`CallLiveClock`).
     let liveClock: CallLiveClockProviding
 
@@ -682,6 +684,7 @@ final class CallManager: ObservableObject, Sendable {
         systemPiP: CallSystemPiPControllerProviding = CallSystemPiPController(),
         audio: CallAudioSessionControllerProviding = CallAudioSessionController(),
         videoSuspension: CallVideoSuspensionProviding = CallVideoSuspension(),
+        cameraActuator: CallCameraActuatorProviding = CallCameraActuator(),
         liveClock: CallLiveClockProviding = CallLiveClock()
     ) {
         self.signalingRouter = signalingRouter
@@ -697,6 +700,7 @@ final class CallManager: ObservableObject, Sendable {
         self.systemPiP = systemPiP
         self.audio = audio
         self.videoSuspension = videoSuspension
+        self.cameraActuator = cameraActuator
         self.audioSessionQueue = audio.audioSessionQueue
         self.liveClock = liveClock
         // Survival controller is created with no actuator yet; `attach(self)` wires
@@ -714,6 +718,7 @@ final class CallManager: ObservableObject, Sendable {
         // the actuator weakly, so no retain cycle (CallManager owns the controller).
         self.videoSurvivalController.attach(actuator: videoSuspension)
         videoSuspension.attach(to: self)
+        cameraActuator.attach(to: self)
         videoSuspension.bindSurvivalFreeze()
 
         sdpSignaler.isCurrentCall = { [weak self] callId in self?.currentCallId == callId }

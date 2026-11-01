@@ -56,7 +56,7 @@ final class CallManagerToggleSpeakerFailureCorrectionSourceTests: XCTestCase {
         guard let fn = body(
             ((try? AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")) ?? ""),
             from: "func toggleSpeaker() {",
-            to: "/// §5.4"
+            to: "/// Annonce aux pairs que ce device ÉCOUTE"
         ) else { return }
         XCTAssertTrue(
             fn.contains("let previousSpeaker = isSpeaker"),
@@ -84,7 +84,7 @@ final class CallManagerToggleSpeakerFailureCorrectionSourceTests: XCTestCase {
         guard let fn = body(
             ((try? AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")) ?? ""),
             from: "func toggleSpeaker() {",
-            to: "/// §5.4"
+            to: "/// Annonce aux pairs que ce device ÉCOUTE"
         ) else { return }
         XCTAssertFalse(fn.contains(".sync"), "toggleSpeaker must never block the main thread on audioSessionQueue")
         XCTAssertFalse(fn.contains("applySpeakerRoute()"), "the synchronous route is for the audio-session lifecycle, not a tap")

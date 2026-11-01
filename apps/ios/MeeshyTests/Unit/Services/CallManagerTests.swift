@@ -1599,7 +1599,7 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
     func test_thermalCritical_updatesHasLocalVideoTrack() throws {
         let body = try thermalBody(try callManagerSource())
         XCTAssertTrue(
-            body.contains("hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack"),
+            body.contains("hasLocalVideoTrack = call.webRTCService.hasLocalVideoTrack"),
             "After downgradeFromVideo(), hasLocalVideoTrack must be synced so the UI (PiP, controls) " +
             "reflects the absence of a local video track."
         )
@@ -2347,12 +2347,12 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
     func test_handleHold_unhold_doesNotSwallowUpgradeToVideoErrorViaTryQuestionMark() throws {
         let body = try unholdBranchBody(try callManagerSource())
         XCTAssertFalse(
-            body.contains("try? await self.webRTCService.upgradeToVideo()"),
+            body.contains("try? await call.webRTCService.upgradeToVideo()"),
             "The unhold branch must not use `try?` to discard upgradeToVideo()'s error — " +
             "a camera-permission failure must not silently leave isVideoEnabled stuck at true."
         )
         XCTAssertTrue(
-            body.contains("try await self.webRTCService.upgradeToVideo()"),
+            body.contains("try await call.webRTCService.upgradeToVideo()"),
             "The unhold branch must call upgradeToVideo() inside a do/catch so errors are handled explicitly."
         )
     }
@@ -7001,7 +7001,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     }
 
     func test_selectCamera_chainsOntoVideoTransitionFamily() throws {
-        let branch = try body(from: "func selectCamera(id: String) {", to: "func toggleTranscription() {", in: try callManagerSource())
+        let branch = try body(from: "func selectCamera(id: String) {", to: "\n}\n\n/// Déclaré après le type", in: try callManagerSource())
         for expected in [
             "await inFlight.settle()",
             "await inFlight.settle()",
@@ -7233,7 +7233,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_guardsHoldAndCaptureSuspensionBeforeUpgrading() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "toggleVideo must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — mirrors the guard applySurvivalVideoSend already applies for the " +
             "automatic survival-recovery path."
@@ -7243,7 +7243,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_holdGuardOnlyBlocksTurningVideoOn() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "if target, call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("expected `if target, ...` guard — turning video OFF while on hold must " +
                      "remain a normal downgrade, only re-enabling is unsafe mid-hold")
@@ -7255,11 +7255,11 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_holdGuardPrecedesUpgradeToVideo() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
         }
-        guard let upgradeRange = body.range(of: "self.webRTCService.upgradeToVideo()"),
+        guard let upgradeRange = body.range(of: "call.webRTCService.upgradeToVideo()"),
               let actuationGate = body.range(of: "guard await self.videoToggleMayActuate(target: target) else { return }"),
               let gateDeclaration = body.range(of: "private func videoToggleMayActuate(target: Bool) async -> Bool {") else {
             XCTFail("upgradeToVideo() or its actuation gate not found in toggleVideo"); return
@@ -7277,7 +7277,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_holdGuardReturnsWithoutFallingThroughToPermissionCheck() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "if target, call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
         }
@@ -7343,7 +7343,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "switchCamera must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — mirrors the guard toggleVideo() applies (Vague 158) for the same " +
             "camera-actuation task chain."
@@ -7353,11 +7353,11 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_holdGuardPrecedesUnderlyingSwitch() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("hold/capture-interruption guard not found in switchCamera"); return
         }
-        guard let actuationRange = body.range(of: "self.webRTCService.switchCamera {") else {
+        guard let actuationRange = body.range(of: "call.webRTCService.switchCamera {") else {
             XCTFail("webRTCService.switchCamera call not found in switchCamera"); return
         }
         XCTAssertLessThan(
@@ -7380,7 +7380,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
         }
         let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
         XCTAssertTrue(
-            guardBlock.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            guardBlock.contains("call.isUsingFrontCamera = previousFrontCamera"),
             "the guard must revert the optimistic mirror flag — otherwise a blocked flip leaves " +
             "isUsingFrontCamera desynced from the camera actually in use."
         )
@@ -7424,7 +7424,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "selectCamera(id:) must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — same capturer, same task chain as switchCamera()."
         )
@@ -7433,11 +7433,11 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_holdGuardPrecedesUnderlyingSwitch() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("hold/capture-interruption guard not found in selectCamera"); return
         }
-        guard let actuationRange = body.range(of: "self.webRTCService.switchToCamera(uniqueID: id)") else {
+        guard let actuationRange = body.range(of: "call.webRTCService.switchToCamera(uniqueID: id)") else {
             XCTFail("webRTCService.switchToCamera call not found in selectCamera"); return
         }
         XCTAssertLessThan(
@@ -7459,11 +7459,11 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
         }
         let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
         XCTAssertTrue(
-            guardBlock.contains("self.selectedCameraId = previousSelectedCameraId"),
+            guardBlock.contains("call.selectedCameraId = previousSelectedCameraId"),
             "the guard must revert the optimistic picker selection."
         )
         XCTAssertTrue(
-            guardBlock.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            guardBlock.contains("call.isUsingFrontCamera = previousFrontCamera"),
             "the guard must revert the optimistic mirror flag."
         )
         XCTAssertTrue(

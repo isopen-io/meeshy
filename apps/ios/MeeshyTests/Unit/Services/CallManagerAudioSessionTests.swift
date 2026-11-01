@@ -3635,12 +3635,12 @@ final class CallManagerHoldTests: XCTestCase {
         // in a do/catch instead (see CallManagerHoldTaskTrackingTests's newer
         // coverage in CallManagerTests.swift for the full catch-branch checks).
         XCTAssertTrue(
-            body.contains("try await self.webRTCService.upgradeToVideo()") ||
+            body.contains("try await call.webRTCService.upgradeToVideo()") ||
             body.contains("try await self?.webRTCService.upgradeToVideo()"),
             "handleHold's unhold path must capture upgradeToVideo()'s needsRenegotiation " +
             "return value inside a do/catch — not discard it with `try?`")
         XCTAssertFalse(
-            body.contains("try? await self.webRTCService.upgradeToVideo()") ||
+            body.contains("try? await call.webRTCService.upgradeToVideo()") ||
             body.contains("try? await self?.webRTCService.upgradeToVideo()"),
             "handleHold's unhold path must not use `try?` here — a camera-permission " +
             "failure must not be silently discarded, leaving isVideoEnabled stuck at true " +

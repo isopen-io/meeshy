@@ -730,6 +730,7 @@
 		2BEFC15B5147B2BC2D2713A3 /* MessageStoreSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CABC1DC5889A65E63439B6 /* MessageStoreSession.swift */; };
 		2BF373608F7CFA007DCE8171 /* CallFrameCatalogue+Generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E91F55C89C964A17604A91D /* CallFrameCatalogue+Generated.swift */; };
 		2C23D2D4464636A0CF0DF355 /* CallTurnCredentialsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16E712A72445579FCA01131 /* CallTurnCredentialsTests.swift */; };
+		9B3FE6300632B3069FD462BD /* CallCameraActuatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 009086C7FBA3A5BCC62E41D3 /* CallCameraActuatorTests.swift */; };
 		BC147792E5CC469B6683AE47 /* CallVideoSuspensionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8304983F5BCAD79948BA0F05 /* CallVideoSuspensionTests.swift */; };
 		36E29AA695758F05EB270E3B /* CallAudioSessionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DAC60FAC85FA63EED93CAA /* CallAudioSessionControllerTests.swift */; };
 		29B9AC84BF9B62B586BF0F36 /* CallSystemPiPControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259A6E487D2922E2DDA02ABC /* CallSystemPiPControllerTests.swift */; };
@@ -2481,6 +2482,7 @@
 		95B5E988FFC82F3F661B3A12 /* StoryTrayWiringGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A27779F8E7A513B662E7C4 /* StoryTrayWiringGuardTests.swift */; };
 		95B9A7795C387DF85F3AF68C /* CallMontageLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51BC985E10011FA35A880AB4 /* CallMontageLayoutTests.swift */; };
 		95C45D0DC872E82DF97EBBA3 /* CallTurnCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 232F803E355753D1EAEBF8C9 /* CallTurnCredentials.swift */; };
+		6BD3C7CBDBDF98E951A24BE9 /* CallCameraActuator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30DF39397ABC3785F469A75C /* CallCameraActuator.swift */; };
 		D1036114260BE79ECA29F04F /* CallVideoSuspension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EC5D1215B38C5EAC6ADA729 /* CallVideoSuspension.swift */; };
 		C897BCFD9144D757FD92EFE0 /* CallAudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72ECD71704080D722AB6B28C /* CallAudioSessionController.swift */; };
 		C07CAE45C7CBA96D7AC7A8FB /* CallSystemPiPController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD1F7ADF7EB295724D6E0EA7 /* CallSystemPiPController.swift */; };
@@ -4901,6 +4903,7 @@
 		2327D438A9EE8D3320B3E90C /* ConversationView+StickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+StickerSheet.swift"; sourceTree = "<group>"; };
 		232C7B9BD77627661572F7E9 /* CallFrameTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFrameTextTests.swift; sourceTree = "<group>"; };
 		232F803E355753D1EAEBF8C9 /* CallTurnCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTurnCredentials.swift; sourceTree = "<group>"; };
+		30DF39397ABC3785F469A75C /* CallCameraActuator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCameraActuator.swift; sourceTree = "<group>"; };
 		0EC5D1215B38C5EAC6ADA729 /* CallVideoSuspension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallVideoSuspension.swift; sourceTree = "<group>"; };
 		72ECD71704080D722AB6B28C /* CallAudioSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioSessionController.swift; sourceTree = "<group>"; };
 		BD1F7ADF7EB295724D6E0EA7 /* CallSystemPiPController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSystemPiPController.swift; sourceTree = "<group>"; };
@@ -8203,6 +8206,7 @@
 		F14876F5E03643120B8BFB2F /* MediaReplyComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaReplyComposerBar.swift; sourceTree = "<group>"; };
 		F16B29317BA1B0EC390E5A11 /* ConversationViewModelDirectEncryptionSendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelDirectEncryptionSendTests.swift; sourceTree = "<group>"; };
 		F16E712A72445579FCA01131 /* CallTurnCredentialsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTurnCredentialsTests.swift; sourceTree = "<group>"; };
+		009086C7FBA3A5BCC62E41D3 /* CallCameraActuatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCameraActuatorTests.swift; sourceTree = "<group>"; };
 		8304983F5BCAD79948BA0F05 /* CallVideoSuspensionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallVideoSuspensionTests.swift; sourceTree = "<group>"; };
 		E2DAC60FAC85FA63EED93CAA /* CallAudioSessionControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioSessionControllerTests.swift; sourceTree = "<group>"; };
 		259A6E487D2922E2DDA02ABC /* CallSystemPiPControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSystemPiPControllerTests.swift; sourceTree = "<group>"; };
@@ -10157,6 +10161,7 @@
 				B720FDFB9FC649A7B7D4436E /* CallStateMachineTests.swift */,
 				7667AAA1E9E8DD7B88A0450D /* CallTranscriptionServiceTests.swift */,
 				F16E712A72445579FCA01131 /* CallTurnCredentialsTests.swift */,
+				009086C7FBA3A5BCC62E41D3 /* CallCameraActuatorTests.swift */,
 				8304983F5BCAD79948BA0F05 /* CallVideoSuspensionTests.swift */,
 				E2DAC60FAC85FA63EED93CAA /* CallAudioSessionControllerTests.swift */,
 				259A6E487D2922E2DDA02ABC /* CallSystemPiPControllerTests.swift */,
@@ -12296,6 +12301,7 @@
 				BB43E11E920BCCEDDFFEA825 /* CallSdpSignaler.swift */,
 				57162E0135AA0F3DD16DF0ED /* CallSignalingRouter.swift */,
 				232F803E355753D1EAEBF8C9 /* CallTurnCredentials.swift */,
+				30DF39397ABC3785F469A75C /* CallCameraActuator.swift */,
 				0EC5D1215B38C5EAC6ADA729 /* CallVideoSuspension.swift */,
 				72ECD71704080D722AB6B28C /* CallAudioSessionController.swift */,
 				BD1F7ADF7EB295724D6E0EA7 /* CallSystemPiPController.swift */,
@@ -14794,6 +14800,7 @@
 				91FA4478C2D179652B481769 /* CallTranscriptionSegment.swift in Sources */,
 				E4378ED16A0E39A2420B5193 /* CallTranscriptionService.swift in Sources */,
 				95C45D0DC872E82DF97EBBA3 /* CallTurnCredentials.swift in Sources */,
+				6BD3C7CBDBDF98E951A24BE9 /* CallCameraActuator.swift in Sources */,
 				D1036114260BE79ECA29F04F /* CallVideoSuspension.swift in Sources */,
 				C897BCFD9144D757FD92EFE0 /* CallAudioSessionController.swift in Sources */,
 				C07CAE45C7CBA96D7AC7A8FB /* CallSystemPiPController.swift in Sources */,
@@ -16908,6 +16915,7 @@
 				04AB1053510D7B48323C8380 /* CallTranscriptJournalTests.swift in Sources */,
 				C0F30A7010BDE3A20736587D /* CallTranscriptionServiceTests.swift in Sources */,
 				2C23D2D4464636A0CF0DF355 /* CallTurnCredentialsTests.swift in Sources */,
+				9B3FE6300632B3069FD462BD /* CallCameraActuatorTests.swift in Sources */,
 				BC147792E5CC469B6683AE47 /* CallVideoSuspensionTests.swift in Sources */,
 				36E29AA695758F05EB270E3B /* CallAudioSessionControllerTests.swift in Sources */,
 				29B9AC84BF9B62B586BF0F36 /* CallSystemPiPControllerTests.swift in Sources */,
