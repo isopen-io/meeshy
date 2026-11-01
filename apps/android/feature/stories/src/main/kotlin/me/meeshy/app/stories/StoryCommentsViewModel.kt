@@ -12,6 +12,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.mention.MentionAutocomplete
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionContacts
+import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.StoryComment
 import me.meeshy.sdk.model.StoryCommentStatus
 import me.meeshy.sdk.model.toStoryComment
@@ -51,10 +57,21 @@ class StoryCommentsViewModel @Inject constructor(
     private val storyRepository: StoryRepository,
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
+    mentionSearch: MentionSearch = MentionSearch.None,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryCommentsUiState())
     val state: StateFlow<StoryCommentsUiState> = _state.asStateFlow()
+
+    /** The « @ » list of the field (#14053): cached contacts at once, the story's own suggestions (`contextType=post`) by the law. */
+    private val mentions = MentionAutocomplete(
+        scope = viewModelScope,
+        search = mentionSearch,
+        contacts = mentionContacts,
+        selfId = { sessionRepository.currentUser.value?.id },
+    )
+    val mention: StateFlow<MentionAutocompleteState> = mentions.state
 
     private var storyId: String? = null
     private var loadingStoryId: String? = null
@@ -66,6 +83,7 @@ class StoryCommentsViewModel @Inject constructor(
         if (loadingStoryId == storyId) return
         this.storyId = storyId
         loadingStoryId = storyId
+        mentions.bind(MentionContext.post(storyId))
         observeIncoming()
         val hadData = _state.value.comments.isNotEmpty()
         _state.update { it.copy(isLoading = !hadData, errorMessage = null) }
@@ -94,11 +112,18 @@ class StoryCommentsViewModel @Inject constructor(
         }
     }
 
+    /** The field's text changed: the « @ » list follows the fragment being typed. */
+    fun onDraftChange(text: String) = mentions.onTextChange(text)
+
+    /** The draft with the picked person's handle in place of the `@fragment`; the list closes. */
+    fun selectMention(candidate: MentionCandidate, draft: String): String = mentions.select(candidate, draft)
+
     /** Optimistically post [content] to the current story (no-op when blank). */
     fun post(content: String) {
         val story = storyId ?: return
         val trimmed = content.trim()
         if (trimmed.isEmpty()) return
+        mentions.reset()
         val clientId = UUID.randomUUID().toString()
         val optimistic = StoryComment(
             id = clientId,

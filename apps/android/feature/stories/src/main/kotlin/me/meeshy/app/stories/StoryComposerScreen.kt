@@ -203,7 +203,7 @@ private fun StoryComposerSheetBody(
         }
         StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE ->
             StoryReferenceSheet(open, state, viewModel, onDone)
-        StoryComposerSheet.OBJECT_EDIT, StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP, StoryComposerSheet.PLACE_REPOINT,
+        StoryComposerSheet.OBJECT_TIME, StoryComposerSheet.STICKER_SWAP, StoryComposerSheet.PLACE_REPOINT,
         StoryComposerSheet.BACKGROUND_SOURCE, StoryComposerSheet.BACKGROUND_DESCRIPTION -> Unit
     }
 }

@@ -100,22 +100,23 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
 
     // MARK: - Les deux rangées
 
-    /// **Le témoin INVERSE des deux rangées** (#13839) : les outils qui
-    /// changeaient de côté selon le format vivent désormais dans ⋯, quel que
-    /// soit le format — le lieu, le hashtag et la mention ne quittent jamais
-    /// un chemin.
-    func test_lesOutilsMobiles_viventDansPlus_surChaqueFormat() {
+    /// **Le témoin INVERSE des deux rangées** (#13839, #14050) : les outils
+    /// qui changeaient de côté selon le format ont UN chemin, quel que soit le
+    /// format — le lieu et la mention en entrées directes du rail, le hashtag
+    /// dans ⋯.
+    func test_lesOutilsMobiles_ontUnSeulChemin_surChaqueFormat() {
         for format in [ComposerFormat.story, .post, .reel] {
             let portes = ComposerRailDoor.offered(served: Set(ComposerRailDoor.canonicalRail),
                                                   format: format, allowsCapture: true)
             let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
                                                             offeredDoors: portes, overflow: []))
                 .compactMap(\.door)
-            for porte in outilsMobiles where portes.contains(porte) {
-                XCTAssertTrue(plus.contains(porte), "\(format) : \(porte.rawValue) manque à ⋯")
-            }
             let colonne = ComposerRestChrome.tools(offered: portes).compactMap(\.door)
-            XCTAssertTrue(Set(colonne).isDisjoint(with: Set(outilsMobiles)), "\(format)")
+            for porte in outilsMobiles where portes.contains(porte) {
+                let surLeRail = porte != .hashtag
+                XCTAssertEqual(colonne.contains(porte), surLeRail, "\(format) : \(porte.rawValue)")
+                XCTAssertEqual(plus.contains(porte), !surLeRail, "\(format) : \(porte.rawValue) a un seul chemin")
+            }
         }
     }
 

@@ -2,7 +2,10 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.saveable.rememberSaveable
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +63,7 @@ fun StoryCommentsSheet(
     viewModel: StoryCommentsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mention by viewModel.mention.collectAsStateWithLifecycle()
     LaunchedEffect(storyId) { viewModel.load(storyId) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -91,7 +95,13 @@ fun StoryCommentsSheet(
                 else -> CommentList(state.comments, onRetry = viewModel::retry)
             }
 
-            CommentInput(accentHex = accentHex, onSend = viewModel::post)
+            CommentInput(
+                accentHex = accentHex,
+                mention = mention,
+                onDraftChange = viewModel::onDraftChange,
+                onSelectMention = viewModel::selectMention,
+                onSend = viewModel::post,
+            )
         }
     }
 }
@@ -149,12 +159,21 @@ private fun Modifier.clickableRetry(onClick: () -> Unit): Modifier =
     this.clickable(onClick = onClick)
 
 @Composable
-private fun CommentInput(accentHex: String, onSend: (String) -> Unit) {
+private fun CommentInput(
+    accentHex: String,
+    mention: MentionAutocompleteState,
+    onDraftChange: (String) -> Unit,
+    onSelectMention: (MentionCandidate, String) -> String,
+    onSend: (String) -> Unit,
+) {
     var draft by rememberSaveable { mutableStateOf("") }
     val accent = hexColor(accentHex)
     MeeshyCommentComposer(
         text = draft,
-        onTextChange = { draft = it },
+        onTextChange = {
+            draft = it
+            onDraftChange(it)
+        },
         placeholder = stringResource(R.string.stories_comments_input_hint),
         onSend = {
             onSend(draft)
@@ -163,6 +182,13 @@ private fun CommentInput(accentHex: String, onSend: (String) -> Unit) {
         accentColor = accent,
         secondaryColor = accent.copy(alpha = 0.75f),
         contentPadding = PaddingValues(top = MeeshySpacing.xs),
+        topSlot = {
+            MeeshyMentionSuggestions(
+                mention = mention,
+                onSelect = { candidate -> draft = onSelectMention(candidate, draft) },
+                accentColor = accent,
+            )
+        },
     )
 }
 

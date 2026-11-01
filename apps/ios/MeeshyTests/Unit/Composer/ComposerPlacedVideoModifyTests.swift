@@ -7,8 +7,8 @@ import MeeshyUI
 /// (#13974 lot I-E4, #14048 — porteur 2026-10-31 : les outils sur le rail, ET
 /// NON PAS dans une feuille à ouvrir). Les outils viennent de l'arbre partagé
 /// (`media.placed.edit`) : Couper · Filtres · Cadres · Réglages · Son ·
-/// Pivoter · Description · Mettre en fond ; Son se déplie en Volume · Muet (le
-/// niveau `media.sound`), puis Dupliquer · Temps · Retirer. Volume ouvre son
+/// Pivoter · Description · Mettre en fond, puis Dupliquer · Temps · Retirer ;
+/// Son pose par-dessus son niveau Volume · Muet (`media.sound`). Volume ouvre son
 /// curseur seul en bas (N3, de 0 à 200 %), Muet bascule dans le rail. Le
 /// curseur écrit le modèle à chaque valeur ; la couche de la vidéo joue à ce
 /// volume.
@@ -75,16 +75,20 @@ final class ComposerPlacedVideoModifyTests: XCTestCase {
 
     // MARK: - Le rail à plat (#14048)
 
-    func test_theFlatRail_ofAPlacedVideo_isItsTools_soundUnfolded_thenItsActionsWithoutModify() {
+    func test_theFlatRail_ofAPlacedVideo_isItsTools_thenItsActionsWithoutModify_soundPosesItsLevel() {
         let pile = ComposerEditRailStack.of(family: .video, editing: .modify, typing: false)
         XCTAssertEqual(pile.levels, [.actions], "aucun niveau « Modifier »")
         let rail = ComposerEditRailItems.items(for: .actions, actions: [.modify, .duplicate, .time, .remove],
                                                sections: [.media(.adjust)], extras: [.setAsBackground],
                                                keyframes: false, backgroundEntries: served())
         XCTAssertEqual(rail, [.backgroundEntry(.trim), .backgroundEntry(.filters), .backgroundEntry(.frames),
-                              .backgroundEntry(.adjust), .volume, .mute, .backgroundEntry(.rotate),
+                              .backgroundEntry(.adjust), .backgroundEntry(.sound), .backgroundEntry(.rotate),
                               .backgroundEntry(.description), .backgroundEntry(.setAsBackground),
                               .action(.duplicate), .action(.time), .action(.remove)])
+        let son = ComposerBackgroundModify.tapped(.sound, in: .closed)
+        XCTAssertEqual(ComposerEditRailStack.of(family: .video, editing: .modify, typing: false,
+                                                above: ComposerBackgroundModify.levels(son)).levels,
+                       [.actions, .backgroundSound], "Son pose son niveau par-dessus le rail à plat")
         XCTAssertEqual(ComposerEditRailItems.items(for: .backgroundSound, actions: [], sections: [], extras: [],
                                                    keyframes: false),
                        [.back, .volume, .mute])

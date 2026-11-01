@@ -52,9 +52,6 @@ const TOLERATED: readonly string[] = [
   'services/gateway/src/routes/directory/friend-request-withdraw.ts',
   // le rattrapage : lit les demandes acceptées pour écrire les lignes UserRelation
   'services/gateway/src/services/relations/userRelationBackfill.ts',
-  // lot notifs-cercles (audience par niveau des fan-outs)
-  'services/gateway/src/services/notifications/fanout/friend-content.ts',
-  'services/gateway/src/services/notifications/fanout/story-comment.ts',
   // lot audiences-publications
   'services/gateway/src/services/posts/postAudience.ts',
   'services/gateway/src/services/posts/viewerAudience.ts',

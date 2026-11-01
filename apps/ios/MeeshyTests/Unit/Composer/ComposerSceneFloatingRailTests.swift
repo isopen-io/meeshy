@@ -26,7 +26,7 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         let colonne = ComposerRestChrome.tools(offered: portes).compactMap(\.door)
         let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
                                                         offeredDoors: portes, overflow: []))
-        let parPlus = plus.compactMap(\.door) + (plus.contains(.background) ? [.background] : [])
+        let parPlus = plus.compactMap(\.door)
         let socle: [ComposerRailDoor] = ComposerPostTextPill.shows(format: format, sceneMounted: true) ? [.content] : []
         return (colonne, parPlus, socle)
     }
@@ -57,10 +57,12 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         XCTAssertTrue(plus.contains(.legend))
     }
 
-    func test_ceQuiSePose_estDansLaColonne_ceQuiQualifie_dansPlus() {
+    /// Fond, Mention et Lieu rejoignent la colonne en entrées directes
+    /// (porteur 2026-10-31, #14050) ; seul le hashtag reste dans ⋯.
+    func test_ceQuiSePose_etFondMentionLieu_dansLaColonne_leHashtag_dansPlus() {
         let (colonne, plus, _) = portesAuRepos(.story)
-        XCTAssertEqual(colonne, [.text, .media, .sticker, .sound, .drawing])
-        XCTAssertEqual(Set(plus), [.background, .mention, .hashtag, .place])
+        XCTAssertEqual(colonne, [.text, .media, .sticker, .sound, .drawing, .background, .mention, .place])
+        XCTAssertEqual(Set(plus), [.hashtag])
     }
 
     func test_leTexteDuPost_passeParLeSocle_enPostEtEnReel() {
@@ -72,9 +74,11 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         }
     }
 
-    func test_sansScene_aucunBoutonDePose() {
-        XCTAssertEqual(ComposerRestChrome.tools(offered: offertes(.status)), [.more],
-                       "un statut n'a pas de scène : seul ⋯ reste")
+    /// Sans scène, rien à POSER ni de Fond ; la Mention, qui qualifie la
+    /// publication, reste une entrée directe du rail (#14050).
+    func test_sansScene_aucunBoutonDePose_laMentionReste() {
+        XCTAssertEqual(ComposerRestChrome.tools(offered: offertes(.status)), [.mention, .more],
+                       "un statut n'a pas de scène : ni pose ni Fond, la Mention et ⋯ restent")
     }
 
     // MARK: - Le niveau reste la loi

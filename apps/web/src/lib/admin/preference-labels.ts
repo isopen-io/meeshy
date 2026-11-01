@@ -59,7 +59,8 @@ type Choice =
   | 'selfViewPosition'
   | 'theme'
   | 'lineHeight'
-  | 'sidebarPosition';
+  | 'sidebarPosition'
+  | 'circleAudience';
 
 type Count = 'fileTypes' | 'tutorials';
 
@@ -152,6 +153,9 @@ const MESSAGE: Kinds<MessagePreference> = {
   maxCharacterLimit: 'characters',
 };
 
+/** Le cran d'entourage d'une action (#13929) — de « Personne » à « Tous mes liens ». */
+const CIRCLE_AUDIENCE: PreferenceKind = { choice: 'circleAudience' };
+
 const NOTIFICATION: Kinds<NotificationPreference> = {
   pushEnabled: 'flag',
   emailEnabled: 'flag',
@@ -180,6 +184,25 @@ const NOTIFICATION: Kinds<NotificationPreference> = {
   contactActivityEnabled: 'flag',
   gameEnabled: 'flag',
   gamePhotoEnabled: 'flag',
+  circlePublicationPost: CIRCLE_AUDIENCE,
+  circlePublicationReel: CIRCLE_AUDIENCE,
+  circlePublicationStory: CIRCLE_AUDIENCE,
+  circlePublicationMood: CIRCLE_AUDIENCE,
+  circlePublicationRepost: CIRCLE_AUDIENCE,
+  circlePublicationShare: CIRCLE_AUDIENCE,
+  circleOnMyContentComment: CIRCLE_AUDIENCE,
+  circleOnMyContentReaction: CIRCLE_AUDIENCE,
+  circleOnMyContentShare: CIRCLE_AUDIENCE,
+  circleOnMyContentRepost: CIRCLE_AUDIENCE,
+  circleOnMyContentQuote: CIRCLE_AUDIENCE,
+  circleOnMyContentReference: CIRCLE_AUDIENCE,
+  circleOnMyContentMention: CIRCLE_AUDIENCE,
+  circleElsewhereComment: CIRCLE_AUDIENCE,
+  circleElsewhereReaction: CIRCLE_AUDIENCE,
+  circleElsewhereShare: CIRCLE_AUDIENCE,
+  circleElsewhereQuote: CIRCLE_AUDIENCE,
+  circleElsewhereReference: CIRCLE_AUDIENCE,
+  circleElsewhereMention: CIRCLE_AUDIENCE,
   dndEnabled: 'flag',
   dndStartTime: 'clock',
   dndEndTime: 'clock',
@@ -306,6 +329,7 @@ export const PREFERENCE_CHOICES: Readonly<Record<Choice, readonly string[]>> = {
   theme: ['light', 'dark', 'auto'],
   lineHeight: ['tight', 'normal', 'relaxed', 'loose'],
   sidebarPosition: ['left', 'right'],
+  circleAudience: ['NOBODY', 'BLOOD', 'CLOSE', 'FRIEND', 'ACQUAINTANCE', 'COMMUNITY', 'PUBLIC'],
 };
 
 /** Le NOM d'une option d'énumération — `admin.people.prefValue.<famille>.<option>` — ou son libellé humanisé. */

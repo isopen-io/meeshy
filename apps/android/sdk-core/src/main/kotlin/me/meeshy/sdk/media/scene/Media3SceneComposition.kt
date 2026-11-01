@@ -38,7 +38,7 @@ internal object Media3SceneComposition {
     fun of(
         job: SceneExportJob,
         planned: SceneComposition = SceneCompositionPlanner.of(job),
-        frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = { RetrieverVideoFrames(it.file) },
+        frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = GuardedVideoFrames::of,
     ): Composition {
         val frame = frameEffects(job.format, overlaysOf(job, planned, frames))
         val video = EditedMediaItemSequence(planned.video.map { videoItem(it, job.format, frame) })
@@ -53,7 +53,7 @@ internal object Media3SceneComposition {
     fun overlaysOf(
         job: SceneExportJob,
         planned: SceneComposition,
-        frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = { RetrieverVideoFrames(it.file) },
+        frames: (SceneExportPlacedVideo) -> PlacedVideoFrames = GuardedVideoFrames::of,
     ): List<TextureOverlay> {
         val deepest = (job.overlays.map { it.depth } + job.placedVideos.map { it.depth }).maxOrNull() ?: 0
         val stack = (0..deepest).flatMap { depth ->

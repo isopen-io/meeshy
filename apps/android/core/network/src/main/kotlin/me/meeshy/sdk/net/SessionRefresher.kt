@@ -74,12 +74,19 @@ public class SessionRefresher(
         return verdictLocked(presentedToken, active, currentOwner(), sentUnderGeneration) == OwnershipVerdict.OWNER
     }
 
-    /** Le garde de [AuthExpiryInterceptor] : sans identité présentée, l'expiration est annoncée. */
+    /**
+     * Le garde de [AuthExpiryInterceptor] : sans identité présentée, l'expiration est annoncée s'il reste une
+     * session à perdre — une session locale, ou celle qu'un renouvellement vient de démonter. Sans aucune, il n'y
+     * a rien à expirer : la restauration d'une session sauvegardée (#14058) se fait refuser sans déconnecter.
+     */
     public fun signalsExpiry(request: okhttp3.Request): Boolean {
         val presented = RequestCredential.carriedBy(request)?.token
-            ?: return !transition.isTransitioning
+            ?: return !transition.isTransitioning && holdsASessionToLose()
         return owns(presented, request.sentCredential()?.generation)
     }
+
+    private fun holdsASessionToLose(): Boolean =
+        tokenStore.jwt != null || tokenStore.sessionToken != null || tornDown?.generation == transition.generation
 
     public suspend fun renew(presentedJwt: String, sentUnderGeneration: Long?): Renewal = mutex.withLock {
         val startOwner = currentOwner()

@@ -18,6 +18,9 @@ import { makeNotificationPrisma } from '../../../__tests__/helpers/notification-
 import { NotificationService } from '../NotificationService';
 import { createFriendContentNotificationsBatch } from '../fanout/friend-content';
 import type { FanoutDependencies } from '../fanout/dependencies';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+
+const ENTOURAGE_AMI = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
 
 const AUTEUR = '507f1f77bcf86cd799439011';
 const AMI = '507f1f77bcf86cd799439012';
@@ -57,6 +60,14 @@ function withBlocks(prisma: ReturnType<typeof makeNotificationPrisma>, blocks: B
 describe("#13350 — l'éventail de publication ne notifie pas une personne bloquée", () => {
   const run = async (blocks: BlockLists, visibility: string, visibilityUserIds: string[] = []) => {
     const prisma = withBlocks(makeNotificationPrisma(), blocks);
+    // #13929 — l'auteur a réglé son entourage à « Ami » : le blocage se mesure sur ses amis.
+    prisma.userRelation.findMany.mockResolvedValue([]);
+    prisma.userRelation.findUnique.mockResolvedValue(null);
+    prisma.communityMember.findMany.mockResolvedValue([]);
+    prisma.participant.findMany.mockResolvedValue([]);
+    prisma.userPreferences.findUnique.mockImplementation(async (args: unknown) =>
+      (args as { where: { userId: string } }).where.userId === AUTEUR ? ENTOURAGE_AMI : null
+    );
     prisma.friendRequest.findMany.mockResolvedValue([
       { senderId: AUTEUR, receiverId: AMI },
       { senderId: BLOQUE, receiverId: AUTEUR },

@@ -4,6 +4,25 @@
  */
 
 import { z } from 'zod';
+import {
+  CIRCLE_NOTIFY_DEFAULTS,
+  CIRCLE_NOTIFY_KEYS,
+  RELATION_AUDIENCE_CHOICES,
+  type CircleNotifyKey,
+} from '../../utils/relation-levels.js';
+
+/**
+ * Le réglage d'ENTOURAGE (#13929) : pour chaque action relayée à mon entourage,
+ * le cran minimal prévenu (`NOBODY` · `BLOOD` · `CLOSE` · `FRIEND` ·
+ * `ACQUAINTANCE` · `COMMUNITY` · `PUBLIC`). Une clé PLATE par action — un `PATCH`
+ * partiel n'écrase donc jamais les autres. Absent d'un document existant ⇒ le
+ * défaut de sa famille (`CIRCLE_NOTIFY_DEFAULTS`, dérivé de la matrice des
+ * cercles). Le shape est construit depuis la table : une action ajoutée à
+ * `CIRCLE_NOTIFY_FAMILIES` arrive ici sans ligne à recopier.
+ */
+const circleAudienceShape = Object.fromEntries(
+  CIRCLE_NOTIFY_KEYS.map((key) => [key, z.enum(RELATION_AUDIENCE_CHOICES).default(CIRCLE_NOTIFY_DEFAULTS[key])]),
+) as Record<CircleNotifyKey, z.ZodDefault<z.ZodEnum<{ [C in (typeof RELATION_AUDIENCE_CHOICES)[number]]: C }>>>;
 
 export const NotificationPreferenceSchema = z.object({
   // Canaux de notification
@@ -47,6 +66,8 @@ export const NotificationPreferenceSchema = z.object({
   // « Moments à immortaliser » (#10175, D8) — le PUSH d'une étape du jeu franchie app fermée ; « Jeu »
   // coupé le coupe aussi. Absent d'un document existant ⇒ reçu.
   gamePhotoEnabled: z.boolean().default(true),
+
+  ...circleAudienceShape,
 
   // Do Not Disturb
   dndEnabled: z.boolean().default(false),
@@ -121,6 +142,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   contactActivityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
+  ...CIRCLE_NOTIFY_DEFAULTS,
   dndEnabled: false,
   dndStartTime: '22:00',
   dndEndTime: '08:00',

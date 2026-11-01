@@ -4,16 +4,16 @@ import MeeshyUI
 
 // MARK: - Le repos posé sur la scène (#13839)
 
-/// Les six boutons, ⋯ et la barre de dessin ouvrent ce que les rails ouvraient,
-/// par les MÊMES fonctions : seule la géographie change.
+/// Les boutons du repos, ⋯ et la barre de dessin ouvrent ce que les rails
+/// ouvraient, par les MÊMES fonctions : seule la géographie change.
 extension MeeshyComposerHost {
 
-    var sceneRestTools: [ComposerRestTool] { ComposerRestChrome.tools(offered: sceneDoors) }
+    var sceneRestTools: [ComposerRestTool] { ComposerRestChrome.tools(offered: sceneDoors, hasBackgroundMedia: sceneBackgroundMedia != nil) }
 
     func handleRestTool(_ tool: ComposerRestTool) {
+        if tool == .background, let fond = sceneBackgroundMedia?.id { return selectSceneBackground(fond) }
         if let door = tool.door { handleRailDoor(door) }
     }
-
 
     var sceneMoreEntries: [ComposerMoreMenuEntry] {
         ComposerMoreMenuPolicy.entries(.init(
@@ -41,7 +41,6 @@ extension MeeshyComposerHost {
         if let door = entree.door { return handleRailDoor(door) }
         switch entree {
         case .addSlide: addSceneSlide()
-        case .background: handleRailDoor(.background)
         case .transitions: handleSceneTrailingOption(.sceneEffect(.opening, isOpen: activeSceneEffect == .opening))
         case .visualEffect: handleSceneTrailingOption(.sceneEffect(.visual, isOpen: activeSceneEffect == .visual))
         case .backgroundFraming: toggleFrameBand()
@@ -53,7 +52,7 @@ extension MeeshyComposerHost {
         case .share: perform(.share)
         case .clearAll: sceneClearAllAsked = true
         case .slideDuration: presentedPortal = .slideDuration
-        case .animation, .mention, .hashtags, .place: break
+        case .animation, .hashtags: break
         }
     }
 

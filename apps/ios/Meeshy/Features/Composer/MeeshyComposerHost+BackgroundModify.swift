@@ -31,6 +31,7 @@ extension ComposerSceneSelectionRelay {
     func backgroundEntries(id: String, family: ComposerInlineFamily) -> [ComposerBackgroundModifyEntry] {
         guard family.modifiesInLevels else { return [] }
         let rognable = host.viewModel.sourceTrim(id: id) != nil
+        guard family != .audio else { return ComposerBackgroundModify.servedSound(hasTrimmableSource: rognable) }
         guard !family.isBackground else {
             return ComposerBackgroundModify.served(isVideo: family.isVideo, hasTrimmableSource: rognable)
         }
@@ -41,6 +42,12 @@ extension ComposerSceneSelectionRelay {
                                                      background: fond, makesSticker: extras.contains(.makeSticker))
     }
 
+    /// Volume · Muet, à plat dans le rail d'un SON posé (#14048) ; une vidéo
+    /// les trouve sous son outil Son.
+    func soundEntries(family: ComposerInlineFamily) -> [ComposerMediaSoundEntry] {
+        family == .audio ? ComposerMediaSound.served() : []
+    }
+
     /// Les réglages de N2 que cet objet peint.
     func backgroundAdjustments(_ level: ComposerEditRailLevel) -> [AdjustmentKind] {
         guard case .backgroundAdjust(let famille) = level,
@@ -49,14 +56,15 @@ extension ComposerSceneSelectionRelay {
     }
 
     /// Ce que le rail allume : l'entrée ouverte, le réglage ou le Volume dont
-    /// le curseur est ouvert, Muet quand le son de la vidéo est coupé.
+    /// le curseur est ouvert, Muet quand le son de la vidéo ou le son posé est coupé.
     func backgroundLit(id: String, family: ComposerInlineFamily) -> Set<ComposerEditRailItem> {
         guard family.modifiesInLevels else { return [] }
         let chemin = backgroundModifyPath
         let entree = chemin.entry.map { [ComposerEditRailItem.backgroundEntry($0)] } ?? []
         let reglage = chemin.adjustment.map { [ComposerEditRailItem.adjustment($0)] } ?? []
         let volume = chemin.volume ? [ComposerEditRailItem.volume] : []
-        let muet = backgroundMedia(id)?.isMuted == true ? [ComposerEditRailItem.mute] : []
+        let coupe = backgroundMedia(id)?.isMuted == true || placedSound(id)?.isMuted == true
+        let muet = coupe ? [ComposerEditRailItem.mute] : []
         return Set(entree + reglage + volume + muet)
     }
 
@@ -146,5 +154,9 @@ extension ComposerSceneSelectionRelay {
 
     private func backgroundMedia(_ id: String) -> StoryMediaObject? {
         host.viewModel.currentEffects.mediaObjects?.first { $0.id == id }
+    }
+
+    private func placedSound(_ id: String) -> StoryAudioPlayerObject? {
+        host.viewModel.currentEffects.audioPlayerObjects?.first { $0.id == id }
     }
 }

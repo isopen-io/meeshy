@@ -18,10 +18,10 @@ import me.meeshy.ui.theme.MeeshyTheme
  * sources de « Remplacer » du fond et sa description (#13973) — et n'existent pas sans lui.
  */
 internal enum class StoryComposerSheet {
-    STICKERS, SOUND, AUDIENCE, OBJECT_EDIT, OBJECT_TIME, STICKER_SWAP, MENTION, HASHTAGS, PLACE, PLACE_REPOINT, BACKGROUND_SOURCE, BACKGROUND_DESCRIPTION;
+    STICKERS, SOUND, AUDIENCE, OBJECT_TIME, STICKER_SWAP, MENTION, HASHTAGS, PLACE, PLACE_REPOINT, BACKGROUND_SOURCE, BACKGROUND_DESCRIPTION;
 
     val servesSelection: Boolean
-        get() = this == OBJECT_EDIT || this == OBJECT_TIME || this == STICKER_SWAP || this == PLACE_REPOINT || this == BACKGROUND_SOURCE ||
+        get() = this == OBJECT_TIME || this == STICKER_SWAP || this == PLACE_REPOINT || this == BACKGROUND_SOURCE ||
             this == BACKGROUND_DESCRIPTION
 
     /** Les feuilles qui se lisent sur la scène, sombres comme elle : le son et ce qui nomme la publication. */

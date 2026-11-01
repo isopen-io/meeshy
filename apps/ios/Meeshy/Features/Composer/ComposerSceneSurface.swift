@@ -229,11 +229,12 @@ struct ComposerSceneSurface: View {
 
 
     /// **Le repos posé sur la scène** (#13839) : le nombre de diapos (la
-    /// rangée paraît dès deux), les six boutons de la colonne, le menu ⋯ et
+    /// rangée paraît dès deux), les boutons de la colonne, le menu ⋯ et
     /// la barre de dessin. Un carrousel d'effets ouvert compte comme un
     /// panneau du bas : la colonne lui cède.
     var slideCount: Int = 1
     var restTools: [ComposerRestTool] = []
+    var restBackgroundIsMedia = false
     var onRestTool: ((ComposerRestTool) -> Void)?
     var moreMenu: AnyView?
     var drawingBar: AnyView?
@@ -439,7 +440,7 @@ struct ComposerSceneSurface: View {
                                          sound: .init(trace: backgroundSound, onEdit: onEditBackgroundSound,
                                                       onDelete: onDeleteBackgroundSound,
                                                       onPromote: onPromoteBackgroundSound),
-                                         pasteEntry: railSystemEntry),
+                                         pasteEntry: railSystemEntry, backgroundIsMedia: restBackgroundIsMedia),
             selection: ComposerSelectionRail(selection: nil, onUndo: onUndo, onRedo: onRedo),
             objectSelection: selectionColumn.map { ComposerSelectionRail(selection: $0) },
             selectionIsShown: !trailingRailIsShown,
@@ -477,6 +478,7 @@ struct ComposerSceneSurface: View {
                                                 onDelete: onDeleteBackgroundSound,
                                                 onPromote: onPromoteBackgroundSound),
                                    pasteEntry: railSystemEntry,
+                                   backgroundIsMedia: restBackgroundIsMedia,
                                    selection: selectionColumn)
     }
 

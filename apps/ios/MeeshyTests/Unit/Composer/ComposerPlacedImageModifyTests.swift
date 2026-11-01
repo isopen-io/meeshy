@@ -116,7 +116,8 @@ final class ComposerPlacedImageModifyTests: XCTestCase {
         XCTAssertTrue(ComposerInlineFamily.image.modifiesInLevels)
         XCTAssertTrue(ComposerInlineFamily.video.modifiesInLevels, "la vidéo posée, lot I-E4")
         XCTAssertTrue(ComposerInlineFamily.background(isVideo: true).modifiesInLevels)
-        for famille in [ComposerInlineFamily.text, .audio, .sticker, .place] {
+        XCTAssertTrue(ComposerInlineFamily.audio.modifiesInLevels, "le son posé, #14048")
+        for famille in [ComposerInlineFamily.text, .sticker, .place] {
             XCTAssertFalse(famille.modifiesInLevels, "\(famille) : son lot viendra")
         }
     }

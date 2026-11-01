@@ -24,6 +24,9 @@ import { makeNotificationPrisma } from '../../../__tests__/helpers/notification-
 import { NotificationService } from '../NotificationService';
 import { createStoryCommentNotificationsBatch } from '../fanout/story-comment';
 import type { FanoutDependencies } from '../fanout/dependencies';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+
+const ENTOURAGE_AMI = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
 import type { NotificationType } from '@meeshy/shared/types/notification';
 
 const AUTEUR = '507f1f77bcf86cd799439021';
@@ -70,6 +73,14 @@ const tous = (overrides: BlockLists): BlockLists => ({
 describe("#13350 — l'éventail d'un commentaire de story écarte les personnes bloquées avec l'AUTEUR", () => {
   const run = async (blocks: BlockLists) => {
     const prisma = withBlocks(makeNotificationPrisma(), blocks);
+    // #13929 — l'auteur a réglé son entourage à « Ami » : le blocage se mesure sur ses amis.
+    prisma.userRelation.findMany.mockResolvedValue([]);
+    prisma.userRelation.findUnique.mockResolvedValue(null);
+    prisma.communityMember.findMany.mockResolvedValue([]);
+    prisma.participant.findMany.mockResolvedValue([]);
+    prisma.userPreferences.findUnique.mockImplementation(async (args: unknown) =>
+      (args as { where: { userId: string } }).where.userId === AUTEUR ? ENTOURAGE_AMI : null
+    );
     prisma.postComment.findMany.mockResolvedValue([{ authorId: BLOQUE }]);
     prisma.postReaction.findMany.mockResolvedValue([]);
     prisma.friendRequest.findMany.mockResolvedValue([

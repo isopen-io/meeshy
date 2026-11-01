@@ -102,18 +102,18 @@ class StoryComposerSelectionBarTest {
     }
 
     @Test
-    fun `a media is edited and removed, its background designation lives in its sheet`() {
+    fun `a media has no Edit, its tools lie flat in the rail, and its background designation is one of them`() {
         val bar = StoryComposerSelectionReducer.mediaSelected(withMedia("m1"), "m1").selectionBar!!
 
-        assertThat(bar.actions).containsExactly(EDIT, REMOVE).inOrder()
+        assertThat(bar.actions).containsExactly(REMOVE)
         assertThat(bar.sheetActions).containsExactly(Action.SET_AS_BACKGROUND)
     }
 
     @Test
-    fun `an ambient sound is edited in its sheet and removed, never timed from the bar`() {
+    fun `an ambient sound has no Edit sheet, it is removed, never timed from the bar`() {
         val bar = StoryComposerSelectionReducer.soundSelected(withSound(), "a1").copy(sceneIsAnimated = true).selectionBar!!
 
-        assertThat(bar.actions).containsExactly(EDIT, REMOVE).inOrder()
+        assertThat(bar.actions).containsExactly(REMOVE)
     }
 
     @Test
