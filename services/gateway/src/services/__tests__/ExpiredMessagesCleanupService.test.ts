@@ -629,3 +629,30 @@ describe('ExpiredMessagesCleanupService — traductions partagées', () => {
     expect(table.remainingIds()).toEqual(['voisine']);
   });
 });
+
+describe('#11269 — le journal de purge des vues uniques', () => {
+  it('journalise chaque ligne purgée : message, conversation, pièces, fichiers en attente', async () => {
+    const prisma = {
+      ...(buildPrisma([messageRow({ attachments: [{ id: 'att-1', mimeType: 'image/jpeg' }] })]) as object),
+      messageAttachment: { count: jest.fn<(args: unknown) => Promise<number>>().mockResolvedValue(0) },
+      sharedTranslation: sharedTranslationTable([]).delegate,
+    } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
+    const service = new ExpiredMessagesCleanupService(prisma, {
+      attachmentRemover: buildAttachments(),
+      now: () => NOW,
+      resolveManager: () => null,
+    });
+    sharedLog.info.mockClear();
+
+    await service.purgeViewOnce();
+
+    const journal = sharedLog.info.mock.calls.find((call) => String(call[0]).includes('view-once purged'));
+    expect(journal?.[1]).toMatchObject({
+      messageId: 'msg-1',
+      conversationId: 'conv-1',
+      attachments: 1,
+      filesPending: false,
+      firstPurge: true,
+    });
+  });
+});

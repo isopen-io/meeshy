@@ -40,16 +40,55 @@ export interface PurgedViewOnce {
   readonly conversationId: string;
 }
 
+/**
+ * Le JOURNAL d'une ligne écrite par la purge (#11269) : combien de pièces elle
+ * visait, si des fichiers restent à reprendre, et s'il s'agit de la première
+ * purge du contenu ou d'une reprise des seuls fichiers.
+ */
+export interface ViewOncePurgeEntry {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly attachments: number;
+  readonly filesPending: boolean;
+  readonly firstPurge: boolean;
+}
+
 export interface PurgeViewOnceOptions {
   readonly now: Date;
   readonly attachmentRemover: ViewOncePurgeAttachmentRemover;
   readonly announce?: (purged: PurgedViewOnce) => void | Promise<void>;
+  readonly onPurged?: (entry: ViewOncePurgeEntry) => void;
   readonly batchSize?: number;
   readonly onError?: (messageId: string, err: unknown) => void;
 }
 
+type DueViewOnce = {
+  id: string;
+  conversationId: string;
+  viewOnceBurnedAt?: Date | null;
+  attachments: Array<{ id: string }>;
+};
+
+/**
+ * Les pièces du message sont-elles TOUTES parties ? Relu en base, jamais déduit
+ * des promesses d'effacement : `deleteAttachment` lève aussi sur une ligne déjà
+ * partie (une passe concurrente), et réussit sans dire si ses `unlink` ont pris.
+ * Une relecture qui échoue répond « non » — la purge ne prétend jamais avoir
+ * effacé ce qu'elle n'a pas su compter.
+ */
+async function attachmentsGone(
+  prisma: Pick<PrismaClient, 'messageAttachment'>,
+  messageId: string,
+): Promise<boolean> {
+  try {
+    return (await prisma.messageAttachment.count({ where: { messageId } })) === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function purgeDueViewOnceContent(
-  prisma: ViewOncePurgePrisma & SharedTranslationErasureClient,
+  prisma: ViewOncePurgePrisma & Pick<PrismaClient, 'messageAttachment'> & SharedTranslationErasureClient,
   options: PurgeViewOnceOptions,
 ): Promise<{ purged: number }> {
   const due = (await prisma.message.findMany({
@@ -61,19 +100,24 @@ export async function purgeDueViewOnceContent(
       ],
       ...unsetOrNull('deletedAt'),
     },
-    select: { id: true, conversationId: true, attachments: { select: { id: true } } },
+    select: { id: true, conversationId: true, viewOnceBurnedAt: true, attachments: { select: { id: true } } },
     orderBy: { viewOnceBurnAt: 'asc' },
     take: options.batchSize ?? DEFAULT_PURGE_BATCH,
-  })) as Array<{ id: string; conversationId: string; attachments: Array<{ id: string }> }>;
+  })) as DueViewOnce[];
 
   const purgedIds: string[] = [];
+  let firstPurges = 0;
   try {
     for (const message of due) {
-      // Les fichiers d'abord : si l'effacement de la ligne échoue, son échéance
-      // reste posée et la passe suivante la reprend.
+      // Les fichiers d'abord. Une pièce qui résiste laisse l'échéance PASSÉE
+      // (#11269) : la loi du porteur continue de refuser ses octets, et la
+      // passe suivante la reprend. La remettre à `null` rendait la pièce de
+      // nouveau lisible, et plus aucune passe ne la revoyait.
       await Promise.allSettled(
         message.attachments.map((attachment) => options.attachmentRemover.deleteAttachment(attachment.id)),
       );
+      const filesPending = message.attachments.length > 0 && !(await attachmentsGone(prisma, message.id));
+      const firstPurge = !(message.viewOnceBurnedAt instanceof Date);
       try {
         await prisma.message.update({
           where: { id: message.id },
@@ -83,8 +127,8 @@ export async function purgeDueViewOnceContent(
             encryptionMetadata: null,
             translations: null,
             metadata: null,
-            viewOnceBurnAt: null,
-            viewOnceBurnedAt: options.now,
+            viewOnceBurnAt: filesPending ? options.now : null,
+            ...(firstPurge ? { viewOnceBurnedAt: options.now } : {}),
           },
         });
       } catch (err) {
@@ -92,6 +136,15 @@ export async function purgeDueViewOnceContent(
         continue;
       }
       purgedIds.push(message.id);
+      options.onPurged?.({
+        id: message.id,
+        conversationId: message.conversationId,
+        attachments: message.attachments.length,
+        filesPending,
+        firstPurge,
+      });
+      if (!firstPurge) continue;
+      firstPurges += 1;
       try {
         await options.announce?.({ id: message.id, conversationId: message.conversationId });
       } catch (err) {
@@ -108,7 +161,7 @@ export async function purgeDueViewOnceContent(
     await eraseSharedTranslations(prisma, { messageIds: purgedIds });
   }
 
-  return { purged: purgedIds.length };
+  return { purged: firstPurges };
 }
 
 /**
