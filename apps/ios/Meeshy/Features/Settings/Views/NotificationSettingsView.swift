@@ -7,9 +7,16 @@ struct NotificationSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs: UserPreferencesManager
-    @StateObject private var circleNotify = CircleNotifySettingsViewModel()
+    @StateObject private var circleNotify: CircleNotifySettingsViewModel
     init(prefs: UserPreferencesManager = .shared) {
         self.prefs = prefs
+        // L'écran compose ses dépendances : le modèle ne lit aucun singleton.
+        _circleNotify = StateObject(wrappedValue: CircleNotifySettingsViewModel(
+            service: CircleNotifyService.shared,
+            networkMonitor: NetworkMonitor.shared,
+            accountId: AuthManager.shared.currentUser?.id,
+            onRefusal: { FeedbackToastManager.shared.showError($0) }
+        ))
     }
 
     private let accentColor = MeeshyColors.brandPrimaryHex
@@ -163,7 +170,7 @@ struct NotificationSettingsView: View {
 
     private var circleNotifySection: some View {
         settingsSection(title: String(localized: "circleNotify.title", defaultValue: "Qui est prévenu", bundle: .main), icon: "person.3.fill", color: MeeshyColors.successHex) {
-            CircleNotifySettingsContent(viewModel: circleNotify, accentHex: accentColor)
+            CircleNotifySettingsContent(viewModel: circleNotify, accent: MeeshyColors.brandPrimary)
         }
         .task { await circleNotify.load() }
     }

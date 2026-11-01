@@ -47,7 +47,7 @@ struct ComposerSceneFrise: View {
             transport
             pistes
         }
-        .onChange(of: timeline.isPlaying) { _ in
+        .adaptiveOnChange(of: timeline.isPlaying) { _, _ in
             guard vue != nil else { return }
             vue = visible.showing(timeline.currentTime, duration: duree)
         }

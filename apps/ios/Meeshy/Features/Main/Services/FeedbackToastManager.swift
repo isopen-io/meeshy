@@ -203,6 +203,11 @@ enum DailyGestureLimitNotice {
         DailyGestureLimitLedger.shared.take(clientMutationId: clientMutationId).map { text(for: $0) }
     }
 
+    /// Montre la limite du jour quand `error` en est une, `fallback` sinon : un seul toast.
+    static func showError(_ error: Error, otherwise fallback: String, toasts: FeedbackToastManager = .shared) {
+        toasts.showError(refusalText(error) ?? fallback)
+    }
+
     /// Montre le message quand `error` est une limite du jour ; `true` si c'en était une.
     @discardableResult
     static func surface(_ error: Error, toasts: FeedbackToastManager = .shared) -> Bool {

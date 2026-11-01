@@ -7,7 +7,7 @@ import MeeshyUI
 /// Communauté et Public, une phrase dit en clair qui sera prévenu.
 struct CircleNotifySettingsContent: View {
     @ObservedObject var viewModel: CircleNotifySettingsViewModel
-    let accentHex: String
+    let accent: Color
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -15,7 +15,7 @@ struct CircleNotifySettingsContent: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(String(localized: "circleNotify.intro", defaultValue: "Choisissez, action par action, le cercle de votre entourage qui reçoit une notification.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.smPlus)
@@ -40,12 +40,12 @@ struct CircleNotifySettingsContent: View {
         HStack {
             Text(String(localized: "circleNotify.unavailable", defaultValue: "Impossible de lire ces réglages.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             Spacer()
             Button(String(localized: "circleNotify.retry", defaultValue: "Réessayer", bundle: .main)) {
                 Task { await viewModel.load() }
             }
-            .foregroundColor(Color(hex: accentHex))
+            .foregroundStyle(accent)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
@@ -63,15 +63,15 @@ struct CircleNotifySettingsContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Self.title(of: family))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(viewModel.preferences.uniformChoice(of: family).map(Self.label(of:))
                      ?? String(localized: "circleNotify.summary.mixed", defaultValue: "Selon l’action", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
             .accessibilityElement(children: .combine)
         }
-        .tint(Color(hex: accentHex))
+        .tint(accent)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
     }
@@ -89,15 +89,15 @@ struct CircleNotifySettingsContent: View {
             } label: {
                 Text(Self.title(of: key.action))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
             .pickerStyle(.menu)
-            .tint(Color(hex: accentHex))
+            .tint(accent)
 
             if let explanation = Self.explanation(of: choice) {
                 Text(explanation)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
