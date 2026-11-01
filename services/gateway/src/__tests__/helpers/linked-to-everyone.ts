@@ -35,14 +35,15 @@ export const userRelationRows =
   };
 
 type UserQuery = {
-  readonly where: { readonly id?: InClause; readonly blockedUserIds?: unknown; readonly deletedAt?: null; readonly isActive?: boolean };
+  readonly where: { readonly id?: InClause; readonly blockedUserIds?: unknown; readonly isActive?: boolean };
 };
 
 export const aliveAndUnblocked =
   (origin: (args: UserQuery) => unknown = async () => []) =>
   async (args: UserQuery) => {
     if (args.where.blockedUserIds !== undefined) return [];
-    if (args.where.deletedAt === null && args.where.isActive === true) return (args.where.id?.in ?? []).map((id) => ({ id }));
+    // La lecture des comptes vivants (#14234) : `isActive` + `deletedAt` absent ou nul.
+    if (args.where.isActive === true) return (args.where.id?.in ?? []).map((id) => ({ id }));
     return origin(args);
   };
 

@@ -66,7 +66,7 @@ const makePrismaMock = () => ({
   },
   user: {
     findUnique: jest.fn(),
-    findMany: jest.fn().mockResolvedValue([]),
+    findMany: jest.fn(async (args: any) => (args?.where?.isActive === true ? (args.where.id?.in ?? []).map((id: string) => ({ id })) : [])), // #14234 comptes vivants
     findFirst: jest.fn().mockResolvedValue(null),
   },
   conversation: {

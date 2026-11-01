@@ -57,6 +57,8 @@ export type World = {
   readonly blocks?: Readonly<Record<string, readonly string[]>>;
   readonly communities?: Readonly<Record<string, readonly string[]>>;
   readonly deleted?: readonly string[];
+  /** Comptes désactivés (`isActive: false`). */
+  readonly inactive?: readonly string[];
   readonly directs?: ReadonlyArray<readonly [string, string]>;
   readonly directsDown?: boolean;
   readonly silent?: readonly string[];
@@ -77,6 +79,14 @@ export const deletedAtMatches = (doc: Record<string, unknown>, filter: unknown):
   if (typeof filter === 'object' && filter !== null && 'isSet' in filter) return (filter as { isSet: boolean }).isSet === present;
   return false;
 };
+
+type LivingWhere = { readonly deletedAt?: unknown; readonly OR?: readonly LivingWhere[]; readonly AND?: readonly LivingWhere[] };
+
+/** La clause `deletedAt` telle que Prisma l'applique, `OR` / `AND` compris (`unsetOrNull`). */
+const livingMatches = (doc: Record<string, unknown>, where: LivingWhere): boolean =>
+  (!('deletedAt' in where) || deletedAtMatches(doc, where.deletedAt)) &&
+  (where.OR === undefined || where.OR.some((clause) => livingMatches(doc, clause))) &&
+  (where.AND === undefined || where.AND.every((clause) => livingMatches(doc, clause)));
 
 export function monde(world: World = {}) {
   const store = relationStore({
@@ -102,11 +112,15 @@ export function monde(world: World = {}) {
       }),
       findFirst: async (args: { where: { OR?: ReadonlyArray<{ id: string; blockedUserIds: { has: string } }> } }) =>
         (args.where.OR ?? []).find((clause) => blockedOf(clause.id).includes(clause.blockedUserIds.has)) ? { id: 'blocked' } : null,
-      findMany: async (args: { where: { id: { in: string[] }; blockedUserIds?: { has: string }; deletedAt?: null; isActive?: boolean } }) => {
+      // Un compte jamais supprimé n'a PAS de clé `deletedAt` (leçon 318) : `{ deletedAt: null }` seul ne l'apparie pas.
+      findMany: async (args: { where: LivingWhere & { id: { in: string[] }; blockedUserIds?: { has: string }; isActive?: boolean } }) => {
         const { blockedUserIds } = args.where;
         if (blockedUserIds) return args.where.id.in.filter((id) => blockedOf(id).includes(blockedUserIds.has)).map((id) => ({ id }));
-        if (args.where.deletedAt !== null || args.where.isActive !== true) return [];
-        return args.where.id.in.filter((id) => !(world.deleted ?? []).includes(id)).map((id) => ({ id }));
+        if (args.where.isActive !== true) return [];
+        const docOf = (id: string): Record<string, unknown> => ((world.deleted ?? []).includes(id) ? { deletedAt: new Date(0) } : {});
+        return args.where.id.in
+          .filter((id) => !(world.inactive ?? []).includes(id) && livingMatches(docOf(id), args.where))
+          .map((id) => ({ id }));
       },
     },
     userPreferences: {

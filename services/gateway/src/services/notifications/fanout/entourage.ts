@@ -14,7 +14,9 @@
  *    personnes que Communauté (ADR du lot) ;
  * 3. le verdict de LA loi (`resolveRelationAccess`, `ownerAudience`) : le niveau
  *    effectif borne toujours le réglage, et le blocage, dans un sens ou dans
- *    l'autre, coupe tout. Une lecture de blocage qui échoue n'envoie rien.
+ *    l'autre, coupe tout. Une lecture de blocage qui échoue n'envoie rien ;
+ * 4. les seuls comptes VIVANTS (#14234), propriétaire compris : un compte
+ *    supprimé ou désactivé n'est prévenu de rien et n'a pas d'entourage.
  *
  * Ce que l'entourage ne dit PAS : qui a le droit de VOIR le contenu. C'est
  * l'admission de la publication (`filterPostConsumers`), que l'éventail applique
@@ -33,6 +35,7 @@ import {
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { notificationLogger } from '../../../utils/logger-enhanced';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
+import { unsetOrNull } from '../../../utils/prisma-unset';
 import { comptesAuMoins, niveauxParmi } from '../../friendship';
 import { getCommunityCoMemberIdsBounded } from '../../posts/communityVisibility';
 import { linkedAmong, type ChosenLinkDb } from '../../posts/chosenRecipientLinks';
@@ -45,6 +48,20 @@ export type Entourage = { readonly ids: string[]; readonly truncated: boolean };
 const NOBODY: Entourage = { ids: [], truncated: false };
 
 const widensToCommunity = (choice: RelationAudienceChoice): boolean => choice === 'COMMUNITY' || choice === 'PUBLIC';
+
+/**
+ * Les comptes VIVANTS parmi `ids`, en UNE lecture bornée par l'appelant (#14234).
+ * Vivant = ce que le schéma déclare : `isActive` vrai et `deletedAt` absent ou
+ * nul. Un compte jamais supprimé n'a PAS de clé `deletedAt` : `{ deletedAt: null }`
+ * seul l'écarterait (leçon 318), d'où `unsetOrNull`.
+ */
+async function livingAmong(prisma: Pick<PrismaClient, 'user'>, ids: readonly string[]): Promise<Set<string>> {
+  const rows = await prisma.user.findMany({
+    where: { id: { in: [...new Set(ids)] }, isActive: true, ...unsetOrNull('deletedAt') },
+    select: { id: true },
+  });
+  return new Set(rows.map((row) => row.id));
+}
 
 /**
  * Le cran du propriétaire pour `key` : clé ABSENTE ⇒ défaut de sa famille ;
@@ -91,13 +108,12 @@ export async function resolveLinkedAudience(
   if (candidates.length === 0) return [];
   const addressed = new Set(params.alreadyAddressedUserIds ?? []);
   try {
-    const [blocked, living, linked] = await Promise.all([
+    const [blocked, alive, linked] = await Promise.all([
       getBlockedUserIdsAmong(prisma, params.ownerId, candidates),
-      prisma.user.findMany({ where: { id: { in: candidates }, deletedAt: null, isActive: true }, select: { id: true } }),
+      livingAmong(prisma, [params.ownerId, ...candidates]),
       linkedAmong(prisma, params.ownerId, candidates.filter((id) => !addressed.has(id))),
     ]);
-    if (linked === null) return [];
-    const alive = new Set(living.map((row) => row.id));
+    if (linked === null || !alive.has(params.ownerId)) return [];
     return candidates.filter((id) => alive.has(id) && (addressed.has(id) || linked.has(id)) && !blocked.has(id));
   } catch (error) {
     notificationLogger.error('Destinataires nommés abandonnés : lecture illisible', { ownerId: params.ownerId, error });
@@ -139,7 +155,13 @@ export async function resolveChosenAudience(
   });
 }
 
-type EntourageParams = { readonly ownerId: string; readonly key: CircleNotifyKey; readonly excludeUserIds?: readonly string[] };
+type EntourageParams = {
+  readonly ownerId: string;
+  readonly key: CircleNotifyKey;
+  readonly excludeUserIds?: readonly string[];
+  /** Comptes qui doivent AUSSI être vivants pour qu'il y ait un entourage (l'acteur d'un relais B seul, #14234). */
+  readonly mustBeAlive?: readonly string[];
+};
 
 /** L'entourage prévenu ; une lecture qui échoue (réglage, liens, niveaux, blocage) n'envoie RIEN. */
 export async function resolveEntourage(prisma: EntourageDb, params: EntourageParams): Promise<Entourage> {
@@ -153,6 +175,7 @@ export async function resolveEntourage(prisma: EntourageDb, params: EntouragePar
 
 async function readEntourage(prisma: EntourageDb, params: EntourageParams): Promise<Entourage> {
   const { ownerId, key } = params;
+  const mustBeAlive = params.mustBeAlive ?? [];
   const setting = await readCircleSetting(prisma, ownerId, key);
   if (setting === 'NOBODY') return NOBODY;
 
@@ -172,16 +195,19 @@ async function readEntourage(prisma: EntourageDb, params: EntourageParams): Prom
 
   const coMemberSet = new Set(coMembers);
   const unknownLevels = candidates.filter((id) => !known.has(id));
-  const [levels, blocked] = await Promise.all([
+  const [levels, blocked, alive] = await Promise.all([
     unknownLevels.length === 0 ? Promise.resolve(known) : niveauxParmi(prisma, ownerId, unknownLevels),
     getBlockedUserIdsAmong(prisma, ownerId, candidates),
+    livingAmong(prisma, [ownerId, ...mustBeAlive, ...candidates]),
   ]);
+  if (![ownerId, ...mustBeAlive].every((id) => alive.has(id))) return { ids: [], truncated };
 
   const levelOf = (id: string): RelationLevel => known.get(id) ?? levels.get(id) ?? 'PUBLIC';
   const feature = CIRCLE_NOTIFY_KEY_FEATURE[key];
   // Le niveau lu est déjà le MINIMUM des deux accords : le passer des deux côtés le rend tel quel.
   const ids = candidates.filter(
     (id) =>
+      alive.has(id) &&
       resolveRelationAccess({
         viewerId: id,
         targetId: ownerId,

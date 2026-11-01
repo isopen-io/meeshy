@@ -44,6 +44,8 @@ function withBlocks(prisma: ReturnType<typeof makeNotificationPrisma>, blocks: B
   });
   prisma.user.findMany.mockImplementation(async (args: unknown) => {
     const { where } = args as ManyArgs;
+    // #14234 — la lecture des comptes vivants : tout candidat l'est ici.
+    if ((where as { isActive?: boolean }).isActive === true) return (where.id?.in ?? []).map((id) => ({ id }));
     return Object.keys(blocks)
       .filter((id) => (where.id ? where.id.in.includes(id) : true))
       .filter((id) => blockedOf(id).includes(where.blockedUserIds.has))

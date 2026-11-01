@@ -139,7 +139,7 @@ async function entourageOf(
       elsewhere: keys.elsewhere,
     });
   }
-  const ofAuthor = await resolveEntourage(deps.prisma, { ownerId: post.authorId, key: keys.onMyContent, excludeUserIds: [actorId] });
+  const ofAuthor = await resolveEntourage(deps.prisma, { ownerId: post.authorId, key: keys.onMyContent, excludeUserIds: [actorId], mustBeAlive: [actorId] });
   const blockedWithActor = await getBlockedUserIdsAmong(deps.prisma, actorId, [...ofAuthor.ids]);
   return { ids: ofAuthor.ids.filter((id) => !blockedWithActor.has(id)), truncated: ofAuthor.truncated };
 }

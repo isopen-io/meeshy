@@ -85,6 +85,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   securityLogger: { logViolation: jest.fn(), logAttempt: jest.fn(), logSuccess: jest.fn() },
 }));
 
+import { aliveAndUnblocked } from '../../helpers/linked-to-everyone';
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
@@ -126,7 +127,7 @@ describe('NotificationService — le fan-out du fil suit l’audience ACTUELLE d
       displayName: 'Actor',
       avatar: null,
     });
-    prisma.user.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockImplementation(aliveAndUnblocked());
     prisma.notification.create.mockResolvedValue({
       id: 'notif-1',
       type: 'story_thread_reply',
