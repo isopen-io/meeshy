@@ -18,6 +18,8 @@ export const NOTIFICATION_STRING_KEYS = [
   'comment.genericFrom', 'comment.repliedInFrom',
   'activity.reaction',
   'activity.reactionFrom',
+  'activity.share',
+  'activity.shareFrom',
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
@@ -549,6 +551,14 @@ export function buildNotificationDisplay(
         author
           ? notificationString(L, 'activity.reactionFrom', { ...(emoji ? { emoji } : {}), postType: kind ?? 'POST', author })
           : ns('activity.reaction', kind ?? 'POST'),
+        nounCap,
+      );
+    // ── Partage, relayé à l'entourage (#14069) — sans auteur tiers : son propre contenu ──
+    case 'friend_content_share':
+      return framed(
+        author
+          ? notificationString(L, 'activity.shareFrom', { postType: kind ?? 'POST', author })
+          : ns('activity.share', kind ?? 'POST'),
         nounCap,
       );
     case 'story_thread_reply':

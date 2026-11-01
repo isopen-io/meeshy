@@ -10,6 +10,7 @@ import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { mayConsumePost } from './postConsumptionGate';
 import { creditPostEngagement } from '../../services/posts/postEngagementCredits';
 import { notePairInteraction } from '../../services/relations/pairInteractionRecorder';
+import { relayActivityToEntourage } from '../../services/notifications/fanout/activity-relay';
 
 /** La tranche de `PostService` que le partage touche — rien d'autre n'est prêté. */
 type ShareService = Pick<PostService, 'sharePost' | 'shareWithTrackingLink'>;
@@ -136,6 +137,15 @@ export function registerShareRoutes(
         });
         // Les cercles (#13932) : partager le post de l'autre compte pour la paire.
         notePairInteraction(prisma, { actorId: authContext.registeredUser.id, otherId: post.authorId, nature: 'share' });
+      }
+
+      // #14069 — l'entourage apprend le partage, hors du chemin de la réponse.
+      const notifier = fastify.notificationService;
+      if (notifier) {
+        relayActivityToEntourage(
+          { prisma, createNotification: (params) => notifier.createNotification(params) },
+          { activity: 'share', postId, actorId: authContext.registeredUser.id },
+        ).catch((err: unknown) => enhancedLogger.warn('[POST /posts/:postId/share]: relais du partage abandonné', { err }));
       }
 
       return sendSuccess(reply, payload);

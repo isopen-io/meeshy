@@ -344,6 +344,12 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
     }
   });
 
+  it('le partage relayé nomme l’auteur tiers, et reste indéfini sur son propre contenu (#14069)', () => {
+    expect(buildNotificationDisplay('fr', { type: 'friend_content_share', actorName: 'E', postType: 'REEL', authorName: 'Awa' }).action).toBe('a partagé un réel de Awa');
+    expect(buildNotificationDisplay('en', { type: 'friend_content_share', actorName: 'E', postType: 'POST', authorName: 'Awa' }).action).toBe('shared Awa’s post');
+    expect(buildNotificationDisplay('fr', { type: 'friend_content_share', actorName: 'E', postType: 'POST' }).action).toBe('a partagé une publication');
+  });
+
   it('le relais d’une réaction sans auteur lisible reste indéfini, jamais « votre » (#14068)', () => {
     for (const authorName of [undefined, '', '   ']) {
       expect(buildNotificationDisplay('fr', {

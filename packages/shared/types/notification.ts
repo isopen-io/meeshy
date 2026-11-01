@@ -82,6 +82,8 @@ export enum NotificationTypeEnum {
   FRIEND_STORY_COMMENT = 'friend_story_comment',
   /** Réaction d'un tiers au contenu d'un proche, relayée à l'entourage commun (#14068). */
   FRIEND_CONTENT_REACTION = 'friend_content_reaction',
+  /** Partage par un tiers du contenu d'un proche, ou d'un proche de son propre contenu (#14069). */
+  FRIEND_CONTENT_SHARE = 'friend_content_share',
   STORY_THREAD_REPLY = 'story_thread_reply',
 
   // ===== FRIEND CONTENT EVENTS (Phase 4F) =====

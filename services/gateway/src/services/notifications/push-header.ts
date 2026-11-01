@@ -71,6 +71,7 @@ export function pushCategoryForNotificationType(
     case 'story_thread_reply':
     case 'friend_story_comment':
     case 'friend_content_reaction':
+    case 'friend_content_share':
     case 'friend_new_story':
     case 'friend_new_post':
     case 'friend_new_mood':

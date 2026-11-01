@@ -26,16 +26,28 @@ import type { NotificationType } from '@meeshy/shared/types/notification';
 import { notificationLogger } from '../../../utils/logger-enhanced';
 import { filterPostConsumers } from '../../posts/postAudience';
 import { NOT_DELETED } from '../../posts/softDelete';
-import { thirdPartyEntourage } from './entourage';
+import { resolveEntourage, thirdPartyEntourage, type Entourage } from './entourage';
 import type { FanoutDependencies } from './dependencies';
 
-export type RelayedActivity = 'reaction';
+export type RelayedActivity = 'reaction' | 'share';
 
-const RELAYS = {
+type RelayKeys = {
+  readonly type: NotificationType;
+  readonly onMyContent: CircleNotifyKey;
+  readonly elsewhere: CircleNotifyKey;
+  /** Sur son PROPRE contenu : l'entourage A de l'acteur ; absent ⇒ rien n'est relayé. */
+  readonly publication?: CircleNotifyKey;
+};
+
+const RELAYS: Readonly<Record<RelayedActivity, RelayKeys>> = {
   reaction: { type: 'friend_content_reaction', onMyContent: 'circleOnMyContentReaction', elsewhere: 'circleElsewhereReaction' },
-} as const satisfies Readonly<
-  Record<RelayedActivity, { readonly type: NotificationType; readonly onMyContent: CircleNotifyKey; readonly elsewhere: CircleNotifyKey }>
->;
+  share: {
+    type: 'friend_content_share',
+    onMyContent: 'circleOnMyContentShare',
+    elsewhere: 'circleElsewhereShare',
+    publication: 'circlePublicationShare',
+  },
+};
 
 export const RELAY_BATCH_SIZE = 50;
 
@@ -52,6 +64,22 @@ export type ActivityRelayDependencies = Pick<FanoutDependencies, 'prisma' | 'cre
 };
 
 const relayOnceKey = (params: ActivityRelayParams): string => `notif:relay:${params.activity}:${params.actorId}:${params.postId}`;
+
+/**
+ * Le débit d'un acteur, par activité : au plus `RELAY_BURST` relais sur
+ * `RELAY_BURST_WINDOW_SECONDS`. Sans lui, partager soixante contenus en une
+ * minute pousserait soixante notifications à chaque proche. Des cases posées
+ * par `setnx`, chacune expirant seule : la première libre est prise.
+ */
+export const RELAY_BURST = 5;
+export const RELAY_BURST_WINDOW_SECONDS = 10 * 60;
+
+async function claimBurstSlot(throttle: RelayThrottle, params: ActivityRelayParams): Promise<boolean> {
+  for (let slot = 0; slot < RELAY_BURST; slot += 1) {
+    if (await throttle.setnx(`notif:relay-burst:${params.activity}:${params.actorId}:${slot}`, '1', RELAY_BURST_WINDOW_SECONDS)) return true;
+  }
+  return false;
+}
 
 const relayThrottleOf = async (deps: ActivityRelayDependencies): Promise<RelayThrottle> =>
   deps.relayThrottle ?? (await import('../../CacheStore')).getCacheStore();
@@ -75,6 +103,24 @@ type RelayedPost = {
 const isExpired = (post: RelayedPost, now: number): boolean =>
   post.expiresAt !== undefined && post.expiresAt !== null && new Date(post.expiresAt).getTime() <= now;
 
+/** Son propre contenu : l'entourage A de l'acteur. Celui d'un autre : B ∩ C. */
+function entourageOf(
+  deps: ActivityRelayDependencies,
+  post: RelayedPost,
+  params: ActivityRelayParams,
+  keys: RelayKeys
+): Promise<Entourage> {
+  if (post.authorId === params.actorId && keys.publication !== undefined) {
+    return resolveEntourage(deps.prisma, { ownerId: params.actorId, key: keys.publication, excludeUserIds: [] });
+  }
+  return thirdPartyEntourage(deps.prisma, {
+    authorId: post.authorId,
+    actorId: params.actorId,
+    onMyContent: keys.onMyContent,
+    elsewhere: keys.elsewhere,
+  });
+}
+
 const chunks = <T>(items: readonly T[], size: number): T[][] =>
   Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, (i + 1) * size));
 
@@ -84,19 +130,16 @@ export async function relayActivityToEntourage(deps: ActivityRelayDependencies, 
       where: { id: params.postId, deletedAt: NOT_DELETED },
       select: { authorId: true, type: true, visibility: true, visibilityUserIds: true, content: true, expiresAt: true },
     })) as RelayedPost | null;
-    if (!post || post.authorId === params.actorId || post.visibility === 'PRIVATE' || isExpired(post, Date.now())) return;
+    if (!post || post.visibility === 'PRIVATE' || isExpired(post, Date.now())) return;
+    const keys = RELAYS[params.activity];
+    const ownContent = post.authorId === params.actorId;
+    if (ownContent && keys.publication === undefined) return;
 
     const throttle = await relayThrottleOf(deps);
     const onceKey = relayOnceKey(params);
     if ((await throttle.get(onceKey)) !== null) return;
 
-    const keys = RELAYS[params.activity];
-    const entourage = await thirdPartyEntourage(deps.prisma, {
-      authorId: post.authorId,
-      actorId: params.actorId,
-      onMyContent: keys.onMyContent,
-      elsewhere: keys.elsewhere,
-    });
+    const entourage = await entourageOf(deps, post, params, keys);
     if (entourage.ids.length === 0) return;
 
     const recipients = (
@@ -109,6 +152,7 @@ export async function relayActivityToEntourage(deps: ActivityRelayDependencies, 
       })
     ).filter((id) => id !== post.authorId && id !== params.actorId);
     if (recipients.length === 0) return;
+    if (!(await claimBurstSlot(throttle, params))) return;
     if (!(await throttle.setnx(onceKey, '1', RELAY_ONCE_WINDOW_SECONDS))) return;
 
     const [actor, author] = await Promise.all([
@@ -135,7 +179,7 @@ export async function relayActivityToEntourage(deps: ActivityRelayDependencies, 
               postId: params.postId,
               postType,
               ...(params.emoji ? { emoji: params.emoji } : {}),
-              ...(authorName ? { contentAuthorName: authorName } : {}),
+              ...(authorName && !ownContent ? { contentAuthorName: authorName } : {}),
             },
           })
         )
