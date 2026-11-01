@@ -1102,7 +1102,8 @@ describe('MessageProcessor — notification flows', () => {
 
   it('sends mention notifications when mentionedUserIds are provided', async () => {
     msgCreate.mockResolvedValue(makeMessage());
-    partFindUnique.mockResolvedValue({ userId: 'sender-user' });
+    // #14066 — l'expéditeur est un membre ACTIF : sinon il ne cite personne.
+    partFindUnique.mockResolvedValue({ userId: 'sender-user', isActive: true, conversationId: CONV_ID });
     userFindUnique.mockResolvedValue({ username: 'sender', displayName: 'Sender', avatar: null });
     convFindUnique.mockResolvedValue({ title: 'T', type: 'group', participants: [{ userId: 'sender-user' }, { userId: 'mentioned-user' }] });
     attFindMany.mockResolvedValue([]);
@@ -1553,6 +1554,7 @@ describe('MessageProcessor — B.1/B.2 send path optimizations', () => {
     });
 
     it('calls processMentionsInDB when explicit mentionedUserIds provided even without @', async () => {
+      partFindUnique.mockResolvedValue({ userId: 'sender-user', isActive: true, conversationId: CONV_ID });
       mockValidateMentionPermissions.mockResolvedValue({ validUserIds: [SENDER_ID] });
       userFindMany.mockResolvedValue([{ username: 'alice' }]);
       msgUpdate.mockResolvedValue(makeMessage());
