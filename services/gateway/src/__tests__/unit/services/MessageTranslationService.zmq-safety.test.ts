@@ -293,7 +293,8 @@ describe('MessageTranslationService — translateTextDirectly listener hygiene',
 
   const listenerCounts = () => ({
     completed: mockZmqClient.listenerCount('translationCompleted'),
-    error: mockZmqClient.listenerCount('translationError')
+    error: mockZmqClient.listenerCount('translationError'),
+    unsupported: mockZmqClient.listenerCount('translationUnsupported')
   });
 
   it('detaches both listeners on the 10s timeout (no leak on the shared zmqClient)', async () => {
@@ -308,7 +309,8 @@ describe('MessageTranslationService — translateTextDirectly listener hygiene',
     await jest.advanceTimersByTimeAsync(0);
     expect(listenerCounts()).toEqual({
       completed: before.completed + 1,
-      error: before.error + 1
+      error: before.error + 1,
+      unsupported: before.unsupported + 1
     });
 
     // Cross the 10s timeout — the promise resolves to the fallback result
