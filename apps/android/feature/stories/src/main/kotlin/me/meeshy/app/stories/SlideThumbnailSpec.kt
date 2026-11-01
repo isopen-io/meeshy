@@ -144,16 +144,15 @@ internal fun StoryComposerUiState.thumbnailPlacedOf(slide: StorySlide, mediaBase
         ThumbnailPlaced(placed.id, source.first, source.second, placed.x, placed.y, placed.scale, placed.rotationDeg, source.third)
     }
 
-/** The media painted behind [slide]: its designated background, else its first media not posed on the scene (#13853) — exactly what the scene canvas renders. */
+/** The media painted behind [slide]: its designated background, else its first media not posed on the scene (#13853) — exactly what the scene canvas renders, a video by its picture (#13843). */
 internal fun StoryComposerUiState.thumbnailBackgroundOf(slide: StorySlide, mediaBaseUrl: String?): ThumbnailBackground? {
     val posed = slide.placedMedia.mapTo(mutableSetOf()) { it.mediaId }
     val id = slide.backgroundMediaId?.takeIf { it in slide.mediaIds } ?: slide.mediaIds.firstOrNull { it !in posed } ?: return null
     attachments.firstOrNull { it.id == id }?.let { media ->
-        val url = ComposerMediaAddress.preview(media, mediaBaseUrl)
-        return ThumbnailBackground(url, url)
+        return ThumbnailBackground(ComposerMediaAddress.preview(media, mediaBaseUrl), ComposerPicture.of(media, mediaBaseUrl))
     }
     val item = pendingUploads.firstOrNull { it.cmid == id }?.item ?: return null
-    return ThumbnailBackground("pending:$id:${item.sizeBytes}", item.previewModel)
+    return ComposerPicture.of(item)?.let { ThumbnailBackground("pending:$id:${item.sizeBytes}", it) }
 }
 
 /** La couleur d'une vignette : le filtre de la scène, puis les réglages du fond quand il en porte (ce que le plateau peint, au flou et au grain près). */

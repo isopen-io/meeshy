@@ -31,7 +31,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -283,7 +282,7 @@ private fun SlideTile(
 /**
  * The picture of a scene. The bitmap comes from [SlideThumbnailStore] when this exact scene was painted before, otherwise it
  * is painted on `Dispatchers.Default` — never on the main thread — after a settling delay if a previous picture is on screen,
- * which stays in place meanwhile (no hole, no repaint per frame of a gesture). Black until the first picture exists; posed media are decoded beside the background (#13867).
+ * which stays in place meanwhile (no hole, no repaint per frame of a gesture). Until the first picture exists the tile shows the scene's own fill, never black (#13843); posed media are decoded beside the background (#13867).
  */
 @Composable
 private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, placedModels: List<ThumbnailPlaced>, modifier: Modifier = Modifier) {
@@ -303,7 +302,8 @@ private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, plac
         }
         shown = painted
     }
-    Box(modifier.background(Color.Black)) {
+    val floor = remember(spec.fill) { spec.fill.brush() }
+    Box(modifier.background(floor)) {
         shown?.let { Image(bitmap = it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
     }
 }
@@ -320,6 +320,7 @@ private suspend fun loadThumbnailPlaced(context: android.content.Context, model:
 }
 
 private suspend fun loadThumbnailBackground(context: android.content.Context, model: Any, spec: SlideThumbnailSpec): Bitmap? {
+    if (model is ComposerVideoFrame) return composerVideoFrameBitmap(context, model)
     val request = ImageRequest.Builder(context)
         .data(model)
         .size((spec.widthPx * spec.framing.scale).toInt().coerceAtLeast(1), (spec.heightPx * spec.framing.scale).toInt().coerceAtLeast(1))
