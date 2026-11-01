@@ -18,7 +18,7 @@ final class MeeshyUIProductOrchestrationGuardTests: XCTestCase {
     private static let governedFolders: [String: [String]] = [
         "Community": forbiddenPatterns,
         "JoinFlow": forbiddenPatterns,
-        "Profile": cachePatterns,
+        "Profile": cachePatterns + [#"\.shared\b"#],
         "Notifications": cachePatterns
     ]
 
@@ -60,6 +60,12 @@ final class MeeshyUIProductOrchestrationGuardTests: XCTestCase {
                 }
             }
         }
+    }
+
+    func test_laGardeVoitUnSingletonDeService() throws {
+        let sample = "let status = FriendshipCache.shared.status(for: id)"
+        let regex = try NSRegularExpression(pattern: #"\.shared\b"#)
+        XCTAssertNotNil(regex.firstMatch(in: sample, range: NSRange(sample.startIndex..., in: sample)))
     }
 
     func test_laGardeVoitUnVraiMotifInterdit() throws {
