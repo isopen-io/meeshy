@@ -23,6 +23,7 @@ import type {
   BinaryFrameInfo,
   CacheForgetRequest
 } from './types';
+import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withTimeout } from '../../utils/with-timeout';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -128,6 +129,9 @@ export class ZmqRequestSender {
       conversationId: request.conversationId,
       modelType: request.modelType || 'basic',
       ...(request.atRest === true ? { atRest: true } : {}),
+      // Sans cette annonce, le translator se tait sur une langue refusée : une
+      // passerelle qui ne lit pas `errorCode` compterait le refus à son disjoncteur.
+      acceptsErrorCodes: [UNSUPPORTED_LANGUAGE_ERROR_CODE],
       timestamp: Date.now()
     };
 

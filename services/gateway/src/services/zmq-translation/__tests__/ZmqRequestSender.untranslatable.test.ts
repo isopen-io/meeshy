@@ -20,6 +20,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { ZmqRequestSender, UntranslatableRequestError } from '../ZmqRequestSender';
 import type { ZmqConnectionManager } from '../ZmqConnectionManager';
 import type { TranslationRequest } from '../types';
+import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from '../types';
 
 function buildSender() {
   const sent: Array<Record<string, unknown>> = [];
@@ -74,5 +75,15 @@ describe('ZmqRequestSender ne pousse que des langues traduisibles côté serveur
     await sender.sendTranslationRequest(request({ sourceLanguage: 'auto', targetLanguages: ['en'] }));
 
     expect(sent).toHaveLength(1);
+  });
+
+  it("annonce au translator qu'elle lit le refus UNSUPPORTED_LANGUAGE", async () => {
+    const { sender, sent } = buildSender();
+
+    await sender.sendTranslationRequest(request({ targetLanguages: ['en'] }));
+
+    // Sans cette annonce, un translator récent se tait sur une langue refusée :
+    // une passerelle ancienne compterait le refus à son disjoncteur.
+    expect(sent[0].acceptsErrorCodes).toEqual([UNSUPPORTED_LANGUAGE_ERROR_CODE]);
   });
 });

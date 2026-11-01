@@ -64,6 +64,17 @@ def unsupported_language(source_language: str, target_language: str) -> Optional
     return None
 
 
+def refusal_is_understood(task: Any) -> bool:
+    """La passerelle a-t-elle annoncé lire `UNSUPPORTED_LANGUAGE` ?
+
+    Une passerelle plus ancienne compterait le refus comme une erreur ordinaire
+    — huit en 30 s ouvrent son disjoncteur et coupent TOUTES les traductions —
+    et, sur `[en, byv]`, solderait la tâche entière, deadman `en` compris. Elle
+    garde donc le sort d'avant ce lot : le silence.
+    """
+    return UNSUPPORTED_LANGUAGE in getattr(task, 'accepted_error_codes', ())
+
+
 def _create_unsupported_result(task: Any, target_language: str, language: str) -> dict:
     """Réponse TERMINALE d'une paire intraduisible : l'original, l'erreur, son code.
 
@@ -122,9 +133,10 @@ async def process_single_translation(
         for target_language in task.target_languages:
             refused = unsupported_language(task.source_language, target_language)
             if refused is not None:
-                await publish_func(
-                    task.task_id, _create_unsupported_result(task, target_language, refused), target_language
-                )
+                if refusal_is_understood(task):
+                    await publish_func(
+                        task.task_id, _create_unsupported_result(task, target_language, refused), target_language
+                    )
                 continue
             try:
                 with task_scope(_is_at_rest(task), task.message_id):
@@ -203,7 +215,7 @@ async def process_batch_translation(
         for target_lang in target_langs:
             refused = unsupported_language(source_lang, target_lang)
             if refused is not None:
-                for task in tasks:
+                for task in filter(refusal_is_understood, tasks):
                     await publish_func(
                         task.task_id, _create_unsupported_result(task, target_lang, refused), target_lang
                     )

@@ -20,6 +20,15 @@ from .zmq_pool.translation_processor import unsupported_language
 
 logger = logging.getLogger(__name__)
 
+
+def _accepted_error_codes(request_data: dict) -> tuple:
+    """Les codes terminaux que la passerelle ANNONCE savoir lire. Une passerelle
+    qui n'annonce rien les compterait comme des erreurs ordinaires."""
+    announced = request_data.get('acceptsErrorCodes')
+    if not isinstance(announced, list):
+        return ()
+    return tuple(code for code in announced if isinstance(code, str))
+
 # Import du service de cache Redis
 CACHE_AVAILABLE = False
 try:
@@ -357,7 +366,8 @@ class TranslationHandler:
                 target_languages=request_data.get('targetLanguages', []),
                 conversation_id=request_data.get('conversationId', 'unknown'),
                 model_type=request_data.get('modelType', 'basic'),
-                at_rest=request_data.get('atRest') is True
+                at_rest=request_data.get('atRest') is True,
+                accepted_error_codes=_accepted_error_codes(request_data)
             )
             
             logger.info(f"🔧 [TRANSLATOR] Tâche créée: {task.task_id} pour {task.conversation_id} ({len(task.target_languages)} langues)")
@@ -516,9 +526,9 @@ class TranslationHandler:
     
     async def _publish_unsupported_language(self, task_id: str, result: dict, target_language: str):
         """Refus TERMINAL d'une langue sans code NLLB-200 : la passerelle solde
-        cette langue sans relance et sert l'original. Une passerelle plus
-        ancienne, qui ne lit pas `errorCode`, le reçoit comme un
-        `translation_error` ordinaire — une erreur au lieu de cinq relances."""
+        cette langue sans relance et sert l'original. Il ne part que vers une
+        passerelle qui l'a annoncé (`acceptsErrorCodes`) : une plus ancienne le
+        compterait à son disjoncteur (`refusal_is_understood`)."""
         message = {
             'type': 'translation_error',
             'taskId': task_id,

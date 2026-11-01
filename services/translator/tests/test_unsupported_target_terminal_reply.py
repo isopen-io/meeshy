@@ -27,8 +27,13 @@ from services.zmq_pool import translation_processor as tp
 from services.zmq_translation_handler import TranslationHandler
 
 
-def _task(targets, source="fr", text="Bonjour à tous", task_id="task-byv"):
+GATEWAY_THAT_READS_THE_CODE = ("UNSUPPORTED_LANGUAGE",)
+
+
+def _task(targets, source="fr", text="Bonjour à tous", task_id="task-byv",
+          accepts=GATEWAY_THAT_READS_THE_CODE):
     return SimpleNamespace(
+        accepted_error_codes=tuple(accepts),
         task_id=task_id,
         message_id=f"msg-{task_id}",
         text=text,
@@ -190,6 +195,73 @@ async def test_the_batch_path_refuses_an_unsupported_target_without_inference():
 
     service._ml_translate_batch.assert_not_called()
     assert published == [("a", "byv", "UNSUPPORTED_LANGUAGE"), ("b", "byv", "UNSUPPORTED_LANGUAGE")]
+
+
+@pytest.mark.unit
+async def test_an_older_gateway_gets_the_previous_silence_not_an_error_it_would_count():
+    """Une passerelle d'avant ce lot ne lit pas `errorCode` : elle compterait le
+    refus au disjoncteur (8 erreurs / 30 s ⇒ toutes les traductions coupées) et,
+    sur `[en, byv]`, solderait la tâche entière, deadman `en` compris. Sans
+    l'annonce `acceptsErrorCodes`, la langue garde son ancien sort : rien ne part."""
+    handler, pub_socket = _handler()
+    service = _ServiceLikeProduction()
+
+    await tp.process_single_translation(
+        task=_task(["en", "byv"], accepts=()),
+        worker_name="w",
+        translation_service=service,
+        translation_cache=None,
+        publish_func=handler._publish_translation_result,
+    )
+
+    assert [(m["type"], m.get("targetLanguage")) for m in _sent(pub_socket)] == [
+        ("translation_completed", "en")
+    ]
+    assert service.calls == ["en"]
+
+
+@pytest.mark.unit
+async def test_an_older_gateway_gets_silence_on_the_batch_path_too():
+    service = _ServiceLikeProduction()
+    service._ml_translate_batch = AsyncMock(return_value=["x", "y"])
+    published = []
+
+    async def publish(task_id, result, target_language):
+        published.append((task_id, target_language, result.get("errorCode")))
+
+    await tp.process_batch_translation(
+        tasks=[_task(["byv"], task_id="old", accepts=()), _task(["byv"], task_id="new")],
+        worker_name="w",
+        translation_service=service,
+        publish_func=publish,
+    )
+
+    service._ml_translate_batch.assert_not_called()
+    assert published == [("new", "byv", "UNSUPPORTED_LANGUAGE")]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("announced, expected", [
+    ({"acceptsErrorCodes": ["UNSUPPORTED_LANGUAGE"]}, ("UNSUPPORTED_LANGUAGE",)),
+    ({}, ()),
+    ({"acceptsErrorCodes": "UNSUPPORTED_LANGUAGE"}, ()),
+    ({"acceptsErrorCodes": True}, ()),
+])
+async def test_the_request_announcement_is_what_the_task_carries(announced, expected):
+    pool_manager = MagicMock()
+    pool_manager.enqueue_task = AsyncMock(return_value=True)
+    pub_socket = MagicMock()
+    pub_socket.send = AsyncMock()
+    handler = TranslationHandler(pool_manager=pool_manager, pub_socket=pub_socket)
+
+    await handler._handle_translation_request({
+        'type': 'translation', 'taskId': 't1', 'messageId': 'm1', 'text': 'Bonjour',
+        'sourceLanguage': 'fr', 'targetLanguages': ['byv'], 'conversationId': 'c1',
+        **announced,
+    })
+
+    task = pool_manager.enqueue_task.call_args.args[0]
+    assert task.accepted_error_codes == expected
 
 
 @pytest.mark.unit
