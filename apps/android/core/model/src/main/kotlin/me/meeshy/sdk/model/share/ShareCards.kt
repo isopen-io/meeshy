@@ -14,8 +14,11 @@ object ShareCards {
 
     fun storyUrl(storyId: String): String = "$WEB/story/${URLEncoder.encode(storyId, "UTF-8")}"
 
-    /** [messageText] : la phrase de la story déjà composée avec [storyUrl] (« 🔗 Story de X : lien »). */
-    fun story(storyId: String, authorId: String?, messageText: String, imageUrl: String? = null) = ShareCard(
+    /**
+     * [messageText] : la phrase de la story déjà composée avec [storyUrl] (« 🔗 Story de X : lien ») ; [isPublic] : la
+     * story est publique, seule audience qui reçoit un lien suivi.
+     */
+    fun story(storyId: String, authorId: String?, messageText: String, imageUrl: String? = null, isPublic: Boolean = false) = ShareCard(
         kind = ShareCardKind.STORY,
         contentId = storyId,
         title = messageText,
@@ -23,6 +26,7 @@ object ShareCards {
         messageText = messageText,
         imageUrl = imageUrl,
         authorId = authorId,
+        isPublicStory = isPublic,
     )
 
     fun post(postId: String, title: String, authorId: String? = null, imageUrl: String? = null) = ShareCard(

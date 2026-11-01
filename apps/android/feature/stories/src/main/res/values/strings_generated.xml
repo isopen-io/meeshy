@@ -152,6 +152,7 @@
     <string name="stories_action_report">Report</string>
     <string name="stories_action_repost">Repost</string>
     <string name="stories_action_send">Send</string>
+    <string name="stories_action_share">Share</string>
     <string name="stories_action_translations">Translations</string>
     <string name="stories_action_views">Views</string>
     <string name="stories_add">Add</string>

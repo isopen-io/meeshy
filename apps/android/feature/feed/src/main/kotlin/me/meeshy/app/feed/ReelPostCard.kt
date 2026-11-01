@@ -55,6 +55,7 @@ internal fun ReelPostCard(
     onRepost: () -> Unit = {},
     onQuote: () -> Unit = {},
     onShare: () -> Unit = {},
+    onSend: (() -> Unit)? = null,
     onCopyLink: () -> Unit = {},
     onCopyText: () -> Unit = {},
     onPin: () -> Unit = {},
@@ -144,6 +145,7 @@ internal fun ReelPostCard(
                     onRepost = onRepost,
                     onQuote = onQuote,
                     overMedia = true,
+                    onSend = onSend,
                 )
             }
         }

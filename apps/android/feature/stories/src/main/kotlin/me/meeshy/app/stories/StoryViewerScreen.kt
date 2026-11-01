@@ -105,6 +105,8 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.app.feed.rememberContentShareOut
+import me.meeshy.sdk.model.share.ShareCard
 import me.meeshy.sdk.model.share.ShareCards
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.model.story.StoryReplyRules
@@ -216,19 +218,23 @@ fun StoryViewerScreen(
         composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread),
     )
 
+    val shareOut = rememberContentShareOut()
+
+    fun storyCard(): ShareCard? = state.currentStoryId?.let { storyId ->
+        ShareCards.story(
+            storyId = storyId,
+            authorId = null,
+            messageText = shareContext.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
+            isPublic = currentItem?.visibility.equals(PUBLIC_STORY_VISIBILITY, ignoreCase = true),
+        )
+    }
+
+    // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur pour une story publique.
     fun openSendTo() {
-        val storyId = state.currentStoryId ?: return
-        val launcher = shareLauncher ?: return
+        val card = storyCard() ?: return
+        val launcher = shareLauncher ?: return shareOut(card)
         showSendTo = true
-        launcher.open(
-            ShareSubject.Card(
-                ShareCards.story(
-                    storyId = storyId,
-                    authorId = null,
-                    messageText = shareContext.getString(R.string.share_story_text, state.authorName, ShareCards.storyUrl(storyId)),
-                ),
-            ),
-        ) { showSendTo = false }
+        launcher.open(ShareSubject.Card(card)) { showSendTo = false }
     }
 
     fun closeRailBars() {
@@ -548,11 +554,12 @@ fun StoryViewerScreen(
                             )
                         }
                         DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
+                            // « Partager » (#14315) : hors de Meeshy, par la feuille du système ; « Envoyer » est au rail.
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.stories_action_send_to)) },
+                                text = { Text(stringResource(R.string.stories_action_share)) },
                                 onClick = {
                                     showOptions = false
-                                    openSendTo()
+                                    storyCard()?.let(shareOut)
                                 },
                             )
                             StoryVideoExportMenuEntries(onPick = { mode ->
@@ -940,3 +947,5 @@ private fun ReactionFlightOverlay(
     )
 }
 
+/** L'audience d'une story qui s'ouvre sans compte — la seule qui reçoit un lien suivi (#14315). */
+private const val PUBLIC_STORY_VISIBILITY = "PUBLIC"

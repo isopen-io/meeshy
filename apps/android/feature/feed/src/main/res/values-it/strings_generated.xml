@@ -9,6 +9,7 @@
     <string name="feed_action_quote">Cita</string>
     <string name="feed_action_report">Segnala</string>
     <string name="feed_action_repost">Ripubblica</string>
+    <string name="feed_action_send">Invia</string>
     <string name="feed_action_share">Condividi</string>
     <string name="feed_action_view_profile">Vedi profilo</string>
     <string name="feed_comment_card_folded">+%1$d risposte</string>

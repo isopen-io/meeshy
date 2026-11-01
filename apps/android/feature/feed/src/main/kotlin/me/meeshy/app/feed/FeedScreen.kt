@@ -1,6 +1,5 @@
 package me.meeshy.app.feed
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,8 +111,8 @@ fun FeedScreen(
             }
             val clipboard = LocalClipboardManager.current
             val linkCopied = stringResource(R.string.feed_link_copied)
-            val shareContext = context
             val shareLauncher = LocalShareLauncher.current
+            val shareOut = rememberContentShareOut()
             var reportPostId by remember { mutableStateOf<String?>(null) }
             var deletePostId by remember { mutableStateOf<String?>(null) }
             reportPostId?.let { targetId ->
@@ -187,18 +186,13 @@ fun FeedScreen(
                             // Tapping an image tile opens the fullscreen media gallery on it.
                             onImageTap = { index -> viewModel.openImageViewer(post.id, index) },
                             isOwn = post.authorId != null && post.authorId == state.currentUserId,
-                            onShare = {
-                                viewModel.recordShare(post.id)
-                                // La feuille de partage unique (#13474) : conversations, copier le lien, partage système.
-                                shareLauncher?.open(
-                                    ShareSubject.Card(ShareCards.post(post.id, title = post.content, authorId = post.authorId)),
-                                ) ?: shareContext.startActivity(
-                                    Intent.createChooser(
-                                        Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PostShareLink.webLink(post.id)),
-                                        null,
-                                    ),
-                                )
+                            // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur ; « Partager »
+                            // (menu « ⋯ ») : la feuille du système, avec ce même lien.
+                            onSend = {
+                                val card = ShareCards.post(post.id, title = post.content, authorId = post.authorId)
+                                shareLauncher?.open(ShareSubject.Card(card)) ?: shareOut(card)
                             },
+                            onShare = { shareOut(ShareCards.post(post.id, title = post.content, authorId = post.authorId)) },
                             onCopyLink = {
                                 clipboard.setText(AnnotatedString(PostShareLink.webLink(post.id)))
                                 scope.launch { snackbar.showSnackbar(linkCopied) }

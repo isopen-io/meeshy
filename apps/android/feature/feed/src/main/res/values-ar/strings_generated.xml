@@ -9,6 +9,7 @@
     <string name="feed_action_quote">اقتباس</string>
     <string name="feed_action_report">إبلاغ</string>
     <string name="feed_action_repost">إعادة نشر</string>
+    <string name="feed_action_send">إرسال</string>
     <string name="feed_action_share">مشاركة</string>
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
     <string name="feed_comment_card_folded">+%1$d ردود</string>

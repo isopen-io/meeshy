@@ -32,11 +32,12 @@ internal class ReelRailActions(
     val onComments: (String) -> Unit,
     val onBookmark: (String) -> Unit,
     val onRepost: (String) -> Unit,
+    val onSend: (String) -> Unit = {},
 )
 
 /**
  * Le rail d'actions d'un réel (iOS `ReelActionRail`) : j'aime — appui bref ❤️, appui long la
- * palette —, commentaires, favori, republier. Le kit plein écran donne à chaque cellule son saut
+ * palette —, commentaires, favori, republier, envoyer (la feuille Meeshy ; « Partager » vit dans le menu « ⋯ »). Le kit plein écran donne à chaque cellule son saut
  * (échelle, ressort rebondissant), son halo coloré à l'état posé et son haptique ; les compteurs
  * sont abrégés comme sur iOS.
  */
@@ -101,6 +102,11 @@ internal fun ReelRail(
             onClick = { actions.onRepost(reel.id) },
             caption = count(reel.repostCount, locale),
             accessibilityValue = reel.repostCount.takeIf { it > 0 }?.toString(),
+        )
+        FullscreenActionButton(
+            icon = MeeshyIcons.Send,
+            label = stringResource(R.string.reels_action_send),
+            onClick = { actions.onSend(reel.id) },
         )
     }
 }

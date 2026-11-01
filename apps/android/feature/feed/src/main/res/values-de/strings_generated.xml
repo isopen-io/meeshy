@@ -9,6 +9,7 @@
     <string name="feed_action_quote">Zitieren</string>
     <string name="feed_action_report">Melden</string>
     <string name="feed_action_repost">Erneut teilen</string>
+    <string name="feed_action_send">Senden</string>
     <string name="feed_action_share">Teilen</string>
     <string name="feed_action_view_profile">Profil ansehen</string>
     <string name="feed_comment_card_folded">+%1$d Antworten</string>

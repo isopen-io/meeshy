@@ -9,6 +9,7 @@
     <string name="feed_action_quote">Citar</string>
     <string name="feed_action_report">Denunciar</string>
     <string name="feed_action_repost">Republicar</string>
+    <string name="feed_action_send">Enviar</string>
     <string name="feed_action_share">Compartilhar</string>
     <string name="feed_action_view_profile">Ver o perfil</string>
     <string name="feed_comment_card_folded">+%1$d respostas</string>
