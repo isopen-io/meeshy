@@ -264,7 +264,11 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 95 : #13998 ajoute `relations-level` — le niveau EFFECTIF du lien avec une
     // personne (`GET /api/v1/relations/:userId`). Aucun alias, aucune route
     // retirée ni renommée ; le manifeste gagne exactement cette route.
-    expect(ROUTE_TABLE.length).toBe(95);
+    // 96 : #11327 ajoute `lens` — les partenaires des lens, leurs crédits et
+    // l'usage k-anonyme sous `/api/v1/lens` (distinct de `/packs/lens`, dont les
+    // chemins statiques masqueraient des slugs). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement ses neuf routes.
+    expect(ROUTE_TABLE.length).toBe(96);
   });
 });
 
