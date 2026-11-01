@@ -1,6 +1,5 @@
 package me.meeshy.app.stories
 
-import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
@@ -127,22 +126,25 @@ internal class ThumbnailPlaced(
     val aspectRatio: Double?,
 )
 
-/** The media posed on [slide] that the tile can load — an uploaded one by its url, a pending one by its local preview. */
+/**
+ * The media posed on [slide] that the tile can load, by the very picture the scene shows (#14182): an uploaded one by its
+ * url, a video by its served thumbnail or else the first frame of its cut window, a pending one by its file.
+ */
 internal fun StoryComposerUiState.thumbnailPlacedOf(slide: StorySlide, mediaBaseUrl: String?): List<ThumbnailPlaced> =
     slide.placedMedia.filter { it.mediaId in slide.mediaIds }.mapNotNull { placed ->
         val uploaded = attachments.firstOrNull { it.id == placed.mediaId }
         val source = when {
-            uploaded != null -> {
-                val video = uploaded.mimeType.startsWith("video", ignoreCase = true)
-                val url = if (video) uploaded.thumbnailUrl?.let { ComposerMediaAddress.of(it, mediaBaseUrl) } else ComposerMediaAddress.preview(uploaded, mediaBaseUrl)
-                url?.let { Triple(it, it as Any, ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height)) }
+            uploaded != null -> ComposerPicture.of(uploaded, mediaBaseUrl, atMs = placed.posterAtMs(uploaded)).let { model ->
+                Triple(thumbnailKeyOf(model), model, ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height))
             }
-            else -> pendingUploads.firstOrNull { it.cmid == placed.mediaId }?.item
-                ?.takeUnless { it.mimeType.startsWith("video", ignoreCase = true) }
-                ?.let { Triple("pending:${placed.mediaId}:${it.sizeBytes}", it.previewModel, null) }
+            else -> pendingUploads.firstOrNull { it.cmid == placed.mediaId }?.item?.let { item ->
+                ComposerPicture.of(item)?.let { Triple("pending:${placed.mediaId}:${item.sizeBytes}", it, null) }
+            }
         } ?: return@mapNotNull null
         ThumbnailPlaced(placed.id, source.first, source.second, placed.x, placed.y, placed.scale, placed.rotationDeg, source.third)
     }
+
+private fun thumbnailKeyOf(model: Any): String = (model as? ComposerVideoFrame)?.let { "${it.address}@${it.atMs}" } ?: model.toString()
 
 /** The media painted behind [slide]: its designated background, else its first media not posed on the scene (#13853) — exactly what the scene canvas renders, a video by its picture (#13843). */
 internal fun StoryComposerUiState.thumbnailBackgroundOf(slide: StorySlide, mediaBaseUrl: String?): ThumbnailBackground? {

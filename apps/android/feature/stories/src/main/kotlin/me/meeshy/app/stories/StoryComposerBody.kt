@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerEditingChrome
+import me.meeshy.sdk.model.composer.ComposerHistoryPlace
+import me.meeshy.sdk.model.composer.ComposerRailContent
 import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
 import me.meeshy.sdk.model.composer.ComposerSceneReferences
@@ -93,14 +95,17 @@ private fun SceneFirstFrame(
     val armed = capture?.armed == true
     val panel = state.scenePanel(morePanel)?.takeIf { !armed }
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
-    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null)
-    val chrome = editing.sceneControls
+    val besideScene = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null)
     val subject = state.selectionSubject
     val selection = state.selectionBar?.takeIf { subject == ComposerSelectionSubject.OBJECT && panel == null && typing == null && !armed }
     val openedFor = remember(sheet.open) { subject }
     val openSheet = sheet.open?.takeIf(state::serves)?.takeIf { !it.servesSelection || openedFor == subject }
-    val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), editing.editing && openSheet == null, selection,
+    val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), besideScene.editing && openSheet == null, selection,
         quiet = panel != null || typing != null || armed)
+    val reduced = (panel != null || edition.anyBand) && typing == null
+    val objectLane = selection != null && openSheet == null
+    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, sceneReduced = reduced, laneCleared = objectLane)
+    val chrome = editing.sceneControls
     val levels = edition.levels
     val edited = edition.edited
     val placed = edited.placed
@@ -108,11 +113,11 @@ private fun SceneFirstFrame(
     StaleSheetReleased(stale = sheet.open != null && openSheet == null, onRelease = sheet.onDismiss)
     val dialogs = rememberStoryOverflowDialogs(state, viewModel)
     val more = StoryMoreHost(sceneExport, doors, dialogs, onMorePanel, sheet.onOpen, capture)
-    val rails = storySceneRails(state, viewModel, more, edited, morePanel, formatChevron, editing to levels)
+    val rails = storySceneRails(state, viewModel, more, edited, morePanel, formatChevron, besideScene to levels)
     Box(Modifier.fillMaxSize()) {
         StorySceneFirstLayout(
             onDismiss = doors.onClose,
-            reduced = (panel != null || edition.anyBand) && typing == null,
+            reduced = reduced,
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
                     StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered)
@@ -121,12 +126,16 @@ private fun SceneFirstFrame(
             top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
             strip = { if (chrome) StorySlideStrip(state, viewModel) },
             trailing = {
-                SceneRail(
-                    content = editing.rail,
-                    tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column) },
-                    options = { SceneEditingOptions(edited, levels) },
-                    background = { SceneEditingBackground(edited, levels) },
-                )
+                val laneHistory = state.history()?.takeIf { editing.history == ComposerHistoryPlace.LANE }
+                Box(if (laneHistory != null) Modifier.weight(1f) else Modifier) {
+                    SceneRail(
+                        content = editing.rail,
+                        tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column) },
+                        options = { SceneEditingOptions(edited, levels) },
+                        background = { SceneEditingBackground(edited, levels) },
+                    )
+                }
+                laneHistory?.let { SceneLaneHistory(it, viewModel::onUndo, viewModel::onRedo) }
             },
             panel = {
                 panel?.let {
@@ -151,7 +160,7 @@ private fun SceneFirstFrame(
             typing = typing,
             rails = rails,
             incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
-            clearsTrailingLane = selection != null && openSheet == null,
+            clearsTrailingLane = objectLane || (reduced && editing.rail == ComposerRailContent.BACKGROUND_OPTIONS && openSheet == null),
         )
         EditingAnnouncer(editing = editedWord(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
@@ -309,13 +318,16 @@ private fun StoryEditingLevels(
     }
 }
 
-/** ✕ et ↶↷ ; en édition d'un objet (#13956), ✕ se retire et la barre garde sa hauteur, ↶↷ restent. */
+/** L'historique de la scène, seulement quand il y a quelque chose à défaire ou à refaire. */
+private fun StoryComposerUiState.history(): SceneHistory? =
+    SceneHistory(canUndo, canRedo).takeIf { ComposerSceneTools.showsHistory(canUndo, canRedo) }
+
+/** ✕ et ↶↷ ; en édition d'un objet (#13956), ✕ se retire et la barre garde sa hauteur ; ↶↷ passent dans le couloir des options quand la scène le cède (#14197). */
 @Composable
 private fun StorySceneTop(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onClose: () -> Unit, editing: ComposerEditingChrome) {
     SceneTopBar(
         onClose = onClose,
-        history = SceneHistory(state.canUndo, state.canRedo)
-            .takeIf { editing.sceneControls && ComposerSceneTools.showsHistory(state.canUndo, state.canRedo) },
+        history = state.history()?.takeIf { editing.history == ComposerHistoryPlace.TOP },
         onUndo = viewModel::onUndo,
         onRedo = viewModel::onRedo,
         showsClose = editing.close,

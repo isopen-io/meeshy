@@ -2027,14 +2027,23 @@ jobs:
           uv venv --python ${{ env.PYTHON_VERSION }}
           # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
           # build deps required for pkuseg build with no-build-isolation)
+          # #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+          # (pyproject.toml) : aucun extra `cpu` n'existe. Trois échecs font échouer
+          # l'étape — la boucle ne finit plus sur le code de retour de `sleep`.
+          installed=0
           for i in 1 2 3; do
-            uv pip install numpy setuptools wheel cython \
-              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
-              && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
+            if uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra dev; then
+              installed=1
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
+          if [ "$installed" != 1 ]; then
+            echo "::error::uv sync a échoué trois fois — dépendances du traducteur non installées"
+            exit 1
+          fi
 
       - name: Run tests with coverage (80% minimum)
         env:
@@ -2132,14 +2141,23 @@ jobs:
           uv venv --python ${{ env.PYTHON_VERSION }}
           # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
           # build deps required for pkuseg build with no-build-isolation)
+          # #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+          # (pyproject.toml) : aucun extra `cpu` n'existe. Trois échecs font échouer
+          # l'étape — la boucle ne finit plus sur le code de retour de `sleep`.
+          installed=0
           for i in 1 2 3; do
-            uv pip install numpy setuptools wheel cython \
-              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
-              && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
+            if uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra dev; then
+              installed=1
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
+          if [ "$installed" != 1 ]; then
+            echo "::error::uv sync a échoué trois fois — dépendances du traducteur non installées"
+            exit 1
+          fi
 
       - name: Create audio output directory
         run: |
@@ -2249,14 +2267,23 @@ jobs:
           uv venv --python ${{ env.PYTHON_VERSION }}
           # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
           # build deps required for pkuseg build with no-build-isolation)
+          # #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+          # (pyproject.toml) : aucun extra `cpu` n'existe. Trois échecs font échouer
+          # l'étape — la boucle ne finit plus sur le code de retour de `sleep`.
+          installed=0
           for i in 1 2 3; do
-            uv pip install numpy setuptools wheel cython \
-              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
-              && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
+            if uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra dev; then
+              installed=1
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
+          if [ "$installed" != 1 ]; then
+            echo "::error::uv sync a échoué trois fois — dépendances du traducteur non installées"
+            exit 1
+          fi
 
       - name: Run UnifiedTTSService tests
         env:
@@ -2378,14 +2405,23 @@ jobs:
           uv venv --python ${{ env.PYTHON_VERSION }}
           # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
           # build deps required for pkuseg build with no-build-isolation)
+          # #14184 — torch CPU vient de l'index `pytorch-cpu` de `[tool.uv.sources]`
+          # (pyproject.toml) : aucun extra `cpu` n'existe. Trois échecs font échouer
+          # l'étape — la boucle ne finit plus sur le code de retour de `sleep`.
+          installed=0
           for i in 1 2 3; do
-            uv pip install numpy setuptools wheel cython \
-              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
-              && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
+            if uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra dev; then
+              installed=1
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
+          if [ "$installed" != 1 ]; then
+            echo "::error::uv sync a échoué trois fois — dépendances du traducteur non installées"
+            exit 1
+          fi
 
       # Generate JavaScript Prisma client (required for Gateway Voice API tests)
       - name: Generate Prisma client (JavaScript)

@@ -72,7 +72,11 @@
     <string name="feed_retry">إعادة المحاولة</string>
     <string name="feed_scene_more">المشهد %1$d، و%2$d أخرى</string>
     <string name="feed_scene_next">المشهد التالي</string>
+    <string name="feed_scene_pause">يوقف تشغيل المشهد</string>
     <string name="feed_scene_previous">المشهد السابق</string>
+    <string name="feed_scene_resume">يستأنف تشغيل المشهد</string>
+    <string name="feed_scene_sound_mute">كتم الصوت</string>
+    <string name="feed_scene_sound_unmute">إعادة تشغيل الصوت</string>
     <string name="feed_scene_tile">المشهد %1$d</string>
     <string name="feed_secondary_translation_a11y">الترجمة إلى %1$s: %2$s</string>
     <string name="feed_translated">الترجمة متاحة</string>

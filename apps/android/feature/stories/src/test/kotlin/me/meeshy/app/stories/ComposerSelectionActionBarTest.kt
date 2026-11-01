@@ -437,7 +437,7 @@ class ComposerSelectionActionBarTest {
         vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
         show(vm)
 
-        compose.onNodeWithText("Duplicate").performClick()
+        compose.onNodeWithText("Duplicate").performScrollTo().performClick()
 
         val slide = vm.state.value.deck.selectedSlide
         assertThat(slide.placedMedia.map { it.mediaId }).containsExactly("p", "p")

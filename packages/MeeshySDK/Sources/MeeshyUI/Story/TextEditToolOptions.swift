@@ -704,12 +704,23 @@ public struct TextEditToolOptions: View {
         obj.frameBorderColor = StoryTextAttributeCycle.defaultFrameBorderColor
     }
 
+    /// **Le curseur de contour dit ce qu'il règle** (#13899) : un trait fin, un
+    /// trait épais, et l'épaisseur en points — jamais les glyphes de la taille
+    /// ou du gras, qui le faisaient lire « A … B ».
+    nonisolated static let outlineWidthGlyphs = (thin: "circle", thick: "circle.circle")
+
+    nonisolated static let outlineWidthColumn: CGFloat = 56
+
+    nonisolated static func outlineWidthLabel(_ width: Double, locale: Locale = .current) -> String {
+        width.formatted(.number.precision(.fractionLength(0...1)).locale(locale)) + " pt"
+    }
+
     private var borderWidthSlider: some View {
         // Slider continu 0...12pt, défaut 4pt (cf. `initializeBorderDefaultsIfNeutral`).
         // Slider à 0 ⇒ aucun trait rendu (guard `widthPx > 0` dans `StoryTextLayer`).
         // Couleur conservée → utilisateur peut remonter le slider sans re-choisir une couleur.
         HStack(spacing: 10) {
-            Image(systemName: "textformat.size.smaller")
+            Image(systemName: Self.outlineWidthGlyphs.thin)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             Slider(
@@ -724,13 +735,17 @@ public struct TextEditToolOptions: View {
                 step: 0.5
             )
             .tint(MeeshyColors.brandPrimary)
-            Image(systemName: "bold")
+            .accessibilityLabel(Text(String(localized: "story.textEdit.effect.outline", defaultValue: "Contour", bundle: .module)))
+            .accessibilityValue(Text(Self.outlineWidthLabel(Double(textObject.borderWidth ?? 0))))
+            Image(systemName: Self.outlineWidthGlyphs.thick)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.secondary)
-            Text(String(format: "%.1f", textObject.borderWidth ?? 0))
+            Text(Self.outlineWidthLabel(Double(textObject.borderWidth ?? 0)))
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
-                .frame(width: 34)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(width: Self.outlineWidthColumn, alignment: .trailing)
         }
     }
 

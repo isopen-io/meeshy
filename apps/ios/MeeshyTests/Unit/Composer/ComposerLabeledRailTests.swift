@@ -177,4 +177,23 @@ final class ComposerLabeledRailTests: XCTestCase {
             return langues.compactMapValues { (($0 as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String }
         }
     }
+
+    // MARK: - Des titres au même corps (#13899)
+
+    /// Chaque rangée rétrécissait SON mot jusqu'à 70 % pour le faire tenir :
+    /// « Durée » restait à pleine taille, « Hashtags » et « Partager » fondaient
+    /// chacun à sa mesure. Les titres gardent tous le même corps, et un mot
+    /// trop long passe à la ligne.
+    func test_row_keepsOneTypeSizeForEveryTitle_andWrapsALongOne() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let fichier = AppSourceGuard.stripComments(try String(
+            contentsOf: racine.appendingPathComponent("Meeshy/Features/Composer/ComposerLabeledRail.swift"), encoding: .utf8))
+        let debut = try XCTUnwrap(fichier.range(of: "struct ComposerLabeledRailRow: View {"))
+        let fin = try XCTUnwrap(fichier.range(of: "struct ComposerLabeledRail: View {"))
+        let rangee = String(fichier[debut.upperBound..<fin.lowerBound])
+        XCTAssertFalse(rangee.contains("minimumScaleFactor"), "un titre ne rétrécit plus seul")
+        XCTAssertTrue(rangee.contains(".lineLimit(2)"), "un titre long passe à la ligne")
+    }
 }

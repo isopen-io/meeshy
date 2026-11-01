@@ -310,6 +310,7 @@ private fun SlideThumbnail(spec: SlideThumbnailSpec, backgroundModel: Any?, plac
 
 /** A posed media, decoded at the tile's own size: it never covers more than the tile. */
 private suspend fun loadThumbnailPlaced(context: android.content.Context, model: Any, spec: SlideThumbnailSpec): Bitmap? {
+    if (model is ComposerVideoFrame) return composerVideoFrameBitmap(context, model)
     val request = ImageRequest.Builder(context)
         .data(model)
         .size(spec.widthPx.coerceAtLeast(1), spec.heightPx.coerceAtLeast(1))

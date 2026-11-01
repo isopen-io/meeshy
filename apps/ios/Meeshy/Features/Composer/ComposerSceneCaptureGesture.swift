@@ -144,33 +144,6 @@ nonisolated enum ComposerSceneQuickCapture {
         ComposerSceneCamera.modes(for: format).isEmpty ? nil : .arm
     }
 
-    /// **Un geste, une ligne, son icône** (#8671, complément porteur
-    /// 2026-09-29 : « l'instruction de taper photo peut avoir l'appareil photo
-    /// au-devant, et à la ligne une caméra vidéo pour la partie long press »).
-    ///
-    /// **La photo a DEUX lignes depuis #8711** — toucher arme, toucher encore
-    /// prend : l'indication dit les deux temps que le geste demande.
-    enum GestureLine: Equatable, Sendable {
-        case tapArm
-        case tapAgainPhoto
-        case holdFilm
-
-        var symbol: String {
-            switch self {
-            case .tapArm:        return "camera.viewfinder"
-            case .tapAgainPhoto: return "camera"
-            case .holdFilm:      return "video"
-            }
-        }
-    }
-
-    static func gestureLines(_ hint: Hint) -> [GestureLine] {
-        switch hint {
-        case .photoOrVideo: return [.tapArm, .tapAgainPhoto, .holdFilm]
-        case .videoOnly:    return [.holdFilm]
-        }
-    }
-
     static func hint(format: ComposerFormat) -> Hint? {
         guard tap(format: format) != nil else { return nil }
         return ComposerSceneCamera.modes(for: format).contains(.photo) ? .photoOrVideo : .videoOnly

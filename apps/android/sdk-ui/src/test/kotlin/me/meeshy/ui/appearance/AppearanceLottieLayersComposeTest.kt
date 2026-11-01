@@ -11,6 +11,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Dispatchers
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.media.LottiePlaybackMode
 import me.meeshy.ui.accessibility.LocalReduceMotion
@@ -24,6 +25,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * #13952 — les couches animées du catalogue JOUENT sur Android : contour et bannière se lisent depuis les fichiers
@@ -37,10 +39,16 @@ class AppearanceLottieLayersComposeTest {
 
     private val assets = repositoryFile("sdk-core/src/main/assets")
     private val catalog = AppearanceCatalog.decode(File(assets, "appearance-catalog.json").readText())
-    private val source = LottieLayerSource(BundledPackFileReader { path -> File(assets, path).inputStream() })
     private val layer = SemanticsMatcher.keyIsDefined(LottiePlaybackModeKey)
 
-    private fun host(reduceMotion: Boolean = false, content: @Composable () -> Unit) {
+    /** Les films de l'hôte se lisent et se décodent là où la composition les demande : le fil principal du test (#14193). */
+    private fun hostSource(onLoad: () -> Unit = {}) = LottieLayerSource(
+        reader = BundledPackFileReader(dispatcher = Dispatchers.Unconfined) { path -> onLoad(); File(assets, path).inputStream() },
+        decoder = { data -> onLoad(); LottieLayerSource.decodeFilm(data) },
+        dispatcher = Dispatchers.Unconfined,
+    )
+
+    private fun host(reduceMotion: Boolean = false, source: LottieLayerSource = hostSource(), content: @Composable () -> Unit) {
         rule.setContent {
             CompositionLocalProvider(LocalReduceMotion provides reduceMotion) {
                 ProvideLottieLayerSource(source, content)
@@ -107,6 +115,23 @@ class AppearanceLottieLayersComposeTest {
     @Test fun `an illustrated frame holds both films at their first frame under reduce motion`() {
         host(reduceMotion = true) { AvatarRingLayer(masque, footprint = 50.dp) { Box(Modifier.size(50.dp)) } }
         assertThat(modes(2).map { it.config[LottiePlaybackModeKey] }).containsExactly(LottiePlaybackMode.FirstFrame, LottiePlaybackMode.FirstFrame)
+    }
+
+    /**
+     * #14193 — l'hôte d'un test Compose fait tourner la composition sur un répartiteur qui ne la ramène jamais au fil
+     * principal : un film lu ou décodé sur un fil de fond y reprenait la composition, qui touchait alors la vue depuis ce
+     * fil, au hasard de l'ordonnancement. L'hôte lit et décode donc ses films sur le fil principal.
+     */
+    @Test fun `the host reads and decodes its films on the main thread, never on a worker that would resume the composition`() {
+        val main = Thread.currentThread()
+        val loads = ConcurrentLinkedQueue<Thread>()
+        host(reduceMotion = true, source = hostSource { loads += Thread.currentThread() }) {
+            AvatarRingLayer(masque, footprint = 50.dp) { Box(Modifier.size(50.dp)) }
+        }
+
+        assertThat(modes(2)).hasSize(2)
+        assertThat(loads).hasSize(4)
+        assertThat(loads.toSet()).containsExactly(main)
     }
 
     @Test fun `an animated banner plays its layer without the host passing anything`() {

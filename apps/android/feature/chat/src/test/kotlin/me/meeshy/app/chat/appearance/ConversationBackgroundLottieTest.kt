@@ -4,6 +4,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.Dispatchers
 import me.meeshy.sdk.mediahub.BackgroundPhotoSource
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.ConversationAppearance
@@ -29,7 +30,11 @@ class ConversationBackgroundLottieTest {
 
     private val assets = repositoryFile("sdk-core/src/main/assets")
     private val catalog = AppearanceCatalog.decode(File(assets, "appearance-catalog.json").readText())
-    private val source = LottieLayerSource(BundledPackFileReader { path -> File(assets, path).inputStream() })
+    /** Lue et décodée sur le fil principal du test : un film repris sur un fil de fond y reprendrait la composition (#14193). */
+    private val source = LottieLayerSource(
+        reader = BundledPackFileReader(dispatcher = Dispatchers.Unconfined) { path -> File(assets, path).inputStream() },
+        dispatcher = Dispatchers.Unconfined,
+    )
     private val layer = SemanticsMatcher.keyIsDefined(LottiePlaybackModeKey)
 
     private fun show(appearance: ConversationAppearance, reduceMotion: Boolean = false): LottiePlaybackMode {

@@ -91,7 +91,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                 val isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true)
                 PlacedMediaFrame(
                     placed = placed,
-                    model = ComposerPicture.of(uploaded, mediaBaseUrl, atMs = posterAtMs(placed.id)),
+                    model = ComposerPicture.of(uploaded, mediaBaseUrl, atMs = placed.posterAtMs(uploaded)),
                     aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height)
                         ?.let { measured -> StoryMediaCrop.effectiveRatio(measured, placed.crop.takeUnless { isVideo }) },
                     isVideo = isVideo,
@@ -102,7 +102,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                 val isVideo = pending.item.mimeType.startsWith("video", ignoreCase = true)
                 PlacedMediaFrame(
                     placed = placed,
-                    model = ComposerPicture.of(pending.item, atMs = posterAtMs(placed.id)),
+                    model = ComposerPicture.of(pending.item),
                     isVideo = isVideo,
                     pendingItem = pending.item.takeUnless { isVideo },
                     pendingPhase = pendingPhase(pending.cmid),
@@ -113,11 +113,6 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
         }
     }
 }
-
-/** L'instant de l'affiche d'une vidéo posée : le début de sa fenêtre coupée (#13863), le début de la source sinon. */
-private fun StoryComposerUiState.posterAtMs(id: String): Long = placedTrimOf(id)?.let { (it.start * MILLIS_PER_SECOND).toLong() } ?: 0L
-
-private const val MILLIS_PER_SECOND = 1_000
 
 /** Les gestes d'un média posé, par identifiant : glisser (fractions du canevas), fin de geste, pincer / tourner, toucher pour le sélectionner (#13836). */
 internal class PlacedMediaGestures(

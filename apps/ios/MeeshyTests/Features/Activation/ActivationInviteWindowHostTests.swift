@@ -82,6 +82,47 @@ final class ActivationInviteWindowHostTests: XCTestCase {
         scene.windows.first { $0.windowLevel == ActivationInvitePresentation.windowLevel && !$0.isHidden }
     }
 
+    private func touchedView(at point: CGPoint, in scene: UIWindowScene) -> UIView? {
+        scene.windows
+            .filter { !$0.isHidden && $0.isUserInteractionEnabled }
+            .sorted { $0.windowLevel > $1.windowLevel }
+            .lazy
+            .compactMap { $0.hitTest($0.convert(point, from: nil), with: nil) }
+            .first
+    }
+
+    func test_show_overAFullScreenComposer_leavesItsCloseButtonVisibleAndTouchable() throws {
+        let (scene, main) = try foregroundScene()
+        let composer = makeComposerStandIn()
+        topmost(main.rootViewController!).present(composer, animated: false)
+        settle { composer.view.window != nil && !composer.isBeingPresented }
+        defer {
+            composer.dismiss(animated: false)
+            settle { composer.view.window == nil }
+        }
+        composer.view.layoutIfNeeded()
+        let close = try XCTUnwrap(composer.view.subviews.compactMap { $0 as? UIButton }.first)
+        let closeCenter = close.convert(CGPoint(x: close.bounds.midX, y: close.bounds.midY), to: nil)
+
+        let host = ActivationInviteWindowHost()
+        XCTAssertTrue(host.show(invitedModel()) {})
+        defer {
+            host.hide()
+            settle { self.overlay(in: scene) == nil }
+        }
+        settle { self.overlay(in: scene)?.rootViewController?.presentedViewController?.isBeingPresented == false }
+        let window = try XCTUnwrap(overlay(in: scene))
+        let sheet = try XCTUnwrap(window.rootViewController?.presentedViewController)
+        let card = sheet.presentationController?.presentedView ?? sheet.view!
+        let cardFrame = card.convert(card.bounds, to: nil)
+        capture(scene, "5-invite-leaves-the-close-button")
+
+        XCTAssertFalse(cardFrame.contains(closeCenter), "l'invitation recouvre le ✕ du composer : \(cardFrame) ∋ \(closeCenter)")
+        XCTAssertTrue(touchedView(at: closeCenter, in: scene) === close, "le ✕ du composer ne reçoit pas le toucher")
+        let insideCard = CGPoint(x: cardFrame.midX, y: cardFrame.maxY - 20)
+        XCTAssertTrue(touchedView(at: insideCard, in: scene)?.isDescendant(of: card) == true, "la carte reçoit ses propres touchers")
+    }
+
     func test_show_overAFullScreenComposer_putsAnOpaqueSheetAboveIt_andLaterRemovesItsWindow() throws {
         let (scene, main) = try foregroundScene()
         let theme = ThemeManager.shared

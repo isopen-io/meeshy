@@ -47,10 +47,18 @@ data class FeedPostImage(
 
 /**
  * Les scènes d'un post composé sur la scène (#13863 R7, iOS `PostSceneCard` / `PostSceneMosaic`) : elles se peignent à la place
- * de ses médias, dans la disposition que l'auteur a choisie, sur la couleur de l'auteur.
+ * de ses médias, dans la disposition que l'auteur a choisie, sur la couleur de l'auteur. [captions] : la légende propre de chaque
+ * scène, rang pour rang ([PostSceneCaptions]) ; [offersSound] : une scène a quelque chose à faire entendre, que la fiche du post
+ * laisse couper (#13893).
  */
 @Immutable
-data class FeedPostScenes(val items: List<StoryItem>, val layout: MosaicLayoutMode, val accentHex: String?)
+data class FeedPostScenes(
+    val items: List<StoryItem>,
+    val layout: MosaicLayoutMode,
+    val accentHex: String?,
+    val captions: List<String?> = emptyList(),
+    val offersSound: Boolean = false,
+)
 
 /**
  * A feed post projected for rendering: Prisme-resolved content, the viewer's own
@@ -212,7 +220,15 @@ object FeedPostBuilder {
             languageExplorer = PostLanguageExplorerBuilder.build(post, preferences, activeCode),
             reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia, post.authorAccentHex()) { post.toStoryItem() } else null,
             reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
-            scenes = if (isReel) null else post.sceneItems()?.let { FeedPostScenes(it.items, it.layout, post.authorAccentHex()) },
+            scenes = if (isReel) null else post.sceneItems()?.let { read ->
+                FeedPostScenes(
+                    items = read.items,
+                    layout = read.layout,
+                    accentHex = post.authorAccentHex(),
+                    captions = PostSceneCaptions.of(read.items, media),
+                    offersSound = PostSceneSound.offers(read.items),
+                )
+            },
             commentCardSupport = CommentCardReading.support(post, content),
         )
     }
