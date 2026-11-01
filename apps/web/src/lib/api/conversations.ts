@@ -12,6 +12,7 @@ import { conversationById, conversationsWithSurged, directConversationWith } fro
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
 import type { Conversation } from './types';
+import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
 /**
  * LE PORT DE LA LISTE ET D'UNE CONVERSATION (#5650, F2 ; paginé #6195) —
@@ -314,11 +315,22 @@ export function refreshConversations(queryClient: QueryClient, deps: Conversatio
  * bout et un que le serveur lit. Sans option, la passerelle rend le chiffré
  * s'il existe, sinon le plus récemment actif ; `{ plaintext: true }` demande
  * celui qu'elle lit, et le crée à côté du chiffré s'il n'existe pas.
+ *
+ * **Le mode de chiffrement ne se choisit qu'à l'écran de création** (décision
+ * du 2026-11-01) : lui seul passe `encryptionMode`. Toute autre création
+ * (profil, partage, carte de contact, clavier d'appel, humeur, notification,
+ * geste « sans chiffrement de bout en bout ») n'en envoie aucun, et la
+ * passerelle pose Serveur. `plaintext` et `encryptionMode` s'excluent (la
+ * passerelle rend 400 `ENCRYPTION_MODE_CONFLICT`) : le type l'interdit.
  */
+export type DirectCreationOptions =
+  | { readonly plaintext?: true; readonly encryptionMode?: never }
+  | { readonly plaintext?: never; readonly encryptionMode?: CreationEncryptionMode };
+
 export function createDirectConversation(
   deps: ConversationsDeps,
   participantId: string,
-  options: { readonly plaintext?: true } = {},
+  options: DirectCreationOptions = {},
 ): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     /* Les survenues AUSSI, et les HORS-LISTE : un direct qui vient
@@ -333,7 +345,12 @@ export function createDirectConversation(
   return deps.transport.request<Conversation>({
     method: 'POST',
     path: conversationsEndpoints.root,
-    body: { type: 'direct', participantIds: [participantId], ...(options.plaintext === true ? { plaintext: true } : {}) },
+    body: {
+      type: 'direct',
+      participantIds: [participantId],
+      ...(options.plaintext === true ? { plaintext: true } : {}),
+      ...(options.encryptionMode === undefined ? {} : { encryptionMode: options.encryptionMode }),
+    },
   });
 }
 
@@ -364,7 +381,12 @@ export function createDirectConversation(
  */
 export function createGroupConversation(
   deps: ConversationsDeps,
-  body: { readonly title: string; readonly description?: string; readonly participantIds: readonly string[] },
+  body: {
+    readonly title: string;
+    readonly description?: string;
+    readonly participantIds: readonly string[];
+    readonly encryptionMode?: CreationEncryptionMode;
+  },
 ): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     return Promise.resolve({ ok: false, status: 501, error: 'Création de groupe indisponible en fixtures' });
@@ -377,6 +399,7 @@ export function createGroupConversation(
       title: body.title,
       ...(body.description === undefined || body.description === '' ? {} : { description: body.description }),
       participantIds: [...body.participantIds],
+      ...(body.encryptionMode === undefined ? {} : { encryptionMode: body.encryptionMode }),
     },
   });
 }
