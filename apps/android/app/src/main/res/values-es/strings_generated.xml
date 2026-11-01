@@ -25,4 +25,8 @@
     <string name="composer_publish_menu_title">Publicar como</string>
     <string name="push_action_comment">Comentar</string>
     <string name="push_action_comment_hint">Comentar…</string>
+    <string name="upgrade_required_action">Actualizar</string>
+    <string name="upgrade_required_message">Esta versión de Meeshy ya no puede comunicarse con el servidor. Instala la última versión para continuar.</string>
+    <string name="upgrade_required_min_version">Versión mínima: %1$s</string>
+    <string name="upgrade_required_title">Actualización necesaria</string>
 </resources>
