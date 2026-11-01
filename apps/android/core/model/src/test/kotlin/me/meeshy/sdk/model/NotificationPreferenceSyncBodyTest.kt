@@ -7,6 +7,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import me.meeshy.sdk.model.relation.CircleNotify
+import me.meeshy.sdk.model.relation.RelationAudienceChoice
 import org.junit.Test
 
 /**
@@ -93,7 +95,7 @@ class NotificationPreferenceSyncBodyTest {
             Json.parseToJsonElement(it).jsonObject
         }
 
-        assertThat(obj.keys).isEqualTo(gatewayFields)
+        assertThat(obj.keys).isEqualTo(gatewayFields + CircleNotify.KEYS)
         assertThat(obj.keys).doesNotContain("extras")
     }
 
@@ -190,5 +192,38 @@ class NotificationPreferenceSyncBodyTest {
         val local = UserNotificationPreferences(contactActivityEnabled = false, dndUtcOffsetMinutes = 60)
         assertThat(replayed.toPreferences(local).contactActivityEnabled).isFalse()
         assertThat(replayed.toPreferences(local).dndUtcOffsetMinutes).isEqualTo(60)
+    }
+
+    @Test
+    fun `a circle choice made here rides the wire under its flat key`() {
+        val prefs = UserNotificationPreferences(circleAudience = mapOf("circleElsewhereMention" to RelationAudienceChoice.NOBODY))
+
+        val obj = Json.parseToJsonElement(wire.encodeToString(NotificationPreferenceSyncBody.from(prefs))).jsonObject
+
+        assertThat(obj["circleElsewhereMention"]!!.jsonPrimitive.content).isEqualTo("NOBODY")
+        assertThat(obj.keys).containsNoneIn(CircleNotify.KEYS - "circleElsewhereMention")
+    }
+
+    @Test
+    fun `a circle this device never knew is not sent, so a toggle here never overwrites another device's choice`() {
+        val obj = Json.parseToJsonElement(wire.encodeToString(NotificationPreferenceSyncBody.from(UserNotificationPreferences()))).jsonObject
+
+        assertThat(obj.keys).containsNoneIn(CircleNotify.KEYS)
+    }
+
+    @Test
+    fun `a served circle folds onto the local block, an absent or unknown one keeps the local value`() {
+        val local = UserNotificationPreferences(
+            circleAudience = mapOf("circlePublicationPost" to RelationAudienceChoice.FRIEND, "circleElsewhereComment" to RelationAudienceChoice.PUBLIC),
+        )
+        val served = wire.decodeFromString<NotificationPreferenceSyncBody>(
+            wire.encodeToString(NotificationPreferenceSyncBody.from(UserNotificationPreferences())).dropLast(1) +
+                ""","circlePublicationPost":"BLOOD","circleElsewhereComment":"EVERYONE"}""",
+        )
+
+        val next = served.toPreferences(local).circleAudience
+
+        assertThat(next["circlePublicationPost"]).isEqualTo(RelationAudienceChoice.BLOOD)
+        assertThat(next["circleElsewhereComment"]).isEqualTo(RelationAudienceChoice.PUBLIC)
     }
 }
