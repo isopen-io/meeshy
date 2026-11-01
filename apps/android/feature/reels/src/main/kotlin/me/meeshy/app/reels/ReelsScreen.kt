@@ -41,12 +41,8 @@ import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.ReelSwitchWork
 import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.component.FeedbackToastHost
-import me.meeshy.ui.component.fullscreen.FullscreenScrims
 import me.meeshy.ui.component.video.rememberVideoWindowShown
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.ui.unit.LayoutDirection
 
@@ -150,10 +146,6 @@ fun ReelsScreen(
                     chromeHidden = false
                     haptics.light()
                 },
-            )
-            FullscreenScrims(
-                topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
-                chromeVisible = !chromeOff,
             )
         }
         ReelTopChrome(
