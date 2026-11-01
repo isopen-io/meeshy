@@ -105,7 +105,10 @@ async function harness(options: Options = {}) {
     prisma: prisma as never,
     dedup,
     now: () => new Date('2026-11-01T12:00:00Z'),
-    normalizeLogo: async (bytes) => ({ ok: true as const, image: { bytes, mimeType: 'image/png' as const, width: 128, height: 128, animated: false } }),
+    normalizeLogo: async (bytes) =>
+      bytes.subarray(0, 8).equals(PNG.subarray(0, 8))
+        ? { ok: true as const, image: { bytes, mimeType: 'image/png' as const, width: 128, height: 128, animated: false } }
+        : { ok: false as const, reason: 'not-an-image' as const },
   });
   const app: FastifyInstance = Fastify({ logger: false });
   app.decorate('prisma', prisma as never);
@@ -222,11 +225,12 @@ describe('l’identité d’un partenaire est VÉRIFIÉE par BIGBOSS/ADMIN', () 
     expect(pending.json().data).toEqual([expect.objectContaining({ userId: ALICE, displayName: 'Studio Lumière', verified: false })]);
   });
 
-  it('un nom vide ou un site non https est refusé (400) ; un logo illisible est refusé (422)', async () => {
+  it('un nom vide ou un site non https est refusé (400) ; un logo illisible est refusé (422), un logo trop lourd aussi (413)', async () => {
     const h = await harness();
     expect((await saveProfile(h, { displayName: '' })).statusCode).toBe(400);
     expect((await saveProfile(h, { displayName: 'Studio', website: 'javascript:alert(1)' })).statusCode).toBe(400);
-    expect((await saveProfile(h, { displayName: 'Studio', logo: Buffer.alloc(300_000, 1).toString('base64') })).json()).toMatchObject({ code: 'PARTNER_LOGO_REFUSED' });
+    expect((await saveProfile(h, { displayName: 'Studio', logo: Buffer.from('pas une image').toString('base64') })).json()).toMatchObject({ code: 'PARTNER_LOGO_REFUSED', reason: 'not-an-image' });
+    expect((await saveProfile(h, { displayName: 'Studio', logo: Buffer.alloc(300_000, 1).toString('base64') })).statusCode).toBe(413);
     expect(h.prisma.partnerProfile.rows).toEqual([]);
   });
 });
