@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.SceneObjectNumbers
+import me.meeshy.sdk.model.scene.LayeredScale
 import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 
 /**
@@ -95,6 +96,9 @@ data class StoryForegroundMediaView(
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
 
+    /** The written scale split between the laid-out frame and the layer that magnifies beyond it (#14298) — no ceiling, no floor. */
+    val layered: LayeredScale get() = SceneObjectScalePolicy.layered(scale)
+
     fun animated(atSeconds: Float): StoryForegroundMediaView {
         val resolved = StoryKeyframeResolver.resolve(
             keyframes = keyframes,
@@ -135,7 +139,7 @@ data class StoryForegroundMediaView(
         return copy(
             x = SceneObjectNumbers.position(base.x),
             y = SceneObjectNumbers.position(base.y),
-            scale = SceneObjectScalePolicy.clamped(base.scale),
+            scale = SceneObjectScalePolicy.served(base.scale),
             opacity = SceneObjectNumbers.opacity(opacityBase * transitionOpacity),
         )
     }
@@ -144,7 +148,7 @@ data class StoryForegroundMediaView(
     fun bounded(): StoryForegroundMediaView = copy(
         x = SceneObjectNumbers.position(x),
         y = SceneObjectNumbers.position(y),
-        scale = SceneObjectScalePolicy.clamped(scale),
+        scale = SceneObjectScalePolicy.served(scale),
         aspectRatio = SceneObjectNumbers.aspectRatio(aspectRatio),
         rotation = SceneObjectNumbers.rotation(rotation),
         opacity = SceneObjectNumbers.opacity(opacity),

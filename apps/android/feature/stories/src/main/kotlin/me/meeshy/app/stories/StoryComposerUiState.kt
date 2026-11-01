@@ -328,7 +328,7 @@ data class StoryComposerUiState(
      * pure [StorySlideDeck.selectedSlideDurationSeconds] so the duration control shows a
      * live value and the screen stays glue.
      */
-    val selectedSlideDurationSeconds: Double get() = deck.selectedSlideDurationSeconds
+    val selectedSlideDurationSeconds: Double get() = deck.slideDurationSeconds(deck.selectedSlide, selectedSlideBackdropMediaId, ::videoSourceSeconds)
 
     /**
      * The **selected** slide's author-chosen backdrop (`null` when none), projected from

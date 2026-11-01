@@ -1,50 +1,85 @@
 import XCTest
 @testable import MeeshyUI
 
-/// **Une borne, deux gestes** (#4722) — le pinch UIKit du canvas et le
-/// `MagnificationGesture` de la puce audio bornent la même grandeur.
+/// **Un objet posé grandit sans plafond et rapetisse jusqu'à 5 px de design**
+/// (#14299, jumelle Android #14298) — une règle, trois gestes : le pinch UIKit
+/// du canvas, le `MagnificationGesture` de la puce son et ses actions
+/// d'accessibilité.
 final class SceneObjectScalePolicyTests: XCTestCase {
 
-    /// Les bornes reprises du pinch UIKit, à l'unité près : ce lot donne un nom
-    /// à ce qui était écrit en littéral, il ne change aucun comportement.
-    func test_lesBornes_sontCellesDuPinchUIKit() {
-        XCTAssertEqual(SceneObjectScalePolicy.minScale, 0.3)
-        XCTAssertEqual(SceneObjectScalePolicy.maxScale, 4.0)
+    /// Le plancher se mesure dans la scène de RÉFÉRENCE 1080 × 1920, celle où
+    /// `baseSize`, `fontSize` et l'export sont exprimés : la même échelle donne
+    /// la même taille chez l'auteur et chez le lecteur, quel que soit l'écran.
+    func test_lePlancher_vautCinqPixelsDeDesign() {
+        XCTAssertEqual(SceneObjectScalePolicy.minimumRenderedSide, 5)
     }
 
-    /// **La composition et la borne sont le MÊME appel.** Un appelant qui
-    /// multiplie lui-même peut dépasser, puis revenir : le clamp appliqué après
-    /// coup ne rattrape pas un `base` déjà sorti des bornes.
-    func test_leGeste_composeEtBorneEnUnSeulAppel() {
-        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 1, gestureScale: 2), 2)
-        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 2, gestureScale: 10), 4.0)
-        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 1, gestureScale: 0.01), 0.3)
+    func test_agrandir_naAucunPlafond() {
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 1, gestureScale: 1000, unitSide: 140), 1000)
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 4, gestureScale: 25, unitSide: 140), 100)
     }
 
-    /// La borne basse garde le GESTE DE RETOUR : sous `0.3`, une puce de 40 pt
-    /// tombe sous la moitié d'une cible tactile — un objet qu'on ne peut plus
-    /// reprendre.
-    func test_laBorneBasse_gardeLObjetSaisissable() {
-        XCTAssertEqual(SceneObjectScalePolicy.clamped(0.05), 0.3)
+    /// Un sticker de `baseSize` 140 s'arrête à `5 / 140` : son côté rendu vaut
+    /// alors exactement 5 px de design.
+    func test_reduire_sArreteQuandLePlusPetitCoteVautCinqPixels() {
+        let plancher = SceneObjectScalePolicy.settled(base: 1, gestureScale: 0.0001, unitSide: 140)
+        XCTAssertEqual(plancher, 5.0 / 140, accuracy: 1e-12)
+        XCTAssertEqual(plancher * 140, 5, accuracy: 1e-9)
     }
 
-    /// **Zéro et négatif se ramènent à l'IDENTITÉ, jamais à la borne basse.**
-    ///
-    /// Aucun geste ne produit ces valeurs : elles viennent d'un modèle ancien ou
-    /// d'une charge corrompue. Les clamper à `0.3` rendrait visible, minuscule
-    /// et impossible à saisir un objet dont la taille n'a simplement aucun sens
-    /// — un défaut qui a l'air d'un réglage plutôt que d'une donnée fausse.
-    func test_uneEchelleAbsurde_revientALIdentite_pasALaBorneBasse() {
-        XCTAssertEqual(SceneObjectScalePolicy.clamped(0), 1)
-        XCTAssertEqual(SceneObjectScalePolicy.clamped(-2), 1)
-        XCTAssertEqual(SceneObjectScalePolicy.clamped(.nan), 1)
-        XCTAssertEqual(SceneObjectScalePolicy.clamped(.infinity), 1)
+    /// Le plancher dépend de l'OBJET : un objet deux fois plus grand à
+    /// l'échelle 1 descend deux fois plus bas en échelle, et atteint le même
+    /// côté rendu.
+    func test_lePlancher_dependDuCoteALechelleUn() {
+        XCTAssertEqual(SceneObjectScalePolicy.floor(unitSide: 540), 5.0 / 540, accuracy: 1e-12)
+        XCTAssertEqual(SceneObjectScalePolicy.floor(unitSide: 70), 5.0 / 70, accuracy: 1e-12)
     }
 
-    /// Une échelle déjà valide traverse sans être touchée — la règle borne, elle
-    /// ne normalise pas.
-    func test_uneEchelleValide_traverseIntacte() {
-        XCTAssertEqual(SceneObjectScalePolicy.clamped(1), 1)
-        XCTAssertEqual(SceneObjectScalePolicy.clamped(2.5), 2.5)
+    /// Au-dessus du plancher, la réduction passe intacte : l'ancienne borne
+    /// `0,3` ne retient plus rien.
+    func test_reduireAuDessusDuPlancher_passeIntact() {
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 1, gestureScale: 0.1, unitSide: 140), 0.1, accuracy: 1e-12)
+    }
+
+    /// Un facteur qui déborde le `Double` (∞) ou un geste dégénéré (0, NaN)
+    /// laisse l'échelle où elle était : la seule garde est « finie et > 0 ».
+    func test_unProduitNonFini_laisseLEchelleIntacte() {
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 2, gestureScale: .infinity, unitSide: 140), 2)
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 2, gestureScale: .nan, unitSide: 140), 2)
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 1e308, gestureScale: 10, unitSide: 140), 1e308)
+    }
+
+    /// Un côté inconnu (zéro, négatif, non fini) ne permet pas de prouver le
+    /// plancher : le geste grandit encore, il ne réduit plus.
+    func test_unCoteInconnu_interditDeReduire() {
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 1, gestureScale: 0.5, unitSide: 0), 1)
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 1, gestureScale: 3, unitSide: .nan), 3)
+    }
+
+    /// Une échelle de départ absurde (modèle ancien, charge corrompue) repart
+    /// de l'identité avant d'être composée avec le geste.
+    func test_uneBaseAbsurde_repartDeLIdentite() {
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: 0, gestureScale: 2, unitSide: 140), 2)
+        XCTAssertEqual(SceneObjectScalePolicy.settled(base: -3, gestureScale: 2, unitSide: 140), 2)
+    }
+
+    /// **Le lecteur ne borne rien** : seule une valeur qu'aucun geste ne
+    /// produit (zéro, négative, non finie) revient à l'identité.
+    func test_lecture_neBorneQueLesValeursAbsurdes() {
+        XCTAssertEqual(SceneObjectScalePolicy.sanitized(0.01), 0.01)
+        XCTAssertEqual(SceneObjectScalePolicy.sanitized(250), 250)
+        XCTAssertEqual(SceneObjectScalePolicy.sanitized(0), 1)
+        XCTAssertEqual(SceneObjectScalePolicy.sanitized(-2), 1)
+        XCTAssertEqual(SceneObjectScalePolicy.sanitized(.nan), 1)
+        XCTAssertEqual(SceneObjectScalePolicy.sanitized(.infinity), 1)
+    }
+
+    /// **Le média de FOND n'est pas un objet posé** : il garde le cadrage qu'il
+    /// avait, de 0,3 à 4.
+    func test_leFond_garderSesBornesDeCadrage() {
+        XCTAssertEqual(SceneObjectScalePolicy.backgroundRange, 0.3...4.0)
+        XCTAssertEqual(SceneObjectScalePolicy.settledBackground(base: 2, gestureScale: 10), 4)
+        XCTAssertEqual(SceneObjectScalePolicy.settledBackground(base: 1, gestureScale: 0.01), 0.3)
+        XCTAssertEqual(SceneObjectScalePolicy.settledBackground(base: 1, gestureScale: 2), 2)
     }
 }

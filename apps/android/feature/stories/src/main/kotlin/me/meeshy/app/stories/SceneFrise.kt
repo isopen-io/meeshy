@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
@@ -83,6 +84,7 @@ import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.sdk.model.composer.ComposerObjectChips
 import me.meeshy.sdk.model.composer.timeline.ClipWindowResolver
 import me.meeshy.sdk.model.composer.timeline.FriseBarDrag
+import me.meeshy.sdk.model.composer.timeline.FrisePlayClock
 import me.meeshy.sdk.model.composer.timeline.FriseRuler
 import me.meeshy.sdk.model.composer.timeline.FriseViewport
 import me.meeshy.sdk.model.composer.timeline.Plan2DTrack
@@ -124,25 +126,42 @@ internal fun SceneFrise(
     visuals: Map<String, FriseBarVisual> = emptyMap(),
     onDuplicate: (id: String) -> Unit = {},
     onRemove: (id: String) -> Unit = {},
+    keyframableIds: Set<String> = emptySet(),
+    keyframeHeld: Boolean = false,
+    onKeyframe: (id: String) -> Unit = {},
 ) {
     val duration = maxOf(slideDurationSeconds, ClipWindowResolver.MINIMUM_DURATION)
     var laneWidthPx by remember { mutableStateOf(0) }
     // La portion du temps montrée (#13481, iso iOS #14213) : `null`, la slide entière ; pincer la resserre autour de la tête.
     var zoom by remember { mutableStateOf<FriseViewport?>(null) }
     val view = (zoom ?: FriseViewport.whole(duration)).clamped(duration)
-    var playing by remember { mutableStateOf(false) }
+    // Le transport de l'hôte quand il en tend un (#13481) : la scène vivante joue avec la tête ; sinon un transport à soi.
+    val transport = LocalFriseTransport.current ?: remember { FriseTransport() }
+    DisposableEffect(transport) {
+        transport.mount()
+        onDispose { transport.unmount() }
+    }
+    var playing by transport::playing
     val currentPlayhead by rememberUpdatedState(playheadSeconds)
-    val currentScrub by rememberUpdatedState(onScrub)
-    // **Lire la scène** : la tête avance au rythme de l'horloge d'affichage, s'arrête à la fin ; la frise zoomée la suit.
+    val hostScrub by rememberUpdatedState(onScrub)
+    // Un scrub de l'auteur pendant la lecture réancre l'horloge (#14293) : la tête repart de là où il l'a posée.
+    var seek by remember { mutableStateOf<Float?>(null) }
+    val userScrub: (Float) -> Unit = { at ->
+        if (playing) seek = at
+        hostScrub(at)
+    }
+    // **Lire la scène** : la tête vaut le temps écoulé depuis l'origine de la lecture (#14293), jamais un pas par image
+    // ajouté à la tête que l'hôte rend avec retard ; elle s'arrête à la fin, la frise zoomée la suit.
     LaunchedEffect(playing, duration) {
         if (!playing) return@LaunchedEffect
-        if (currentPlayhead >= duration) currentScrub(0f)
-        var last = withFrameNanos { it }
+        val from = if (currentPlayhead >= duration) 0f else currentPlayhead
+        if (from != currentPlayhead) hostScrub(from)
+        var clock = FrisePlayClock(from, withFrameNanos { it })
         while (playing) {
             withFrameNanos { now ->
-                val next = FriseViewport.advanced(currentPlayhead, (now - last) / 1_000_000_000f, duration)
-                last = now
-                currentScrub(next)
+                seek?.let { clock = FrisePlayClock(it, now); seek = null }
+                val next = clock.headAt(now, duration)
+                hostScrub(next)
                 zoom = zoom?.clamped(duration)?.showing(next, duration)
                 if (next >= duration) playing = false
             }
@@ -170,6 +189,8 @@ internal fun SceneFrise(
             onSplit = { selectedId?.let(onSplit) },
             onDuplicate = { selectedId?.let(onDuplicate) },
             onRemove = { selectedId?.let(onRemove) },
+            keyframe = keyframeChip(selectedId, keyframableIds, tracks, playheadSeconds, duration, keyframeHeld),
+            onKeyframe = { selectedId?.let(onKeyframe) },
         )
         // L'axe du temps se lit de gauche à droite dans toutes les langues (#14219) : en RTL, `offset` est miroité mais
         // la position du doigt ne l'est pas — la tête et les barres fuyaient le doigt. Les noms gardent l'interface.
@@ -182,7 +203,7 @@ internal fun SceneFrise(
             },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Ruler(view = view, duration = duration, zoomed = zoom != null, onScrub = onScrub, onLaneWidth = { laneWidthPx = it })
+                Ruler(view = view, duration = duration, zoomed = zoom != null, onScrub = userScrub, onLaneWidth = { laneWidthPx = it })
                 if (tracks.isEmpty()) {
                     Text(
                         text = stringResource(R.string.composer_frise_empty),
@@ -209,6 +230,7 @@ internal fun SceneFrise(
                             onSnap = haptics::light,
                             onSelect = { at ->
                                 haptics.light()
+                                if (playing) seek = at
                                 onSelectTrack(track.id, at)
                             },
                             onCommit = { w -> onWindow(track.id, w.startSeconds, w.durationSeconds) },
@@ -236,6 +258,8 @@ private fun FriseTransport(
     onSplit: () -> Unit,
     onDuplicate: () -> Unit,
     onRemove: () -> Unit,
+    keyframe: KeyframeChip?,
+    onKeyframe: () -> Unit,
 ) {
     // Les réglages passent à la ligne quand la place manque (#14255) : sur 360 dp, l'horloge en `weight(1f)` n'avait plus
     // que quelques points, se brisait caractère par caractère et creusait la frise au-dessus et au-dessous d'elle.
@@ -258,6 +282,12 @@ private fun FriseTransport(
             TextChip(stringResource(R.string.composer_frise_entry), onEntry)
             TextChip(stringResource(R.string.composer_frise_exit), onExit)
             if (canSplit) TextChip(stringResource(R.string.composer_object_editor_split), onSplit)
+            // L'image clé à la tête (#14271, iOS « Animer au playhead ») : losange plein quand la tête en tient une.
+            when (keyframe) {
+                KeyframeChip.ADD -> GlyphChip(MeeshyIcons.Diamond, stringResource(R.string.composer_frise_keyframe_add), onKeyframe)
+                KeyframeChip.REMOVE -> GlyphChip(MeeshyIcons.DiamondFilled, stringResource(R.string.composer_frise_keyframe_remove), onKeyframe)
+                null -> Unit
+            }
             // Dupliquer et Retirer l'objet choisi sans quitter la frise (#14221) : un pas d'annulation chacun.
             GlyphChip(MeeshyIcons.Copy, stringResource(R.string.story_canvas_action_duplicate), onDuplicate)
             GlyphChip(MeeshyIcons.Delete, stringResource(R.string.composer_selection_remove), onRemove)
@@ -537,6 +567,7 @@ private fun FriseTrackRow(
             ) {
                 visual?.let { FriseBarContent(it) }
             }
+            if (track.keyframes.isNotEmpty()) KeyframeMarkers(track.keyframeTimes, view)
             if (selected && dragEnabled) {
                 Handle(view.fraction(window.start), laneWidthPx, Grip.START) { grip ->
                     Modifier.dragBar(track.id, grip, geometry, { currentStored }, { currentCandidates }, { live = it }, {
@@ -560,7 +591,7 @@ private fun FriseTrackRow(
 private fun FriseBarContent(visual: FriseBarVisual) {
     when (visual) {
         is FriseBarVisual.Filmstrip -> {
-            val frames = rememberVideoFrames(visual.url, visual.sourceSeconds)
+            val frames = rememberVideoFrames(visual.url, visual.startSeconds, visual.endSeconds)
             Row(Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)).graphicsLayer { alpha = 0.85f }) {
                 frames.forEach { frame ->
                     Image(
@@ -721,6 +752,43 @@ private fun onExitAt(
     val (start, end) = barOf(tracks, id, duration)
     val window = ClipWindowResolver.resolve(ClipWindowResolver.Edit.SetEnd(at), ClipWindowResolver.Window(start, end - start))
     FriseBarDrag.stored(window, duration).let { onWindow(id, it.startSeconds, it.durationSeconds) }
+}
+
+/** Ce que le transport offre pour l'image clé : rien hors d'un texte ou d'un média posé, ou la tête hors de sa barre. */
+private enum class KeyframeChip { ADD, REMOVE }
+
+private fun keyframeChip(
+    selectedId: String?,
+    keyframableIds: Set<String>,
+    tracks: List<Plan2DTrack>,
+    playheadSeconds: Float,
+    duration: Float,
+    held: Boolean,
+): KeyframeChip? {
+    if (selectedId == null || selectedId !in keyframableIds) return null
+    val (start, end) = barOf(tracks, selectedId, duration)
+    if (playheadSeconds !in start..end) return null
+    return if (held) KeyframeChip.REMOVE else KeyframeChip.ADD
+}
+
+/** Les losanges des images clés sur la piste (#14271, iOS `LaneKeyframeOverlays`) : lus, jamais une cible de toucher. */
+@Composable
+private fun BoxScope.KeyframeMarkers(times: List<Double>, view: FriseViewport) {
+    Canvas(Modifier.matchParentSize()) {
+        val half = size.height * 0.18f
+        times.forEach { time ->
+            val x = view.fraction(time.toFloat()) * size.width
+            val diamond = androidx.compose.ui.graphics.Path().apply {
+                moveTo(x, center.y - half)
+                lineTo(x + half, center.y)
+                lineTo(x, center.y + half)
+                lineTo(x - half, center.y)
+                close()
+            }
+            drawPath(diamond, Color.White)
+            drawPath(diamond, Color.Black.copy(alpha = 0.55f), style = Stroke(width = 1.dp.toPx()))
+        }
+    }
 }
 
 private fun barOf(tracks: List<Plan2DTrack>, id: String, duration: Float): Pair<Float, Float> =

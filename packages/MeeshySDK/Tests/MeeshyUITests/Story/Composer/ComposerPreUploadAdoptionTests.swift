@@ -141,4 +141,58 @@ final class ComposerPreUploadAdoptionTests: XCTestCase {
 
         XCTAssertNotNil(vm.loadedImages["pm-d"])
     }
+
+    // MARK: - L'adoption n'est pas un geste de l'auteur (#14202)
+
+    /// **Un seul ↶ défait le geste de l'auteur, même quand une montée aboutit
+    /// juste après.** L'adoption réécrit l'URL d'un objet : un instantané de
+    /// plus dans l'historique, et le premier ↶ ne défaisait qu'elle — après
+    /// « Remplacer le fond », il en fallait deux pour retrouver l'ancien fond.
+    func test_uneMonteeQuiAboutitApresUnGeste_neCoutePasUnAnnulerDePlus() {
+        let vm = sut()
+        guard let ancien = poserImage(vm, local: "file:///tmp/ancien.jpg"),
+              let nouveau = poserImage(vm, local: "file:///tmp/nouveau.jpg") else {
+            return XCTFail("la pose a échoué")
+        }
+        if !vm.isBackground(id: ancien) { vm.toggleBackground(id: ancien) }
+        XCTAssertTrue(vm.isBackground(id: ancien))
+        vm.seedHistory()
+
+        vm.toggleBackground(id: nouveau)
+        XCTAssertTrue(vm.isBackground(id: nouveau), "le geste n'a pas remplacé le fond")
+        vm.pushHistorySnapshot()
+        XCTAssertTrue(vm.adoptPreUploadedMedia(
+            localURL: "file:///tmp/nouveau.jpg", postMediaId: "pm-n", remoteURL: "https://cdn/nouveau.jpg"))
+        vm.pushHistorySnapshot()
+
+        XCTAssertTrue(vm.undoGlobal())
+        XCTAssertTrue(vm.isBackground(id: ancien), "le premier ↶ n'a pas rendu l'ancien fond")
+        XCTAssertEqual(media(vm, nouveau)?.mediaURL, "https://cdn/nouveau.jpg",
+                       "défaire le geste ne défait pas la montée")
+        XCTAssertFalse(vm.undoGlobal(), "l'adoption a laissé une étape d'annulation")
+    }
+
+    /// **Une montée qui aboutit après un ↶ laisse ↷ disponible.** Le document
+    /// change d'adresse, pas de contenu : la branche à rétablir reste là.
+    func test_uneMonteeQuiAboutitApresUnAnnuler_laisseLeRetablir() {
+        let vm = sut()
+        guard let ancien = poserImage(vm, local: "file:///tmp/ancien-r.jpg"),
+              let nouveau = poserImage(vm, local: "file:///tmp/nouveau-r.jpg") else {
+            return XCTFail("la pose a échoué")
+        }
+        if !vm.isBackground(id: ancien) { vm.toggleBackground(id: ancien) }
+        vm.seedHistory()
+        vm.toggleBackground(id: nouveau)
+        vm.pushHistorySnapshot()
+        XCTAssertTrue(vm.undoGlobal())
+        XCTAssertTrue(vm.canRedoGlobal)
+
+        XCTAssertTrue(vm.adoptPreUploadedMedia(
+            localURL: "file:///tmp/nouveau-r.jpg", postMediaId: "pm-r", remoteURL: "https://cdn/nouveau-r.jpg"))
+
+        XCTAssertTrue(vm.canRedoGlobal, "la montée a effacé le ↷")
+        XCTAssertTrue(vm.redoGlobal())
+        XCTAssertTrue(vm.isBackground(id: nouveau))
+        XCTAssertEqual(media(vm, nouveau)?.mediaURL, "https://cdn/nouveau-r.jpg")
+    }
 }

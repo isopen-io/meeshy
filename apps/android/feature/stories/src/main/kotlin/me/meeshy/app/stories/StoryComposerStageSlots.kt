@@ -58,13 +58,14 @@ internal fun StoryComposerScene(
     captureOffered: Boolean = false,
 ) {
     val armsCapture = capture?.takeIf { captureOffered }
+    val accentHex = viewModel.observedAuthorAccentHex()
     CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
                 backgroundModel = rememberStoryMediaLookModel(rememberComposerPicture(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl)), state.backgroundMediaLook(comparison.mediaId)),
-                sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
-                    StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
+                sceneBrush = remember(state.selectedSlideBackground, accentHex) {
+                    StorySceneFill.resolve(state.selectedSlideBackground, accentHex).brush()
                 },
                 look = state.selectedSlideLook(comparison.mediaId),
                 textElements = state.selectedSlideTextElements,
@@ -372,5 +373,9 @@ internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryCompose
         visuals = state.friseBarVisuals(),
         onDuplicate = { id -> state.friseRef(id)?.let { viewModel.onSelectionAction(it, ComposerSelectionAction.DUPLICATE) {} } },
         onRemove = { id -> state.friseRef(id)?.let { viewModel.onSelectionAction(it, ComposerSelectionAction.REMOVE) {} } },
+        // L'image clé à la tête (#14271) : une réduction, donc un seul pas d'annulation.
+        keyframableIds = StoryComposerKeyframeReducer.keyframableIds(state),
+        keyframeHeld = state.selectedSceneObject?.id?.let { StoryComposerKeyframeReducer.keyframeAtPlayhead(state, it) } != null,
+        onKeyframe = { id -> viewModel.onSceneReduce { s -> StoryComposerKeyframeReducer.toggled(s, id) } },
     )
 }

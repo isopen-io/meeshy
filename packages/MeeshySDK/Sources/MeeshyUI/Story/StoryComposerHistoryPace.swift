@@ -108,7 +108,7 @@ final class StoryComposerHistoryPace {
 
     /// Encodage déterministe (`.sortedKeys` — l'ordre des clés JSONEncoder
     /// est instable sur iOS 26, la dédup de la pile exige des octets stables).
-    static func encode(_ slides: [StorySlide]) -> Data? {
+    nonisolated static func encode(_ slides: [StorySlide]) -> Data? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return try? encoder.encode(slides)

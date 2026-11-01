@@ -9,12 +9,12 @@ import org.junit.runners.JUnit4
 class ClipTransformTest {
 
     @Test
-    fun `position scale et rotation sont bornes`() {
+    fun `position et rotation sont bornees, l echelle n a qu un plancher`() {
         val t = ClipTransform.IDENTITY
         assertThat(t.applying(ClipTransform.Field.X(9.0)).x).isEqualTo(1.5)
         assertThat(t.applying(ClipTransform.Field.Y(-9.0)).y).isEqualTo(-0.5)
         assertThat(t.applying(ClipTransform.Field.Scale(0.0)).scale).isEqualTo(0.05)
-        assertThat(t.applying(ClipTransform.Field.Scale(99.0)).scale).isEqualTo(8.0)
+        assertThat(t.applying(ClipTransform.Field.Scale(99.0)).scale).isEqualTo(99.0)
         assertThat(t.applying(ClipTransform.Field.Rotation(720.0)).rotation).isEqualTo(180.0)
         assertThat(t.applying(ClipTransform.Field.ZIndex(-500)).zIndex).isEqualTo(-100)
     }

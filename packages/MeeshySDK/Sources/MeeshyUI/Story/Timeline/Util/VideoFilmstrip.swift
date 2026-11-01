@@ -21,6 +21,17 @@ public enum VideoFilmstrip {
         CGSize(width: maxHeight * 4, height: maxHeight * scale)
     }
 
+    /// Les vignettes de la seule fenêtre `window` de la source (#14268) : un
+    /// clip coupé ne montre que ce qu'il joue.
+    public static func frames(url: URL, count: Int, window: ClosedRange<Double>,
+                              maxHeight: CGFloat, scale: CGFloat) async -> [UIImage] {
+        let demande = VideoThumbnailRequest(url: url,
+                                            instants: .window(start: window.lowerBound, end: window.upperBound, count: count),
+                                            maximumSize: maximumSize(maxHeight: maxHeight, scale: scale),
+                                            tolerance: .seconds(0.5))
+        return await VideoThumbnailGenerator.shared.images(for: demande)
+    }
+
     public static func frames(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) async -> [UIImage] {
         await VideoThumbnailGenerator.shared.images(for: request(url: url, count: count, maxHeight: maxHeight, scale: scale))
     }

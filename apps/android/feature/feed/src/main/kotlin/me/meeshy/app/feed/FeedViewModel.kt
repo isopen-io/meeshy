@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.model.analytics.ContentSurface
 import me.meeshy.sdk.model.analytics.ImpressionSource
@@ -43,6 +45,8 @@ data class FeedUiState(
      * (« Impossible de charger le fil » + Réessayer, iOS FeedView) instead of the empty one.
      */
     val loadFailed: Boolean = false,
+    /** No usable network: the screen draws the discreet « Hors ligne » band over what the feed keeps (#14263). */
+    val isOffline: Boolean = false,
     /** A one-shot localized feedback (toast), cleared by [FeedViewModel.consumeNotice]. */
     val notice: FeedNotice? = null,
     val hasMore: Boolean = true,
@@ -100,6 +104,7 @@ class FeedViewModel @Inject constructor(
     private val workManager: WorkManager,
     engagement: FeedEngagementRepository,
     private val publications: PublicationOutbox,
+    private val network: NetworkMonitor = InMemoryNetworkMonitor(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -147,6 +152,9 @@ class FeedViewModel @Inject constructor(
     }
 
     init {
+        viewModelScope.launch {
+            network.isOnline.collect { online -> _state.update { it.copy(isOffline = !online) } }
+        }
         viewModelScope.launch {
             publications.notices.collect { notice -> _state.update { it.copy(notice = notice.feedNotice) } }
         }
@@ -721,9 +729,12 @@ private fun FeedUiState.project(
 
 /**
  * A load failure: with nothing on screen, the drawn error state; with posts already shown,
- * only the localized toast — the reader keeps reading what the cache holds.
+ * only the localized toast — the reader keeps reading what the cache holds. Offline, the band
+ * already says why: no toast over a readable feed (#14263).
  */
-private fun FeedUiState.withLoadFailure(): FeedUiState =
-    if (posts.isEmpty()) copy(loadFailed = true, isSyncing = false, showSkeleton = false)
-    else copy(notice = FeedNotice.LOAD_FAILED, isSyncing = false, showSkeleton = false)
+private fun FeedUiState.withLoadFailure(): FeedUiState = when {
+    posts.isEmpty() -> copy(loadFailed = true, isSyncing = false, showSkeleton = false)
+    isOffline -> copy(isSyncing = false, showSkeleton = false)
+    else -> copy(notice = FeedNotice.LOAD_FAILED, isSyncing = false, showSkeleton = false)
+}
 

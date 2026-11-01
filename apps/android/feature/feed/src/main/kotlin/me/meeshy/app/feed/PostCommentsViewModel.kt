@@ -413,7 +413,7 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
+                val language = ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
                 when (val result = postRepository.addComment(postId, content, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
@@ -584,7 +584,7 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
+                val language = ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
                 when (val result = postRepository.addComment(postId, content, parentId, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }

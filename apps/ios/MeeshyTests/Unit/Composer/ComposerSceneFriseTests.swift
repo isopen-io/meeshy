@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 import MeeshyUI
 
 /// **La frise de la scène animée suit la maquette** (#8370, lot 6 —
@@ -439,5 +440,27 @@ final class ComposerSceneFriseTests: XCTestCase {
             XCTAssertTrue(ComposerSceneFriseMetrics.canDuplicate(piste(kind)), "\(kind)")
         }
         XCTAssertFalse(ComposerSceneFriseMetrics.canDuplicate(piste(.place)))
+    }
+
+    // MARK: - Une barre coupée ne montre que sa fenêtre (#14268)
+
+    func test_laFenetreDeSource_partDuDebutDeCoupeEtDureCeQueLaSceneJoue() {
+        XCTAssertEqual(SceneFriseSourceWindow.range(sourceStart: nil, sourceEnd: nil, playedSeconds: 6), 0...6)
+        XCTAssertEqual(SceneFriseSourceWindow.range(sourceStart: 2, sourceEnd: nil, playedSeconds: 3), 2...5)
+        XCTAssertEqual(SceneFriseSourceWindow.range(sourceStart: 2, sourceEnd: 4, playedSeconds: 3), 2...4)
+        XCTAssertNil(SceneFriseSourceWindow.range(sourceStart: 2, sourceEnd: nil, playedSeconds: 0))
+    }
+
+    func test_lesVignettes_neSePrennentQueDansLaFenetre() {
+        XCTAssertEqual(VideoThumbnailInstants.seconds(for: .window(start: 2, end: 6, count: 2), duration: nil), [3, 5])
+        XCTAssertEqual(VideoThumbnailInstants.seconds(for: .window(start: 2, end: 6, count: 2), duration: 4), [2.5, 3.5])
+        XCTAssertFalse(VideoThumbnailInstants.needsDuration(.window(start: 0, end: 1, count: 1)))
+    }
+
+    func test_lOnde_neMontreQueLaFenetre() {
+        let onde: [Float] = [1, 2, 3, 4, 5, 6, 7, 8]
+        XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: 2...6, sourceDuration: 8), [3, 4, 5, 6])
+        XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: nil, sourceDuration: 8), onde)
+        XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: 2...6, sourceDuration: nil), onde)
     }
 }

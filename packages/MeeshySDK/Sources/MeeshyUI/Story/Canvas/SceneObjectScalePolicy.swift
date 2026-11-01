@@ -1,60 +1,69 @@
 import Foundation
 
-/// **Jusqu'où un objet de scène grandit et rapetisse** — une borne, deux
-/// gestes (#4722).
+/// **Jusqu'où un objet posé grandit et rapetisse** — une règle, trois gestes
+/// (#4722, #14299 ; jumelle Android #14298).
 ///
-/// ## Pourquoi une règle plutôt qu'un littéral
+/// Le pinch UIKit du canvas, le `MagnificationGesture` de la puce son et ses
+/// actions d'accessibilité bornent la même grandeur. Deux littéraux pour une
+/// grandeur divergent au premier ajustement de l'un, sans qu'aucun témoin ne
+/// rougisse : chacun reste juste vis-à-vis de lui-même. La grandeur a donc un
+/// site unique.
 ///
-/// Le pinch du canvas UIKit clampait en toutes lettres — `max(0.3, min(4.0,
-/// …))`, au milieu d'un `case .changed` — et c'était le seul geste qui
-/// redimensionnait un objet. La puce audio en ajoute un SECOND, en SwiftUI,
-/// pour la puce que rien ne recouvre (celle qui est recouverte se peint et se
-/// saisit dans le canvas, #13864).
+/// ## La règle
 ///
-/// Deux gestes qui bornent la même grandeur avec deux littéraux se
-/// ressemblent le jour où on les écrit et divergent au premier ajustement de
-/// l'un. Le témoin qui l'attraperait n'existerait pas : chacun est juste
-/// vis-à-vis de lui-même.
+/// - **Agrandir n'a aucun plafond.** La seule garde est une échelle finie et
+///   strictement positive.
+/// - **Réduire s'arrête quand le plus petit côté RENDU de l'objet vaut
+///   `minimumRenderedSide` pixels de la scène de référence 1080 × 1920** —
+///   celle où `baseSize`, `fontSize` et l'export sont exprimés. Le plancher ne
+///   dépend donc pas de l'écran de l'auteur : la même échelle donne la même
+///   taille chez le lecteur, dans la vignette et dans l'export.
+/// - **Le plancher est une règle du GESTE.** Ce qui lit une échelle écrite
+///   (lecteur, carte, export) passe par `sanitized`, qui ne borne rien.
 ///
-/// > Ce que deux sites partagent n'est pas leur GESTE — l'un est un
-/// > `UIPinchGestureRecognizer`, l'autre un `MagnificationGesture` — mais la
-/// > grandeur qu'ils bornent. C'est elle qui a un site unique.
-///
-/// ## Les bornes, et ce qu'elles protègent
-///
-/// `0.3` en bas : sous ce facteur une puce de 40 pt tombe à 12 pt — moins que
-/// la moitié d'une cible tactile, donc un objet qu'on ne peut plus reprendre.
-/// La borne basse n'est pas esthétique, elle garde le geste de retour.
-///
-/// `4.0` en haut : au-delà, un objet couvre la scène entière et masque ce
-/// qu'il commente. Reprises telles quelles du pinch UIKit — ce lot ne change
-/// aucun comportement existant, il donne un nom à celui qui était écrit.
+/// Le média de FOND n'est pas un objet posé : son pinch relève du cadrage et
+/// garde ses bornes, `backgroundRange`.
 public nonisolated enum SceneObjectScalePolicy {
 
-    public static let minScale: Double = 0.3
-    public static let maxScale: Double = 4.0
+    public static let minimumRenderedSide: Double = 5
+
+    public static let backgroundRange: ClosedRange<Double> = 0.3...4.0
+
+    /// La plus petite échelle d'un objet dont le plus petit côté, à l'échelle
+    /// 1, mesure `unitSide` pixels de la scène de référence.
+    public static func floor(unitSide: Double) -> Double {
+        minimumRenderedSide / unitSide
+    }
 
     /// L'échelle retenue pour `base` multipliée par le facteur du geste.
     ///
-    /// Prend les DEUX termes plutôt que le produit déjà fait : un appelant qui
-    /// multiplie lui-même peut dépasser puis revenir, et le clamp appliqué
-    /// après coup ne rattrape pas un `base` déjà hors bornes. Ici la
-    /// composition et la borne sont le même appel.
-    public static func settled(base: Double, gestureScale: Double) -> Double {
-        clamped(base * gestureScale)
+    /// Prend les DEUX termes plutôt que le produit : la composition et la
+    /// garde sont le même appel. Un produit non fini (débordement, geste
+    /// dégénéré) laisse l'objet où il était. Un `unitSide` qui ne mesure rien
+    /// ne permet pas de prouver le plancher : le geste grandit encore, il ne
+    /// réduit plus.
+    public static func settled(base: Double, gestureScale: Double, unitSide: Double) -> Double {
+        let depart = sanitized(base)
+        let voulu = depart * gestureScale
+        guard voulu.isFinite, voulu > 0 else { return depart }
+        guard unitSide.isFinite, unitSide > 0 else { return max(depart, voulu) }
+        return max(floor(unitSide: unitSide), voulu)
     }
 
-    /// La borne seule, pour ce qui lit une échelle déjà écrite — un modèle
-    /// ancien, une charge décodée — plutôt que pour un geste en cours.
+    /// L'échelle retenue pour le pinch du média de FOND.
+    public static func settledBackground(base: Double, gestureScale: Double) -> Double {
+        let voulu = sanitized(base) * gestureScale
+        guard voulu.isFinite, voulu > 0 else { return sanitized(base) }
+        return min(backgroundRange.upperBound, max(backgroundRange.lowerBound, voulu))
+    }
+
+    /// Une échelle déjà écrite, telle qu'un rendu doit la lire.
     ///
-    /// **Un `scale` de zéro ou négatif ne se ramène pas à la borne basse, il
-    /// se ramène à l'IDENTITÉ.** Zéro fait disparaître l'objet et un négatif
-    /// le retourne : ni l'un ni l'autre n'est une petite taille, ce sont des
-    /// valeurs qu'aucun geste ne produit. Les clamper à `0.3` rendrait
-    /// visible, minuscule et impossible à saisir un objet dont la valeur est
-    /// simplement corrompue.
-    public static func clamped(_ scale: Double) -> Double {
+    /// **Zéro, négatif ou non fini se ramène à l'IDENTITÉ.** Zéro fait
+    /// disparaître l'objet et un négatif le retourne : ce ne sont pas de
+    /// petites tailles, ce sont des valeurs qu'aucun geste ne produit.
+    public static func sanitized(_ scale: Double) -> Double {
         guard scale > 0, scale.isFinite else { return 1 }
-        return min(maxScale, max(minScale, scale))
+        return scale
     }
 }

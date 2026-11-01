@@ -167,6 +167,7 @@ internal fun StorySticker.toElement(): StoryStickerElement = StoryStickerElement
  */
 internal fun StoryTextObject.toElement(): StoryTextElement {
     val size = StoryTextSize.entries.minBy { abs(it.designSize - fontSize.toFloat()) }
+    val ratio = fontSize / size.designSize
     return StoryTextElement(
         id = id,
         text = text,
@@ -187,9 +188,11 @@ internal fun StoryTextObject.toElement(): StoryTextElement {
         timing = StoryElementTiming(startSeconds = startTime?.toFloat() ?: 0f, durationSeconds = duration?.toFloat() ?: 0f),
         x = x.toFloat(),
         y = y.toFloat(),
-        scale = (scale * fontSize / size.designSize).toFloat(),
+        scale = (scale * ratio).toFloat(),
         rotationDeg = rotation.toFloat(),
         referenceUserId = referenceUserId,
         zIndex = zIndex,
+        // L'échelle d'une image clé vit dans l'espace de la police du fil : elle suit l'échelle de l'élément.
+        keyframes = keyframes.orEmpty().map { frame -> frame.copy(scale = frame.scale?.times(ratio)) },
     ).normalised()
 }

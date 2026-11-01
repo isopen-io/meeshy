@@ -110,8 +110,7 @@ public nonisolated struct CanvasGeometry: Equatable, Sendable {
     public static func stickerFontSize(baseSize: Double, scale: Double, canvasWidth: CGFloat) -> CGFloat {
         guard canvasWidth > 0 else { return 0 }
         let designSide = CGFloat(max(0, baseSize) * max(0, scale))
-        // Plancher à 8 pt : sous cette taille le glyphe n'est plus qu'un
-        // artefact d'anticrénelage, et la miniature s'en trouve illisible.
-        return max(8, designSide * (canvasWidth / designWidth))
+        guard designSide.isFinite else { return 0 }
+        return designSide * (canvasWidth / designWidth)
     }
 }

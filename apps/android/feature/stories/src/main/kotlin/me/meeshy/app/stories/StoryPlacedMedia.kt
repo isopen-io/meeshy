@@ -3,10 +3,13 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryDraftPlacedMediaSnapshot
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.media.MediaTrimRule
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryVolumeCarrying
 import me.meeshy.sdk.model.scene.wireValue
@@ -44,6 +47,8 @@ data class StoryPlacedMedia(
     /** Le volume d'auteur d'une VIDÉO posée (#13973, A-E4, iOS `StoryMediaObject.volume`) : 0 est le muet, le mémento rend le niveau quitté. */
     override val volume: Float = 1f,
     override val mutedVolumeMemento: Float? = null,
+    /** Ses images clés (#14271, iOS `StoryMediaObject.keyframes`) : temps relatif à son départ, pose figée à cet instant. */
+    val keyframes: List<StoryKeyframe> = emptyList(),
 ) : StoryVolumeCarrying {
     /** La fenêtre rognée, ou `null` : la source entière (jamais une borne seule, jamais une fenêtre sous le plancher). */
     val trim: MediaTrimBounds?
@@ -52,7 +57,7 @@ data class StoryPlacedMedia(
     fun normalised(): StoryPlacedMedia = copy(
         x = coord(x),
         y = coord(y),
-        scale = StoryTextElement.clampScale(scale),
+        scale = StoryTextElement.servedScale(scale),
         rotationDeg = StoryTextElement.normaliseRotation(rotationDeg),
         adjustments = adjustments?.takeUnless { it.isNeutral },
         sourceStart = trim?.start,
@@ -61,8 +66,12 @@ data class StoryPlacedMedia(
         volume = volume.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f,
     )
 
-    fun transformed(scaleBy: Float, rotateByDeg: Float): StoryPlacedMedia = copy(
-        scale = StoryTextElement.clampScale(scale * scaleBy),
+    /**
+     * Pincer / tourner : l'échelle grandit sans plafond et ne descend pas sous 5 pixels de la scène de référence sur le
+     * plus petit côté du cadre que peignent les lecteurs pour [aspectRatio] (#14298) ; un facteur dégénéré la laisse.
+     */
+    fun transformed(scaleBy: Float, rotateByDeg: Float, aspectRatio: Double? = null): StoryPlacedMedia = copy(
+        scale = SceneObjectScalePolicy.settled(scale, scaleBy, smallestSideDesignPx = ForegroundMediaFrame.baseDesignSize(aspectRatio).smallestSide),
         rotationDeg = StoryTextElement.normaliseRotation(rotationDeg + rotateByDeg),
     )
 
@@ -102,6 +111,7 @@ data class StoryPlacedMedia(
             mutedVolumeMemento = mutedVolumeMemento.takeIf { video },
             zIndex = zIndex,
             startTime = timing.startSeconds.takeIf { timing.hasStart }?.toDouble(),
+            keyframes = keyframes.takeIf { it.isNotEmpty() },
         )
     }
 
@@ -110,7 +120,7 @@ data class StoryPlacedMedia(
             id = mediaId, x = x, y = y, scale = scale, rotationDeg = rotationDeg, filter = filter?.wireValue(), adjustments = adjustments,
             sourceStart = sourceStart, sourceEnd = sourceEnd, crop = crop, zIndex = zIndex, objectId = id.takeIf { it != mediaId },
             startSeconds = timing.startSeconds, durationSeconds = timing.durationSeconds,
-            volume = volume, mutedVolumeMemento = mutedVolumeMemento,
+            volume = volume, mutedVolumeMemento = mutedVolumeMemento, keyframes = keyframes,
         )
 
     companion object {
@@ -142,6 +152,7 @@ data class StoryPlacedMedia(
                     id = it.id.ifBlank { it.postMediaId },
                     volume = it.volume,
                     mutedVolumeMemento = it.mutedVolumeMemento,
+                    keyframes = it.keyframes.orEmpty(),
                 ).normalised()
             }
 
@@ -169,6 +180,7 @@ data class StoryPlacedMedia(
                 id = snapshot.objectId?.takeIf { it.isNotBlank() } ?: snapshot.id,
                 volume = snapshot.volume,
                 mutedVolumeMemento = snapshot.mutedVolumeMemento,
+                keyframes = snapshot.keyframes,
             ).normalised()
     }
 }

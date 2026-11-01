@@ -343,7 +343,7 @@ private fun StorySlideStrip(state: StoryComposerUiState, viewModel: StoryCompose
     ComposerSlideRail(
         deck = state.deck,
         backgrounds = backgrounds,
-        accentHex = viewModel.authorAccentHex,
+        accentHex = viewModel.observedAuthorAccentHex(),
         canvasWidthPx = state.canvasWidthPx,
         onSelect = viewModel::onSelectSlide,
         onAdd = {},

@@ -60,6 +60,8 @@
     <string name="composer_frise_exit">Esce qui</string>
     <string name="composer_frise_exitEarlier">Esci prima</string>
     <string name="composer_frise_exitLater">Esci più tardi</string>
+    <string name="composer_frise_keyframe_add">Aggiungi un fotogramma chiave</string>
+    <string name="composer_frise_keyframe_remove">Rimuovi il fotogramma chiave</string>
     <string name="composer_frise_later">Più tardi</string>
     <string name="composer_frise_media">Media</string>
     <string name="composer_frise_panel">Timeline</string>
@@ -156,6 +158,7 @@
     <string name="stories_cancel">Annulla</string>
     <string name="stories_caption_see_less">mostra meno</string>
     <string name="stories_caption_see_more">mostra di più</string>
+    <string name="stories_comments_composer_hint">Commenta…</string>
     <plurals name="stories_comments_count">
         <item quantity="one">%1$d commento</item>
         <item quantity="many">%1$d commenti</item>

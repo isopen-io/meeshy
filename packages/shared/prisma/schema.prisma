@@ -2245,6 +2245,11 @@ model Notification {
   @@index([createdAt])
   @@index([type])
   @@index([userId, isRead, createdAt(sort: Desc)]) // Optimisation: pagination non-lus par user
+  // Les chemins `context.postId`, `metadata.repostId` et `metadata.originalPostId`
+  // (retrait des notifications d'une publication) sont indexés HORS du schéma —
+  // Prisma ne sait pas déclarer un index sur un chemin de `Json` : migration
+  // `2026-11-01-notification-post-link-indexes.mongodb.js` (#14254). Un
+  // `prisma db push` les retirerait : il est interdit (#9035).
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)
@@ -4214,6 +4219,11 @@ model Post {
   /// le post intermédiaire (repostOf) est lui-même un repost.
   /// null si ce post n'est pas un repost.
   originalRepostOfId String?  @db.ObjectId
+  /// Auteur d'ORIGINE du contenu copié dans ce post — l'instantané d'une source
+  /// éphémère (`repostPost`). Survit au détachement de `repostOfId` par le
+  /// balayage des stories expirées : la garde de blocage le lit (#14247).
+  /// Absent sur les anciennes lignes et sur tout post qui ne copie rien.
+  snapshotAuthorId   String?  @db.ObjectId
   /// true = quote (avec contenu ajouté), false = repost simple
   isQuote    Boolean  @default(false)
 

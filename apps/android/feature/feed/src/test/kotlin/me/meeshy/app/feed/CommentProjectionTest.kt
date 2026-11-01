@@ -240,6 +240,19 @@ class CommentProjectionTest {
     }
 
     @Test
+    fun `a voice comment projects as audio, with its file and length and no still`() {
+        val withMedia = comment().copy(
+            media = listOf(me.meeshy.sdk.model.ApiPostMedia(id = "a", mimeType = "audio/mp4", fileUrl = "/u/a.m4a", duration = 12_000)),
+        )
+        val piece = CommentProjection.build(withMedia, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").media.single()
+        assertThat(piece.isAudio).isTrue()
+        assertThat(piece.isVideo).isFalse()
+        assertThat(piece.thumbnailUrl).isNull()
+        assertThat(piece.url).endsWith("/u/a.m4a")
+        assertThat(piece.durationMillis).isEqualTo(12_000)
+    }
+
+    @Test
     fun `the media of a comment carry their full file, size and length for the full screen`() {
         val withMedia = comment().copy(
             media = listOf(
@@ -255,5 +268,15 @@ class CommentProjectionTest {
         assertThat(piece.width).isEqualTo(720)
         assertThat(piece.height).isEqualTo(1280)
         assertThat(piece.durationMillis).isEqualTo(12_500)
+    }
+
+    @Test
+    fun `a comment without text renders no body, one with text does`() {
+        val voice = comment().copy(
+            content = "",
+            media = listOf(me.meeshy.sdk.model.ApiPostMedia(id = "a", mimeType = "audio/mp4", fileUrl = "/u/a.m4a")),
+        )
+        assertThat(CommentProjection.build(voice, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").hasBody).isFalse()
+        assertThat(CommentProjection.build(comment(), Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").hasBody).isTrue()
     }
 }

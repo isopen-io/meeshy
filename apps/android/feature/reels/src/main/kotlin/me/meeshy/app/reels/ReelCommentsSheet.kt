@@ -1,9 +1,10 @@
 package me.meeshy.app.reels
 
-import androidx.compose.foundation.layout.PaddingValues
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
-import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.ui.component.composer.LocalUniversalComposer
+import me.meeshy.ui.component.composer.UniversalComposerSpec
 import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -211,13 +212,18 @@ private fun ReelCommentInput(
     onMentionSelected: (MentionCandidate) -> Unit,
     onSend: (String) -> Unit,
 ) {
-    MeeshyCommentComposer(
-        text = draft,
-        onTextChange = onDraftChange,
-        placeholder = stringResource(R.string.reels_comments_input_hint),
-        onSend = { onSend(draft) },
-        contentPadding = PaddingValues(top = MeeshySpacing.xs),
-        topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected) },
+    val composer = LocalUniversalComposer.current ?: return
+    composer(
+        UniversalComposerSpec(
+            configuration = ComposerConfiguration.COMMENT,
+            draft = draft,
+            placeholder = stringResource(R.string.reels_comments_composer_hint),
+            canSend = draft.isNotBlank(),
+            onDraftChange = onDraftChange,
+            onSend = { onSend(draft) },
+            topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected) },
+        ),
+        Modifier.padding(top = MeeshySpacing.xs),
     )
 }
 

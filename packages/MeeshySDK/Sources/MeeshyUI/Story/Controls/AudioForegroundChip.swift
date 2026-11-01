@@ -228,7 +228,7 @@ public struct AudioForegroundChip: View {
     /// qui garantit qu'une puce publiée se lit exactement à la taille où
     /// l'auteur l'a laissée.
     private var renderedScale: CGFloat {
-        CGFloat(SceneObjectScalePolicy.clamped(audioObject.scale ?? 1)) * pinchScale
+        CGFloat(SceneObjectScalePolicy.sanitized(audioObject.scale ?? 1)) * pinchScale
     }
 
     private var positionedChip: some View {
@@ -407,18 +407,18 @@ public struct AudioForegroundChip: View {
             .updating($pinchScale) { value, state, _ in state = value }
             .onEnded { value in
                 audioObject.scale = SceneObjectScalePolicy.settled(
-                    base: audioObject.scale ?? 1, gestureScale: Double(value))
+                    base: audioObject.scale ?? 1, gestureScale: Double(value),
+                    unitSide: SceneObjectUnitSide.designSide(of: .audio(audioObject)))
                 onDragEnd()
             }
     }
 
-    /// **Le pas des actions d'accessibilité** — un cran qui SE VOIT sans
-    /// traverser la plage en deux pressions.
+    /// **Le pas des actions d'accessibilité** — un cran qui SE VOIT.
     ///
     /// VoiceOver ne pince pas : sans ces deux actions, le redimensionnement
     /// serait une capacité réservée à qui voit l'écran et pose deux doigts
-    /// dessus. `1.25` donne dix crans entre les bornes — assez fin pour viser,
-    /// assez franc pour que chaque pression change quelque chose.
+    /// dessus. `1.25` est assez fin pour viser, assez franc pour que chaque
+    /// pression change quelque chose.
     private static let accessibilityScaleStep: Double = 1.25
 
     static var enlargeActionLabel: String {
@@ -435,7 +435,8 @@ public struct AudioForegroundChip: View {
     /// chemins vers une grandeur, une seule borne.
     private func stepScale(by factor: Double) {
         audioObject.scale = SceneObjectScalePolicy.settled(
-            base: audioObject.scale ?? 1, gestureScale: factor)
+            base: audioObject.scale ?? 1, gestureScale: factor,
+            unitSide: SceneObjectUnitSide.designSide(of: .audio(audioObject)))
         onDragEnd()
     }
 }

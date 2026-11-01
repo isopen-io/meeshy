@@ -108,7 +108,7 @@ class StoryComposerViewModel @Inject constructor(
 
     /** The author colour the reader paints a background-less slide with (#12314). */
     val lookPerson: ComposerLookPerson get() = sessionRepository.lookPerson()
-    val authorAccentHex: String get() = StorySceneFill.authorAccentHex(sessionRepository.currentUser.value)
+    val author: StateFlow<me.meeshy.sdk.model.MeeshyUser?> get() = sessionRepository.currentUser
 
     /** One-shot signal that a story was queued — the screen dismisses on it. */
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)

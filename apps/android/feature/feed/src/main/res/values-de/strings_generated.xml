@@ -99,6 +99,8 @@
     <string name="nearby_retry">Erneut versuchen</string>
     <string name="nearby_title">In der Nähe</string>
     <string name="post_comments_cancel_reply">Antwort abbrechen</string>
+    <string name="post_comments_composer_hint">Kommentieren…</string>
+    <string name="post_comments_composer_reply_hint">Antworten…</string>
     <string name="post_comments_copy_text">Text kopieren</string>
     <string name="post_comments_delete_error">Kommentar konnte nicht gelöscht werden</string>
     <string name="post_comments_deleted">Kommentar gelöscht</string>
@@ -109,9 +111,12 @@
         <item quantity="other">%1$d weitere Antworten anzeigen</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">Zeigt die restlichen Antworten in diesem Thread</string>
+    <string name="post_comments_media_audio">Audio</string>
     <string name="post_comments_media_image">Kommentarbild</string>
     <string name="post_comments_media_open">Zum Vergrößern tippen</string>
+    <string name="post_comments_media_pause_audio">Pausieren</string>
     <string name="post_comments_media_play">Video abspielen</string>
+    <string name="post_comments_media_play_audio">Audio abspielen</string>
     <string name="post_comments_media_video">Video</string>
     <string name="post_comments_more_options">Weitere Optionen</string>
     <string name="post_comments_reply_a11y_label">%1$s, Antwort. %2$s. %3$s</string>

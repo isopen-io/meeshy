@@ -107,6 +107,8 @@
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
     <string name="post_comments_cancel_reply">إلغاء الرد</string>
+    <string name="post_comments_composer_hint">تعليق…</string>
+    <string name="post_comments_composer_reply_hint">رد…</string>
     <string name="post_comments_copy_text">نسخ النص</string>
     <string name="post_comments_delete_error">تعذّر حذف التعليق</string>
     <string name="post_comments_deleted">تم حذف التعليق</string>
@@ -121,9 +123,12 @@
         <item quantity="other">عرض %1$d ردّ إضافي</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">يعرض بقية الردود في هذا النقاش</string>
+    <string name="post_comments_media_audio">صوت</string>
     <string name="post_comments_media_image">صورة التعليق</string>
     <string name="post_comments_media_open">اضغط للتكبير</string>
+    <string name="post_comments_media_pause_audio">إيقاف مؤقت</string>
     <string name="post_comments_media_play">تشغيل الفيديو</string>
+    <string name="post_comments_media_play_audio">تشغيل الصوت</string>
     <string name="post_comments_media_video">الفيديو</string>
     <string name="post_comments_more_options">المزيد من الخيارات</string>
     <string name="post_comments_reply_a11y_label">%1$s، ردّ. %2$s. %3$s</string>

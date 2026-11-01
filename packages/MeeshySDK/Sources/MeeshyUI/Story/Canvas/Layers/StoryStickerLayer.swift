@@ -231,7 +231,7 @@ public final class StoryStickerLayer: CALayer {
     private nonisolated static func decodeBudget(side: CGFloat, scale: CGFloat) -> Int {
         let pixels = side * scale
         guard pixels.isFinite, pixels > 0 else { return 64 }
-        return max(64, Int(pixels.rounded()))
+        return max(64, Int(min(pixels, SceneRasterBudget.maxPixelSide).rounded()))
     }
 
     /// Chemin ASYNCHRONE — la discipline de `StoryMediaLayer.configureImage` :

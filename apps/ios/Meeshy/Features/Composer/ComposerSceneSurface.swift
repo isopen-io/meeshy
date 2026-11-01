@@ -226,7 +226,7 @@ struct ComposerSceneSurface: View {
     var bandBackdrop: StoryBackdrop = .blur
     var onPickBandFitMode: ((String) -> Void)?
     var onPickBandBackdrop: ((StoryBackdrop) -> Void)?
-
+    var onCloseBand: (() -> Void)?
 
     /// **Le repos posé sur la scène** (#13839) : le nombre de diapos (la
     /// rangée paraît dès deux), les boutons de la colonne, le menu ⋯ et
@@ -663,14 +663,14 @@ struct ComposerSceneSurface: View {
     /// objet ne saute pendant le geste (`ComposerSceneFit`).
     private var sceneLayer: some View {
         GeometryReader { geo in
-            let zone = CGRect(origin: .zero, size: geo.size)
+            let zone = ComposerSceneFit.zone(in: geo.size, aspectRatio: aspectRatio)
             let scene = ComposerSceneFit.frame(in: zone, aspectRatio: aspectRatio)
             let lift = ComposerSceneFit.lift(scene: scene, visibleBottom: visibleBottom(in: geo))
             sceneCanvas
-                .frame(width: geo.size.width, height: geo.size.height)
+                .frame(width: zone.width, height: zone.height)
                 .scaleEffect(lift.scale,
-                             anchor: UnitPoint(x: 0.5, y: geo.size.height > 0 ? scene.minY / geo.size.height : 0))
-                .offset(y: lift.offsetY)
+                             anchor: UnitPoint(x: 0.5, y: zone.height > 0 ? (scene.minY - zone.minY) / zone.height : 0))
+                .offset(y: zone.minY + lift.offsetY)
                 .animation(keyboard.liftAnimation(reduceMotion: reduceMotion, now: Date()), value: lift)
         }
         .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
@@ -978,7 +978,8 @@ struct ComposerSceneSurface: View {
                               backdrop: bandBackdrop,
                               plateauTint: plateauTint,
                               onPickFitMode: onPickBandFitMode,
-                              onPickBackdrop: onPickBandBackdrop)
+                              onPickBackdrop: onPickBandBackdrop,
+                              onCloseBand: onCloseBand)
     }
 
     // **Le champ PERMANENT est absent** :

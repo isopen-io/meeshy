@@ -60,6 +60,8 @@
     <string name="composer_frise_exit">Sort ici</string>
     <string name="composer_frise_exitEarlier">Sortir plus tôt</string>
     <string name="composer_frise_exitLater">Sortir plus tard</string>
+    <string name="composer_frise_keyframe_add">Ajouter une image clé</string>
+    <string name="composer_frise_keyframe_remove">Retirer l’image clé</string>
     <string name="composer_frise_later">Plus tard</string>
     <string name="composer_frise_media">Média</string>
     <string name="composer_frise_panel">Plan temps</string>
@@ -156,6 +158,7 @@
     <string name="stories_cancel">Annuler</string>
     <string name="stories_caption_see_less">voir moins</string>
     <string name="stories_caption_see_more">voir plus</string>
+    <string name="stories_comments_composer_hint">Commenter…</string>
     <plurals name="stories_comments_count">
         <item quantity="one">%1$d commentaire</item>
         <item quantity="many">%1$d commentaires</item>

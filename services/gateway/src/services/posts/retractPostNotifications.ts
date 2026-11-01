@@ -29,6 +29,8 @@ const log = enhancedLogger.child({ module: 'retractPostNotifications' });
  *     chemin dans un blob JSON que l'API Prisma ne sait pas filtrer sur
  *     MongoDB — d'où la commande brute, exactement comme
  *     `markPostNotificationsAsRead` et `retractFriendRequestNotifications`.
+ *     Ces chemins sont indexés par migration (`POST_NOTIFICATION_LINK_PATHS`,
+ *     #14254) : la lecture ne parcourt plus la collection.
  *     Le filtre n'est PAS scopé à un `userId` : un post notifie une AUDIENCE
  *     (auteur, commentateurs du fil, amis prévenus de la publication), donc la
  *     relecture projette `userId` et l'annonce se groupe par destinataire —
@@ -78,6 +80,14 @@ export const POST_NOTIFICATION_RETRACTION_BATCH_SIZE = 200;
  * bien été supprimés.
  */
 const MAX_RETRACTION_BATCHES = 200;
+
+/**
+ * Les chemins qui lient une ligne à une publication (voir le filtre plus bas).
+ * Chacun est INDEXÉ par `packages/shared/prisma/migrations/2026-11-01-notification-post-link-indexes.mongodb.js`
+ * (#14254) : sans index, chaque lot parcourait toute la collection. Un chemin
+ * ajouté ici sans son index rougit le témoin de cette migration.
+ */
+export const POST_NOTIFICATION_LINK_PATHS = ['context.postId', 'metadata.repostId', 'metadata.originalPostId'] as const;
 
 type RawObjectId = string | { $oid?: string };
 
@@ -145,11 +155,7 @@ export async function retractPostNotifications(
       // exact où elle sert (#11160).
       filter: {
         type: { $ne: 'content_removed' },
-        $or: [
-          { 'context.postId': { $in: targets } },
-          { 'metadata.repostId': { $in: targets } },
-          { 'metadata.originalPostId': { $in: targets } },
-        ],
+        $or: POST_NOTIFICATION_LINK_PATHS.map((path) => ({ [path]: { $in: targets } })),
       },
       // `delivery.pushSent` : la révocation push ne réveille un appareil que
       // là où un push est parti. Aucune conversation ici — les lignes d'un post

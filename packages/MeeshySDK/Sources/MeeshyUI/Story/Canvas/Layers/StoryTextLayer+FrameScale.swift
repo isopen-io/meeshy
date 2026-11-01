@@ -20,7 +20,7 @@ extension StoryTextLayer {
     /// Côté maximal (pixels) de la texture d'un texte agrandi. Au-delà, le
     /// gain de netteté porte sur des pixels hors de l'écran et coûte de la
     /// mémoire pour rien (un texte ×4 de 350 pt à 3× pèserait 4 200 px de côté).
-    nonisolated static let maxRasterSide: CGFloat = 4096
+    nonisolated static let maxRasterSide: CGFloat = SceneRasterBudget.maxPixelSide
 
     /// Transformation de scène d'un texte : rotation du modèle composée de
     /// l'échelle uniforme du cadre. Les deux commutent en 2D, l'ordre est

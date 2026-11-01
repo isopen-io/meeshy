@@ -32,6 +32,35 @@ public nonisolated struct SceneFriseTrack: Equatable, Sendable, Identifiable {
     }
 }
 
+/// **La fenêtre de SOURCE qu'une piste joue** (#14268) : à partir de
+/// `sourceStart`, pendant sa durée sur la scène, bornée par `sourceEnd`. Les
+/// vignettes et l'onde d'une barre coupée ne montrent qu'elle.
+public nonisolated enum SceneFriseSourceWindow {
+    public static func range(sourceStart: Double?, sourceEnd: Double?, playedSeconds: Double) -> ClosedRange<Double>? {
+        let debut = max(0, sourceStart ?? 0)
+        let joue = debut + max(0, playedSeconds)
+        let fin = sourceEnd.map { min($0, joue) } ?? joue
+        guard fin > debut, fin.isFinite else { return nil }
+        return debut...fin
+    }
+
+    /// La fenêtre de source jouée par la piste vidéo ou sonore `id` de [timeline], `nil` pour toute autre famille.
+    /// Ici et non sur `TimelineViewModel`, que le budget de cohésion borne : une lecture du projet, pas un état.
+    @MainActor
+    public static func of(_ id: String, in timeline: TimelineViewModel) -> ClosedRange<Double>? {
+        guard let piste = timeline.sceneFriseTracks.first(where: { $0.id == id }) else { return nil }
+        let joue = Double(piste.end - piste.start)
+        let project = timeline.project
+        if let media = project.mediaObjects.first(where: { $0.id == id }), media.kind == .video {
+            return range(sourceStart: media.sourceStart, sourceEnd: media.sourceEnd, playedSeconds: joue)
+        }
+        if let son = project.audioPlayerObjects.first(where: { $0.id == id }) {
+            return range(sourceStart: son.sourceStart, sourceEnd: son.sourceEnd, playedSeconds: joue)
+        }
+        return nil
+    }
+}
+
 extension TimelineViewModel {
 
     /// Les pistes de la slide, dans l'ordre de la pile du plan : ce qu'on voit

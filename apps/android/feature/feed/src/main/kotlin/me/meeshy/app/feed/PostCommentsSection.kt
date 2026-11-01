@@ -3,10 +3,10 @@ package me.meeshy.app.feed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -63,7 +64,10 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.ui.component.composer.LocalUniversalComposer
+import me.meeshy.ui.component.composer.UniversalComposerSpec
+import me.meeshy.ui.component.composer.rememberComposerMediaIntake
 import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.bubble.LanguageChip
@@ -78,8 +82,8 @@ import me.meeshy.ui.theme.hexColor
  * The comment thread beneath a post in [PostDetailScreen]. Hosts its own
  * [PostCommentsViewModel] (scoped to the same nav entry, so it reads the same `postId`)
  * and renders — top to bottom — a section header, the projected comments (each Prisme-
- * resolved, an optimistic row dimmed until confirmed), an optional "show more" affordance,
- * and a pinned composer. Accent-coherent (Indigo) with the post card above it.
+ * resolved, an optimistic row dimmed until confirmed) and an optional "show more" affordance;
+ * its composer is [PostCommentsComposerBar], pinned by the screen. Accent-coherent (Indigo) with the post card above it.
  */
 @Composable
 internal fun PostCommentsSection(
@@ -188,19 +192,34 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
             }
         }
 
-        Spacer(Modifier.height(MeeshySpacing.md))
-        val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
-        CommentAttachmentBar(tray = state.attachments, onEdit = editPiece, onRemove = viewModel::removeMedia)
+    }
+}
+
+/**
+ * #14285 — le composeur des commentaires, ÉPINGLÉ sous le fil comme la barre de saisie d'iOS : l'écran du détail le pose
+ * hors du défilement, au-dessus du clavier. Il lit le même [PostCommentsViewModel] que la section (même entrée de
+ * navigation), donc le brouillon, la cible de la réponse et les pièces jointes restent une seule source.
+ */
+@Composable
+internal fun PostCommentsComposerBar(
+    viewModel: PostCommentsViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
+    Box(modifier.fillMaxWidth()) {
         CommentComposer(
             draft = state.draft,
             mention = state.mention,
             isSubmitting = state.isSubmitting,
             canSubmit = state.canSubmit,
-            canAttach = !state.attachments.isFull,
+            attachments = state.attachments,
             replyTarget = state.replyTarget,
             onDraftChange = viewModel::onDraftChange,
             onMentionSelected = viewModel::onMentionSelected,
             onAttach = viewModel::attachMedia,
+            onEditPiece = editPiece,
+            onRemovePiece = viewModel::removeMedia,
             onSubmit = viewModel::submit,
             onCancelReply = viewModel::cancelReply,
         )
@@ -264,14 +283,16 @@ private fun CommentRow(
                     )
                 }
             }
-            SelectionContainer {
-                RichMessageText(
-                    text = comment.content,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    linkColor = MeeshyPalette.Indigo500,
-                    mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
-                )
+            if (comment.hasBody) {
+                SelectionContainer {
+                    RichMessageText(
+                        text = comment.content,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        linkColor = MeeshyPalette.Indigo500,
+                        mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
+                    )
+                }
             }
             }
             CommentMediaStrip(comment.media)
@@ -511,35 +532,62 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
     }
 }
 
+/**
+ * **LE COMPOSEUR DES COMMENTAIRES EST CELUI DES CONVERSATIONS** (#14265, iOS `UniversalComposerBar(mode: .comment)`) :
+ * réglé pour un commentaire, il offre texte, emoji, vocal, photothèque et caméra ; ce qu'on joint rejoint le bandeau,
+ * se téléverse aussitôt, et part avec le commentaire. Au-dessus de la saisie : les mentions, la cible de la réponse et
+ * les pièces en attente.
+ */
 @Composable
 private fun CommentComposer(
     draft: String,
     mention: MentionAutocompleteState,
     isSubmitting: Boolean,
     canSubmit: Boolean,
-    canAttach: Boolean,
+    attachments: CommentAttachmentTray,
     replyTarget: ReplyTarget?,
     onDraftChange: (String) -> Unit,
     onMentionSelected: (MentionCandidate) -> Unit,
     onAttach: (MediaUploadItem) -> Unit,
+    onEditPiece: (CommentPendingPiece) -> Unit,
+    onRemovePiece: (String) -> Unit,
     onSubmit: () -> Unit,
     onCancelReply: () -> Unit,
 ) {
-    val isReply = replyTarget != null
-    MeeshyCommentComposer(
-        text = draft,
-        onTextChange = onDraftChange,
-        placeholder = stringResource(if (isReply) R.string.post_comments_reply_hint else R.string.post_comments_input_hint),
-        onSend = onSubmit,
-        isSending = isSubmitting,
-        sendEnabled = canSubmit,
-        contentPadding = PaddingValues(vertical = MeeshySpacing.sm),
-        topSlot = {
-            MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
-            if (replyTarget != null) ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
-        },
-        leadingAction = { CommentAttachButton(enabled = canAttach && !isSubmitting, onPicked = onAttach) },
+    val composer = LocalUniversalComposer.current ?: return
+    val intake = rememberComposerMediaIntake(onAttach)
+    val canAttach = !attachments.isFull && !isSubmitting
+    val focusTrigger = rememberReplyFocusTrigger(replyTarget)
+    val placeholder = stringResource(if (replyTarget != null) R.string.post_comments_composer_reply_hint else R.string.post_comments_composer_hint)
+    composer(
+        UniversalComposerSpec(
+            configuration = ComposerConfiguration.COMMENT,
+            draft = draft,
+            placeholder = placeholder,
+            canSend = canSubmit && !isSubmitting,
+            onDraftChange = onDraftChange,
+            onSend = onSubmit,
+            hasPendingAttachments = attachments.hasMedia,
+            pendingAttachmentCount = attachments.pieces.size,
+            focusTrigger = focusTrigger,
+            onAttachUris = intake.onUris.takeIf { canAttach },
+            onAttachFile = intake.onFile.takeIf { canAttach },
+            topSlot = {
+                MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
+                if (replyTarget != null) ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
+                CommentAttachmentBar(tray = attachments, onEdit = onEditPiece, onRemove = onRemovePiece)
+            },
+        ),
+        Modifier,
     )
+}
+
+/** Viser un commentaire pour y répondre rend la main au champ (iOS `beginReply` → `composerFocusTrigger`). */
+@Composable
+private fun rememberReplyFocusTrigger(replyTarget: ReplyTarget?): Int {
+    var trigger by remember { mutableIntStateOf(0) }
+    LaunchedEffect(replyTarget) { if (replyTarget != null) trigger += 1 }
+    return trigger
 }
 
 /**

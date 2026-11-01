@@ -60,6 +60,8 @@
     <string name="composer_frise_exit">يخرج هنا</string>
     <string name="composer_frise_exitEarlier">الخروج أبكر</string>
     <string name="composer_frise_exitLater">الخروج لاحقًا</string>
+    <string name="composer_frise_keyframe_add">إضافة إطار رئيسي</string>
+    <string name="composer_frise_keyframe_remove">إزالة الإطار الرئيسي</string>
     <string name="composer_frise_later">لاحقًا</string>
     <string name="composer_frise_media">وسائط</string>
     <string name="composer_frise_panel">المخطط الزمني</string>
@@ -156,6 +158,7 @@
     <string name="stories_cancel">إلغاء</string>
     <string name="stories_caption_see_less">عرض أقل</string>
     <string name="stories_caption_see_more">عرض المزيد</string>
+    <string name="stories_comments_composer_hint">تعليق…</string>
     <plurals name="stories_comments_count">
         <item quantity="zero">%1$d تعليقات</item>
         <item quantity="one">%1$d تعليق</item>

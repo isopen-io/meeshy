@@ -27,6 +27,8 @@ data class CommentMediaPreview(
     val width: Int? = null,
     val height: Int? = null,
     val durationMillis: Int? = null,
+    /** Un commentaire vocal (#14265) : il s'écoute dans le fil, il ne s'ouvre pas en plein écran. */
+    val isAudio: Boolean = false,
 )
 
 @Immutable
@@ -51,6 +53,9 @@ data class CommentPresentation(
     /** Le compte de l'auteur : sa présence servie se lit sur la carte unique. */
     val authorId: String? = null,
 ) {
+    /** Un commentaire sans texte (un vocal, une photo seule) ne rend aucun corps : pas de ligne vide sous l'auteur (#14289). */
+    val hasBody: Boolean get() = content.isNotBlank()
+
     /**
      * Libellé TalkBack d'une ligne — iso `ReplyCell.accessibilityLabel` : « <nom>, réponse. <contenu>.
      * <heure> ». [format] est le gabarit localisé à trois arguments positionnels ; [unknownAuthor]
@@ -125,11 +130,13 @@ object CommentProjection {
     private fun mediaPreviews(comment: ApiPostComment, mediaBaseUrl: String?): List<CommentMediaPreview> =
         comment.media.orEmpty().sortedBy { it.order ?: 0 }.map { media ->
             val isVideo = media.mimeType?.startsWith("video") == true
-            val still = media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
+            val isAudio = media.mimeType?.startsWith("audio") == true
+            val still = if (isAudio) null else media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
             CommentMediaPreview(
                 id = media.id,
                 thumbnailUrl = still?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
                 isVideo = isVideo,
+                isAudio = isAudio,
                 url = media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
                 width = media.width,
                 height = media.height,

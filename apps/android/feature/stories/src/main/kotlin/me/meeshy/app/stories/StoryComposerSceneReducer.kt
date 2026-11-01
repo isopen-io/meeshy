@@ -101,7 +101,7 @@ internal object StoryComposerSceneReducer {
         val known = state.deck.selectedSlide.let { slide -> slide.elements.map { it.id } + slide.stickers.map { it.id } }.toSet()
         val slide = placed.deck.selectedSlide
         val fresh = (slide.elements.map { it.id } + slide.stickers.map { it.id }).filterNot { it in known }
-        val window = SceneEntryWindow.forNewObject(state.playheadSeconds.toDouble(), placed.deck.selectedSlideDurationSeconds)
+        val window = SceneEntryWindow.forNewObject(state.playheadSeconds.toDouble(), placed.selectedSlideDurationSeconds)
         return fresh.fold(placed) { acc, id ->
             windowed(acc, id, window.start.toFloat(), window.duration.toFloat())
         }

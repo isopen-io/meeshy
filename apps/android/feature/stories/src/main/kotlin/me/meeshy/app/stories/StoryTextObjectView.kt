@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 import me.meeshy.sdk.model.scene.SceneObjectNumbers
+import me.meeshy.sdk.model.scene.LayeredScale
 import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.model.scene.StoryTextFrame
@@ -58,11 +59,16 @@ data class StoryTextObjectView(
     val frame: StoryTextFrame = StoryTextFrame(),
     val zIndex: Int = 0,
 ) {
-    /** One design pixel on a scene [canvasWidthPx] wide, carrying the object's own scale — the frame's unit. */
+    /** One design pixel on a scene [canvasWidthPx] wide, carrying the object's laid-out scale — the frame's unit. */
     fun framePxPerDesign(canvasWidthPx: Float): Float = StoryTextMetrics.pxPerDesign(renderScale, canvasWidthPx)
 
-    /** The scale a published (untrusted) text renders at: the scene object bounds, NaN, zero or negative as identity. */
-    private val renderScale: Double get() = SceneObjectScalePolicy.clamped(scale)
+    /**
+     * The written scale split between what the text is laid out at and what its layer magnifies beyond (#14298): the
+     * reader paints the full written scale, no ceiling, no floor — NaN, zero or negative as identity.
+     */
+    val layered: LayeredScale get() = SceneObjectScalePolicy.layered(scale)
+
+    private val renderScale: Double get() = layered.layout
 
     /** The outline stroke in pixels on a scene [canvasWidthPx] wide — the composer's law ([StoryTextMetrics]). */
     fun outlinePx(canvasWidthPx: Float): Float = StoryTextMetrics.designPx(outline.width.toDouble(), renderScale, canvasWidthPx)
@@ -116,7 +122,7 @@ data class StoryTextObjectView(
         return copy(
             x = SceneObjectNumbers.position(base.x),
             y = SceneObjectNumbers.position(base.y),
-            scale = SceneObjectScalePolicy.clamped(base.scale),
+            scale = SceneObjectScalePolicy.served(base.scale),
             opacity = SceneObjectNumbers.opacity(fadeEnvelope ?: base.opacity),
         )
     }

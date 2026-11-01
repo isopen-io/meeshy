@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -162,7 +164,8 @@ fun PostDetailScreen(
                 onRefresh = viewModel::refresh,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    .consumeWindowInsets(padding),
             ) {
                 when {
                     state.showSkeleton -> PostDetailSkeleton()
@@ -234,6 +237,7 @@ internal fun PostDetailContent(
     onBookmark: () -> Unit,
     onCommentNotice: suspend (CommentNotice) -> Unit,
     commentsSection: @Composable () -> Unit = { PostCommentsSection(onNotice = onCommentNotice, support = post.commentCardSupport) },
+    commentComposer: @Composable () -> Unit = { PostCommentsComposerBar() },
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
@@ -247,122 +251,126 @@ internal fun PostDetailContent(
         )
     }
     gallery?.let { opened -> FeedImageViewerHost(gallery = opened, onDismiss = { gallery = null }) }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MeeshySpacing.lg),
-    ) {
-        MeeshyGlassSurface(
-            shape = RoundedCornerShape(MeeshyRadius.xl),
-            modifier = Modifier.fillMaxWidth(),
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(MeeshySpacing.lg),
         ) {
-            Column(Modifier.padding(MeeshySpacing.lg)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
-                    MeeshyAvatar(
-                        name = post.authorName ?: unknownAuthor,
-                        size = 44.dp,
-                        imageUrl = post.authorAvatarUrl,
-                        presence = rememberPresence(post.authorId),
-                        modifier = profileTap,
-                    )
-                    Spacer(Modifier.width(MeeshySpacing.md))
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = post.authorName ?: unknownAuthor,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MeeshyTheme.tokens.textPrimary,
-                                modifier = profileTap,
-                            )
-                            if (post.moodEmoji != null) {
+            MeeshyGlassSurface(
+                shape = RoundedCornerShape(MeeshyRadius.xl),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(MeeshySpacing.lg)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                        MeeshyAvatar(
+                            name = post.authorName ?: unknownAuthor,
+                            size = 44.dp,
+                            imageUrl = post.authorAvatarUrl,
+                            presence = rememberPresence(post.authorId),
+                            modifier = profileTap,
+                        )
+                        Spacer(Modifier.width(MeeshySpacing.md))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = post.moodEmoji,
-                                    modifier = Modifier.padding(start = MeeshySpacing.xs),
+                                    text = post.authorName ?: unknownAuthor,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MeeshyTheme.tokens.textPrimary,
+                                    modifier = profileTap,
+                                )
+                                if (post.moodEmoji != null) {
+                                    Text(
+                                        text = post.moodEmoji,
+                                        modifier = Modifier.padding(start = MeeshySpacing.xs),
+                                    )
+                                }
+                            }
+                            post.createdAtIso?.let {
+                                Text(
+                                    text = detailRelativeTime(it),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MeeshyTheme.tokens.textSecondary,
+                                )
+                            }
+                            PostReachLine(post = post)
+                            onOpenViewers?.let { open -> ViewersEntry(onClick = open) }
+                        }
+                    }
+
+                    if (post.content.isNotBlank() && !post.showsReelCard) {
+                        Spacer(Modifier.height(MeeshySpacing.md))
+                        HashtagAwareLinks(onOpenHashtag) {
+                            SelectionContainer {
+                                RichMessageText(
+                                    text = post.content,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MeeshyTheme.tokens.textPrimary,
                                 )
                             }
                         }
-                        post.createdAtIso?.let {
-                            Text(
-                                text = detailRelativeTime(it),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MeeshyTheme.tokens.textSecondary,
-                            )
-                        }
-                        PostReachLine(post = post)
-                        onOpenViewers?.let { open -> ViewersEntry(onClick = open) }
                     }
-                }
 
-                if (post.content.isNotBlank() && !post.showsReelCard) {
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    HashtagAwareLinks(onOpenHashtag) {
-                        SelectionContainer {
-                            RichMessageText(
-                                text = post.content,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MeeshyTheme.tokens.textPrimary,
-                            )
-                        }
+                    PostSecondaryTranslationPanel(secondaryTranslation)
+
+                    if (detailLanguageStrip.isNotEmpty() || post.languageExplorer != null) {
+                        Spacer(Modifier.height(MeeshySpacing.sm))
+                        DetailLanguageStrip(
+                            chips = detailLanguageStrip,
+                            onChipTap = onFlagTap,
+                            onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
+                        )
                     }
-                }
 
-                PostSecondaryTranslationPanel(secondaryTranslation)
+                    val scenes = post.scenes
+                    if (scenes != null) {
+                        Spacer(Modifier.height(MeeshySpacing.md))
+                        PostDetailScenes(scenes = scenes)
+                    } else if (post.images.isNotEmpty()) {
+                        Spacer(Modifier.height(MeeshySpacing.md))
+                        PostImageLayout(
+                            images = post.images,
+                            layout = post.layout,
+                            onImageTap = { index ->
+                                gallery = FeedMediaGallery.of(post, index).takeUnless(FeedGallery::isEmpty)
+                            },
+                        )
+                    }
 
-                if (detailLanguageStrip.isNotEmpty() || post.languageExplorer != null) {
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    DetailLanguageStrip(
-                        chips = detailLanguageStrip,
-                        onChipTap = onFlagTap,
-                        onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
-                    )
-                }
+                    post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
+                        Spacer(Modifier.height(MeeshySpacing.md))
+                        ReelPostCard(
+                            post = post,
+                            cover = cover,
+                            onOpenReel = onOpenReel,
+                            showsActions = false,
+                            captionLines = DETAIL_CAPTION_LINES,
+                            onOpenProfile = onOpenProfile,
+                        )
+                    } ?: FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
 
-                val scenes = post.scenes
-                if (scenes != null) {
                     Spacer(Modifier.height(MeeshySpacing.md))
-                    PostDetailScenes(scenes = scenes)
-                } else if (post.images.isNotEmpty()) {
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    PostImageLayout(
-                        images = post.images,
-                        layout = post.layout,
-                        onImageTap = { index ->
-                            gallery = FeedMediaGallery.of(post, index).takeUnless(FeedGallery::isEmpty)
-                        },
-                    )
-                }
-
-                post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    ReelPostCard(
+                    DetailStatsRow(
                         post = post,
-                        cover = cover,
-                        onOpenReel = onOpenReel,
-                        showsActions = false,
-                        captionLines = DETAIL_CAPTION_LINES,
-                        onOpenProfile = onOpenProfile,
+                        isReposted = isReposted,
+                        onRepost = onRepost,
+                        onQuote = onQuote,
+                        onLike = onLike,
+                        quickEmojis = quickEmojis,
+                        onReact = onReact,
+                        onBookmark = onBookmark,
                     )
-                } ?: FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
-
-                Spacer(Modifier.height(MeeshySpacing.md))
-                DetailStatsRow(
-                    post = post,
-                    isReposted = isReposted,
-                    onRepost = onRepost,
-                    onQuote = onQuote,
-                    onLike = onLike,
-                    quickEmojis = quickEmojis,
-                    onReact = onReact,
-                    onBookmark = onBookmark,
-                )
+                }
             }
-        }
 
-        Spacer(Modifier.height(MeeshySpacing.lg))
-        commentsSection()
+            Spacer(Modifier.height(MeeshySpacing.lg))
+            commentsSection()
+        }
+        Box(Modifier.fillMaxWidth().imePadding()) { commentComposer() }
     }
 }
 

@@ -113,7 +113,7 @@ export const StoryMediaObjectSchema = z.object({
   aspectRatio: z.number().min(0.05).max(20).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   // Plafond a 2 : l'auteur peut pousser un media au-dela de son niveau nominal
   // (quitte a saturer, c'est un choix de composition assume). Miroir de
@@ -148,7 +148,7 @@ const StoryTextObjectSchema = z.object({
   content: z.string().max(STORY_TEXT_MAX).optional(),  // legacy field
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   fontSize: z.number().min(1).max(1000).optional(),
   textSize: z.number().min(1).max(1000).optional(),  // legacy field
@@ -189,7 +189,7 @@ const StoryStickerObjectSchema = z.object({
   emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   zIndex: z.number().int().min(-1000).max(1000).optional(),
   keyframes: StoryKeyframesBoundsSchema,

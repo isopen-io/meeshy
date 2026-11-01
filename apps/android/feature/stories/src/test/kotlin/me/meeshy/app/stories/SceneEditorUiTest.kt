@@ -194,6 +194,39 @@ class SceneEditorUiTest {
     }
 
     @Test
+    fun `la frise tend sa lecture au transport de l'hote, que la scene vivante suit`() {
+        val state = stickerState()
+        val transport = FriseTransport()
+        var shown by mutableStateOf(true)
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalFriseTransport provides transport) {
+                    if (shown) {
+                        SceneFrise(
+                            tracks = state.sceneTracks,
+                            editableIds = state.sceneEditableTrackIds,
+                            selectedId = null,
+                            slideDurationSeconds = 10f,
+                            playheadSeconds = 1f,
+                            onSelectTrack = { _, _ -> },
+                            onScrub = {},
+                            onWindow = { _, _, _ -> },
+                        )
+                    }
+                }
+            }
+        }
+
+        assertThat(transport.isOpen).isTrue()
+        compose.onNodeWithContentDescription("Play").performClick()
+        assertThat(transport.playing).isTrue()
+        shown = false
+        compose.waitForIdle()
+        assertThat(transport.isOpen).isFalse()
+        assertThat(transport.playing).isFalse()
+    }
+
+    @Test
     fun `Lire fait avancer la tete au rythme de la scene, Pause l'arrete`() {
         val state = stickerState()
         var playhead by mutableStateOf(1f)
@@ -250,6 +283,39 @@ class SceneEditorUiTest {
         compose.onNodeWithContentDescription("Remove").performClick()
         assertThat(duplicated).containsExactly("s1")
         assertThat(removed).containsExactly("s1")
+    }
+
+    @Test
+    fun `le losange du transport pose ou retire l'image cle de l'objet choisi, et seulement d'un objet qui s'anime`() {
+        val state = stickerState()
+        val toggled = mutableListOf<String>()
+        var held by mutableStateOf(false)
+        var animatable by mutableStateOf(setOf("s1"))
+        compose.setContent {
+            MeeshyTheme {
+                SceneFrise(
+                    tracks = state.sceneTracks,
+                    editableIds = state.sceneEditableTrackIds,
+                    selectedId = "s1",
+                    slideDurationSeconds = 10f,
+                    playheadSeconds = 4f,
+                    onSelectTrack = { _, _ -> },
+                    onScrub = {},
+                    onWindow = { _, _, _ -> },
+                    keyframableIds = animatable,
+                    keyframeHeld = held,
+                    onKeyframe = { toggled += it },
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Add a keyframe").performClick()
+        assertThat(toggled).containsExactly("s1")
+        held = true
+        compose.onNodeWithContentDescription("Remove the keyframe").assertExists()
+        animatable = emptySet()
+        compose.onNodeWithContentDescription("Remove the keyframe").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add a keyframe").assertDoesNotExist()
     }
 
     @Test

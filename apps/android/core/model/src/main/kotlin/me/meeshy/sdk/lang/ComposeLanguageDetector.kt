@@ -29,6 +29,9 @@ object ComposeLanguageDetector {
 
     private const val UNDETERMINED: String = "und"
 
+    /** Le repli qui dit « non reconnu » : aucun code de langue n'est vide. */
+    private const val NOT_IDENTIFIED: String = ""
+
     private val URL: Regex = Regex("""https?://\S+""")
     private val LETTER: Regex = Regex("""\p{L}""")
 
@@ -165,17 +168,13 @@ object ComposeLanguageDetector {
     ): String = manual ?: detect(text, senderLanguage, identifier)
 
     /**
-     * [originalLanguageAtSend] pour un contenu sans sélecteur de langue (un commentaire) : la langue
-     * de repli est la langue résolue de [author] ; sans auteur connu, `null` laisse la passerelle
-     * décider comme avant.
+     * La langue d'origine d'un contenu sans sélecteur de langue (un commentaire) : celle que [identifier] reconnaît avec
+     * confiance, sinon `null`, et la passerelle la détecte (texte) ou la transcription la lit (vocal sans légende).
+     * Jamais la langue de l'auteur par défaut (#14284) : un texte français trop court pour l'identifieur partait
+     * étiqueté dans la langue primaire de son auteur, et s'affichait badgé dans une langue qu'il ne parle pas.
      */
-    suspend fun authoredLanguage(
-        text: String,
-        author: LanguageResolver.ContentLanguagePreferences?,
-        identifier: LanguageIdentifying,
-    ): String? = author?.let {
-        originalLanguageAtSend(text, manual = null, senderLanguage = LanguageResolver.resolveUserLanguage(it), identifier = identifier)
-    }
+    suspend fun authoredLanguage(text: String, identifier: LanguageIdentifying): String? =
+        detect(text, fallback = NOT_IDENTIFIED, identifier = identifier).takeIf { it != NOT_IDENTIFIED }
 
     /**
      * Détection à l'envoi par [identifier] (ML Kit) : au moins 4 lettres une fois les URL retirées

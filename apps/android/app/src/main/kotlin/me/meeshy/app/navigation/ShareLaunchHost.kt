@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import me.meeshy.app.chat.AppShareSheetHost
+import me.meeshy.app.chat.UniversalComposerHost
 import me.meeshy.app.chat.export.CommentCardExportSheet
 import me.meeshy.app.feed.CommentCardExporter
 import me.meeshy.app.feed.LocalCommentCardExporter
@@ -30,6 +31,8 @@ import me.meeshy.app.stories.ReelCardScene
 import me.meeshy.app.stories.RepostSceneCard
 import me.meeshy.app.stories.rememberStoryItemExport
 import me.meeshy.sdk.model.share.ShareSubject
+import me.meeshy.ui.component.composer.LocalUniversalComposer
+import me.meeshy.ui.component.composer.UniversalComposer
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.ShareLauncher
 
@@ -59,6 +62,8 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     val sceneItemExport: SceneItemExportHost = remember { { key -> rememberStoryItemExport(key) } }
     // « Imager » un commentaire peint sa carte par l'atelier des conversations, que le fil ne connaît pas (#13922).
     val commentCardExport: CommentCardExporter = remember { { key, card, onDismiss -> CommentCardExportSheet(key, card, onDismiss) } }
+    // Les commentaires s'écrivent dans le composeur des conversations, réglé pour un commentaire (#14265).
+    val universalComposer: UniversalComposer = remember { { spec, modifier -> UniversalComposerHost(spec, modifier) } }
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
     val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigate(Routes.story(authorId, storyId)) } }
     CompositionLocalProvider(
@@ -71,6 +76,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
         LocalSceneItemExportHost provides sceneItemExport,
         LocalCommentCardExporter provides commentCardExport,
         LocalStoryOpener provides openStory,
+        LocalUniversalComposer provides universalComposer,
     ) { content() }
     pending?.let { share ->
         AppShareSheetHost(

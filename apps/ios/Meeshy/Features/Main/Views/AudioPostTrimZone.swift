@@ -13,7 +13,7 @@ struct AudioPostTrimZone: View {
     @Binding var trimRange: ClosedRange<TimeInterval>
     let onRetry: () -> Void
 
-    private var theme: ThemeManager { ThemeManager.shared }
+    @ResolvedThemePalette private var theme
 
     @ViewBuilder
     var body: some View {
