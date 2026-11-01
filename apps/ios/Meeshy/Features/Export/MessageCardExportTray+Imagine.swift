@@ -68,16 +68,26 @@ enum MessageCardTrayOffer {
     }
 
     /// Les durées d'une VIDÉO tirée d'un son — celles que le son offre ; rien
-    /// pour une image fixe, rien quand une vidéo jointe fixe elle-même la durée.
+    /// pour une image fixe, rien quand une vidéo jointe fixe elle-même la durée,
+    /// rien au-delà d'une minute : les quarts les remplacent (#14332).
     static func clipLengths(output: MessageCardOutput, media: [MessageCardMedia]) -> [MessageCardClipLength] {
-        guard output == .video, !media.contains(where: { $0.kind == .video }), let sound = sound(media) else { return [] }
+        guard output == .video, !media.contains(where: { $0.kind == .video }), let sound = sound(media),
+              clipQuarters(output: output, media: media).isEmpty else { return [] }
         return MessageCardClipLength.offered(forSoundDuration: sound.duration)
     }
 
+    /// Au-delà d'une minute, la vidéo rend 1/4 · 2/4 · 3/4 · 4/4 de son média
+    /// depuis le début, comme la vue Imager d'une œuvre (#14332, #13871).
+    static func clipQuarters(output: MessageCardOutput, media: [MessageCardMedia]) -> [ImagerLengthChoice] {
+        MessageCardMotionPlan.quarters(output, media: media)
+    }
+
     /// Le passage à exporter se choisit quand la carte s'anime et que son média
-    /// dure PLUS que l'extrait — sinon il part en entier, sans rien à choisir.
+    /// dure PLUS que l'extrait — sinon il part en entier, sans rien à choisir ;
+    /// une part en quarts part du début, sans passage à glisser.
     static func excerpt(plan: MessageCardMotionPlan?, media: [MessageCardMedia]) -> MessageCardExcerpt? {
-        guard let plan, let source = media.first(where: { $0.kind == .video }) ?? sound(media),
+        guard let plan, clipQuarters(output: plan.output, media: media).isEmpty,
+              let source = media.first(where: { $0.kind == .video }) ?? sound(media),
               let total = source.duration, total > plan.duration + 0.25 else { return nil }
         return MessageCardExcerpt(total: total, window: plan.clip, sound: source.kind == .audio ? source : nil)
     }
@@ -260,11 +270,24 @@ extension MessageCardExportTray {
         }
     }
 
-    /// En vidéo : la durée, puis le passage qu'on fait glisser sur l'onde.
+    /// En vidéo : la durée, puis le passage qu'on fait glisser sur l'onde ; au-delà
+    /// d'une minute, la part rendue depuis le début (#14332).
     @ViewBuilder
     private var clipOptions: some View {
         let lengths = MessageCardTrayOffer.clipLengths(output: output, media: media)
+        let quarters = MessageCardTrayOffer.clipQuarters(output: output, media: media)
         let sound = MessageCardTrayOffer.sound(media)
+        if !quarters.isEmpty {
+            row {
+                ForEach(quarters, id: \.quarter) { choice in
+                    pill(ImagerPresenter.label(for: choice), selected: choice.quarter == clipQuarter) {
+                        clipQuarter = choice.quarter
+                    }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(String(localized: "export.imager.length.title", defaultValue: "Quelle durée imager ?", bundle: .main))
+        }
         if !lengths.isEmpty {
             let selected = format.disposition.clipLength.selected(among: lengths, soundDuration: sound?.duration)
             row {

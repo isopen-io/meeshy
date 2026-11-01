@@ -73,6 +73,8 @@ struct MessageCardExportSheet: View {
     @StateObject var motion = MessageCardMotionProgress()
     /// Où commence le passage exporté d'un son ou d'une vidéo, en secondes (#8979) — propre à ce message.
     @State var clipStart: Double = 0
+    /// La part rendue d'un son ou d'une vidéo de plus d'une minute, depuis le début, tout par défaut (#14332).
+    @State var clipQuarter: ImagerQuarter = .four
     /// Le pincement en cours sur une partie de l'aperçu (#8979).
     @State var pinch: MessageCardPinch?
     /// Le visuel que « une seule » et « en fond » montrent (#9235) — propre à ce contenu.
@@ -137,7 +139,8 @@ struct MessageCardExportSheet: View {
 
     /// Le plan d'une carte animée : la durée choisie, à partir du passage choisi (#8979).
     var motionPlan: MessageCardMotionPlan? {
-        MessageCardMotionPlan.of(output, media: paintedMedia, length: format.disposition.clipLength, start: clipStart)
+        MessageCardMotionPlan.of(output, media: paintedMedia, length: format.disposition.clipLength,
+                                 quarter: clipQuarter, start: clipStart)
     }
 
     /// L'extrait que l'aperçu montre — celui que la vidéo emportera.
@@ -336,6 +339,7 @@ struct MessageCardExportSheet: View {
             hasMediaAuthors: subject.hasMediaAuthors,
             output: output,
             plan: motionPlan,
+            clipQuarter: $clipQuarter,
             languages: request.languages,
             exportLanguage: $exportLanguage,
             thumbs: thumbSource,
