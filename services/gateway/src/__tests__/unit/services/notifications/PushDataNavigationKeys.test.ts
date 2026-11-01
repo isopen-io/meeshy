@@ -18,6 +18,11 @@
  * @jest-environment node
  */
 import { NotificationService } from '../../../../services/notifications/NotificationService';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+import { sharedFriendships } from '../../../helpers/shared-friendships';
+
+/** Entourage réglé à « Ami » (#13929) : ce cas porte sur les clés du push, pas sur le cran. */
+const ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   notificationLogger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -45,7 +50,7 @@ const makePrismaMock = () => ({
   },
   user: {
     findUnique: jest.fn(),
-    findMany: jest.fn().mockResolvedValue([]),
+    findMany: jest.fn(async (args: any) => (args?.where?.isActive === true ? (args.where.id?.in ?? []).map((id: string) => ({ id })) : [])), // #14234 comptes vivants
     findFirst: jest.fn().mockResolvedValue(null),
   },
   conversation: {
@@ -63,6 +68,8 @@ const makePrismaMock = () => ({
   postComment: { findMany: jest.fn().mockResolvedValue([]) },
   postReaction: { findMany: jest.fn().mockResolvedValue([]) },
   friendRequest: { findMany: jest.fn().mockResolvedValue([]) },
+  userRelation: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
+  participant: { findMany: jest.fn().mockResolvedValue([]) },
 }) as any;
 
 type PushCall = { userId: string; payload: { data: Record<string, string> } };
@@ -138,7 +145,8 @@ describe('Push data — clés de navigation commentId / friendRequestId', () => 
 
   it('test_createStoryCommentNotificationsBatch_allBuckets_dataCarriesTriggeringCommentId', async () => {
     prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_ID }]);
-    prisma.friendRequest.findMany.mockResolvedValue([
+    prisma.userPreferences.findUnique.mockResolvedValue(ENTOURAGE_FRIEND);
+    sharedFriendships(prisma.friendRequest.findMany, RECIPIENT_ID, ACTOR_ID)([
       { senderId: RECIPIENT_ID, receiverId: FRIEND_ID },
     ]);
 

@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.composer.sound.ApiSound
 import me.meeshy.sdk.model.composer.sound.SoundRemovalNotice
 import me.meeshy.sdk.model.composer.sound.SoundShelfEmpty
@@ -243,7 +244,7 @@ private fun SwipeToRemove(onRemove: () -> Unit, content: @Composable () -> Unit)
 private fun EmptyShelf(kind: SoundShelfEmpty) {
     val message = when (kind) {
         SoundShelfEmpty.NoMatch -> R.string.story_sound_library_emptySearch
-        SoundShelfEmpty.NoneMine -> R.string.story_sound_library_emptyMine
+        SoundShelfEmpty.NoneMine -> ComposerFormatLabel.SOUND_LIBRARY_EMPTY_MINE.res(LocalComposerSceneNoun.current)
         SoundShelfEmpty.NoneTrending -> R.string.story_sound_library_emptyTrending
     }
     Column(

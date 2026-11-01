@@ -113,10 +113,16 @@ data class MessageActionContext(
      * everyone are offered only when it is known clear ([PlainSignalAdmission]). Closed (unknown) until the host says.
      */
     val signalClearance: ConversationClearance = ConversationClearance.UNKNOWN,
+    /** The server already reads this message (#13804): deleting it for everyone keeps its clear route. Closed by default. */
+    val isReadByServer: Boolean = false,
 ) {
     /** The gestures an end-to-end conversation carries as encrypted signals, which this device cannot seal yet. */
     val offersPlainSignals: Boolean
         get() = PlainSignalAdmission.offers(signalClearance)
+
+    /** Deleting for everyone is judged on the message's ROW, as the gateway does ([PlainSignalAdmission.offersErasure]). */
+    val offersPlainErasure: Boolean
+        get() = PlainSignalAdmission.offersErasure(signalClearance, isReadByServer)
 
     /** The quick reaction strip of the menu (and its full picker). */
     val offersReaction: Boolean
@@ -189,7 +195,7 @@ object MessageActionMenu {
         if (ctx.isOutgoing && ctx.isActionable && ctx.canEdit) {
             add(MessageAction.Edit)
         }
-        if (ctx.isOutgoing && ctx.isActionable && ctx.canDeleteForEveryone && ctx.offersPlainSignals) {
+        if (ctx.isOutgoing && ctx.isActionable && ctx.canDeleteForEveryone && ctx.offersPlainErasure) {
             add(MessageAction.DeleteForEveryone)
         }
         if (ctx.isActionable) {

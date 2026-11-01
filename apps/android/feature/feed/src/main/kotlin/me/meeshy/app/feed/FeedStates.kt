@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -70,6 +71,20 @@ internal fun FeedErrorState(onRetry: () -> Unit, modifier: Modifier = Modifier) 
         icon = { Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(48.dp)) },
         title = stringResource(R.string.feed_load_error),
         subtitle = null,
+        action = {
+            OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.feed_retry)) }
+        },
+        modifier = modifier,
+    )
+}
+
+/** Hors ligne, rien de gardé : un seul état, qui dit pourquoi le fil est vide et quand il se remplira (#14263). */
+@Composable
+internal fun FeedOfflineEmptyState(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    FeedStatePane(
+        icon = { Icon(Icons.Outlined.WifiOff, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(48.dp)) },
+        title = stringResource(R.string.feed_offline_empty_title),
+        subtitle = stringResource(R.string.feed_offline_empty_detail),
         action = {
             OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.feed_retry)) }
         },

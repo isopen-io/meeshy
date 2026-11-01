@@ -120,9 +120,11 @@ class MemoryStore {
     const now = Date.now();
     const existing = this.store.get(key);
 
+    // Un INSTANTANÉ, comme le rend Redis : rendre l'objet vivant laissait un
+    // appelant lire le compte d'un débit concurrent posé après le sien (#14105).
     if (existing && existing.resetAt > now) {
       existing.count += amount;
-      return existing;
+      return { ...existing };
     }
 
     const resetAt = now + windowMs;
@@ -132,7 +134,7 @@ class MemoryStore {
     // Cleanup old entries periodically (prevent memory leak)
     this.cleanup();
 
-    return record;
+    return { ...record };
   }
 
   private cleanup() {
@@ -155,10 +157,10 @@ class MemoryStore {
    * à offrir une tentative de plus au tour suivant : un remboursement doit
    * annuler un décompte, pas en créditer un.
    */
-  async decrement(key: string): Promise<void> {
+  async decrement(key: string, amount = 1): Promise<void> {
     const existing = this.store.get(key);
     if (!existing || existing.resetAt <= Date.now()) return;
-    existing.count = Math.max(0, existing.count - 1);
+    existing.count = Math.max(0, existing.count - amount);
   }
 }
 
@@ -207,12 +209,12 @@ class RedisStore {
    * décrémente donc que si la clé existe, et on remonte à zéro si un
    * remboursement en trop l'a fait passer sous la barre.
    */
-  async decrement(key: string): Promise<void> {
+  async decrement(key: string, amount = 1): Promise<void> {
     const windowKey = `ratelimit:${key}`;
     const existe = await this.redis.exists(windowKey);
     if (!existe) return;
 
-    const restant = await this.redis.decr(windowKey);
+    const restant = amount === 1 ? await this.redis.decr(windowKey) : await this.redis.decrby(windowKey, amount);
     if (restant < 0) await this.redis.set(windowKey, '0', 'KEEPTTL');
   }
 }
@@ -376,6 +378,21 @@ export class RateLimiter {
       await this.store.decrement(`${this.config.keyPrefix}:${key}`);
     } catch (error) {
       logger.error('Rate limiter refund error', error as Error);
+    }
+  }
+
+  /**
+   * REND un décompte PONDÉRÉ que `consume` vient de prendre (#14105) : un lot
+   * refusé ou une écriture échouée en aval ne doit rien coûter. Même garde que
+   * `refund` — jamais sous zéro, jamais sur une fenêtre expirée, best-effort.
+   */
+  async release(key: string, cost: number): Promise<void> {
+    const amount = Math.max(0, Math.floor(cost));
+    if (rateLimitDisabled() || amount === 0) return;
+    try {
+      await this.store.decrement(`${this.config.keyPrefix}:${key}`, amount);
+    } catch (error) {
+      logger.error('Rate limiter release error', error as Error);
     }
   }
 

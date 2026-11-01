@@ -152,23 +152,10 @@ extension StoryViewModel {
             // flow (`StoryExportShareViewModel`).
 
             var uploadResult: TusUploadResult? = nil
-            if let bgImage = upload.slideImages[slide.id] {
-                let thumbHash = bgImage.toThumbHash()
-                let encoded = try await StoryImageUploadEncoder.temporaryFile(
-                    for: bgImage, file: nil, policy: MediaContext.story.storedOutgoingImagePolicy())
-                let tempURL = encoded.url
-                defer { try? FileManager.default.removeItem(at: tempURL) }
-                let result = try await uploader.uploadFile(
-                    fileURL: tempURL, mimeType: encoded.mimeType,
-                    credential: .bearer(token), uploadContext: "story", thumbHash: thumbHash
-                )
-                uploadResult = result
-                // Pre-populate the image cache under the server URL so that when
-                // reconcilePublishedQueueSlide swaps in the real StoryItem the viewer
-                // gets a cache hit — no re-download of content the author just uploaded.
-                // adoptImage moves tempURL into the cache store; the deferred removeItem
-                // silently no-ops since the file is already gone from tempURL.
-                await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+            if let fondBrut = upload.slideImages[slide.id] {
+                let bgImage = await StoryPublicationLookBake.publishedBackground(fondBrut, effects: slide.effects)
+                uploadResult = try await StoryPublicationLookBake.uploadStoryImage(
+                    bgImage, file: nil, uploader: uploader, token: token)
                 onProgress(baseProgress + 0.30 * slideShare)
             } else {
                 onProgress(baseProgress + 0.30 * slideShare)
@@ -177,29 +164,21 @@ extension StoryViewModel {
             var updatedEffects = slide.effects
             var foregroundMediaIds: [String] = []
             if var mediaObjects = updatedEffects.mediaObjects {
-                let mediaCount = mediaObjects.filter({ $0.postMediaId.isEmpty }).count
+                let mediaCount = mediaObjects.filter(StoryPublicationLookBake.needsUpload).count
                 var mediaIdx = 0
-                for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
+                for i in mediaObjects.indices where StoryPublicationLookBake.needsUpload(mediaObjects[i]) {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = mediaObjects[i]
-                    if obj.kind == .video, let videoURL = upload.loadedVideoURLs[obj.id] {
+                    if obj.kind == .video, let brute = upload.loadedVideoURLs[obj.id] {
+                        let videoURL = await StoryPublicationLookBake.publishedVideo(brute, media: obj)
                         let result = try await uploadStoryVideo(videoURL, uploader: uploader, token: token)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
-                    } else if obj.kind == .image, let uiImage = upload.loadedImages[obj.id] {
-                        let fgThumbHash = uiImage.toThumbHash()
-                        let encoded = try await StoryImageUploadEncoder.temporaryFile(
-                            for: uiImage, file: StoryImageUploadEncoder.localFile(obj.mediaURL), policy: MediaContext.story.storedOutgoingImagePolicy())
-                        let tempURL = encoded.url
-                        defer { try? FileManager.default.removeItem(at: tempURL) }
-                        let result = try await uploader.uploadFile(
-                            fileURL: tempURL, mimeType: encoded.mimeType,
-                            credential: .bearer(token), uploadContext: "story", thumbHash: fgThumbHash
-                        )
-                        // Seed the image cache under the server URL — metadata-only
-                        // reconciliation: viewer gets a cache hit, never re-downloads.
-                        await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+                    } else if obj.kind == .image, let brute = upload.loadedImages[obj.id] {
+                        let (uiImage, fichier) = await StoryPublicationLookBake.publishedImage(brute, media: obj)
+                        let result = try await StoryPublicationLookBake.uploadStoryImage(
+                            uiImage, file: fichier, uploader: uploader, token: token)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
@@ -342,6 +321,9 @@ extension StoryViewModel {
                     "publish slide=\(slide.id, privacy: .public) audioPlayerObjects is nil — no audio attached to this slide"
                 )
             }
+
+            // #13840 — le look est CUIT dans les octets téléversés ; il ne part jamais au fil.
+            updatedEffects = updatedEffects.withoutMediaLooks
 
             onPhase(.publishing)
             // Les médias PRÉ-téléversés par le composer ne passent pas par
@@ -556,21 +538,15 @@ extension StoryViewModel {
             // 1. Fond de slide. Identité d'instance : le MÊME UIImage que
             // celui posé par l'hydratation = fond inchangé → l'original reste
             // attaché, aucun ré-upload. Une autre instance = fond remplacé.
-            if let bgImage = slideImages[slide.id] {
-                if let hydrated = edit.hydratedBackgroundImage, hydrated === bgImage,
+            if let fondBrut = slideImages[slide.id] {
+                let fondRegle = slide.effects.resolvedBackgroundMedia.map(StoryPublicationLookBake.paints) ?? false
+                if let hydrated = edit.hydratedBackgroundImage, hydrated === fondBrut, !fondRegle,
                    let originalBg = edit.originalBackgroundMediaId {
                     keptOriginalIds.insert(originalBg)
                 } else {
-                    let thumbHash = bgImage.toThumbHash()
-                    let encoded = try await StoryImageUploadEncoder.temporaryFile(
-                        for: bgImage, file: nil, policy: MediaContext.story.storedOutgoingImagePolicy())
-                    let tempURL = encoded.url
-                    defer { try? FileManager.default.removeItem(at: tempURL) }
-                    let result = try await uploader.uploadFile(
-                        fileURL: tempURL, mimeType: encoded.mimeType,
-                        credential: .bearer(token), uploadContext: "story", thumbHash: thumbHash
-                    )
-                    await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+                    let bgImage = await StoryPublicationLookBake.publishedBackground(fondBrut, effects: slide.effects)
+                    let result = try await StoryPublicationLookBake.uploadStoryImage(
+                        bgImage, file: nil, uploader: uploader, token: token)
                     newMediaIds.append(result.id)
                 }
             } else if slide.mediaURL != nil, let originalBg = edit.originalBackgroundMediaId {
@@ -585,30 +561,26 @@ extension StoryViewModel {
             if var mediaObjects = updatedEffects.mediaObjects {
                 for i in mediaObjects.indices {
                     let obj = mediaObjects[i]
-                    if !obj.postMediaId.isEmpty {
+                    if !StoryPublicationLookBake.needsUpload(obj) {
                         keptOriginalIds.insert(obj.postMediaId)
                         continue
                     }
-                    if obj.kind == .video, let videoURL = loadedVideoURLs[obj.id] {
+                    if obj.kind == .video, let brute = loadedVideoURLs[obj.id] {
+                        let videoURL = await StoryPublicationLookBake.publishedVideo(brute, media: obj)
                         let result = try await uploadStoryVideo(videoURL, uploader: uploader, token: token)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         newMediaIds.append(result.id)
-                    } else if obj.kind == .image, let uiImage = loadedImages[obj.id] {
-                        let fgThumbHash = uiImage.toThumbHash()
-                        let encoded = try await StoryImageUploadEncoder.temporaryFile(
-                            for: uiImage, file: StoryImageUploadEncoder.localFile(obj.mediaURL), policy: MediaContext.story.storedOutgoingImagePolicy())
-                        let tempURL = encoded.url
-                        defer { try? FileManager.default.removeItem(at: tempURL) }
-                        let result = try await uploader.uploadFile(
-                            fileURL: tempURL, mimeType: encoded.mimeType,
-                            credential: .bearer(token), uploadContext: "story", thumbHash: fgThumbHash
-                        )
-                        await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+                    } else if obj.kind == .image, let brute = loadedImages[obj.id] {
+                        let (uiImage, fichier) = await StoryPublicationLookBake.publishedImage(brute, media: obj)
+                        let result = try await StoryPublicationLookBake.uploadStoryImage(
+                            uiImage, file: fichier, uploader: uploader, token: token)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         newMediaIds.append(result.id)
                     } else {
+                        // Un média déjà servi garde son original plutôt que de disparaître.
+                        if !obj.postMediaId.isEmpty { keptOriginalIds.insert(obj.postMediaId) }
                         os.Logger.storyAudio.error(
                             "update foreground media asset missing kind=\(obj.mediaType, privacy: .public) id=\(obj.id, privacy: .public) — layer will be invisible to viewers"
                         )
@@ -616,6 +588,10 @@ extension StoryViewModel {
                 }
                 updatedEffects.mediaObjects = mediaObjects
             }
+            // #13840 — la couverture locale peint encore le look sur les bitmaps bruts ;
+            // la charge et l'item publié, eux, le portent cuit.
+            let effectsForCover = updatedEffects
+            updatedEffects = updatedEffects.withoutMediaLooks
 
             // 3. Clips audio — même contrat.
             if var audioObjects = updatedEffects.audioPlayerObjects {
@@ -731,10 +707,10 @@ extension StoryViewModel {
 
             // 7. Réconciliation locale : cover local-first re-rendue (la
             // composition a changé) + remplacement de l'item dans le groupe.
-            var editedSlide = slide
-            editedSlide.effects = updatedEffects
+            var coverSlide = slide
+            coverSlide.effects = effectsForCover
             if let cover = StoryStaticSnapshot.render(
-                slide: editedSlide,
+                slide: coverSlide,
                 loadedImages: loadedImages,
                 bgImage: slideImages[slide.id],
                 size: StoryCoverThumbnail.renderSize

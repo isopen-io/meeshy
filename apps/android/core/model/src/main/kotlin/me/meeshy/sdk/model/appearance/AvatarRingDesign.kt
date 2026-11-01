@@ -64,6 +64,37 @@ data class AvatarRingOrnament(
     val paths: List<AvatarRingOrnamentPath>,
 )
 
+/**
+ * Les CALQUES ILLUSTRÉS d'un contour (#13960, miroir de `AvatarRingDecorSchema`) : un film [back] DERRIÈRE
+ * l'avatar, un film [front] AU-DESSUS, chacun carré, centré sur l'avatar, de côté [reach] × la boîte du contour —
+ * il DÉBORDE sans grandir la mise en page. L'anneau fixe reste l'image de repli et celle de « Réduire les
+ * animations ». Hors bornes ou sans film, le calque ne se construit pas ([LossyRingDecorSerializer] le tait seul).
+ */
+@Serializable
+data class AvatarRingDecor(
+    val reach: Double,
+    @Serializable(with = LossyPackAssetRefSerializer::class)
+    val back: PackAssetRef? = null,
+    @Serializable(with = LossyPackAssetRefSerializer::class)
+    val front: PackAssetRef? = null,
+) {
+    init {
+        require(reach in 1.0..MAX_REACH) { "débordement hors bornes" }
+        require(back != null || front != null) { "aucun film" }
+    }
+
+    /** Le côté d'un film dans une boîte de contour de côté [box] (miroir de `ringDecorCanvas`). */
+    fun side(box: Float): Float = (box * reach).toFloat()
+
+    companion object {
+        /** Le débordement maximal : un film de côté 1,5 × la boîte du contour (`RING_DECOR_MAX_REACH`). */
+        const val MAX_REACH = 1.5
+    }
+}
+
+/** Un calque illustré illisible s'ignore : le contour reste. */
+object LossyRingDecorSerializer : KSerializer<AvatarRingDecor?> by LossyNullableSerializer(AvatarRingDecor.serializer())
+
 @Serializable
 data class AvatarRingDesign(
     val key: String,
@@ -78,6 +109,9 @@ data class AvatarRingDesign(
     /** Les mouvements déclarés (#10932) ; un mouvement inconnu ou hors bornes est ignoré. */
     @Serializable(with = FrameMotionListSerializer::class)
     val motion: List<FrameMotion> = emptyList(),
+    /** Les calques illustrés (#13960) ; illisibles ⇒ ignorés, l'anneau fixe reste. */
+    @Serializable(with = LossyRingDecorSerializer::class)
+    val decor: AvatarRingDecor? = null,
 ) {
     init {
         require(FrameDecorField.isGroup(key)) { "clé illisible" }

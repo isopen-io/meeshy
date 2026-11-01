@@ -127,6 +127,29 @@ struct UserPresenceStateTests {
         #expect(decoded.lastActiveAt == original.lastActiveAt)
     }
 
+    // MARK: - Présence servie à un Ami (presence-ami-binaire, #13928)
+
+    @Test("A served Friend online without lastActiveAt stays online at any instant")
+    func servedFriendOnline_withoutLastActiveAt_neverDecays() {
+        #expect(presence(isOnline: true).state(now: now) == .online)
+        #expect(presence(isOnline: true).state(now: now.addingTimeInterval(86_400)) == .online)
+    }
+
+    @Test("A served Friend offline without lastActiveAt renders offline, never a last-seen state")
+    func servedFriendOffline_withoutLastActiveAt_isOfflineAtAnyInstant() {
+        #expect(presence(isOnline: false).state(now: now) == .offline)
+        #expect(presence(isOnline: false).state(now: now.addingTimeInterval(60)) == .offline)
+        #expect(presence(isOnline: false).state(now: now.addingTimeInterval(86_400)) == .offline)
+    }
+
+    @Test("A served Friend never produces away or idle without lastActiveAt")
+    func servedFriend_withoutLastActiveAt_neverRendersAwayOrIdle() {
+        for isOnline in [true, false] {
+            let state = presence(isOnline: isOnline).state(now: now)
+            #expect(state != .away && state != .idle)
+        }
+    }
+
     // MARK: - Présence servie d'un résultat de recherche (#10944)
 
     @Test("A search result renders only the presence the gateway served")

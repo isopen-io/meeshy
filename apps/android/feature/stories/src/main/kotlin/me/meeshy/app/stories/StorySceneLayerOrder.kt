@@ -34,12 +34,20 @@ internal sealed interface StorySceneLayer {
         override val zIndex: Int get() = view.zIndex
         override val key: String get() = "place:$id"
     }
+
+    /** La pastille d'un son posé sur la scène (#13852) : à son rang dans la pile, au-dessus de tout quand elle n'en a pas. */
+    data class Audio(val view: StoryAudioChipView) : StorySceneLayer {
+        override val id: String get() = view.id
+        override val zIndex: Int get() = view.zIndex
+        override val key: String get() = "audio:$id"
+    }
 }
 
 /**
  * L'ordre de peinture de la scène, celui d'iOS (`StoryRenderer.render` : `collectItems(...).sorted(by: zIndex)`) : UN tri
- * stable par `zIndex` sur tous les objets, et à égalité l'ordre de collecte — textes, puis médias, puis stickers. Les
- * puces des sons de premier plan restent au-dessus de tout, comme la couche audio d'iOS.
+ * stable par `zIndex` sur tous les objets, et à égalité l'ordre de collecte — textes, puis médias, puis stickers, puis
+ * lieux, puis les pastilles de son. Le compositeur range ces cinq familles sur une seule pile (#13852, [StorySceneStack]) :
+ * le lecteur peint cette pile. Une pastille sans rang reste au-dessus de tout, comme la couche audio d'iOS.
  */
 internal object StorySceneLayerOrder {
 
@@ -48,6 +56,7 @@ internal object StorySceneLayerOrder {
             slide.textObjects.map(StorySceneLayer::Text) +
                 slide.foregroundMedia.map(StorySceneLayer::Media) +
                 slide.stickers.map(StorySceneLayer::Sticker) +
-                slide.places.map(StorySceneLayer::Place)
+                slide.places.map(StorySceneLayer::Place) +
+                slide.audioChips.map(StorySceneLayer::Audio)
             ).sortedBy { it.zIndex }
 }

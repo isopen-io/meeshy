@@ -6,7 +6,6 @@ import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.DUPLICATE
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.EDIT
-import me.meeshy.sdk.model.composer.ComposerSelectionAction.ORDER
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.REMOVE
 import me.meeshy.sdk.model.composer.ComposerSelectionAction.TIME
 import me.meeshy.sdk.model.composer.ComposerSelectionActions
@@ -40,7 +39,7 @@ class StoryComposerSelectionBarTest {
 
         assertThat(framed.selectedSceneObject).isEqualTo(SceneObjectRef(ComposerObjectKind.TEXT, "t1"))
         assertThat(framed.isEditingTextElement).isFalse()
-        assertThat(framed.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, REMOVE).inOrder()
+        assertThat(framed.selectionBar!!.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
     }
 
     @Test
@@ -88,34 +87,33 @@ class StoryComposerSelectionBarTest {
     }
 
     @Test
-    fun `stickers sharing the plane are ordered, and Order opens both directions`() {
+    fun `stickers sharing the plane serve no Order, touching one brought it to the front`() {
         val bar = StoryComposerStickerReducer.selected(withStickers("s1", "s2"), "s1").selectionBar!!
 
-        assertThat(bar.actions).containsExactly(EDIT, ORDER, DUPLICATE, REMOVE).inOrder()
-        assertThat(bar.orderChoices).containsExactly(Action.BRING_FORWARD, Action.SEND_BACKWARD).inOrder()
+        assertThat(bar.actions).containsExactly(EDIT, DUPLICATE, TIME, REMOVE).inOrder()
     }
 
     @Test
-    fun `timing joins the bar of a text or a sticker only once the scene is animated`() {
+    fun `timing joins the bar of a text or a sticker, the scene animated or still, as on iOS`() {
         val animated = withStickers("s1").copy(sceneIsAnimated = true)
 
         assertThat(animated.selectionBar!!.actions).contains(TIME)
-        assertThat(withStickers("s1").selectionBar!!.actions).doesNotContain(TIME)
+        assertThat(withStickers("s1").selectionBar!!.actions).contains(TIME)
     }
 
     @Test
-    fun `a media is edited and removed, its background designation lives in its sheet`() {
+    fun `a media has no Edit, its tools lie flat in the rail, and its background designation is one of them`() {
         val bar = StoryComposerSelectionReducer.mediaSelected(withMedia("m1"), "m1").selectionBar!!
 
-        assertThat(bar.actions).containsExactly(EDIT, REMOVE).inOrder()
+        assertThat(bar.actions).containsExactly(REMOVE)
         assertThat(bar.sheetActions).containsExactly(Action.SET_AS_BACKGROUND)
     }
 
     @Test
-    fun `a sound is edited in its sheet and removed, never timed from the bar`() {
+    fun `an ambient sound has no Edit sheet, it is removed, never timed from the bar`() {
         val bar = StoryComposerSelectionReducer.soundSelected(withSound(), "a1").copy(sceneIsAnimated = true).selectionBar!!
 
-        assertThat(bar.actions).containsExactly(EDIT, REMOVE).inOrder()
+        assertThat(bar.actions).containsExactly(REMOVE)
     }
 
     @Test

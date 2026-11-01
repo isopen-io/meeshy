@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "futuriste.hud",
             mood: .futuriste,
             name: "HUD",
+            localizedNames: ["fr": "HUD", "en": "HUD", "es": "HUD", "pt": "HUD", "de": "HUD", "it": "HUD", "ar": "HUD"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.07, gap: 0.03, top: 0.15, bottom: 0.1),
@@ -29,13 +30,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#FFFFFF", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hud.comite",
             motif: "futuriste.hud",
             mood: .futuriste,
             name: "HUD",
+            localizedNames: ["fr": "HUD", "en": "HUD", "es": "HUD", "pt": "HUD", "de": "HUD", "it": "HUD", "ar": "HUD"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .hero, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.1),
@@ -54,13 +56,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hud.groupe",
             motif: "futuriste.hud",
             mood: .futuriste,
             name: "HUD",
+            localizedNames: ["fr": "HUD", "en": "HUD", "es": "HUD", "pt": "HUD", "de": "HUD", "it": "HUD", "ar": "HUD"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .mosaic, margin: 0.06, gap: 0.02, top: 0.15, bottom: 0.1),
@@ -79,13 +82,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hud.tablee",
             motif: "futuriste.hud",
             mood: .futuriste,
             name: "HUD",
+            localizedNames: ["fr": "HUD", "en": "HUD", "es": "HUD", "pt": "HUD", "de": "HUD", "it": "HUD", "ar": "HUD"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.015, top: 0.13, bottom: 0.11),
@@ -104,13 +108,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#7CFF4A", width: 0.004), double: true, glow: nil, shadow: false, card: nil, tilt: .none, tone: .cool, duotone: nil), background: .solid(color: "#17191C"), ornaments: [CallFrameOrnament(kind: .crosshair, color: "#7CFF4A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .rec, color: "#7CFF4A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#7CFF4A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hud_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hud_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.duo",
             motif: "futuriste.hologramme",
             mood: .futuriste,
             name: "Hologramme",
+            localizedNames: ["fr": "Hologramme", "en": "Hologram", "es": "Holograma", "pt": "Holograma", "de": "Hologramm", "it": "Ologramma", "ar": "هولوغرام"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.07, gap: 0.03, top: 0.15, bottom: 0.1),
@@ -129,13 +134,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .neon, color: "#FF7AF5", place: .top, size: .s, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.comite",
             motif: "futuriste.hologramme",
             mood: .futuriste,
             name: "Hologramme",
+            localizedNames: ["fr": "Hologramme", "en": "Hologram", "es": "Holograma", "pt": "Holograma", "de": "Hologramm", "it": "Ologramma", "ar": "هولوغرام"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -154,13 +160,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.groupe",
             motif: "futuriste.hologramme",
             mood: .futuriste,
             name: "Hologramme",
+            localizedNames: ["fr": "Hologramme", "en": "Hologram", "es": "Holograma", "pt": "Holograma", "de": "Hologramm", "it": "Ologramma", "ar": "هولوغرام"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.02, top: 0.15, bottom: 0.1),
@@ -179,13 +186,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .hex, radius: nil, stroke: CallFrameStroke(color: "#36E3FF", width: 0.006), double: false, glow: "#FF4FD8AA", shadow: false, card: nil, tilt: .none, tone: .duotone, duotone: CallFrameDuotone(shadow: "#1B0A3F", light: "#9BF3FF")), background: .radial(colors: ["#1A0A3A", "#05020F"]), ornaments: [CallFrameOrnament(kind: .glitch, color: "#36E3FF", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .futuristic, color: "#5AF0FF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_hologramme_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_hologramme_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.duo",
             motif: "futuriste.orbite",
             mood: .futuriste,
             name: "Orbite",
+            localizedNames: ["fr": "Orbite", "en": "Orbit", "es": "Órbita", "pt": "Órbita", "de": "Umlaufbahn", "it": "Orbita", "ar": "مدار"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.05, top: 0.17, bottom: 0.11),
@@ -204,13 +212,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#FFB8D9", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.comite",
             motif: "futuriste.orbite",
             mood: .futuriste,
             name: "Orbite",
+            localizedNames: ["fr": "Orbite", "en": "Orbit", "es": "Órbita", "pt": "Órbita", "de": "Umlaufbahn", "it": "Orbita", "ar": "مدار"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .orbit, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.11),
@@ -229,13 +238,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.groupe",
             motif: "futuriste.orbite",
             mood: .futuriste,
             name: "Orbite",
+            localizedNames: ["fr": "Orbite", "en": "Orbit", "es": "Órbita", "pt": "Órbita", "de": "Umlaufbahn", "it": "Orbita", "ar": "مدار"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .orbit, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.1),
@@ -254,13 +264,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .circle, radius: nil, stroke: CallFrameStroke(color: "#F2C86A", width: 0.008), double: false, glow: "#F2C86A88", shadow: true, card: nil, tilt: .none, tone: .warm, duotone: nil), background: .radial(colors: ["#1B1140", "#03020A"]), ornaments: [CallFrameOrnament(kind: .orbits, color: "#F2C86A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#FFFFFF", fill: "#1B1140CC"), title: CallFrameTitle(source: .group, font: .brush, color: "#FFE3A1", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/futuriste_orbite_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/futuriste_orbite_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.17)]))]
         ),
         CallFrameDesign(
             id: "futuriste.essaim.groupe",
             motif: "futuriste.essaim",
             mood: .futuriste,
             name: "Essaim",
+            localizedNames: ["fr": "Essaim", "en": "Swarm", "es": "Enjambre", "pt": "Enxame", "de": "Schwarm", "it": "Sciame", "ar": "سرب"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.015, top: 0.14, bottom: 0.14),
@@ -283,6 +294,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "futuriste.essaim",
             mood: .futuriste,
             name: "Essaim",
+            localizedNames: ["fr": "Essaim", "en": "Swarm", "es": "Enjambre", "pt": "Enxame", "de": "Schwarm", "it": "Sciame", "ar": "سرب"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.05, gap: 0.01, top: 0.12, bottom: 0.08),

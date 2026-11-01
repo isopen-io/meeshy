@@ -41,6 +41,7 @@ export const PostType = { POST: 'POST', REEL: 'REEL', STORY: 'STORY', STATUS: 'S
 export const PostVisibility = {
   PUBLIC: 'PUBLIC', FRIENDS: 'FRIENDS', COMMUNITY: 'COMMUNITY',
   PRIVATE: 'PRIVATE', EXCEPT: 'EXCEPT', ONLY: 'ONLY',
+  ACQUAINTANCES: 'ACQUAINTANCES', CLOSE: 'CLOSE', BLOOD: 'BLOOD',
 } as const;
 
 export const TrackingTargetType = {

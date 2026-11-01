@@ -26,9 +26,36 @@ val LocalStoryOpener = staticCompositionLocalOf<((authorId: String, storyId: Str
  * Comment la scène d'un RÉEL se dessine sur sa carte (iOS `ReelCardSceneBackdrop`) : non plus une carte de story 9:16 centrée,
  * mais la scène qui REMPLIT le cadre reçu (cadrage « fill », rognée au centre), sur du noir, muette, sans geste ni libellé propres
  * — la carte porte l'ouverture et son libellé. Arguments : le réel composé, la couleur de son auteur, [live] (élu par le fil),
- * le cadre à remplir.
+ * [muted] (le fil est muet par construction ; la fiche d'un post laisse le lecteur couper ou rétablir le son, #13893), le
+ * cadre à remplir.
  */
-typealias ReelSceneRenderer = @Composable (item: StoryItem, accentHex: String?, live: Boolean, modifier: Modifier) -> Unit
+typealias ReelSceneRenderer = @Composable (item: StoryItem, accentHex: String?, live: Boolean, muted: Boolean, modifier: Modifier) -> Unit
 
 /** `null` hors de l'application (tests, aperçus) : la couverture retombe alors sur l'aplat d'accent. */
 val LocalReelSceneRenderer = staticCompositionLocalOf<ReelSceneRenderer?> { null }
+
+/**
+ * Comment la scène d'un POST se dessine sur sa carte du fil et dans sa fiche (#14223) : le cadre d'un réel, mais le sol d'une
+ * story — une scène qui ne déclare aucun fond se lit sur le dégradé de son auteur, comme la story publiée du même geste, jamais
+ * sur le noir d'un réel. Mêmes arguments que [ReelSceneRenderer] ; `null` hors de l'application : la tuile reste vide.
+ */
+val LocalPostSceneCardRenderer = staticCompositionLocalOf<ReelSceneRenderer?> { null }
+
+/**
+ * Comment une scène de POST se lit en plein écran (iOS `PostSceneCardContainer`) : la scène entière, au centre, et son son joue.
+ * Arguments : la scène, la couleur de son auteur, [playing] (la page que le lecteur montre : elle seule joue), le cadre.
+ */
+typealias PostSceneReaderRenderer = @Composable (item: StoryItem, accentHex: String?, playing: Boolean, modifier: Modifier) -> Unit
+
+/** `null` hors de l'application (tests, aperçus) : toucher une scène n'ouvre alors rien. */
+val LocalPostSceneReaderRenderer = staticCompositionLocalOf<PostSceneReaderRenderer?> { null }
+
+/**
+ * Le menu d'export du plein écran d'un post à scène (#13896) : Enregistrer, Partager et Imager rendent le post ENTIER, toutes
+ * ses scènes bout à bout, par le moteur d'export que l'application fournit. Arguments : les scènes du post, la couleur de
+ * son auteur, la place du bouton.
+ */
+typealias PostSceneExportRenderer = @Composable (scenes: List<StoryItem>, accentHex: String?, modifier: Modifier) -> Unit
+
+/** `null` hors de l'application (tests, aperçus) : le plein écran n'offre alors aucun export. */
+val LocalPostSceneExportRenderer = staticCompositionLocalOf<PostSceneExportRenderer?> { null }

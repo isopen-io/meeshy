@@ -1,12 +1,7 @@
 package me.meeshy.app.feed
 
-import me.meeshy.sdk.media.readMediaUploadItem
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,13 +18,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +33,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import java.io.File
@@ -57,18 +53,46 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val PieceShape = RoundedCornerShape(MeeshyRadius.md)
 private val PieceSize = 56.dp
+private val PieceRemoveDisc = 20.dp
+private val PieceRemoveTouch = 32.dp
 private val MediaSize = 120.dp
 
-/** Les médias d'un commentaire, sous son texte : une vignette par pièce, une vidéo marquée comme telle. */
+/**
+ * Les médias d'un commentaire, sous son texte : une vignette par pièce, une vidéo marquée comme telle. Toucher une pièce
+ * l'ouvre en plein écran (#13915) quand un [CommentMediaFullscreen] l'entoure.
+ */
 @Composable
 internal fun CommentMediaStrip(media: List<CommentMediaPreview>) {
     if (media.isEmpty()) return
+    media.filter { it.isAudio }.forEach { CommentAudioChip(it) }
+    val visual = media.filterNot { it.isAudio }
+    if (visual.isEmpty()) return
+    CommentVisualStrip(visual)
+}
+
+@Composable
+private fun CommentVisualStrip(media: List<CommentMediaPreview>) {
+    val open = LocalCommentMediaOpener.current
+    val photoLabel = stringResource(R.string.post_comments_media_image)
+    val videoLabel = stringResource(R.string.post_comments_media_video)
+    val enlarge = stringResource(R.string.post_comments_media_open)
+    val play = stringResource(R.string.post_comments_media_play)
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = MeeshySpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        media.forEach { item ->
-            Box(Modifier.size(MediaSize).clip(PieceShape).background(MeeshyTheme.tokens.backgroundTertiary), contentAlignment = Alignment.Center) {
+        media.forEachIndexed { index, item ->
+            val touch = if (open != null && item.url != null) {
+                Modifier.clickable(onClickLabel = if (item.isVideo) play else enlarge, role = Role.Button) { open(media, index) }
+            } else {
+                Modifier
+            }
+            Box(
+                Modifier.size(MediaSize).clip(PieceShape).background(MeeshyTheme.tokens.backgroundTertiary)
+                    .then(touch)
+                    .semantics(mergeDescendants = true) { contentDescription = if (item.isVideo) videoLabel else photoLabel },
+                contentAlignment = Alignment.Center,
+            ) {
                 item.thumbnailUrl?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 if (item.isVideo) Icon(MeeshyIcons.PlayCircleFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
             }
@@ -99,21 +123,38 @@ internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentP
                     PieceThumbnail(piece)
                     if (piece.uploaded == null) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                 }
-                IconButton(
-                    onClick = { onRemove(piece.id) },
-                    modifier = Modifier.size(20.dp).align(Alignment.TopEnd).background(Color.Black.copy(alpha = 0.6f), CircleShape),
-                ) {
-                    Icon(MeeshyIcons.Close, contentDescription = removeLabel, tint = MeeshyPalette.White, modifier = Modifier.size(12.dp))
-                }
+                PieceRemoveButton(label = removeLabel, onClick = { onRemove(piece.id) }, modifier = Modifier.align(Alignment.TopEnd))
             }
+        }
+    }
+}
+
+/**
+ * Le ✕ d'une pièce (#14287) : un rond net de 20 dp dans le coin de la vignette. La zone touchée, plus large, reste
+ * transparente ; un `IconButton` l'aurait portée à 48 dp et peinte en gris, débordant en demi-disque derrière le ✕.
+ */
+@Composable
+private fun PieceRemoveButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(PieceRemoveTouch)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Box(
+            Modifier.size(PieceRemoveDisc).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(12.dp))
         }
     }
 }
 
 @Composable
 private fun PieceThumbnail(piece: CommentPendingPiece) {
-    if (piece.isVideo) {
-        Icon(MeeshyIcons.Video, contentDescription = null, tint = MeeshyPalette.Indigo500)
+    if (piece.isVideo || piece.isAudio) {
+        Icon(if (piece.isAudio) MeeshyIcons.Mic else MeeshyIcons.Video, contentDescription = null, tint = MeeshyPalette.Indigo500)
         return
     }
     val bitmap = remember(piece.item) {
@@ -126,24 +167,6 @@ private fun PieceThumbnail(piece: CommentPendingPiece) {
         }.getOrNull()
     }
     bitmap?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-}
-
-/** Le bouton « joindre » du composeur : la galerie, photo ou vidéo ; ce qui se lit part au bandeau. */
-@Composable
-internal fun CommentAttachButton(enabled: Boolean, onPicked: (MediaUploadItem) -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
-        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let(onPicked) }
-    }
-    IconButton(
-        onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-        enabled = enabled,
-    ) {
-        Icon(MeeshyIcons.PhotoFilled, contentDescription = stringResource(R.string.feed_composer_attach_media),
-            tint = if (enabled) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted)
-    }
 }
 
 /**

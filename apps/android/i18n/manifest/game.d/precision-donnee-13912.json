@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.tier",
+          "androidName": "game_detail_fact_tier",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.score",
+          "androidName": "game_detail_fact_score",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.convertible",
+          "androidName": "game_detail_fact_convertible",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.level_next",
+          "androidName": "game_detail_fact_level_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.level_record",
+          "androidName": "game_detail_fact_level_record",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.tailwind",
+          "androidName": "game_detail_fact_tailwind",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.mint_price",
+          "androidName": "game_detail_fact_mint_price",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.mint_missing",
+          "androidName": "game_detail_fact_mint_missing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.can_mint",
+          "androidName": "game_detail_fact_can_mint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.factor",
+          "androidName": "game_detail_fact_factor",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.mint_next",
+          "androidName": "game_detail_fact_mint_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.mint_glory",
+          "androidName": "game_detail_fact_mint_glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.minted",
+          "androidName": "game_detail_fact_minted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.glory",
+          "androidName": "game_detail_fact_glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.glory_missing",
+          "androidName": "game_detail_fact_glory_missing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.streak",
+          "androidName": "game_detail_fact_streak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.streak_record",
+          "androidName": "game_detail_fact_streak_record",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.flame_state",
+          "androidName": "game_detail_fact_flame_state",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.missions_done",
+          "androidName": "game_detail_fact_missions_done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.league_place",
+          "androidName": "game_detail_fact_league_place",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.week_points",
+          "androidName": "game_detail_fact_week_points",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.league_zone",
+          "androidName": "game_detail_fact_league_zone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.league_missing",
+          "androidName": "game_detail_fact_league_missing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.league_closes",
+          "androidName": "game_detail_fact_league_closes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.league_friends",
+          "androidName": "game_detail_fact_league_friends",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.season",
+          "androidName": "game_detail_fact_season",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.season_week",
+          "androidName": "game_detail_fact_season_week",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.season_steps",
+          "androidName": "game_detail_fact_season_steps",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.season_stars",
+          "androidName": "game_detail_fact_season_stars",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.prestige_glory",
+          "androidName": "game_detail_fact_prestige_glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.elan_families",
+          "androidName": "game_detail_fact_elan_families",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.badges_earned",
+          "androidName": "game_detail_fact_badges_earned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.defis_earned",
+          "androidName": "game_detail_fact_defis_earned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.succes_earned",
+          "androidName": "game_detail_fact_succes_earned",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.trophies",
+          "androidName": "game_detail_fact_trophies",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.showcase_visibility",
+          "androidName": "game_detail_fact_showcase_visibility",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.atlas_stamps",
+          "androidName": "game_detail_fact_atlas_stamps",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.atlas_pending",
+          "androidName": "game_detail_fact_atlas_pending",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.spend_held",
+          "androidName": "game_detail_fact_spend_held",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.spend_cost",
+          "androidName": "game_detail_fact_spend_cost",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.spend_after",
+          "androidName": "game_detail_fact_spend_after",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.spend_missing",
+          "androidName": "game_detail_fact_spend_missing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.level_now",
+          "androidName": "game_detail_fact_level_now",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.fact.level_required",
+          "androidName": "game_detail_fact_level_required",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

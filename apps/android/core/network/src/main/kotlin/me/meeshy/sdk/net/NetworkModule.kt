@@ -72,8 +72,12 @@ internal object NetworkModule {
 
     @Provides
     @Singleton
-    fun providesTokenStore(@TokenVault store: SecureStore): TokenStore =
-        EncryptedTokenStore(store)
+    fun providesTokenStore(
+        @TokenVault store: SecureStore,
+        backup: SessionBackup,
+        consent: SessionBackupConsent,
+        shelf: AccountShelf,
+    ): TokenStore = BackedUpTokenStore(EncryptedTokenStore(store), backup, shelf = shelf, consent = consent)
 
     @Provides
     @Singleton

@@ -159,6 +159,24 @@ extension LocalizationConsistencyTests {
         return result
     }
 
+    /// **Une clé que le manifeste Android ADOPTE n'est pas morte** (#13918) :
+    /// `xcstrings_to_android.py` lit ses traductions dans ce catalogue, même
+    /// quand le code iOS ne la cite plus. Miroir de `android_adopted_app_keys`
+    /// (`check_localization.py`).
+    func androidAdoptedAppKeys(repoRoot: URL) -> Set<String> {
+        let racine = repoRoot.appendingPathComponent("apps/android/i18n/manifest")
+        let fichiers = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "json" } ?? []
+        return Set(fichiers.flatMap { url -> [String] in
+            let json = (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) }
+            let modules = ((json as? [String: Any])?["modules"] as? [String: Any]) ?? [:]
+            return modules.values
+                .flatMap { (($0 as? [String: Any])?["entries"] as? [[String: Any]]) ?? [] }
+                .filter { $0["catalog"] as? String == "app" && $0["status"] as? String == "adopted" }
+                .compactMap { $0["iosKey"] as? String }
+        })
+    }
+
     /// Locales the app actually ships — read from `Info.plist`, not hard-coded.
     func shippedLocales(repoRoot: URL) throws -> Set<String> {
         let url = repoRoot.appendingPathComponent("apps/ios/Meeshy/Info.plist")

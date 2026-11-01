@@ -96,6 +96,12 @@ function SaveMenu({
           glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.arrowBendUpRight} size={GLYPH_SIZE.md} />,
           onSelect: send,
         },
+        {
+          key: 'imager',
+          label: translate(language, 'media.viewer.imager'),
+          glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={GLYPH_SIZE.md} />,
+          onSelect: page.imager,
+        },
       ]}
     />
   );

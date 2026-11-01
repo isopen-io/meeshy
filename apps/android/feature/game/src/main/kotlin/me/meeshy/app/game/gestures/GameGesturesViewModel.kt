@@ -23,6 +23,8 @@ import me.meeshy.sdk.model.game.DailyChest
 import me.meeshy.sdk.model.game.GameIntentIds
 import me.meeshy.sdk.model.game.GameMintPreview
 import me.meeshy.sdk.model.game.MeeshEdition
+import me.meeshy.sdk.model.game.ceremony.GameMintSettlement
+import me.meeshy.sdk.model.game.ceremony.MintSettlementOutcome
 import me.meeshy.sdk.model.game.engagement.MeeshMintOutcome
 import me.meeshy.sdk.model.game.engagement.outcome
 import me.meeshy.sdk.model.game.GameRefusalLaw
@@ -42,6 +44,7 @@ data class GameGestureFailure(val offline: Boolean, val code: String?)
 private data class Results(
     val chestReward: DailyChest?,
     val celebration: MintCelebration?,
+    val mintSettlement: GameMintSettlement?,
     val claimingStep: Int?,
     val prestigePassed: Int?,
     val accountTimezone: String?,
@@ -67,6 +70,11 @@ data class GameGesturesUiState(
     val prestigePassed: Int? = null,
     /** La dernière frappe confirmée par la passerelle ; `null` tant qu'aucune ne l'a été sur cet écran. */
     val celebration: MintCelebration? = null,
+    /**
+     * La DERNIÈRE frappe RÉGLÉE par la passerelle — pièce ou refus (iOS `mintSettlement`) : ce que la cérémonie attend
+     * pour frapper, ce qui libère la tête de l'Héritage. `null` tant qu'aucune n'a été réglée sur cet écran.
+     */
+    val mintSettlement: GameMintSettlement? = null,
     val failures: Map<GameGesture, GameGestureFailure> = emptyMap(),
     /** Le fuseau du COMPTE, où la passerelle découpe le jour de jeu : jamais celui de l'appareil. */
     val accountTimezone: String? = null,
@@ -118,12 +126,20 @@ class GameGesturesViewModel internal constructor(
     private val failures = MutableStateFlow<Map<GameGesture, GameGestureFailure>>(emptyMap())
     private val chestReward = MutableStateFlow<DailyChest?>(null)
     private val celebrationFlow = MutableStateFlow<MintCelebration?>(null)
+    private val settlementFlow = MutableStateFlow<GameMintSettlement?>(null)
     private val claimingStepFlow = MutableStateFlow<Int?>(null)
     private val prestigePassedFlow = MutableStateFlow<Int?>(null)
 
     val state: StateFlow<GameGesturesUiState> = combine(
-        network.isOnline, inFlight, rerollingMission, failures, combine(chestReward, celebrationFlow, claimingStepFlow, prestigePassedFlow, accountTimezone, ::Results),
-    ) { online, busy, rerolling, failed, (reward, celebration, claiming, passed, timezone) ->
+        network.isOnline,
+        inFlight,
+        rerollingMission,
+        failures,
+        combine(chestReward, celebrationFlow, settlementFlow, claimingStepFlow, combine(prestigePassedFlow, accountTimezone, ::Pair)) {
+                reward, celebration, settlement, claiming, (passed, timezone) ->
+            Results(reward, celebration, settlement, claiming, passed, timezone)
+        },
+    ) { online, busy, rerolling, failed, (reward, celebration, settlement, claiming, passed, timezone) ->
         GameGesturesUiState(
             online = online,
             rerollingMissionId = rerolling,
@@ -136,6 +152,7 @@ class GameGesturesViewModel internal constructor(
             passingPrestige = GameGesture.Prestige in busy,
             prestigePassed = passed,
             celebration = celebration,
+            mintSettlement = settlement,
             failures = failed,
             accountTimezone = timezone,
             chestReward = reward,
@@ -170,19 +187,30 @@ class GameGesturesViewModel internal constructor(
      * Frapper la Meesh suivante. Le prix que l'écran a montré part avec la frappe ([GameMintPreview.price]) : au-delà,
      * la passerelle refuse (`PRICE_CHANGED`) sans rien débiter. La pièce, son numéro et son édition sont ceux de la
      * RÉPONSE ; le solde, le niveau et le prix suivant sont relus sur la progression servie.
+     *
+     * Sans bloc de jeu ([preview] nul, iOS `ProgressionMeeshDetail`), la frappe part sans garde de prix, comme iOS
+     * (`maxPrice: game?.mint.price`), et la pièce ne se célèbre que si la réponse dit son numéro.
+     *
+     * Chaque réponse — pièce ou refus, réseau absent compris — se RÈGLE ([GameGesturesUiState.mintSettlement]) avant la
+     * relecture : la cérémonie de frappe ne frappe qu'à ce réglement, jamais avant.
      */
-    fun mint(preview: GameMintPreview) {
+    fun mint(preview: GameMintPreview?) {
         run(
             GameGesture.Mint,
             "mint",
+            onRefused = { failure -> settle(GameMintSettlement.refusal(failure.offline, failure.code)) },
             onDone = { result ->
+                settle(GameMintSettlement.outcomeOf(result, preview))
                 if (result.outcome == MeeshMintOutcome.MINTED) {
-                    celebrationFlow.update { MintCelebration(result.number ?: preview.number, result.edition ?: preview.edition, (it?.key ?: 0) + 1) }
+                    val number = result.number ?: preview?.number
+                    if (number != null) {
+                        celebrationFlow.update { MintCelebration(number, result.edition ?: preview?.edition, (it?.key ?: 0) + 1) }
+                    }
                 } else if (result.outcome != MeeshMintOutcome.ALREADY_MINTED) {
                     failures.update { it + (GameGesture.Mint to GameGestureFailure(offline = false, code = null)) }
                 }
             },
-        ) { id -> gestures.mint(id, preview.price) }
+        ) { id -> gestures.mint(id, preview?.price) }
     }
 
     /** Réclamer la récompense d'une halte du Voyage. Le crédit (points, fragment, Veilleuse) est celui que la passerelle applique. */
@@ -210,11 +238,14 @@ class GameGesturesViewModel internal constructor(
         onStart: () -> Unit = {},
         onEnd: () -> Unit = {},
         onDone: (T) -> Unit = {},
+        onRefused: (GameGestureFailure) -> Unit = {},
         send: suspend (requestId: String) -> GameWriteOutcome<T>,
     ) {
         if (!reserve(gesture)) return
         if (!isOnline.value) {
-            failures.update { it + (gesture to GameGestureFailure(offline = true, code = null)) }
+            val failure = GameGestureFailure(offline = true, code = null)
+            failures.update { it + (gesture to failure) }
+            onRefused(failure)
             release(gesture)
             return
         }
@@ -230,7 +261,9 @@ class GameGesturesViewModel internal constructor(
                     }
                     is GameWriteOutcome.Refused -> {
                         if (GameRefusalLaw.releasesId(outcome.code)) ids.spent(intention)
-                        failures.update { it + (gesture to GameGestureFailure(outcome.offline, outcome.code)) }
+                        val failure = GameGestureFailure(outcome.offline, outcome.code)
+                        failures.update { it + (gesture to failure) }
+                        onRefused(failure)
                         if (GameRefusalLaw.refreshesAfter(outcome.code) && !outcome.offline) refreshProgress()
                     }
                 }
@@ -249,6 +282,8 @@ class GameGesturesViewModel internal constructor(
             if (inFlight.compareAndSet(current, current + gesture)) return true
         }
     }
+
+    private fun settle(outcome: MintSettlementOutcome) = settlementFlow.update { GameMintSettlement.next(it, outcome) }
 
     private fun release(gesture: GameGesture) = inFlight.update { it - gesture }
 

@@ -21,6 +21,7 @@ import {
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { assertValidObjectId } from '../utils/object-id.js';
+import { notePairInteraction } from './relations/pairInteractionRecorder.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService, type EngagementActivityOptions } from './engagement/EngagementService.js';
@@ -232,10 +233,12 @@ export class ReactionService {
     // rang part avec `lastReaction`, `emitConversationActivityUpdate`).
     await recordConversationActivity({ prisma: this.prisma, conversationId: message.conversationId, at: reaction.createdAt });
 
-    this.creditReactor(
-      message.conversation.participants.find((p) => p.id === participantId)?.userId ?? null,
-      message.conversationId,
-    );
+    const reactorUserId = message.conversation.participants.find((p) => p.id === participantId)?.userId ?? null;
+    this.creditReactor(reactorUserId, message.conversationId);
+    // Les cercles (#13932) : réagir au message de l'autre compte pour la paire.
+    if (reactorUserId && message.sender?.userId) {
+      notePairInteraction(this.prisma, { actorId: reactorUserId, otherId: message.sender.userId, nature: 'reaction', at: reaction.createdAt });
+    }
 
     return { reaction: this.mapReactionToData(reaction), unchanged: false };
   }

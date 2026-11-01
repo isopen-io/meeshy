@@ -22,9 +22,8 @@ class StoryObjectControllersTest {
     }
 
     @Test
-    fun `stickers sharing the plane can be stacked, and editing or trimming are not controllers`() {
+    fun `stickers sharing the plane are never stacked by a controller, and editing or trimming are not controllers`() {
         val state = StoryComposerStickerReducer.selected(withStickers("s1", "s2"), "s2")
-        assertThat(state.selectedObjectControllers!!.actions)
-            .containsExactly(Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.DELETE).inOrder()
+        assertThat(state.selectedObjectControllers!!.actions).containsExactly(Action.DUPLICATE, Action.DELETE).inOrder()
     }
 }

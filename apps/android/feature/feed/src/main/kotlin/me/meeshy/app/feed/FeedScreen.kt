@@ -14,7 +14,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -57,7 +56,8 @@ fun FeedScreen(
     onOpenProfile: ((String) -> Unit)? = null,
     onOpenHashtag: (String) -> Unit = {},
     onResumeStoryDraft: () -> Unit = {},
-    onOpenComposer: ((ComposerOrigin) -> Unit)? = null,
+    /** Every door of the composer (#13863): the placeholder, a draft to resume, a failed post reopened — one host, one scene. */
+    onOpenComposer: (ComposerOrigin) -> Unit,
     onRefreshRail: () -> Unit = {},
     storyRail: @Composable () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
@@ -71,24 +71,15 @@ fun FeedScreen(
     val sceneCoordinator = remember { FeedSceneCoordinator() }
     val sceneIds = remember(state.posts) { feedSceneIds(state.posts) }
     FeedSceneElectionEffect(coordinator = sceneCoordinator, listState = listState, sceneIds = sceneIds)
-    var composerDraft by remember { mutableStateOf<FeedComposerDraft?>(null) }
-
     val context = LocalContext.current
-    val retryLabel = stringResource(R.string.feed_retry)
     // Each notice shows once, in the reader's language. Collected (not keyed) so consuming
     // it never cancels the toast that is on screen.
     LaunchedEffect(viewModel) {
         viewModel.state.map { it.notice }.distinctUntilChanged().filterNotNull().collect { notice ->
-            val unpublished = viewModel.state.value.unpublishedDraft
             viewModel.consumeNotice()
-            if (unpublished != null) viewModel.consumeUnpublishedDraft()
             // The author's own post lands at the head: bring it into view (iOS scrolls to it).
             if (notice == FeedNotice.PUBLISHED) launch { listState.animateScrollToItem(0) }
-            val result = snackbar.showSnackbar(
-                message = context.getString(notice.messageRes()),
-                actionLabel = if (unpublished != null) retryLabel else null,
-            )
-            if (unpublished != null && result == SnackbarResult.ActionPerformed) composerDraft = unpublished
+            snackbar.showSnackbar(message = context.getString(notice.messageRes()))
         }
     }
 
@@ -111,16 +102,12 @@ fun FeedScreen(
                 .padding(padding),
         ) {
             // La porte du composeur (iOS `FeedView.composerPlaceholder`) SOUS le rail de stories, dans le contenu qui
-            // défile (#13653) — tapping it opens FeedComposerSheet; the pure FeedComposerDraft owns the publish rules.
-            // Then « Reprendre votre brouillon » (#13430) and « Publications non envoyées » (#13417).
+            // défile (#13653) — it opens the ONE composer on its scene (#13863). Then « Reprendre votre brouillon » (#13430)
+            // and « Publications non envoyées » (#13417), whose reopened post opens the same host.
             val composerHead: @Composable () -> Unit = {
                 FeedComposerHead(
-                    onCompose = {
-                        if (onOpenComposer != null) onOpenComposer(ComposerOrigin.FeedComposer)
-                        else scope.launch { composerDraft = viewModel.restorableDraft() ?: FeedComposerDraft() }
-                    },
+                    onCompose = { onOpenComposer(ComposerOrigin.FeedComposer) },
                     onResumeStory = onResumeStoryDraft,
-                    onReopen = { draft -> composerDraft = draft },
                 )
             }
             val clipboard = LocalClipboardManager.current
@@ -147,6 +134,7 @@ fun FeedScreen(
                     },
                 )
             }
+            FeedOfflineBand(visible = state.showsOfflineBand)
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,
                 onRefresh = {
@@ -157,11 +145,12 @@ fun FeedScreen(
                     .fillMaxSize()
                     .weight(1f),
             ) {
-            when {
-                state.showSkeleton -> FeedHeadColumn(storyRail, composerHead) { FeedSkeleton() }
-                state.posts.isEmpty() && state.loadFailed -> FeedHeadColumn(storyRail, composerHead) { FeedErrorState(onRetry = viewModel::refresh) }
-                state.posts.isEmpty() -> FeedHeadColumn(storyRail, composerHead) { FeedEmptyState() }
-                else -> LazyColumn(
+            when (state.body) {
+                FeedBody.SKELETON -> FeedHeadColumn(storyRail, composerHead) { FeedSkeleton() }
+                FeedBody.OFFLINE_EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedOfflineEmptyState(onRetry = viewModel::refresh) }
+                FeedBody.LOAD_ERROR -> FeedHeadColumn(storyRail, composerHead) { FeedErrorState(onRetry = viewModel::refresh) }
+                FeedBody.EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedEmptyState() }
+                FeedBody.POSTS -> LazyColumn(
                     state = listState,
                     modifier = Modifier.sceneViewport(),
                     // Aucune marge horizontale de contenu : le rail court d'un bord à l'autre, comme en tête des
@@ -251,33 +240,6 @@ fun FeedScreen(
         FeedImageViewerHost(gallery = gallery, onDismiss = viewModel::dismissImageViewer)
     }
 
-    composerDraft?.let { seed ->
-        FeedComposerSheet(
-            initialDraft = seed,
-            onPublish = { request, draft ->
-                viewModel.publishPost(
-                    content = request.content,
-                    visibility = request.visibility,
-                    mediaIds = request.mediaIds,
-                    type = request.type,
-                    location = request.location,
-                    language = request.language,
-                    mediaAlt = request.mediaAlt,
-                    mediaCaption = request.mediaCaption,
-                    background = request.background,
-                    draft = draft.toSnapshot(System.currentTimeMillis()),
-                )
-                composerDraft = null
-            },
-            onDismiss = { composerDraft = null },
-            onDraftChange = viewModel::persistComposerDraft,
-            onQueueMedia = viewModel::queueMedia,
-            onRemoveMedia = viewModel::discardQueuedMedia,
-            onUploadMedia = viewModel::uploadMedia,
-            onMediaError = { message -> scope.launch { snackbar.showSnackbar(message) } },
-        )
-    }
-
     state.quoteComposer?.let { composer ->
         QuoteComposerSheet(
             composer = composer,
@@ -289,11 +251,11 @@ fun FeedScreen(
 }
 
 @Composable
-private fun FeedComposerHead(onCompose: () -> Unit, onResumeStory: () -> Unit, onReopen: (FeedComposerDraft) -> Unit) {
+private fun FeedComposerHead(onCompose: () -> Unit, onResumeStory: () -> Unit) {
     Column {
         FeedComposerPlaceholder(onClick = onCompose)
         DraftResumeSection(onResumePost = onCompose, onResumeStory = onResumeStory)
-        UnsentPublicationsEntry(onReopen = onReopen, onReopenStory = onResumeStory)
+        UnsentPublicationsEntry(onReopen = onCompose, onReopenStory = onResumeStory)
     }
 }
 

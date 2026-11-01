@@ -33,7 +33,10 @@ extension StoryEffects {
     /// préservées : elles sont sémantiquement portables d'un device à
     /// l'autre et utiles aux tests / mode preview.
     public func sanitizedForServerPublish() -> StoryEffects {
-        var copy = self
+        // **Le look d'un média ne part jamais au fil** (#13840) : la publication
+        // l'a cuit dans les octets ; un chemin qui l'oublierait le ferait
+        // peindre une seconde fois chez le lecteur iOS, et jamais ailleurs.
+        var copy = withoutMediaLooks
         if let medias = copy.mediaObjects {
             copy.mediaObjects = medias.map { media in
                 guard let raw = media.mediaURL, Self.isLocalFileURL(raw) else { return media }

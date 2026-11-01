@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "jovial.fete",
             mood: .jovial,
             name: "Fête",
+            localizedNames: ["fr": "Fête", "en": "Party", "es": "Fiesta", "pt": "Festa", "de": "Fest", "it": "Festa", "ar": "حفلة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -30,13 +31,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.16, stroke: CallFrameStroke(color: "#FFE08A", width: 0.026), double: false, glow: "#FFD24A88", shadow: true, card: nil, tilt: .wild, tone: .color, duotone: nil), background: .radial(colors: ["#FF4F9A", "#B5176B", "#5E0C3A"]), ornaments: [CallFrameOrnament(kind: .confetti, color: "#FFE08A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFF1B8", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_fete_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_fete_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.16, stroke: CallFrameStroke(color: "#FFE08A", width: 0.026), double: false, glow: "#FFD24A88", shadow: true, card: nil, tilt: .wild, tone: .color, duotone: nil), background: .radial(colors: ["#FF4F9A", "#B5176B", "#5E0C3A"]), ornaments: [CallFrameOrnament(kind: .confetti, color: "#FFE08A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFF1B8", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_fete_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_fete_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "jovial.fete.comite",
             motif: "jovial.fete",
             mood: .jovial,
             name: "Fête",
+            localizedNames: ["fr": "Fête", "en": "Party", "es": "Fiesta", "pt": "Festa", "de": "Fest", "it": "Festa", "ar": "حفلة"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.035, top: 0.17, bottom: 0.1),
@@ -56,13 +58,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.16, stroke: CallFrameStroke(color: "#FFE08A", width: 0.026), double: false, glow: "#FFD24A88", shadow: true, card: nil, tilt: .wild, tone: .color, duotone: nil), background: .radial(colors: ["#FF4F9A", "#B5176B", "#5E0C3A"]), ornaments: [CallFrameOrnament(kind: .confetti, color: "#FFE08A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFF1B8", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_fete_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_fete_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.16, stroke: CallFrameStroke(color: "#FFE08A", width: 0.026), double: false, glow: "#FFD24A88", shadow: true, card: nil, tilt: .wild, tone: .color, duotone: nil), background: .radial(colors: ["#FF4F9A", "#B5176B", "#5E0C3A"]), ornaments: [CallFrameOrnament(kind: .confetti, color: "#FFE08A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFF1B8", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_fete_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_fete_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "jovial.fete.groupe",
             motif: "jovial.fete",
             mood: .jovial,
             name: "Fête",
+            localizedNames: ["fr": "Fête", "en": "Party", "es": "Fiesta", "pt": "Festa", "de": "Fest", "it": "Festa", "ar": "حفلة"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .mosaic, margin: 0.05, gap: 0.025, top: 0.16, bottom: 0.1),
@@ -82,13 +85,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.16, stroke: CallFrameStroke(color: "#FFE08A", width: 0.026), double: false, glow: "#FFD24A88", shadow: true, card: nil, tilt: .wild, tone: .color, duotone: nil), background: .radial(colors: ["#FF4F9A", "#B5176B", "#5E0C3A"]), ornaments: [CallFrameOrnament(kind: .confetti, color: "#FFE08A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFF1B8", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_fete_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_fete_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.16, stroke: CallFrameStroke(color: "#FFE08A", width: 0.026), double: false, glow: "#FFD24A88", shadow: true, card: nil, tilt: .wild, tone: .color, duotone: nil), background: .radial(colors: ["#FF4F9A", "#B5176B", "#5E0C3A"]), ornaments: [CallFrameOrnament(kind: .confetti, color: "#FFE08A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFF1B8", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_fete_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_fete_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "jovial.fete.tablee",
             motif: "jovial.fete",
             mood: .jovial,
             name: "Fête",
+            localizedNames: ["fr": "Fête", "en": "Party", "es": "Fiesta", "pt": "Festa", "de": "Fest", "it": "Festa", "ar": "حفلة"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.08),
@@ -108,13 +112,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.16, stroke: CallFrameStroke(color: "#FFE08A", width: 0.026), double: false, glow: "#FFD24A88", shadow: true, card: nil, tilt: .wild, tone: .color, duotone: nil), background: .radial(colors: ["#FF4F9A", "#B5176B", "#5E0C3A"]), ornaments: [CallFrameOrnament(kind: .confetti, color: "#FFE08A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFF1B8", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_fete_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_fete_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .round, radius: 0.16, stroke: CallFrameStroke(color: "#FFE08A", width: 0.026), double: false, glow: "#FFD24A88", shadow: true, card: nil, tilt: .wild, tone: .color, duotone: nil), background: .radial(colors: ["#FF4F9A", "#B5176B", "#5E0C3A"]), ornaments: [CallFrameOrnament(kind: .confetti, color: "#FFE08A", density: .mid, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .bubble, color: "#FFF1B8", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_fete_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_fete_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         ),
         CallFrameDesign(
             id: "jovial.fanfare.duo",
             motif: "jovial.fanfare",
             mood: .jovial,
             name: "Fanfare",
+            localizedNames: ["fr": "Fanfare", "en": "Fanfare", "es": "Charanga", "pt": "Fanfarra", "de": "Blaskapelle", "it": "Fanfara", "ar": "فرقة نحاسية"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.04, top: 0.18, bottom: 0.12),
@@ -138,6 +143,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "jovial.fanfare",
             mood: .jovial,
             name: "Fanfare",
+            localizedNames: ["fr": "Fanfare", "en": "Fanfare", "es": "Charanga", "pt": "Fanfarra", "de": "Blaskapelle", "it": "Fanfara", "ar": "فرقة نحاسية"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .orbit, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.11),
@@ -161,6 +167,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "jovial.fanfare",
             mood: .jovial,
             name: "Fanfare",
+            localizedNames: ["fr": "Fanfare", "en": "Fanfare", "es": "Charanga", "pt": "Fanfarra", "de": "Blaskapelle", "it": "Fanfara", "ar": "فرقة نحاسية"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .honeycomb, margin: 0.06, gap: 0.02, top: 0.15, bottom: 0.16),
@@ -184,6 +191,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "jovial.fanfare",
             mood: .jovial,
             name: "Fanfare",
+            localizedNames: ["fr": "Fanfare", "en": "Fanfare", "es": "Charanga", "pt": "Fanfarra", "de": "Blaskapelle", "it": "Fanfara", "ar": "فرقة نحاسية"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.14),
@@ -207,6 +215,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "jovial.ballons",
             mood: .jovial,
             name: "Ballons",
+            localizedNames: ["fr": "Ballons", "en": "Balloons", "es": "Globos", "pt": "Balões", "de": "Luftballons", "it": "Palloncini", "ar": "بالونات"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.07, gap: 0.04, top: 0.17, bottom: 0.1),
@@ -227,13 +236,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .bubble, color: "#FF4D8D", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#BFE4FF", "#FFD6E8"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .balloons, color: "#FF5C8A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .clouds, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .brush, color: "#2E1E8A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_ballons_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_ballons_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#BFE4FF", "#FFD6E8"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .balloons, color: "#FF5C8A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .clouds, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .brush, color: "#2E1E8A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_ballons_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_ballons_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "jovial.ballons.comite",
             motif: "jovial.ballons",
             mood: .jovial,
             name: "Ballons",
+            localizedNames: ["fr": "Ballons", "en": "Balloons", "es": "Globos", "pt": "Balões", "de": "Luftballons", "it": "Palloncini", "ar": "بالونات"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .scatter, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.1),
@@ -254,13 +264,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#BFE4FF", "#FFD6E8"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .balloons, color: "#FF5C8A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .clouds, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .brush, color: "#2E1E8A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_ballons_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_ballons_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#BFE4FF", "#FFD6E8"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .balloons, color: "#FF5C8A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .clouds, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .brush, color: "#2E1E8A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_ballons_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_ballons_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "jovial.ballons.groupe",
             motif: "jovial.ballons",
             mood: .jovial,
             name: "Ballons",
+            localizedNames: ["fr": "Ballons", "en": "Balloons", "es": "Globos", "pt": "Balões", "de": "Luftballons", "it": "Palloncini", "ar": "بالونات"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.03, top: 0.15, bottom: 0.1),
@@ -281,13 +292,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#BFE4FF", "#FFD6E8"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .balloons, color: "#FF5C8A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .clouds, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .brush, color: "#2E1E8A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_ballons_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_ballons_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#BFE4FF", "#FFD6E8"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .balloons, color: "#FF5C8A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .clouds, color: "#FFFFFF", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .sparkles, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .brush, color: "#2E1E8A", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: nil), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_ballons_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_ballons_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "jovial.grimaces.duo",
             motif: "jovial.grimaces",
             mood: .jovial,
             name: "Grimaces",
+            localizedNames: ["fr": "Grimaces", "en": "Funny Faces", "es": "Muecas", "pt": "Caretas", "de": "Grimassen", "it": "Smorfie", "ar": "وجوه مضحكة"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.05, top: 0.13, bottom: 0.12),
@@ -306,7 +318,7 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .poster, color: "#FFFFFF", place: .bottom, size: .m, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.17), tilt: .wild, tone: .color, duotone: nil), background: .solid(color: "#FFD93B"), ornaments: [CallFrameOrnament(kind: .lightning, color: "#FF4FA3", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .stars, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .caption, font: .tag, color: "#111111", fill: nil), title: CallFrameTitle(source: .names, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_grimaces_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_grimaces_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: nil, double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.17), tilt: .wild, tone: .color, duotone: nil), background: .solid(color: "#FFD93B"), ornaments: [CallFrameOrnament(kind: .lightning, color: "#FF4FA3", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .stars, color: "#FFFFFF", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .handle, style: .caption, font: .tag, color: "#111111", fill: nil), title: CallFrameTitle(source: .names, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/jovial_grimaces_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/jovial_grimaces_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)]))]
         )
     ]
 }

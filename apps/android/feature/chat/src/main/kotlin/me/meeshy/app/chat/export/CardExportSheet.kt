@@ -68,6 +68,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.permission.PermissionFlow
 import me.meeshy.ui.component.permission.PermissionFlowHost
@@ -82,7 +83,6 @@ import me.meeshy.ui.theme.MeeshyTheme
  * ce qui existe, montre la carte telle qu'elle partira, puis l'enregistre ou la partage. La
  * peinture tourne HORS du thread principal. Tout est local : rien n'est envoyé au serveur.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CardExportSheet(
     bubble: BubbleContent,
@@ -90,11 +90,41 @@ internal fun CardExportSheet(
     onDismiss: () -> Unit,
     viewModel: CardExportViewModel = hiltViewModel(),
 ) {
-    val state = rememberCardExportState(bubble, viewModel.viewer, conversationTitle)
+    val viewer = viewModel.viewer
+    val source = remember(bubble) { BubbleCardSource(bubble, viewer, System.currentTimeMillis()) }
+    CardExportSheet(source, viewer, conversationTitle, onDismiss)
+}
+
+/**
+ * « Imager » un COMMENTAIRE (#13922, iOS `MessageCardExportMenu.request(post:comment:…)`) : la carte que
+ * `PostCommentCardComposition` a composée — l'auteur, le texte servi par le Prisme, le post public en tête, le bloc
+ * « Fil de commentaires » au-delà de deux blocs — passe par le MÊME atelier qu'un message, puis Enregistrer ou Partager.
+ * Comme sur iOS, la carte d'un commentaire ne porte aucun titre de conversation.
+ */
+@Composable
+fun CommentCardExportSheet(
+    key: String,
+    card: PostCommentCardSubject,
+    onDismiss: () -> Unit,
+    viewModel: CardExportViewModel = hiltViewModel(),
+) {
+    val source = remember(key, card) { ComposedCardSource(key, CardSubjects.of(card)) }
+    CardExportSheet(source, viewModel.viewer, conversationTitle = null, onDismiss = onDismiss)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CardExportSheet(
+    source: CardSource,
+    viewer: CardViewer,
+    conversationTitle: String?,
+    onDismiss: () -> Unit,
+) {
+    val state = rememberCardExportState(source, viewer, conversationTitle)
     val subject = state.subject
-    // Le message VIVANT fait foi : supprimé, rendu éphémère ou protégé pendant que l'atelier est
+    // Ce qu'on image VIVANT fait foi : supprimé, rendu éphémère ou protégé pendant que l'atelier est
     // ouvert, il ne s'image plus — l'atelier se ferme au lieu de peindre l'instantané d'ouverture.
-    if (subject == null || CardSubjects.refusal(bubble, System.currentTimeMillis()) != null) {
+    if (subject == null || !source.stillAllowed(System.currentTimeMillis())) {
         LaunchedEffect(Unit) { onDismiss() }
         return
     }

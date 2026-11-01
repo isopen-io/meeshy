@@ -26,15 +26,15 @@
     },
     "animes": {
       "name": "Animés",
-      "description": "Des fonds qui respirent doucement."
+      "description": "La brume respire, des bulles montent, des pétales tombent."
     },
     "bannieres-animees": {
       "name": "Bannières animées",
-      "description": "Un reflet discret traverse la bannière."
+      "description": "Une aurore, une marée, des braises : la bannière s’anime."
     },
     "contours-animes": {
       "name": "Contours animés",
-      "description": "Un arc doré fait le tour de l’avatar."
+      "description": "Un halo doré, un prisme qui tourne, une onde qui bat."
     },
     "contours-haussmannien": {
       "name": "Contour haussmannien",
@@ -91,6 +91,46 @@
     "cadres-celte": {
       "name": "Cadre celte",
       "description": "Tresse sans fin et triskèles en spirale."
+    },
+    "cadres-illustres": {
+      "name": "Cadres illustrés",
+      "description": "Six cadres qui débordent de l’avatar : un masque aux yeux qui rougissent, une toile et son araignée, des ailes d’ange, un cercle runique, des griffes d’os, des ailes de démon."
+    },
+    "cadres-asiatiques": {
+      "name": "Cadres d’Asie",
+      "description": "Trois cadres inspirés de l’Asie : un dragon de jade qui ondule autour de l’avatar, des nuages de soie qui dérivent, des lanternes de papier qui se balancent."
+    },
+    "cadres-africains": {
+      "name": "Cadres d’Afrique",
+      "description": "Trois cadres inspirés de l’Afrique : un masque d’ébène aux yeux qui s’illuminent devant un soleil de savane, des bandes tissées qui ondulent, un collier de perles qui roule."
+    },
+    "cadres-celtes": {
+      "name": "Cadres celtes",
+      "description": "Trois cadres inspirés des entrelacs celtes : un nœud entrelacé qui s’efface puis se retrace, une spirale triple qui tourne, un lierre d’émeraude dont les feuilles frémissent."
+    },
+    "cadres-nordiques": {
+      "name": "Cadres nordiques",
+      "description": "Quatre cadres venus du grand Nord : des corbeaux qui tournoient, une aurore boréale qui ondule, un anneau de pierre gravée qui s’allume, une proue sculptée sur les vagues."
+    },
+    "cadres-egyptiens": {
+      "name": "Cadres égyptiens",
+      "description": "Quatre cadres d’or et de lapis : un cobra qui se dresse, un scarabée qui ouvre ses ailes, un soleil du désert au grand collier, des lotus du Nil qui s’ouvrent."
+    },
+    "cadres-mayas": {
+      "name": "Cadres mayas",
+      "description": "Quatre cadres de pierre et de jade : un serpent de jade à crête de plumes, des cartouches de glyphes qui s’allument, une frise à gradins sous un soleil levant, un jaguar caché dans la jungle."
+    },
+    "cadres-indiens": {
+      "name": "Cadres indiens",
+      "description": "Trois cadres inspirés des motifs de l’Inde : un mandala floral qui s’ouvre, un paon qui fait la roue, une guirlande de soucis et de jasmin qui se balance."
+    },
+    "cadres-amerindiens": {
+      "name": "Cadres amérindiens",
+      "description": "Trois cadres inspirés du tissage et du perlage : un cercle tissé dont les plumes stylisées se balancent, un perlage de losanges qui tourne, un soleil en escalier sur des montagnes et leur rivière."
+    },
+    "cadres-australs": {
+      "name": "Cadres australs",
+      "description": "Trois cadres inspirés de la peinture de points et du ciel austral : des cercles de points qui scintillent, une tortue marine qui nage autour de l’avatar, la Croix du Sud qui brille."
     }
   },
   "designs": {
@@ -109,7 +149,11 @@
     "horizon": "Horizon",
     "baobab": "Baobab",
     "brume-vivante": "Brume vivante",
-    "aurore-vive": "Aurore vive"
+    "aurore-vive": "Aurore vive",
+    "bulles-legeres": "Bulles légères",
+    "pluie-de-petales": "Pluie de pétales",
+    "maree": "Marée",
+    "braises": "Braises"
   },
   "rings": {
     "filet": "Filet",
@@ -132,7 +176,45 @@
     "rituel": "Africain rituel",
     "rituel-anime": "Africain rituel animé",
     "celte": "Celte",
-    "celte-anime": "Celte animé"
+    "celte-anime": "Celte animé",
+    "prisme-vivant": "Prisme vivant",
+    "onde": "Onde",
+    "masque-felin": "Masque félin",
+    "toile-araignee": "Toile d’araignée",
+    "ailes-ange": "Ailes d’ange",
+    "cercle-runique": "Cercle runique",
+    "griffes-os": "Griffes d’os",
+    "ailes-demon": "Ailes de démon",
+    "dragon-jade": "Dragon de jade",
+    "nuages-soie": "Nuages de soie",
+    "lanternes-papier": "Lanternes de papier",
+    "masque-ebene": "Masque d’ébène",
+    "bandes-tissees": "Bandes tissées",
+    "collier-perles": "Collier de perles",
+    "noeud-entrelace": "Nœud entrelacé",
+    "spirale-triple": "Spirale triple",
+    "lierre-emeraude": "Lierre d’émeraude",
+    "corbeaux-tournoyants": "Corbeaux tournoyants",
+    "aurore-boreale": "Aurore boréale",
+    "anneau-pierre-gravee": "Anneau de pierre gravée",
+    "proue-sculptee": "Proue sculptée",
+    "cobra-dore": "Cobra d’or",
+    "scarabee-aile": "Scarabée ailé",
+    "soleil-du-desert": "Soleil du désert",
+    "lotus-du-nil": "Lotus du Nil",
+    "serpent-de-jade": "Serpent de jade",
+    "cartouches-de-glyphes": "Cartouches de glyphes",
+    "frise-a-gradins": "Frise à gradins",
+    "jaguar-de-jungle": "Jaguar de la jungle",
+    "mandala-floral": "Mandala floral",
+    "paon-roue": "Paon qui fait la roue",
+    "guirlande-soucis": "Guirlande de soucis",
+    "cercle-tisse": "Cercle tissé aux plumes",
+    "perlage-losanges": "Perlage en losanges",
+    "soleil-montagnes": "Soleil sur les montagnes",
+    "cercles-points": "Cercles de points",
+    "tortue-marine": "Tortue marine",
+    "croix-du-sud": "Croix du Sud"
   },
   "gamut": {
     "indigo": "Indigo Meeshy",

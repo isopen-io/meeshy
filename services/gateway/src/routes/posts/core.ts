@@ -41,10 +41,11 @@ import { protectedPreview, maskedAttachment } from '../../services/notifications
 import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { mayServePostToAnonymous } from './anonymousPostGate';
-import { notifyRepostedAuthor, readRepostedSource, repostedAuthorToNotify } from './repostedAuthorNotification';
+import { noteRepostInteraction, notifyRepostedAuthor, readRepostedSource, repostedAuthorToNotify } from './repostedAuthorNotification';
 import { audienceChangeVerdict, mayRepostSource } from '../../services/posts/moderationHold';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
-import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
+import { getAppVersionFloor, getAppStoreUrl } from '../../utils/appVersion';
+import { rejectBelowAppVersionFloor as rejectBelowFloor } from '../../middleware/app-version-floor';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { issuesServies } from '../../utils/zod-issue-schema';
 import { MentionService } from '../../services/MentionService';
@@ -68,6 +69,9 @@ import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../servi
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { logError, logWarn } from '../../utils/logger.js';
+import { isBlockedWithAny } from '../../utils/blocking';
+import { OnlyUnlinkedBudgetRefused, refuseOnlyUnlinkedBudget, releaseOnlyUnlinkedBudget, spendOnlyUnlinkedBudget } from './onlyUnlinkedBudget';
+import { spendOnlyUnlinkedBudgetOnEdit } from './onlyUnlinkedBudgetOnEdit';
 
 /**
  * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
@@ -106,17 +110,7 @@ function rejectBelowAppVersionFloor(
   data: { storyEffects?: unknown; type?: string }
 ): boolean {
   if (data.storyEffects == null && data.type !== 'STORY') return false;
-  const versionHeader = request.headers['x-app-version'];
-  const version = typeof versionHeader === 'string' ? versionHeader : undefined;
-  if (!isBelowFloor(version, getAppVersionFloor())) return false;
-  const platformHeader = request.headers['x-app-platform'];
-  sendUpgradeRequired(reply, 'App version outdated - update the app', {
-    details: {
-      minVersion: getAppVersionFloor(),
-      storeUrl: getAppStoreUrl(typeof platformHeader === 'string' ? platformHeader : undefined),
-    },
-  });
-  return true;
+  return rejectBelowFloor(request, reply);
 }
 
 function rejectNonV3StoryEffects(
@@ -270,6 +264,8 @@ export function registerCoreRoutes(
         select: {
           id: true, messageId: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
           originalName: true, width: true, height: true, duration: true, codec: true, thumbHash: true,
+          // Le crédit de la lens (#11327) suit la copie vers le post.
+          lensSlug: true,
           // Protection au niveau PIÈCE JOINTE (lue par `maskedAttachment`).
           isViewOnce: true, isBlurred: true, effectFlags: true,
           // Protection au niveau MESSAGE PARENT (lue par `protectedPreview`) —
@@ -278,6 +274,8 @@ export function registerCoreRoutes(
           // sortir EN CLAIR vers un post.
           message: { select: {
             conversationId: true,
+            // #14242 — `senderId` est un Participant.id : le blocage se lit sur son `userId`.
+            sender: { select: { userId: true } },
             conversation: { select: { identifier: true } },
             messageType: true, isViewOnce: true, isBlurred: true, isEncrypted: true,
             effectFlags: true, expiresAt: true, createdAt: true,
@@ -343,6 +341,10 @@ export function registerCoreRoutes(
         if (reason === 'unpublishable-media') {
           return sendBadRequest(reply, 'This media cannot be published', { code: 'UNPUBLISHABLE_MEDIA' });
         }
+        return sendNotFound(reply, 'Attachment not found', { code: 'ATTACHMENT_NOT_FOUND' });
+      }
+      // #14242 — publier la pièce d'un expéditeur avec qui un blocage existe se refuse comme une pièce introuvable.
+      if (await isBlockedWithAny(prisma, authContext.registeredUser.id, [attachment?.message?.sender?.userId])) {
         return sendNotFound(reply, 'Attachment not found', { code: 'ATTACHMENT_NOT_FOUND' });
       }
 
@@ -449,6 +451,10 @@ export function registerCoreRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const authorId = authContext.registeredUser.id;
+      // #14105 — un post ONLY original : ses choisis sans lien comptent au plafond
+      // quotidien, débités DANS l'opération journalisée (une création rejouée ne
+      // recompte rien) et rendus si l'écriture échoue.
+      const countsOnlyUnlinked = creation.visibility === 'ONLY' && !creation.repostOfId?.trim();
       type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
       let companionReel: (CreatedPost & { id: string }) | undefined;
       // #9603 — le verdict du journal dit si la publication vient d'être
@@ -464,32 +470,14 @@ export function registerCoreRoutes(
         // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
         // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
         replayCost: 'diverges',
-        op: () => {
-          // `detectedLanguage` (#5349) EST désormais une entrée de
-          // `PostService.createPost`, persistée sur `Post` (#5422) : sans elle,
-          // une traduction demandée après coup (`translateOnDemand`) retombait
-          // sur la détection regex du serveur au lieu de la mesure on-device
-          // déjà faite à la création. Elle traverse donc par le spread comme le
-          // reste de `parsed.data`, au même titre qu'`originalLanguage`.
-          const input = {
-            ...creation,
-            content: creation.content !== undefined ? SecuritySanitizer.sanitizeText(creation.content) : undefined,
-            type: creation.type ?? 'POST',
-            visibility: creation.visibility ?? (creation.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
-          };
-          if (alsoAsReel !== true) {
-            return postService.createPost(input, authorId) as Promise<CreatedPost & { id: string }>;
-          }
-          // Les DEUX publications, ou aucune. Le journal de mutation retient la
-          // STORY (l'id rendu) ; le réel voyage à côté, dans `reel`.
-          return publishStoryAlsoAsReel({
-            prisma,
-            storage: companionStorage,
-            createPost: (post, author) => postService.createPost(post, author) as Promise<CreatedPost & { id: string }>,
-            retractPost: (postId, author) => postService.deletePost(postId, author, { actorRole: 'USER', reason: 'also-as-reel-rollback' }),
-          }, input, authorId).then(({ story, reel }) => {
-            companionReel = reel;
-            return story;
+        op: async () => {
+          const spent = countsOnlyUnlinked
+            ? await spendOnlyUnlinkedBudget({ fastify, prisma, authorId, chosenIds: creation.visibilityUserIds ?? [] })
+            : null;
+          if (spent && !spent.allowed) throw new OnlyUnlinkedBudgetRefused(spent);
+          return publish().catch(async (error: unknown) => {
+            if (spent) await releaseOnlyUnlinkedBudget({ fastify, authorId, unlinked: spent.unlinked });
+            throw error;
           });
         },
         onDuplicate: async (resultId) => {
@@ -497,6 +485,34 @@ export function registerCoreRoutes(
           return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
         },
       });
+      function publish(): Promise<CreatedPost & { id: string }> {
+        // `detectedLanguage` (#5349) EST désormais une entrée de
+        // `PostService.createPost`, persistée sur `Post` (#5422) : sans elle,
+        // une traduction demandée après coup (`translateOnDemand`) retombait
+        // sur la détection regex du serveur au lieu de la mesure on-device
+        // déjà faite à la création. Elle traverse donc par le spread comme le
+        // reste de `parsed.data`, au même titre qu'`originalLanguage`.
+        const input = {
+          ...creation,
+          content: creation.content !== undefined ? SecuritySanitizer.sanitizeText(creation.content) : undefined,
+          type: creation.type ?? 'POST',
+          visibility: creation.visibility ?? (creation.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
+        };
+        if (alsoAsReel !== true) {
+          return postService.createPost(input, authorId) as Promise<CreatedPost & { id: string }>;
+        }
+        // Les DEUX publications, ou aucune. Le journal de mutation retient la
+        // STORY (l'id rendu) ; le réel voyage à côté, dans `reel`.
+        return publishStoryAlsoAsReel({
+          prisma,
+          storage: companionStorage,
+          createPost: (post, author) => postService.createPost(post, author) as Promise<CreatedPost & { id: string }>,
+          retractPost: (postId, author) => postService.deletePost(postId, author, { actorRole: 'USER', reason: 'also-as-reel-rollback' }),
+        }, input, authorId).then(({ story, reel }) => {
+          companionReel = reel;
+          return story;
+        });
+      }
 
       if (replayed) {
         return sendSuccess(reply, servePublishedPost({
@@ -556,11 +572,13 @@ export function registerCoreRoutes(
       });
 
       if (sourcePostId) {
+        noteRepostInteraction(fastify.prisma, { actorId: authorId, source: repostedSource });
         notifyRepostedAuthor(fastify.notificationService, {
           actorId: authorId,
           source: repostedSource,
           sourcePostId,
           repostId: post.id,
+          reposterEntourageNotified: true,
         }).catch((err: unknown) => logWarn(fastify.log, '[POST /posts]: notify post repost failed', err));
       }
 
@@ -587,6 +605,7 @@ export function registerCoreRoutes(
       if (error instanceof ReelCompanionNotQualifiedError) {
         return sendError(reply, 422, 'The composition does not qualify as a reel', { code: REEL_NOT_QUALIFIED });
       }
+      if (error instanceof OnlyUnlinkedBudgetRefused) return refuseOnlyUnlinkedBudget(reply, error.verdict);
       // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
       // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
       // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
@@ -709,16 +728,23 @@ export function registerCoreRoutes(
         }
       }
 
+      // #14105 — débité APRÈS les refus de saisie : un 400 ne coûte rien.
+      const onlyBudget = await spendOnlyUnlinkedBudgetOnEdit(fastify, prisma, { postId, authorId: authContext.registeredUser.id, update: parsed.data });
+      if (!onlyBudget.allowed) return refuseOnlyUnlinkedBudget(reply, onlyBudget);
+
       const baseUpdateData = parsed.data.content !== undefined
         ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
         : parsed.data;
       const sanitizedUpdateData = { ...baseUpdateData, location: locationUpdate };
       // L'écriture porte la condition « pas hors ligne » (`updatePost`) : un retrait posé
       // pendant la requête la fait échouer (P2025), et ce refus se dit comme le verdict.
-      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData).catch((error: unknown) => {
+      const releaseOnlyBudget = () => releaseOnlyUnlinkedBudget({ fastify, authorId: authContext.registeredUser.id, unlinked: onlyBudget.unlinked });
+      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData).catch(async (error: unknown) => {
         if (parsed.data.visibility !== undefined && parsed.data.visibility !== 'PRIVATE' && (error as { code?: unknown } | null)?.code === 'P2025') return 'held' as const;
+        await releaseOnlyBudget();
         throw error;
       });
+      if (post === 'held' || !post) await releaseOnlyBudget();
       if (post === 'held') return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });

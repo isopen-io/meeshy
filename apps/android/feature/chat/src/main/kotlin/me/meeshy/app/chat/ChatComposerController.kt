@@ -22,16 +22,15 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.session.asCoroutineContext
-import me.meeshy.sdk.mention.MentionComposer
+import me.meeshy.sdk.mention.MentionContacts
+import me.meeshy.sdk.mention.MentionLookupDriver
 import me.meeshy.sdk.mention.MentionSearch
-import me.meeshy.sdk.mention.applyRemote
-import me.meeshy.sdk.mention.onTextChange
 import me.meeshy.sdk.mention.reset
-import me.meeshy.sdk.mention.select
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
@@ -44,6 +43,7 @@ import me.meeshy.sdk.model.MimeTypeResolver
 import me.meeshy.sdk.model.TypedEmojis
 import me.meeshy.sdk.model.isWorthPersisting
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.RecentEmojiStore
 import me.meeshy.sdk.session.AnonymousSessionStore
@@ -78,15 +78,22 @@ internal class ChatComposerController(
     private val composerText: ComposerTextHolder = ComposerTextHolder(),
     private val recentEmojis: RecentEmojiStore? = null,
     private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) {
 
-    private var mentionRoster: List<MentionCandidate> = emptyList()
+    private val mentions = MentionLookupDriver(
+        scope = scope,
+        search = mentionSearch,
+        contacts = mentionContacts,
+        selfId = { sessionRepository.currentUser.value?.id },
+        read = { state.value.mention },
+        write = { transform -> state.update { it.copy(mention = transform(it.mention)) } },
+    )
     private var isEmittingTyping = false
     private var typingReemitJob: Job? = null
     private var typingIdleJob: Job? = null
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
-    private var mentionSearchJob: Job? = null
 
     /** The draft being written when « Modifier » was tapped, given back when the edit ends (iOS `draftBeforeEdit`). */
     private var draftBeforeEdit: String? = null
@@ -94,9 +101,14 @@ internal class ChatComposerController(
     /** The edited message's text, so an unchanged edit is dropped instead of sent (iOS `editingOriginalContent`). */
     private var editingOriginal: String? = null
 
-    /** Replaces the roster the `@mention` panel suggests from (the conversation's participants). */
-    fun updateMentionRoster(roster: List<MentionCandidate>) {
-        mentionRoster = roster
+    /**
+     * Replaces the people of the conversation the `@mention` panel serves locally (its
+     * participants) and the [context] the network is asked about from the third character
+     * (#14053). A direct or group conversation only offers its members.
+     */
+    fun updateMentionRoster(roster: List<MentionCandidate>, context: MentionContext? = null) {
+        mentions.updateRoster(roster)
+        mentions.bind(context ?: MentionContext.conversation(conversationId, conversationType = null, isMember = false))
     }
 
     /**
@@ -149,23 +161,17 @@ internal class ChatComposerController(
             state.update {
                 it.copy(
                     clipboardContent = detection.content,
-                    mention = it.mention.onTextChange("", mentionRoster),
                     composerLanguage = it.composerLanguage.onDraftChanged(""),
                 )
             }
-            mentionSearchJob?.cancel()
+            mentions.onTextChange("")
             stopTypingEmission()
             persistDraft("", state.value.replyingToMessageId)
             return
         }
         composerText.typed(value)
-        state.update {
-            it.copy(
-                mention = it.mention.onTextChange(value, mentionRoster),
-                composerLanguage = it.composerLanguage.onDraftChanged(value),
-            )
-        }
-        maybeSearchRemoteMentions(state.value.mention.activeQuery)
+        state.update { it.copy(composerLanguage = it.composerLanguage.onDraftChanged(value)) }
+        mentions.onTextChange(value)
         if (value.isBlank()) {
             stopTypingEmission()
         } else {
@@ -242,36 +248,7 @@ internal class ChatComposerController(
      * `@fragment`), record it as a draft mention, and dismiss the suggestion panel.
      */
     fun onMentionSelected(candidate: MentionCandidate) {
-        mentionSearchJob?.cancel()
-        val (newDraft, newMention) = state.value.mention.select(candidate, composerText.text)
-        composerText.replace(newDraft)
-        state.update { it.copy(mention = newMention) }
-    }
-
-    /**
-     * Fires a debounced directory lookup for the active `@fragment` and folds the
-     * results into the panel below the local roster. Mirrors iOS
-     * `MentionComposerController`: nothing runs for a dismissed panel or a query under
-     * two significant characters (the roster already covers those); a fresh keystroke
-     * cancels the previous in-flight lookup (300 ms debounce). The self-exclusion and
-     * local-first dedup live in the pure [MentionAutocompleteState.applyRemote] merge,
-     * which also drops a slow response whose fragment is already stale.
-     */
-    private fun maybeSearchRemoteMentions(query: String?) {
-        mentionSearchJob?.cancel()
-        if (query == null || !MentionComposer.shouldQueryRemote(query)) return
-        val currentUserId = sessionRepository.currentUser.value?.id
-        mentionSearchJob = scope.launch {
-            delay(MENTION_SEARCH_DEBOUNCE_MS)
-            val remote = try {
-                mentionSearch.search(query.trim())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                return@launch
-            }.filterNot { it.id == currentUserId }
-            state.update { it.copy(mention = it.mention.applyRemote(query, remote)) }
-        }
+        composerText.replace(mentions.select(candidate, composerText.text))
     }
 
     /**
@@ -366,6 +343,7 @@ internal class ChatComposerController(
         // sender's own language as the fallback — never a partial detection of the typing (#12484).
         val manualLanguage = state.value.composerLanguage.manualOverride
         composerText.clear()
+        mentions.reset()
         state.update {
             it.copy(
                 clipboardContent = null,
@@ -579,6 +557,14 @@ internal class ChatComposerController(
         persistDraft(composerText.text, state.value.replyingToMessageId)
     }
 
+    /** Arm (or disarm, with `null`) the ephemeral [choice] — iOS `ephemeralChoice` (#8303). */
+    fun selectEphemeralChoice(choice: EphemeralChoice?) {
+        state.update {
+            it.copy(pendingEffects = MessageEffectsEditor.withEphemeralChoice(it.pendingEffects, choice))
+        }
+        persistDraft(composerText.text, state.value.replyingToMessageId)
+    }
+
     /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
     fun selectEphemeralDuration(duration: EphemeralDuration) {
         state.update {
@@ -676,7 +662,6 @@ internal class ChatComposerController(
     private companion object {
         const val TYPING_REEMIT_MS = 3_000L
         const val TYPING_IDLE_MS = 3_000L
-        const val MENTION_SEARCH_DEBOUNCE_MS = 300L
         const val CLIPBOARD_ATTACHMENT_NAME = "clipboard-content.txt"
         const val CLIPBOARD_ATTACHMENT_MIME = "text/plain"
         const val DEFAULT_ATTACHMENT_NAME = "attachment"

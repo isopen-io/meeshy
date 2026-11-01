@@ -26,6 +26,35 @@ export const RING_AVATAR_RADIUS = 42;
 /** La palette d'un contour : huit couleurs au plus, comme un cadre de bannière (#10936). */
 export const RING_MAX_COLORS = 8;
 
+/** Le débordement maximal d'un calque illustré : un film de côté 1,5 × la boîte du contour (#13960). */
+export const RING_DECOR_MAX_REACH = 1.5;
+
+/**
+ * Les CALQUES ILLUSTRÉS d'un contour (#13960) — un cadre n'est plus seulement un anneau :
+ * un film `back` se joue DERRIÈRE l'avatar (ailes, rayons, flammes), un film `front`
+ * AU-DESSUS (masque, toile, griffes, braises), et l'un comme l'autre peuvent couvrir
+ * l'avatar en partie et DÉBORDER du contour. Chaque film est carré, centré sur l'avatar,
+ * de côté `reach ×` la boîte du contour : le viewBox 0 0 100 100 du contour en occupe le
+ * centre, sur `100 / reach` de son côté. Le débordement se DESSINE hors de la boîte sans
+ * la grandir : une liste ne se décale pas. Un client antérieur ignore le champ et garde
+ * l'anneau fixe (`stroke` + `ornament`), qui reste l'image de repli et celle de « réduire
+ * les animations ».
+ */
+const AvatarRingDecorSchema = z
+  .object({
+    reach: z.number().check(z.minimum(1), z.maximum(RING_DECOR_MAX_REACH)),
+    back: z.optional(PackAssetRefSchema),
+    front: z.optional(PackAssetRefSchema),
+  })
+  .check(z.refine((decor) => decor.back !== undefined || decor.front !== undefined));
+export type AvatarRingDecor = z.infer<typeof AvatarRingDecorSchema>;
+
+/** Où poser un film illustré dans une boîte de contour de côté `box` : son côté, et son décalage depuis le coin de la boîte. */
+export const ringDecorCanvas = ({ box, reach }: { readonly box: number; readonly reach: number }): { readonly side: number; readonly offset: number } => {
+  const side = box * reach;
+  return { side, offset: (box - side) / 2 };
+};
+
 const RingOrnamentStrokeSchema = z.object({
   d: z.string().check(z.regex(PATH_D_PATTERN)),
   /** Index dans `stroke.colors`. */
@@ -52,6 +81,7 @@ export const AvatarRingDesignSchema = z
     gradients: z.optional(frameGradientsSchema),
     motion: z.optional(FrameMotionListSchema),
     lottie: z.optional(PackAssetRefSchema),
+    decor: z.optional(AvatarRingDecorSchema),
   })
   .check(
     z.refine((ring) => ring.ornament === undefined || ring.ornament.paths.every((path) => path.color < ring.stroke.colors.length)),

@@ -187,6 +187,9 @@ extension StoryCanvasUIView {
     /// 2026-05-27 « les média semblent jouent en double ou s'entrevauche ».
     public override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
+        // Un canvas qui quitte l'écran en plein geste le TERMINE : l'historique
+        // ne reste jamais suspendu à un doigt disparu (#14208).
+        if newWindow == nil { manipulatedItemId = nil }
         guard newWindow == nil else { return }
         endTransitionRehearsal()
         unregisterFromActive()

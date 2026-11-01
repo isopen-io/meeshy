@@ -52,6 +52,7 @@ import * as healthGroup from './endpoints/health.js';
 import * as invitationsGroup from './endpoints/invitations.js';
 import * as lGroup from './endpoints/l.js';
 import * as languagesGroup from './endpoints/languages.js';
+import * as lensGroup from './endpoints/lens.js';
 import * as linksGroup from './endpoints/links.js';
 import * as meGroup from './endpoints/me.js';
 import * as mentionsGroup from './endpoints/mentions.js';
@@ -61,6 +62,7 @@ import * as packAssetsGroup from './endpoints/pack-assets.js';
 import * as packsGroup from './endpoints/packs.js';
 import * as postsGroup from './endpoints/posts.js';
 import * as reactionsGroup from './endpoints/reactions.js';
+import * as relationsGroup from './endpoints/relations.js';
 import * as reportsGroup from './endpoints/reports.js';
 import * as rootLegacyAttachmentsGroup from './endpoints/root-legacy-attachments.js';
 import * as rootLegacyVoiceGroup from './endpoints/root-legacy-voice.js';
@@ -113,6 +115,7 @@ export const API_ENDPOINTS = {
   invitations: invitationsGroup,
   l: lGroup,
   languages: languagesGroup,
+  lens: lensGroup,
   links: linksGroup,
   me: meGroup,
   mentions: mentionsGroup,
@@ -122,6 +125,7 @@ export const API_ENDPOINTS = {
   packs: packsGroup,
   posts: postsGroup,
   reactions: reactionsGroup,
+  relations: relationsGroup,
   reports: reportsGroup,
   rootLegacyAttachments: rootLegacyAttachmentsGroup,
   rootLegacyVoice: rootLegacyVoiceGroup,
@@ -470,6 +474,13 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/invitations/email',
   '/api/v1/l/:token',
   '/api/v1/languages',
+  '/api/v1/lens/credits',
+  '/api/v1/lens/partners/:partnerId/logo',
+  '/api/v1/lens/partners/:userId/revoke',
+  '/api/v1/lens/partners/:userId/verify',
+  '/api/v1/lens/partners/me',
+  '/api/v1/lens/partners/pending',
+  '/api/v1/lens/usage/:slug',
   '/api/v1/links',
   '/api/v1/links/:identifier',
   '/api/v1/links/:identifier/card',
@@ -661,6 +672,11 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/reactions/:messageId',
   '/api/v1/reactions/:messageId/:emoji',
   '/api/v1/reactions/user/:userId',
+  '/api/v1/relations',
+  '/api/v1/relations/:userId',
+  '/api/v1/relations/:userId/level',
+  '/api/v1/relations/:userId/ritual',
+  '/api/v1/relations/config',
   '/api/v1/reports',
   '/api/v1/signal/keys',
   '/api/v1/signal/keys/:userId',
@@ -1098,6 +1114,13 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/invitations/email': ['POST'],
   '/api/v1/l/:token': ['GET'],
   '/api/v1/languages': ['GET'],
+  '/api/v1/lens/credits': ['GET'],
+  '/api/v1/lens/partners/:partnerId/logo': ['GET'],
+  '/api/v1/lens/partners/:userId/revoke': ['POST'],
+  '/api/v1/lens/partners/:userId/verify': ['POST'],
+  '/api/v1/lens/partners/me': ['GET', 'PUT'],
+  '/api/v1/lens/partners/pending': ['GET'],
+  '/api/v1/lens/usage/:slug': ['GET', 'POST'],
   '/api/v1/links': ['GET', 'POST'],
   '/api/v1/links/:identifier': ['GET'],
   '/api/v1/links/:identifier/card': ['GET'],
@@ -1289,6 +1312,11 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/reactions/:messageId': ['GET'],
   '/api/v1/reactions/:messageId/:emoji': ['DELETE'],
   '/api/v1/reactions/user/:userId': ['GET'],
+  '/api/v1/relations': ['GET'],
+  '/api/v1/relations/:userId': ['GET'],
+  '/api/v1/relations/:userId/level': ['POST'],
+  '/api/v1/relations/:userId/ritual': ['POST'],
+  '/api/v1/relations/config': ['GET'],
   '/api/v1/reports': ['POST'],
   '/api/v1/signal/keys': ['POST'],
   '/api/v1/signal/keys/:userId': ['GET'],

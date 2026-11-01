@@ -31,7 +31,7 @@ extension StoryComposerViewModel {
 
     public var canAddSlide: Bool { slides.count < 10 }
 
-    var currentSlideDuration: Float {
+    public var currentSlideDuration: Float {
         // Source de vérité = `effects.timelineDuration` (autoritaire, lu par
         // `computedTotalDuration`). Régler explicitement la durée du slide via ce
         // contrôle POSE donc un pin timeline — sinon le réglage serait ignoré au

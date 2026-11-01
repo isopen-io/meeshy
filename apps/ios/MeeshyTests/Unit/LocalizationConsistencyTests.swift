@@ -86,9 +86,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         // interpolation, so this is immune to the nested-literal pitfalls that
         // break naive literal extraction.
         let quotedTokens = quotedIdentifierTokens(in: env.combinedSource)
+        let adopted = androidAdoptedAppKeys(repoRoot: env.repoRoot)
 
         let orphans = env.appIdentifierKeys
-            .filter { !Self.orphanAllowlist.contains($0) && !quotedTokens.contains($0) }
+            .filter { !Self.orphanAllowlist.contains($0) && !quotedTokens.contains($0) && !adopted.contains($0) }
             .sorted()
 
         XCTAssertTrue(
@@ -161,6 +162,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
+        // #14056 — les règles pures de l'éditeur (refus d'identité compris) ont
+        // quitté `ProfileView.swift` pour la taille : leurs clés suivent.
+        "apps/ios/Meeshy/Features/Profile/Views/MeeshyUser+ProfileEdits.swift",
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",  // 32
         // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour
@@ -174,7 +178,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",  // 28
         "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
-        "apps/ios/Meeshy/Features/Composer/ComposerDocumentSurface.swift",  // 21
+        // #13864 — la surface document est partie ; « Texte du post » la remplace au socle.
+        "apps/ios/Meeshy/Features/Composer/ComposerPostTextPill.swift",
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
         // #11230 — les libellés du menu d'une rangée ont quitté le menu custom
         // pour le catalogue que les deux chemins d'OS lisent : le cliquet suit.
@@ -240,7 +245,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift",  // 8
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift",  // 8
-        "apps/ios/Meeshy/Features/Composer/ComposerLeadingRail.swift",  // 7
+        // #13907 — les mots du rail ont quitté sa vue retirée ; le cliquet les suit.
+        "apps/ios/Meeshy/Features/Composer/ComposerRailCopy.swift",  // 7
         "apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
@@ -602,7 +608,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CommentMediaView.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Components/CrashReportSheet.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Drop.swift",  // 3
-        "apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift",  // 3
+        "apps/ios/Meeshy/Features/Composer/PasteIntoComposer.swift",  // 2
+        // #13913 — le refus d'un document et le plafond de durée ont quitté le
+        // collage et la limite pour la table des variantes, avec leurs clés.
+        "apps/ios/Meeshy/Features/Composer/ComposerFormatVariant.swift",
         "apps/ios/Meeshy/Features/Profile/Views/AchievementBadgeView.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
         "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2

@@ -164,6 +164,8 @@ public final class StoryBackgroundLayer: CALayer {
     /// cette classe sont `nonisolated` pour interopérer avec `CALayer` — elle
     /// est donc posée après `super.init()`, jamais avant (voir les deux inits).
     @MainActor public let playbackQoE: StoryBackgroundPlaybackQoE
+    /// Le voile d'un fond vidéo qui attend sa première image (#14180).
+    @MainActor lazy var videoWaitVeil = StoryVideoWaitVeil()
 
     /// Marks the final bitmap as stamped and notifies `onFinalImageStamped`.
     @MainActor
@@ -185,6 +187,8 @@ public final class StoryBackgroundLayer: CALayer {
     /// (`StoryBackgroundLook.painted`) : cuits après le filtre dans le bitmap
     /// d'un fond image, posés en composition sur l'item d'un fond vidéo.
     @MainActor public private(set) var activeAdjustments: ImageAdjustments?
+    /// Le look de la retouche du média de fond (#13840), peint avant le filtre.
+    @MainActor public private(set) var activeMediaLook: StoryMediaLook?
     /// Le bitmap BRUT du dernier stamp final et sa clé de filtre — ce qu'un
     /// changement de rendu seul (filtre, réglages) repeint en place. Une autre
     /// source rend caduque toute cuisson en vol.
@@ -227,10 +231,12 @@ public final class StoryBackgroundLayer: CALayer {
 
     /// Pose le RENDU courant — filtre, intensité, réglages — sans rien peindre.
     @MainActor
-    func setLook(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?) {
+    func setLook(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?,
+                 mediaLook: StoryMediaLook? = nil) {
         activeFilter = filter
         activeFilterIntensity = filterIntensity
         activeAdjustments = adjustments
+        activeMediaLook = mediaLook
     }
 
     /// Applies the active look — slide filter, then the background media's
@@ -244,7 +250,8 @@ public final class StoryBackgroundLayer: CALayer {
     func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
         stampedSource = (image, imageId)
         stampDisplay(StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
-                                               adjustments: activeAdjustments, imageId: imageId), on: img)
+                                               adjustments: activeAdjustments, imageId: imageId,
+                                               look: activeMediaLook), on: img)
     }
 
     /// Pose un bitmap DÉJÀ peint — par `stampFinalImage`, ou par la cuisson
@@ -394,7 +401,7 @@ extension StoryBackgroundLayer {
                           letterboxFillHashes: [String] = [],
                           filter: StoryFilter? = nil,
                           filterIntensity: Float = 1.0,
-                          adjustments: ImageAdjustments? = nil,
+                          adjustments: ImageAdjustments? = nil, mediaLook: StoryMediaLook? = nil,
                           contentVersion: UInt64 = 0) {
         // FAST PATH ANTI-FLASH :
         // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
@@ -446,7 +453,7 @@ extension StoryBackgroundLayer {
         let filterUnchanged = (self.activeFilter == filter)
             && (self.activeFilterIntensity == filterIntensity)
             && (self.lastContentVersion == contentVersion)
-        let adjustmentsUnchanged = (self.activeAdjustments == adjustments)
+        let adjustmentsUnchanged = (self.activeAdjustments == adjustments) && (self.activeMediaLook == mediaLook)
         let sameScene = (previousContentIdentity == nextContentIdentity)
             && (self.transform3D == transform)
             && (self.configuredRenderSize == geometry.renderSize)
@@ -458,7 +465,7 @@ extension StoryBackgroundLayer {
         // filtre : le fond se repeint EN PLACE, sans détacher son contenu. Une
         // image repart de son bitmap brut retenu ; une vidéo garde son player
         // (la lecture ne saute pas) et reçoit la composition de ses réglages.
-        if sameScene, restyleInPlace(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments) {
+        if sameScene, restyleInPlace(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments, mediaLook: mediaLook) {
             return
         }
 
@@ -516,7 +523,7 @@ extension StoryBackgroundLayer {
 
         self.kind = kind
         self.transform3D = transform
-        setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments)
+        setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments, mediaLook: mediaLook)
         self.lastContentVersion = contentVersion
         self.frame = CGRect(origin: .zero, size: geometry.renderSize)
         self.configuredRenderSize = geometry.renderSize
@@ -766,21 +773,17 @@ extension StoryBackgroundLayer {
                 break
             }
 
-            // Fast-path : URL locale immédiate ou cache disk hit → AVPlayer
-            // direct, sans placeholder noir ni ThumbHash (la première frame
-            // de la vidéo est rendue très vite).
-            if remoteURL.isFileURL {
-                storyMediaLog.info("bg video path=local-file")
-                backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
-                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
-                                       fitOverride: self.transform3D.videoFitMode)
-                break
-            }
-            if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
-                storyMediaLog.info("bg video path=disk-hit")
+            // Fast-path : fichier local ou cache disque → AVPlayer direct, sans
+            // placeholder noir ; la scène du composer y attend la première image
+            // sous l'affiche du fond, comme une vidéo posée (#14180).
+            if let local = remoteURL.isFileURL ? remoteURL
+                : CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
+                storyMediaLog.info("bg video path=\(remoteURL.isFileURL ? "local-file" : "disk-hit", privacy: .public)")
                 backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
                 attachBackgroundPlayer(url: local, looping: looping, mute: mute,
                                        fitOverride: self.transform3D.videoFitMode)
+                videoWaitVeil.cover(avPlayerLayer, playing: local, thumbHash: thumbHash, look: activeMediaLook,
+                                    adjustments: activeAdjustments, fitMode: transform3D.videoFitMode)
                 break
             }
             storyMediaLog.info("bg video path=cache-miss → readable cache transfer")

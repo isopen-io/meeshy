@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
+import me.meeshy.sdk.model.pack.PackAssetRef
 
 /*
  * Le catalogue embarqué (#10631, spec § 8.2) — MIROIR de `AppearanceCatalog.swift`,
@@ -62,6 +63,18 @@ class AppearanceCatalog private constructor(
 
     fun bannerFrame(pack: String, item: String): BannerFrameDesign? =
         bannerFramePacks.firstOrNull { it.slug == pack }?.frames?.firstOrNull { it.key == item }
+
+    /**
+     * Les couches animées que le catalogue référence (#13952), une par empreinte, dans l'ordre fonds, bannières,
+     * contours (couche du contour, puis films arrière et avant d'un cadre illustré, #13960), cadres de bannière : celles que le SDK embarque pour qu'elles jouent dès le premier rendu, sans réseau.
+     */
+    val lottieLayers: List<PackAssetRef>
+        get() = (
+            wallpaperPacks.flatMap { pack -> pack.designs.mapNotNull { it.lottie } } +
+                bannerPacks.flatMap { pack -> pack.designs.mapNotNull { it.lottie } } +
+                ringPacks.flatMap { pack -> pack.rings.flatMap { listOfNotNull(it.lottie, it.decor?.back, it.decor?.front) } } +
+                bannerFramePacks.flatMap { pack -> pack.frames.mapNotNull { it.lottie } }
+            ).distinctBy { it.sha256 }
 
     // endregion
 

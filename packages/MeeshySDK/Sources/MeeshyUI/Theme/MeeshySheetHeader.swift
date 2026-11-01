@@ -32,14 +32,25 @@ public struct MeeshySheetHeader: View {
     private let title: String
     private let onCancel: () -> Void
     private let onDone: () -> Void
+    private let doneTitle: String?
+    private let canFinish: Bool
 
+    /// `doneTitle` remplace « Terminé » (le compositeur dit « OK » sur toutes
+    /// ses feuilles, #13839) ; `canFinish` grise la validation tant qu'elle
+    /// n'aurait rien à valider.
     public init(title: String,
+                doneTitle: String? = nil,
+                canFinish: Bool = true,
                 onCancel: @escaping () -> Void,
                 onDone: @escaping () -> Void) {
         self.title = title
+        self.doneTitle = doneTitle
+        self.canFinish = canFinish
         self.onCancel = onCancel
         self.onDone = onDone
     }
+
+    public static func doneIsEnabled(canFinish: Bool) -> Bool { canFinish }
 
     public var body: some View {
         // Le titre en `ZStack` plutôt qu'au centre d'une `HStack` : centré sur
@@ -57,8 +68,10 @@ public struct MeeshySheetHeader: View {
                 action(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module),
                        perform: onCancel)
                 Spacer()
-                action(String(localized: "common.done", defaultValue: "Terminé", bundle: .module),
+                action(doneTitle ?? String(localized: "common.done", defaultValue: "Terminé", bundle: .module),
                        perform: onDone)
+                    .disabled(!Self.doneIsEnabled(canFinish: canFinish))
+                    .opacity(Self.doneIsEnabled(canFinish: canFinish) ? 1 : 0.4)
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)

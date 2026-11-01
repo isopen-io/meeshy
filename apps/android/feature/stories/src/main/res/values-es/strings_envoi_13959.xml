@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_upload_resending">Enviando…</string>
+    <string name="story_composer_upload_failed_retry">Error — Reintentar</string>
+</resources>

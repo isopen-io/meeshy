@@ -4,6 +4,11 @@ import MeeshyUI
 
 // MARK: - La géographie des rails de la scène plein écran (#8713, #8714)
 //
+// **Close par #13839** : au repos, plus de rail gauche ni de colonne droite.
+// L'éclair et le Cadre vivent dans ⋯ (Animation, Cadrage du fond), le (+) dans
+// « ⋯ › Ajouter une diapo », défaire / rétablir en haut de la scène. La
+// colonne droite ci-dessous ne sert plus que l'outil ouvert et l'objet touché.
+//
 // > Directive porteur 2026-09-29 : « change l'emplacement de l'icône
 // > animé/éclair pour la mettre après la géolocalisation et mets à sa place le
 // > bouton (+) pour créer une nouvelle scène ; de même l'icône qui est au-dessus
@@ -74,12 +79,13 @@ nonisolated enum ComposerTrailingColumn {
         /// un fond média (#8712), l'effet dont le carrousel est ouvert marqué.
         case scene(effects: [ComposerSceneEffect], open: ComposerSceneEffect?)
         case tool([ComposerToolControl])
-        /// **Un objet en édition en place** (#9138) — toutes familles, le fond
-        /// compris (#8847) : ses sous-outils, celui dont les options sont
-        /// ouvertes marqué, puis ses actions, puis le `(x)`.
-        case object(sections: [ComposerObjectEditorSection],
-                    open: ComposerObjectEditorSection?,
-                    actions: [StoryCanvasContextAction])
+        /// **Un objet en édition en place** (#9138) : la colonne se tait
+        /// (#13839, L5). Ses réglages sont les puces libellées des feuilles
+        /// Modifier et Temps, ses actions la barre de la sélection.
+        case object
+        /// On écrit (#13839, L4) : la barre collée au clavier porte les
+        /// réglages et OK ; la colonne se tait.
+        case typing
     }
 
     enum Entry: Equatable, Identifiable {
@@ -87,33 +93,22 @@ nonisolated enum ComposerTrailingColumn {
         /// Une catégorie d'effets de la scène (#8712) — la toucher ouvre son
         /// carrousel en bas, à la place de l'audience et de Publier.
         case sceneEffect(ComposerSceneEffect, isOpen: Bool)
-        /// Un sous-outil de l'objet (#9138) — le toucher ouvre ses options à
-        /// droite, depuis le haut, jamais l'éditeur plein écran.
-        case editorSection(ComposerObjectEditorSection, isOpen: Bool)
-        case objectAction(StoryCanvasContextAction)
         /// Le `(x)` d'un outil : il le termine et rend les portes.
         case exitTool
-        /// Le `(x)` d'une sélection : il désélectionne et rend les rails de la
-        /// scène.
-        case exitObject
 
         var id: String {
             switch self {
             case .toolControl(let control):   return "tool.\(control.id)"
             case .sceneEffect(let effet, _):  return "effect.\(effet.rawValue)"
-            case .editorSection(let section, _): return "section.\(section.identifier)"
-            case .objectAction(let action):   return "action.\(String(describing: action))"
             case .exitTool:                   return "exit.tool"
-            case .exitObject:                 return "exit.object"
             }
         }
 
         /// Le `(x)` — il ne défile jamais avec les options.
         var isExit: Bool {
             switch self {
-            case .exitTool, .exitObject:                          return true
-            case .toolControl, .sceneEffect, .editorSection, .objectAction:
-                return false
+            case .exitTool:                    return true
+            case .toolControl, .sceneEffect:   return false
             }
         }
     }
@@ -129,39 +124,30 @@ nonisolated enum ComposerTrailingColumn {
     }
 
     static func focus(railMode: ComposerRailMode,
-                      selection: (sections: [ComposerObjectEditorSection],
-                                  open: ComposerObjectEditorSection?,
-                                  actions: [StoryCanvasContextAction])?,
+                      objectIsEdited: Bool,
                       effects: [ComposerSceneEffect] = [],
-                      openEffect: ComposerSceneEffect? = nil) -> Focus {
+                      openEffect: ComposerSceneEffect? = nil,
+                      typing: Bool = false) -> Focus {
+        if typing { return .typing }
         if case .tool(let controls) = railMode { return .tool(controls) }
-        guard let selection else {
+        guard objectIsEdited else {
             return .scene(effects: effects, open: openEffect.flatMap { effects.contains($0) ? $0 : nil })
         }
-        return .object(sections: selection.sections, open: selection.open, actions: selection.actions)
+        return .object
     }
 
     /// **Les options, de HAUT en bas, le `(x)` en dernier.**
     ///
-    /// Pour un objet : « Modifier » d'abord (le même geste que le double
-    /// toucher), puis les sections de son éditeur, puis ses actions. Le
-    /// ROGNAGE n'y paraît qu'une fois — la section `.media(.trim)` et l'action
-    /// `.trim` ouvrent la même plaque.
+    /// Un objet n'y a plus rien (#13839, L5) : la barre de la sélection porte
+    /// ses actions, libellées, et les feuilles Modifier et Temps ses réglages.
     static func options(for focus: Focus) -> [Entry] {
         switch focus {
         case .scene(let effects, let open):
             return effects.map { Entry.sceneEffect($0, isOpen: $0 == open) }
         case .tool(let controls):
             return controls.map(Entry.toolControl) + [.exitTool]
-        case .object(let sections, let open, let actions):
-            let modifier = actions.contains(.edit) ? [Entry.objectAction(.edit)] : []
-            let reste = actions.filter { action in
-                action != .edit && !(action == .trim && sections.contains(.media(.trim)))
-            }
-            return modifier
-                + sections.map { Entry.editorSection($0, isOpen: $0 == open) }
-                + reste.map(Entry.objectAction)
-                + [.exitObject]
+        case .object, .typing:
+            return []
         }
     }
 
@@ -169,9 +155,17 @@ nonisolated enum ComposerTrailingColumn {
         switch focus {
         case .tool, .object:
             return [.undo, .redo]
+        case .typing:
+            return []
         case .scene:
             return (timeServed ? [.time] : []) + [.undo, .redo]
         }
+    }
+
+    /// **L'historique n'est servi que si le pied du focus le porte** (#13839,
+    /// L4) : la frappe n'a ni ↶ ni ↷ au bord de la scène.
+    static func servesHistory(_ entry: Foot, for focus: Focus) -> Bool {
+        foot(for: focus, timeServed: false).contains(entry)
     }
 
     /// **Le pied suit les sous-outils, sans ressort, pendant une édition en
@@ -181,13 +175,13 @@ nonisolated enum ComposerTrailingColumn {
     /// la scène, et aucun panneau ne voisine sa colonne.
     static func footFollowsOptions(for focus: Focus) -> Bool {
         switch focus {
-        case .object:        return true
-        case .tool, .scene:  return false
+        case .object:                 return true
+        case .tool, .scene, .typing:  return false
         }
     }
 
-    /// Ce que CE meuble sait faire d'une action d'objet sur la colonne :
-    /// « Modifier » (le double toucher) en plus des contrôleurs du rail.
+    /// Ce que CE meuble sait faire d'une action d'objet — la barre de la
+    /// sélection les compose : « Modifier » en plus des contrôleurs du rail.
     /// « Sortir de la scène » attend sa décision produit (#4038).
     static let servedActions: Set<StoryCanvasContextAction> =
         ComposerSceneCapabilities.controllers.union([.edit])
@@ -321,11 +315,12 @@ nonisolated enum ComposerSceneLift {
     }
 
     /// **Quel panneau pousse la scène** : les réglages d'un outil, ou une
-    /// bande sur téléphone (le grand écran la pose en carte, à côté du rail).
-    static func panelIsOpen(lowZone: ComposerLowZone, toolOptionsServed: Bool, roomy: Bool) -> Bool {
+    /// bande — sur tout écran, elle se pose sous la scène (#13839, L6).
+    static func panelIsOpen(lowZone: ComposerLowZone, toolOptionsServed: Bool) -> Bool {
         switch lowZone {
+        case .properties:  return true
         case .toolOptions: return toolOptionsServed
-        case .band:        return !roomy
+        case .band:        return true
         case .nothing:     return false
         }
     }

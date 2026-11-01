@@ -12,4 +12,5 @@
     <string name="call_mode_record">Filmen</string>
     <string name="call_mode_record_stop">Aufnahme beenden</string>
     <string name="call_mode_record_stop_hint">Speichert das Video in deiner Galerie</string>
+    <string name="call_capture_faces_hint">Speichert ein quadratisches Porträt jedes Teilnehmers in deiner Galerie</string>
 </resources>

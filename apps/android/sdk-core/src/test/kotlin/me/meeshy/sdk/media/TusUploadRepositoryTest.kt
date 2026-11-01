@@ -31,7 +31,8 @@ class TusUploadRepositoryTest {
 
     // checkpoints.find(...) is relaxed-mocked to null unless a test stubs it explicitly
     // (with the specific matching key) before calling repository() — see the resume tests below.
-    private fun repository() = TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined), me.meeshy.sdk.net.MeeshyConfig(apiBaseUrl = apiBaseUrl))
+    private fun repository(seeder: UploadedMediaSeeder = UploadedMediaSeeder.None) =
+        TusUploadRepository(api, checkpoints, OutgoingMediaSanitizer(InMemoryOutgoingPhotoLocationStore(), kotlinx.coroutines.Dispatchers.Unconfined), me.meeshy.sdk.net.MeeshyConfig(apiBaseUrl = apiBaseUrl), seeder)
 
     private fun item(name: String = "story.jpg", mime: String = "application/octet-stream") =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = mime)
@@ -229,7 +230,7 @@ class TusUploadRepositoryTest {
 
     @Test
     fun `uploadAll stops at the first failure and never uploads the remaining items`() = runTest {
-        coEvery { api.createUpload(any(), any(), any()) } returnsMany listOf(locationResponse(), errorResponse(500))
+        coEvery { api.createUpload(any(), any(), any()) } returnsMany listOf(locationResponse(), errorResponse(400))
         coEvery { api.uploadData(any(), any(), any(), any()) } returns
             finishResponse(MediaAttachmentWire(id = "a", fileUrl = "https://cdn/a.jpg"))
 
@@ -337,13 +338,14 @@ class TusUploadRepositoryTest {
         }
 
     @Test
-    fun `a single-chunk upload never persists intermediate progress via upsert`() = runTest {
+    fun `a fresh session is checkpointed at offset zero before its first byte, so even a single chunk can resume`() = runTest {
         coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
         coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(null)
 
         repository().upload(item(), TusUploadContext.STORY)
 
-        coVerify(exactly = 0) { checkpoints.upsert(any()) }
+        coVerify(exactly = 1) { checkpoints.upsert(match { it.uploadedBytes == 0L && it.location == "https://gate/api/v1/uploads/abc123" }) }
+        coVerify(exactly = 0) { checkpoints.upsert(match { it.uploadedBytes > 0L }) }
     }
 
     @Test
@@ -381,10 +383,11 @@ class TusUploadRepositoryTest {
         val savedOffsets = mutableListOf<Long>()
         coEvery { checkpoints.upsert(any()) } coAnswers { savedOffsets += (it.invocation.args[0] as TusUploadCheckpointEntity).uploadedBytes }
 
-        // 25 bytes over a 10-byte chunk size makes two intermediate chunks ([0,10), [10,20)).
+        // 25 bytes over a 10-byte chunk size makes two intermediate chunks ([0,10), [10,20)), after the session's own
+        // checkpoint at zero (#13959).
         repository().upload(bigItem(bytes = 25), TusUploadContext.STORY, chunkSizeBytes = 10L)
 
-        assertThat(savedOffsets).containsExactly(10L, 20L).inOrder()
+        assertThat(savedOffsets).containsExactly(0L, 10L, 20L).inOrder()
     }
 
     @Test
@@ -411,7 +414,7 @@ class TusUploadRepositoryTest {
 
         repository().upload(bigItem(), TusUploadContext.STORY, chunkSizeBytes = 10L)
 
-        coVerify(exactly = 0) { checkpoints.upsert(any()) }
+        coVerify(exactly = 0) { checkpoints.upsert(match { it.uploadedBytes > 0L }) }
     }
 
     @Test
@@ -593,5 +596,31 @@ class TusUploadRepositoryTest {
         coVerify(exactly = 0) { api.uploadChunk(any(), any(), any(), any()) }
         coVerify(exactly = 0) { api.uploadData(any(), any(), any(), any()) }
         coVerify(exactly = 0) { checkpoints.upsert(any()) }
+    }
+
+    @Test
+    fun `a video accepted by the gateway enters the video cache under its served address`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns locationResponse()
+        coEvery { api.uploadData(any(), any(), any(), any()) } returns finishResponse(
+            MediaAttachmentWire(id = "pm1", fileUrl = "https://cdn.meeshy.me/pm1.mp4", mimeType = "video/mp4", fileSize = 3L),
+        )
+        val cache = RecordingUploadedMediaCache()
+
+        repository(cache.seeder()).upload(item(name = "clip.mp4"), TusUploadContext.POST)
+
+        val adoption = cache.adoptions.single()
+        assertThat(adoption.category).isEqualTo(me.meeshy.sdk.model.mediacache.MediaCacheCategory.VIDEO)
+        assertThat(adoption.url).isEqualTo("https://cdn.meeshy.me/pm1.mp4")
+        assertThat(adoption.bytes).isEqualTo(byteArrayOf(1, 2, 3))
+    }
+
+    @Test
+    fun `a refused upload seeds nothing`() = runTest {
+        coEvery { api.createUpload(any(), any(), any()) } returns errorResponse(500)
+        val cache = RecordingUploadedMediaCache()
+
+        repository(cache.seeder()).upload(item(name = "clip.mp4"), TusUploadContext.POST)
+
+        assertThat(cache.adoptions).isEmpty()
     }
 }

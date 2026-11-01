@@ -27,6 +27,8 @@ public data class BubbleCallbacks(
     val onLocationClick: ((BubbleLocation) -> Unit)? = null,
     /** Tap on a playable audio attachment. */
     val onAudioClick: ((BubbleAudio) -> Unit)? = null,
+    /** Tap on a word of the transcript of the voice note being played: seek it to that word's start, in seconds. */
+    val onAudioSeek: ((BubbleAudio, Double) -> Unit)? = null,
     /** Tap on a file attachment that has a url. */
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */

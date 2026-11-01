@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.composer.MediaDescriptionLaw
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
@@ -122,7 +123,7 @@ private fun MediaFields(
 
 @Composable
 private fun SoundExtractionRow(allowed: Boolean, onChange: (Boolean) -> Unit) {
-    val hint = stringResource(R.string.story_media_soundExtraction_a11yHint)
+    val hint = formatLabel(ComposerFormatLabel.SOUND_EXTRACTION_HINT)
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -131,7 +132,7 @@ private fun SoundExtractionRow(allowed: Boolean, onChange: (Boolean) -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             Text(stringResource(R.string.story_media_soundExtraction_label), style = MaterialTheme.typography.bodyMedium)
             Text(
-                stringResource(R.string.story_media_soundExtraction_caption),
+                formatLabel(ComposerFormatLabel.SOUND_EXTRACTION_CAPTION),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -44,7 +44,7 @@ class FeedRailContractTest {
     @Test
     fun `le rail du fil occupe toute la largeur comme celui des conversations`() {
         val screen = File(feedDir, "FeedScreen.kt").readText()
-        val list = screen.substringAfter("else -> LazyColumn(").substringBefore(") {")
+        val list = screen.substringAfter("FeedBody.POSTS -> LazyColumn(").substringBefore(") {")
         assertThat(list).doesNotContain("PaddingValues(MeeshySpacing.lg)")
         assertThat(list).doesNotContain("PaddingValues(horizontal")
         assertThat(list).contains("contentPadding = PaddingValues(bottom = MeeshySpacing.lg)")

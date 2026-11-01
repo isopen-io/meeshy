@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.model.StorySticker
 import me.meeshy.sdk.model.StickerDisplayRank
 import me.meeshy.sdk.model.sticker.StickerTemplateCatalog
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /**
@@ -12,7 +13,7 @@ import me.meeshy.sdk.model.scene.StoryElementTiming
  * straight into the wire request; [scale] and [rotationDeg] follow the exact same
  * clamp/wrap rules as a text element (a sticker can be pinched and twisted with the
  * same gesture). To keep the canvas-geometry rules in **one** place, this model
- * reuses [StoryTextElement]'s pure clamp helpers (`clampCoord`/`clampScale`/
+ * reuses [StoryTextElement]'s pure clamp helpers (`clampCoord`/`servedScale`/
  * `normaliseRotation`) — the single source of truth for how any on-canvas object
  * settles — rather than re-deriving them. The constructor never throws on an
  * out-of-range value: [normalised] (and every mutator that moves the sticker) pulls
@@ -41,6 +42,8 @@ data class StoryStickerElement(
     val imageUrl: String? = null,
     /** Le mouvement, par son nom de fil. */
     val animation: String? = null,
+    /** Son rang dans l'ordre UNIQUE de la scène (#13852, le `zIndex` d'iOS) : le plus haut se peint au-dessus. */
+    val zIndex: Int = 0,
 ) {
     /** Une image posée dont les octets ne sont pas encore arrivés : elle se voit, elle ne part pas. */
     val isAwaitingImage: Boolean get() = imageUrl != null && postMediaId.isBlank()
@@ -51,27 +54,26 @@ data class StoryStickerElement(
 
     /**
      * A copy with every continuous field pulled back into its legal range: [x]/[y]
-     * clamped into the canvas `0f..1f`, [scale] clamped to
-     * `[StoryTextElement.MIN_SCALE, StoryTextElement.MAX_SCALE]`, and [rotationDeg]
-     * wrapped into `(-180, 180]`. Total even on a non-finite input (`NaN`/∞ collapse
+     * clamped into the canvas `0f..1f`, [scale] kept when finite and positive
+     * (no ceiling, #14298), and [rotationDeg] wrapped into `(-180, 180]`. Total even on a non-finite input (`NaN`/∞ collapse
      * to the field's neutral value), so the deck reducer and the canvas stay glue.
      */
     fun normalised(): StoryStickerElement = copy(
         x = StoryTextElement.clampCoord(x),
         y = StoryTextElement.clampCoord(y),
-        scale = StoryTextElement.clampScale(scale),
+        scale = StoryTextElement.servedScale(scale),
         rotationDeg = StoryTextElement.normaliseRotation(rotationDeg),
     )
 
     /**
      * Applies one incremental pinch/rotate gesture: multiplies [scale] by the
-     * gesture's [scaleBy] factor (clamped) and adds [rotateByDeg] to [rotationDeg]
-     * (wrapped), leaving the position and emoji untouched. A degenerate factor
-     * (`scaleBy <= 0`, `NaN`) collapses to the neutral scale rather than producing a
-     * broken sticker.
+     * gesture's [scaleBy] factor — no ceiling, and never below a side of 5 design
+     * pixels ([BASE_DESIGN_SIDE] × scale, #14298) — and adds [rotateByDeg] to
+     * [rotationDeg] (wrapped), leaving the position and emoji untouched. A degenerate
+     * factor (`scaleBy <= 0`, `NaN`) leaves the scale where it is.
      */
     fun transformed(scaleBy: Float, rotateByDeg: Float): StoryStickerElement = copy(
-        scale = StoryTextElement.clampScale(scale * scaleBy),
+        scale = SceneObjectScalePolicy.settled(scale, scaleBy, smallestSideDesignPx = BASE_DESIGN_SIDE),
         rotationDeg = StoryTextElement.normaliseRotation(rotationDeg + rotateByDeg),
     )
 
@@ -100,7 +102,14 @@ data class StoryStickerElement(
         y = y.toDouble(),
         scale = scale.toDouble(),
         rotation = rotationDeg.toDouble(),
+        baseSize = BASE_DESIGN_SIDE,
         startTime = timing.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
         duration = timing.durationSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
+        zIndex = zIndex,
     )
+
+    companion object {
+        /** Le côté d'un sticker à l'échelle 1, en pixels de la scène de référence 1080 : le `baseSize` qu'écrit le fil. */
+        const val BASE_DESIGN_SIDE: Double = 140.0
+    }
 }

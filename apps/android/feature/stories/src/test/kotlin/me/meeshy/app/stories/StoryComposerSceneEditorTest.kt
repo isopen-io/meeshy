@@ -77,16 +77,13 @@ class StoryComposerSceneEditorTest {
     }
 
     @Test
-    fun `l'empilement d'un sticker suit l'ordre de la liste`() {
+    fun `toucher un sticker le fait passer devant, l'empilement suit l'ordre de la liste`() {
         val state = withStickers("a", "b", "c")
 
-        val toFront = StoryComposerSceneReducer.stickerReordered(state, "a", StoryZOrder.TO_FRONT)
+        val toFront = StoryComposerStickerReducer.selected(state, "a")
         assertThat(toFront.deck.selectedSlide.stickers.map { it.id }).containsExactly("b", "c", "a").inOrder()
 
-        val toBack = StoryComposerSceneReducer.stickerReordered(toFront, "a", StoryZOrder.TO_BACK)
-        assertThat(toBack.deck.selectedSlide.stickers.map { it.id }).containsExactly("a", "b", "c").inOrder()
-
-        assertThat(StoryComposerSceneReducer.stickerReordered(state, "c", StoryZOrder.TO_FRONT)).isSameInstanceAs(state)
+        assertThat(StoryComposerStickerReducer.selected(state, "c").deck).isSameInstanceAs(state.deck)
     }
 
     @Test
@@ -111,11 +108,11 @@ class StoryComposerSceneEditorTest {
     }
 
     @Test
-    fun `le menu de deux stickers offre l'empilement entre dupliquer et supprimer`() {
+    fun `l'appui long sur l'un de deux stickers le fait passer devant, sans empilement au menu`() {
         val state = StoryComposerSceneReducer.stickerMenuOpened(withStickers("s1", "s2"), "s1")
 
-        assertThat(state.sceneContextMenu!!.actions)
-            .containsExactly(Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.DELETE).inOrder()
+        assertThat(state.deck.selectedSlide.stickers.map { it.id }).containsExactly("s2", "s1").inOrder()
+        assertThat(state.sceneContextMenu!!.actions).containsExactly(Action.DUPLICATE, Action.DELETE).inOrder()
     }
 
     @Test
@@ -126,7 +123,7 @@ class StoryComposerSceneEditorTest {
 
         assertThat(menu.ref).isEqualTo(SceneObjectRef(ComposerObjectKind.TEXT, "t1"))
         assertThat(menu.actions)
-            .containsExactly(Action.EDIT, Action.DUPLICATE, Action.BRING_FORWARD, Action.SEND_BACKWARD, Action.DELETE)
+            .containsExactly(Action.EDIT, Action.DUPLICATE, Action.DELETE)
             .inOrder()
     }
 

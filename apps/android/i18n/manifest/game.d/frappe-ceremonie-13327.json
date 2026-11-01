@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.ancestors.gold",
+          "androidName": "game_frappe_ancestors_gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.ancestors.prism",
+          "androidName": "game_frappe_ancestors_prism",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.ancestors.title",
+          "androidName": "game_frappe_ancestors_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.glory",
+          "androidName": "game_frappe_glory",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.light",
+          "androidName": "game_frappe_light",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.refused.light",
+          "androidName": "game_frappe_refused_light",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.refused.locked",
+          "androidName": "game_frappe_refused_locked",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.refused.offline",
+          "androidName": "game_frappe_refused_offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.refused.shadow",
+          "androidName": "game_frappe_refused_shadow",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.refused.unknown",
+          "androidName": "game_frappe_refused_unknown",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.say.gold",
+          "androidName": "game_frappe_say_gold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.say.prism",
+          "androidName": "game_frappe_say_prism",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.say.silver",
+          "androidName": "game_frappe_say_silver",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.skip",
+          "androidName": "game_frappe_skip",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.tchak",
+          "androidName": "game_frappe_tchak",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.tchak_final",
+          "androidName": "game_frappe_tchak_final",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

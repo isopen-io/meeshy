@@ -79,8 +79,21 @@ class RouteManifestRatchetTest {
          * 208 : moins l'installation et le retrait d'un pack (`PUT` / `DELETE /packs/<domaine>/:slug/install`) et la
          * boutique d'un domaine (`GET /packs/<domaine>`, le repli d'un ancien serveur) (#13641), que porte `PackApi` ; le
          * motif `{domain}` couvre aussi les domaines que l'écran n'offre pas (capture-frame, glory-frame, lens).
+         * 207 : moins `POST /me/game/guide/seen` (#13885 : la ligne de Mee et sa feuille sur la première page
+         * Progression), que porte `GameApi.markGuideSeen`.
+         * 205 : moins `POST /conversations/:id/messages/after-read/consume` et `POST …/messages/:messageId/consume`
+         * (#13995 : la flamme-œil consommée à la sortie, la vue unique consommée à la fermeture), que porte `MessageApi`.
+         * 199 : moins les six routes que `StickerPackApi` et `SharedTranslationApi` déclarent par les constantes du
+         * catalogue généré (`ApiRoutesStickerPacks`, `ApiRoutesConversations`) : le scanner ne lisait que les chemins
+         * écrits en littéral et les croyait donc « à porter ». Il résout désormais `ApiRoutesX.NOM` (#13998, qui
+         * branche `RelationsApi` par `ApiRoutesRelations.BY_USER_ID`).
+         * 198 : moins `GET /mentions/suggestions` (#14053 : la liste « @ » fait remonter les personnes du
+         * contexte d'une conversation ou d'un post), que porte `MentionsApi.suggestions`.
+         * 201 : plus les trois routes des cercles que la passerelle sert (`GET /relations`,
+         * `POST /relations/:userId/level`, `POST /relations/:userId/ritual`, #13933) et que l'écran des cercles d'Android
+         * portera (ui-cercles) : à porter, pas hors périmètre.
          */
-        const val TO_PORT_CEILING = 208
+        const val TO_PORT_CEILING = 201
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

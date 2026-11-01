@@ -3,6 +3,7 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import me.meeshy.sdk.model.relation.RelationAudienceChoice
 
 /**
  * User preference models — port of PreferenceModels.swift.
@@ -279,6 +280,9 @@ data class UserNotificationPreferences(
     val showSenderName: Boolean = true,
     val groupNotifications: Boolean = true,
     val notificationBadgeEnabled: Boolean = true,
+    // #14064 — « Qui est prévenu » : les crans d'entourage RÉGLÉS ou SERVIS, une clé plate par action
+    // (`circlePublicationPost`…) ; une clé absente vaut le défaut de sa famille (`CircleNotify.valueOf`).
+    val circleAudience: Map<String, RelationAudienceChoice> = emptyMap(),
     val extras: Map<String, JsonElement> = emptyMap(),
 )
 

@@ -198,7 +198,7 @@ function readJson(path: string): ReadResult {
 type ContractFiles = { readonly refs: readonly PackAssetRef[]; readonly frames: number; readonly keys: readonly string[] };
 const NO_CONTRACT: ContractFiles = { refs: [], frames: 0, keys: [] };
 
-type AppearanceItem = { readonly key: string; readonly lottie?: PackAssetRef };
+type AppearanceItem = { readonly key: string; readonly lottie?: PackAssetRef; readonly decor?: { readonly back?: PackAssetRef; readonly front?: PackAssetRef } };
 
 /** Les modèles d'un pack de fonds, de bannières, de contours ou de cadres de bannière. */
 function appearanceContractItems(domain: PackDomain, input: unknown): readonly AppearanceItem[] {
@@ -209,14 +209,16 @@ function appearanceContractItems(domain: PackDomain, input: unknown): readonly A
 }
 
 /**
- * Ce qu'un contrat d'apparence ouvre au magasin : ses clés, et la couche Lottie
- * facultative de chaque modèle (D6, #10638) — le seul fichier qu'un dessin
- * référence, les dessins eux-mêmes étant des DONNÉES.
+ * Ce qu'un contrat d'apparence ouvre au magasin : ses clés, la couche Lottie
+ * facultative de chaque modèle (D6, #10638) et les deux films d'un cadre
+ * illustré (`decor.back`, `decor.front`, #13960) — les seuls fichiers qu'un
+ * dessin référence, les dessins eux-mêmes étant des DONNÉES.
  */
 function appearanceContractFiles(domain: PackDomain, input: unknown): ContractFiles {
   const items = appearanceContractItems(domain, input);
   const keys = items.map((item) => item.key);
-  return { refs: items.flatMap((item) => (item.lottie === undefined ? [] : [item.lottie])), frames: keys.length, keys };
+  const refs = items.flatMap((item) => [item.lottie, item.decor?.back, item.decor?.front].flatMap((ref) => (ref === undefined ? [] : [ref])));
+  return { refs, frames: keys.length, keys };
 }
 
 const APPEARANCE_DOMAINS: readonly PackDomain[] = ['wallpaper', 'banner', 'avatar-ring', 'banner-frame'];

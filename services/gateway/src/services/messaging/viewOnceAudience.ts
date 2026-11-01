@@ -59,6 +59,8 @@ export interface ViewOnceReaderState {
   readonly openedCount: number;
   /** Destinataires actifs (auteur exclu) — le dénominateur. */
   readonly recipientCount: number;
+  /** #11269 — le contenu est purgé (`viewOnceBurnedAt`) : rien ne se sert plus, à personne. */
+  readonly purged?: boolean;
 }
 
 /**
@@ -152,6 +154,7 @@ export async function computeViewOnceStates(
       isFullyConsumed: isPurged(message) || (recipientCount > 0 && openedCount >= recipientCount),
       openedCount,
       recipientCount,
+      purged: isPurged(message),
     });
   }
 
@@ -224,7 +227,7 @@ export interface ViewOnceServedFields {
  *   ouvert » / « destinataires actifs » : un client qui lit encore
  *   `viewOnceCount ≥ maxViewOnceCount` comme « brûlé » lit désormais « tous les
  *   destinataires l'ont ouvert », et plus jamais « quelqu'un l'a ouvert ».
- * - Pour qui l'a DÉJÀ ouvert : ni texte, ni
+ * - Pour qui l'a DÉJÀ ouvert, et pour tous une fois PURGÉE : ni texte, ni
  *   traduction, ni pièce jointe, ni lieu, ni sticker, ni métadonnée. Il ne
  *   reste que la bulle (identifiant, auteur, heure, type) et l'état.
  *
@@ -243,9 +246,10 @@ export function projectViewOnceForReader<T extends object>(
     viewOnceCount: state.openedCount,
     maxViewOnceCount: state.recipientCount,
   };
-  // Une vue unique PURGÉE n'a déjà plus de contenu en base : seule
-  // l'ouverture du lecteur a besoin d'être retenue ici.
-  if (!state.consumedByMe) return served;
+  // Une vue unique PURGÉE se retient à TOUT lecteur (#11269) : une pièce dont
+  // les octets sont en reprise garde sa ligne, et un membre arrivé après la
+  // purge — qui ne l'a jamais ouverte — la recevait encore.
+  if (!state.consumedByMe && state.purged !== true) return served;
 
   // Seules les clés que la charge PORTE sont retenues : une lecture projetée
   // (`/sync?fields=`) ne se voit pas ajouter ce qu'elle n'a pas demandé.

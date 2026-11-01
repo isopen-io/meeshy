@@ -16,6 +16,14 @@ export const NOTIFICATION_STRING_KEYS = [
   'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.commentContext', 'reaction.post',
   'comment.your', 'comment.generic', 'comment.repliedIn', 'comment.reply', 'comment.replyWithParent',
   'comment.genericFrom', 'comment.repliedInFrom',
+  'activity.reaction',
+  'activity.reactionFrom',
+  'activity.share',
+  'activity.shareFrom',
+  'activity.repost',
+  'activity.repostFrom',
+  'activity.quote',
+  'activity.quoteFrom',
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
@@ -27,6 +35,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'contact.requestAction', 'contact.acceptedAction',
   'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',
   'contact.recentlyActiveAction', 'contact.recentlyActiveBody',
+  'contact.acquaintanceAction', 'contact.acquaintanceBody',
   'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
   'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
@@ -540,6 +549,33 @@ export function buildNotificationDisplay(
           : ns('comment.generic', kind ?? 'STORY'),
         nounCap,
       );
+    // ── Réaction d'un tiers au contenu d'un proche, relayée (#14068) ──
+    case 'friend_content_reaction':
+      return framed(
+        author
+          ? notificationString(L, 'activity.reactionFrom', { ...(emoji ? { emoji } : {}), postType: kind ?? 'POST', author })
+          : ns('activity.reaction', kind ?? 'POST'),
+        nounCap,
+      );
+    // ── Partage, relayé à l'entourage (#14069) — sans auteur tiers : son propre contenu ──
+    case 'friend_content_share':
+      return framed(
+        author
+          ? notificationString(L, 'activity.shareFrom', { postType: kind ?? 'POST', author })
+          : ns('activity.share', kind ?? 'POST'),
+        nounCap,
+      );
+    // ── Republication (#14070) et citation (#14072), relayées à l'entourage de l'auteur ──
+    case 'friend_content_repost':
+      return framed(
+        author ? notificationString(L, 'activity.repostFrom', { postType: kind ?? 'POST', author }) : ns('activity.repost', kind ?? 'POST'),
+        nounCap,
+      );
+    case 'friend_content_quote':
+      return framed(
+        author ? notificationString(L, 'activity.quoteFrom', { postType: kind ?? 'POST', author }) : ns('activity.quote', kind ?? 'POST'),
+        nounCap,
+      );
     case 'story_thread_reply':
       return framed(
         author
@@ -585,6 +621,10 @@ export function buildNotificationDisplay(
     // ── Un contact est revenu (#8285) : « Marie était sur Meeshy récemment » ──
     case 'contact_recently_active':
       return framed(notificationString(L, 'contact.recentlyActiveAction'), null);
+
+    // ── La Connaissance est née toute seule (#13932) : « Marie est maintenant une Connaissance » ──
+    case 'relation_acquaintance':
+      return framed(notificationString(L, 'contact.acquaintanceAction'), null);
 
     // ── Le jeu (#9490) : un duo se joue entre amis, on nomme l'ami. La ligue et la saison
     //    n'ont pas d'acteur : le titre reste au client, la phrase est dans le corps. ──

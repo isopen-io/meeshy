@@ -103,8 +103,8 @@ describe('GET /export?types=packs', () => {
       { domain: 'avatar-ring', slug: 'echantillon', source: 'purchase', reference: null, priceMeeshes: 30, acquiredAt: AT.toISOString() },
       { domain: 'banner', slug: 'fete', source: 'event', reference: 'fete-2026', priceMeeshes: 0, acquiredAt: AT.toISOString() },
     ]);
-    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 2, appearanceSubmissions: 0, lensSubmissions: 0 });
-    expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false, ownerships: false, appearanceSubmissions: false, lensSubmissions: false });
+    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 2, appearanceSubmissions: 0, lensSubmissions: 0, partnerProfile: 0 });
+    expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false, ownerships: false, appearanceSubmissions: false, lensSubmissions: false, partnerProfile: false });
     expect(JSON.stringify(packs)).not.toContain(OTHER);
     await app.close();
   });
@@ -134,6 +134,21 @@ describe('GET /export?types=packs', () => {
 
     const csv = (await app.inject({ method: 'GET', url: '/export?types=packs&format=csv' })).json().data.csv;
     expect(csv['packs.lensSubmissions']).toContain('aurore');
+    await app.close();
+  });
+  it('le profil partenaire (#11327) sort, sans les octets du logo ni qui l’a vérifié', async () => {
+    const db = seeded();
+    db.tables.partnerProfile.rows.push({
+      id: 'pp1', userId: USER, displayName: 'Studio Nord', website: 'https://nord.example', logoSrc: 'aaaaaaaaaaaaaaaa.png', logoSha256: 'f'.repeat(64),
+      logoMime: 'image/png', logoBytes: Buffer.from('octets'), logoSize: 6, verifiedAt: AT, verifiedBy: OTHER, createdAt: AT, updatedAt: AT,
+    });
+    const app = await build(db);
+
+    const packs = (await app.inject({ method: 'GET', url: '/export?types=packs' })).json().data.packs;
+    expect(packs.partnerProfile).toEqual([
+      { displayName: 'Studio Nord', website: 'https://nord.example', logoSrc: 'aaaaaaaaaaaaaaaa.png', logoSize: 6, verifiedAt: AT.toISOString(), createdAt: AT.toISOString(), updatedAt: AT.toISOString() },
+    ]);
+    expect(JSON.stringify(packs)).not.toContain(OTHER);
     await app.close();
   });
 });

@@ -14,6 +14,7 @@ import {
   type ReelSeed,
 } from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
+import { loadFeedFriendIds } from './posts/feedFriends';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hoistLocationDeep } from './location/sharedPlace';
@@ -134,7 +135,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     // Phase 1 — Fetch candidates
     const where: any = {
@@ -286,7 +287,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     // Archive de l'AUTEUR : mes propres stories restent renvoyées après leur
     // expiration, pour que « Mes stories » puisse les lister (vignette voilée).
@@ -533,7 +534,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     const whereClause: any = {
       deletedAt: NOT_DELETED,
@@ -649,7 +650,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const contactIds = new Set([...friendIds, ...dmContactIds]);
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, [...contactIds], communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, [...contactIds], communityCoMemberIds, this.cache);
 
     const andClauses: any[] = [
       visibilityFilter,
@@ -867,7 +868,7 @@ export class PostFeedService {
         getCommunityCoMemberIds(this.prisma, viewerUserId, this.cache),
       ]);
       const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-      andClauses.push(await buildFeedVisibilityFilter(this.prisma, viewerUserId, allContactIds, communityCoMemberIds));
+      andClauses.push(await buildFeedVisibilityFilter(this.prisma, viewerUserId, allContactIds, communityCoMemberIds, this.cache));
     }
 
     if (cursorData) {
@@ -1033,32 +1034,8 @@ export class PostFeedService {
     }
   }
 
-  private async getFriendIds(userId: string): Promise<string[]> {
-    const cacheKey = `feed:friends:${userId}`;
-    if (this.cache) {
-      const cached = await this.cache.get(cacheKey).catch(() => null);
-      if (cached) return JSON.parse(cached) as string[];
-    }
-    try {
-      const friendRequests = await this.prisma.friendRequest.findMany({
-        where: {
-          status: 'accepted',
-          OR: [
-            { senderId: userId },
-            { receiverId: userId },
-          ],
-        },
-        select: { senderId: true, receiverId: true },
-      });
-
-      const result = friendRequests.map((f) =>
-        f.senderId === userId ? f.receiverId : f.senderId
-      );
-      if (this.cache) await this.cache.set(cacheKey, JSON.stringify(result), FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
-      return result;
-    } catch {
-      return [];
-    }
+  private getFriendIds(userId: string): Promise<string[]> {
+    return loadFeedFriendIds({ prisma: this.prisma, cache: this.cache, userId });
   }
 
   /// Stories : `isLikedByMe` suit la règle des listes (`likedFromReactions`,

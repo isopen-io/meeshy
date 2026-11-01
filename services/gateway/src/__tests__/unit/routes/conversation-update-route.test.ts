@@ -68,7 +68,7 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 const HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
 
 const lawFaithfulResolver =
-  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  (friendsOfViewer: ReadonlySet<string> = new Set(), level: 'FRIEND' | 'CLOSE' = 'FRIEND') =>
   async (viewer: PresenceViewer, ids: readonly string[]) =>
     new Map(
       ids.map((id) => [
@@ -77,7 +77,7 @@ const lawFaithfulResolver =
           ? resolvePresenceVisibility({
               isSelf: viewer.userId === id,
               viewerRole: viewer.role,
-              areConnected: friendsOfViewer.has(id),
+              relationLevel: friendsOfViewer.has(id) ? level : 'PUBLIC',
               targetShowOnlineStatus: true,
               targetShowLastSeen: true,
               targetIsDeactivated: false,
@@ -350,8 +350,17 @@ describe.each(['PUT', 'PATCH'] as const)(
       );
     });
 
-    it('ami accepté ⇒ présence servie', async () => {
+    it('Ami ⇒ « en ligne » servi, lastActiveAt JAMAIS (#13928)', async () => {
       mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([USER_ID])));
+
+      const served = await updateWithParticipants([participantRow()]);
+
+      expect(served.participants[0].isOnline).toBe(true);
+      expect(served.participants[0].lastActiveAt).toBeNull();
+    });
+
+    it('Proche ⇒ présence détaillée servie (#13928)', async () => {
+      mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([USER_ID]), 'CLOSE'));
 
       const served = await updateWithParticipants([participantRow()]);
 

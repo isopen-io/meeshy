@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import MeeshySDK
 
 // MARK: - StoryComposerViewModel + History (C9 — undo/redo global, capture)
@@ -11,28 +12,21 @@ extension StoryComposerViewModel {
     /// HORS périmètre pendant le dessin actif (UX undo dédiée — un snapshot
     /// unique à la sortie capture le résultat, cf. plan C9).
     public func pushHistorySnapshot() {
-        guard !drawingEditingMode.isActive else { return }
+        guard !drawingEditingMode.isActive, !historyPace.captureHeld else { return }
         guard let data = Self.encodeHistorySnapshot(slides) else { return }
         _ = history.push(data)
         purgeUnreachableRetiredResources()
         refreshHistoryFlags()
     }
 
-    /// Les bitmaps et octets animés mis de côté par une suppression ne servent qu'à un undo. Quand plus aucune
-    /// étape de la trajectoire ne les référence — évincés par le cap, ou branche redo tronquée — ils restaient en
-    /// mémoire jusqu'à la sortie du composer : une longue séance qui pose et retire des photos gardait chacune.
-    /// Un identifiant présent dans les octets d'un snapshot est conservé (un faux positif garde, jamais ne perd).
-    /// Les URL de fichiers restent : leur cycle de vie est celui des fichiers, pas de la mémoire.
+    /// Les bitmaps et octets animés qu'aucun pas ne peut plus ressusciter quittent la mémoire
+    /// (`StoryComposerHistoryPace.retained`) ; les URL de fichiers restent.
     func purgeUnreachableRetiredResources() {
         guard !retiredImages.isEmpty || !retiredSlideImages.isEmpty || !retiredStickerAnimations.isEmpty else { return }
-        let snapshots = history.states
-        func reachable(_ id: String) -> Bool {
-            let needle = Data(id.utf8)
-            return snapshots.contains { $0.range(of: needle) != nil }
-        }
-        retiredImages = retiredImages.filter { reachable($0.key) }
-        retiredSlideImages = retiredSlideImages.filter { reachable($0.key) }
-        retiredStickerAnimations = retiredStickerAnimations.filter { reachable($0.key) }
+        let pas = history.states
+        retiredImages = StoryComposerHistoryPace.retained(retiredImages, reachableFrom: pas)
+        retiredSlideImages = StoryComposerHistoryPace.retained(retiredSlideImages, reachableFrom: pas)
+        retiredStickerAnimations = StoryComposerHistoryPace.retained(retiredStickerAnimations, reachableFrom: pas)
     }
 
     /// (Re)démarre la trajectoire : à l'entrée du composer ET après la
@@ -47,39 +41,45 @@ extension StoryComposerViewModel {
         retiredStickerAnimations = [:]
         retiredAudioURLs = [:]
         retiredSlideImages = [:]
+        historyPace.observe(document: $slides,
+                            changed: { [weak self] in self?.noteDocumentChanged($0) },
+                            released: { [weak self] in if let self { self.noteDocumentChanged(self.slides) } })
         pushHistorySnapshot()
+    }
+
+    private func noteDocumentChanged(_ nouvelles: [StorySlide]) {
+        guard !historyPace.isApplying, !historyPace.captureHeld, !drawingEditingMode.isActive,
+              let courant = history.current else { return }
+        let boutons = StoryComposerHistoryPace.buttons(for: nouvelles, captured: courant,
+                                                       canUndo: history.canUndo, canRedo: history.canRedo)
+        if canUndoGlobal != boutons.canUndo { canUndoGlobal = boutons.canUndo }
+        if canRedoGlobal != boutons.canRedo { canRedoGlobal = boutons.canRedo }
     }
 
     /// Applique un cran d'annulation. `true` si un état a été appliqué —
     /// l'appelant (View) fait alors suivre les side-effects de présentation
     /// (restoreCanvas, rechargement timeline).
     @discardableResult
-    public func undoGlobal() -> Bool {
-        guard let data = history.undo() else { refreshHistoryFlags(); return false }
-        return applyHistorySnapshot(data)
-    }
+    public func undoGlobal() -> Bool { stepHistory { $0.undo() } }
 
     @discardableResult
-    public func redoGlobal() -> Bool {
-        guard let data = history.redo() else { refreshHistoryFlags(); return false }
+    public func redoGlobal() -> Bool { stepHistory { $0.redo() } }
+
+    /// La dernière action, si sa capture débouncée n'est pas encore partie,
+    /// devient d'abord un pas : annuler défait CETTE action, jamais la précédente.
+    private func stepHistory(_ move: (inout HistoryStore<Data>) -> Data?) -> Bool {
+        pushHistorySnapshot()
+        guard let data = move(&history) else { refreshHistoryFlags(); return false }
         return applyHistorySnapshot(data)
     }
 
     private func applyHistorySnapshot(_ data: Data) -> Bool {
-        guard let decoded = try? JSONDecoder().decode([StorySlide].self, from: data),
-              !decoded.isEmpty else {
-            refreshHistoryFlags()
-            return false
-        }
-        // La slide éditée garde la main par son ID : l'index seul glissait
-        // (supprimer A sous C, puis annuler, montrait B).
+        guard let decoded = StoryComposerHistoryPace.decode(data) else { refreshHistoryFlags(); return false }
         let editedSlideId = slides.indices.contains(currentSlideIndex) ? slides[currentSlideIndex].id : nil
+        historyPace.isApplying = true
+        defer { historyPace.isApplying = false }
         slides = decoded
-        if let editedSlideId, let restored = slides.firstIndex(where: { $0.id == editedSlideId }) {
-            currentSlideIndex = restored
-        } else {
-            currentSlideIndex = min(max(0, currentSlideIndex), slides.count - 1)
-        }
+        currentSlideIndex = StoryComposerHistoryPace.index(of: editedSlideId, in: decoded, previous: currentSlideIndex)
         // Sélection/format panel réinitialisés — simple et sûr (plan §Risques) ;
         // le View reset le band via ses hooks existants au changement d'état.
         selectedElementId = nil
@@ -88,6 +88,10 @@ extension StoryComposerViewModel {
         // Le z-order VM se réhydrate depuis les champs persistés des objets
         // restaurés (mécanisme existant du changement de slide).
         rehydrateZIndexMapFromSlide()
+        // Les miroirs des transitions suivent la slide restaurée : le carrousel
+        // et l'atelier les relisent.
+        openingEffect = currentEffects.opening
+        closingEffect = currentEffects.closing
         refreshHistoryFlags()
         // NOTE dédup : l'état appliqué DEVIENT entries[index] — le prochain
         // cycle du historyTrigger encode le même JSON et la dédup l'absorbe.
@@ -138,11 +142,5 @@ extension StoryComposerViewModel {
         if canRedoGlobal != history.canRedo { canRedoGlobal = history.canRedo }
     }
 
-    /// Encodage déterministe (`.sortedKeys` — l'ordre des clés JSONEncoder
-    /// est instable sur iOS 26, la dédup du store exige des octets stables).
-    static func encodeHistorySnapshot(_ slides: [StorySlide]) -> Data? {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        return try? encoder.encode(slides)
-    }
+    static func encodeHistorySnapshot(_ slides: [StorySlide]) -> Data? { StoryComposerHistoryPace.encode(slides) }
 }

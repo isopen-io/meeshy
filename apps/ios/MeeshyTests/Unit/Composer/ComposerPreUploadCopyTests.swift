@@ -53,14 +53,14 @@ final class ComposerPreUploadCopyTests: XCTestCase {
     /// un point en anglais. La couverture des libellés est ailleurs, dans les
     /// gardes de catalogue qui interrogent le `.xcstrings` sans dépendre d'une
     /// locale d'exécution.
-    func test_unAssetPret_leDit() {
-        let phrase = ComposerPreUploadCopy.label(
-            for: .ready(postMediaId: "m1", remoteURL: "https://cdn/x"), locale: fr)
-        // Le CONTRASTE avec les trois silences ci-dessus est tout l'invariant :
-        // `idle` et `failed` rendent `nil`, `ready` PARLE.
-        XCTAssertNotNil(phrase, "un asset prêt doit le DIRE — c'est ce qui le sépare des deux silences")
-        XCTAssertFalse(phrase?.isEmpty ?? true,
-                       "et le dire par une phrase, jamais par une chaîne vide qui se concatène en silence")
+    /// **Un asset prêt ne se dit plus** (#13839, L3) : « aucune puce d'état
+    /// au repos ». Prêt est l'état NOMINAL — le dire sur chaque média occupait
+    /// la scène pour annoncer que rien n'est à faire. Seule la montée en cours,
+    /// discrète, a encore quelque chose à dire.
+    func test_unAssetPret_neDitRien() {
+        XCTAssertNil(ComposerPreUploadCopy.label(
+            for: .ready(postMediaId: "m1", remoteURL: "https://cdn/x"), locale: fr),
+            "prêt est l'état nominal : aucune puce au repos")
     }
 
     /// La phrase de la planche, dans ses trois morceaux — dont les deux que

@@ -26,11 +26,17 @@
         <item quantity="many">Eliminare %1$d messaggi?</item>
         <item quantity="other">Eliminare %1$d messaggi?</item>
     </plurals>
+    <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_engagement_a11y_streak">%1$s · Scintille: %2$d · Oggi: %3$d</string>
     <string name="chat_engagement_a11y_streak_days_one">%1$d giorno</string>
     <string name="chat_engagement_a11y_streak_days_other">%1$d giorni</string>
     <string name="chat_engagement_a11y_total_one">%1$s scintilla guadagnata in questa conversazione</string>
     <string name="chat_engagement_a11y_total_other">%1$s scintille guadagnate in questa conversazione</string>
+    <string name="chat_ephemeral_activate">Attiva la modalità effimera</string>
+    <string name="chat_ephemeral_active">Modalità effimera attiva: %1$s</string>
+    <string name="chat_ephemeral_after_read">Dopo la lettura</string>
+    <string name="chat_ephemeral_after_read_a11y">Dopo la lettura, quando il lettore lascia la conversazione</string>
+    <string name="chat_ephemeral_off">Disattivo</string>
     <string name="chat_exit_blocked_after_read">Scompare dopo la lettura: non si inoltra, non si salva e non si condivide.</string>
     <string name="chat_exit_blocked_attachment_not_in_source">Questo elemento non fa più parte del messaggio.</string>
     <string name="chat_exit_blocked_encrypted_source">Questo contenuto cifrato viene copiato da questo dispositivo.</string>

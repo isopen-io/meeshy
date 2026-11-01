@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_circle_notify_title">من يتلقى الإشعار</string>
+    <string name="settings_circle_notify_intro">اختر، لكل إجراء، أي دائرة من محيطك تتلقى إشعارًا.</string>
+    <string name="settings_circle_notify_family_publication">منشوراتي</string>
+    <string name="settings_circle_notify_family_on_my_content">نشاط الآخرين على محتواي</string>
+    <string name="settings_circle_notify_family_elsewhere">نشاطي في أماكن أخرى</string>
+    <string name="settings_circle_notify_summary_mixed">حسب الإجراء</string>
+    <string name="settings_circle_notify_choice_nobody">لا أحد</string>
+    <string name="settings_circle_notify_explain_nobody">لا يتلقى أحد من محيطك إشعارًا.</string>
+    <string name="settings_circle_notify_explain_community">كل روابطك، من الدم إلى المعارف، وأعضاء المجتمعات التي تشاركها.</string>
+    <string name="settings_circle_notify_explain_public">الأشخاص أنفسهم كما في المجتمع: لا يوجد متابعون في Meeshy، ولا يتلقى أي غريب إشعارًا.</string>
+    <string name="settings_circle_notify_action_post">منشور</string>
+    <string name="settings_circle_notify_action_reel">ريل</string>
+    <string name="settings_circle_notify_action_story">قصة</string>
+    <string name="settings_circle_notify_action_mood">مزاج</string>
+    <string name="settings_circle_notify_action_repost">إعادة نشر</string>
+    <string name="settings_circle_notify_action_share">مشاركة</string>
+    <string name="settings_circle_notify_action_comment">تعليق</string>
+    <string name="settings_circle_notify_action_reaction">تفاعل</string>
+    <string name="settings_circle_notify_action_quote">اقتباس</string>
+    <string name="settings_circle_notify_action_reference">إشارة مرجعية</string>
+    <string name="settings_circle_notify_action_mention">إشارة</string>
+    <string name="settings_circle_notify_choice_blood">دم</string>
+    <string name="settings_circle_notify_choice_close">مقرّب</string>
+    <string name="settings_circle_notify_choice_friend">صديق</string>
+    <string name="settings_circle_notify_choice_acquaintance">معرفة</string>
+    <string name="settings_circle_notify_choice_community">المجتمع</string>
+    <string name="settings_circle_notify_choice_public">عام</string>
+</resources>

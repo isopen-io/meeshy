@@ -132,19 +132,18 @@ extension MeeshyComposerHost {
                 // brouillon d'un post, et le seul qui voie à la fois le format
                 // choisi et l'atelier.
                 //
-                // `sceneIsPresent` — le MÊME prédicat que celui qui monte la
-                // vue, jamais `documentHasScene` en direct : les deux
-                // répondaient à la même question et divergeaient sur une story
-                // vide (cf. `sceneIsPresent`). Sans scène à l'écran, aucun blob
-                // ne part — un canvas vide encodé ferait croire à une scène
-                // composée puis effacée.
+                // `scenePublishes` (#13864) — et non plus `sceneIsPresent` : un
+                // post texte seul MONTRE sa scène, il ne la publie pas. Sans
+                // fond ni objet, aucun blob ne part — la charge reste celle du
+                // post texte d'avant, et un canvas vide encodé ferait croire à
+                // une scène composée puis effacée.
                 // **TOUTES les slides partent** (directive porteur 2026-09-06).
                 // La règle vit dans `ComposerStoryCanvas`, où elle s'éprouve ;
                 // ce site ne fait que la consulter, comme il consulte déjà
-                // `sceneIsPresent`.
+                // `scenePublishes`.
                 storyEffects: ComposerStoryCanvas.publishedSlide(
                     format: choice.format,
-                    sceneIsPresent: sceneIsPresent,
+                    sceneIsPresent: scenePublishes,
                     slides: viewModel.slides,
                     // **La disposition demandée voyage avec les scènes.** Sans
                     // cette ligne le contrôle serait un décor : l'auteur
@@ -200,7 +199,7 @@ extension MeeshyComposerHost {
     /// `postMediaId` (et n'est pas emporté), ce qui est en vol partira par la
     /// file au lieu de monter deux fois.
     var carriedSceneAssets: ComposerCarriedSceneAssets {
-        guard sceneIsPresent else { return .empty }
+        guard scenePublishes else { return .empty }
         stopPreUploadsForPublication()
         let deja = Set(documentLocalMedia.map(\.url))
         let emportes = ComposerCarriedSceneAssets.materialize(

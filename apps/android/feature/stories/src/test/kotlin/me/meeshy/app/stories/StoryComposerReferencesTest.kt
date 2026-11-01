@@ -162,7 +162,9 @@ class StoryComposerReferencesTest {
 
         val bar = vm.state.value.selectionBar!!
         assertThat(bar.ref).isEqualTo(SceneObjectRef(ComposerObjectKind.PLACE, place.id))
-        assertThat(bar.actions).containsExactly(ComposerSelectionAction.REMOVE)
+        assertThat(bar.actions).containsExactly(
+            ComposerSelectionAction.EDIT, ComposerSelectionAction.DUPLICATE, ComposerSelectionAction.TIME, ComposerSelectionAction.REMOVE,
+        ).inOrder()
 
         vm.onSelectionAction(bar.ref, ComposerSelectionAction.REMOVE) {}
         assertThat(vm.state.value.deck.selectedSlide.places).isEmpty()

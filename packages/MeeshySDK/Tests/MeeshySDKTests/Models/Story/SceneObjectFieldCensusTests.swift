@@ -68,7 +68,14 @@ final class SceneObjectFieldCensusTests: XCTestCase {
     /// Swift et passerelle) et par `CanvasV3ExhaustivityTests` ; le gateway le
     /// laisse passer (schéma `passthrough`, branche audio qui répand le
     /// reste) ; le web ne le lit pas encore (#9698) ; Android natif est gelé.
-    private static let recensementEcrit = 124
+    ///
+    /// **125 depuis #13840** — `StoryMediaObject.look`, le look de la retouche
+    /// gardé comme réglage. À la question du témoin : il est EXERCÉ par
+    /// `CanvasV3ExhaustivityTests` (le document de l'auteur, brouillon et
+    /// historique, s'encode en v3), mais il ne voyage JAMAIS au fil : la
+    /// publication le cuit et encode `StoryEffects.withoutMediaLooks`
+    /// (`StoryMediaLookCodableTests`). Aucun autre client ne le lit.
+    private static let recensementEcrit = 125
 
     private func champs<T>(_ instance: T) -> Int {
         Mirror(reflecting: instance).children.count

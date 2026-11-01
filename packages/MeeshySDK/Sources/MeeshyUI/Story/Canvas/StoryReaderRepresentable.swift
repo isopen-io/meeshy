@@ -28,6 +28,9 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// alors du cadre visible, et leur remplissage ne se peint plus. `true` par
     /// défaut : toute autre surface garde ses bandes.
     public internal(set) var servesLetterboxFill: Bool = true
+    /// La couleur d'auteur sur laquelle une scène sans fond se lit (#14258) —
+    /// `nil` garde le sol noir (réel, aperçu, conversation).
+    public internal(set) var sceneFloorHex: String?
     /// Drives `StoryCanvasUIView.setPaused(_:)` — gels la timeline canvas
     /// (displayLink + AVPlayer + audioMixer) en phase avec la progress bar
     /// du viewer parent. Sans ça, ouvrir un sheet pendant la lecture laissait
@@ -174,6 +177,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     // MARK: - Primary init
 
     public init(story: StoryItem,
+                sceneFloorHex: String? = nil,
                 preferredLanguage: String? = nil,
                 preferredLanguages: [String] = [],
                 preferredContentLanguages: [String]? = nil,
@@ -196,6 +200,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 onPlaybackTime: ((Double) -> Void)? = nil,
                 onPlaybackProgressing: ((Bool) -> Void)? = nil) {
         self.storyItem = story
+        self.sceneFloorHex = sceneFloorHex
         self.playbackQoEStoryId = story.id
         // `preferredContentLanguages` is the legacy label; it takes priority over
         // `preferredLanguages` when provided so existing call-sites compile unchanged.
@@ -224,10 +229,18 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.imageCache = imageCache
     }
 
+    /// La slide que le canvas peint : celle du porteur, posée sur le dégradé
+    /// de l'auteur quand elle ne déclare aucun fond.
+    var renderableSlide: StorySlide {
+        var slide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        slide.effects = slide.effects.flooredOnAuthorGradient(sceneFloorHex)
+        return slide
+    }
+
     // MARK: - UIViewRepresentable
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
-        let slide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        let slide = renderableSlide
         // Outgoing canvas (cross-fade sortant) doit naître en `.edit` pour ne
         // jamais démarrer ses médias — sinon les bg/FG AVPlayer + audio mixer
         // jouent en double avec le canvas visible 350-400 ms le temps de
@@ -344,7 +357,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // choisir une langue dans le strip du viewer laissait le canvas afficher
         // les textes dans l'ancienne langue (bug 2026-07-25).
         let languagesChanged = view.readerContext.preferredLanguages != preferredLanguages
-        let newSlide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
+        let newSlide = renderableSlide
         let identityChanged = newSlide.id != view.slide.id
         if identityChanged || languagesChanged || newSlide.content != view.slide.content {
             view.slide = newSlide

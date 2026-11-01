@@ -68,6 +68,13 @@ final class FeedbackToastManager: ObservableObject {
         present(FeedbackToast(message: message, type: .error, isTappable: true), tapAction: tapAction)
     }
 
+    /// Un AVERTISSEMENT bref — une limite atteinte n'est pas une erreur : la
+    /// vibration d'avertissement, un toast d'information, l'annonce VoiceOver.
+    func showNotice(_ message: String) {
+        HapticFeedback.warning()
+        present(FeedbackToast(message: message, type: .info))
+    }
+
     func showSuccess(_ message: String) {
         HapticFeedback.success()
         present(FeedbackToast(message: message, type: .success))
@@ -149,6 +156,8 @@ enum DailyGestureLimitNotice {
             case .reaction:
                 return String(localized: "post.daily_limit.reaction.untimed",
                               defaultValue: "Vous avez fait toutes les réactions permises aujourd'hui. La limite compte vos gestes, jamais vos points.", bundle: .main)
+            case .unlinkedRecipients:
+                return onlyUnlinkedRecipientsText
             }
         }
         let time = resetTime(resetAt, locale: locale, timeZone: timeZone)
@@ -157,11 +166,26 @@ enum DailyGestureLimitNotice {
             return String(localized: "post.daily_limit.comment",
                           defaultValue: "Vous avez fait tous les commentaires permis aujourd'hui. La limite compte vos gestes, jamais vos points : vous pourrez recommenter à \(time).",
                           bundle: .main)
+        case .unlinkedRecipients:
+            return onlyUnlinkedRecipientsText
         case .reaction:
             return String(localized: "post.daily_limit.reaction",
                           defaultValue: "Vous avez fait toutes les réactions permises aujourd'hui. La limite compte vos gestes, jamais vos points : vous pourrez réagir de nouveau à \(time).",
                           bundle: .main)
         }
+    }
+
+    /// **Trop de personnes choisies sans lien aujourd'hui** (#14169) : ni une
+    /// cadence ni une heure — l'auteur retire ces personnes, ou revient demain.
+    static var onlyUnlinkedRecipientsText: String {
+        String(localized: "post.audience.only_unlinked_limit",
+               defaultValue: "Trop de personnes choisies n’ont encore aucun lien avec vous aujourd’hui. Retirez-les de la liste, ou réessayez demain.",
+               bundle: .main)
+    }
+
+    /// Le message d'un refus du jour, quand `error` en est un ; `nil` sinon.
+    static func refusalText(_ error: Error) -> String? {
+        DailyGestureLimit.from(error).map { text(for: $0) }
     }
 
     /// L'heure de remise à zéro, courte, dans le fuseau et la langue de l'appareil.
@@ -177,6 +201,11 @@ enum DailyGestureLimitNotice {
     /// Le message d'une mutation que la file a abandonnée sur une limite du jour.
     static func exhaustedText(clientMutationId: String) -> String? {
         DailyGestureLimitLedger.shared.take(clientMutationId: clientMutationId).map { text(for: $0) }
+    }
+
+    /// Montre la limite du jour quand `error` en est une, `fallback` sinon : un seul toast.
+    static func showError(_ error: Error, otherwise fallback: String, toasts: FeedbackToastManager = .shared) {
+        toasts.showError(refusalText(error) ?? fallback)
     }
 
     /// Montre le message quand `error` est une limite du jour ; `true` si c'en était une.

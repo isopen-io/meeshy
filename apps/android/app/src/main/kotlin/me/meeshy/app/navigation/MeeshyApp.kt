@@ -49,6 +49,8 @@ import me.meeshy.app.notifications.NotificationBannerHost
 import me.meeshy.app.startup.AppExtensionsViewModel
 import me.meeshy.app.startup.AppOverlayStack
 import me.meeshy.app.startup.ProvideAppLocals
+import me.meeshy.app.upgrade.UpgradeGateHost
+import me.meeshy.app.upgrade.UpgradeRequiredViewModel
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.net.SessionExpiryNotifier
@@ -100,6 +102,10 @@ fun MeeshyApp(
     LaunchedEffect(guestEnded) {
         if (guestEnded != null) authViewModel.onExternalSessionOpened()
     }
+    // Ce binaire est sous le plancher de version (426 REST ou `error` socket) : l'écran « Mettre à jour Meeshy » couvre TOUTE
+    // la racine, sans sortie, et rien dessous n'est plus lu par TalkBack ni touché ([UpgradeGateHost], #13954).
+    val upgradeViewModel: UpgradeRequiredViewModel = hiltViewModel()
+    val upgradeRequirement by upgradeViewModel.requirement.collectAsStateWithLifecycle()
     // Seule la PHASE de l'appel est lue ici : l'etat complet change chaque seconde (le chrono),
     // et le lire a la racine recomposerait MeeshyApp et redonnerait au `builder` du NavHost une
     // identite neuve chaque seconde — le graphe reconstruit pendant tout l'appel. La pastille
@@ -181,6 +187,7 @@ fun MeeshyApp(
         }
     }
 
+    UpgradeGateHost(requirement = upgradeRequirement) {
     ShareLaunchHost(navController) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -209,7 +216,10 @@ fun MeeshyApp(
                                 .padding(vertical = MeeshySpacing.xs),
                         )
                     }
-                    Box(
+                    // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
+                    // la destination, qu'il comprime au lieu de la recouvrir : le ✕ du compositeur reste entier.
+                    ActivationInviteBandHost(
+                        navController = navController,
                         modifier = Modifier
                             .weight(1f)
                             .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
@@ -308,6 +318,7 @@ fun MeeshyApp(
         LoggingOutVeil(visible = authState.isLoggingOut)
 
         SplashOverlay()
+    }
     }
     }
 }

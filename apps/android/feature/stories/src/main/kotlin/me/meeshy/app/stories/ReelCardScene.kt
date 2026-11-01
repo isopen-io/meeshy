@@ -65,8 +65,8 @@ internal fun ReelCardSceneFrame(modifier: Modifier = Modifier, content: @Composa
 
 /**
  * La scène d'un réel composé sur sa carte (iOS `ReelCardSceneBackdrop`) : la même projection et le même lecteur que le lecteur de
- * stories, mais la scène REMPLIT le cadre reçu (sur du noir, rognée au centre), muette, sans geste ni libellé — la carte qui la porte
- * ouvre le réel et se lit « Réel de … ». Elle ne joue que quand le fil l'élit ([live]) ; sinon c'est une image fixe, sans lecteur (#13663).
+ * stories, mais la scène REMPLIT le cadre reçu (sur du noir, rognée au centre), sans geste ni libellé — la carte qui la porte
+ * ouvre le réel et se lit « Réel de … ». Muette dans le fil ; la fiche d'un post la fait entendre tant que [muted] ne la coupe pas. Elle ne joue que quand le fil l'élit ([live]) ; sinon c'est une image fixe, sans lecteur (#13663).
  */
 @Composable
 fun ReelCardScene(
@@ -74,6 +74,8 @@ fun ReelCardScene(
     accentHex: String?,
     live: Boolean,
     modifier: Modifier = Modifier,
+    muted: Boolean = true,
+    floor: SceneFloor = SceneFloor.BLACK,
     viewModel: RepostSceneViewModel = hiltViewModel(),
 ) {
     val slide = remember(item, accentHex) { viewModel.slideOf(item, accentHex = accentHex ?: SCENE_FALLBACK_ACCENT) }
@@ -81,13 +83,30 @@ fun ReelCardScene(
         StoryScenePlayer(
             slide = slide,
             playing = live,
-            muted = true,
+            muted = muted,
             loads = true,
             rewindWhenIdle = false,
             resting = !live,
-            floor = SceneFloor.BLACK,
+            floor = floor,
         )
     }
+}
+
+/**
+ * La scène d'un post, sur sa carte du fil et dans sa fiche (#14223) : le cadre d'un réel, le sol d'une story. Une scène qui ne
+ * déclare aucun fond se lit sur le dégradé de son auteur — celui que le compositeur montrait, et que la story publiée du même
+ * geste montre — jamais sur le noir d'un réel.
+ */
+@Composable
+fun PostSceneCard(
+    item: StoryItem,
+    accentHex: String?,
+    live: Boolean,
+    modifier: Modifier = Modifier,
+    muted: Boolean = true,
+    viewModel: RepostSceneViewModel = hiltViewModel(),
+) {
+    ReelCardScene(item, accentHex, live, modifier, muted = muted, floor = SceneFloor.AUTHOR_GRADIENT, viewModel = viewModel)
 }
 
 private const val SCENE_FALLBACK_ACCENT = "6366F1"

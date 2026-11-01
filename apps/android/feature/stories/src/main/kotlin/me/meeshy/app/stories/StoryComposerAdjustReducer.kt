@@ -23,7 +23,7 @@ internal object StoryComposerAdjustReducer {
             else -> backgroundWith(state, mediaId) { it.resetting(family) }
         }
 
-    private fun StoryComposerUiState.isPlaced(mediaId: String): Boolean = deck.selectedSlide.placedMedia.any { it.mediaId == mediaId }
+    private fun StoryComposerUiState.isPlaced(mediaId: String): Boolean = deck.selectedSlide.placedMedia.any { it.id == mediaId }
 
     private fun backgroundWith(state: StoryComposerUiState, mediaId: String, change: (ImageAdjustments) -> ImageAdjustments): StoryComposerUiState {
         if (mediaId != state.sceneBackgroundMediaId) return state

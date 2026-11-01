@@ -63,6 +63,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     postReaction: { findMany: jest.fn() },
     postMedia: { findFirst: jest.fn() },
     friendRequest: { findMany: jest.fn() },
+    userRelation: { findMany: jest.fn(), findUnique: jest.fn() },
     communityMember: { findMany: jest.fn() },
     participant: { findMany: jest.fn() },
   };
@@ -92,6 +93,10 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { notificationLogger } from '../../../utils/logger-enhanced';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+
+/** L'auteur a réglé son entourage à « Ami » (#13929) : la borne s'éprouve sur ses amis. */
+const ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
 
 const AUTHOR_ID = '507f1f77bcf86cd799439001';
 const COMMENTER_ID = '507f1f77bcf86cd799439002';
@@ -114,9 +119,16 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
     service = new NotificationService(prisma);
     service.setSocketIO({ to: jest.fn().mockReturnThis(), emit: jest.fn() } as any, new Map());
 
-    prisma.userPreferences.findUnique.mockResolvedValue(null);
+    prisma.userPreferences.findUnique.mockImplementation(({ where }: { where: { userId: string } }) =>
+      Promise.resolve(where.userId === AUTHOR_ID ? ENTOURAGE_FRIEND : null)
+    );
+    prisma.userRelation.findMany.mockResolvedValue([]);
+    prisma.userRelation.findUnique.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ username: 'a', displayName: 'A', avatar: null });
-    prisma.user.findMany.mockResolvedValue([]);
+    // Tous les comptes vivants (#14252 : la borne ne compte que des vivants) ; aucun blocage.
+    prisma.user.findMany.mockImplementation(async (args: { where?: { isActive?: boolean; id?: { in?: string[] } } }) =>
+      args?.where?.isActive === true ? (args.where.id?.in ?? []).map((id) => ({ id })) : []
+    );
     prisma.postComment.findMany.mockResolvedValue([]);
     prisma.postReaction.findMany.mockResolvedValue([]);
     prisma.friendRequest.findMany.mockResolvedValue([]);
@@ -167,7 +179,7 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
       expect(result.truncatedBuckets).toContain('previousComments');
     });
 
-    it('nomme le seau des amis, et celui des réacteurs, quand ils saturent', async () => {
+    it('nomme le seau de l’entourage, et celui des réacteurs, quand ils saturent', async () => {
       prisma.friendRequest.findMany.mockResolvedValue(
         idsOfLength(FANOUT_ROW_CAP + 1, 'f-').map((id) => ({ senderId: AUTHOR_ID, receiverId: id }))
       );
@@ -178,7 +190,7 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(result.truncatedBuckets).toEqual(
-        expect.arrayContaining(['friendRequests', 'reactors'])
+        expect.arrayContaining(['entourage', 'reactors'])
       );
     });
 
@@ -218,7 +230,7 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
 
       const [, context] = warnedTruncations()[0] ?? [];
       expect(context).toEqual(
-        expect.objectContaining({ postId: POST_ID, authorId: AUTHOR_ID, cap: FANOUT_ROW_CAP })
+        expect.objectContaining({ ownerId: AUTHOR_ID, cap: FANOUT_ROW_CAP })
       );
     });
 

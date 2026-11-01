@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+import { POST_VISIBILITIES } from '@meeshy/shared/types/post';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 import { parseMessageSticker } from '../../services/stickers/messageSticker';
@@ -112,7 +113,7 @@ export const StoryMediaObjectSchema = z.object({
   aspectRatio: z.number().min(0.05).max(20).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   // Plafond a 2 : l'auteur peut pousser un media au-dela de son niveau nominal
   // (quitte a saturer, c'est un choix de composition assume). Miroir de
@@ -147,7 +148,7 @@ const StoryTextObjectSchema = z.object({
   content: z.string().max(STORY_TEXT_MAX).optional(),  // legacy field
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   fontSize: z.number().min(1).max(1000).optional(),
   textSize: z.number().min(1).max(1000).optional(),  // legacy field
@@ -188,7 +189,7 @@ const StoryStickerObjectSchema = z.object({
   emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   zIndex: z.number().int().min(-1000).max(1000).optional(),
   keyframes: StoryKeyframesBoundsSchema,
@@ -284,9 +285,18 @@ export const PostReferenceInputSchema = z.object({
   message: 'userId ou username requis',
 });
 
+/**
+ * L'audience d'une publication — UN seul schéma pour les quatre entrées (création,
+ * édition, republication, publication d'une pièce jointe), dérivé de la liste
+ * partagée `POST_VISIBILITIES`. Quatre `z.enum` recopiés à la main divergent : une
+ * valeur ajoutée à l'un et oubliée aux autres refuse, selon la porte, une audience
+ * que le schéma Prisma accepte.
+ */
+export const PostVisibilitySchema = z.enum(POST_VISIBILITIES);
+
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).default('POST'),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibility: PostVisibilitySchema.optional(),
   visibilityUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(500).optional(),
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),
@@ -442,7 +452,7 @@ function hasAnyContentCarrier(data: {
 
 export const UpdatePostSchema = z.object({
   content: z.string().max(5000).optional(),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibility: PostVisibilitySchema.optional(),
   visibilityUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(500).optional(),
   storyEffects: StoryEffectsSchema.optional(),
   // Opt-in extraction bande-son vidéo — même contrat que CreatePostSchema.
@@ -578,7 +588,7 @@ export const RepostSchema = z.object({
   // Audience choisie par le REPOSTEUR. Le composer l'affiche depuis toujours ;
   // sans ce champ elle n'atteignait aucune couche et tout repost sortait avec
   // la visibilité de l'original (donc PUBLIC, seule valeur repostable).
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibility: PostVisibilitySchema.optional(),
 });
 
 export const TranslatePostSchema = z.object({
@@ -782,7 +792,7 @@ export const PublishAttachmentSchema = z.object({
   attachmentId: z.string().min(1),
   target: z.enum(['POST', 'REEL', 'STORY']).optional(),
   content: z.string().max(5000).optional(),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibility: PostVisibilitySchema.optional(),
   capturedInApp: z.boolean().optional(),
   editedInApp: z.boolean().optional(),
 });

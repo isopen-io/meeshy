@@ -5,6 +5,10 @@ import MeeshyUI
 /// **Le rail *trailing* — les CONTRÔLEURS de l'objet sélectionné** (#4063,
 /// planche rév. 27 § P4, loi 12).
 ///
+/// **Sur la scène, il ne paraît plus au repos** (#13839) : seulement quand un
+/// outil est ouvert ou un objet touché (`ComposerSceneSurface.trailingRailIsShown`).
+/// Défaire et rétablir ont quitté sa base pour le haut de la scène.
+///
 /// ## Ce qu'il porte, et pourquoi ce n'est pas une invention
 ///
 /// Exactement ce que l'appui long propose déjà sur un objet de la scène
@@ -60,8 +64,8 @@ struct ComposerTrailingRail: View {
     var onUndo: (() -> Void)?
     var onRedo: (() -> Void)?
 
-    /// **Le ressort qui pousse vers le pouce** — le même contrat que
-    /// `ComposerLeadingRail.pushesToThumb`. Sur la scène plein écran (#8370), le
+    /// **Le ressort qui pousse vers le pouce** — le contrat qu'avait le rail
+    /// gauche, retiré au #13907. Sur la scène plein écran (#8370), le
     /// rail FLOTTE au bas de la scène libre : un ressort l'y étirait sur toute la
     /// hauteur, colonne de verre vide au-dessus du `[+]`.
     var pushesToThumb: Bool = true
@@ -364,12 +368,6 @@ nonisolated enum ComposerTrailingRailCopy {
         String(localized: "composer.rail.slide.add",
                defaultValue: "Nouvelle slide", bundle: .main)
     }
-
-    /// Le `(x)` d'une sélection (#8714) : il ne détruit rien, il rend la scène.
-    static var exitObject: String {
-        String(localized: "composer.rail.object.exit",
-               defaultValue: "Quitter l'objet", bundle: .main)
-    }
 }
 
 /// Les mots des EFFETS de la scène (#8712, #8792) : deux familles, deux noms.
@@ -439,25 +437,9 @@ struct ComposerTrailingColumnPaint {
             label = ComposerSceneEffectCopy.label(effet)
             isOn = ouvert
             tint = neutre
-        case .editorSection(let section, let ouvert):
-            symbol = ComposerObjectEditorRail.symbolName(section)
-            label = ComposerObjectEditorCopy.entry(section)
-            isOn = ouvert
-            tint = neutre
-        case .objectAction(let action):
-            symbol = action.systemImage
-            label = action.title
-            isOn = false
-            // La seule action DESTRUCTRICE porte la couleur sémantique d'erreur.
-            tint = action == .delete ? MeeshyColors.error : neutre
         case .exitTool:
             symbol = "xmark"
             label = ComposerToolExitCopy.label
-            isOn = false
-            tint = neutre
-        case .exitObject:
-            symbol = "xmark"
-            label = ComposerTrailingRailCopy.exitObject
             isOn = false
             tint = neutre
         }
@@ -519,3 +501,30 @@ nonisolated enum ComposerTrailingRailPolicy {
     }
 }
 
+/// **« Temps », seul au rail droit pendant que la frise est ouverte.** Il reste
+/// où il était — AU-DESSUS de l'historique : la frise masque annuler et
+/// rétablir (elle réécrit la slide à sa fermeture), mais leur place est
+/// gardée, sans quoi le bouton qui la RANGE descendrait sous le doigt qui
+/// vient de l'ouvrir.
+struct ComposerFriseRail: View {
+    let plateauTint: Color
+    let onTime: (() -> Void)?
+    let timeIsOpen: Bool
+    let reservesUndo: Bool
+    let reservesRedo: Bool
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 0)
+            ComposerTrailingRail(actions: [],
+                                 plateauTint: plateauTint,
+                                 pushesToThumb: false,
+                                 separateButtons: true,
+                                 onTime: onTime,
+                                 timeIsOpen: timeIsOpen)
+                .padding(.trailing, ComposerRailGeometry.outerMargin)
+                .padding(.bottom, ComposerRailGeometry.floatingBottomInset
+                                  + ComposerRailGeometry.historyReserve(undo: reservesUndo, redo: reservesRedo))
+        }
+    }
+}

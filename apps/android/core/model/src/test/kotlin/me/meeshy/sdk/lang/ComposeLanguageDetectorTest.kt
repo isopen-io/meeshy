@@ -238,6 +238,32 @@ class ComposeLanguageDetectorTest {
         )
         assertThat(result).isEqualTo("en")
     }
+
+    private fun identifies(code: String, confidence: Double) = LanguageIdentifying { LanguageIdentification(code, confidence) }
+
+    @Test
+    fun authoredLanguage_confidentDetection_isClaimed() = runTest {
+        assertThat(ComposeLanguageDetector.authoredLanguage("Bonjour à toutes et à tous", identifies("fr", 0.98))).isEqualTo("fr")
+    }
+
+    @Test
+    fun authoredLanguage_weakDetection_isLeftToTheServer_neverTheAuthorsLanguage() = runTest {
+        // #14284 — un compte dont la langue primaire est l'espagnol écrit « Recette commentaire photo S8 » :
+        // l'identifieur hésite, et le commentaire partait badgé « Español ».
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette commentaire photo S8", identifies("fr", 0.40))).isNull()
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette commentaire photo S8", LanguageIdentifying.Unavailable)).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_withoutText_isLeftToTheServer() = runTest {
+        // Un vocal sans légende : la langue se lit dans l'audio (transcription), pas dans la langue de l'auteur.
+        assertThat(ComposeLanguageDetector.authoredLanguage("", identifies("es", 0.99))).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_undeterminedIdentification_isLeftToTheServer() = runTest {
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette offline ok", identifies("und", 0.99))).isNull()
+    }
 }
 
 private object LanguageResolverSupport {

@@ -12,7 +12,29 @@ import type { ReachBreakdown } from './content-reach.js';
 // =====================================================
 
 export type PostType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
-export type PostVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
+
+/**
+ * Les audiences d'une publication, source UNIQUE de la liste (schéma Prisma
+ * `PostVisibility`, schémas Zod du gateway, listes d'écrans d'administration).
+ *
+ * `ACQUAINTANCES`, `CLOSE` et `BLOOD` (cercles, #13931) se lisent au NIVEAU
+ * EFFECTIF de l'auteur avec le lecteur : Connaissance et au-dessus, Proche et
+ * au-dessus, Sang seul. `FRIENDS` garde son sens historique « Amis et
+ * au-dessus ». Aucune valeur n'est retirée ; un client qui ne connaît pas une
+ * valeur servie ne la lit JAMAIS comme `PUBLIC` (décodage fail-closed).
+ */
+export const POST_VISIBILITIES = [
+  'PUBLIC',
+  'FRIENDS',
+  'COMMUNITY',
+  'PRIVATE',
+  'EXCEPT',
+  'ONLY',
+  'ACQUAINTANCES',
+  'CLOSE',
+  'BLOOD',
+] as const;
+export type PostVisibility = (typeof POST_VISIBILITIES)[number];
 
 /**
  * Audience par défaut de TOUTE publication — POST, REEL, STORY, STATUS

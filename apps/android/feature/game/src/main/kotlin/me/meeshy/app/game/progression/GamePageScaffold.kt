@@ -1,5 +1,6 @@
 package me.meeshy.app.game.progression
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -43,19 +44,19 @@ internal fun GamePageScaffold(
     title: String,
     onBack: () -> Unit,
     isRefreshing: Boolean,
-    onRefresh: () -> Unit,
+    onRefresh: (() -> Unit)?,
     modifier: Modifier = Modifier,
     trailing: @Composable RowScope.() -> Unit = {},
+    scroll: ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     MeeshyBackground {
-        val scroll = rememberScrollState()
         val density = LocalDensity.current.density
         val offsetDp by remember(scroll, density) {
             derivedStateOf { CollapsibleHeaderPageProgress.scrollOffsetDp(scroll.value, density) }
         }
         Box(modifier.fillMaxSize()) {
-            PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+            val column: @Composable () -> Unit = {
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -72,6 +73,12 @@ internal fun GamePageScaffold(
                     content()
                     Spacer(Modifier.height(MeeshySpacing.xxxl))
                 }
+            }
+            // Une page qui ne lit rien (le carnet des règles) ne se tire pas : sans [onRefresh], aucun rafraîchissement.
+            if (onRefresh == null) {
+                column()
+            } else {
+                PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) { column() }
             }
             CollapsibleHeader(
                 title = title,

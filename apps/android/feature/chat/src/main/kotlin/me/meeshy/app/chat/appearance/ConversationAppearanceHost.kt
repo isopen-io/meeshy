@@ -79,7 +79,8 @@ internal fun ConversationBackgroundLayer(host: ConversationAppearanceHost) {
         val base = Modifier.fillMaxSize().clearAndSetSemantics { }
         when (resolution) {
             ConversationBackgroundResolution.Signature -> Unit
-            is ConversationBackgroundResolution.Designed -> Box(base.clipToBounds()) {
+            // Dessin et couche se taisent chacun pour TalkBack : la boîte ne recouvre pas leur sémantique (#13952).
+            is ConversationBackgroundResolution.Designed -> Box(Modifier.fillMaxSize().clipToBounds()) {
                 AppearanceDesignView(resolution.design, host.isDark, host.accentHex ?: "#6366F1", Modifier.fillMaxSize())
                 PackLottieLayer(
                     resolution.design.lottie,

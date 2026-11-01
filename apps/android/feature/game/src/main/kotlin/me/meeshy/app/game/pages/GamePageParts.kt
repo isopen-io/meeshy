@@ -244,11 +244,30 @@ private const val TRACK_ALPHA = 0.2f
 private const val CHIP_ALPHA = 0.14f
 private const val TINT_CARD_ALPHA = 0.08f
 
-/** La porte « Réglages du jeu » de la première page : une ligne simple, un chevron, 44 dp au moins, et le rebond du jeu. */
+/** La porte « Réglages du jeu » de la première page. */
 @Composable
 internal fun GameSettingsDoor(onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    GameDoorRow(
+        icon = me.meeshy.ui.icons.MeeshyIcons.SettingsFilled,
+        title = stringResource(R.string.game2_door_settings),
+        onOpen = onOpen,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Une PORTE du bas de la première page (iOS `ProgressionConceptRow` sans sous-titre) : un pictogramme, un titre, un
+ * chevron, 44 dp au moins, et le rebond du jeu. Carnet, « Comment ça marche » et Réglages ont la même forme.
+ */
+@Composable
+internal fun GameDoorRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     GameBounceButton(onClick = onOpen, modifier = modifier.fillMaxWidth()) {
-        androidx.compose.foundation.layout.Row(
+        Row(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(MeeshyRadius.md))
@@ -258,14 +277,9 @@ internal fun GameSettingsDoor(onOpen: () -> Unit, modifier: Modifier = Modifier)
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            androidx.compose.material3.Icon(
-                me.meeshy.ui.icons.MeeshyIcons.SettingsFilled,
-                contentDescription = null,
-                tint = MeeshyPalette.Indigo500,
-                modifier = Modifier.size(22.dp),
-            )
+            androidx.compose.material3.Icon(icon, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(22.dp))
             Text(
-                stringResource(R.string.game2_door_settings),
+                title,
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,

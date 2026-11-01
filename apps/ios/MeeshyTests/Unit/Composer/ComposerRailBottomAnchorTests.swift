@@ -19,16 +19,17 @@ final class ComposerRailBottomAnchorTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    /// Les deux rails et le volet vivent dans la scène libre, qui s'aligne au
-    /// BAS : un seul repère pour trois éléments.
-    func test_lesRailsEtLeVolet_partagentLeBasDeLaSceneLibre() throws {
+    /// La colonne droite (outil, objet) et le volet vivent dans la scène libre,
+    /// qui s'aligne au BAS. Le rail gauche n'y est plus (#13839) : le repos se
+    /// pose sur la scène par son propre calque.
+    func test_laColonneEtLeVolet_partagentLeBasDeLaSceneLibre_sansRailGauche() throws {
         let code = try compact()
         guard let debut = code.range(of: "privatevarfreeZone:someView{") else {
             return XCTFail("La scène libre a changé de nom — la garde doit être re-pointée.")
         }
         let libre = code[debut.upperBound...]
         XCTAssertTrue(libre.hasPrefix("ZStack(alignment:.bottom){"), "Un seul repère, aligné au bas.")
-        XCTAssertTrue(libre.contains("floatingRail"))
+        XCTAssertFalse(libre.contains("floatingRail"), "le rail gauche est revenu dans la scène libre")
         XCTAssertTrue(libre.contains("ComposerTrailingRail("))
         XCTAssertTrue(libre.contains("descriptionOverlay"),
                       "Le volet se pose au bas de la scène libre, entre les deux rails (#4993).")

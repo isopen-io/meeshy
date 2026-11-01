@@ -32,6 +32,16 @@ final class SceneShapeTests: XCTestCase {
                  payload: payload)
     }
 
+    /// **La boîte d'un objet suit son échelle sans plafond** (#14299) : un
+    /// sticker agrandi huit fois occupe plus de place qu'agrandi trois fois,
+    /// et la carte qui le cadre doit le savoir.
+    func test_laBoiteDUnObjet_granditAvecSonEchelleSansPlafond() {
+        let trois = SceneShape.anchorBox(of: objet(.sticker, scale: 3))
+        let huit = SceneShape.anchorBox(of: objet(.sticker, scale: 8))
+        XCTAssertGreaterThan(huit.height, trois.height)
+        XCTAssertGreaterThan(huit.width, trois.width)
+    }
+
     /// Un fond à la forme du composer : un objet média qui DÉCLARE son rapport
     /// ET son cadrage explicite (`fit`) — ce que #6125 pose sur chaque fond
     /// neuf. Les témoins de containment (§ 3) portent sur le débordement, pas

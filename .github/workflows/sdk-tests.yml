@@ -50,12 +50,21 @@ on:
       - 'packages/shared/utils/message-content-kind.ts'
       - 'packages/shared/types/role-types.ts'
       - 'packages/shared/fixtures/conversation-preview-cases.json'
+      # La loi d'accès des cercles (#13927) : RelationAccessCasesTests rejoue ces cas
+      # et relit les tables TS — une PR TypeScript seule qui les change doit
+      # rejouer le miroir Swift.
+      - 'packages/shared/fixtures/relation-access-cases.json'
+      - 'packages/shared/utils/relation-levels.ts'
+      - 'packages/shared/types/relation.ts'
       - 'packages/shared/types/call-rules.ts'
       - 'packages/shared/types/consents.ts'
       - 'packages/shared/types/preferences/application.ts'
       # Le tier média (#11281) : DeviceMediaTierTests rejoue ces vecteurs neutres,
       # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
       - 'packages/shared/fixtures/device-tier-vectors.json'
+      # Le logo de cercle d'une story exportée (#13997) : RelationExportBadgeVectorTests
+      # rejoue ces vecteurs, partagés avec la loi TypeScript et le miroir Kotlin.
+      - 'packages/shared/fixtures/relation-export-badge.vectors.json'
       # Le contrat MeeshyLens v1 (#11270) : LensFormatVectorsTests rejoue ses vecteurs.
       - 'packages/shared/fixtures/lens-v1/**'
       - '.github/workflows/sdk-tests.yml'
@@ -84,12 +93,21 @@ on:
       - 'packages/shared/utils/message-content-kind.ts'
       - 'packages/shared/types/role-types.ts'
       - 'packages/shared/fixtures/conversation-preview-cases.json'
+      # La loi d'accès des cercles (#13927) : RelationAccessCasesTests rejoue ces cas
+      # et relit les tables TS — une PR TypeScript seule qui les change doit
+      # rejouer le miroir Swift.
+      - 'packages/shared/fixtures/relation-access-cases.json'
+      - 'packages/shared/utils/relation-levels.ts'
+      - 'packages/shared/types/relation.ts'
       - 'packages/shared/types/call-rules.ts'
       - 'packages/shared/types/consents.ts'
       - 'packages/shared/types/preferences/application.ts'
       # Le tier média (#11281) : DeviceMediaTierTests rejoue ces vecteurs neutres,
       # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
       - 'packages/shared/fixtures/device-tier-vectors.json'
+      # Le logo de cercle d'une story exportée (#13997) : RelationExportBadgeVectorTests
+      # rejoue ces vecteurs, partagés avec la loi TypeScript et le miroir Kotlin.
+      - 'packages/shared/fixtures/relation-export-badge.vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
       - '.github/workflows/sdk-tests.yml'
       - 'scripts/ci/**'

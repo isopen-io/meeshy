@@ -11,6 +11,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "morbide.faire-part",
             mood: .morbide,
             name: "Faire-part",
+            localizedNames: ["fr": "Faire-part", "en": "Death Notice", "es": "Esquela", "pt": "Aviso fúnebre", "de": "Traueranzeige", "it": "Necrologio", "ar": "نعي"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.1, gap: 0.05, top: 0.17, bottom: 0.12),
@@ -29,13 +30,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#3A3530", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "morbide.faire-part.comite",
             motif: "morbide.faire-part",
             mood: .morbide,
             name: "Faire-part",
+            localizedNames: ["fr": "Faire-part", "en": "Death Notice", "es": "Esquela", "pt": "Aviso fúnebre", "de": "Traueranzeige", "it": "Necrologio", "ar": "نعي"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.1, gap: 0.035, top: 0.17, bottom: 0.12),
@@ -54,13 +56,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#3A3530", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "morbide.faire-part.groupe",
             motif: "morbide.faire-part",
             mood: .morbide,
             name: "Faire-part",
+            localizedNames: ["fr": "Faire-part", "en": "Death Notice", "es": "Esquela", "pt": "Aviso fúnebre", "de": "Traueranzeige", "it": "Necrologio", "ar": "نعي"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.09, gap: 0.03, top: 0.16, bottom: 0.12),
@@ -79,13 +82,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#3A3530", place: .top, size: .s, effect: nil, letterCase: nil)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .rect, radius: nil, stroke: CallFrameStroke(color: "#141216", width: 0.006), double: false, glow: nil, shadow: true, card: CallFrameCard(color: "#FFFFFF", pad: 0.05, foot: 0.05), tilt: .none, tone: .mono, duotone: nil), background: .solid(color: "#EFE6D6"), ornaments: [CallFrameOrnament(kind: .petals, color: "#8E939B", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#D9C8A8", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#141216", fill: nil), title: CallFrameTitle(source: .group, font: .elegant, color: "#141216", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_faire-part_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_faire-part_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.16)]))]
         ),
         CallFrameDesign(
             id: "morbide.memento.duo",
             motif: "morbide.memento",
             mood: .morbide,
             name: "Memento",
+            localizedNames: ["fr": "Memento", "en": "Memento", "es": "Memento", "pt": "Memento", "de": "Memento", "it": "Memento", "ar": "تذكار"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.04, top: 0.17, bottom: 0.11),
@@ -106,13 +110,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.memento.comite",
             motif: "morbide.memento",
             mood: .morbide,
             name: "Memento",
+            localizedNames: ["fr": "Memento", "en": "Memento", "es": "Memento", "pt": "Memento", "de": "Memento", "it": "Memento", "ar": "تذكار"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.16, bottom: 0.11),
@@ -133,13 +138,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.memento.groupe",
             motif: "morbide.memento",
             mood: .morbide,
             name: "Memento",
+            localizedNames: ["fr": "Memento", "en": "Memento", "es": "Memento", "pt": "Memento", "de": "Memento", "it": "Memento", "ar": "تذكار"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.025, top: 0.15, bottom: 0.11),
@@ -159,13 +165,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.memento.tablee",
             motif: "morbide.memento",
             mood: .morbide,
             name: "Memento",
+            localizedNames: ["fr": "Memento", "en": "Memento", "es": "Memento", "pt": "Memento", "de": "Memento", "it": "Memento", "ar": "تذكار"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.14, bottom: 0.12),
@@ -186,13 +193,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .radial(colors: ["#4A2520", "#140B09"]), ornaments: [CallFrameOrnament(kind: .vignette, color: "#000000", density: .mid, layer: .back), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#E3BE5A", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_memento_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_memento_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.crypte.duo",
             motif: "morbide.crypte",
             mood: .morbide,
             name: "Crypte",
+            localizedNames: ["fr": "Crypte", "en": "Crypt", "es": "Cripta", "pt": "Cripta", "de": "Krypta", "it": "Cripta", "ar": "سرداب"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .split, margin: 0.08, gap: 0.04, top: 0.16, bottom: 0.11),
@@ -212,13 +220,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.crypte.comite",
             motif: "morbide.crypte",
             mood: .morbide,
             name: "Crypte",
+            localizedNames: ["fr": "Crypte", "en": "Crypt", "es": "Cripta", "pt": "Cripta", "de": "Krypta", "it": "Cripta", "ar": "سرداب"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.03, top: 0.17, bottom: 0.11),
@@ -238,13 +247,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.crypte.groupe",
             motif: "morbide.crypte",
             mood: .morbide,
             name: "Crypte",
+            localizedNames: ["fr": "Crypte", "en": "Crypt", "es": "Cripta", "pt": "Cripta", "de": "Krypta", "it": "Cripta", "ar": "سرداب"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .tiers, margin: 0.06, gap: 0.025, top: 0.16, bottom: 0.11),
@@ -264,13 +274,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.crypte.tablee",
             motif: "morbide.crypte",
             mood: .morbide,
             name: "Crypte",
+            localizedNames: ["fr": "Crypte", "en": "Crypt", "es": "Cripta", "pt": "Cripta", "de": "Krypta", "it": "Cripta", "ar": "سرداب"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.02, top: 0.15, bottom: 0.12),
@@ -289,13 +300,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: nil
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(background: .linear(colors: ["#3A3A38", "#0E0D0C"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .runes, color: "#8A6A3A", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFB45A", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .bats, color: "#0A0A0A", density: .low, layer: .front, motion: .loop)], title: CallFrameTitle(source: .group, font: .fantasy, color: "#D9CDBE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_crypte_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_crypte_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.veillee.duo",
             motif: "morbide.veillee",
             mood: .morbide,
             name: "Veillée",
+            localizedNames: ["fr": "Veillée", "en": "Wake", "es": "Velatorio", "pt": "Velório", "de": "Totenwache", "it": "Veglia", "ar": "سهرة عزاء"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .diagonal, margin: 0.08, gap: 0.03, top: 0.16, bottom: 0.12),
@@ -320,6 +332,7 @@ nonisolated extension CallFrameCatalogue {
             motif: "morbide.tombe",
             mood: .morbide,
             name: "Tombe",
+            localizedNames: ["fr": "Tombe", "en": "Grave", "es": "Tumba", "pt": "Túmulo", "de": "Grab", "it": "Tomba", "ar": "قبر"],
             bucket: .duo,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .row, margin: 0.08, gap: 0.06, top: 0.17, bottom: 0.11),
@@ -339,13 +352,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#AEB6BD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.tombe.comite",
             motif: "morbide.tombe",
             mood: .morbide,
             name: "Tombe",
+            localizedNames: ["fr": "Tombe", "en": "Grave", "es": "Tumba", "pt": "Túmulo", "de": "Grab", "it": "Tomba", "ar": "قبر"],
             bucket: .comite,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.07, gap: 0.035, top: 0.17, bottom: 0.11),
@@ -365,13 +379,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#AEB6BD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.tombe.groupe",
             motif: "morbide.tombe",
             mood: .morbide,
             name: "Tombe",
+            localizedNames: ["fr": "Tombe", "en": "Grave", "es": "Tumba", "pt": "Túmulo", "de": "Grab", "it": "Tomba", "ar": "قبر"],
             bucket: .groupe,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.06, gap: 0.03, top: 0.16, bottom: 0.11),
@@ -391,13 +406,14 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#AEB6BD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         ),
         CallFrameDesign(
             id: "morbide.tombe.tablee",
             motif: "morbide.tombe",
             mood: .morbide,
             name: "Tombe",
+            localizedNames: ["fr": "Tombe", "en": "Grave", "es": "Tumba", "pt": "Túmulo", "de": "Grab", "it": "Tomba", "ar": "قبر"],
             bucket: .tablee,
             look: CallFrameLook(
                 layout: CallFrameLayout(arrangement: .grid, margin: 0.05, gap: 0.025, top: 0.15, bottom: 0.12),
@@ -417,7 +433,7 @@ nonisolated extension CallFrameCatalogue {
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#AEB6BD", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
             ),
             surfaces: [.capture, .live],
-            styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
+            styles: [CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "en": "Relief", "es": "Relieve", "pt": "Relevo", "de": "Relief", "it": "Rilievo", "ar": "نقش بارز"], look: CallFrameLookOverride(slot: CallFrameSlotStyle(shape: .arch, radius: nil, stroke: CallFrameStroke(color: "#C9CCC8", width: 0.02), double: true, glow: nil, shadow: true, card: nil, tilt: .none, tone: .mono, duotone: nil), background: .linear(colors: ["#8C8B86", "#3F3E3B"], angle: 0.0), ornaments: [CallFrameOrnament(kind: .bats, color: "#111111", density: .low, layer: .front, motion: .loop), CallFrameOrnament(kind: .fireflies, color: "#9FB3C8", density: .low, layer: .back, motion: .loop), CallFrameOrnament(kind: .candles, color: "#FFD08A", density: .low, layer: .front, motion: .loop)], names: CallFrameNames(show: .name, style: .plate, font: .elegant, color: "#1F2326", fill: "#C9CCC8E6"), title: CallFrameTitle(source: .group, font: .fantasy, color: "#F2F2EE", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#E6E6E2", place: .top, size: .s, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper), scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/morbide_tombe_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil), CallFrameSceneLayer(id: "moulure", kind: .image, depth: .front, src: "assets/call-frames/morbide_tombe_front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.2)]))]
         )
     ]
 }

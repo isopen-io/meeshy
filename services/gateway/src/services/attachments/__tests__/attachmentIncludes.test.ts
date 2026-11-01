@@ -111,6 +111,13 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       );
     });
 
+    it('includes lensSlug — le crédit « Lens par X » voyage avec le média (#11327)', () => {
+      // Le média reçu affiche la lens qui l'a produit ; la LISTE de messages et le
+      // canal socket le livrent depuis ce select. Absent d'ici, le crédit ne
+      // s'affiche jamais, E2EE compris (l'identifiant voyage en clair, #11251).
+      expect(attachmentMediaSelect).toEqual(expect.objectContaining({ lensSlug: true }));
+    });
+
     it('keeps the full file + audio/video codec set', () => {
       expect(attachmentMediaSelect).toEqual(
         expect.objectContaining({
@@ -152,7 +159,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       });
     });
 
-    it('selects exactly 33 documented fields — guards against silent omission', () => {
+    it('selects exactly 34 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -186,10 +193,11 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'transcription',
         'translations',
         'capturedInApp',
+        'lensSlug',
         'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(33);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(34);
     });
   });
 

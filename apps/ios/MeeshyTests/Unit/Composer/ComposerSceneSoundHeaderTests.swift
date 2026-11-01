@@ -176,34 +176,28 @@ final class ComposerSceneSoundHeaderTests: XCTestCase {
     /// haute, posé SUR la scène — il n'y a plus de vide à franchir. Ce que le
     /// témoin garde : elle vit dans le chrome, juste sous la barre, jamais dans
     /// le calque de la scène, où elle deviendrait un objet du canvas.
-    func test_soundHeader_isTheFirstFloorUnderTheTopBar() throws {
+    func test_leSonDeFond_seLitAuBoutonSon_plusDansUneTraceSurLaScene() throws {
+        // **Le témoin INVERSE** (#13839, inventaire B15) : la trace en tête de
+        // scène est partie avec la barre haute. Le son de fond se dit au point
+        // du bouton Son, que VoiceOver lit par la même phrase que la trace
+        // (`ComposerAvatarSoundBadge.spokenLabel`), et se règle de son menu.
         let surface = try source("ComposerSceneSurface.swift")
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        guard let chrome = surface.range(of: "privatevarchromeLayer:someView{"),
-              let barre = surface.range(of: "ComposerTopBar(", range: chrome.upperBound..<surface.endIndex),
-              let trace = surface.range(of: "ComposerSceneSoundHeader(", range: chrome.upperBound..<surface.endIndex),
-              let libre = surface.range(of: "freeZone", range: chrome.upperBound..<surface.endIndex) else {
-            return XCTFail("le chrome, sa barre ou la trace ont changé de nom — la garde doit être re-pointée")
-        }
-        XCTAssertTrue(barre.upperBound <= trace.lowerBound && trace.upperBound <= libre.lowerBound,
-                      "la trace se pose entre la barre haute et la scène libre")
-        guard let scene = surface.range(of: "privatevarsceneLayer:someView{") else {
-            return XCTFail("le calque de la scène a changé de nom")
-        }
-        XCTAssertFalse(surface[scene.upperBound..<chrome.lowerBound].contains("ComposerSceneSoundHeader("),
-                       "un son de fond ne produit aucun pixel au rendu : sa trace ne vit pas dans la scène")
+        XCTAssertFalse(surface.contains("ComposerSceneSoundHeader("),
+                       "la trace du son est revenue en tête de scène")
+        let repos = try source("ComposerSceneOverlayChrome.swift")
+        XCTAssertTrue(repos.contains("ComposerAvatarSoundBadge.spokenLabel("),
+                      "le bouton Son ne dit pas quel son est posé")
+        XCTAssertTrue(repos.contains("ComposerSoundActionsMenu("),
+                      "retirer et mettre sur la scène n'ont plus de chemin")
     }
 
-    /// **Le bord gauche vient de la CARTE mesurée, jamais d'un littéral** (#5011).
-    /// La carte se centre dans le viewport et n'en touche le bord que si la
-    /// largeur la contraint (iPhone portrait) ; sur iPad elle s'en écarte.
-    func test_soundHeader_alignsOnTheMeasuredCard_neverALiteralInset() throws {
-        let surface = try source("ComposerSceneSurface.swift")
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(surface.contains("ComposerSceneSoundHeader(backgroundSound:backgroundSound,toolIsOpen:toolIsOpen,leadingInset:sceneCardLeading,"),
-                      "la trace lit le bord de la carte que le canvas a mesuré")
-        XCTAssertTrue(surface.contains("ComposerRailGeometry.sceneLeadingInset("),
-                      "le bord se calcule par la règle, jamais d'un nombre")
+    /// Un son de fond se rouvre d'un toucher sur Son ; sans éditeur (fond
+    /// hérité), le toucher ouvre la porte.
+    func test_leBoutonSon_rouvreLeSonDeFond_parLaRegle() throws {
+        let repos = try source("ComposerSceneOverlayChrome.swift")
+        XCTAssertTrue(repos.contains("ComposerRestChrome.soundAction(hasBackgroundSound:"))
+        XCTAssertEqual(ComposerRestChrome.soundAction(hasBackgroundSound: true, canEditBackgroundSound: true),
+                       .editBackground)
     }
 
 }

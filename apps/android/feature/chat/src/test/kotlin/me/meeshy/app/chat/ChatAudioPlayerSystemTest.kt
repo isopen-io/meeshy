@@ -70,7 +70,12 @@ class ChatAudioPlayerSystemTest {
             playing = false
         }
 
-        override fun seekTo(positionMs: Long) = Unit
+        val seeks = mutableListOf<Long>()
+        override fun seekTo(positionMs: Long) {
+            seeks += positionMs
+        }
+
+        override fun setSpeed(rate: Float) = Unit
         override fun reset() {
             playing = false
         }
@@ -103,6 +108,27 @@ class ChatAudioPlayerSystemTest {
         playing(host)
 
         assertThat(host.published.last().first.durationMs).isEqualTo(12_000L)
+    }
+
+    @Test
+    fun `a touch on a word of the transcript seeks the voice note being played there`() {
+        val engine = FakeEngine()
+        val player = playing(RecordingHost(), engine)
+
+        player.seek(voice, positionSeconds = 2.5)
+
+        assertThat(engine.seeks).containsExactly(2_500L)
+        assertThat(player.bubbleFor(voice)?.currentSeconds).isWithin(0.001).of(2.5)
+    }
+
+    @Test
+    fun `a touch on the transcript of another voice note seeks nothing`() {
+        val engine = FakeEngine()
+        val player = playing(RecordingHost(), engine)
+
+        player.seek(voice.copy(attachmentId = "other"), positionSeconds = 2.5)
+
+        assertThat(engine.seeks).isEmpty()
     }
 
     @Test

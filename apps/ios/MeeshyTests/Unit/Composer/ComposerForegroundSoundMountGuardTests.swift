@@ -44,101 +44,6 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         return nil
     }
 
-    /// La carte se monte DANS la disposition texte-seul — la seule branche que
-    /// `content` rend quand `showsScene` est faux. C'est cette structure, et
-    /// elle seule, qui tient le « sans canvas » de la directive : une seconde
-    /// garde écrite dans la règle de résolution se tairait le jour où celle-ci
-    /// changerait.
-    func test_laCarte_estMontéeDansLaBrancheSANSCanvas() throws {
-        let surface = try source("ComposerDocumentSurface.swift")
-        guard let texteSeul = corps("private var textOnlyContent: some View {", dans: surface) else {
-            return XCTFail("`textOnlyContent` introuvable — la garde ne mesurerait rien.")
-        }
-        XCTAssertTrue(
-            texteSeul.contains("foregroundSoundCard"),
-            "`textOnlyContent` ne monte plus la carte du son de contenu : le son placé en contenu de "
-                + "publication redeviendrait une vignette muette dans le rail."
-        )
-        guard let carte = corps("private var foregroundSoundCard: some View {", dans: surface) else {
-            return XCTFail("`foregroundSoundCard` introuvable.")
-        }
-        XCTAssertTrue(
-            carte.contains("MeeshyAudioTranscriptPlayer("),
-            "La carte doit monter le lecteur du SDK, jamais une bande réécrite ici."
-        )
-        // **UNE carte par son** (#4672). Une seule se montait, celle du DERNIER
-        // fichier ; les précédents partaient à la publication sans que rien à
-        // l'écran ne dise qu'ils existaient.
-        XCTAssertTrue(
-            carte.contains("ForEach(foregroundSounds)"),
-            "La carte doit se répéter sur TOUS les sons de contenu : un `if let` n'en montre "
-                + "qu'un, et les autres partent quand même à la publication."
-        )
-        XCTAssertTrue(
-            carte.contains("rappel(son)"),
-            "…et le tap doit désigner LE son touché : un rappel sans argument ouvrirait "
-                + "toujours le même, un contrôle qui a l'air de répondre et vise son voisin."
-        )
-    }
-
-    /// **La branche à SCÈNE ne la monte pas.** Contre-épreuve : sans elle, la
-    /// première assertion resterait verte si la carte était montée dans les
-    /// DEUX branches — c'est-à-dire précisément le défaut que la directive
-    /// exclut (« sans canvas »).
-    func test_laBrancheÀSCÈNE_neLaMontePas() throws {
-        let surface = try source("ComposerDocumentSurface.swift")
-        guard let contenu = corps("private var content: some View {", dans: surface),
-              let scene = contenu.range(of: "EmbeddedSceneCanvas(") else {
-            return XCTFail("`content` ou sa scène introuvables.")
-        }
-        let brancheScene = contenu[scene.lowerBound...]
-        XCTAssertFalse(
-            brancheScene.contains("foregroundSoundCard"),
-            "La carte ne doit pas paraître sous la scène : un son de premier plan y est déjà un objet "
-                + "posé sur le canvas, et le montrer deux fois ferait deux contrôles pour un son."
-        )
-    }
-
-    /// **Toucher la carte doit MENER quelque part** (loi 4). Le meuble sert la
-    /// fermeture d'édition, et elle rouvre bien le portail du son — sans quoi
-    /// la carte serait un contrôle inerte à l'air parfaitement vivant.
-    func test_leMeuble_câbleLÉdition_versLaFeuilleDeCréationAudio() throws {
-        // `documentSurface` a quitté `+Surfaces` pour `+DocumentSurface` au
-        // #5069 — le fichier d'origine dépassait le plafond de 1200 lignes. La
-        // garde SUIT le membre : elle épingle une règle de montage, pas un
-        // chemin de fichier, et un chemin périmé la ferait échouer sur
-        // « introuvable » là où la règle est intacte.
-        let surfaces = try source("MeeshyComposerHost+DocumentSurface.swift")
-        guard let document = corps("var documentSurface: some View {", dans: surfaces) else {
-            return XCTFail("`documentSurface` introuvable.")
-        }
-        XCTAssertTrue(document.contains("foregroundSounds: foregroundSounds"),
-                      "La surface ne reçoit plus les sons de contenu.")
-        XCTAssertTrue(document.contains("editForegroundSound(son)"),
-                      "Le tap de la carte n'est plus câblé : il ne ferait rien.")
-
-        let son = try source("MeeshyComposerHost+Sound.swift")
-        guard let edition = corps("func editForegroundSound(", dans: son) else {
-            return XCTFail("`editForegroundSound` introuvable.")
-        }
-        // **Repointé au #4684** : l'ouverture est passée par un site UNIQUE
-        // (`openSoundSheet`), qui pose le placement ET renouvelle l'identité de
-        // la feuille. Épingler les deux lignes d'avant ferait rougir la garde
-        // sur le correctif qu'elle devrait protéger.
-        XCTAssertTrue(edition.contains("openSoundSheet(placement: .foreground)"),
-                      "L'édition doit rouvrir « Création audio » par le site unique, sur la "
-                      + "moitié du commutateur que le geste vient de désigner.")
-
-        guard let feuille = corps("var composerSoundSheet: some View {", dans: son) else {
-            return XCTFail("`composerSoundSheet` introuvable.")
-        }
-        XCTAssertTrue(
-            feuille.contains("initialAudio:"),
-            "La feuille doit s'ouvrir SUR le son édité — sans `initialAudio`, « modifier » rouvrirait un "
-                + "enregistreur vierge et l'auteur perdrait sa prise."
-        )
-    }
-
     // MARK: - La pastille du son de FOND (#4668/#4669)
 
     /// **Le plancher de 44 pt a SUIVI le son.**
@@ -458,7 +363,7 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         guard let tap = corps("onItemTapped: { id, kind in", dans: surfaces) else {
             return XCTFail("`onItemTapped` introuvable — la garde ne mesurerait rien.")
         }
-        XCTAssertTrue(tap.contains("selectedSceneItemId = id"))
+        XCTAssertTrue(tap.contains("selectSceneItem(id"), "le tap simple SÉLECTIONNE (#13839, L5)")
         XCTAssertFalse(tap.contains("editSceneSound(id)"),
                        "le tap simple sélectionne : la feuille s'ouvre par « Modifier »")
         let colonnes = try source("MeeshyComposerHost+SceneColumns.swift")

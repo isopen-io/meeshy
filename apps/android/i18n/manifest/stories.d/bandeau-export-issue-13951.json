@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "media.save.done.share",
+          "androidName": "stories_scene_export_shared",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

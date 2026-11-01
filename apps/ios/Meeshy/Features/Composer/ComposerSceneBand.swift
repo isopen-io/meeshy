@@ -109,6 +109,9 @@ nonisolated enum ComposerSceneBand: String, CaseIterable, Equatable, Sendable {
 /// question a une seule réponse, `railMode`.
 nonisolated enum ComposerLowZone: Equatable {
 
+    /// Les propriétés de l'objet édité (#13957, R6) : elles passent avant
+    /// tout, la scène se réduisant au-dessus d'elles.
+    case properties
     /// Un outil est déplié : ses options prennent le bas.
     case toolOptions
     /// Aucun outil : la bande demandée ET servie.
@@ -118,7 +121,8 @@ nonisolated enum ComposerLowZone: Equatable {
 
     /// `toolIsOpen` vient de `railMode`, la seule source qui SAIT qu'un outil
     /// est ouvert — jamais de la présence d'une vue, qui peut être montée vide.
-    static func resolve(toolIsOpen: Bool, band: ComposerSceneBand?) -> ComposerLowZone {
+    static func resolve(toolIsOpen: Bool, band: ComposerSceneBand?, properties: Bool = false) -> ComposerLowZone {
+        if properties { return .properties }
         if toolIsOpen { return .toolOptions }
         guard let band else { return .nothing }
         return .band(band)
@@ -257,6 +261,7 @@ struct ComposerSceneBandView: View {
     var plateauTint: Color = .clear
     var onPickFitMode: ((String) -> Void)?
     var onPickBackdrop: ((StoryBackdrop) -> Void)?
+    var onCloseBand: (() -> Void)?
 
     var body: some View {
         switch band {
@@ -267,7 +272,8 @@ struct ComposerSceneBandView: View {
                               backdrop: backdrop,
                               plateauTint: plateauTint,
                               onPickFitMode: { onPickFitMode?($0) },
-                              onPickBackdrop: { onPickBackdrop?($0) })
+                              onPickBackdrop: { onPickBackdrop?($0) },
+                              header: onCloseBand.map { ComposerPropertiesHeader(title: ComposerFrameCopy.title, onDone: $0) })
         }
     }
 

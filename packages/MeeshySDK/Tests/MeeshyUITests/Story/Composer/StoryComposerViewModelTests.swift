@@ -147,6 +147,69 @@ final class StoryComposerViewModelTests: XCTestCase {
         XCTAssertEqual(medias.first(where: { $0.id == first.id })?.isBackground, false)
     }
 
+    /// **Un fond remplacé repart cadré** (#14195) : le décalage, le zoom et la
+    /// rotation visaient l'ANCIEN fichier ; le mode d'ajustement et le fond des
+    /// bandes sont des choix de la SCÈNE (#6125) et restent.
+    func test_toggleBackground_promotingAnotherMedia_dropsTheOldOffsetAndZoom_keepsTheSceneChoices() {
+        let vm = makeSubject()
+        _ = vm.addMediaObject(kind: .video)!
+        var effects = vm.currentEffects
+        effects.backgroundTransform = StoryBackgroundTransform(scale: 1.8, offsetX: 40, offsetY: -25, rotation: 0.3,
+                                                               videoFitMode: StoryBackgroundFraming.fill,
+                                                               backdrop: StoryBackdrop.black.rawValue)
+        vm.currentEffects = effects
+        let nouveau = vm.addMediaObject(kind: .video)!
+        var pose = vm.currentEffects
+        pose.mediaObjects = pose.mediaObjects?.map { media in
+            guard media.id == nouveau.id else { return media }
+            var deplace = media
+            deplace.x = 0.62
+            deplace.y = 0.41
+            deplace.scale = 0.6
+            deplace.rotation = 12
+            return deplace
+        }
+        vm.currentEffects = pose
+
+        vm.toggleBackground(id: nouveau.id)
+
+        let fond = vm.currentEffects.mediaObjects?.first { $0.id == nouveau.id }
+        XCTAssertEqual(fond?.x, 0.5, "le nouveau fond se pose au centre, pas à sa place de premier plan")
+        XCTAssertEqual(fond?.y, 0.5)
+        XCTAssertEqual(fond?.scale, 1, "il couvre la scène, sans le zoom de sa pose")
+        XCTAssertEqual(fond?.rotation, 0)
+        let cadrage = vm.currentEffects.backgroundTransform
+        XCTAssertEqual(cadrage?.scale ?? 1, 1, "le zoom de l'ancien fond ne passe pas au nouveau")
+        XCTAssertEqual(cadrage?.offsetX ?? 0, 0, "ni son décalage horizontal")
+        XCTAssertEqual(cadrage?.offsetY ?? 0, 0, "ni son décalage vertical")
+        XCTAssertEqual(cadrage?.rotation ?? 0, 0, "ni sa rotation")
+        XCTAssertEqual(cadrage?.videoFitMode, StoryBackgroundFraming.fill, "l'ajustement est un choix de la scène")
+        XCTAssertEqual(cadrage?.backdrop, StoryBackdrop.black.rawValue, "le fond des bandes aussi")
+    }
+
+    /// Rendre au plan un objet posé ne touche pas au cadrage : il n'y a pas de
+    /// nouveau fond.
+    func test_toggleBackground_demotingTheBackground_keepsItsFraming() {
+        let vm = makeSubject()
+        let fond = vm.addMediaObject(kind: .video)!
+        var effects = vm.currentEffects
+        effects.backgroundTransform = StoryBackgroundTransform(scale: 1.8, offsetX: 40)
+        effects.mediaObjects = effects.mediaObjects?.map { media in
+            var zoome = media
+            zoome.scale = 1.7
+            zoome.x = 0.3
+            return zoome
+        }
+        vm.currentEffects = effects
+
+        vm.toggleBackground(id: fond.id)
+
+        XCTAssertEqual(vm.currentEffects.backgroundTransform?.scale, 1.8)
+        XCTAssertEqual(vm.currentEffects.backgroundTransform?.offsetX, 40)
+        XCTAssertEqual(vm.currentEffects.mediaObjects?.first?.scale, 1.7)
+        XCTAssertEqual(vm.currentEffects.mediaObjects?.first?.x, 0.3)
+    }
+
     func test_toggleBackground_offDemotesWithoutPromotingOthers() {
         let vm = makeSubject()
         let only = vm.addMediaObject(kind: .image)!

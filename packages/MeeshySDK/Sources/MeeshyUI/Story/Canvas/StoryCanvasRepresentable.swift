@@ -158,6 +158,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// qu'il peint lui-même (la retouche de la caméra, pour son texte) le demande ; le défaut
     /// garde le canvas du composer tel qu'il était.
     public var paintsSceneBackground: Bool = true
+    /// La barre collée au clavier et le panneau d'options de l'hôte (#13839, L4).
+    public var inlineEditInputLink: StoryInlineEditInputLink?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -194,7 +196,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 timelineBridge: StoryCanvasTimelineBridge? = nil,
                 localMediaAliases: [String: URL] = [:],
                 inlineEditYieldsToManipulation: Bool = false,
-                paintsSceneBackground: Bool = true) {
+                paintsSceneBackground: Bool = true,
+                inlineEditInputLink: StoryInlineEditInputLink? = nil) {
+        self.inlineEditInputLink = inlineEditInputLink
         self.paintsSceneBackground = paintsSceneBackground
         self.localMediaAliases = localMediaAliases
         self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
@@ -298,6 +302,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // Les curseurs de look du composer repeignent le fond HORS du fil
         // principal (#9873). Le prefetcher du lecteur, lui aussi en `.edit`, non.
         view.backgroundLayer.bakesLookOffMainThread = true
+        // Un fond vidéo y attend sa première image sous son affiche (#14180).
+        view.backgroundLayer.videoWaitVeil.isEnabled = true
         // Pincer ou tourner un calque modifie la slide à la cadence du doigt :
         // le canvas UIKit la dessine depuis sa propre copie, et le binding —
         // dont chaque écriture réévalue le composer — suit à 30 Hz au plus.
@@ -379,6 +385,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onViewportZoomResetRequested = onViewportZoomResetRequested
         uiView.isDrawingOverlayActive = isDrawingOverlayActive
         uiView.canvasCornerRadius = canvasCornerRadius
+        uiView.formatWording = context.environment.composerFormatWording
         // **Le cadre de sélection** (#4073). `setSelectionMarker` se garde
         // lui-même contre la réassignation identique : `updateUIView` est
         // appelée à chaque évaluation du corps SwiftUI, et reposer le cadre à
@@ -431,6 +438,12 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         if uiView.isGestureActive { return }
 
         pushOutsideSlide(into: uiView, coordinator: context.coordinator)
+        syncInlineEdit(into: uiView)
+    }
+
+    /// La saisie en ligne : ses rappels, ses bornes, ses vues d'entrée, puis
+    /// son ouverture ou sa fermeture.
+    private func syncInlineEdit(into uiView: StoryCanvasUIView) {
         uiView.onInlineTextChanged = onInlineTextChanged
         uiView.onInlineTextEditEnded = onInlineTextEditEnded
         // Posé AVANT `beginInlineTextEdit` : l'ouverture ancre le bloc d'après
@@ -439,6 +452,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         uiView.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         uiView.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
+        // Posé AVANT `beginInlineTextEdit` : la barre monte avec le clavier.
+        uiView.inlineEditInputLink = inlineEditInputLink
         if uiView.inlineEditingTextId != editingTextId {
             if let id = editingTextId {
                 // Une saisie SUSPENDUE par le doigt ne se rouvre pas d'elle-même :

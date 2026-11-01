@@ -93,6 +93,17 @@ class StorySceneLayerOrderTest {
     }
 
     @Test
+    fun `a sound chip paints at its rank among the objects, and one without a rank stays above everything`() {
+        val chip = StoryAudioChipView(id = "a", x = 0.5, y = 0.5, credit = null, waveform = emptyList())
+
+        val ranked = slide(texts = listOf(text("t", z = 3))).copy(audioChips = listOf(chip.copy(zIndex = 1)))
+        val unranked = slide(texts = listOf(text("t", z = 3))).copy(audioChips = listOf(chip))
+
+        assertThat(ids(ranked)).containsExactly("a", "t").inOrder()
+        assertThat(ids(unranked)).containsExactly("t", "a").inOrder()
+    }
+
+    @Test
     fun `the projection carries the zIndex the author gave each object`() {
         val item = StoryItem(
             id = "s",

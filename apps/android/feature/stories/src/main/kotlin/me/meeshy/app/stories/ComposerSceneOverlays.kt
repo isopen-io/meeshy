@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -54,10 +55,10 @@ internal data class SceneHistory(val canUndo: Boolean, val canRedo: Boolean)
 /** La pastille d'audience : le libellé du mode (« Public ») et son glyphe. */
 internal data class SceneAudience(val label: String, val icon: ImageVector)
 
-private val SCENE_TARGET = 48.dp
+internal val SCENE_TARGET = 48.dp
 private val SCENE_DISC = 40.dp
 private val SCENE_VEIL = Color.Black.copy(alpha = 0.38f)
-private val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
+internal val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
 
 /**
  * Un bouton rond posé sur la scène (#13834) : un disque translucide de 40 dp dans une cible de 48 dp, nommé pour TalkBack.
@@ -96,7 +97,10 @@ internal fun SceneRoundButton(
     }
 }
 
-/** Le haut de la scène : ✕ à gauche, ↶ ↷ à droite seulement avec un historique. */
+/**
+ * Le haut de la scène : ✕ à gauche, ↶ ↷ à droite seulement avec un historique. [keepsHeight] : la barre garde sa hauteur
+ * quand ✕ se retire pour l'édition d'un objet (#13956), sans quoi la colonne remonterait d'un cran.
+ */
 @Composable
 internal fun SceneTopBar(
     onClose: () -> Unit,
@@ -104,15 +108,26 @@ internal fun SceneTopBar(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     showsClose: Boolean = true,
+    keepsHeight: Boolean = false,
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        if (showsClose) SceneRoundButton(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose)
+    Row(
+        modifier = Modifier.fillMaxWidth().then(if (keepsHeight) Modifier.heightIn(min = SCENE_TARGET) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        EditingChromeVisibility(showsClose) { SceneRoundButton(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose) }
         Spacer(Modifier.weight(1f))
-        history?.let {
-            SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = it.canUndo)
-            SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = it.canRedo)
-        }
+        history?.let { SceneHistoryButtons(it, onUndo, onRedo) }
     }
+}
+
+/**
+ * ↶ et ↷ (#14209, décision porteur du 2026-11-01) : un bouton sans pas à annuler ou à rétablir est MASQUÉ, jamais grisé,
+ * et réapparaît dès qu'il a un pas à rejouer.
+ */
+@Composable
+internal fun SceneHistoryButtons(history: SceneHistory, onUndo: () -> Unit, onRedo: () -> Unit) {
+    if (history.canUndo) SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo)
+    if (history.canRedo) SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo)
 }
 
 /**
@@ -129,20 +144,25 @@ internal fun SceneToolColumn(
     onMediaSource: (ComposerMediaSource) -> Unit = {},
     cameraServed: Boolean = false,
 ) {
+    // Le « ⋯ » reste TOUJOURS posé au pied de la colonne (#14282, recette S8) : en post, « Texte du post » prend une rangée
+    // au socle, la colonne n'a plus la place de tout montrer, et le dernier bouton passait hors champ sans que rien ne dise
+    // qu'on pouvait défiler. Ce sont les outils au-dessus de lui qui défilent.
     Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        tools.forEach { tool ->
-            if (tool == ComposerSceneTool.MORE) {
-                more()
-            } else {
+        Column(
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            tools.filterNot { it == ComposerSceneTool.MORE }.forEach { tool ->
                 MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, cameraServed), onMediaSource) { press ->
                     SceneRoundButton(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == active, press = press)
                 }
             }
         }
+        if (ComposerSceneTool.MORE in tools) more()
     }
 }
 
@@ -224,6 +244,9 @@ internal fun ComposerSceneTool.glyph(): ImageVector = when (this) {
     ComposerSceneTool.STICKER -> MeeshyIcons.EmojiFilled
     ComposerSceneTool.SOUND -> MeeshyIcons.MusicNote
     ComposerSceneTool.DRAWING -> MeeshyIcons.Scribble
+    ComposerSceneTool.BACKGROUND -> MeeshyIcons.Palette
+    ComposerSceneTool.MENTION -> MeeshyIcons.Mention
+    ComposerSceneTool.PLACE -> MeeshyIcons.Location
     ComposerSceneTool.MORE -> MeeshyIcons.MoreHorizontal
 }
 
@@ -233,5 +256,8 @@ internal fun ComposerSceneTool.labelRes(): Int = when (this) {
     ComposerSceneTool.STICKER -> R.string.stories_composer_add_sticker
     ComposerSceneTool.SOUND -> R.string.story_tool_audio
     ComposerSceneTool.DRAWING -> R.string.story_tool_drawing
+    ComposerSceneTool.BACKGROUND -> R.string.story_tool_texture
+    ComposerSceneTool.MENTION -> R.string.composer_more_mention
+    ComposerSceneTool.PLACE -> R.string.story_place_title
     ComposerSceneTool.MORE -> R.string.stories_scene_overflow_menu
 }

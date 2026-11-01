@@ -15,6 +15,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { SearchQuery } from './types';
+import { PARTICIPATION_VIVANTE } from './utils/access-control';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
@@ -203,7 +204,9 @@ export function registerSearchRoutes(
         ? await prisma.participant.findMany({
             where: {
               conversationId: { in: conversationIds },
-              isActive: true,
+              // #14183 — une participation VIVANTE : un banni encore actif n'est
+              // pas membre, ne reçoit pas son rang, et aucun client ne l'infère.
+              ...PARTICIPATION_VIVANTE,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
             // `role` en plus : c'est le titre qui ouvre l'effectif ENTIER
@@ -401,6 +404,10 @@ export function registerSearchRoutes(
           // public de cinquante membres, où elle écartait à tort le salon d'un
           // membre légitime.
           isMember,
+          // #14183 — le rang, comme la liste et le détail : un client qui ouvre
+          // la conversation depuis cette charge lit son appartenance par lui.
+          // `null` = pas membre (sémantique de `conversationMinimalSchema`).
+          currentUserRole: memberRoleByConversation.get(conversation.id) ?? null,
           // Déjà chargés par le `include` ci-dessus (au plus 5) : sans cette
           // recopie, une conversation DIRECTE trouvée par la recherche arrive
           // sans titre (forcé à `null` pour les directs) ET sans personne —

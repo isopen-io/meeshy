@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "composer.capture.sound.mute", "androidName": "feed_scene_sound_mute", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.capture.sound.unmute", "androidName": "feed_scene_sound_unmute", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.detail.sound.pause.hint", "androidName": "feed_scene_pause", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.detail.sound.resume.hint", "androidName": "feed_scene_resume", "status": "adopted" }
+      ]
+    }
+  }
+}

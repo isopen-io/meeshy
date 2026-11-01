@@ -59,6 +59,7 @@ import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.MeeshyUser
@@ -66,8 +67,10 @@ import me.meeshy.sdk.model.share.ShareDelivery
 import me.meeshy.sdk.model.ForwardRefusalReason
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionContacts
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessagePinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
@@ -208,6 +211,7 @@ class ChatViewModelTest {
         targetConversations: List<ApiConversation> = emptyList(),
         activeCall: ActiveCallSession? = null,
         mentionSearch: MentionSearch = FakeMentionSearch(),
+        mentionContacts: MentionContacts = MentionContacts.None,
         anonymousSession: AnonymousSessionContext? = null,
         showReadReceipts: Boolean = true,
         offline: Boolean = false,
@@ -279,6 +283,7 @@ class ChatViewModelTest {
                 handle,
                 ownReactionWithdrawals = OwnReactionWithdrawals(),
                 outOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
+                mentionContacts = mentionContacts,
             ),
             repo,
             workManager,
@@ -1495,6 +1500,47 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun send_afterReadChoice_shipsBothBitsAndNoDuration_likeIos() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        val captured = slot<MessageEffects>()
+        coEvery {
+            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), capture(captured))
+        } returns "cmid_1"
+        advanceUntilIdle()
+
+        vm.selectEphemeralChoice(EphemeralChoice.AfterRead)
+        vm.onDraftChange("vu puis parti")
+        vm.send()
+        advanceUntilIdle()
+
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL_AFTER_READ)).isTrue()
+        assertThat(captured.captured.ephemeralDuration).isNull()
+    }
+
+    @Test
+    fun send_fifteenSecondsChoice_shipsFifteenSeconds() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        val captured = slot<MessageEffects>()
+        coEvery {
+            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), capture(captured))
+        } returns "cmid_1"
+        advanceUntilIdle()
+
+        vm.selectEphemeralChoice(EphemeralChoice.AfterRead)
+        vm.selectEphemeralChoice(EphemeralChoice.Duration(EphemeralDuration.FIFTEEN_SECONDS))
+        vm.onDraftChange("quinze secondes")
+        vm.send()
+        advanceUntilIdle()
+
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL_AFTER_READ)).isFalse()
+        assertThat(captured.captured.ephemeralDuration).isEqualTo(15)
+    }
+
+    @Test
     fun send_withNoArmedEffects_stampsAnEmptyEffectSelection() = runTest(dispatcher) {
         val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
         val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
@@ -1614,7 +1660,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun a_two_character_at_query_merges_directory_results_below_the_local_roster() = runTest(dispatcher) {
+    fun a_two_character_at_query_with_local_matches_stays_on_the_local_roster() = runTest(dispatcher) {
         val remote = FakeMentionSearch(
             default = listOf(MentionCandidate(id = "u9", username = "borys", displayName = "Borys R")),
         )
@@ -1629,9 +1675,89 @@ class ChatViewModelTest {
         h.vm.onDraftChange("hey @bo")
         advanceUntilIdle()
 
+        assertThat(remote.queries).isEmpty()
         assertThat(h.vm.state.value.mention.suggestions.map { it.username })
-            .containsExactly("bob", "bobby", "borys").inOrder()
-        assertThat(remote.queries).containsExactly("bo")
+            .containsExactly("bob", "bobby").inOrder()
+    }
+
+    @Test
+    fun a_three_character_at_query_merges_the_conversation_suggestions_below_the_local_roster() = runTest(dispatcher) {
+        val remote = FakeMentionSearch(
+            default = listOf(MentionCandidate(id = "u9", username = "bobo", displayName = "Bobo R")),
+        )
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = conversationWithRoster(),
+            mentionSearch = remote,
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @bob")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.mention.suggestions.map { it.username })
+            .containsExactly("bob", "bobby", "bobo").inOrder()
+        assertThat(remote.queries).containsExactly("bob")
+        assertThat(remote.contexts).containsExactly(MentionContext.conversation("c1", "group", isMember = true))
+    }
+
+    @Test
+    fun a_two_character_at_query_without_local_match_asks_the_conversation_suggestions() = runTest(dispatcher) {
+        val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "zoe")))
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = conversationWithRoster(),
+            mentionSearch = remote,
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @zo")
+        advanceUntilIdle()
+
+        assertThat(remote.queries).containsExactly("zo")
+        assertThat(h.vm.state.value.mention.suggestions.map { it.username }).containsExactly("zoe")
+    }
+
+    @Test
+    fun a_reader_who_is_not_a_member_of_a_public_conversation_is_offered_nobody_and_asks_nothing() = runTest(dispatcher) {
+        val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "bobo")))
+        val outsider = conversationWithRoster().copy(
+            type = "public",
+            participants = conversationWithRoster().participants.filterNot { it.userId == "me" },
+        )
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = outsider, mentionSearch = remote)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @bob")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.mention.suggestions).isEmpty()
+        assertThat(remote.queries).isEmpty()
+    }
+
+    @Test
+    fun a_group_puts_its_known_members_first_and_never_offers_a_friend_outside_it() = runTest(dispatcher) {
+        val contacts = object : MentionContacts {
+            override fun snapshot(): List<MentionCandidate> = listOf(
+                MentionCandidate(id = "u2", username = "bobby", displayName = "Bobby Tables"),
+                MentionCandidate(id = "u7", username = "bobette", displayName = "Bobette"),
+            )
+            override suspend fun refresh() = Unit
+        }
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = conversationWithRoster(),
+            mentionContacts = contacts,
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @b")
+
+        assertThat(h.vm.state.value.mention.suggestions.map { it.username })
+            .containsExactly("bobby", "bob").inOrder()
     }
 
     @Test
@@ -1706,10 +1832,16 @@ class ChatViewModelTest {
         private val default: List<MentionCandidate> = emptyList(),
     ) : MentionSearch {
         val queries = mutableListOf<String>()
+        val contexts = mutableListOf<MentionContext?>()
 
         override suspend fun search(query: String): List<MentionCandidate> {
             queries += query
             return byQuery[query] ?: default
+        }
+
+        override suspend fun suggest(query: String, context: MentionContext?): List<MentionCandidate> {
+            contexts += context
+            return search(query)
         }
     }
 

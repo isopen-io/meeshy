@@ -6,7 +6,9 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import me.meeshy.sdk.model.game.GameHapticPlan
 import me.meeshy.sdk.model.game.GameHapticTap
@@ -68,8 +70,12 @@ public class GameHaptics(context: Context) : GameHapticsProviding {
     }
 }
 
+/** Un moteur haptique fourni par l'hôte (un témoin qui compte les vibrations) ; `null` : celui de l'appareil. */
+public val LocalGameHaptics: ProvidableCompositionLocal<GameHapticsProviding?> = staticCompositionLocalOf { null }
+
 @Composable
 public fun rememberGameHaptics(): GameHapticsProviding {
     val context = LocalContext.current
-    return remember(context) { GameHaptics(context) }
+    val provided = LocalGameHaptics.current
+    return remember(context, provided) { provided ?: GameHaptics(context) }
 }

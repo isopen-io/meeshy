@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.DEFAULT_MEDIA_MIME_TYPE
+import me.meeshy.sdk.model.MediaAttachmentWire
 import me.meeshy.sdk.model.MessageTranscriptionFiche
 import me.meeshy.sdk.model.TranscribeRequest
 import me.meeshy.sdk.model.UploadedMedia
@@ -63,6 +64,7 @@ object MediaUpload {
 class MediaRepository @Inject constructor(
     private val mediaApi: MediaApi,
     private val sanitizer: OutgoingMediaSanitizer,
+    private val seeder: UploadedMediaSeeder = UploadedMediaSeeder.None,
 ) {
     suspend fun upload(items: List<MediaUploadItem>, conversationId: String? = null): NetworkResult<List<UploadedMedia>> {
         if (items.isEmpty()) return NetworkResult.Success(emptyList())
@@ -76,11 +78,22 @@ class MediaRepository @Inject constructor(
             }
             val destination = conversationId?.takeIf { it.isNotBlank() }?.let(MediaUpload::destinationPart)
             val parts = listOfNotNull(destination) + clean.map { (sent, _) -> MediaUpload.formPart(sent) }
-            return apiCall { mediaApi.upload(parts) }
-                .map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }
+            val result = apiCall { mediaApi.upload(parts) }
+            if (result is NetworkResult.Success) seed(clean.map { (sent, _) -> sent }, result.data.attachments)
+            return result.map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }
         } finally {
             clean.forEach { (sent, original) -> sanitizer.release(sent, original) }
         }
+    }
+
+    /**
+     * Les octets envoyés entrent au cache sous l'adresse de LEUR pièce (#13861), lus avant que la copie nettoyée ne
+     * quitte le disque. La réponse ne se rapproche des fichiers que rang pour rang : si elle n'en compte pas autant,
+     * rien ne s'adopte plutôt qu'un fichier sous l'adresse d'un autre.
+     */
+    private suspend fun seed(sent: List<MediaUploadItem>, attachments: List<MediaAttachmentWire>) {
+        if (attachments.size != sent.size) return
+        sent.zip(attachments).forEach { (item, wire) -> wire.toUploadedMedia()?.let { seeder.seed(item, it) } }
     }
 
     /**

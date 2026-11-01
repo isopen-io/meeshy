@@ -61,35 +61,34 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
         }
     }
 
-    /// **Les deux rails sont dans la scène LIBRE du chrome**, au même endroit
-    /// et à la même hauteur : deux rails qui encadrent la même scène à deux
-    /// hauteurs différentes se voient avant de se comprendre.
-    func test_lesDeuxRails_flottentDansLaSceneLibre() throws {
+    /// **Le témoin INVERSE de « les deux rails flottent dans la scène libre »**
+    /// (#13839, directive porteur du 2026-10-30). Le rail gauche est parti ; le
+    /// repos est un CALQUE à lui, posé au-dessus du chrome, jamais dans le
+    /// calque de la scène — ce qu'il porte n'entre ni dans l'export ni dans la
+    /// vignette. La colonne droite qui reste (outil, objet) garde sa place.
+    func test_leRepos_estUnCalqueAuDessusDuChrome_etLaColonneDroiteResteDansLaSceneLibre() throws {
         let code = compact(try sceneSurface())
+        XCTAssertTrue(code.contains("sceneLetterboxsceneLayerchromeLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))ifarrangement==.rails{railsLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}else{restChrome.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}}"),
+                      "sol, scène, chrome, repos (ou les rails du grand écran, #13839 L6) — dans cet ordre")
         guard let debut = code.range(of: "privatevarfreeZone:someView{") else {
             return XCTFail("La scène libre a changé de nom — la garde doit être re-pointée.")
         }
-        let libre = code[debut.upperBound...]
-        // Au bas sur téléphone (le pouce), CENTRÉS sur grand écran (maquette
-        // `iPad.dc.html`, retour porteur 2026-09-28) — une seule règle, lue
-        // de `isRoomy`.
-        // Le rail droit CÈDE à un outil ouvert (#8652), par la règle.
-        XCTAssertTrue(libre.contains("HStack(alignment:isRoomy?.center:.bottom,spacing:0){floatingRailSpacer(minLength:0)ifComposerToolFocus.isShown(.trailingRail,toolIsOpen:toolIsOpen,writesText:writesText){ComposerTrailingRail("),
-                      "Rail gauche, ressort, rail droit — dans cet ordre, au bas sur téléphone, centrés sur grand écran.")
-        XCTAssertTrue(code.contains("freeZone"))
+        XCTAssertTrue(code[debut.upperBound...].contains(
+            "HStack(alignment:isRoomy?.center:.bottom,spacing:0){Spacer(minLength:0)iftrailingRailIsShown{ComposerTrailingRail("))
+        let scene = try bloc("privatevarsceneLayer:someView{", jusqua: "privatevarchromeLayer:someView{")
+        XCTAssertFalse(scene.contains("restChrome"), "le repos est monté dans le calque de la scène")
+        XCTAssertFalse(scene.contains("railsLayer"), "les rails du grand écran sont montés dans le calque de la scène")
     }
 
-    /// **Les deux rails portent les MÊMES marges.** La symétrie est ce qui rend
-    /// la place APPRENABLE.
-    func test_lesDeuxRails_partagentLeursMarges() throws {
-        let code = compact(try sceneSurface())
-        // La marge de bord se lit d'UNE règle (`edgeMargin(roomy:)`) : 10 pt sur
-        // téléphone, 24 sur iPad/Mac — et c'est la même des deux côtés.
-        XCTAssertTrue(code.contains("privatevaredge:CGFloat{ComposerRailGeometry.edgeMargin(roomy:isRoomy)}"))
-        XCTAssertTrue(code.contains(".padding(.leading,edge)"))
-        XCTAssertTrue(code.contains(".padding(.trailing,edge)"))
-        XCTAssertTrue(code.contains(".padding(.bottom,ComposerRailGeometry.floatingBottomInset)"),
-                      "Les marges se lisent de `ComposerRailGeometry`, jamais d'un littéral : "
-                      + "un nombre recopié ferait diverger les deux rails en silence.")
+    /// **Les boutons du repos ont UN gabarit** : 44 pt, verre, voile de 38 %,
+    /// et des marges lues des jetons d'espacement — jamais d'un littéral.
+    func test_lesBoutonsDuRepos_partagentUnGabarit() throws {
+        XCTAssertEqual(ComposerSceneRoundGlyph.size, 44)
+        XCTAssertEqual(ComposerSceneRoundGlyph.veil, 0.38, accuracy: 0.0001)
+        let repos = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Composer/ComposerSceneOverlayChrome.swift")))
+        XCTAssertTrue(repos.contains(".padding(.horizontal,MeeshySpacing.smPlus)"))
+        XCTAssertEqual(repos.components(separatedBy: "ComposerSceneRoundGlyph(symbol:").count - 1, 1,
+                       "un seul site de dessin pour les boutons ronds")
     }
 }

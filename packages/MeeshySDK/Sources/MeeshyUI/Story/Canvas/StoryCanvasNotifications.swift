@@ -5,7 +5,7 @@ import Foundation
 /// Notification names shared across the story canvas, composer, viewer, and audio player.
 /// Previously defined in StoryCanvasReaderView.swift (legacy); moved here after that file
 /// was deleted in the Phase A4 reader migration.
-public extension Notification.Name {
+public nonisolated extension Notification.Name {
     /// Le composer a été DÉMONTÉ sans sortie demandée (reconstruction de la hiérarchie : fenêtre d'iPad
     /// passée de compact à regular) ; son brouillon est écrit. `object` : l'id du brouillon (`String`), sur
     /// lequel la racine suivante le rouvre.
@@ -34,4 +34,17 @@ public extension Notification.Name {
     static let timelineDidStartPlaying = Notification.Name("timelineDidStartPlaying")
     /// Posted by the timeline when playback stops inside the composer.
     static let timelineDidStopPlaying = Notification.Name("timelineDidStopPlaying")
+    /// Un geste de manipulation commence ou finit sur un canvas d'édition (#14208) :
+    /// l'historique du compositeur n'en capture que l'état final.
+    static let storyCanvasManipulationDidChange = Notification.Name("storyCanvasManipulationDidChange")
+}
+
+/// La clé de `storyCanvasManipulationDidChange` : `true` au début du geste, `false` à sa fin.
+public nonisolated enum StoryCanvasManipulation {
+    public static let activeKey = "active"
+
+    /// Annonce le début (`active`) ou la fin d'un geste sur `canvas`.
+    static func announce(active: Bool, by canvas: AnyObject, center: NotificationCenter = .default) {
+        center.post(name: .storyCanvasManipulationDidChange, object: canvas, userInfo: [activeKey: active])
+    }
 }

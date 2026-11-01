@@ -20,7 +20,7 @@ class StoryPlacedMediaTest {
     }
 
     @Test
-    fun `a foreground media object from an iOS story becomes a placed media and the background is skipped`() {
+    fun `a foreground media object from an iOS story becomes a placed media, keeping its object id, and the background is skipped`() {
         val ios = listOf(
             StoryMediaObject(id = "bg", postMediaId = "bg", isBackground = true),
             StoryMediaObject(id = "o1", postMediaId = "m1", x = 0.2, y = 0.8, scale = 1.5, rotation = 30.0),
@@ -28,16 +28,16 @@ class StoryPlacedMediaTest {
 
         val placed = StoryPlacedMedia.foreground(ios)
 
-        assertThat(placed).containsExactly(StoryPlacedMedia(mediaId = "m1", x = 0.2f, y = 0.8f, scale = 1.5f, rotationDeg = 30f))
+        assertThat(placed).containsExactly(StoryPlacedMedia(mediaId = "m1", x = 0.2f, y = 0.8f, scale = 1.5f, rotationDeg = 30f, id = "o1"))
     }
 
     @Test
-    fun `a hostile placement is pulled back into the canvas`() {
+    fun `a hostile placement is pulled back into the canvas, its scale kept without a ceiling`() {
         val tame = StoryPlacedMedia(mediaId = "m", x = 9f, y = Float.NaN, scale = 99f, rotationDeg = 540f).normalised()
 
         assertThat(tame.x).isEqualTo(1f)
         assertThat(tame.y).isEqualTo(0.5f)
-        assertThat(tame.scale).isAtMost(4f)
+        assertThat(tame.scale).isEqualTo(99f)
         assertThat(tame.rotationDeg).isAtLeast(-180f)
         assertThat(tame.rotationDeg).isAtMost(180f)
     }

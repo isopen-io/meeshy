@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.scene.sound.muted", "androidName": "feed_scene_sound_muted", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.scene.mosaic.video", "androidName": "feed_scene_video", "status": "adopted" },
+        { "catalog": "app", "iosKey": "feed.detail.sound.track", "androidName": "feed_scene_sound_track", "status": "adopted" }
+      ]
+    }
+  }
+}

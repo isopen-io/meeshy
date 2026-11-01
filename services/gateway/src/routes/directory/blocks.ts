@@ -10,6 +10,7 @@ import type { AuthenticatedRequest } from '../users/types';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { getCacheStore } from '../../services/CacheStore';
 import { blockCacheKey } from '../../utils/block-cache';
+import { cancelAutoAcquaintanceOnBlock } from '../../services/relations/autoAcquaintance';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { sendWithETag } from '../../utils/etag';
@@ -127,6 +128,9 @@ export async function bloquer(
   // passer les messages de la personne bloquée, et un second appel est
   // justement ce que fait quelqu'un dont le premier n'a « rien fait ».
   try { await getCacheStore().del(blockCacheKey(moi, cibleId)); } catch { /* best-effort */ }
+
+  // Les cercles (#13932) : un blocage annule la Connaissance née toute seule.
+  cancelAutoAcquaintanceOnBlock(fastify.prisma, { blockerId: moi, blockedId: cibleId });
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une

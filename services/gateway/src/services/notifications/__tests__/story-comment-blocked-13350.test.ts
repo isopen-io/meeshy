@@ -21,9 +21,13 @@ jest.mock('../../../utils/logger-enhanced', () =>
 );
 
 import { makeNotificationPrisma } from '../../../__tests__/helpers/notification-service-doubles';
+import { sharedFriendships } from '../../../__tests__/helpers/shared-friendships';
 import { NotificationService } from '../NotificationService';
 import { createStoryCommentNotificationsBatch } from '../fanout/story-comment';
 import type { FanoutDependencies } from '../fanout/dependencies';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+
+const ENTOURAGE_AMI = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
 import type { NotificationType } from '@meeshy/shared/types/notification';
 
 const AUTEUR = '507f1f77bcf86cd799439021';
@@ -45,6 +49,8 @@ function withBlocks(prisma: ReturnType<typeof makeNotificationPrisma>, blocks: B
   });
   prisma.user.findMany.mockImplementation(async (args: unknown) => {
     const { where } = args as ManyArgs;
+    // #14234 — la lecture des comptes vivants : tout candidat l'est ici.
+    if ((where as { isActive?: boolean }).isActive === true) return (where.id?.in ?? []).map((id) => ({ id }));
     return Object.keys(blocks)
       .filter((id) => (where.id ? where.id.in.includes(id) : true))
       .filter((id) => blockedOf(id).includes(where.blockedUserIds.has))
@@ -70,9 +76,17 @@ const tous = (overrides: BlockLists): BlockLists => ({
 describe("#13350 — l'éventail d'un commentaire de story écarte les personnes bloquées avec l'AUTEUR", () => {
   const run = async (blocks: BlockLists) => {
     const prisma = withBlocks(makeNotificationPrisma(), blocks);
+    // #13929 — l'auteur a réglé son entourage à « Ami » : le blocage se mesure sur ses amis.
+    prisma.userRelation.findMany.mockResolvedValue([]);
+    prisma.userRelation.findUnique.mockResolvedValue(null);
+    prisma.communityMember.findMany.mockResolvedValue([]);
+    prisma.participant.findMany.mockResolvedValue([]);
+    prisma.userPreferences.findUnique.mockImplementation(async (args: unknown) =>
+      [AUTEUR, COMMENTATEUR].includes((args as { where: { userId: string } }).where.userId) ? ENTOURAGE_AMI : null
+    );
     prisma.postComment.findMany.mockResolvedValue([{ authorId: BLOQUE }]);
     prisma.postReaction.findMany.mockResolvedValue([]);
-    prisma.friendRequest.findMany.mockResolvedValue([
+    sharedFriendships(prisma.friendRequest.findMany, AUTEUR, COMMENTATEUR)([
       { senderId: AUTEUR, receiverId: AMI },
       { senderId: BLOQUE, receiverId: AUTEUR },
     ]);
@@ -118,7 +132,7 @@ describe("#13350 — l'éventail d'un commentaire de story écarte les personnes
     const prisma = withBlocks(makeNotificationPrisma(), tous({}));
     prisma.postComment.findMany.mockResolvedValue([{ authorId: ENGAGE }]);
     prisma.postReaction.findMany.mockResolvedValue([]);
-    prisma.friendRequest.findMany.mockResolvedValue([{ senderId: AUTEUR, receiverId: AMI }]);
+    sharedFriendships(prisma.friendRequest.findMany, AUTEUR, COMMENTATEUR)([{ senderId: AUTEUR, receiverId: AMI }]);
     prisma.user.findMany.mockRejectedValue(new Error('mongo down'));
     const createNotification = jest.fn(async () => null);
     const deps = {

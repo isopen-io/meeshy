@@ -17,6 +17,26 @@ public final class StoryInlineTextEditor: UITextView {
     /// `true` quand le placeholder est masqué (le champ contient du texte).
     public var isPlaceholderHidden: Bool { placeholderLabel.isHidden }
 
+    /// Un toucher sur le champ, sans rien retirer à ses gestes propres
+    /// (curseur, sélection) : l'hôte qui a remplacé le clavier le rend (#13839).
+    var onTouched: (() -> Void)? {
+        didSet { installTouchRecognizerIfNeeded() }
+    }
+
+    private let touchRelay = StoryInlineEditorTouchRelay()
+    private var touchRecognizer: UITapGestureRecognizer?
+
+    private func installTouchRecognizerIfNeeded() {
+        guard touchRecognizer == nil, onTouched != nil else { return }
+        let reconnaisseur = UITapGestureRecognizer(target: self, action: #selector(touched))
+        reconnaisseur.cancelsTouchesInView = false
+        reconnaisseur.delegate = touchRelay
+        addGestureRecognizer(reconnaisseur)
+        touchRecognizer = reconnaisseur
+    }
+
+    @objc private func touched() { onTouched?() }
+
     public init() {
         super.init(frame: .zero, textContainer: nil)
         backgroundColor = .clear
@@ -217,5 +237,16 @@ public final class StoryInlineTextEditor: UITextView {
     private static func color(hex: String?) -> UIColor? {
         guard let hex else { return nil }
         return HexColor(hex: hex)?.uiColor
+    }
+}
+
+/// Laisse le toucher du champ coexister avec ses propres gestes : il n'en
+/// annule aucun, il se contente d'être prévenu.
+private final class StoryInlineEditorTouchRelay: NSObject, UIGestureRecognizerDelegate {
+    nonisolated deinit {}
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        true
     }
 }

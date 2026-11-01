@@ -15,6 +15,7 @@ import org.junit.Test
 
 class StoryComposerSelectionTest {
     private val filterSection = ComposerObjectEditorSection.Media(MediaEditTool.FILTER)
+    private val lookSection = ComposerObjectEditorSection.Media(MediaEditTool.LOOK)
     private val altSection = ComposerObjectEditorSection.Media(MediaEditTool.ALT_TEXT)
 
     private fun media(id: String, mime: String = "image/jpeg") =
@@ -32,17 +33,18 @@ class StoryComposerSelectionTest {
         state.copy(deck = state.deck.toggleSelectedBackgroundMedia(id))
 
     @Test
-    fun `a selected media serves filter, adjust, effects, description and plan, the first open, with its actions`() {
+    fun `a selected media serves filters and frames, filter, adjust, effects, description and plan, the first open, with its actions`() {
         val state = StoryComposerSelectionReducer.mediaSelected(withMedia("m1"), "m1")
         val focus = state.trailingFocus as Focus.Object
         assertThat(focus.sections).containsExactly(
+            lookSection,
             filterSection,
             ComposerObjectEditorSection.Media(MediaEditTool.ADJUST),
             ComposerObjectEditorSection.Media(MediaEditTool.EFFECTS),
             altSection,
             ComposerObjectEditorSection.Plan,
         ).inOrder()
-        assertThat(focus.open).isEqualTo(filterSection)
+        assertThat(focus.open).isEqualTo(lookSection)
         assertThat(focus.actions).containsExactly(Action.SET_AS_BACKGROUND, Action.DELETE).inOrder()
         assertThat(ComposerTrailingColumn.options(focus).last()).isEqualTo(Entry.ExitObject)
     }
@@ -63,7 +65,7 @@ class StoryComposerSelectionTest {
         val alt = StoryComposerTrailingReducer.sectionOpened(selected, altSection)
         assertThat((alt.trailingFocus as Focus.Object).open).isEqualTo(altSection)
         val ignored = StoryComposerTrailingReducer.sectionOpened(selected, ComposerObjectEditorSection.Media(MediaEditTool.SPLIT))
-        assertThat((ignored.trailingFocus as Focus.Object).open).isEqualTo(filterSection)
+        assertThat((ignored.trailingFocus as Focus.Object).open).isEqualTo(lookSection)
     }
 
     @Test
@@ -160,31 +162,6 @@ class StoryComposerSelectionTest {
         val open = StoryComposerSelectionReducer.sceneEffectToggled(withBackground(withMedia("m1"), "m1"), ComposerSceneEffect.VISUAL)
         assertThat(StoryComposerTextReducer.added(open, "t1").sceneEffectCarousel).isNull()
         assertThat(StoryComposerDrawingReducer.entered(open).sceneEffectCarousel).isNull()
-    }
-
-    @Test
-    fun `the frame and the carousel share the foot, opening one closes the other`() {
-        val image = withBackground(withMedia("m1"), "m1")
-        val frame = StoryComposerSelectionReducer.frameToggled(image)
-        assertThat(frame.frameOpen).isTrue()
-        val effect = StoryComposerSelectionReducer.sceneEffectToggled(frame, ComposerSceneEffect.OPENING)
-        assertThat(effect.frameOpen).isFalse()
-        assertThat(effect.sceneEffectCarousel).isEqualTo(ComposerSceneEffect.OPENING)
-        assertThat(StoryComposerSelectionReducer.frameToggled(effect).sceneEffectCarousel).isNull()
-    }
-
-    @Test
-    fun `the frame tapped while a media is touched opens at once, the touched media let go`() {
-        val touched = StoryComposerSelectionReducer.mediaSelected(withBackground(withMedia("m1", "m2"), "m1"), "m2")
-        val frame = StoryComposerSelectionReducer.frameToggled(touched)
-        assertThat(frame.frameOpen).isTrue()
-        assertThat(frame.selectedMedia).isNull()
-        assertThat(StoryComposerSelectionReducer.frameToggled(frame).frameOpen).isFalse()
-    }
-
-    @Test
-    fun `the frame needs a media background`() {
-        assertThat(StoryComposerSelectionReducer.frameToggled(StoryComposerUiState()).frameOpen).isFalse()
     }
 
     @Test

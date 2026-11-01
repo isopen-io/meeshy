@@ -4,6 +4,7 @@ import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.media.MediaIntake
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -36,10 +37,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.SlowModeState
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.composer.ComposerCapability
+import me.meeshy.sdk.model.composer.ComposerConfiguration
 import me.meeshy.sdk.model.composer.ComposerToolbarLaw
 import me.meeshy.sdk.model.composer.ComposerMinimizeOutcome
 import me.meeshy.sdk.model.composer.ConversationComposerFold
@@ -95,6 +99,7 @@ internal fun ChatComposer(
     effects: MessageEffects = MessageEffects(),
     onToggleEffect: (Long) -> Unit = {},
     onSelectEphemeralDuration: (EphemeralDuration) -> Unit = {},
+    onSelectEphemeralChoice: (EphemeralChoice?) -> Unit = {},
     quickEmojis: List<String> = ComposerToolbarLaw.QUICK_EMOJI_DEFAULTS,
     onQuickEmoji: ((String) -> Unit)? = null,
     pendingSlot: (@Composable () -> Unit)? = null,
@@ -104,6 +109,10 @@ internal fun ChatComposer(
     /** Les familles que le lien d'un invité ouvre ; restreintes, la porte « Fichier » ouvre la feuille de l'invité (#10006). */
     guestAllowance: GuestAttachmentAllowance = GuestAttachmentAllowance.UNRESTRICTED,
     conversationTitle: String = "",
+    /** Le réglage du composeur universel (#14265) : une porte qu'il ferme ne s'affiche pas ; la conversation les ouvre toutes. */
+    configuration: ComposerConfiguration = ComposerConfiguration.CONVERSATION,
+    /** Le texte indicatif du champ ; `null` = celui d'un message. */
+    placeholder: String? = null,
 ) {
     val context = LocalContext.current
     var guestSheetOpen by rememberSaveable { mutableStateOf(false) }
@@ -111,14 +120,22 @@ internal fun ChatComposer(
     val haptics = rememberMeeshyHaptics()
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        if (onPickUris != null) return@rememberLauncherForActivityResult onPickUris(uris)
+    val receivePicked: (List<Uri>) -> Unit = receive@{ uris ->
+        if (uris.isEmpty()) return@receive
+        if (onPickUris != null) return@receive onPickUris(uris)
         ioScope.launch {
             val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
             onPickFile(picked.file, picked.fileName, picked.mimeType)
         }
     }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents(), receivePicked)
+    // La photothèque est le sélecteur de photos du système (#14286), comme la grille des médias récents — jamais
+    // celui des fichiers, qui ouvrait documentsui.
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(RecentMediaSource.HEAD_SAMPLE_COUNT),
+        receivePicked,
+    )
+    val openPhotos: () -> Unit = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
     val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
     var minimized by rememberSaveable { mutableStateOf(false) }
     var fieldFocused by remember { mutableStateOf(false) }
@@ -151,7 +168,7 @@ internal fun ChatComposer(
     }
     var cameraChooserOpen by remember { mutableStateOf(false) }
     var emojiPickerOpen by remember { mutableStateOf(false) }
-    val ladderTiles = remember(affordances, onLocationRequest != null, guestAllowance) {
+    val ladderTiles = remember(affordances, onLocationRequest != null, guestAllowance, configuration) {
         ComposerAttachmentLadder.tiles(
             affordances,
             hasRecentMediaStrip = true,
@@ -159,6 +176,7 @@ internal fun ChatComposer(
             showContact = guestAllowance.offersContactsAndPlaces,
             showLocation = onLocationRequest != null,
             showEmoji = true,
+            configuration = configuration,
         )
     }
     val pickContactCard = rememberContactCardPicker(onCard = onPickFile)
@@ -247,7 +265,9 @@ internal fun ChatComposer(
             },
         )
     }
-    val showMic = !isEditing && draft.isBlank() && clipboardContent == null && !hasPendingAttachments && affordances.canSendAudios
+    val showMic = !isEditing && draft.isBlank() && clipboardContent == null && !hasPendingAttachments && affordances.canSendAudios &&
+        configuration.offers(ComposerCapability.VOICE)
+    val canCapture = affordances.canSendImages || affordances.canSendVideos
     val interact = hostCallbacks.onAnyInteraction
     // Le ⌄ (iOS `CommentComposerFoldModifier.fold`) : ferme le clavier et ce qui est ouvert dans le
     // verre, haptique légère, puis replie. Brouillon, réponse et pièces jointes vivent au-dessus.
@@ -318,13 +338,11 @@ internal fun ChatComposer(
                 val inputAvailable = !voice.isRecording && !isEndToEnd && !affordances.isReadOnly
                 if (inputAvailable && !isEditing && ephemeralRailOpen) {
                     ComposerEphemeralRail(
-                        selected = EphemeralDuration.fromSeconds(effects.ephemeralDuration)
-                            ?.takeIf { MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL) },
-                        onPick = { duration ->
-                            if (!MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL)) {
-                                onToggleEffect(MessageEffectFlags.EPHEMERAL)
-                            }
-                            onSelectEphemeralDuration(duration)
+                        selected = EphemeralChoice.of(effects),
+                        accentColor = accentColor,
+                        onPick = { choice ->
+                            haptics.light()
+                            onSelectEphemeralChoice(choice)
                             ephemeralRailOpen = false
                         },
                     )
@@ -353,7 +371,7 @@ internal fun ChatComposer(
                             interact()
                             haptics.light()
                             if (MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL)) {
-                                onToggleEffect(MessageEffectFlags.EPHEMERAL)
+                                onSelectEphemeralChoice(null)
                                 ephemeralRailOpen = false
                             } else {
                                 effectsPanelOpen = false
@@ -371,18 +389,19 @@ internal fun ChatComposer(
                             effectsPanelOpen = !effectsPanelOpen
                         },
                         onPickLanguage = onPickLanguage,
-                        onLibrary = if (affordances.canSendImages || affordances.canSendVideos) {
-                            { interact(); filePicker.launch("image/*") }
+                        onLibrary = if (canCapture && configuration.offers(ComposerCapability.PHOTO_LIBRARY)) {
+                            { interact(); openPhotos() }
                         } else {
                             null
                         },
-                        onCamera = if (affordances.canSendImages || affordances.canSendVideos) {
+                        onCamera = if (canCapture && configuration.offers(ComposerCapability.CAMERA)) {
                             { interact(); cameraChooserOpen = true }
                         } else {
                             null
                         },
                         accentColor = accentColor,
                         onFold = if (foldable && ConversationComposerFold.offersFoldButton(minimized, isComposing)) fold else null,
+                        configuration = configuration,
                     )
                 }
                 when {
@@ -424,7 +443,7 @@ internal fun ChatComposer(
                             iconTint = iconTint,
                             protectionTint = protectionTint,
                             quickEmojis = quickEmojis,
-                            onQuickEmoji = onQuickEmoji?.let { send ->
+                            onQuickEmoji = onQuickEmoji?.takeIf { configuration.offers(ComposerCapability.QUICK_EMOJIS) }?.let { send ->
                                 { emoji: String ->
                                     interact()
                                     haptics.light()
@@ -436,6 +455,7 @@ internal fun ChatComposer(
                                 emojiPickerOpen = true
                             },
                             focusRequester = focusRequester,
+                            placeholder = placeholder,
                             onFocusChange = { focused ->
                                 fieldFocused = focused
                                 if (focused) {
@@ -453,7 +473,9 @@ internal fun ChatComposer(
                                     attachmentTrayOpen = true
                                 }
                             },
-                            onFieldChange = { newValue ->
+                            onFieldChange = { typed ->
+                                val bounded = configuration.bounded(typed.text)
+                                val newValue = if (bounded == typed.text) typed else TextFieldValue(bounded, TextRange(bounded.length))
                                 if (newValue.text != fieldValue.text) attachmentTrayOpen = false
                                 fieldValue = newValue
                                 onDraftChange(newValue.text)
@@ -471,33 +493,34 @@ internal fun ChatComposer(
                     }
                 }
                 if (attachmentTrayOpen && ladderTiles.isNotEmpty() && !voice.isRecording && !affordances.isReadOnly) {
+                    val recentStrip: @Composable () -> Unit = {
+                        ComposerRecentMedia(
+                            canCapture = canCapture,
+                            accentColor = accentColor,
+                            onPickFile = onPickFile,
+                            onPickUri = onPickUris?.let { stage -> { uri: Uri -> stage(listOf(uri)) } },
+                            onEdit = { picked ->
+                                attachmentTrayOpen = false
+                                ioScope.launch {
+                                    val now = System.currentTimeMillis()
+                                    val opened = when {
+                                        picked.mimeType?.startsWith("video") == true ->
+                                            ChatVideoRetouchPending.of(context, picked.file, now)?.also { videoRetouch = it }
+                                        else -> withContext(Dispatchers.Default) { ChatRetouchPending.of(picked.bytes, picked.fileName, picked.mimeType) }
+                                            ?.also { retouch = it }
+                                    }
+                                    if (opened == null) onPickFile(picked.file, picked.fileName, picked.mimeType) else picked.file.delete()
+                                }
+                            },
+                        )
+                    }
                     ComposerAttachmentTray(
                         tiles = ladderTiles,
-                        recentMedia = {
-                            ComposerRecentMedia(
-                                canCapture = affordances.canSendImages || affordances.canSendVideos,
-                                accentColor = accentColor,
-                                onPickFile = onPickFile,
-                                onPickUri = onPickUris?.let { stage -> { uri: Uri -> stage(listOf(uri)) } },
-                                onEdit = { picked ->
-                                    attachmentTrayOpen = false
-                                    ioScope.launch {
-                                        val now = System.currentTimeMillis()
-                                        val opened = when {
-                                            picked.mimeType?.startsWith("video") == true ->
-                                                ChatVideoRetouchPending.of(context, picked.file, now)?.also { videoRetouch = it }
-                                            else -> withContext(Dispatchers.Default) { ChatRetouchPending.of(picked.bytes, picked.fileName, picked.mimeType) }
-                                                ?.also { retouch = it }
-                                        }
-                                        if (opened == null) onPickFile(picked.file, picked.fileName, picked.mimeType) else picked.file.delete()
-                                    }
-                                },
-                            )
-                        },
+                        recentMedia = recentStrip.takeIf { configuration.offers(ComposerCapability.PHOTO_LIBRARY) },
                         onTileClick = { kind ->
                             attachmentTrayOpen = false
                             when (kind) {
-                                AttachmentTileKind.Photo -> filePicker.launch("image/*")
+                                AttachmentTileKind.Photo -> openPhotos()
                                 AttachmentTileKind.File ->
                                     if (guestAllowance.isRestricted) guestSheetOpen = true else filePicker.launch("*/*")
                                 AttachmentTileKind.Voice -> voice.request()

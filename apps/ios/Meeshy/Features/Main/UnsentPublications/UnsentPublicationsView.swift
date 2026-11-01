@@ -233,7 +233,7 @@ struct UnsentPublicationsEntry: View {
                         Text(UnsentPublicationsCopy.banner(viewModel.count))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         Spacer(minLength: 0)
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.forward")
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     }
                     .padding(.horizontal, MeeshySpacing.lg)

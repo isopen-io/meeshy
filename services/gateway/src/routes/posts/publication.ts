@@ -521,7 +521,7 @@ export async function runPublicationEffects(
   // d'engagement « stories » (#5534) / « réels » (#5535) qui suivent.
   const writtenType = (asOptionalString(post.type) ?? postType) as PublishedPostType;
 
-  // Éventail vers les amis : `user_mentioned` et `post_repost` priment (dedup via excludeUserIds).
+  // Éventail vers les amis : `user_mentioned` (s'il part, #14168) et `post_repost` priment.
   const notifService = fastify.notificationService;
   if (notifService) {
     notifService.createFriendContentNotificationsBatch({
@@ -531,7 +531,9 @@ export async function runPublicationEffects(
       excerpt: postSignals?.slice(0, 100),
       postCreatedAt: (post.createdAt ?? undefined) as Date | undefined,
       postExpiresAt: (post.expiresAt ?? undefined) as Date | undefined,
-      excludeUserIds: [...createdMentions.mentionedUserIds, ...(repostedAuthorId ? [repostedAuthorId] : [])],
+      excludeUserIds: repostedAuthorId ? [repostedAuthorId] : [],
+      mentionedUserIds: createdMentions.mentionedUserIds,
+      isRepost: asOptionalString(post.repostOfId) !== undefined,
       visibility,
       visibilityUserIds,
     }).catch((err: unknown) => {

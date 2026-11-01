@@ -4,7 +4,6 @@ import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.ReelComposition
 import me.meeshy.sdk.model.ReelOffer
-import me.meeshy.sdk.model.StoryVisibility
 
 /**
  * The ONE composer's document, as the host sees it — port of the host-side state of iOS
@@ -20,25 +19,16 @@ data class ComposerHostState(
     val moodEmoji: String? = null,
     val audience: String? = null,
     val chosen: ComposerFormat? = null,
-    /** Les médias téléversés du post (ids serveur) et ceux de la scène, tels que chaque surface les rapporte. */
-    val postMedia: List<CarriedMedia> = emptyList(),
-    val sceneMedia: List<CarriedMedia> = emptyList(),
-    /** Les médias de la scène encore en file hors-ligne : sans id serveur, ils ne peuvent pas suivre. */
-    val scenePending: Int = 0,
-    /** Les places libres sur la slide qui reçoit. */
-    val sceneRoom: Int = SCENE_ROOM,
-    val postVisibility: StoryVisibility = StoryVisibility.PUBLIC,
-    val storyVisibility: StoryVisibility = StoryVisibility.PUBLIC,
-    /** Les ids présents des DEUX côtés depuis la dernière bascule : ce qu'on peut retirer d'un côté sans toucher à l'autre. */
-    val synced: Set<String> = emptySet(),
-    val holder: ComposerCarry.Side? = null,
-    val carry: ComposerCarry? = null,
+    /** Les scènes publiables que la scène rapporte : ce que la disposition range (#13863). */
+    val sceneCount: Int = 0,
     /** The layout of the scenes the author armed (iOS `ComposerPublishChoice.layout`); `null` until chosen. */
     val layout: MosaicLayoutMode? = null,
-    private val carrySeq: Int = 0,
-    /** L'audience que la dernière bascule a POSÉE sur un côté : intacte au retour, elle ne revient pas écraser l'autre. */
-    private val audienceSeed: Pair<ComposerCarry.Side, StoryVisibility>? = null,
-    private val audienceSeedBefore: Pair<ComposerCarry.Side, StoryVisibility>? = null,
+    /**
+     * Les formats que l'auteur a COCHÉS au chevron (#13919, décision porteur du 2026-10-31) : un ensemble ordonné comme le
+     * menu, jamais vide une fois posé ; vide, le seul format qui gouverne part. L'offre filtre à la lecture : un format
+     * qu'elle retire cesse de partir, et revient coché si la composition le qualifie de nouveau.
+     */
+    val checked: List<ComposerFormat> = emptyList(),
 ) {
     val reelGate: Boolean get() = ReelComposition.qualifiesAsReel(media)
 
@@ -56,24 +46,61 @@ data class ComposerHostState(
 
     val offeredFormats: List<ComposerFormat> get() = profile.offeredFormats
 
-    /** The format that GOVERNS — the surface mounted and the type published — never one the offer withdrew. */
-    val selectedFormat: ComposerFormat
+    /** The single format the door or the author's last exclusive choice resolves to, never one the offer withdrew. */
+    private val soleFormat: ComposerFormat
         get() = ComposerFormatFanPolicy.resolvedSelection(
             current = chosen ?: intent.openingFormat(compositionQualifiesAsReel = reelGate),
             offered = offeredFormats,
         )
+
+    /**
+     * Ce qui PART d'un seul geste (#13919) : les formats cochés que l'offre sert encore, dans l'ordre du menu, sinon le seul
+     * format qui gouverne. Jamais vide. L'humeur ne se cumule pas : elle a sa feuille.
+     */
+    val publishedFormats: List<ComposerFormat>
+        get() = checked.filter { it in offeredFormats && it.cumulates }.ifEmpty { listOf(soleFormat) }
+
+    /** The format that GOVERNS — the surface mounted — is the FIRST published one: checking another never moves the scene. */
+    val selectedFormat: ComposerFormat get() = publishedFormats.first()
+
+    private val menuOrder: List<ComposerFormat> get() = profile(reel = true).offeredFormats
+
+    /** Une publication rouverte se modifie dans SON format : rien ne s'y cumule. */
+    private val cumulates: Boolean get() = intent.origin !is ComposerOrigin.Edit
+
+    /**
+     * Coche ou décoche [format] (#13919) : un format refusé ne se coche pas, le dernier coché ne se décoche pas, et
+     * l'humeur — ou une modification — reste un choix exclusif ([choose]).
+     */
+    fun toggle(format: ComposerFormat): ComposerHostState {
+        if (format !in offeredFormats) return this
+        val current = publishedFormats
+        if (!cumulates || !format.cumulates || current.any { !it.cumulates }) return choose(format)
+        val next = if (format in current) current - format else current + format
+        if (next.isEmpty()) return this
+        val ordered = menuOrder.filter { it in next }
+        return copy(chosen = ordered.first(), checked = ordered)
+    }
+
+    /** Un brouillon rouvert rend ses formats cochés ; ceux que la porte n'offre jamais sont oubliés. */
+    fun restore(formats: List<ComposerFormat>): ComposerHostState {
+        val ordered = menuOrder.filter { it in formats && it.cumulates }
+        if (ordered.isEmpty()) return formats.firstOrNull()?.let(::choose) ?: this
+        if (!cumulates) return choose(ordered.first())
+        return copy(chosen = ordered.first(), checked = ordered)
+    }
 
     /** The menu: the door's formats with the reel kept open, so a reel not yet qualified is greyed with its reason. */
     val verdicts: List<FormatVerdict>
         get() = ComposerFormatAvailability.verdicts(profile(reel = true).offeredFormats, offeredFormats, carriesMoreThanText)
 
     /**
-     * The layouts the menu offers for what is composed now — empty (no section) unless the post publishes a document of
-     * several scenes: [PostPhotoScenes] gives one scene per photo, and nothing for any other media (#13612). The control
-     * exists exactly where the publication carries its choice.
+     * The layouts the menu offers for what is composed now — empty (no section) unless a checked post publishes a document
+     * of several scenes (#13863 R2, #13921), even behind a story the scene follows: the control exists exactly where the
+     * publication carries its choice.
      */
     val layoutChoices: List<MosaicLayoutMode>
-        get() = ComposerMosaicChoice.offered(PostPhotoScenes.sceneCount(postMedia.map { it.media.mimeType }, selectedFormat), selectedFormat)
+        get() = publishedFormats.flatMap { ComposerFormatVariant.of(it).layouts(sceneCount) }.distinct()
 
     /** Only an offered layout can be armed; anything else leaves the state untouched. */
     fun chooseLayout(mode: MosaicLayoutMode): ComposerHostState = if (mode in layoutChoices) copy(layout = mode) else this
@@ -99,72 +126,23 @@ data class ComposerHostState(
         }
 
     /**
-     * Only a choosable format can be chosen; anything else leaves the state untouched. The media (and the
-     * audience) of the surface being left are PLANNED onto the one being entered — [carry] — so the document
-     * survives the switch; whatever cannot follow is counted, never silent.
+     * Only a choosable format can be chosen; anything else leaves the state untouched. Story, post and reel compose on the
+     * SAME scene (#13863 R1): switching changes the format and nothing else — nothing to carry, nothing left behind.
      */
-    fun choose(format: ComposerFormat): ComposerHostState {
-        if (format !in offeredFormats) return this
-        val chosenNow = copy(chosen = format)
-        val target = ComposerCarry.Side.of(format) ?: return chosenNow
-        val source = ComposerCarry.Side.of(selectedFormat) ?: holder
-        if (source == null || source == target) return chosenNow
-        val unapplied = carry?.takeIf { it.target == source }
-        if (unapplied != null) {
-            return chosenNow.copy(carry = null, synced = unapplied.ledgerBefore, audienceSeed = audienceSeedBefore)
-        }
-        return chosenNow.carrying(source, target)
-    }
-
-    private fun carrying(source: ComposerCarry.Side, target: ComposerCarry.Side): ComposerHostState {
-        val toScene = target == ComposerCarry.Side.SCENE
-        val plan = ComposerMediaTransfer.plan(
-            source = if (toScene) postMedia else sceneMedia,
-            targetIds = (if (toScene) sceneMedia else postMedia).map { it.media.id },
-            ledger = synced,
-            room = if (toScene) sceneRoom else (POST_ROOM - postMedia.size).coerceAtLeast(0),
-            sourceLeftBehind = if (toScene) 0 else scenePending,
-        )
-        val sourceAudience = if (toScene) postVisibility else storyVisibility
-        val targetAudience = if (toScene) storyVisibility else postVisibility
-        val arrival = ComposerAudienceCarry.arrival(sourceAudience, toScene)
-            .takeUnless { audienceSeed == (source to sourceAudience) }
-        val audience = arrival?.takeIf { it != targetAudience }
-        val next = ComposerCarry(target, plan, audience, token = carrySeq + 1, ledgerBefore = synced)
-        return copy(
-            synced = plan.synced,
-            carrySeq = carrySeq + 1,
-            carry = next.takeIf { !plan.isEmpty || plan.leftBehind > 0 || audience != null },
-            audienceSeed = arrival?.let { target to it } ?: audienceSeed,
-            audienceSeedBefore = audienceSeed,
-        )
-    }
-
-    /** The target surface applied [token]'s carry: it is never applied twice. */
-    fun carryApplied(token: Int): ComposerHostState = if (carry?.token == token) copy(carry = null) else this
-
-    fun withPostDocument(media: List<CarriedMedia>, visibility: StoryVisibility) =
-        copy(postMedia = media, postVisibility = visibility, holder = holderAfter(ComposerCarry.Side.POST, media))
-
-    fun withSceneDocument(media: List<CarriedMedia>, pending: Int, room: Int, visibility: StoryVisibility) =
-        copy(
-            sceneMedia = media, scenePending = pending, sceneRoom = room, storyVisibility = visibility,
-            holder = holderAfter(ComposerCarry.Side.SCENE, media),
-        )
-
-    private fun holderAfter(side: ComposerCarry.Side, media: List<CarriedMedia>) =
-        if (media.isNotEmpty()) side else holder
+    fun choose(format: ComposerFormat): ComposerHostState =
+        if (format in offeredFormats) copy(chosen = format, checked = emptyList()) else this
 
     fun withText(value: String) = copy(text = value)
     fun withMedia(value: List<ReelComposition.MediaKind>) = copy(media = value)
     fun withScene(value: Boolean) = copy(hasScene = value)
     fun withMoodEmoji(value: String?) = copy(moodEmoji = value)
     fun withAudience(value: String?) = copy(audience = value)
+    fun withSceneCount(value: Int) = copy(sceneCount = value)
 
     companion object {
-        const val POST_ROOM: Int = 10
-        const val SCENE_ROOM: Int = 10
-
         fun open(intent: ComposerIntent) = ComposerHostState(intent)
     }
 }
+
+/** Story, post et réel se cumulent ; l'humeur, qui n'a pas de scène, part seule. */
+private val ComposerFormat.cumulates: Boolean get() = this != ComposerFormat.STATUS

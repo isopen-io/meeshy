@@ -312,27 +312,6 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     }
 }
 
-/// Ce que la rangée montre — et la loi 4 y tient en une phrase : **un outil non
-/// servi est ABSENT, jamais grisé.**
-nonisolated enum ComposerDocumentToolPolicy {
-
-    /// - Parameters:
-    ///   - served: les outils que le SITE de montage sait réellement servir.
-    ///     C'est lui qui possède le chemin d'ingestion ; peindre un outil qu'il
-    ///     ne sert pas ouvrirait un sélecteur dont le résultat n'aurait nulle
-    ///     part où aller.
-    ///   - allowsCapture: `ComposerProfile.allowsCapture`. Une porte qui
-    ///     reprend un contenu déjà publié (repost, édition) refuse la caméra ;
-    ///     l'outil disparaît alors de la rangée au lieu d'y rester inerte.
-    static func visibleTools(
-        served: [ComposerDocumentTool],
-        allowsCapture: Bool
-    ) -> [ComposerDocumentTool] {
-        guard !allowsCapture else { return served }
-        return served.filter { $0 != .camera }
-    }
-}
-
 /// **Le gate de MATIÈRE du socle** — ce sans quoi une pression sur la flèche
 /// partirait sur une page blanche.
 ///
@@ -774,9 +753,12 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         /// serveur ne l'apprend jamais.
         allowSoundExtraction: Bool?
     ) -> ComposerDocumentDraft {
-        ComposerDocumentDraft(
+        // #13824 — le plafond du serveur s'applique ICI, comme celui du mood :
+        // la fabrique est le seul site que tous les chemins d'envoi traversent.
+        let plafonne = ComposerPostTextPolicy.truncate(text)
+        return ComposerDocumentDraft(
             format: format,
-            text: text.isEmpty ? nil : text,
+            text: plafonne.isEmpty ? nil : plafonne,
             emoji: nil,
             visibility: visibility,
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,

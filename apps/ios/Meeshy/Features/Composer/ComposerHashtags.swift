@@ -205,19 +205,6 @@ nonisolated enum ComposerAudienceCopy {
         String(localized: "composer.audience.title", defaultValue: "Audience", bundle: .main)
     }
 
-    static var apply: String {
-        String(localized: "composer.audience.apply", defaultValue: "Appliquer", bundle: .main)
-    }
-
-    /// **La note de la planche `2l`, mot pour mot.** Elle répond à la question
-    /// que l'écran fait naître — « si je change de format, est-ce que je perds
-    /// mon audience ? » — avant qu'on ait à l'essayer.
-    static var scopeNote: String {
-        String(localized: "composer.audience.scope",
-               defaultValue: "L'audience appartient à la publication, jamais à une slide : changer de profil la conserve.",
-               bundle: .main)
-    }
-
     static var mentionsSection: String {
         String(localized: "composer.audience.mentions", defaultValue: "MENTIONS", bundle: .main)
     }

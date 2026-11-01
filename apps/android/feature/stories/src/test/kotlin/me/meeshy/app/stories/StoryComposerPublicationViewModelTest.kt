@@ -48,16 +48,19 @@ class StoryComposerPublicationViewModelTest {
     private val repo: StoryRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val workManager: WorkManager = mockk(relaxed = true)
-    private val media: StoryMediaUploader = mockk(relaxed = true)
+    private val media: StoryMediaUploader = mockk<StoryMediaUploader>(relaxed = true).also { it.answersEachFromWhole() }
     private val uploadQueue: MediaUploadQueue = mockk(relaxed = true)
 
     private val blocks = BlockCache()
 
-    private fun viewModel(draftStore: InMemoryStoryComposerDraftStore = InMemoryStoryComposerDraftStore()): StoryComposerViewModel {
+    private fun viewModel(
+        draftStore: InMemoryStoryComposerDraftStore = InMemoryStoryComposerDraftStore(),
+        lookOven: StoryLookOven? = null,
+    ): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
         return StoryComposerViewModel(
             repo, session, media, uploadQueue, workManager, draftStore, mockk<MediaBlobStore>(relaxed = true),
-            mockk<StoryDraftConfirmation>(relaxed = true), blocks,
+            mockk<StoryDraftConfirmation>(relaxed = true), blocks, lookOven = lookOven,
         )
     }
 
@@ -485,5 +488,41 @@ class StoryComposerPublicationViewModelTest {
         assertThat(dependsOn.captured).containsExactly(queued)
         assertThat(request.captured.mediaAlt).containsExactly(queued, "un chat")
         io.mockk.coVerify(exactly = 0) { uploadQueue.enqueue(any(), any()) }
+    }
+
+    @Test
+    fun `publier une image reglee part avec sa copie cuite, et le brouillon garde l original et son look`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val copy = me.meeshy.sdk.media.MediaUploadItem(byteArrayOf(7), "story-look-m1.jpg", "image/jpeg")
+        val queue: MediaUploadQueue = mockk { coEvery { enqueue(copy, me.meeshy.sdk.model.media.TusUploadContext.STORY) } returns "cmid-look" }
+        val vm = viewModel(draftStore = store, lookOven = StoryLookOven({ copy }, queue, media))
+        picked(vm, "m1")
+        vm.onSceneReduce { StoryComposerLookReducer.chosen(it, "m1", me.meeshy.sdk.model.composer.look.ComposerLookStripItem.Filter(me.meeshy.sdk.model.call.VideoFilterPreset.Warm)) }
+        val dependsOn = slot<List<String>>()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), capture(dependsOn)) } returns "story-cmid"
+
+        vm.publish()
+
+        assertThat(request.captured.mediaIds).containsExactly("cmid-look")
+        assertThat(dependsOn.captured).containsExactly("cmid-look")
+        assertThat(me.meeshy.sdk.net.MeeshyApi.json.encodeToString(CreateStoryRequest.serializer(), request.captured)).doesNotContain("filterPreset")
+        val kept = store.load()!!.slides.single()
+        assertThat(kept.mediaIds).containsExactly("m1")
+        assertThat(kept.mediaLooks).containsExactly("m1", me.meeshy.sdk.model.StoryMediaLook(filterPreset = "warm"))
+    }
+
+    @Test
+    fun `une image dont le look ne se cuit pas ne se publie pas en original`() = runTest {
+        val vm = viewModel(lookOven = StoryLookOven({ null }, mockk(), media))
+        picked(vm, "m1")
+        vm.onSceneReduce { StoryComposerLookReducer.chosen(it, "m1", me.meeshy.sdk.model.composer.look.ComposerLookStripItem.Filter(me.meeshy.sdk.model.call.VideoFilterPreset.Warm)) }
+
+        vm.publish()
+
+        io.mockk.coVerify(exactly = 0) { repo.enqueuePublish(any(), any()) }
+        assertThat(vm.state.value.isPublishing).isFalse()
+        assertThat(vm.state.value.errorMessage).isNotNull()
+        assertThat(vm.state.value.mediaLookOf("m1")).isEqualTo(me.meeshy.sdk.model.StoryMediaLook(filterPreset = "warm"))
     }
 }

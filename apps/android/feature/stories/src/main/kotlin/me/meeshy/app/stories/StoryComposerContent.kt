@@ -6,72 +6,81 @@ import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.model.composer.CarriedMedia
-import me.meeshy.sdk.model.composer.ComposerCarry
+import me.meeshy.sdk.model.MosaicLayoutMode
+import me.meeshy.sdk.model.ReelComposition
+import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerFormatVariant
 import me.meeshy.sdk.model.composer.ComposerOpening
 
 /**
- * The story body of the ONE composer: [StoryComposerScreen] mounted as a CONTENT of the host. The scene
- * survives a round trip through another format (the ViewModel belongs to the host's back-stack entry);
- * [seedText] is what the author already wrote under another format: their LATEST words, whichever format
- * they were typed under, carried in.
- * [onFacts] reports the text and whether a scene exists, so the host lets the other formats breathe.
+ * The scene of the ONE composer (#13863 R1): story, post and reel are all composed here, mounted as a CONTENT of the host
+ * (the ViewModel belongs to the host's back-stack entry). The host pushes the [formats] the author checked — the scene follows
+ * the first, one gesture publishes them all (#13919) — and the [layout] it armed; a format switch changes them and nothing
+ * else — the scene stays where it is, nothing is carried. [onFacts] reports what the offer breathes with (text, media, scene,
+ * scene count), and [onFormatRestored] the formats of a reopened draft, or those a partial failure left to publish again.
  */
 @Composable
 fun StoryComposerContent(
-    seedText: String,
+    formats: List<ComposerFormat>,
+    layout: MosaicLayoutMode?,
     onFacts: (StoryComposerFacts) -> Unit,
-    carry: ComposerCarry? = null,
-    onCarryApplied: (token: Int, lost: Int) -> Unit = { _, _ -> },
     onClose: () -> Unit,
     /** Le menu « Publier comme » de l'hôte, rendu dans le chevron de Publier (#13834). */
     formatChevron: @Composable () -> Unit,
     /** La matière que la porte pose (partage entrant, média de conversation ou de post) : déjà jugée et copiée dans le cache privé, elle rejoint la scène par le chemin d'un média choisi. */
     seedMedia: List<MediaUploadItem> = emptyList(),
+    seedText: String = "",
     seededByDoor: Boolean = false,
     onSeedApplied: () -> Unit = {},
+    onFormatRestored: (List<ComposerFormat>) -> Unit = {},
+    raisePostText: Boolean = false,
+    onPostTextRaised: () -> Unit = {},
     /** Ce que la porte promet au geste sur la scène vide : le viseur photo et vidéo, ou vidéo seulement (#13849). */
     opening: ComposerOpening = ComposerOpening.CAMERA_READY,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    StoryComposerScreen(onClose = onClose, seededByDoor = seededByDoor, formatChevron = formatChevron, opening = opening, viewModel = viewModel)
+    LaunchedEffect(formats, layout) { viewModel.onFormats(formats, layout) }
+    StoryComposerScreen(
+        onClose = onClose,
+        seededByDoor = seededByDoor,
+        formatChevron = formatChevron,
+        opening = opening,
+        raisePostText = raisePostText,
+        onPostTextRaised = onPostTextRaised,
+        viewModel = viewModel,
+    )
     LaunchedEffect(seedMedia) {
         if (seedMedia.isEmpty()) return@LaunchedEffect
         viewModel.onMediaPicked(seedMedia)
         onSeedApplied()
     }
-    // After the screen: its own draft restore has run. The host's text is the latest the author typed, under any
-    // format; an empty one (a fresh door) never clobbers a restored draft.
+    // The host's text is the latest the author typed, under any format (the mood included); an empty one, or the scene's own
+    // words handed back after a rotation, never clobbers what the scene holds.
     LaunchedEffect(Unit) {
-        if (seedText.isNotBlank() && seedText != state.editorText) viewModel.onTextChange(seedText)
+        val writesPostText = formats.any { ComposerFormatVariant.of(it).writesPostText }
+        val own = if (writesPostText) state.postText else state.editorText
+        if (seedText.isBlank() || seedText == own) return@LaunchedEffect
+        if (writesPostText) viewModel.onPostTextChange(seedText) else viewModel.onTextChange(seedText)
     }
-    val hasScene = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() ||
-        state.selectedSlideTextElements.isNotEmpty() || state.selectedSlideStickers.isNotEmpty() ||
-        state.selectedSlideStrokes.isNotEmpty() || state.selectedSlideBackground != null
-    LaunchedEffect(carry?.token) {
-        carry?.takeIf { it.target == ComposerCarry.Side.SCENE }?.let { viewModel.onCarry(it) { lost -> onCarryApplied(it.token, lost) } }
+    LaunchedEffect(state.restoredFormats) {
+        val restored = state.restoredFormats ?: return@LaunchedEffect
+        onFormatRestored(restored)
+        viewModel.onFormatRestoredApplied()
     }
-    LaunchedEffect(state.editorText, hasScene, state.carriedMedia, state.carriedPending, state.draft.visibility) {
-        onFacts(
-            StoryComposerFacts(
-                text = state.editorText,
-                hasScene = hasScene,
-                media = state.carriedMedia,
-                pending = state.carriedPending,
-                room = state.deck.selectedRemainingMediaSlots,
-                visibility = state.draft.visibility,
-            ),
-        )
-    }
+    val facts = StoryComposerFacts(
+        text = if (state.writesPostText) state.postText else state.editorText,
+        hasScene = state.postSceneSlides.isNotEmpty(),
+        media = state.sceneMediaKinds(),
+        sceneCount = state.postSceneSlides.size,
+    )
+    LaunchedEffect(facts) { onFacts(facts) }
 }
 
-/** What the host needs to know about the scene: its text, whether it exists, and its media (the document's other half). */
+/** What the host needs to know about the scene: its text, whether it exists, its media and how many scenes it holds. */
 data class StoryComposerFacts(
     val text: String,
     val hasScene: Boolean,
-    val media: List<CarriedMedia>,
-    val pending: Int,
-    val room: Int,
-    val visibility: StoryVisibility,
+    val media: List<ReelComposition.MediaKind>,
+    val sceneCount: Int,
 )

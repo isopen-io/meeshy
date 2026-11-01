@@ -59,6 +59,7 @@ internal class ChatAudioPlayback private constructor(
             isLoading = transport.isLoading,
             progress = transport.progress.toFloat(),
             timeLabel = transport.timeLabel(declaredDurationSeconds),
+            currentSeconds = transport.currentSeconds,
         )
     }
 

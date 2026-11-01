@@ -118,6 +118,7 @@ internal fun CallMontagePicker(
     val shooter = rememberCallCaptureShooter(capture, scene, hints)
     val haptics = LocalHapticFeedback.current
     val classicNames = CallMontageStyle.entries.associateWith { stringResource(styleName(it)) }
+    val language = LocalConfiguration.current.locales[0]?.language
     val nextDeclination = stringResource(R.string.call_live_frame_declination_next)
     val previousDeclination = stringResource(R.string.call_live_frame_declination_previous)
     fun stepDeclination(offset: Int): Boolean {
@@ -149,7 +150,7 @@ internal fun CallMontagePicker(
                 items = items,
                 selection = selection,
                 title = stringResource(R.string.call_mode_montage_title),
-                name = { item -> choiceName(CallMontagePickRule.declined(pick, item, count), classicNames) },
+                name = { item -> choiceName(CallMontagePickRule.declined(pick, item, count), classicNames, language) },
                 reduceMotion = reduceMotion,
                 onSelect = { item -> if (item != selection) capture.select(item) },
                 nextLabel = stringResource(R.string.call_montage_next),
@@ -182,6 +183,8 @@ internal fun CallMontagePicker(
         MontageActionBar(
             hold = hold,
             isRecording = captureState.isRecording,
+            facesEnabled = !captureState.isWorking && !captureState.isRecording,
+            onFaces = shooter.faces,
             onQuit = onClose,
             onHold = { id ->
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -293,9 +296,19 @@ private fun MoodChip(label: String, selected: Boolean, isEnabled: Boolean, hint:
     )
 }
 
-/** Quitter à gauche, puis « Cadre » quand le cadre affiché peut se garder pendant l'appel (iOS `CallModeActionBar`). */
+/**
+ * Quitter à gauche, puis « Cadre » quand le cadre affiché peut se garder pendant l'appel, puis « Chaque visage »
+ * (iOS `CallModeActionBar`, options `holdOptions + [faces]`), refusé pendant une prise ou un film.
+ */
 @Composable
-private fun MontageActionBar(hold: CallMontageHold?, isRecording: Boolean, onQuit: () -> Unit, onHold: (String) -> Unit) {
+private fun MontageActionBar(
+    hold: CallMontageHold?,
+    isRecording: Boolean,
+    facesEnabled: Boolean,
+    onFaces: () -> Unit,
+    onQuit: () -> Unit,
+    onHold: (String) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xl),
         verticalAlignment = Alignment.CenterVertically,
@@ -323,6 +336,16 @@ private fun MontageActionBar(hold: CallMontageHold?, isRecording: Boolean, onQui
                 onClick = { if (!isRecording) onHold(option.frameId) },
             )
         }
+        CallPillButton(
+            icon = MeeshyIcons.Account,
+            kind = CallPillKind.Normal,
+            label = stringResource(R.string.call_capture_faces),
+            caption = stringResource(R.string.call_capture_faces),
+            hint = stringResource(R.string.call_capture_faces_hint),
+            diameter = SIDE_DIAMETER,
+            enabled = facesEnabled,
+            onClick = onFaces,
+        )
     }
 }
 
@@ -343,9 +366,9 @@ internal fun FrameThumbnail(design: CallFrameDesign, people: List<CallFramePerso
     bitmap?.let { Image(it, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
 }
 
-private fun choiceName(choice: CallMontageChoice, classicNames: Map<CallMontageStyle, String>): String = when (choice) {
+private fun choiceName(choice: CallMontageChoice, classicNames: Map<CallMontageStyle, String>, language: String?): String = when (choice) {
     is CallMontageChoice.Classic -> classicNames[choice.style].orEmpty()
-    is CallMontageChoice.Frame -> CallMontageFrameRule.frameName(choice.id).orEmpty()
+    is CallMontageChoice.Frame -> CallMontageFrameRule.frameName(choice.id, language = language).orEmpty()
 }
 
 @Composable

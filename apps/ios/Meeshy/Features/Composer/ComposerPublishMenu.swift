@@ -13,24 +13,52 @@ import MeeshyUI
 /// L'éventail du haut (`ComposerFormatFan`) demandait le format AVANT la
 /// composition, quand l'auteur ne sait pas encore ce qu'il publie. Le choix
 /// descend sur la flèche : c'est le seul instant où la matière est connue.
+///
+/// **Le choix est COMPOSITE** (#13920, décision porteur : « le choix du type
+/// de post est composite et non exclusif ») : l'auteur coche un ou plusieurs
+/// formats parmi Story, Post et Réel, et un seul geste les publie tous.
 nonisolated struct ComposerPublishChoice: Hashable, Sendable {
-    let format: ComposerFormat
-    /// `nil` ⇒ aucune disposition imposée : le repli du modèle s'appliquera.
+    /// Les formats qui PARTENT — jamais vide, rangés dans l'ordre du menu
+    /// (`ComposerFormat.allComposable`) : le premier GOUVERNE la scène.
+    let formats: [ComposerFormat]
+    /// La disposition des scènes du POST. `nil` ⇒ aucune disposition imposée :
+    /// le repli du modèle s'appliquera.
     let layout: MosaicLayoutMode?
-    /// **La story part AUSSI en réel** (#9476) : le menu coche les deux
-    /// formats, et un seul geste les publie. N'a de sens que sur une story sans
-    /// disposition — `ComposerPublishMenuRule.armed` le retire partout ailleurs.
-    let alsoAsReel: Bool
 
     init(format: ComposerFormat, layout: MosaicLayoutMode?, alsoAsReel: Bool = false) {
-        self.format = format
+        self.formats = alsoAsReel ? ComposerFormat.allComposable.filter { $0 == format || $0 == .reel } : [format]
         self.layout = layout
-        self.alsoAsReel = alsoAsReel
     }
 
+    /// `nil` quand rien n'est coché : un choix publie toujours quelque chose.
+    init?(formats: [ComposerFormat], layout: MosaicLayoutMode?) {
+        let ranges = ComposerFormat.allComposable.filter(formats.contains)
+        guard !ranges.isEmpty else { return nil }
+        self.formats = ranges
+        self.layout = ranges.contains(.post) ? layout : nil
+    }
+
+    /// Le format qui gouverne la scène, les rails et la garde de publication.
+    var format: ComposerFormat { formats[0] }
+
+    /// **La story part AUSSI en réel** (#9476) — le cas particulier du choix
+    /// composite : une seule requête, le serveur fait le réel de la story.
+    var alsoAsReel: Bool { formats.contains(.story) && formats.contains(.reel) }
+
     /// Les formats qui PARTENT — ce que le menu coche, ce que la capsule nomme.
-    var publishedFormats: [ComposerFormat] {
-        alsoAsReel ? [format, .reel] : [format]
+    var publishedFormats: [ComposerFormat] { formats }
+
+    /// **Une publication par format** : la story emporte son réel quand les
+    /// deux sont cochés (#9476), le post emporte la disposition.
+    var legs: [ComposerPublishChoice] {
+        formats.compactMap { format in
+            switch format {
+            case .reel where alsoAsReel: return nil
+            case .story: return ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: alsoAsReel)
+            case .post: return ComposerPublishChoice(format: .post, layout: layout)
+            case .reel, .status: return ComposerPublishChoice(format: format, layout: nil)
+            }
+        }
     }
 }
 
@@ -89,9 +117,8 @@ nonisolated enum ComposerPublishMenuRule {
         ComposerFormatAvailability.verdicts(candidates: candidates, offered: offered,
                                             carriesMoreThanText: carriesMoreThanText)
             .map { verdict in
-                let deplie = verdict.format == .post
-                    && layoutsTravel
-                    && ComposerMosaicChoice.isServed(slideCount: slideCount, format: verdict.format)
+                let deplie = layoutsTravel
+                    && ComposerFormatVariant.of(verdict.format).offersLayouts(sceneCount: slideCount)
                 return Entry(format: verdict.format,
                              isChoosable: verdict.isChoosable,
                              reason: verdict.reason,
@@ -108,6 +135,11 @@ nonisolated enum ComposerPublishMenuRule {
     /// principale de la capsule publie au format de la porte. `nil` quand il
     /// n'offrirait qu'un geste : une entrée unique sans sous-menu est une
     /// affordance sans choix (loi 4) — le mood, qui n'offre que lui-même.
+    /// **Le chevron CHOISIT, il ne publie pas** : il échappe au gate de matière
+    /// (une scène encore vide peut déjà devenir un post ou un réel, #13839) et
+    /// ne se fige que pendant l'envoi.
+    static func chevronIsEnabled(isPublishing: Bool) -> Bool { !isPublishing }
+
     static func menu(candidates: [ComposerFormat],
                      offered: [ComposerFormat],
                      carriesMoreThanText: Bool,
@@ -131,19 +163,23 @@ nonisolated enum ComposerPublishMenuRule {
     /// « Aussi en réel » (#9476) ne survit que là où le menu l'OFFRE
     /// (`companionReelOffered`) : sinon la story part seule, et la capsule le
     /// dit — jamais un réel annoncé qui ne partirait pas.
+    ///
+    /// Le choix composite (#13920) se relit FORMAT PAR FORMAT : chacun garde
+    /// ses règles, et seul celui que le menu refuse tombe.
     static func armed(chosen: ComposerPublishChoice?,
                       defaultFormat: ComposerFormat,
                       entries: [Entry]?,
                       companionReelOffered: Bool = false) -> ComposerPublishChoice {
         let porte = ComposerPublishChoice(format: defaultFormat, layout: nil)
         guard let chosen else { return porte }
-        let seul = ComposerPublishChoice(format: chosen.format, layout: chosen.layout)
-        guard let entree = entries?.first(where: { $0.format == chosen.format }),
-              entree.isChoosable,
-              entree.choices.contains(seul) else { return porte }
-        let accompagne = chosen.alsoAsReel && companionReelOffered
-            && chosen.format == .story && chosen.layout == nil
-        return accompagne ? chosen : seul
+        let servis = chosen.formats.filter { format in
+            guard let entree = entries?.first(where: { $0.format == format }), entree.isChoosable else { return false }
+            guard format == .post, let disposition = chosen.layout else { return true }
+            return entree.layouts.contains(disposition)
+        }
+        let accompagne = companionReelOffered && servis.contains(.story)
+        return ComposerPublishChoice(formats: servis.filter { $0 != .reel || accompagne || !servis.contains(.story) },
+                                     layout: chosen.layout) ?? porte
     }
 
     /// **La story peut-elle partir AUSSI en réel ?** (#9476) — la story ET le
@@ -160,26 +196,27 @@ nonisolated enum ComposerPublishMenuRule {
         return choisissable(.story) && choisissable(.reel)
     }
 
-    /// **Ce que touche une entrée SANS disposition** (#9476). Story et Réel se
-    /// cochent ENSEMBLE quand la story peut partir aussi en réel : toucher l'un
-    /// AJOUTE ou RETIRE l'autre, jamais au point de ne plus rien cocher. Partout
-    /// ailleurs, une entrée arme son format seul, comme avant.
+    /// **Toucher une entrée la COCHE ou la DÉCOCHE** (#13920) — jamais au point
+    /// de ne plus rien cocher : la dernière entrée cochée le reste.
+    ///
+    /// Story et Réel ne se cochent ensemble que là où la story peut partir
+    /// aussi en réel (#9476) : ailleurs, cocher l'un décoche l'autre. Le post se
+    /// coche avec l'un comme avec l'autre, et garde sa disposition.
     static func toggled(_ format: ComposerFormat,
                         armed: ComposerPublishChoice,
                         companionReelOffered: Bool) -> ComposerPublishChoice {
-        let seul = ComposerPublishChoice(format: format, layout: nil)
-        guard companionReelOffered, armed.layout == nil else { return seul }
-        let both = ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: true)
-        switch (format, armed.format, armed.alsoAsReel) {
-        case (.reel, .story, false), (.story, .reel, _):
-            return both
-        case (.reel, .story, true):
-            return ComposerPublishChoice(format: .story, layout: nil)
-        case (.story, .story, true):
-            return ComposerPublishChoice(format: .reel, layout: nil)
-        default:
-            return seul
+        guard !armed.formats.contains(format) else {
+            return ComposerPublishChoice(formats: armed.formats.filter { $0 != format }, layout: armed.layout) ?? armed
         }
+        let rival: ComposerFormat? = companionReelOffered ? nil : [.story: .reel, .reel: .story][format]
+        let coches = armed.formats.filter { $0 != rival } + [format]
+        return ComposerPublishChoice(formats: coches, layout: armed.layout) ?? armed
+    }
+
+    /// **Choisir une disposition COCHE le post** et garde les autres formats.
+    static func choosingLayout(_ layout: MosaicLayoutMode,
+                               armed: ComposerPublishChoice) -> ComposerPublishChoice {
+        ComposerPublishChoice(formats: armed.formats + [.post], layout: layout) ?? armed
     }
 
     /// **Le menu COCHE ce qui partira** (#9419). Le format armé est coché ; dans
@@ -192,7 +229,7 @@ nonisolated enum ComposerPublishMenuRule {
     }
 
     static func checkedLayout(in entry: Entry, armed: ComposerPublishChoice) -> MosaicLayoutMode? {
-        guard armed.format == entry.format, !entry.layouts.isEmpty else { return nil }
+        guard armed.formats.contains(entry.format), !entry.layouts.isEmpty else { return nil }
         return armed.layout ?? ComposerMosaicChoice.fallback
     }
 
@@ -227,6 +264,12 @@ nonisolated enum ComposerPublishMenuRule {
         case unsupported
     }
 
+    /// **Une requête par format** (#13920) : chaque publication du choix
+    /// composite emprunte le canal de son format.
+    static func dispatches(surface: ComposerSurfaceKind, choice: ComposerPublishChoice) -> [Dispatch] {
+        choice.legs.map { dispatch(surface: surface, choice: $0) }
+    }
+
     static func dispatch(surface: ComposerSurfaceKind, choice: ComposerPublishChoice) -> Dispatch {
         switch route(surface: surface, choice: choice) {
         case .atelier: return .atelier(choice.format.postType, alsoAsReel: choice.alsoAsReel)
@@ -258,6 +301,17 @@ nonisolated enum ComposerPublishMenuCopy {
         String(localized: "composer.publish.menu.title", defaultValue: "Publier comme", bundle: .main)
     }
 
+    /// Le nom du chevron pour VoiceOver (#13839) : il CHOISIT le type, il ne
+    /// publie pas — « Publier comme » le faisait entendre comme un second Publier.
+    static var typeMenu: String {
+        String(localized: "composer.publish.typeMenu", defaultValue: "Type de publication", bundle: .main)
+    }
+
+    static var emptyReason: String {
+        String(localized: "composer.publish.emptyReason",
+               defaultValue: "Ajoutez quelque chose à la scène pour publier", bundle: .main)
+    }
+
     static var hint: String {
         String(localized: "composer.publish.menu.a11y.hint",
                defaultValue: "Ouvre le choix du format et de la disposition", bundle: .main)
@@ -266,12 +320,33 @@ nonisolated enum ComposerPublishMenuCopy {
     /// **Ce que dit la partie principale de la capsule** (#7497) — le format
     /// qui partira si l'auteur ne touche pas au chevron. `nil` pour le mood :
     /// son en-tête dit « Publier », il n'a aucun autre format à nommer.
-    /// Ce que la capsule nomme pour un CHOIX : la story et son réel quand les
-    /// deux partent (#9476), sinon le format seul.
+    /// Ce que la capsule nomme pour un CHOIX : chacun des formats cochés
+    /// (#13920), la story et son réel compris (#9476).
     static func publishTitle(for choice: ComposerPublishChoice) -> String? {
-        guard choice.alsoAsReel else { return publishTitle(choice.format) }
-        return String(localized: "composer.publish.as.storyAndReel",
-                      defaultValue: "Publier la story et le réel", bundle: .main)
+        switch Set(choice.formats) {
+        case [.story, .reel]:
+            return String(localized: "composer.publish.as.storyAndReel",
+                          defaultValue: "Publier la story et le réel", bundle: .main)
+        case [.story, .post]:
+            return String(localized: "composer.publish.as.storyAndPost",
+                          defaultValue: "Publier la story et le post", bundle: .main)
+        case [.post, .reel]:
+            return String(localized: "composer.publish.as.postAndReel",
+                          defaultValue: "Publier le post et le réel", bundle: .main)
+        case [.story, .post, .reel]:
+            return String(localized: "composer.publish.as.storyPostAndReel",
+                          defaultValue: "Publier la story, le post et le réel", bundle: .main)
+        default:
+            return publishTitle(choice.format)
+        }
+    }
+
+    /// **L'échec partiel dit LEQUEL** (#13920) : les formats partis le sont, la
+    /// phrase nomme ceux qui ne sont pas partis.
+    static func partialFailure(_ formats: [ComposerFormat]) -> String {
+        let noms = ListFormatter.localizedString(byJoining: formats.map(ComposerFormatCopy.label))
+        return String(format: String(localized: "composer.publish.partialFailure",
+                                     defaultValue: "Non publié : %@", bundle: .main), noms)
     }
 
     static func publishTitle(_ format: ComposerFormat) -> String? {
@@ -335,9 +410,14 @@ struct ComposerPublishMenu<Etiquette: View>: View {
             .disabled(!entry.isChoosable)
         } else {
             Menu {
+                Toggle(isOn: choosing(ComposerPublishMenuRule.toggled(entry.format, armed: armed,
+                                                                      companionReelOffered: companionReelOffered),
+                                      isChecked: ComposerPublishMenuRule.isChecked(entry, armed: armed))) {
+                    Text(ComposerFormatCopy.label(entry.format))
+                }
                 Section(ComposerMosaicChoice.sectionTitle) {
                     ForEach(entry.layouts, id: \.self) { mode in
-                        Toggle(isOn: choosing(ComposerPublishChoice(format: entry.format, layout: mode),
+                        Toggle(isOn: choosing(ComposerPublishMenuRule.choosingLayout(mode, armed: armed),
                                               isChecked: ComposerPublishMenuRule.checkedLayout(
                                                   in: entry, armed: armed) == mode)) {
                             Label(ComposerMosaicChoice.label(mode), systemImage: ComposerMosaicChoice.symbol(mode))
@@ -360,5 +440,147 @@ struct ComposerPublishMenu<Etiquette: View>: View {
     /// disposition. Toucher une entrée déjà cochée la réarme, rien d'autre.
     private func choosing(_ choice: ComposerPublishChoice, isChecked: Bool) -> Binding<Bool> {
         Binding(get: { isChecked }, set: { _ in onChoose(choice) })
+    }
+}
+
+/// **Le chevron posé dans la capsule Publier** (#13839) : le filet qui le
+/// sépare, le menu et son nom VoiceOver « Type de publication ». Un type
+/// concret, pour que la capsule le reçoive hors du gate de matière sans
+/// effacer son type.
+struct ComposerPublishChevron: View {
+    let entries: [ComposerPublishMenuRule.Entry]
+    let armed: ComposerPublishChoice
+    var companionReelOffered = false
+    let onChoose: (ComposerPublishChoice) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.white.opacity(0.35))
+                .frame(width: 1, height: 20)
+                .accessibilityHidden(true)
+            ComposerPublishMenu(entries: entries, armed: armed,
+                                companionReelOffered: companionReelOffered,
+                                onChoose: onChoose) {
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.bold))
+                    .foregroundColor(.white)
+                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(ComposerPublishMenuCopy.typeMenu)
+            .accessibilityHint(ComposerPublishMenuCopy.hint)
+        }
+    }
+}
+
+/// Un Publier grisé n'est pas muet : le toucher dit la raison du refus, ou
+/// qu'il faut d'abord poser quelque chose sur la scène.
+struct ComposerPublishRefusalTapZone: View {
+    let isRefused: Bool
+    let reason: String
+
+    var body: some View {
+        if isRefused {
+            Color.clear
+                .contentShape(Capsule())
+                .onTapGesture {
+                    HapticFeedback.warning()
+                    FeedbackToastManager.shared.showError(reason.isEmpty ? ComposerPublishMenuCopy.emptyReason : reason)
+                }
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// **Les publications d'atelier d'un même geste** (#13920). Une référence, et
+/// non un `@State` : le relais la lit dans la pile d'appel du geste qui l'a
+/// remplie, avant tout nouveau rendu.
+final class ComposerAtelierFanOut {
+    private var pending: [ComposerPublishChoice] = []
+
+    /// `nonisolated` : un deinit isolé au MainActor plante xctest au démontage
+    /// sur iOS 18.4+/26 (Swift #85663) — gate `check-ios-isolated-deinits.sh`, #13971.
+    nonisolated deinit {}
+
+    func hold(_ legs: [ComposerPublishChoice]) { pending = legs }
+
+    /// Ce que la remise de l'atelier publie — vidé à chaque lecture.
+    func take(served: PostType, alsoAsReel: Bool) -> [ComposerPublishChoice] {
+        defer { pending = [] }
+        return ComposerSeveralFormats.handOffs(pending: pending, served: served, alsoAsReel: alsoAsReel)
+    }
+}
+
+/// **Le plan d'un choix composite** (#13920) : chaque format, par le canal de
+/// son format (`ComposerPublishMenuRule.dispatch`), sous sa propre garde.
+nonisolated struct ComposerSeveralFormats: Equatable {
+    let atelier: [ComposerPublishChoice]
+    let scene: [ComposerPublishChoice]
+    let document: [ComposerPublishChoice]
+    /// Les formats qui ne partiront pas — refusés par leur garde, ou sans canal.
+    let refused: [ComposerFormat]
+
+    static func plan(_ choice: ComposerPublishChoice, surface: ComposerSurfaceKind,
+                     accepts: (ComposerFormat) -> Bool) -> ComposerSeveralFormats {
+        let routes = choice.legs.map { leg in
+            (leg: leg, dispatch: accepts(leg.format) ? ComposerPublishMenuRule.dispatch(surface: surface, choice: leg)
+                                                     : .unsupported)
+        }
+        let canal = { (garde: (ComposerPublishMenuRule.Dispatch) -> Bool) in routes.filter { garde($0.dispatch) }.map(\.leg) }
+        return ComposerSeveralFormats(
+            atelier: canal { if case .atelier = $0 { return true } else { return false } },
+            scene: canal { if case .storyScene = $0 { return true } else { return false } },
+            document: canal { if case .document = $0 { return true } else { return false } },
+            refused: canal { $0 == .unsupported }.flatMap(\.formats)
+        )
+    }
+
+    /// **Ce que publie UNE remise de l'atelier** : la file du geste quand elle
+    /// commence par le type remis, sinon la remise seule, comme avant (#9476).
+    static func handOffs(pending: [ComposerPublishChoice], served: PostType,
+                         alsoAsReel: Bool) -> [ComposerPublishChoice] {
+        guard let premiere = pending.first, premiere.format.postType == served else {
+            return [ComposerPublishChoice(format: ComposerFormat(served), layout: nil, alsoAsReel: alsoAsReel)]
+        }
+        return pending
+    }
+
+    /// **Le texte du post part avec le post et le réel, jamais avec la story**
+    /// (R2) : seule la slide courante le porte, comme au chemin d'un seul format.
+    static func slides(_ slides: [StorySlide], for leg: ComposerPublishChoice,
+                       among legs: [ComposerPublishChoice], postText: String,
+                       currentSlideId: String) -> [StorySlide] {
+        guard legs.count > 1, ComposerFormatVariant.of(leg.format).writesPostText,
+              !postText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return slides }
+        return slides.map { slide in
+            guard slide.id == currentSlideId else { return slide }
+            var porteuse = slide
+            porteuse.content = postText
+            return porteuse
+        }
+    }
+
+    /// **La remise de l'atelier, distribuée** : chaque format reste sur
+    /// l'atelier ou est repris par le meuble (`staysOnAtelier`) ; ceux que la
+    /// publication refuse sont nommés quand le geste en portait plusieurs.
+    /// `true` dès qu'une publication est acceptée.
+    @MainActor
+    static func relay(_ remises: [ComposerPublishChoice], staysOnAtelier: (PostType) -> Bool,
+                      publish: (ComposerPublishChoice) -> Bool) -> Bool {
+        let issues = remises.map { remise -> Bool? in
+            staysOnAtelier(remise.format.postType) ? publish(remise) : nil
+        }
+        if remises.count > 1 {
+            sayRefused(zip(remises, issues).filter { $0.1 == false }.flatMap(\.0.formats))
+        }
+        return issues.contains(true)
+    }
+
+    @MainActor
+    static func sayRefused(_ formats: [ComposerFormat]) {
+        guard !formats.isEmpty else { return }
+        HapticFeedback.error()
+        FeedbackToastManager.shared.showError(ComposerPublishMenuCopy.partialFailure(formats))
     }
 }

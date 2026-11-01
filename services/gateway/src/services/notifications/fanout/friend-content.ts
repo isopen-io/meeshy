@@ -3,12 +3,11 @@
  * `NotificationService.ts` (#7093).
  */
 import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
-import { notificationLogger } from '../../../utils/logger-enhanced';
-import { getCommunityCoMemberIds } from '../../posts/communityVisibility';
+import { circleNotifyKey, type CircleNotifyKey } from '@meeshy/shared/utils/relation-levels';
+import { filterPostConsumers } from '../../posts/postAudience';
 import { truncateMessage } from '../notification-preview';
 import { resolvePostMedia } from '../post-media-thumbnail';
-import { FANOUT_ROW_CAP } from './row-cap';
-import { getBlockedUserIdsAmong } from '../../../utils/blocking';
+import { mentionReceivers, resolveChosenAudience, resolveEntourage } from './entourage';
 import type { FanoutDependencies } from './dependencies';
 
 export type FriendContentFanoutParams = {
@@ -22,11 +21,14 @@ export type FriendContentFanoutParams = {
   postExpiresAt?: string | Date;
   /** Nature du média principal — affiché quand le contenu n'a pas de texte. */
   mediaType?: 'image' | 'video' | 'audio' | 'text';
-  /**
-   * User IDs to exclude from fan-out.
-   * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
-   */
+  /** User IDs to exclude from fan-out, unconditionally (the reposted author, who gets `post_repost`). */
   excludeUserIds?: string[];
+  /**
+   * Les personnes que le post NOMME : celles que la mention prévient réellement
+   * (les liens de l'auteur, #14168) ne reçoivent que `user_mentioned` ; un nommé
+   * sans lien reste dans l'éventail.
+   */
+  mentionedUserIds?: readonly string[];
   /**
    * Post visibility — used to filter recipients (same rules as Socket.IO broadcast).
    *
@@ -38,10 +40,28 @@ export type FriendContentFanoutParams = {
   visibility: string | null | undefined;
   /** User IDs list for ONLY/EXCEPT visibility modes. */
   visibilityUserIds?: string[];
+  /**
+   * La publication est un REPOST (simple ou citation) : son entourage suit le
+   * réglage « repost » de l'auteur, pas celui du type écrit (#13929).
+   */
+  isRepost?: boolean;
 };
 
+const PUBLICATION_ACTION = {
+  POST: 'post',
+  REEL: 'reel',
+  STORY: 'story',
+  MOOD: 'mood',
+  STATUS: 'mood',
+} as const;
+
+const publicationKey = (params: Pick<FriendContentFanoutParams, 'contentType' | 'isRepost'>): CircleNotifyKey =>
+  circleNotifyKey('publication', params.isRepost ? 'repost' : PUBLICATION_ACTION[params.contentType]);
+
 /**
- * Fan-out notifications to all friends of `authorId` when they publish new content.
+ * Fan-out notifications to the ENTOURAGE of `authorId` when they publish new content —
+ * the circle level the author chose for this action (`circlePublication*`, default
+ * Proche and above, #13929), among those allowed to see it.
  *
  * contentType mapping:
  *   STORY  → friend_new_story
@@ -52,10 +72,10 @@ export type FriendContentFanoutParams = {
  * Rate-limit: none in v1. These are once-per-publish events so burst risk is low.
  * Aggregation: none in v1. Duplicate suppression (author vs friend) is enforced via excludeUserIds.
  *
- * Dedup with mentions: pass mentionedUserIds as `excludeUserIds`.
- * user_mentioned takes priority over friend_new_post for the same recipient.
+ * Dedup with mentions: pass `mentionedUserIds`; those the mention actually notifies
+ * get only user_mentioned (priority over friend_new_post).
  *
- * Cap: 500 friend rows max (mirrors createStoryCommentNotificationsBatch pattern).
+ * Cap: `FANOUT_ROW_CAP` named recipients, closest first (`resolveEntourage`).
  */
 export async function createFriendContentNotificationsBatch(
   deps: FanoutDependencies,
@@ -79,46 +99,21 @@ export async function createFriendContentNotificationsBatch(
 
   if (!author) return;
 
-  const friendRequestRows = await deps.prisma.friendRequest.findMany({
-    where: {
-      status: 'accepted',
-      OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
-    },
-    select: { senderId: true, receiverId: true },
-    take: FANOUT_ROW_CAP + 1,
-    orderBy: { updatedAt: 'desc' },
+  const mentioned = await mentionReceivers(deps.prisma, {
+    mentionerId: params.authorId,
+    mentionedUserIds: params.mentionedUserIds ?? [],
   });
-
-  // Le tri est `updatedAt desc` et la borne est fixe : chez un auteur qui la
-  // dépasse durablement, ce sont TOUJOURS les mêmes contacts — les plus
-  // anciens — qui n'apprennent aucune de ses publications. Le silence est ici
-  // structurel, pas ponctuel, d'où la trace.
-  //
-  // Requête sans `distinct` : la ligne témoin y est un compte EXACT — elle
-  // existe si et seulement si l'auteur a PLUS de `FANOUT_ROW_CAP` amitiés
-  // acceptées. Elle est comptée, puis jetée par le `slice` : la borne de
-  // diffusion reste à sa valeur, seule sa saturation devient dicible.
-  if (friendRequestRows.length > FANOUT_ROW_CAP) {
-    notificationLogger.warn('Fan-out de publication tronqué à la borne', {
-      postId: params.postId,
-      authorId: params.authorId,
-      cap: FANOUT_ROW_CAP,
-    });
-  }
-  const friendRequests = friendRequestRows.slice(0, FANOUT_ROW_CAP);
-
-  const excludeSet = new Set(params.excludeUserIds ?? []);
+  const excludeSet = new Set([...(params.excludeUserIds ?? []), ...mentioned]);
   const excerpt = params.excerpt ? truncateMessage(params.excerpt) : '';
   // Vignette du contenu publié → rendue in-app + attachée au push iOS. Le
   // mediaType explicite de l'appelant prime ; sinon on le dérive du média.
   const media = await resolvePostMedia(deps.prisma, params.postId);
   const mediaType = params.mediaType ?? media?.mediaType;
 
-  // Aucun `?? 'PUBLIC'` : une visibilité absente retombe sur la branche par
-  // défaut ci-dessous (l'énumération des amis), jamais sur une ouverture.
+  // Aucun `?? 'PUBLIC'` : une visibilité absente est admise comme FRIENDS par
+  // `filterPostConsumers`, jamais comme une ouverture.
   const visibility = params.visibility;
   const visibilityUserIds = params.visibilityUserIds ?? [];
-  const visibilityUserIdSet = new Set(visibilityUserIds);
 
   if (visibility === 'PRIVATE') return;
 
@@ -139,38 +134,35 @@ export async function createFriendContentNotificationsBatch(
   const contentKey: NotificationStringKey =
     params.contentType === 'REEL' ? 'friend.reel' : contentKeyByType[notificationType];
 
-  const baseFriendIds = friendRequests
-    .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
-    .filter(id => id !== params.authorId && !excludeSet.has(id));
-
-  let recipientIds: string[];
-  if (visibility === 'COMMUNITY') {
-    // Une action dans une communauté est OBLIGATOIREMENT notifiée à TOUS les
-    // membres de la communauté (pas seulement aux contacts de l'auteur) —
-    // miroir de SocialEventsHandler.getVisibilityFilteredRecipients pour que
-    // notification et broadcast temps réel ciblent exactement le même set.
-    const coMemberIds = await getCommunityCoMemberIds(deps.prisma, params.authorId);
-    recipientIds = coMemberIds.filter(id => id !== params.authorId && !excludeSet.has(id));
-  } else if (visibility === 'ONLY') {
-    recipientIds = visibilityUserIds.filter(id => id !== params.authorId && !excludeSet.has(id));
-  } else if (visibility === 'EXCEPT') {
-    recipientIds = baseFriendIds.filter(id => !visibilityUserIdSet.has(id));
-  } else {
-    recipientIds = baseFriendIds;
-  }
-
-  // #13350 — le blocage ne rompt pas l'amitié en base : une personne en
-  // relation de blocage avec l'auteur, dans un sens ou dans l'autre, sort de
-  // l'éventail ici, en UNE lecture groupée. Une lecture qui échoue n'envoie rien.
-  const candidateIds = [...new Set(recipientIds)];
-  let blocked: Set<string>;
-  try {
-    blocked = await getBlockedUserIdsAmong(deps.prisma, params.authorId, candidateIds);
-  } catch (error) {
-    notificationLogger.error('Fan-out de publication abandonné : blocage illisible', { postId: params.postId, error });
-    return;
-  }
-  const uniqueRecipientIds = candidateIds.filter((id) => !blocked.has(id));
+  // #13929 — l'entourage prévenu est celui que l'AUTEUR a choisi pour cette
+  // action (défaut : Proche et au-dessus), lu par la loi des cercles ; puis
+  // l'admission de la publication dit qui, parmi eux, a le droit de la VOIR
+  // (PRIVATE, ONLY, EXCEPT, COMMUNITY, FRIENDS — la même table que le fil).
+  // Les personnes CHOISIES d'un post `ONLY` sont toujours prévenues (#14080) — pas
+  // celles d'une REPUBLICATION, dont la liste vient de la source et que le
+  // republieur n'a pas choisies : elle suit son seul réglage « repost ».
+  const [entourage, chosen] = await Promise.all([
+    resolveEntourage(deps.prisma, {
+      ownerId: params.authorId,
+      key: publicationKey(params),
+      excludeUserIds: [...excludeSet],
+    }),
+    visibility === 'ONLY' && !params.isRepost
+      ? resolveChosenAudience(deps.prisma, {
+          ownerId: params.authorId,
+          chosenUserIds: visibilityUserIds,
+          excludeUserIds: [...excludeSet],
+        })
+      : Promise.resolve<string[]>([]),
+  ]);
+  const admitted = await filterPostConsumers({
+    prisma: deps.prisma,
+    authorId: params.authorId,
+    visibility,
+    visibilityUserIds,
+    candidateUserIds: entourage.ids,
+  });
+  const uniqueRecipientIds = [...new Set([...chosen, ...admitted])].filter((id) => id !== params.authorId);
   const langs = await deps.resolveRecipientLangs(uniqueRecipientIds);
 
   const actorInfo = {

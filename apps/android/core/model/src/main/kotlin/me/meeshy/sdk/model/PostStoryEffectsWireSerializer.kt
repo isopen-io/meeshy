@@ -23,8 +23,8 @@ import kotlinx.serialization.json.intOrNull
  * ([StoryEffects.canvas], #13612 — une scène par photo, `layout` dedans seulement là). Jamais une disposition SEULE : iOS
  * peint TOUT document v3 à la place des médias du post, donc un `{v:3, layout}` sans scène masquerait les photos. Tout le
  * reste garde le fil v1 d'avant. La LECTURE est celle de [StoryEffectsWireSerializer] (v3 rabattu sur les familles v1),
- * plus, quand il porte au moins deux scènes ou une scène qui désigne une pièce du post (une photo seule sur une
- * couleur), le document lui-même ([StoryEffects.canvas]) : l'outbox rejoue la charge
+ * plus, quand il porte au moins deux scènes ou une scène qui compose quelque chose (une pièce du post, un texte, un
+ * sticker — #13863 : la scène d'un post), le document lui-même ([StoryEffects.canvas]) : l'outbox rejoue la charge
  * qu'elle a écrite, et la réécrire à l'identique est ce qui garde chaque scène de la 2 à la N.
  */
 object PostStoryEffectsWireSerializer : KSerializer<StoryEffects> {
@@ -56,8 +56,11 @@ object PostStoryEffectsWireSerializer : KSerializer<StoryEffects> {
         val mark = (document["v"] as? JsonPrimitive)?.intOrNull ?: return null
         if (mark < 3) return null
         val canvas = runCatching { tolerant.decodeFromJsonElement(CanvasV3.serializer(), document) }.getOrNull() ?: return null
-        return canvas.takeIf { it.scenes.size >= 2 || it.scenes.any { scene -> scene.objects.any(::designatesPostMedia) } }
+        return canvas.takeIf { it.scenes.size >= 2 || it.scenes.any { scene -> scene.objects.any(::composesTheScene) } }
     }
+
+    /** Un objet du plan de contenu (texte, sticker, son, lieu…) ou une pièce du post : une scène, jamais « un fond et rien d'autre ». */
+    private fun composesTheScene(item: ObjectV3): Boolean = item.plane != BACKGROUND_PLANE || designatesPostMedia(item)
 
     private fun designatesPostMedia(item: ObjectV3): Boolean {
         val id = item.payload["postMediaId"] as? JsonPrimitive ?: return false
@@ -71,4 +74,6 @@ object PostStoryEffectsWireSerializer : KSerializer<StoryEffects> {
      */
     private fun isBackgroundOnly(value: StoryEffects): Boolean =
         value.background != null && value == StoryEffects(background = value.background)
+
+    private const val BACKGROUND_PLANE = "bg"
 }

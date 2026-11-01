@@ -7,8 +7,13 @@ import MeeshySDK
 /// retour au premier plan) : chaque émission est remise au modèle, qui décide.
 /// L'onboarding passe d'abord — deux présentations plein écran ne se
 /// superposent pas (`OnboardingPresenceSignal`).
+///
+/// La feuille ne se présente plus depuis la racine (#14046) : elle vit dans sa
+/// fenêtre (`ActivationInvitePresenter`), par-dessus le composer, les
+/// visionneuses et les feuilles déjà ouvertes.
 struct ActivationInviteHost: ViewModifier {
     @StateObject private var model = ActivationInviteViewModel()
+    @State private var presenter = ActivationInvitePresenter()
 
     func body(content: Content) -> some View {
         content
@@ -17,8 +22,11 @@ struct ActivationInviteHost: ViewModifier {
                 guard !onboarding else { return }
                 model.userChanged(user)
             }
-            .sheet(isPresented: $model.isPresented) {
-                ActivationInviteView(model: model)
+            .onReceive(model.$isPresented.removeDuplicates().receive(on: DispatchQueue.main)) { isPresented in
+                presenter.apply(model: model, isPresented: isPresented)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIScene.didActivateNotification)) { _ in
+                presenter.retryPendingShow(model: model)
             }
     }
 }

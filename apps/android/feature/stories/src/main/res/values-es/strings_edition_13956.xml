@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_editing_announce">Edición: %1$s</string>
+    <string name="composer_editing_done">De vuelta a las herramientas de la escena</string>
+    <string name="composer_editing_back">Atrás</string>
+</resources>

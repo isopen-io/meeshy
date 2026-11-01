@@ -95,6 +95,14 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
     /// conséquences, et c'est tout ce que cet écran a à faire.
     case audience
 
+    /// **Le FOND de la scène — couleurs puis effet d'ouverture** (#13839, L3).
+    /// La couleur s'applique en direct, la feuille reste ouverte jusqu'à OK :
+    /// on compare en regardant la scène réduite au-dessus.
+    case background
+
+    /// **La durée de la diapo** (#13839, L3) — une feuille courte.
+    case slideDuration
+
     public var id: String { rawValue }
 
     /// **Comment le portail se présente** (#9125). La caméra s'ouvre SEULE en
@@ -103,9 +111,66 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
     nonisolated enum Presentation: Equatable, Sendable {
         case sheet
         case fullScreen
+        /// **Ancrée dans la pile du meuble** (#13839, L3) : posée en bas, sans
+        /// voile, elle RÉDUIT la scène au lieu de la couvrir.
+        case anchored
     }
 
     var presentation: Presentation {
-        self == .camera ? .fullScreen : .sheet
+        switch self {
+        case .camera: return .fullScreen
+        case .emoji, .language: return .sheet
+        case .sound, .soundLibrary, .location: return .sheet
+        case .sticker, .reference, .hashtag, .audience, .background, .slideDuration:
+            return .anchored
+        }
     }
+
+    /// Le titre que la feuille ancrée porte avec son OK — `nil` pour les vues
+    /// qui ont déjà leur en-tête : deux en-têtes empilés diraient deux fois
+    /// la même chose.
+    var anchoredTitle: String? {
+        switch self {
+        case .sticker: return ComposerAnchoredSheetCopy.stickers
+        case .audience: return ComposerAnchoredSheetCopy.audience
+        case .background: return ComposerAnchoredSheetCopy.background
+        case .slideDuration: return ComposerAnchoredSheetCopy.duration
+        case .location, .emoji, .sound, .soundLibrary, .reference, .language, .camera, .hashtag:
+            return nil
+        }
+    }
+
+    var anchoredSize: ComposerAnchoredSheetMetrics.Size {
+        switch self {
+        case .slideDuration: return .compact
+        case .background, .audience, .hashtag, .reference, .soundLibrary: return .regular
+        case .location, .sticker, .sound, .emoji, .language, .camera: return .tall
+        }
+    }
+
+    /// Le son garde le thème de l'app : sa vue, partagée avec le fil, lit le
+    /// thème global et le resynchronise quand le schéma change.
+    var anchoredForcesDark: Bool { self != .sound }
+
+    /// **La hauteur fixe d'une feuille SYSTÈME qui réduit la scène** —
+    /// `nil` pour toute autre présentation.
+    ///
+    /// Le son, sa bibliothèque et le lieu montent leur propre
+    /// `NavigationStack` : posés dans la pile comme une feuille ancrée, ils ne
+    /// recevaient aucun toucher (recette au simulateur — « Enregistrer »,
+    /// « Bibliothèque », « Fichiers » et la recherche d'un lieu traversaient la
+    /// feuille jusqu'à la scène, qui la refermait). Ils restent donc des
+    /// feuilles système, à la hauteur de leur feuille ancrée, et la scène se
+    /// réduit au-dessus d'eux comme au-dessus des autres.
+    var sheetDetentFraction: CGFloat? {
+        switch self {
+        case .sound, .soundLibrary, .location:
+            return ComposerAnchoredSheetMetrics.fraction(anchoredSize)
+        default:
+            return nil
+        }
+    }
+
+    /// La scène se réduit au-dessus de cette feuille au lieu d'être couverte.
+    var reducesScene: Bool { presentation == .anchored || sheetDetentFraction != nil }
 }

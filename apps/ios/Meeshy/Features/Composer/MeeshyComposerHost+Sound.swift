@@ -188,7 +188,7 @@ extension MeeshyComposerHost {
             initialAudio: editedSoundTrack,
             // **Supprimer n'est offert qu'en ÉDITION** — voir
             // `deleteEditedSoundAction`, dont le `nil` retire le bouton.
-            onDelete: deleteEditedSoundAction
+            onDelete: deleteEditedSoundAction, appearance: .dark
         )
         // **Une ouverture, une feuille NEUVE**. Voir
         // `soundSheetSession` : sans identité renouvelée, SwiftUI réutilise la
@@ -366,25 +366,6 @@ extension MeeshyComposerHost {
         HapticFeedback.medium()
     }
 
-    /// **Retirer un son de contenu depuis SA carte**.
-    ///
-    /// L'appui long est la seconde porte de la suppression, et la plus courte :
-    /// ouvrir la feuille pour supprimer coûte trois gestes là où poser en a
-    /// coûté un. Elle passe par le même retrait que la feuille — le
-    /// dictionnaire de transcriptions doit perdre sa clé en même temps que la
-    /// liste perd sa pièce, sinon un son posé plus tard sous la même URL
-    /// temporaire hériterait d'un texte qui n'est pas le sien.
-    ///
-    /// **Le « même retrait » est LE retrait** : deux portes qui appelleraient
-    /// chacune leurs deux lignes partageraient un motif sans partager la règle — et
-    /// il leur manquerait à toutes deux l'oubli de la pré-montée.
-    func deleteForegroundSound(_ son: ComposerForegroundSound) {
-        retractMedia(objectIds: [], fileURLs: [son.url])
-        // Le son supprimé pouvait être celui que la feuille tenait ouvert.
-        if editedForegroundSound?.url == son.url { editedForegroundSound = nil }
-        HapticFeedback.medium()
-    }
-
     /// **`nil` quand la feuille ne fait que CRÉER** — une création n'a rien à
     /// supprimer, et un bouton de suppression posé là serait un contrôle sans
     /// effet. L'absence est structurelle : la feuille ne reçoit pas la fermeture,
@@ -436,18 +417,6 @@ extension MeeshyComposerHost {
         editedForegroundSound = nil
         editedBackgroundSoundId = sound.id
         openSoundSheet(placement: .background)
-        HapticFeedback.light()
-    }
-
-    /// **Toucher la carte du son de contenu rouvre « Création audio » DESSUS.**
-    ///
-    /// Le placement est forcé à `.foreground` : la carte n'existe QUE pour un
-    /// son de contenu, et ouvrir la feuille sur l'autre moitié du commutateur
-    /// ferait mentir le geste qui vient d'être fait.
-    func editForegroundSound(_ son: ComposerForegroundSound) {
-        editedBackgroundSoundId = nil
-        editedForegroundSound = son
-        openSoundSheet(placement: .foreground)
         HapticFeedback.light()
     }
 

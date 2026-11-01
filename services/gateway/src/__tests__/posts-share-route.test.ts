@@ -32,6 +32,12 @@ jest.mock('../utils/withMutationLog', () => ({
   // les laissait à `undefined` — `instanceof undefined` lève un TypeError
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../utils/withMutationLog') as object), withMutationLog: jest.fn().mockImplementation(({ op }: any) => op()) }));
+const relayActivityToEntourage = jest.fn<(...a: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
+jest.mock('../services/notifications/fanout/activity-relay', () => ({
+  relayActivityToEntourage: (...args: unknown[]) => relayActivityToEntourage(...args),
+}));
+const createNotification = jest.fn();
+const blockBetween = jest.fn<(...a: unknown[]) => Promise<{ id: string } | null>>().mockResolvedValue(null);
 jest.mock('../services/MentionService', () => ({ resolveMentionedUsers: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]) }));
 
 const POST_ID = '507f1f77bcf86cd799439011';
@@ -57,11 +63,16 @@ async function buildApp(authed: boolean): Promise<FastifyInstance> {
         visibility: 'PUBLIC',
         visibilityUserIds: [] as string[],
         expiresAt: null,
+        repostOfId: null,
+        originalRepostOfId: null,
       }),
+      findMany: () => Promise.resolve([]),
     },
+    user: { findFirst: (...args: unknown[]) => blockBetween(...args) },
   } as unknown as PrismaClient;
   const mw = authed ? auth : noAuth;
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');
+  app.decorate('notificationService', { createNotification } as never);
   app.register(async (instance) => {
     instance.addHook('preValidation', mw as any);
     registerInteractionRoutes(instance, prisma, mw);
@@ -106,5 +117,48 @@ describe('POST /posts/:postId/share', () => {
     shareWithTrackingLink.mockResolvedValueOnce(null);
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('un partage, simple ou suivi, est relayé à l’entourage (#14069)', async () => {
+    relayActivityToEntourage.mockClear();
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
+    expect(relayActivityToEntourage).toHaveBeenCalledTimes(2);
+    expect(relayActivityToEntourage.mock.calls[0][1]).toEqual({ activity: 'share', postId: POST_ID, actorId: 'u1' });
+  });
+
+  it('un partage refusé (contenu introuvable) n’est pas relayé (#14069)', async () => {
+    relayActivityToEntourage.mockClear();
+    shareWithTrackingLink.mockResolvedValueOnce(null);
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
+    expect(relayActivityToEntourage).not.toHaveBeenCalled();
+  });
+
+  it("partager le contenu d'un auteur avec qui un blocage existe se refuse comme un contenu introuvable, sans frappe ni relais (#14242)", async () => {
+    sharePost.mockClear();
+    relayActivityToEntourage.mockClear();
+    blockBetween.mockResolvedValueOnce({ id: 'author-1' });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, code: 'POST_NOT_FOUND' });
+    expect(sharePost).not.toHaveBeenCalled();
+    expect(relayActivityToEntourage).not.toHaveBeenCalled();
+  });
+
+  it('un partage hors audience (refusé par la garde) n’est pas relayé (#14069)', async () => {
+    const denied = Fastify({ logger: false });
+    const prisma = { post: { findFirst: () => Promise.resolve(null) } } as unknown as PrismaClient;
+    denied.decorate('notificationService', { createNotification } as never);
+    const { registerInteractionRoutes } = await import('../routes/posts/interactions');
+    denied.register(async (instance) => {
+      instance.addHook('preValidation', auth as any);
+      registerInteractionRoutes(instance, prisma, auth);
+    });
+    await denied.ready();
+    relayActivityToEntourage.mockClear();
+    const res = await denied.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    expect(res.statusCode).toBe(404);
+    expect(relayActivityToEntourage).not.toHaveBeenCalled();
+    await denied.close();
   });
 });

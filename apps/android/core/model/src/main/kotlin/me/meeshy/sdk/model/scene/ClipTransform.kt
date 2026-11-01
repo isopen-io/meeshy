@@ -4,7 +4,8 @@ import kotlinx.serialization.Serializable
 
 /**
  * Place d'une piste dans le PLAN : position (normalisée, peut déborder de 0..1), taille, rotation en
- * DEGRÉS et rang de superposition. Miroir de `ClipTransform.swift`. Valeur pure, bornée : `applying(Field)` ne sort jamais des bornes.
+ * DEGRÉS et rang de superposition. Miroir de `ClipTransform.swift`. Valeur pure, bornée : `applying(Field)` ne sort jamais des bornes ;
+ * l'échelle n'a qu'un plancher, pas de plafond (#14298).
  */
 @Serializable
 data class ClipTransform(
@@ -27,7 +28,7 @@ data class ClipTransform(
     fun applying(field: Field): ClipTransform = when (field) {
         is Field.X -> if (field.value.isFinite()) copy(x = field.value.coerceIn(POSITION_RANGE)) else this
         is Field.Y -> if (field.value.isFinite()) copy(y = field.value.coerceIn(POSITION_RANGE)) else this
-        is Field.Scale -> if (field.value.isFinite()) copy(scale = field.value.coerceIn(SCALE_RANGE)) else this
+        is Field.Scale -> if (field.value.isFinite()) copy(scale = field.value.coerceAtLeast(MIN_SCALE)) else this
         is Field.Rotation -> if (field.value.isFinite()) copy(rotation = field.value.coerceIn(ROTATION_RANGE)) else this
         is Field.ZIndex -> copy(zIndex = field.value.coerceIn(Z_INDEX_RANGE))
     }
@@ -35,7 +36,7 @@ data class ClipTransform(
     companion object {
         val IDENTITY = ClipTransform()
         val POSITION_RANGE = -0.5..1.5
-        val SCALE_RANGE = 0.05..8.0
+        const val MIN_SCALE: Double = 0.05
         val ROTATION_RANGE = -180.0..180.0
         val Z_INDEX_RANGE = -100..100
     }

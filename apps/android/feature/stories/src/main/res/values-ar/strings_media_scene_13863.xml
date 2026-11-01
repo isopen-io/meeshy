@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_composer_scene_voice_a11y">صوت على المشهد</string>
+    <string name="story_composer_incoming_a11y">جارٍ إضافة الوسائط</string>
+    <string name="story_composer_incoming_preparing">جارٍ التحضير…</string>
+    <string name="story_composer_incoming_sending">جارٍ الإرسال %1$d٪</string>
+    <string name="story_composer_incoming_more">+%1$d</string>
+    <string name="story_composer_incoming_cancel">إلغاء الإضافة</string>
+    <string name="story_composer_incoming_failed">تعذّرت إضافة الوسائط.</string>
+    <string name="story_composer_incoming_retry">إعادة المحاولة</string>
+    <string name="story_composer_incoming_waiting">في الانتظار</string>
+</resources>

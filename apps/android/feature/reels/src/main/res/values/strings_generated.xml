@@ -4,6 +4,7 @@
     <string name="reels_caption_translated">Translation available</string>
     <string name="reels_close">Close</string>
     <string name="reels_comments">Comments</string>
+    <string name="reels_comments_composer_hint">Comment…</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d comment</item>
         <item quantity="other">%1$d comments</item>

@@ -16,6 +16,9 @@ public enum StoryPublishRetryPolicy {
 
     public static func isPermanent(_ error: Error) -> Bool {
         if error is StoryPublishUnrecoverableError { return true }
+        // Une limite du jour (#14169) tient jusqu'au lendemain : la rejouer ne
+        // ferait que consommer le seau d'écriture.
+        if DailyGestureLimit.from(error) != nil { return true }
         if let rejection = error as? APIRejection { return isPermanentStatus(rejection.statusCode) }
         switch MeeshyError.from(error) {
         case .forbidden:

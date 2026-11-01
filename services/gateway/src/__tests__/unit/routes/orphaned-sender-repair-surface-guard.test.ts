@@ -242,8 +242,13 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'game/MissionHabits.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7729 — suggestions d'onboarding : `select: { senderId: true }`, la relation n'est jamais chargée.
   'onboarding/OnboardingService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #14105 — le lien d'un choisi d'un post ONLY : a-t-il écrit dans la conversation directe ?
+  // `select: { senderId: true }`, la relation n'est jamais chargée.
+  'posts/directContactVisibility.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
   'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #11269 — rattrapage des médias à vue unique lus par tous : `senderId` (colonne) seul, la relation n'est jamais chargée.
+  'messaging/viewOnceMediaCatchUp.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9382 — le signal de jeu « réponse reçue » : `select: { createdAt: true }`
   // seul, pour mesurer la fenêtre d'éligibilité du bonus. Aucun expéditeur servi.
   'game/MessageGameSignals.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

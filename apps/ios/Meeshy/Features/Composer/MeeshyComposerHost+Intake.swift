@@ -192,7 +192,7 @@ extension MeeshyComposerHost {
         // énumérer — cinq, dont une née d'un GESTE et absente de tout
         // inventaire. Ici, une sixième porte hérite de la
         // pré-montée sans que personne n'ait à y penser.
-        if let poseeParLeRail { beginInlineEdit(poseeParLeRail) }
+        if let poseeParLeRail, !replaceBackgroundIfPending(with: poseeParLeRail) { sceneSelectionRelay.selectSceneItem(poseeParLeRail) }
         startPendingPreUploads()
     }
 
@@ -248,16 +248,6 @@ extension MeeshyComposerHost {
             hasPlace: documentLocation != nil,
             visibility: composerVisibility
         )
-    }
-
-    /// Ce que le meuble sert — une PROJECTION de la règle, jamais une liste
-    /// écrite ici. Le jour où un outil gagnera sa destination, il suffira de lui
-    /// donner un `effect` : une énumération recopiée ici aurait exigé de penser
-    /// aux DEUX endroits, et le second est celui qu'on oublie.
-    /// La rangée SERVIE dépend du format : une story n'a pas de champ de
-    /// contenu à outiller (`ComposerDocumentTool.servedRow(for:)`).
-    var servedDocumentTools: [ComposerDocumentTool] {
-        ComposerDocumentTool.servedRow(for: selectedFormat)
     }
 
     /// **Semer la première unité d'histoire.** Appelé au changement de format
@@ -341,7 +331,7 @@ extension MeeshyComposerHost {
             // Avec un média de fond, la même porte ouvre le CADRE.
             HapticFeedback.light()
             let bande = ComposerSceneBand.forBackgroundDoor(hasBackgroundMedia: sceneHasBackgroundMedia)
-            requestedSceneBand = requestedSceneBand == bande ? nil : bande
+            if bande == .palette { presentedPortal = .background } else { requestedSceneBand = requestedSceneBand == bande ? nil : bande }
         case .description:
             // La SEULE façon d'ouvrir la description sur la scène incrustée :
             // aucun champ permanent ne l'affiche dès qu'un texte existe.
@@ -392,9 +382,9 @@ extension MeeshyComposerHost {
                 // est DÉPLIÉ : ouvrir le dessin laissait la zone basse VIDE
                 // jusqu'à ce qu'une bulle du rail soit tapée — un geste de plus
                 // avant le premier réglage, sur un écran qui vient précisément
-                // de libérer cette place. Le pinceau est le premier réglage de
-                // tout tracé ; le déplier d'emblée ne devine rien.
-                viewModel.setExpandedDrawingTool(.tool)
+                // de libérer cette place. Le pinceau est le premier réglage ; la
+                // scène le porte déjà dans sa barre de dessin (#13839).
+                if mountedComposerView != .scene { viewModel.setExpandedDrawingTool(.tool) }
             }
         case .text:
             // **Poser PUIS saisir SUR LA SCÈNE, dans le même geste** (« plutôt que
@@ -426,30 +416,6 @@ extension MeeshyComposerHost {
     /// **Le rail délègue au VIEWMODEL, jamais au canvas.** Muter la slide par
     /// le modèle est ce qui garde publication, reader et export d'accord ; le
     /// meuble n'a d'ailleurs aucune référence à la vue UIKit.
-    /// **Taper un jeton de l'inspecteur ouvre là où sa valeur se CHANGE.**
-    ///
-    /// Sans ce geste, `onObjectChip` serait au contrat de la surface sans
-    /// qu'aucun meuble ne le remplisse : la rangée peindrait six capsules qui
-    /// s'annoncent `.isButton`, vibrent sous le doigt, et n'ouvrent
-    /// rien — un contrôle INERTE, ce qui coûte plus qu'un contrôle absent
-    /// puisqu'il PROMET (loi 4).
-    ///
-    /// La destination est décidée par la RÈGLE, qui a déjà regardé le jeu des
-    /// bandes ouvrables : ce meuble ne fait que poser le résultat. Un jeton
-    /// sans destination rend la bande INCHANGÉE — la refermer ferait de
-    /// « TAILLE 140 % », pendant un rognage, un bouton d'annulation déguisé.
-    func handleObjectChip(_ chipId: String) {
-        // Le retour haptique suit l'EFFET, jamais le doigt : faire vibrer
-        // l'appareil pour un geste qui ne change rien est précisément le retour
-        // trompeur que la loi 4 combat. Un jeton sans destination est une
-        // LECTURE — la vue ne l'annonce même pas comme bouton.
-        guard let id = selectedSceneItemId,
-              let section = ComposerObjectChips.destination(of: chipId, in: sceneObjectChips)
-        else { return }
-        openObjectEditor(id, section: section)
-        HapticFeedback.light()
-    }
-
     func handleTrailingRailAction(_ action: StoryCanvasContextAction) {
         guard let id = selectedSceneItemId else { return }
         switch action {
@@ -458,9 +424,7 @@ extension MeeshyComposerHost {
             retractMedia(objectIds: [id])
             selectedSceneItemId = nil
             selectedSceneItemKind = nil
-        case .bringForward: viewModel.bringForward(id: id)
         case .setAsBackground, .replaceBackground: makeSceneBackground(id)
-        case .sendBackward: viewModel.sendBackward(id: id)
         case .trim:
             // **« Rogner » ouvre l'ÉDITEUR sur ses bornes.** La première vue n'édite
             // pas, et les bornes de lecture vivent à `.media(.trim)`.
@@ -470,9 +434,10 @@ extension MeeshyComposerHost {
             // ranger. Un écran modal se referme par son propre en-tête.
             openObjectEditor(id, section: .media(.trim))
             HapticFeedback.light()
-        case .edit, .leaveScene:
-            // Injoignables DEPUIS LE RAIL, et pour deux raisons distinctes que
-            // le `switch` exhaustif oblige à relire quand on les sert.
+        case .edit, .leaveScene, .bringForward, .sendBackward:
+            // Injoignables DEPUIS LE RAIL, et pour trois raisons distinctes que
+            // le `switch` exhaustif oblige à relire quand on les sert — l'empilement
+            // se fait au TOUCHER (#13918).
             //
             // `edit` a son chemin — l'appui long et l'action
             // VoiceOver « Modifier », câblés par `onItemEdit` — mais
@@ -724,6 +689,7 @@ extension MeeshyComposerHost {
     /// corps VIDE, et refermer la photothèque ne produit aucun signal.
     func abandonRailPosing() {
         railPosesNextMedia = false
+        backgroundReplacementId = nil
     }
 
     /// **LE site unique où une porte d'ingestion écrit dans
@@ -793,6 +759,18 @@ extension MeeshyComposerHost {
     /// parce que `documentLocalMedia` déclenche `syncPostMediaIntoSlides` par
     /// `adaptiveOnChange` — écrire la liste d'abord ferait courir la mécanique
     /// sur des cartes vides.
+    /// La porte du fil ouvre « Texte du post », clavier levé (#13864).
+    func openPostTextAtDoorIfDue() {
+        guard !postTextOpenedAtDoor,
+              ComposerPostTextPill.opensOnAppear(
+                  opening: profile.opensWith, format: selectedFormat,
+                  picksFirst: ComposerScenePicking.opensOnPicker(origin: intent.origin, compositionIsEmpty: compositionIsEmpty))
+        else { return }
+        postTextOpenedAtDoor = true
+        editsSceneDescription = false
+        editsPostContent = true
+    }
+
     func ingestSeedIntoDocumentIfNeeded() {
         guard !seedIngestedIntoDocument,
               let plan = ComposerSeedIngestion.plan(for: mediaSeed) else { return }

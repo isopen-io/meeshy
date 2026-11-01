@@ -67,17 +67,13 @@ internal fun ComposerMoreEntry.glyph(): ImageVector = when (this) {
     ComposerMoreEntry.REMOVE_BACKGROUND -> MeeshyIcons.RemoveCircleFilled
     ComposerMoreEntry.CLEAR_ALL -> MeeshyIcons.Delete
     ComposerMoreEntry.ADD_SLIDE -> MeeshyIcons.Add
-    ComposerMoreEntry.BACKGROUND -> MeeshyIcons.Palette
     ComposerMoreEntry.SLIDE_DURATION -> MeeshyIcons.Timer
     ComposerMoreEntry.ANIMATION -> MeeshyIcons.Bolt
     ComposerMoreEntry.TIMING -> MeeshyIcons.ScheduleFilled
-    ComposerMoreEntry.FRAME -> MeeshyIcons.Crop
     ComposerMoreEntry.OPENING_EFFECT -> MeeshyIcons.Sparkles
     ComposerMoreEntry.VISUAL_EFFECT -> MeeshyIcons.PhotoFilter
     ComposerMoreEntry.CAPTION -> MeeshyIcons.Subtitles
-    ComposerMoreEntry.MENTION -> MeeshyIcons.Mention
     ComposerMoreEntry.HASHTAGS -> MeeshyIcons.Tag
-    ComposerMoreEntry.PLACE -> MeeshyIcons.Location
     ComposerMoreEntry.SAVE_TO_PHOTOS -> MeeshyIcons.Download
     ComposerMoreEntry.SHARE -> MeeshyIcons.Share
 }
@@ -88,17 +84,13 @@ internal fun ComposerMoreEntry.labelRes(): Int = when (this) {
     ComposerMoreEntry.REMOVE_BACKGROUND -> R.string.composer_more_remove_background
     ComposerMoreEntry.CLEAR_ALL -> R.string.composer_more_clear_all
     ComposerMoreEntry.ADD_SLIDE -> R.string.stories_composer_add_slide
-    ComposerMoreEntry.BACKGROUND -> R.string.story_tool_texture
     ComposerMoreEntry.SLIDE_DURATION -> R.string.stories_composer_slide_duration
     ComposerMoreEntry.ANIMATION -> R.string.composer_scene_more_animation
     ComposerMoreEntry.TIMING -> R.string.composer_scene_more_timing
-    ComposerMoreEntry.FRAME -> R.string.stories_scene_frame_title
     ComposerMoreEntry.OPENING_EFFECT -> R.string.stories_scene_effect_opening
     ComposerMoreEntry.VISUAL_EFFECT -> R.string.stories_scene_effect_visual
     ComposerMoreEntry.CAPTION -> R.string.stories_composer_text_caption
-    ComposerMoreEntry.MENTION -> R.string.composer_more_mention
     ComposerMoreEntry.HASHTAGS -> R.string.story_hashtag_title
-    ComposerMoreEntry.PLACE -> R.string.story_place_title
     ComposerMoreEntry.SAVE_TO_PHOTOS -> R.string.stories_scene_overflow_save
     ComposerMoreEntry.SHARE -> R.string.stories_scene_overflow_share
 }

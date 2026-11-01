@@ -80,11 +80,14 @@ public object CallMontageFrameRule {
     public fun design(id: String, among: List<CallFrameDesign> = CallFrameCatalogue.all): CallFrameDesign? =
         CallFrameCatalogue.frame(id, among)
 
-    /** Le nom d'un cadre dans le carrousel : le nom propre du motif, suivi de sa déclinaison s'il en porte une (iOS `CallFrameCopy.choiceName`). */
-    public fun frameName(id: String, among: List<CallFrameDesign> = CallFrameCatalogue.all): String? {
+    /**
+     * Le nom d'un cadre dans le carrousel, dans la langue d'interface [language] (#13953) : celui du motif, suivi
+     * de sa déclinaison s'il en porte une (iOS `CallFrameCopy.choiceName`) ; sans langue, le français d'avant.
+     */
+    public fun frameName(id: String, among: List<CallFrameDesign> = CallFrameCatalogue.all, language: String? = null): String? {
         val design = design(id, among) ?: return null
-        val style = design.styles.firstOrNull { it.id == design.styleId } ?: return design.name
-        return "${design.name} · ${style.name}"
+        val style = design.styles.firstOrNull { it.id == design.styleId } ?: return design.displayName(language)
+        return "${design.displayName(language)} · ${style.displayName(language)}"
     }
 
     /**

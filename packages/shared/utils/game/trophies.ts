@@ -153,6 +153,10 @@ export const SHOWCASE_VISIBILITIES = ['everyone', 'friends', 'me'] as const;
 export type ShowcaseVisibility = (typeof SHOWCASE_VISIBILITIES)[number];
 export const SHOWCASE_DEFAULT_VISIBILITY: ShowcaseVisibility = 'friends';
 
+/**
+ * La classe d'un lecteur. `friend` = niveau effectif d'au moins Ami (`game.basic`, #13930), jamais un simple booléen
+ * d'amitié lu à côté de la loi des cercles ; `other` = le public (sous Ami).
+ */
 export type ShowcaseViewer = 'self' | 'friend' | 'other' | 'admin';
 
 /**

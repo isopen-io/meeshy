@@ -62,6 +62,25 @@ enum SceneStickerPose {
     /// pack, dont les octets se chargent d'abord (`posePackSticker`).
     @discardableResult
     static func pose(_ choice: StickerSheetChoice, on viewModel: StoryComposerViewModel) -> String? {
+        guard let id = posed(choice, on: viewModel) else { return nil }
+        settle(id, on: viewModel)
+        return id
+    }
+
+    /// **Le sticker posé se décale hors des objets existants** (#13839, L5) :
+    /// posé au centre, il couvrait le texte qu'on venait d'écrire.
+    static func settle(_ id: String, on viewModel: StoryComposerViewModel) {
+        var slide = viewModel.currentSlide
+        guard var stickers = slide.effects.stickerObjects,
+              let index = stickers.firstIndex(where: { $0.id == id }) else { return }
+        let place = SceneStickerSpot.spot(avoiding: ComposerScenePosedObjects.positions(on: slide, excluding: id))
+        stickers[index].x = Double(place.x)
+        stickers[index].y = Double(place.y)
+        slide.effects.stickerObjects = stickers
+        viewModel.currentSlide = slide
+    }
+
+    private static func posed(_ choice: StickerSheetChoice, on viewModel: StoryComposerViewModel) -> String? {
         switch choice {
         case .emoji(let emoji):
             return viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale)?.id
@@ -94,9 +113,11 @@ enum SceneStickerPose {
     @discardableResult
     static func posePackSticker(_ loaded: StickerPackItemImages.Loaded,
                                 on viewModel: StoryComposerViewModel) -> String? {
-        viewModel.addSticker(image: loaded.image, provider: packProvider,
-                             scale: StorySticker.posedScale,
-                             animatedData: loaded.isAnimated ? loaded.data : nil)?.id
+        guard let id = viewModel.addSticker(image: loaded.image, provider: packProvider,
+                                            scale: StorySticker.posedScale,
+                                            animatedData: loaded.isAnimated ? loaded.data : nil)?.id else { return nil }
+        settle(id, on: viewModel)
+        return id
     }
 
     private static func poseMee(_ mee: MeeSticker, on viewModel: StoryComposerViewModel) -> String? {
@@ -108,5 +129,31 @@ enum SceneStickerPose {
         let film = MeeStickerCatalog.animatedImageData(for: mee)
         return viewModel.addSticker(image: still, provider: meeProvider,
                                     scale: StorySticker.posedScale, animatedData: film)?.id
+    }
+}
+
+// MARK: - La place libre d'un sticker posé (#13839, L5)
+
+/// **Où poser un sticker sans couvrir ce qui existe** — une règle pure, sur une
+/// liste de places connues : le centre d'abord, puis autour. La première place
+/// assez loin de tous les objets gagne ; à défaut, la plus éloignée.
+nonisolated enum SceneStickerSpot {
+
+    /// L'écart minimal, en unités de scène (0…1), entre un sticker posé et le
+    /// centre d'un objet existant.
+    static let clearance: CGFloat = 0.18
+
+    static let candidates: [CGPoint] = [
+        CGPoint(x: 0.5, y: 0.5), CGPoint(x: 0.5, y: 0.3), CGPoint(x: 0.5, y: 0.7),
+        CGPoint(x: 0.28, y: 0.4), CGPoint(x: 0.72, y: 0.4), CGPoint(x: 0.28, y: 0.6),
+        CGPoint(x: 0.72, y: 0.6), CGPoint(x: 0.5, y: 0.18), CGPoint(x: 0.5, y: 0.82)
+    ]
+
+    static func spot(avoiding objects: [CGPoint]) -> CGPoint {
+        func ecart(_ place: CGPoint) -> CGFloat {
+            objects.map { hypot($0.x - place.x, $0.y - place.y) }.min() ?? .greatestFiniteMagnitude
+        }
+        if let libre = candidates.first(where: { ecart($0) >= clearance }) { return libre }
+        return candidates.max { ecart($0) < ecart($1) } ?? candidates[0]
     }
 }

@@ -94,6 +94,9 @@ nonisolated enum DeviceRemoteCommand {
         case "activate":
             app.activate()
             return "ok"
+        case "rotate":
+            XCUIDevice.shared.orientation = rest == "portrait" ? .portrait : .landscapeLeft
+            return "ok"
         case "sleep":
             Thread.sleep(forTimeInterval: number(1))
             return "ok"

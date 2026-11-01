@@ -47,6 +47,7 @@ internal fun BubbleContent.actionContext(
     isEndToEndSealed = isEndToEndSealed,
     entries = MessageMenuEntries.offers(menuEntryFacts(hasThread, conversationIsEndToEnd, nowMillis)),
     signalClearance = signalClearance,
+    isReadByServer = isReadByServer,
 )
 
 /** A gesture a message row offers outside the long-press menu. */

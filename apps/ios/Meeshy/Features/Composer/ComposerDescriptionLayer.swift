@@ -356,14 +356,18 @@ struct ComposerDescriptionLayer: View {
         Button {
             isFocused = false
         } label: {
-            Image(systemName: "checkmark")
-                .font(MeeshyFont.relative(MeeshyIconSize.sm).weight(.semibold))
+            // « OK », comme la barre collée au clavier du texte de scène
+            // (#13839, L4) : une coche seule ne dit pas qu'elle referme.
+            Text(ComposerKeyboardStyleCopy.done)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
                 // Adaptatif : le calque vit sur le plateau SOMBRE de la surface
                 // de scène ET sur la couche floutée de l'atelier, qui prend la
                 // teinte du fond composé. Une couleur figée « claire »
                 // disparaît sur la seconde.
                 .glassControlForeground()
-                .frame(width: 32, height: 32)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(validationLabel))
     }

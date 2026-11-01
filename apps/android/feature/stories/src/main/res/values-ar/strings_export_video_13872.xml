@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_viewer_export_save">حفظ الفيديو</string>
+    <string name="stories_viewer_export_share">مشاركة الفيديو</string>
+    <string name="stories_viewer_export_imager">حوِّل إلى صورة</string>
+    <string name="stories_export_length_title">ما المدة المطلوب إنشاؤها؟</string>
+    <string name="stories_export_length_subtitle">من بداية القصة</string>
+    <string name="stories_export_length_option">%1$d/4 · %2$s</string>
+</resources>

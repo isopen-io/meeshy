@@ -77,7 +77,7 @@ const makeHarness = (params: { post: PostRow | null | Error; recipient: Recipien
             : { username: 'alice', displayName: 'Alice', avatar: null, ...params.recipient }
         )
       ),
-      findMany: jest.fn().mockResolvedValue([]),
+      findMany: jest.fn(async (args: any) => (args?.where?.isActive === true ? (args.where.id?.in ?? []).map((id: string) => ({ id })) : [])), // #14251 comptes vivants
     },
     post: {
       findFirst: jest.fn().mockResolvedValue({ authorId: 'post-author', visibility: 'PUBLIC', visibilityUserIds: [] }),

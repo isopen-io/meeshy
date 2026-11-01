@@ -28,20 +28,31 @@ object StoryDraftReopening {
             .flatMap { (slide, carried) -> slide.mediaIds.zip(carried) }
             .filter { (placeholder, served) -> placeholder != served }
             .toMap()
+        return renamed(kept, renames).copy(awaitingPublication = emptyList())
+    }
+
+    /**
+     * [snapshot] with every media it names put under the id [renames] gives it — the slides' media, backdrop, placed media,
+     * looks and sounds, the descriptions and the kept pieces. An id [renames] does not know keeps its name.
+     */
+    fun renamed(snapshot: StoryComposerDraftSnapshot, renames: Map<String, String>): StoryComposerDraftSnapshot {
+        if (renames.isEmpty()) return snapshot
         fun String.served(): String = renames[this] ?: this
-        return kept.copy(
-            slides = kept.slides.map { slide ->
+        return snapshot.copy(
+            slides = snapshot.slides.map { slide ->
                 slide.copy(
                     mediaIds = slide.mediaIds.map { it.served() },
                     backgroundMediaId = slide.backgroundMediaId?.served(),
                     placedMedia = slide.placedMedia.map { it.copy(id = it.id.served()) },
+                    mediaLooks = slide.mediaLooks.mapKeys { (id, _) -> id.served() },
+                    audio = slide.audio.map { track -> track.copy(postMediaId = track.postMediaId.served()) },
                 )
             },
-            annotations = kept.annotations.copy(
-                mediaAlt = kept.annotations.mediaAlt.mapKeys { (id, _) -> id.served() },
-                mediaCaption = kept.annotations.mediaCaption.mapKeys { (id, _) -> id.served() },
+            annotations = snapshot.annotations.copy(
+                mediaAlt = snapshot.annotations.mediaAlt.mapKeys { (id, _) -> id.served() },
+                mediaCaption = snapshot.annotations.mediaCaption.mapKeys { (id, _) -> id.served() },
             ),
-            awaitingPublication = emptyList(),
+            media = snapshot.media.map { it.copy(id = it.id.served()) },
         )
     }
 

@@ -1332,6 +1332,14 @@ model MessageAttachment {
   /// @see packages/shared/utils/forward-to-publication.ts
   capturedInApp             Boolean @default(false)
 
+  /// L'identifiant de la lens qui a produit ce média (#11327, S26), DÉCLARÉ par
+  /// le client à l'envoi et retenu seulement s'il nomme une lens PUBLIÉE que
+  /// l'expéditeur a installée (`LensAttribution`). EN CLAIR, conversations E2EE
+  /// comprises — métadonnée assumée par le porteur (#11251, 2026-11-01) — pour
+  /// que le média reçu affiche « Lens par X » (`GET /lens/credits`). `null` :
+  /// aucune lens, ou une déclaration non retenue.
+  lensSlug                  String?
+
   // =====================================================
   // ORDRE DANS LE MESSAGE (#9776)
   // =====================================================
@@ -1963,6 +1971,11 @@ model FriendRequest {
   status      String    @default("pending")
   /// When the request was accepted/rejected
   respondedAt DateTime?
+  /// Le niveau VISÉ par la demande (`RelationLevel`, cercles de proximité #13926).
+  /// `null` veut dire FRIEND, le sens historique : un ancien client qui n'écrit
+  /// pas ce champ demande une amitié, exactement comme avant. Les valeurs
+  /// nouvelles sont ACQUAINTANCE, CLOSE et BLOOD (consommées par rel-demandes).
+  targetLevel String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1980,6 +1993,149 @@ model FriendRequest {
   /// sur la seule colonne d'identité laisserait le tri en mémoire.
   @@index([receiverId, status, createdAt])
   @@index([senderId, status, createdAt])
+}
+
+/// Un passage de niveau dans l'histoire d'un lien (`UserRelation.transitions`).
+///
+/// Embarqué plutôt qu'une collection `UserRelationTransition` : l'historique
+/// d'une paire est BORNÉ (cool-down de 30 jours, cran par cran), se lit avec la
+/// ligne et n'a besoin d'aucun index propre. Une BAISSE y est gravée mais n'est
+/// JAMAIS servie (`visibleRelationTransitions`, packages/shared/types/relation.ts).
+type RelationTransition {
+  /// Qui a accordé / retiré ce niveau (l'un des deux de la paire).
+  actorId String   @db.ObjectId
+  /// `RelationLevel` avant et après.
+  from    String
+  to      String
+  at      DateTime
+}
+
+/// Le lien entre DEUX personnes, une ligne par paire NON orientée (#13926).
+///
+/// `FriendRequest` est un journal de demandes orienté, sans unique de paire et
+/// dont `dismiss` supprime la ligne : il ne peut porter ni un niveau par
+/// direction, ni une Connaissance née sans demande, ni la date d'entrée.
+/// `UserContact` est un carnet unidirectionnel lié à l'appareil.
+///
+/// `userLowId` est le plus petit des deux ObjectId (ordre lexicographique de 24
+/// caractères hexadécimaux), voir `relationPairKey`. Le niveau EFFECTIF est le
+/// minimum des deux accords (`minRelationLevel`) ; une valeur illisible se lit
+/// PUBLIC (`parseRelationLevel`). Aucune relation Prisma vers `User` : la
+/// purge d'un compte supprimera ses liens dans le lot de la loi d'accès.
+///
+/// Index : l'unique de paire sert aussi le côté low (préfixe) ; `userHighId`
+/// sert le côté high. Les colonnes de niveau (6 valeurs) ne s'indexent pas : la
+/// requête est bornée par le nombre de liens de l'utilisateur.
+///
+/// Migration d'index : `migrations/2026-10-31-user-relation-indexes.mongodb.js`.
+model UserRelation {
+  id                String               @id @default(auto()) @map("_id") @db.ObjectId
+  userLowId         String               @db.ObjectId
+  userHighId        String               @db.ObjectId
+  /// Niveau accordé par `userLowId` à `userHighId` (`RelationLevel`).
+  grantedByLow      String               @default("PUBLIC")
+  /// Niveau accordé par `userHighId` à `userLowId`.
+  grantedByHigh     String               @default("PUBLIC")
+  /// Entrée au niveau effectif courant (montée OU baisse).
+  levelSince        DateTime?
+  /// Cool-down de 30 jours (RG-08) : `userLowId` ne peut plus demander avant.
+  cooldownLowUntil  DateTime?
+  cooldownHighUntil DateTime?
+  /// "request" | "backfill-friend" | "auto-acquaintance"
+  origin            String
+  transitions       RelationTransition[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([userLowId, userHighId])
+  @@index([userHighId])
+}
+
+/// L'AGRÉGAT DES INTERACTIONS D'UNE PAIRE, par jour UTC (#13932, cercles de proximité).
+///
+/// Une ligne par paire NON orientée (`relationPairKey`) et par jour : `byLow<Nature>`
+/// compte ce que `userLowId` a fait ENVERS `userHighId` ce jour-là, `byHigh<Nature>`
+/// l'inverse. Neuf natures (RG-04) : message, réaction (like compris), vue de post,
+/// commentaire, partage, réponse à une story ou un mood, mention, appel, message
+/// audio. Un message audio ne compte qu'en `Audio` (jamais en plus en `Message`).
+///
+/// Ce que ce modèle remplace : la `PairInteractionWeek` Json de la spec — Prisma
+/// n'incrémente pas dans un Json, et la fenêtre de la Connaissance automatique (D-1)
+/// est une semaine GLISSANTE que la clé ISO ne calcule pas. La semaine ISO UTC se
+/// déduit par somme de jours.
+///
+/// Seul le FAIT d'une interaction est compté : aucun contenu, jamais (E2EE).
+///
+/// Expiration : `expiresAt` porte un index TTL (`expireAfterSeconds: 0`) posé par
+/// `migrations/2026-10-31-pair-interaction-day-indexes.mongodb.js`, hors `db push`.
+/// Conservation 120 jours : douze semaines entières (84 j) plus la marge de deux
+/// semaines partielles et de la semaine courante.
+model PairInteractionDay {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userLowId          String   @db.ObjectId
+  userHighId         String   @db.ObjectId
+  /// Minuit UTC du jour compté.
+  day                DateTime
+  byLowMessage       Int      @default(0)
+  byLowReaction      Int      @default(0)
+  byLowPostView      Int      @default(0)
+  byLowComment       Int      @default(0)
+  byLowShare         Int      @default(0)
+  byLowStoryReply    Int      @default(0)
+  byLowMention       Int      @default(0)
+  byLowCall          Int      @default(0)
+  byLowAudio         Int      @default(0)
+  byHighMessage      Int      @default(0)
+  byHighReaction     Int      @default(0)
+  byHighPostView     Int      @default(0)
+  byHighComment      Int      @default(0)
+  byHighShare        Int      @default(0)
+  byHighStoryReply   Int      @default(0)
+  byHighMention      Int      @default(0)
+  byHighCall         Int      @default(0)
+  byHighAudio        Int      @default(0)
+  expiresAt          DateTime
+
+  @@unique([userLowId, userHighId, day])
+  @@index([day])
+}
+
+/// Les CONSENTEMENTS d'une personne envers UNE AUTRE, écrits au rituel du Sang
+/// (#13933, cercles de proximité, RG-09). Une ligne par couple ORIENTÉ (`ownerId`
+/// règle, `otherId` en bénéficie) : la loi d'accès dit le PLAFOND de ce que le niveau
+/// ouvre, cette ligne dit si la personne l'ACTIVE — les deux sont requis, jamais
+/// l'un sans l'autre. Tout est FAUX par défaut (fail-closed) ; un refus du rituel
+/// est un `false` explicite, il ne bloque pas le Sang.
+///
+/// Les partages que le rituel présente : titre d'écoute, position en direct,
+/// historique de position, alerte de proximité. Les réglages des autres lots du
+/// chantier (talkie, blocage du Bring, fantôme) s'y ajouteront avec leur lot.
+/// Index unique posé par `migrations/2026-10-31-relation-feature-setting-indexes.mongodb.js`.
+model RelationFeatureSetting {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId               String   @db.ObjectId
+  otherId               String   @db.ObjectId
+  listeningTitleShared  Boolean  @default(false)
+  locationShared        Boolean  @default(false)
+  locationHistoryShared Boolean  @default(false)
+  proximityShared       Boolean  @default(false)
+  consentedAt           DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([ownerId, otherId])
+}
+
+/// RÉSERVÉ — le lien parent/tuteur vérifié du niveau ATOME (hors MVP, #13926).
+/// Aucune route ne l'écrit ni ne le lit au MVP : le modèle est prêt, rien de plus.
+model AtomLink {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  atomId     String    @db.ObjectId
+  electronId String    @db.ObjectId
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([atomId, electronId])
 }
 
 /// DEPRECATED: Use UserPreferences.notification JSON instead
@@ -2089,6 +2245,11 @@ model Notification {
   @@index([createdAt])
   @@index([type])
   @@index([userId, isRead, createdAt(sort: Desc)]) // Optimisation: pagination non-lus par user
+  // Les chemins `context.postId`, `metadata.repostId` et `metadata.originalPostId`
+  // (retrait des notifications d'une publication) sont indexés HORS du schéma —
+  // Prisma ne sait pas déclarer un index sur un chemin de `Json` : migration
+  // `2026-11-01-notification-post-link-indexes.mongodb.js` (#14254). Un
+  // `prisma db push` les retirerait : il est interdit (#9035).
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)
@@ -3970,11 +4131,14 @@ enum PostType {
 /// Visibilité d'un post
 enum PostVisibility {
   PUBLIC    // Visible par tous
-  FRIENDS   // Amis uniquement
+  FRIENDS   // Amis et au-dessus (niveau effectif Ami, Proche, Sang)
   COMMUNITY // Membres de la communauté uniquement
   PRIVATE   // Brouillon / seulement l'auteur
   EXCEPT    // Amis sauf ceux dans visibilityUserIds
   ONLY      // Uniquement les utilisateurs dans visibilityUserIds
+  ACQUAINTANCES // Niveau effectif Connaissance et au-dessus (cercles, #13931)
+  CLOSE     // Niveau effectif Proche et au-dessus
+  BLOOD     // Niveau effectif Sang uniquement ; jamais repartageable (RG-18)
 }
 
 /// Contenu social unifié (posts permanents, stories éphémères, status/moods)
@@ -4055,6 +4219,11 @@ model Post {
   /// le post intermédiaire (repostOf) est lui-même un repost.
   /// null si ce post n'est pas un repost.
   originalRepostOfId String?  @db.ObjectId
+  /// Auteur d'ORIGINE du contenu copié dans ce post — l'instantané d'une source
+  /// éphémère (`repostPost`). Survit au détachement de `repostOfId` par le
+  /// balayage des stories expirées : la garde de blocage le lit (#14247).
+  /// Absent sur les anciennes lignes et sur tout post qui ne copie rien.
+  snapshotAuthorId   String?  @db.ObjectId
   /// true = quote (avec contenu ajouté), false = repost simple
   isQuote    Boolean  @default(false)
 
@@ -4484,6 +4653,11 @@ model PostMedia {
   /// l'auteur qui réclame, et une cascade sur suppression de compte effacerait
   /// la propriété au lieu de la conserver.
   uploaderId   String?  @db.ObjectId
+
+  /// L'identifiant de la lens qui a produit ce média (#11327) — jumeau exact de
+  /// `MessageAttachment.lensSlug` : déclaré à l'envoi, retenu seulement s'il
+  /// nomme une lens publiée installée par l'uploadeur, servi en clair.
+  lensSlug     String?
 
   /// Nombre de fois que CE média précis a été téléchargé : +1 par média
   /// effectivement enregistré. Voir la note sur `Post.downloadCount` — la somme
@@ -6361,7 +6535,7 @@ model CommunityAppearancePack {
 /// Une lens proposée par un partenaire (#11271, MeeshyLens v1) : le document
 /// re-sérialisé par `parseLens`, ses fichiers ré-encodés, et la fenêtre et les
 /// communautés FIXÉES par la modération. Gratuite (prix 0) ; l'identité
-/// partenaire, le crédit et le comptage d'usage attendent #11251 (S26).
+/// partenaire (`PartnerProfile`), le crédit et l'usage (`LensUsageDaily`) : #11327.
 model LensPack {
   id             String    @id @default(auto()) @map("_id") @db.ObjectId
   slug           String    @unique
@@ -6396,6 +6570,53 @@ model LensPack {
   @@index([status, createdAt])
   @@index([submitterId, status])
   @@index([documentSrc])
+}
+
+/// L'IDENTITÉ d'un partenaire qui propose des lens (#11327, S26) : un nom
+/// affichable, un site et un logo, VÉRIFIÉS par BIGBOSS ou ADMIN (décision
+/// #11251). Optionnel : une lens sans profil vérifié se publie, mais ne crédite
+/// personne. Changer son nom ou son logo RETIRE la vérification — une identité
+/// vérifiée ne se remplace pas après coup. Gratuit des deux côtés : aucun
+/// champ de prix ni de paiement.
+model PartnerProfile {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  /// Le compte qui propose les lens (`LensPack.submitterId`).
+  userId      String    @unique @db.ObjectId
+  displayName String
+  /// https seulement (`parsePartnerProfileInput`).
+  website     String?
+  /// `<sha16>.webp|png` — le logo ré-encodé, composé dans le filigrane À CÔTÉ de celui de Meeshy.
+  logoSrc     String?
+  logoSha256  String?
+  logoMime    String?
+  logoBytes   Bytes?
+  logoSize    Int?
+  /// `null` = non vérifié. Posé par BIGBOSS/ADMIN, journalisé avant d'agir.
+  verifiedAt  DateTime?
+  verifiedBy  String?   @db.ObjectId
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([verifiedAt])
+}
+
+/// L'USAGE d'une lens, AGRÉGÉ par lens × jour (UTC) × surface (#11327) : des
+/// compteurs, aucune identité. `devices` compte les comptes distincts du jour
+/// par une empreinte à sel QUOTIDIEN tenu en cache et jamais persisté — passé
+/// le jour, personne, serveur compris, ne relie plus un usage à un compte.
+/// Aucune ligne ne se sert sous `LENS_USAGE_K_ANONYMITY` (20) appareils.
+model LensUsageDaily {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  lensId    String   @db.ObjectId
+  /// `AAAA-MM-JJ`, UTC.
+  day       String
+  /// camera · story · message · call (`LENS_USAGE_SURFACES`).
+  surface   String
+  devices   Int      @default(0)
+  uses      Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([lensId, day, surface])
 }
 
 /// Un fichier d'une lens (#11271) : ré-encodé à la proposition, adressé par son

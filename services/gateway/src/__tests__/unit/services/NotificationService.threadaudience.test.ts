@@ -54,6 +54,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     post: { findFirst: jest.fn(), findUnique: jest.fn() },
     postComment: { findFirst: jest.fn(), findUnique: jest.fn() },
     postMedia: { findFirst: jest.fn() },
+    userRelation: { findUnique: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
     friendRequest: { findMany: jest.fn(), findFirst: jest.fn() },
     communityMember: { findMany: jest.fn(), findFirst: jest.fn() },
     participant: { findMany: jest.fn(), findFirst: jest.fn() },
@@ -90,6 +91,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { aliveAndUnblocked } from '../../helpers/linked-to-everyone';
 
 const AUTHOR_ID = '507f1f77bcf86cd799439001';
 const RECIPIENT_ID = '507f1f77bcf86cd799439002';
@@ -110,7 +112,7 @@ describe('NotificationService — les notifications du fil suivent l’audience 
 
     prisma.userPreferences.findUnique.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ username: 'actor', displayName: 'Actor', avatar: null });
-    prisma.user.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockImplementation(aliveAndUnblocked());
     prisma.notification.create.mockResolvedValue({
       id: 'notif-1', type: 'comment_reply', isRead: false, createdAt: new Date(),
     });

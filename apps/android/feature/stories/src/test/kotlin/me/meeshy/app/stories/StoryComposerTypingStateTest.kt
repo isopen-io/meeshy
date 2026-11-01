@@ -7,7 +7,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -80,7 +79,7 @@ class StoryComposerTypingStateTest {
                     StoryComposerSceneFirst(
                         state = state,
                         viewModel = vm,
-                        sceneExport = SceneExportHost(SceneCapture(rememberGraphicsLayer(), SceneCapturePass.NONE), emptyList(), false) {},
+                        sceneExport = SceneExportHost(emptyList(), false) {},
                         doors = StoryComposerDoors(onClose = {}, onOpenAudience = {}, onOpenStickers = {}, onPickMedia = {}, onOpenSoundShelf = {}),
                         morePanel = morePanel(),
                         onMorePanel = onMorePanel,
@@ -151,7 +150,7 @@ class StoryComposerTypingStateTest {
     @Test
     fun `a choice applies to the text being written, and OK ends the writing without removing it`() {
         val vm = viewModel()
-        vm.onAddTextElement()
+        vm.addWrittenText("Bonjour")
         show(vm)
 
         compose.onNodeWithContentDescription("Color").performClick()

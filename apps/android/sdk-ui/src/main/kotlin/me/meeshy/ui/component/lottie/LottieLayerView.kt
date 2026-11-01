@@ -16,6 +16,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -33,6 +35,13 @@ import me.meeshy.ui.accessibility.LocalReduceMotion
 public object LottieBudgets {
     public val shared: LottieLiveBudget = LottieLiveBudget(LottieLiveBudget.MAX_LIVE_LAYERS)
 }
+
+/**
+ * Ce que fait la couche, exposé aux témoins seulement (#13952) : une clé propre, qu'aucun lecteur d'écran ne lit —
+ * la couche reste muette pour TalkBack.
+ */
+public val LottiePlaybackModeKey: SemanticsPropertyKey<LottiePlaybackMode> = SemanticsPropertyKey("LottiePlaybackMode")
+private var SemanticsPropertyReceiver.lottiePlaybackMode by LottiePlaybackModeKey
 
 /** La source des films de pack, fournie par l'app ; absente ⇒ les couches s'effacent (couture inerte). */
 public val LocalLottieLayerSource = compositionLocalOf<LottieLayerSource?> { null }
@@ -76,7 +85,7 @@ public fun LottieLayerView(
         progress = { if (still) 0f else state.progress },
         modifier = modifier
             .onGloballyPositioned { onScreen = it.isAttached && it.boundsInWindow().overlaps(it.findRootCoordinates().boundsInWindow()) }
-            .clearAndSetSemantics { },
+            .clearAndSetSemantics { lottiePlaybackMode = mode },
         contentScale = contentScale,
     )
 }

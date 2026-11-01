@@ -41,6 +41,24 @@ public nonisolated enum StoryVideoAdjustmentsProcessor {
         return peints
     }
 
+    /// **Le look de la retouche que cette vidéo POSÉE peint** (#13840), `nil`
+    /// sans look, pour un fond (sa couche a son propre chemin) ou sans peintre.
+    public static func paintedLook(for media: StoryMediaObject) -> StoryMediaLook? {
+        guard media.kind == .video, !media.isBackground else { return nil }
+        return StoryMediaLookPainterRegistry.paintable(media.look)
+    }
+
+    /// Cette vidéo demande-t-elle une composition — un look ou des réglages ?
+    public static func paints(_ media: StoryMediaObject) -> Bool {
+        paintedLook(for: media) != nil || paintedAdjustments(for: media) != nil
+    }
+
+    /// La signature de ce que la composition peint — vide quand elle ne peint rien.
+    public static func signature(look: StoryMediaLook?, adjustments: ImageAdjustments?) -> String {
+        guard look != nil || adjustments != nil else { return "" }
+        return (look?.signature ?? "-") + "#" + (adjustments.map(StoryMediaAdjustmentsProcessor.signature) ?? "-")
+    }
+
     /// Une trame réglée — CIImage → CIImage, pure, dans le cadre de la source.
     public static func frame(_ source: CIImage, _ adjustments: ImageAdjustments) -> CIImage {
         paint(source, adjustments.served(for: .video))
@@ -58,25 +76,46 @@ public nonisolated enum StoryVideoAdjustmentsProcessor {
     /// `asset` — celle que la lecture pose sur son `AVPlayerItem`.
     public static func composition(for asset: AVAsset,
                                    adjustments: ImageAdjustments) async throws -> AVVideoComposition {
-        let peints = adjustments.served(for: .video)
+        try await composition(for: asset, adjustments: adjustments, look: nil)
+    }
+
+    /// La composition qui peint le look de la retouche (#13840) PUIS les
+    /// réglages — l'ordre de la publication, qui cuit le look dans les octets.
+    public static func composition(for asset: AVAsset, adjustments: ImageAdjustments?,
+                                   look: StoryMediaLook?) async throws -> AVVideoComposition {
+        let peints = adjustments?.served(for: .video) ?? .neutral
         return try await AVVideoComposition.videoComposition(with: asset, applyingCIFiltersWithHandler: { request in
-            request.finish(with: Self.paint(request.sourceImage, peints), context: Self.context)
+            let regardee = StoryMediaLookPainterRegistry.painted(request.sourceImage, look: look, still: false)
+            request.finish(with: Self.paint(regardee, peints), context: Self.context)
         })
     }
 
     /// Une trame DÉCODÉE (export), réglée par la même chaîne ; la trame telle
     /// quelle si cette vidéo ne peint rien.
     public static func apply(_ media: StoryMediaObject, to image: CGImage) -> CGImage {
-        guard let reglages = paintedAdjustments(for: media) else { return image }
+        apply(look: paintedLook(for: media), adjustments: paintedAdjustments(for: media), to: image)
+    }
+
+    /// La même chaîne sur un look et des réglages DÉJÀ résolus — ceux d'une
+    /// vidéo posée, ou ceux qu'un fond vidéo pose sur son player (#14180).
+    public static func apply(look: StoryMediaLook?, adjustments: ImageAdjustments?, to image: CGImage) -> CGImage {
+        guard look != nil || adjustments != nil else { return image }
         let source = CIImage(cgImage: image)
-        return context.createCGImage(frame(source, reglages), from: source.extent) ?? image
+        let regardee = StoryMediaLookPainterRegistry.painted(source, look: look, still: false)
+        let peinte = adjustments.map { frame(regardee, $0) } ?? regardee
+        return context.createCGImage(peinte, from: source.extent) ?? image
     }
 
     /// L'affiche d'une vidéo (vignette composite, `StorySlideRenderer`) réglée
     /// comme ses trames ; l'affiche telle quelle si la vidéo ne peint rien.
     public static func poster(_ image: UIImage, for media: StoryMediaObject) -> UIImage {
-        guard let reglages = paintedAdjustments(for: media) else { return image }
-        return StoryMediaAdjustmentsProcessor.apply(reglages, to: image,
-                                                    imageId: "\(media.id)-poster-\(ObjectIdentifier(image).hashValue)")
+        let reglages = paintedAdjustments(for: media)
+        guard let regard = paintedLook(for: media) else {
+            guard let reglages else { return image }
+            return StoryMediaAdjustmentsProcessor.apply(reglages, to: image,
+                                                        imageId: "\(media.id)-poster-\(ObjectIdentifier(image).hashValue)")
+        }
+        return StoryLookBake.image(image, filter: nil, intensity: 1, adjustments: reglages,
+                                   imageId: "\(media.id)-poster", look: regard)
     }
 }

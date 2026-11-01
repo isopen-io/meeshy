@@ -100,50 +100,24 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
 
     // MARK: - Les deux rangées
 
-    func test_sideRow_enStory_porteLesQuatreOutilsDeplaces() {
-        let gauche = ComposerSceneFloatingRail.sideRow(from: ComposerRailDoor.canonicalRail,
-                                                       format: .story)
-        for porte in outilsMobiles {
-            XCTAssertTrue(gauche.contains(porte), "\(porte.rawValue) manque au rail gauche en Story")
+    /// **Le témoin INVERSE des deux rangées** (#13839, #14050) : les outils
+    /// qui changeaient de côté selon le format ont UN chemin, quel que soit le
+    /// format — le lieu et la mention en entrées directes du rail, le hashtag
+    /// dans ⋯.
+    func test_lesOutilsMobiles_ontUnSeulChemin_surChaqueFormat() {
+        for format in [ComposerFormat.story, .post, .reel] {
+            let portes = ComposerRailDoor.offered(served: Set(ComposerRailDoor.canonicalRail),
+                                                  format: format, allowsCapture: true)
+            let plus = ComposerMoreMenuPolicy.entries(.init(addsSlides: true, backgroundMedia: nil,
+                                                            offeredDoors: portes, overflow: []))
+                .compactMap(\.door)
+            let colonne = ComposerRestChrome.tools(offered: portes).compactMap(\.door)
+            for porte in outilsMobiles where portes.contains(porte) {
+                let surLeRail = porte != .hashtag
+                XCTAssertEqual(colonne.contains(porte), surLeRail, "\(format) : \(porte.rawValue)")
+                XCTAssertEqual(plus.contains(porte), !surLeRail, "\(format) : \(porte.rawValue) a un seul chemin")
+            }
         }
-    }
-
-    func test_lowRow_enPost_porteLesTroisOutilsDeplaces() {
-        let bas = ComposerSceneFloatingRail.lowRow(from: ComposerRailDoor.canonicalRail,
-                                                   format: .post)
-        for porte in outilsMobiles {
-            XCTAssertTrue(bas.contains(porte), "\(porte.rawValue) manque à la rangée du bas en Post")
-        }
-    }
-
-    /// La partition tient sur CHAQUE format — c'est la propriété qui empêche
-    /// qu'une porte se perde entre deux rangées ou s'y montre deux fois.
-    ///
-    /// **TROIS places depuis #8370** : la porte du corps du post a quitté la
-    /// rangée basse pour le SOCLE (directive porteur 2026-09-27). La partition
-    /// se compte donc sur le côté, le bas ET le socle — sans quoi elle
-    /// s'y perdrait sans que rien ne le dise.
-    func test_lesTroisPlacesFormentUnePartition_surChaqueFormat() {
-        for format in ComposerFormat.allComposable {
-            let toutes = ComposerRailDoor.canonicalRail
-            let gauche = ComposerSceneFloatingRail.sideRow(from: toutes, format: format)
-            let bas = ComposerSceneFloatingRail.lowRow(from: toutes, format: format)
-            let socle = toutes.filter { $0 == ComposerSceneFloatingRail.socleDoor
-                                        && !gauche.contains($0) }
-            XCTAssertEqual(gauche.count + bas.count + socle.count, toutes.count, "\(format)")
-            XCTAssertTrue(Set(gauche).isDisjoint(with: Set(bas)), "\(format)")
-            XCTAssertFalse(bas.contains(ComposerSceneFloatingRail.socleDoor),
-                           "\(format) : le corps du post ne se peint pas deux fois")
-            XCTAssertEqual(Set(gauche).union(bas).union(socle), Set(toutes), "\(format)")
-        }
-    }
-
-    /// **La bascule doit se VOIR** : les deux rangées d'une Story et celles d'un
-    /// Post ne peuvent pas être identiques, sinon la règle ne fait rien.
-    func test_laGeographieDunePostEtDuneStorySontDifferentes() {
-        let toutes = ComposerRailDoor.canonicalRail
-        XCTAssertNotEqual(ComposerSceneFloatingRail.sideRow(from: toutes, format: .story),
-                          ComposerSceneFloatingRail.sideRow(from: toutes, format: .post))
     }
 
     // MARK: - Ce que chaque format OFFRE
@@ -205,32 +179,4 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
         }
     }
 
-    // MARK: - #6131 · Le rail flottant défile quand il ne tient pas
-
-    /// **Une pile trop haute n'est pas clippée : elle DESSINE par-dessus les
-    /// bords.**
-    ///
-    /// Mesuré au simulateur le 2026-09-12 : clavier levé, la colonne du meuble
-    /// tombe à ~408 pt quand neuf portes en demandent `9 × 44 + 8 × 10 = 476`.
-    /// La pastille `@` se peignait sur « Public », le `#` passait sous le
-    /// clavier. C'est le même débordement arithmétique que la rangée
-    /// horizontale corrige depuis #4582 — transposé à la verticale.
-    ///
-    /// Le témoin lit la SOURCE parce que le rail n'est pas mesurable sans le
-    /// monter, et qu'il n'y a rien à calculer : ce qui se garde est la présence
-    /// des deux variantes et le fait que le choix entre elles soit une question
-    /// de PLACE (`ViewThatFits`) et non d'état.
-    func test_leRailVertical_defileQuandIlNeTientPas() throws {
-        let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerLeadingRail.swift"))
-        let compacte = code.components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertGreaterThan(code.count, 500, "source du rail vide — la garde ne garde rien")
-        XCTAssertTrue(compacte.contains("ViewThatFits(in:.vertical)"),
-                      "Le rail vertical doit CHOISIR entre tenir et défiler (#6131).")
-        XCTAssertTrue(compacte.contains("ScrollView(.vertical,showsIndicators:false)"),
-                      "… et la seconde variante doit être un vrai défilement.")
-        XCTAssertTrue(compacte.contains("axis==.vertical&&!pushesToThumb"),
-                      "Le rail à RESSORT en est exclu : son `Spacer` flexible tient toujours, "
-                        + "donc `ViewThatFits` y choisirait éternellement la première variante.")
-    }
 }

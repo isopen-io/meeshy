@@ -61,7 +61,16 @@ class StorySceneFillTest {
 
         assertThat(StorySceneFill.authorAccentHex(named)).isEqualTo(DynamicColorGenerator.colorForName("Demo User"))
         assertThat(StorySceneFill.authorAccentHex(unnamed)).isEqualTo(DynamicColorGenerator.colorForName("demo"))
-        assertThat(StorySceneFill.authorAccentHex(null)).isEqualTo(DynamicColorGenerator.colorForName(""))
+    }
+
+    @Test
+    fun `an author whose identity is not known yet has no colour, and the scene waits on black`() {
+        val nameless = MeeshyUser(id = "me", username = " ", displayName = null)
+
+        assertThat(StorySceneFill.authorAccentHex(null)).isNull()
+        assertThat(StorySceneFill.authorAccentHex(nameless)).isNull()
+        assertThat(StorySceneFill.resolve(null, null)).isEqualTo(StorySceneFill.Black)
+        assertThat(StorySceneFill.resolve(StoryBackgroundValue.Hex("FF3B30"), null)).isEqualTo(StorySceneFill.Solid("FF3B30"))
     }
 
     private companion object {

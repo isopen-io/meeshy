@@ -20,6 +20,7 @@ import me.meeshy.sdk.net.api.createSession
 import me.meeshy.sdk.net.api.patchChunk
 import me.meeshy.sdk.net.api.probeSession
 import me.meeshy.sdk.net.apiCall
+import kotlinx.coroutines.delay
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -58,6 +59,7 @@ public class TusUploadRepository @Inject constructor(
     private val checkpoints: TusUploadCheckpointDao,
     private val sanitizer: OutgoingMediaSanitizer,
     private val config: MeeshyConfig,
+    private val seeder: UploadedMediaSeeder = UploadedMediaSeeder.None,
 ) {
     /**
      * Uploads one [item] tagged with [context]. See [TusUploadRepository].
@@ -77,11 +79,37 @@ public class TusUploadRepository @Inject constructor(
             is NetworkResult.Success -> result.data
         }
         return try {
-            send(outgoing, context, chunkSizeBytes, onProgress)
+            sendResuming(outgoing, context, chunkSizeBytes, onProgress).also { result ->
+                if (result is NetworkResult.Success) result.data.forEach { seeder.seed(outgoing, it) }
+            }
         } finally {
             sanitizer.release(outgoing, item)
         }
     }
+
+    /**
+     * Un envoi interrompu reprend SEUL (#13959) : sur un échec de transport (réseau coupé, délai dépassé, `5xx`, décalage
+     * contesté `409`, session verrouillée `423`), au plus [MAX_RESUMES] fois, après une courte pause croissante. Chaque
+     * reprise repasse par [resolveSession], donc par un `HEAD` : elle repart du décalage que la passerelle a RÉELLEMENT
+     * reçu, sur la même session, jamais de l'octet zéro. Un refus (`4xx`, média refusé) n'est jamais rejoué.
+     */
+    private suspend fun sendResuming(
+        outgoing: MediaUploadItem,
+        context: TusUploadContext,
+        chunkSizeBytes: Long,
+        onProgress: (sent: Long, total: Long) -> Unit,
+    ): NetworkResult<List<UploadedMedia>> {
+        var resumes = 0
+        while (true) {
+            val result = send(outgoing, context, chunkSizeBytes, onProgress)
+            if (result !is NetworkResult.Failure || !isResumable(result.error) || resumes >= MAX_RESUMES) return result
+            resumes++
+            delay(RESUME_PAUSE_MILLIS * resumes)
+        }
+    }
+
+    private fun isResumable(error: ApiError): Boolean =
+        error.code == NETWORK_CODE || error.httpStatus?.let { it >= SERVER_ERROR || it in RESUMABLE_STATUSES } == true
 
     private suspend fun send(
         outgoing: MediaUploadItem,
@@ -118,6 +146,7 @@ public class TusUploadRepository @Inject constructor(
                 }
                 if (!isOurs(location)) return NetworkResult.Failure(foreignSessionError())
                 resumeOffset = 0L
+                checkpoint(checkpointKey, location, uploadedBytes = 0L, totalBytes = totalBytes)
             }
         }
 
@@ -133,15 +162,7 @@ public class TusUploadRepository @Inject constructor(
                     body = outgoing.rangeBody(range.offset, range.length, OCTET_STREAM_MEDIA_TYPE),
                 )
                 if (chunkResult is NetworkResult.Failure) return chunkResult
-                checkpoints.upsert(
-                    TusUploadCheckpointEntity(
-                        checkpointKey = checkpointKey,
-                        location = location,
-                        uploadedBytes = range.offset + range.length,
-                        totalBytes = totalBytes,
-                        updatedAt = System.currentTimeMillis(),
-                    ),
-                )
+                checkpoint(checkpointKey, location, uploadedBytes = range.offset + range.length, totalBytes = totalBytes)
                 onProgress(range.offset + range.length, totalBytes)
                 continue
             }
@@ -164,6 +185,21 @@ public class TusUploadRepository @Inject constructor(
         // TusResumePlanner never resumes at an offset that has already reached totalBytes.
         error("TusChunkPlan produced no ranges for $totalBytes bytes at resumeOffset=$resumeOffset")
     }
+
+    /**
+     * The session and what it has confirmed. Written from its creation on (#13959), so that even a single-chunk upload cut
+     * mid-body is resumed from the gateway's own offset ([resolveSession]) instead of opening a second session.
+     */
+    private suspend fun checkpoint(key: String, location: String, uploadedBytes: Long, totalBytes: Long) =
+        checkpoints.upsert(
+            TusUploadCheckpointEntity(
+                checkpointKey = key,
+                location = location,
+                uploadedBytes = uploadedBytes,
+                totalBytes = totalBytes,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
 
     /**
      * Whether to resume a stored session or open a new one (#13429). A stored session is never trusted
@@ -216,6 +252,18 @@ public class TusUploadRepository @Inject constructor(
         return NetworkResult.Success(uploaded)
     }
 
+    /**
+     * Uploads every item in [items] on its own (#13959): one outcome per item, in order, and a failed item never stops nor
+     * discards the others — a video already received by the gateway is not thrown away because the photo picked with it
+     * failed. Sequential, so the items share the link rather than fight for it.
+     */
+    public suspend fun uploadEach(
+        items: List<MediaUploadItem>,
+        context: TusUploadContext,
+        onProgress: (index: Int, sent: Long, total: Long) -> Unit = { _, _, _ -> },
+    ): List<NetworkResult<List<UploadedMedia>>> =
+        items.mapIndexed { index, item -> upload(item, context) { sent, total -> onProgress(index, sent, total) } }
+
     public companion object {
         /**
          * Default PATCH chunk size — matches iOS `TusUploadManager.chunkSize` (10 MB)
@@ -224,6 +272,14 @@ public class TusUploadRepository @Inject constructor(
          * parameter from any caller/module.
          */
         public const val DEFAULT_CHUNK_SIZE_BYTES: Long = 10L * 1024 * 1024
+
+        /** How many times an interrupted upload resumes on its own before its failure is said (#13959). */
+        public const val MAX_RESUMES: Int = 3
+
+        private const val RESUME_PAUSE_MILLIS = 1_500L
+        private const val NETWORK_CODE = "NETWORK"
+        private const val SERVER_ERROR = 500
+        private val RESUMABLE_STATUSES = setOf(408, 409, 423)
 
         private const val FOREIGN_SESSION_CODE = "TUS_FOREIGN_SESSION"
 

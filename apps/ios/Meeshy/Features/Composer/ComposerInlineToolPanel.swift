@@ -2,57 +2,58 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **Les options du sous-outil ouvert, À DROITE, depuis le haut** (#9138,
-/// directive porteur 2026-10-02 : « les options des outils qui s'ouvrent à
-/// droite partant du haut »).
+/// **Les propriétés du sous-outil ouvert, EN BAS** (#13957, #13974, spec R6).
 ///
-/// Une plaque de verre teintée du plateau, posée à gauche de la colonne des
-/// sous-outils et alignée sur son haut. Elle prend la largeur que la colonne
-/// gauche, vide pendant l'édition, libère, et la hauteur que son contenu
-/// demande jusqu'à toute la hauteur libre — au-delà, elle défile. La règle de
-/// place vit dans `ComposerInlinePanelLayout` ; cette vue la lit.
-///
-/// **Le panneau ne couvre jamais l'objet qu'il règle** (#9495, #9143) : il
-/// descend au bas quand le haut le cacherait, et se réduit quand les deux le
-/// cacheraient — on juge une police sur son texte comme un filtre sur son
-/// image. La surface remet le cadre de la carte (`composerSceneCardFrame`) ; la
-/// règle choisit le côté et la hauteur.
+/// Une feuille basse de verre teintée du plateau, posée dans les étages du bas
+/// de la scène : la scène se réduit au-dessus d'elle, rien ne la recouvre. Elle
+/// épouse son contenu jusqu'à 42 % de la fenêtre et défile au-delà
+/// (`ComposerPropertiesSheetLayout`). Son en-tête dit le réglage ouvert, et OK
+/// referme le niveau. Elle remplace le panneau qui s'ouvrait en haut à droite
+/// (#9138) : une option d'édition n'a plus que trois places, et le haut de
+/// l'écran n'en est pas une.
 ///
 /// Le CONTENU de chaque sous-outil est celui que l'éditeur d'objet monte déjà —
 /// `TextEditToolOptions` du SDK, `ComposerObjectTimingControls`,
 /// `ComposerObjectPlanControls`, `ComposerMediaFilterGrid`, `ComposerMediaAdjustPanel`,
 /// `ComposerMediaTrimBand`, `ComposerMediaActionRow`, `MediaAltTextField` :
-/// aucune copie, donc aucune divergence au premier réglage.
+/// aucune copie, donc aucune divergence au premier réglage. Chaque réglage
+/// s'écrit sur la slide au fil du geste : il se voit en temps réel sur la scène.
 struct ComposerInlineToolPanel: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let edit: ComposerInlineEdit
-    let section: ComposerObjectEditorSection
+    /// `nil` ⇒ la feuille ne montre que son en-tête : aucune puce ouverte.
+    let section: ComposerObjectEditorSection?
     let plateauTint: Color
     /// La description d'un média vit au MEUBLE (#4756) ; `nil` ⇒ aucun champ
     /// qui n'écrirait nulle part (loi 4).
     var altText: Binding<String>?
+    /// Le nom du réglage et OK, qui referme le niveau.
+    var header: ComposerPropertiesHeader?
     /// Le plan 2D désigne un autre objet : l'édition en place le reprend.
     var onSelectObject: (String) -> Void = { _ in }
     /// L'appui maintenu sur « Comparer » des réglages (#9175) : le meuble
     /// montre l'original de l'image dans la scène tant qu'il dure.
     var onCompareLook: ((Bool) -> Void)?
 
-    @Environment(\.composerSceneCardFrame) private var sceneCard
     @State private var planHoldsGesture = false
 
     var body: some View {
-        ComposerTrailingOptionsPlate(plateauTint: plateauTint,
-                                     holdsGesture: planHoldsGesture,
-                                     objectFrame: { objectFrame(container: $0) }) {
-            content
+        ComposerPropertiesSheetPlate(plateauTint: plateauTint, holdsGesture: planHoldsGesture) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                if let header { header }
+                content
+            }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(ComposerObjectEditorCopy.entry(section)))
+        .accessibilityLabel(Text(section.map(ComposerObjectEditorCopy.entry) ?? ComposerSelectionCopy.bar))
+        .accessibilityIdentifier("composer.properties.sheet")
     }
 
     @ViewBuilder
     private var content: some View {
         switch section {
+        case nil:
+            EmptyView()
         case .tool(let outil):
             if let binding = viewModel.textObjectBinding(for: edit.objectId) {
                 TextEditToolOptions(tool: outil, textObject: binding, layout: .column)
@@ -64,6 +65,8 @@ struct ComposerInlineToolPanel: View {
                                        objectId: edit.objectId,
                                        onSelectObject: onSelectObject,
                                        holdsGesture: $planHoldsGesture)
+        case .media(.look):
+            ComposerMediaLookPanel(viewModel: viewModel, mediaId: edit.objectId)
         case .media(.filter):
             if let media {
                 ComposerMediaFilterGrid(viewModel: viewModel, media: media,
@@ -104,17 +107,39 @@ struct ComposerInlineToolPanel: View {
     private var media: StoryMediaObject? {
         viewModel.currentEffects.mediaObjects?.first { $0.id == edit.objectId }
     }
+}
 
-    /// **Le cadre de l'objet réglé, que le panneau laisse voir** (#9495,
-    /// #9143) — pour TOUT sous-outil de TOUT objet posé : la police d'un texte
-    /// se juge sur le texte comme un filtre sur l'image. Il vient de la
-    /// géométrie même du calque qui le peint, ramenée dans le repère du
-    /// panneau ; un fond couvre la carte entière, il n'a rien à éviter.
-    private func objectFrame(container: CGRect) -> CGRect? {
-        guard !edit.family.isBackground, !sceneCard.isNull, sceneCard.width > 0,
-              let objet = viewModel.currentSlide.sceneObject(id: edit.objectId) else { return nil }
-        return ComposerInlinePanelLayout.sceneFrame(of: objet, card: sceneCard, container: container,
-                                                    typing: viewModel.textEditingMode.activeTextId == edit.objectId)
+/// **La plaque des propriétés, en bas** — pleine largeur de la colonne de la
+/// scène, à la marge des rails ; son contenu jusqu'au plafond de
+/// `ComposerPropertiesSheetLayout`, puis il défile.
+struct ComposerPropertiesSheetPlate<Content: View>: View {
+    let plateauTint: Color
+    var holdsGesture: Bool = false
+    @ViewBuilder let content: () -> Content
+
+    @State private var contentHeight: CGFloat = 0
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(ComposerInlinePanelLayout.contentPadding)
+                .background {
+                    GeometryReader { mesure in
+                        Color.clear.preference(key: ComposerInlinePanelHeightKey.self, value: mesure.size.height)
+                    }
+                }
+        }
+        .scrollDisabled(holdsGesture)
+        // Un toucher dans la feuille ne termine pas la saisie en ligne (#9146).
+        .scrollDismissesKeyboard(.never)
+        .frame(height: ComposerPropertiesSheetLayout.height(
+            content: contentHeight, windowHeight: WindowMetrics.activeWindowFrameInScreen?.height ?? 0))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
+                       tint: plateauTint.opacity(0.55))
+        .padding(.horizontal, ComposerRailGeometry.outerMargin)
+        .padding(.bottom, MeeshySpacing.xsPlus)
+        .onPreferenceChange(ComposerInlinePanelHeightKey.self) { contentHeight = $0 }
     }
 }
 
@@ -127,6 +152,8 @@ struct ComposerInlineToolPanel: View {
 /// toute la hauteur.
 struct ComposerTrailingOptionsPlate<Content: View>: View {
     let plateauTint: Color
+    /// Le côté pris quand aucun objet n'est à laisser voir.
+    var preferredEdge: ComposerInlinePanelEdge = .top
     var holdsGesture: Bool = false
     /// Le cadre, dans le repère de la plaque, de ce qu'elle ne doit pas couvrir.
     var objectFrame: @MainActor (CGRect) -> CGRect? = { _ in nil }
@@ -143,7 +170,8 @@ struct ComposerTrailingOptionsPlate<Content: View>: View {
             let place = ComposerInlinePanelLayout.placement(object: objectFrame(geo.frame(in: .global)),
                                                             free: geo.size,
                                                             panelHeight: contentHeight,
-                                                            roomy: roomy)
+                                                            roomy: roomy,
+                                                            preferredEdge: preferredEdge)
             let cote = place.edge
             ScrollView(.vertical, showsIndicators: false) {
                 content()

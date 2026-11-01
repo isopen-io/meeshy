@@ -58,7 +58,7 @@ struct ConversationView: View {
 
     /// Écrivain UNIQUE de l'override : pair (#9359) et régime de chiffrement (#12522) repeints sur la conversation
     /// AFFICHÉE (une annonce qui ne change rien n'écrit rien), accent relayé (#10631), réglages enregistrés.
-    func admitRepainted(_ repainted: Conversation?) { guard let repainted else { return }; conversationOverride = repainted; repaintRevision &+= 1 }
+    func admitRepainted(_ repainted: Conversation?) { guard let repainted else { return }; conversationOverride = repainted; repaintRevision &+= 1; ConversationMentionScope.rescope(viewModel, to: repainted, anonymousSession: anonymousSession) }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access (+MessageRow, +Header, …).
     @Environment(\.sceneWindowSize) var sceneWindowSize // la fenêtre qui porte la conversation (Stage Manager)
@@ -295,7 +295,7 @@ struct ConversationView: View {
             closedAt: conversation?.closedAt,
             anonymousSession: anonymousSession
         )
-        _viewModel = StateObject(wrappedValue: vm)
+        _viewModel = StateObject(wrappedValue: ConversationMentionScope.applying(conversation, anonymousSession: anonymousSession, to: vm))
 
         // WS-7 (F-086, A6) — décision de l'orchestrateur, ICI, UNE SEULE
         // FOIS. `identity`/`capabilities`/`isFlagEnabled` sont les mêmes

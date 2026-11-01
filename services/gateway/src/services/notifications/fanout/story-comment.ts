@@ -6,15 +6,15 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger } from '../../../utils/logger-enhanced';
-import { getCommunityCoMemberIds } from '../../posts/communityVisibility';
 import { filterPostConsumers } from '../../posts/postAudience';
 import { truncateMessage } from '../notification-preview';
 import { FANOUT_ROW_CAP } from './row-cap';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import type { FanoutDependencies } from './dependencies';
+import { livingAmong, mentionReceivers, resolveEntourage, thirdPartyEntourage, type Entourage } from './entourage';
 
 /** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
-export type FanoutBucket = 'previousComments' | 'friendRequests' | 'reactors';
+export type FanoutBucket = 'previousComments' | 'entourage' | 'reactors';
 
 /**
  * Les trois seaux d'un fan-out de commentaire, et ce qu'on n'a PAS pu lire.
@@ -38,8 +38,9 @@ export type StoryNotificationRecipients = {
  *   1. storyAuthorId  → STORY_NEW_COMMENT
  *   2. previousCommenterIds (prior commenters on this post, excl. commenter & author)
  *                     → STORY_THREAD_REPLY
- *   3. friendIds (friends of the author, excl. commenter, author, and prior commenters)
- *                     → FRIEND_STORY_COMMENT
+ *   3. friendIds (the ENTOURAGE of the author and of the commenter, each at the
+ *      level its owner chose — `commentEntourage`, #13929 — excl. commenter,
+ *      author, and prior commenters) → FRIEND_STORY_COMMENT
  */
 export async function getStoryNotificationRecipients(
   prisma: PrismaClient,
@@ -57,7 +58,7 @@ export async function getStoryNotificationRecipients(
   // des destinataires réels du seau, en silence.
   const excludedEngagerIds = Array.from(new Set([commenterId, authorId]));
 
-  const [previousComments, friendRequests, reactors] = await Promise.all([
+  const [previousComments, entourage, reactors] = await Promise.all([
     prisma.postComment.findMany({
       where: {
         postId,
@@ -69,15 +70,7 @@ export async function getStoryNotificationRecipients(
       take: FANOUT_ROW_CAP + 1,
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.friendRequest.findMany({
-      where: {
-        status: 'accepted',
-        OR: [{ senderId: authorId }, { receiverId: authorId }],
-      },
-      select: { senderId: true, receiverId: true },
-      take: FANOUT_ROW_CAP + 1,
-      orderBy: { updatedAt: 'desc' },
-    }),
+    commentEntourage(prisma, authorId, commenterId),
     // Include post reactors as thread-engaged participants (same bucket as prior commenters)
     prisma.postReaction.findMany({
       where: {
@@ -105,7 +98,7 @@ export async function getStoryNotificationRecipients(
   // borne » — et `>=` échouait précisément au point où les deux se touchent.
   const truncatedBuckets = [
     previousComments.length > FANOUT_ROW_CAP ? 'previousComments' as const : null,
-    friendRequests.length > FANOUT_ROW_CAP ? 'friendRequests' as const : null,
+    entourage.truncated ? 'entourage' as const : null,
     reactors.length > FANOUT_ROW_CAP ? 'reactors' as const : null,
   ].filter((bucket): bucket is FanoutBucket => bucket !== null);
 
@@ -144,18 +137,62 @@ export async function getStoryNotificationRecipients(
 
   const previousCommenterSet = new Set(previousCommenterIds);
 
-  // L'auteur ancre CHAQUE ligne d'amitié — l'écarter par la requête est
-  // impossible ici : sa présence est structurelle, pas budgétaire.
-  const allFriendIds = friendRequests
-    .slice(0, FANOUT_ROW_CAP)
-    .flatMap((fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId])
-    .filter(isNotifiableEngager);
-
-  const friendIds = Array.from(new Set(allFriendIds)).filter(
-    (id: string) => !previousCommenterSet.has(id)
+  const friendIds = entourage.ids.filter(
+    (id: string) => isNotifiableEngager(id) && !previousCommenterSet.has(id)
   );
 
   return { authorId, friendIds, previousCommenterIds, truncatedBuckets };
+}
+
+/**
+ * Les tiers prévenus d'un commentaire (#13929) — deux entourages, chacun réglé
+ * par SON propriétaire :
+ *  - celui de l'AUTEUR du contenu, au cran de « l'activité des autres sur mes
+ *    contenus » (`circleOnMyContentComment`, défaut Proche) ;
+ *  - celui du COMMENTATEUR, au cran de « mon activité ailleurs »
+ *    (`circleElsewhereComment`, défaut Sang) — sauf quand il commente son
+ *    propre contenu, qui n'est pas « ailleurs ».
+ * Le plus restrictif gagne (#14080) : un destinataire passe les DEUX seuils,
+ * chacun mesuré depuis son propriétaire — l'INTERSECTION, dans l'ordre de
+ * l'entourage de l'auteur. « Personne » chez l'un ⇒ aucun relais.
+ */
+async function commentEntourage(
+  prisma: PrismaClient,
+  authorId: string,
+  commenterId: string
+): Promise<Entourage> {
+  return commenterId === authorId
+    ? resolveEntourage(prisma, { ownerId: authorId, key: 'circleOnMyContentComment', excludeUserIds: [commenterId] })
+    : thirdPartyEntourage(prisma, { authorId, actorId: commenterId, onMyContent: 'circleOnMyContentComment', elsewhere: 'circleElsewhereComment' });
+}
+
+type FanoutGates = { readonly blocked: ReadonlySet<string>; readonly alive: ReadonlySet<string> };
+
+/**
+ * Ce qui sort des seaux d'éventail, en DEUX lectures groupées (#13350, #14251) :
+ *  - une personne en relation de blocage avec l'AUTEUR de la story — la garde de
+ *    dernier recours de `createNotification` ne compare le destinataire qu'à
+ *    l'ACTEUR, alors que le nom de l'auteur et l'extrait de son fil voyagent
+ *    dans la charge ;
+ *  - un compte supprimé ou désactivé (`livingAmong`). Un auteur ou un
+ *    commentateur mort ne prévient PERSONNE (`'dead-party'`).
+ * Une lecture qui échoue (`null`) n'envoie rien à ces seaux.
+ */
+async function readFanoutGates(
+  prisma: PrismaClient,
+  params: { readonly postId: string; readonly storyAuthorId: string; readonly commenterId: string; readonly candidates: readonly string[] }
+): Promise<FanoutGates | 'dead-party' | null> {
+  try {
+    const [blocked, alive] = await Promise.all([
+      getBlockedUserIdsAmong(prisma, params.storyAuthorId, [...params.candidates]),
+      livingAmong(prisma, [params.storyAuthorId, params.commenterId, ...params.candidates]),
+    ]);
+    if (!alive.has(params.storyAuthorId) || !alive.has(params.commenterId)) return 'dead-party';
+    return { blocked, alive };
+  } catch (error) {
+    notificationLogger.error('Fan-out de commentaire restreint à l’auteur : blocage ou comptes illisibles', { postId: params.postId, error });
+    return null;
+  }
 }
 
 export type StoryCommentFanoutParams = {
@@ -177,12 +214,17 @@ export type StoryCommentFanoutParams = {
   /** Date d'expiration ISO du contenu commenté (story/status éphémère). */
   postExpiresAt?: string | Date;
   /**
-   * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
-   * Use to pass mentionedUserIds so users who received user_mentioned don't also get
-   * a lower-priority story thread/friend notification.
-   * The story author always gets STORY_NEW_COMMENT regardless of this list.
+   * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment),
+   * unconditionally. The story author always gets STORY_NEW_COMMENT regardless of this list.
    */
   excludeUserIds?: string[];
+  /**
+   * Les personnes que le commentaire NOMME : celles que la mention prévient
+   * réellement (liens du commentateur, ou l'auteur du contenu, #14168) ne
+   * reçoivent que `user_mentioned` ; un nommé sans lien garde son
+   * `story_thread_reply` / `friend_story_comment`.
+   */
+  mentionedUserIds?: readonly string[];
   /**
    * Visibilité du post commenté. Filtre les buckets fan-out (thread + amis)
    * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
@@ -205,7 +247,7 @@ export type StoryCommentFanoutParams = {
  *
  *  - Story author        → STORY_NEW_COMMENT  (priority: normal)
  *  - Previous commenters → STORY_THREAD_REPLY (priority: low)
- *  - Friends of author   → FRIEND_STORY_COMMENT (priority: low)
+ *  - Entourages (author's and commenter's, by their circle settings) → FRIEND_STORY_COMMENT (priority: low)
  *
  * Commenter never receives a notification.
  */
@@ -237,53 +279,33 @@ export async function createStoryCommentNotificationsBatch(
       params.commenterId
     );
 
-  // Filtre de visibilité — miroir de SocialEventsHandler.getVisibilityFilteredRecipients
-  // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
-  // fanout un commentaire (extrait inclus) vers un utilisateur qui ne peut pas le voir.
-  // L'auteur (bucket STORY_NEW_COMMENT) est exempt — il possède le post.
+  // Les entourages disent qui est PRÉVENU ; l'admission de la publication dit
+  // qui a le droit de la VOIR (PRIVATE, ONLY, EXCEPT, COMMUNITY, FRIENDS — la
+  // même table que le fil, #13929). L'auteur (bucket STORY_NEW_COMMENT) en est
+  // exempt — il possède le post.
   const visibility = params.visibility;
-  const visibilityUserIdSet = new Set(params.visibilityUserIds ?? []);
-  const coMemberIds = visibility === 'COMMUNITY'
-    ? new Set(await getCommunityCoMemberIds(deps.prisma, params.storyAuthorId))
-    : null;
-  // Ne s'applique QU'À `friendIds`, une sortie d'ÉNUMÉRATEUR : ces gens SONT
-  // les amis actuels de l'auteur, dépliés de son graphe quelques lignes plus
-  // haut. Leur amitié n'est donc pas à re-vérifier, et seules les listes
-  // nominatives peuvent encore les écarter. Un post COMMUNITY ne passe jamais
-  // ici : il a sa propre branche, adossée au graphe communauté.
-  const canSeeAsFriend = (userId: string): boolean => {
-    switch (visibility) {
-      case 'PRIVATE': return false;
-      case 'ONLY': return visibilityUserIdSet.has(userId);
-      case 'EXCEPT': return !visibilityUserIdSet.has(userId);
-      default: return true; // PUBLIC / FRIENDS — amis par construction
-    }
-  };
-  // Un post COMMUNITY fanout aux co-membres (pas aux amis de l'auteur) — le graphe
-  // amis et le graphe communauté diffèrent ; on cible exactement le même set que le
-  // broadcast temps réel, buckets thread/auteur/commenter restant disjoints.
   const friendAudience = (
-    visibility === 'COMMUNITY'
-      ? [...coMemberIds!].filter(id =>
-          id !== params.storyAuthorId &&
-          id !== params.commenterId &&
-          !previousCommenterIds.includes(id))
-      : friendIds.filter(canSeeAsFriend)
-  );
+    await filterPostConsumers({
+      prisma: deps.prisma,
+      authorId: params.storyAuthorId,
+      visibility,
+      visibilityUserIds: params.visibilityUserIds,
+      candidateUserIds: friendIds,
+    })
+  ).filter((id) => id !== params.storyAuthorId && id !== params.commenterId);
   // `previousCommenterIds` (commentateurs antérieurs ∪ réacteurs) n'est PAS une
   // sortie d'énumérateur : c'est un ensemble arbitraire au regard de l'audience
   // du moment. Ils y étaient admis quand ils ont engagé le post ; une
   // dés-amitié ou une édition de visibilité les en sort sans toucher à leur
-  // commentaire. Il leur faut donc un test d'ADMISSION, pas la table locale
-  // ci-dessus qui rendait `true` sur FRIENDS/EXCEPT sans lire aucun graphe.
+  // commentaire. Il leur faut donc un test d'ADMISSION.
   // Même audience que `canNotifyAboutPost`, qui garde la notification unitaire
   // de cette même population depuis le cycle 30.
   //
   // Sur un post COMMUNITY, les co-membres sont donc résolus une seconde fois
   // (deux requêtes bornées de plus, sur un chemin déjà détaché de la réponse
-  // HTTP). C'est le prix assumé pour ne PAS refiltrer à la main avec le set
-  // ci-dessus : une copie locale de la règle d'admission est exactement ce qui
-  // avait laissé ce seau sans garde.
+  // HTTP). C'est le prix assumé pour ne PAS refiltrer à la main : une copie
+  // locale de la règle d'admission est exactement ce qui avait laissé ce seau
+  // sans garde.
   const engagedAudience = await filterPostConsumers({
     prisma: deps.prisma,
     authorId: params.storyAuthorId,
@@ -292,23 +314,18 @@ export async function createStoryCommentNotificationsBatch(
     candidateUserIds: previousCommenterIds,
   });
 
-  // #13350 — le blocage ne rompt pas l'amitié en base : une personne en
-  // relation de blocage avec l'AUTEUR de la story sort des deux seaux
-  // d'éventail, en une lecture groupée. La garde de dernier recours de
-  // `createNotification` ne compare le destinataire qu'à l'ACTEUR (le
-  // commentateur) ; le nom de l'auteur et l'extrait de son fil voyagent
-  // pourtant dans la charge. Une lecture qui échoue n'envoie rien à ces seaux.
+  // #13350, #14251 — blocage avec l'auteur et comptes morts : `readFanoutGates`.
   const fanoutCandidates = [...new Set([...engagedAudience, ...friendAudience])];
-  let blockedWithAuthor: Set<string> | null;
-  try {
-    blockedWithAuthor = await getBlockedUserIdsAmong(deps.prisma, params.storyAuthorId, fanoutCandidates);
-  } catch (error) {
-    notificationLogger.error('Fan-out de commentaire restreint à l’auteur : blocage illisible', { postId: params.postId, error });
-    blockedWithAuthor = null;
-  }
-  const notBlockedWithAuthor = (id: string): boolean => blockedWithAuthor !== null && !blockedWithAuthor.has(id);
-  const engagedRecipients = engagedAudience.filter(notBlockedWithAuthor);
-  const friendRecipients = friendAudience.filter(notBlockedWithAuthor);
+  const gates = await readFanoutGates(deps.prisma, {
+    postId: params.postId,
+    storyAuthorId: params.storyAuthorId,
+    commenterId: params.commenterId,
+    candidates: fanoutCandidates,
+  });
+  if (gates === 'dead-party') return;
+  const reachable = (id: string): boolean => gates !== null && gates.alive.has(id) && !gates.blocked.has(id);
+  const engagedRecipients = engagedAudience.filter(reachable);
+  const friendRecipients = friendAudience.filter(reachable);
 
   const excerpt = params.commentExcerpt
     ? truncateMessage(params.commentExcerpt)
@@ -353,7 +370,12 @@ export async function createStoryCommentNotificationsBatch(
     avatar: actor.avatar,
   };
 
-  const excludeSet = new Set(params.excludeUserIds ?? []);
+  const mentioned = await mentionReceivers(deps.prisma, {
+    mentionerId: params.commenterId,
+    mentionedUserIds: params.mentionedUserIds ?? [],
+    alreadyAddressedUserIds: [params.storyAuthorId],
+  });
+  const excludeSet = new Set([...(params.excludeUserIds ?? []), ...mentioned]);
   const tasks: Array<Promise<unknown>> = [];
 
   // 1. Story author notification — always sent regardless of excludeUserIds

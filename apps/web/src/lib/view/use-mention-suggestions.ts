@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { mentionLookupStage } from '@meeshy/shared/utils/mention-lookup';
+
 import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 
 import { useMentionContacts } from './mention-contacts';
-import { activeMentionQuery, composeMentionList, filterMentionCandidates, queriesRemote, type MentionQuery } from './mention-query';
+import { activeMentionQuery, composeMentionList, filterMentionCandidates, localMentionMatches, type MentionQuery } from './mention-query';
 import { mentionSourceStore, type MentionSource } from './mention-source';
 
 /** Le débounce de la recherche distante — `MentionComposerController.debounceMs`. */
@@ -15,6 +17,9 @@ export const MENTION_REMOTE_DEBOUNCE_MS = 300;
 const REMOTE_CACHE_LIMIT = 32;
 
 const NO_CANDIDATES: readonly MentionCandidate[] = [];
+
+/** La portée de la conversation, quand la source en porte une (#14071). */
+const reachOf = (source: MentionSource) => (source.reach === undefined ? {} : { reach: source.reach });
 
 export type MentionSuggestions = {
   /** La requête `@` sous le curseur — `null` quand aucune n'est ouverte. */
@@ -54,12 +59,14 @@ const remember = (cache: RemoteCache, key: string, items: readonly MentionCandid
  *    les PARTICIPANTS du contexte répondent IMMÉDIATEMENT, sans réseau ;
  * 2. une lettre ⇒ ces deux groupes se filtrent ET se trient sous le doigt
  *    (`rankMentionCandidates`), toujours sans réseau ;
- * 3. deux lettres ⇒ la passerelle (ou l'annuaire) est interrogée après
- *    300 ms de silence ; une frappe plus récente ANNULE la précédente
+ * 3. la passerelle (ou l'annuaire) n'est interrogée qu'au TROISIÈME
+ *    caractère — dès le DEUXIÈME si les deux lettres ne trouvent personne en
+ *    local (loi partagée `mentionLookupStage`, #14053) —, après 300 ms de
+ *    silence ; une frappe plus récente ANNULE la précédente
  *    (`AbortController`), jamais une réponse périmée ne remplace une liste
  *    plus juste ;
- * 4. la composition garde contacts → participants → autres, sans doublon
- *    (`composeMentionList`).
+ * 4. la composition garde contacts → participants → le serveur dans son
+ *    ordre, sans doublon (`composeMentionList` → `mergeMentionSuggestions`).
  *
  * `source` : celle du champ (`useMentionSource`) ; ABSENTE, c'est celle que
  * le fil ouvert publie (`mention-source.ts`), lue seulement quand une requête
@@ -95,7 +102,15 @@ export function useMentionSuggestions(input: {
     if (query === null) setDismissedAt(null);
   }, [query]);
 
-  const needle = query !== null && source !== null && queriesRemote(query.query) ? query.query.trim().toLocaleLowerCase() : null;
+  const localMatchCount = useMemo(
+    () =>
+      query === null || source === null
+        ? 0
+        : localMentionMatches({ contacts, participants: source.locals, query: query.query, selfId: source.selfId, ...reachOf(source) }).length,
+    [query, source, contacts],
+  );
+  const stage = query === null ? 'local' : mentionLookupStage({ query: query.query, localMatchCount });
+  const needle = query !== null && source !== null && stage === 'remote' ? query.query.trim().toLocaleLowerCase() : null;
   const [remote, setRemote] = useState<RemoteAnswer | null>(null);
   const cache = useRef<RemoteCache>({ search: null, entries: new Map() });
   const search = source?.search ?? null;
@@ -137,7 +152,7 @@ export function useMentionSuggestions(input: {
        réponse PROLONGÉE (`al` servie pendant que `ali` est en vol) est
        filtrée localement, faute de mieux. */
     const served = !usable ? NO_CANDIDATES : remote.key === needle ? remote.items : filterMentionCandidates(remote.items, query.query);
-    return composeMentionList({ contacts, participants: source.locals, remote: served, query: query.query, selfId: source.selfId });
+    return composeMentionList({ contacts, participants: source.locals, remote: served, query: query.query, selfId: source.selfId, ...reachOf(source) });
   }, [active, source, query, remote, needle, contacts]);
 
   const open = active && source !== null && (items.length > 0 || !resolving);

@@ -19,12 +19,6 @@ final class ComposerSceneMenuTests: XCTestCase {
         XCTAssertEqual(entrees.filter(\.isDestructive), [.object(.delete)])
     }
 
-    func test_entries_fond_reprendLeMenuDuFond() {
-        let entrees = ComposerSceneMenu.entries(backgroundActions: ComposerBackgroundMenuAction.served)
-        XCTAssertEqual(entrees.map(\.id), ComposerBackgroundMenuAction.served.map { "background.\($0.rawValue)" })
-        XCTAssertEqual(entrees.filter(\.isDestructive), [.background(.delete)])
-    }
-
     func test_entries_texteReel_composeLaPolitiqueDuRail() {
         var effets = StoryEffects()
         effets.textObjects = [StoryTextObject(id: "t1", text: "salut")]
@@ -75,13 +69,6 @@ final class ComposerSceneMenuTests: XCTestCase {
         XCTAssertTrue(AppSourceGuard.stripComments(code).contains(".adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl"),
                       "le verre du menu passe par l'unique implémentation du dépôt")
         XCTAssertTrue(code.contains(".dismissOnEscape { onDismiss() }"), "VoiceOver et la touche Échap doivent pouvoir le refermer")
-    }
-
-    func test_leFond_nePresentePlusDeDialogueSysteme() throws {
-        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Composer/MeeshyComposerHost+BackgroundMenu.swift"))
-        XCTAssertFalse(code.contains(".confirmationDialog("))
-        XCTAssertTrue(code.contains("sceneMenuLayer("))
     }
 
     func test_laSurface_remetLAppuiLongAuMeuble() throws {

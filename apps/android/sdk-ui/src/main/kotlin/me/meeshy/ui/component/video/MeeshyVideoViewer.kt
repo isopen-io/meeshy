@@ -1,6 +1,20 @@
 package me.meeshy.ui.component.video
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.fullscreen.FullscreenVideoGestures
+import me.meeshy.sdk.model.fullscreen.SwipeDownOutcome
+import me.meeshy.ui.component.viewer.ImageViewerMoreMenu
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -40,7 +54,9 @@ import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.playback.PipAspect
 import me.meeshy.sdk.model.playback.VideoPresentation
 import me.meeshy.ui.R
+import me.meeshy.ui.component.viewer.ImageViewerExit
 import me.meeshy.ui.component.viewer.viewerDialogProperties
+import androidx.compose.ui.platform.testTag
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -50,12 +66,22 @@ import me.meeshy.ui.theme.MeeshySpacing
  * pause / reprend ; la barre de progression et la croix s'effacent après quelques secondes de lecture. Avec [secure], la fenêtre est exclue des captures (FLAG_SECURE) et le média ne passe pas par le cache disque. Un autre son
  * (vocal, appel) qui prend le focus met la lecture en pause, comme partout ailleurs.
  *
+ * Un glissement vers le bas au-delà du seuil de [FullscreenVideoGestures] ferme la vidéo, comme la visionneuse d'images ;
+ * en deçà, elle revient en ressort. Le menu ⋯ porte les [exits] que l'hôte lui confie (Enregistrer, Partager —
+ * #13915) et lui rend celle qu'on touche ; sans sortie, pas de menu.
+ *
  * Le Picture-in-Picture (iOS `MeeshyVideoPlayer` plein écran, #13814) : quitter l'application pendant la lecture, ou
  * toucher le bouton PiP, fait continuer la vidéo seule dans la fenêtre flottante, sans contrôles ; fermer la fenêtre la
  * met en pause. Une vidéo [secure] (protégée) n'a ni bouton ni fenêtre.
  */
 @Composable
-public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Boolean = false) {
+public fun MeeshyVideoViewer(
+    mediaUrl: String,
+    onDismiss: () -> Unit,
+    secure: Boolean = false,
+    exits: List<ImageViewerExit> = emptyList(),
+    onExit: (ImageViewerExit) -> Unit = {},
+) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = viewerDialogProperties(secure),
@@ -76,6 +102,11 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
             },
         )
         val chromeShown = controlsShown && !pip.inPip
+        val density = LocalDensity.current
+        val scope = rememberCoroutineScope()
+        val dragY = remember { Animatable(0f) }
+        val latestDismiss by rememberUpdatedState(onDismiss)
+        val dismissDistancePx = with(density) { FullscreenVideoGestures.DISMISS_DISTANCE.dp.toPx() }
 
         LaunchedEffect(handle) {
             val live = handle ?: return@LaunchedEffect
@@ -96,7 +127,28 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .drawBehind { drawRect(Color.Black.copy(alpha = 1f - STAGE_FADE_ON_DRAG * (dragY.value / dismissDistancePx).coerceIn(0f, 1f))) }
+                .testTag(VIDEO_VIEWER_STAGE_TAG)
+                .pointerInput(Unit) {
+                    var travel = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { travel = 0f },
+                        onVerticalDrag = { change, dy ->
+                            travel = FullscreenVideoGestures.dragOffset(travel + dy)
+                            val follow = travel
+                            scope.launch { dragY.snapTo(follow) }
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            val travelDp = with(density) { travel.toDp().value }
+                            when (FullscreenVideoGestures.swipeDownEnded(travelDp, isPlaying = false, pipActive = false)) {
+                                is SwipeDownOutcome.Dismiss -> latestDismiss()
+                                SwipeDownOutcome.SnapBack -> scope.launch { dragY.animateTo(0f, spring()) }
+                            }
+                        },
+                        onDragCancel = { scope.launch { dragY.animateTo(0f, spring()) } },
+                    )
+                }
                 .clickable(interactionSource = toggleTouch, indication = null, role = Role.Button) {
                     paused = !paused
                     controlsShown = true
@@ -107,7 +159,7 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
                 mediaUrl = mediaUrl,
                 isActive = true,
                 rewindWhenInactive = false,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().graphicsLayer { translationY = dragY.value },
                 muted = false,
                 paused = paused,
                 fit = true,
@@ -141,24 +193,29 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
                 }
             }
             AnimatedVisibility(
-                visible = chromeShown && pip.offersButton,
+                visible = chromeShown && (pip.offersButton || exits.isNotEmpty()),
                 modifier = Modifier.align(Alignment.TopEnd),
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
-                IconButton(
-                    onClick = pip.enter,
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .padding(MeeshySpacing.sm)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.4f)),
+                Row(
+                    modifier = Modifier.statusBarsPadding().padding(MeeshySpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
                 ) {
-                    Icon(
-                        MeeshyIcons.PictureInPicture,
-                        contentDescription = stringResource(R.string.media_video_pip_enter),
-                        tint = Color.White,
-                    )
+                    if (pip.offersButton) {
+                        IconButton(
+                            onClick = pip.enter,
+                            modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)),
+                        ) {
+                            Icon(
+                                MeeshyIcons.PictureInPicture,
+                                contentDescription = stringResource(R.string.media_video_pip_enter),
+                                tint = Color.White,
+                            )
+                        }
+                    }
+                    if (exits.isNotEmpty()) ImageViewerMoreMenu(exits = exits, isBusy = false, onExit = onExit)
                 }
             }
             AnimatedVisibility(
@@ -180,5 +237,10 @@ public fun MeeshyVideoViewer(mediaUrl: String, onDismiss: () -> Unit, secure: Bo
     }
 }
 
+/** La scène de la vidéo plein écran, où se lisent le toucher et le glissement vers le bas. */
+public const val VIDEO_VIEWER_STAGE_TAG: String = "meeshy.video.viewer.stage"
+
+/** How much of the black stage fades while a swipe down follows the finger (as the image viewer). */
+private const val STAGE_FADE_ON_DRAG = 0.6f
 private const val PROGRESS_TICK_MILLIS = 250L
 private const val CONTROLS_HIDE_MILLIS = 3_000L

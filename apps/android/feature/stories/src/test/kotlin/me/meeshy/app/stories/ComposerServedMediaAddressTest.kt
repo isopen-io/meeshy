@@ -121,11 +121,8 @@ class ComposerServedMediaAddressTest {
                     pending = emptyList(),
                     mediaBaseUrl = base,
                     backgroundMediaId = null,
-                    backgroundIsVideo = false,
-                    backgroundLoop = false,
                     onRemove = {},
                     onToggleBackground = {},
-                    onToggleBackgroundLoop = {},
                 )
             }
         }

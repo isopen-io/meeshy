@@ -119,7 +119,9 @@ public extension View {
     @ViewBuilder
     func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true) -> some View {
         if let design {
+            let box = avatarSize * 100 / 84
             scaleEffect(AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize))
+            .background { AvatarRingDecorFilm(decor: design.decor, side: .back, box: box, animates: animates) }
             .overlay {
                 ZStack {
                     AvatarRingView(design: design, animates: animates)
@@ -127,8 +129,9 @@ public extension View {
                     if let lottie = design.lottie {
                         PackLottieLayer(ref: lottie, animates: animates)
                     }
+                    AvatarRingDecorFilm(decor: design.decor, side: .front, box: box, animates: animates)
                 }
-                .frame(width: avatarSize * 100 / 84, height: avatarSize * 100 / 84)
+                .frame(width: box, height: box)
             }
         } else {
             self
@@ -146,6 +149,7 @@ public extension View {
     func avatarRingWithin(_ design: AvatarRingDesign?, footprint: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true) -> some View {
         if let design {
             scaleEffect(AvatarRingGeometry.footprintScale(footprint: footprint, storyRingSize: storyRingSize))
+            .background { AvatarRingDecorFilm(decor: design.decor, side: .back, box: footprint, animates: animates) }
             .overlay {
                 ZStack {
                     AvatarRingView(design: design, animates: animates)
@@ -153,11 +157,34 @@ public extension View {
                     if let lottie = design.lottie {
                         PackLottieLayer(ref: lottie, animates: animates)
                     }
+                    AvatarRingDecorFilm(decor: design.decor, side: .front, box: footprint, animates: animates)
                 }
                 .frame(width: footprint, height: footprint)
             }
         } else {
             self
+        }
+    }
+}
+
+// MARK: - Les calques illustrés d'un cadre (#13960)
+
+/// Un film d'un cadre illustré : `back` posé en arrière-plan de l'avatar, `front` au-dessus,
+/// carré, centré, de côté `reach ×` la boîte du contour — il déborde sans rien grandir ni décaler
+/// (une superposition SwiftUI ne compte pas dans la mise en page). Sans calque, aucune vue.
+struct AvatarRingDecorFilm: View {
+    enum Side { case back, front }
+
+    let decor: AvatarRingDecor?
+    let side: Side
+    let box: CGFloat
+    let animates: Bool
+
+    var body: some View {
+        if let decor, let ref = side == .back ? decor.back : decor.front {
+            let length = CGFloat(decor.side(forBox: Double(box)))
+            PackLottieLayer(ref: ref, animates: animates)
+                .frame(width: length, height: length)
         }
     }
 }

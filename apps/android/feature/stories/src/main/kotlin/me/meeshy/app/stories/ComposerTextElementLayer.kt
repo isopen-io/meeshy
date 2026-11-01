@@ -4,10 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -27,8 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -50,7 +44,7 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 /**
  * One on-canvas text element: positioned at its normalised ([StoryTextElement.x],
  * [StoryTextElement.y]) of the measured canvas (centred on that point), draggable,
- * tappable to select (#13836) — framed by the dashed selection frame, written once edited. The
+ * tappable to select (#13836) — no frame drawn ([sceneSelection], #14207), written once edited. The
  * normalised→pixel placement and the pixel→normalised drag delta are the only
  * arithmetic here; the clamp lives in [StoryTextElement.nudged]. Pure glue.
  */
@@ -71,7 +65,6 @@ internal fun TextElementLayer(
     onTransform: (Float, Float) -> Unit,
     onMeasured: (IntSize) -> Unit = {},
     onTextChange: (String) -> Unit = {},
-    showsSelection: Boolean = true,
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     val haptics = rememberMeeshyHaptics()
@@ -80,6 +73,8 @@ internal fun TextElementLayer(
     val currentDrag by rememberUpdatedState(onDrag)
     val currentDragEnd by rememberUpdatedState(onDragEnd)
     val currentTransform by rememberUpdatedState(onTransform)
+    val currentScale by rememberUpdatedState(element.scale)
+    val currentRotation by rememberUpdatedState(element.rotationDeg)
     Box(
         modifier = Modifier
             .offset {
@@ -97,38 +92,25 @@ internal fun TextElementLayer(
                 sizePx = it
                 onMeasured(it)
             }
-            .pointerInput(element.id) {
-                detectTapGestures(
-                    onLongPress = {
-                        haptics.medium()
-                        currentLongPress()
-                    },
-                    onTap = { currentTap() },
-                )
-            }
-            .pointerInput(element.id) {
-                detectTransformGestures { _, pan, zoom, rotation ->
+            .sceneObjectGestures(
+                key = element.id,
+                pose = { SceneObjectPose(currentScale, currentRotation) },
+                onTap = { currentTap() },
+                onLongPress = {
+                    haptics.medium()
+                    currentLongPress()
+                },
+                onMove = { pan, zoom, rotation ->
                     currentDrag(pan.x, pan.y)
                     currentTransform(zoom, rotation)
-                }
-            }
-            .pointerInput(element.id) {
-                // Observes the Final pass without consuming, so it fires the moment
-                // the drag/pinch lifts (every pointer up) — clearing the snap guides —
-                // while the transform detector above still owns the gesture deltas.
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Final)
-                    } while (event.changes.any { it.pressed })
-                    currentDragEnd()
-                }
-            }
+                },
+                onEnd = { currentDragEnd() },
+            )
             .semantics {
                 onClick { currentTap(); true }
                 onLongClick { currentLongPress(); true }
             }
-            .sceneSelectionFrame(selected && showsSelection && !(menu == null && inlineEditEnabled), element.scale)
+            .sceneSelection(selected)
             .background(
                 color = if (selected && menu == null && inlineEditEnabled) Color.Black.copy(alpha = 0.35f) else Color.Transparent,
                 shape = RoundedCornerShape(8.dp),

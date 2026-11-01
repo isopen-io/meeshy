@@ -163,7 +163,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
         "Features/Composer/ComposerMoodSurface.swift",
-        "Features/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
         // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
@@ -175,7 +174,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
         // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
         // aucune et sort de la liste, comme la règle 4 l'exige.
-        "Features/Composer/MeeshyComposerHost+Overflow.swift",
+        // #14056 — `+Overflow` a perdu à son tour sa dernière taille figée :
+        // le `⋯` de la scène est servi par `ComposerMoreMenuPolicy` (#13839),
+        // et le fichier sort de la liste (règle 4).
         "Features/Profile/Views/AchievementBadgeView.swift",
         "Features/Settings/Views/ActiveSessionsView.swift",
         "Features/Links/Views/AffiliateView.swift",
@@ -464,7 +465,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // figé ne bouge pas.
     // 185 → 178 (S7c, #11494) : les mêmes sept emoji.
     // 178 → 173 (#12568) : les mêmes cinq initiales d'avatar.
-    private static let totalCeiling = 173
+    // 173 → 172 (#13907) : la barre haute quitte le projet avec le glyphe figé
+    // de sa croix ; `ComposerTopBar.swift` sort de `bearingFiles` (règle 4).
+    // 172 → 171 (#14056) : le glyphe figé du `⋯` quitte
+    // `MeeshyComposerHost+Overflow.swift` ; le fichier sort de `bearingFiles`
+    // (règle 4).
+    private static let totalCeiling = 171
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

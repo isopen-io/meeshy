@@ -53,6 +53,12 @@ internal class ComposerHistory private constructor(
     /** Un média que l'une des étapes encore joignables par annuler/rétablir montre : le retirer ne l'abandonne pas encore. */
     fun reaches(mediaId: String): Boolean = store.states.any { snapshot -> snapshot.deck.slides.any { mediaId in it.mediaIds } }
 
+    /** Chaque étape réécrite par [transform] (un média en file reçu change d'identifiant partout, #13959), à la même place. */
+    fun mapped(transform: (ComposerSnapshot) -> ComposerSnapshot): ComposerHistory = ComposerHistory(store.map(transform), openGesture)
+
+    /** Le doigt levé (#14209) : le geste continu en cours se referme, le prochain changement, même de la même clé, est un nouveau pas. */
+    fun closed(): ComposerHistory = if (openGesture == null) this else ComposerHistory(store, null)
+
     fun undone(): Pair<ComposerHistory, ComposerSnapshot>? =
         store.undo()?.let { ComposerHistory(it.store, null) to it.state }
 

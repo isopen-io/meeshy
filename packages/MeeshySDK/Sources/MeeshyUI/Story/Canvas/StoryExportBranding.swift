@@ -158,7 +158,9 @@ public enum StoryExportBranding {
         var hasher = SHA256()
         for field in [content.displayName, content.username,
                       content.moodEmoji ?? "", content.moodMessage ?? "",
-                      content.accentColorHex] {
+                      content.accentColorHex,
+                      content.presence.map { "\($0)" } ?? "",
+                      content.relationLogo ?? ""] {
             hasher.update(data: Data(field.utf8))
             hasher.update(data: Data([0x1f]))   // séparateur : évite les collisions par concaténation
         }

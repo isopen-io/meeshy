@@ -87,22 +87,14 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         XCTAssertEqual(surface, .document,
                        "la story ne charge plus l'atelier depuis le fil (#4700)")
-        XCTAssertEqual(
-            ComposerMountedView.mounted(
-                surface: surface,
-                hasScene: ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false)
-            ),
-            .scene,
-            "Basculer le document en story doit montrer un canvas — sinon le choix ne change rien."
-        )
-        XCTAssertEqual(
-            ComposerMountedView.mounted(
-                surface: surface,
-                hasScene: ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: false)
-            ),
-            .document,
-            "…et le même routage sous un POST vide reste un document : c'est le CHOIX qui change l'écran."
-        )
+        for format in [ComposerFormat.story, .post, .reel] {
+            XCTAssertEqual(
+                ComposerMountedView.mounted(
+                    surface: ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format)),
+                .scene,
+                "Depuis le fil, la story, le post et le réel se composent sur la même scène (#13864)."
+            )
+        }
     }
 
     /// **L'invariant est intact ; il a changé de COUCHE** (#4751, 2026-09-01).
@@ -131,15 +123,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         let surfaceEnPost = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .post)
 
         XCTAssertEqual(
-            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: true),
+            ComposerMountedView.mounted(surface: surfaceEnPost),
             .scene,
-            "Le canvas déjà composé ne disparaît pas parce que l'auteur publie en post."
-        )
-        XCTAssertEqual(
-            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: false),
-            .document,
-            "…et un post SANS rien de composé reste un document : c'est la scène "
-                + "qui commande, pas la porte d'où l'on vient."
+            "Le canvas ne disparaît pas parce que l'auteur publie en post : un post se compose sur la scène."
         )
     }
 
@@ -313,8 +299,8 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// partant des deux portes réelles plutôt que de l'ouverture abstraite.
     /// Sans lui, remettre `.resume` sous la règle du format resterait vert ici
     /// tant que personne ne relie l'ouverture aux portes qui la produisent.
-    func test_surface_desDeuxPortesQuiReprennentSansLegacy_estLAtelier() {
-        for origin in [ComposerOrigin.draft(id: "brouillon-42"), .share] {
+    func test_surface_laPorteQuiReprendSansLegacy_estLAtelier() {
+        for origin in [ComposerOrigin.draft(id: "brouillon-42")] {
             let profil = ComposerProfile.profile(for: origin)
 
             XCTAssertNil(
@@ -397,7 +383,10 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
              origine: .repost(ofPostId: "mood-source", sourceFormat: .status),
              surface: .mood),
             (nom: "draft", origine: .draft(id: "brouillon-42"), surface: .scene),
-            (nom: "share", origine: .share, surface: .scene),
+            // **`.scene` → `.document` le 2026-10-31** (#13864) : le partage
+            // entrant sème sa pièce (`.mediaSeeded`, ce que `ShareComposeDoor`
+            // déclarait déjà) et se compose sur la scène, comme le post.
+            (nom: "share", origine: .share, surface: .document),
             // **`.scene` → `.document` le 2026-09-06** (#5409), même patron que
             // `storyTray` ci-dessus : la porte reste dans la table, seule sa
             // surface change. Son ancien argument — « le document ne porte ni
@@ -1502,44 +1491,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         XCTAssertFalse(libelles.contains(where: \.isEmpty), "Un libellé vide laisse un bouton muet.")
     }
 
-    /// Loi 4 — un outil non servi est ABSENT, jamais grisé. La caméra disparaît
-    /// de la rangée quand la porte refuse la capture (repost, édition) au lieu
-    /// d'y rester inerte.
-    func test_outils_laCameraDisparait_quandLaPorteRefuseLaCapture() {
-        let visibles = ComposerDocumentToolPolicy.visibleTools(
-            served: ComposerDocumentTool.canonicalRow,
-            allowsCapture: false
-        )
-
-        XCTAssertFalse(visibles.contains(.camera), "Une capture refusée retire l'outil, elle ne le grise pas.")
-        XCTAssertEqual(
-            visibles, [.photo, .emoji, .textScene, .document, .place, .microphone, .mention],
-            "Les autres gardent leur ordre : le retrait ne réorganise pas la rangée."
-        )
-    }
-
-    func test_outils_laCameraReste_quandLaPorteAutoriseLaCapture() {
-        XCTAssertEqual(
-            ComposerDocumentToolPolicy.visibleTools(
-                served: ComposerDocumentTool.canonicalRow,
-                allowsCapture: true
-            ),
-            ComposerDocumentTool.canonicalRow
-        )
-    }
-
-    /// Ce que le meuble fait AUJOURD'HUI : il ne sert aucun outil, donc aucune
-    /// rangée n'est peinte. C'est ce qui autorise la surface à exister avant
-    /// que l'ingestion soit branchée sans devenir une affordance sans effet.
-    func test_outils_unSiteQuiNEnSertAucun_nEnMontreAucun() {
-        XCTAssertTrue(
-            ComposerDocumentToolPolicy.visibleTools(served: [], allowsCapture: true).isEmpty
-        )
-        XCTAssertTrue(
-            ComposerDocumentToolPolicy.visibleTools(served: [], allowsCapture: false).isEmpty
-        )
-    }
-
     // MARK: - Ce qu'un outil SERVI doit être : un outil qui AGIT
 
     /// **La loi 4, structurellement plutôt que par discipline.**
@@ -1611,26 +1562,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         for outil in servie {
             XCTAssertTrue(canonique.contains(outil), "« \(outil.rawValue) » est servi hors de la rangée canonique.")
         }
-    }
-
-    /// La politique de capture s'applique à ce qui est SERVI, et pas seulement à
-    /// la rangée canonique. Le cas qui commande : une porte de republication
-    /// (`allowsCapture: false`) ne doit pas voir la caméra revenir par la
-    /// projection. Jusqu'au T2.3 la question ne se posait pas — la caméra
-    /// n'avait pas d'effet, donc `servedRow` ne la contenait pas, et ce témoin
-    /// passait à VIDE. Depuis que `.camera.effect` existe, `servedRow` la
-    /// porte réellement, et ce même témoin exerce enfin le cas qu'il a été
-    /// écrit pour attraper.
-    func test_laCapture_filtreLaRangeeSERVIE_pasSeulementLaCanonique() {
-        let sansCapture = ComposerDocumentToolPolicy.visibleTools(
-            served: ComposerDocumentTool.servedRow, allowsCapture: false
-        )
-        XCTAssertFalse(sansCapture.contains(.camera), "Une porte qui refuse la capture ne peint jamais la caméra.")
-        XCTAssertEqual(
-            ComposerDocumentToolPolicy.visibleTools(served: ComposerDocumentTool.servedRow, allowsCapture: true),
-            ComposerDocumentTool.servedRow,
-            "Hors caméra, la politique ne retire rien de ce que le meuble sert."
-        )
     }
 
     // MARK: - Le chemin d'envoi — la capacité dont l'oubli PERD du contenu
@@ -1729,40 +1660,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
     // MARK: - LA SORTIE
 
-    /// **Le correctif bloquant de V2 bis.** `onDismiss` n'était atteignable que
-    /// sous la SCÈNE, où l'atelier du SDK peint la croix. Le document n'a pas
-    /// d'atelier : la surface était un écran sans issue, et V3 devait la
-    /// brancher sur `.feedComposer` — la porte la plus utilisée de l'app.
-    ///
-    /// Ce que ce test prouve, exactement : la surface PORTE une sortie, et
-    /// cette sortie appelle ce que le site de montage lui a confié. Il ne
-    /// prouve pas qu'un bouton la déclenche — c'est
-    /// `test_laSurface_peintSaSortie_etLeCorpsLaMonte` qui s'en charge, ni que
-    /// le meuble lui passe la sienne — c'est
-    /// `MeeshyComposerHostGuardTests.test_host_donneSaSortie_aLaSurfaceDocument`.
-    /// Les trois ensemble couvrent la chaîne ; aucune seule ne suffit.
-    ///
-    /// Le rappel est déclaré NON OPTIONNEL et sans valeur par défaut : c'est le
-    /// compilateur, et non ce test, qui interdit au prochain site de montage
-    /// d'omettre la sortie.
-    @MainActor
-    func test_laSortie_estUnRappelQueLaSurfaceSaitDeclencher() {
-        var fermetures = 0
-        let surface = ComposerDocumentSurface(
-            text: .constant(""),
-            tools: [],
-            focusesOnAppear: false,
-            onClose: { fermetures += 1 }
-        )
-
-        surface.onClose()
-
-        XCTAssertEqual(
-            fermetures, 1,
-            "La surface doit relayer la fermeture au site qui la monte — sans quoi le document n'a aucune issue."
-        )
-    }
-
     // MARK: - Gardes de SOURCE sur la surface
 
     private func surfaceSource() throws -> String {
@@ -1797,72 +1694,8 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         return nil
     }
 
-    /// Une ancre disparue lève une ERREUR, jamais un `XCTSkip` : un test sauté
-    /// est vert au tableau, et une garde négative qui se saute est une garde
-    /// qui est morte sans le dire.
-    private struct AncreIntrouvable: Error, CustomStringConvertible {
-        let description = "Le bloc `struct ComposerDocumentSurface` est introuvable — la garde ne mesurerait RIEN"
-    }
-
-    private func surfaceBlock() throws -> String {
-        guard let bloc = blockBody(startingAt: "struct ComposerDocumentSurface", in: try surfaceSource()) else {
-            throw AncreIntrouvable()
-        }
-        return bloc
-    }
-
     private func occurrences(of needle: String, in haystack: String) -> Int {
         haystack.components(separatedBy: needle).count - 1
-    }
-
-    /// Le garde-fou des gardes NÉGATIVES ci-dessous : sans lui, un chemin
-    /// devenu faux les ferait toutes passer sur une chaîne vide. Il mesure
-    /// aussi le BLOC, pas seulement le fichier — une ancre renommée rendrait
-    /// les gardes de bloc vertes sur une chaîne vide exactement de la même
-    /// façon.
-    func test_laGardeLitUneSourceNonVide() throws {
-        let code = try surfaceSource()
-        XCTAssertGreaterThan(code.count, 400, "La source de la surface est introuvable ou vide.")
-        XCTAssertTrue(code.contains("struct ComposerDocumentSurface"), "Le fichier lu n'est pas celui de la surface.")
-
-        guard let bloc = blockBody(startingAt: "struct ComposerDocumentSurface", in: code) else {
-            return XCTFail("Le bloc `struct ComposerDocumentSurface` est introuvable — les gardes de bloc ne mesureraient RIEN")
-        }
-        XCTAssertGreaterThan(bloc.count, 400, "Le bloc lu est vide : l'appariement d'accolades a échoué.")
-        XCTAssertTrue(bloc.contains("var body"), "Le bloc lu n'est pas celui de la vue.")
-        XCTAssertFalse(
-            bloc.contains("enum ComposerDocumentSendRouting"),
-            "Le bloc déborde sur les types voisins — la garde ne serait plus ancrée sur la vue."
-        )
-    }
-
-    /// La SORTIE est PEINTE, pas seulement portée. Un rappel stocké que rien ne
-    /// déclenche laisserait exactement le cul-de-sac qu'on corrige.
-    ///
-    /// Elle COMPTE un symbole nommé au lieu de chercher un littéral : la revue
-    /// a trouvé quatre gardes de ce dépôt qu'un simple retour à la ligne
-    /// contournait. `onClose` doit apparaître au moins deux fois dans le bloc —
-    /// sa déclaration, et le bouton qui l'appelle — et `exitAffordance` au
-    /// moins deux fois aussi : sa déclaration, et son montage dans `body`.
-    func test_laSurface_peintSaSortie_etLeCorpsLaMonte() throws {
-        let bloc = try surfaceBlock()
-
-        XCTAssertGreaterThanOrEqual(
-            occurrences(of: "onClose", in: bloc), 2,
-            "`onClose` doit être déclaré ET déclenché : un rappel que rien n'appelle ne fait sortir personne."
-        )
-        XCTAssertGreaterThanOrEqual(
-            occurrences(of: "exitAffordance", in: bloc), 2,
-            "L'issue doit être une propriété NOMMÉE et montée dans le corps de la vue."
-        )
-
-        guard let corps = blockBody(startingAt: "var body", in: bloc) else {
-            return XCTFail("Le corps de la vue doit être une propriété nommée `body` — la garde s'ancre dessus")
-        }
-        XCTAssertTrue(
-            corps.contains("exitAffordance"),
-            "L'issue est déclarée mais absente du corps : la surface resterait un écran dont on ne sort pas."
-        )
     }
 
     /// **Le cliquet, protégé par une garde nommée.** Les six libellés d'outils
@@ -1897,65 +1730,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
     }
 
-    /// La sortie ne fabrique pas une clé de plus pour un mot déjà traduit sept
-    /// fois. Le cliquet de complétude du dépôt est épinglé à un plafond.
-    func test_laSortie_reutiliseLaCleDeFermetureDejaTraduite() throws {
-        let code = try surfaceSource()
-        XCTAssertTrue(
-            code.contains("\"common.close\""),
-            "La sortie doit réutiliser `common.close` — traduite dans les sept langues du catalogue."
-        )
-        XCTAssertFalse(
-            code.contains("composer.document.close"),
-            "Une clé neuve pour « Fermer » rapprocherait le cliquet de son plafond pour rien."
-        )
-    }
-
-    /// Garde NÉGATIVE — elle rougit à la RÉINTRODUCTION d'un envoi dans la
-    /// surface. La surface PRÉSENTE ; le socle du meuble nomme la publication
-    /// et le SDK la déclenche. Une surface qui publierait elle-même ouvrirait
-    /// le second chemin d'envoi que la doctrine, C2 et V7 interdisent tous les
-    /// trois — et l'ouvrirait dans le fichier que personne ne pense à relire.
-    ///
-    /// **Ancrée sur le BLOC de la vue**, pas sur le fichier : celui-ci porte
-    /// aussi `ComposerDocumentSendRouting`, dont la raison d'être est
-    /// justement de NOMMER ces chemins. Une garde de fichier aurait interdit
-    /// d'en documenter un seul.
-    func test_laSurface_nOuvreAucunCheminDePublication() throws {
-        let bloc = try surfaceBlock()
-        for interdit in ["PostService", "TusUploadManager", "createPost(", "createOfflineMediaPost(",
-                         "repostPost(", "OutboxFlusher", "APIClient", "ComposerDocumentSendRouting"] {
-            XCTAssertFalse(
-                bloc.contains(interdit),
-                "La surface appelle « \(interdit) » : c'est un second chemin de publication."
-            )
-        }
-    }
-
-    /// Garde NÉGATIVE — la surface ne possède ni pièces jointes ni sélecteurs.
-    /// Le pipeline d'ingestion existe et tourne sur six sites de production
-    /// (`ComposerDropResolver` / `ComposerIngestRouter`) ; en écrire un second
-    /// ici condamnerait à corriger deux fois chaque cas limite du presse-papier
-    /// et du sandbox. Sa condition de levée est nommée : le jour où la surface
-    /// devient propriétaire de l'ingestion, ce test se retourne — il ne se
-    /// supprime pas. Ancrée sur le BLOC, pour la même raison que la précédente.
-    ///
-    /// **Élargie à `CameraView` (T2.3).** Photo, caméra et document posent
-    /// désormais un fichier LOCAL dans le brouillon
-    /// (`ComposerDocumentTool.effect`), et l'ingestion — état, sélecteurs,
-    /// tuiles — vit dans le meuble (`MeeshyComposerHost.handleDocumentTool`,
-    /// `ComposerMediaIntake`), jamais ici : la surface reste une PRÉSENTATION
-    /// sans état, exactement comme avant que ces trois outils n'aient un
-    /// effet.
-    func test_laSurface_neFabriquePasUnSecondPipelineDIngestion() throws {
-        let bloc = try surfaceBlock()
-        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController", "ComposerViewfinder("] {
-            XCTAssertFalse(
-                bloc.contains(interdit),
-                "La surface monte « \(interdit) » : le pipeline d'ingestion du dépôt est ailleurs, et unique."
-            )
-        }
-    }
 
     // MARK: - Le PLAN d'envoi — ce que le meuble a le droit d'envoyer, et par où
 
@@ -2723,100 +2497,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     }
 }
 
-/// V2 — le CONTRASTE de la surface document, sur les trois teintes du plateau.
-///
-/// Jumelle de `ComposerPlateauTests`, et pour la même raison : le plateau se
-/// CHOISIT (O6), donc ce qu'on écrit dessus doit se lire sur les trois teintes,
-/// pas seulement sur la teinte par défaut. La surface document est la première
-/// à porter du texte long ; mesurer le socle sans la mesurer, elle, aurait
-/// laissé le contenu du post hors de toute garde.
-///
-/// `@MainActor` : le bundle de tests est compilé en isolation `nonisolated`, et
-/// `WCAGContrast` est épinglé au main actor pour reproduire le contexte d'appel
-/// des ponts `UIColor(_: Color)`.
-@MainActor
-final class ComposerDocumentSurfaceContrastTests: XCTestCase {
-
-    /// Les jetons que la surface peint RÉELLEMENT — arrimés à la source par
-    /// `test_laListeMesuree_couvreToutCeQueLaSurfacePeint`. Une liste qui
-    /// dériverait de la vue mesurerait des premiers plans que rien ne pose,
-    /// exactement le défaut que D-18 a corrigé dans l'autre sens.
-    private let peints: [(String, Color)] = [
-        ("textPrimary(isDark: true)", MeeshyColors.textPrimary(isDark: true)),
-        ("textSecondary(isDark: true)", MeeshyColors.textSecondary(isDark: true))
-    ]
-
-    /// Les jetons peints sur du NON-TEXTUEL — ici la teinte de l'icône
-    /// « palette » quand le sélecteur de fond est ouvert.
-    ///
-    /// Liste SÉPARÉE parce que le seuil l'est : WCAG 1.4.11 demande **3:1**
-    /// pour un élément non textuel, contre 4,5:1 pour du texte normal. Les
-    /// ranger ensemble aurait imposé au pictogramme une règle que la norme ne
-    /// lui applique pas — et, plus grave, laissé croire que la liste unique
-    /// mesurait tout au même titre.
-    ///
-    /// L'arrimage ci-dessous accepte les DEUX listes : ce qu'il interdit est
-    /// qu'un jeton soit peint sans être mesuré NULLE PART, pas qu'il soit
-    /// mesuré ailleurs.
-    private let peintsNonTextuels: [(String, Color)] = [
-        ("brandPrimaryHex", Color(hex: MeeshyColors.brandPrimaryHex))
-    ]
-
-    func test_lesPictogrammes_passentLeSeuilNonTextuel_surLesTroisTeintes() {
-        for tint in PlateauTint.allCases {
-            for (nom, premierPlan) in peintsNonTextuels {
-                let ratio = WCAGContrast.ratioOfTranslucentForeground(premierPlan, on: tint.color)
-                XCTAssertGreaterThanOrEqual(
-                    ratio, 3.0,
-                    "\(nom) sur le plateau \(tint.rawValue) mesure \(WCAGContrast.fmt(ratio)):1 — sous le seuil non textuel de WCAG 1.4.11"
-                )
-            }
-        }
-    }
-
-    func test_lesPremiersPlans_passentAA_surLesTroisTeintesDuPlateau() {
-        for tint in PlateauTint.allCases {
-            for (nom, premierPlan) in peints {
-                let ratio = WCAGContrast.ratioOfTranslucentForeground(premierPlan, on: tint.color)
-                XCTAssertGreaterThanOrEqual(
-                    ratio, 4.5,
-                    "\(nom) sur le plateau \(tint.rawValue) mesure \(WCAGContrast.fmt(ratio)):1 — sous AA texte normal"
-                )
-            }
-        }
-    }
-
-    /// L'arrimage. Sans lui, la liste ci-dessus et la vue divergeraient dès
-    /// qu'un jeton serait ajouté : le test resterait vert en ne mesurant plus
-    /// tout ce qui est peint. Il rougit notamment à la réintroduction de
-    /// `textMuted`, mesuré à 4,41:1 sur le violet profond.
-    func test_laListeMesuree_couvreToutCeQueLaSurfacePeint() throws {
-        let fichier = AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
-        XCTAssertTrue(fichier.contains("struct ComposerDocumentSurface"), "Source de la surface introuvable — la garde ne mesurerait rien")
-
-        // **Le bloc de la SURFACE, pas le fichier.** Le fichier héberge aussi
-        // `DocumentComposerDoor`, qui monte l'APERÇU (`StoryViewerView`) et lui
-        // passe une couleur d'avatar : un jeton qui n'est ni un texte ni un
-        // fond du plateau, et que mesurer ici n'aurait aucun sens. La garde dit
-        // « tout ce que la SURFACE peint » — elle lisait le fichier entier, ce
-        // qui la faisait rougir pour du code qui ne peint pas la surface.
-        guard let code = corpsDuBloc(commencantPar: "struct ComposerDocumentSurface", dans: fichier) else {
-            return XCTFail("Le bloc de `ComposerDocumentSurface` est introuvable — la garde ne mesurerait RIEN.")
-        }
-        XCTAssertTrue(code.contains("MeeshyColors."), "Le bloc lu ne peint aucun jeton — la garde serait vacante.")
-
-        let mesures = (peints + peintsNonTextuels).map { $0.0 }
-        for ligne in code.split(separator: "\n") where ligne.contains("MeeshyColors.") {
-            XCTAssertTrue(
-                mesures.contains(where: { ligne.contains($0) }),
-                "La surface peint un jeton non mesuré : « \(ligne.trimmingCharacters(in: .whitespaces)) »"
-            )
-        }
-    }
-}
-
-/// Le corps d'un BLOC par appariement d'accolades — fonction de FICHIER, parce
-/// que deux suites de ce fichier la lisent.
+/// Le corps d'un BLOC par appariement d'accolades.
 fileprivate func corpsDuBloc(commencantPar ancre: String, dans code: String) -> String? {
     guard let debut = code.range(of: ancre) else { return nil }
     var profondeur = 0

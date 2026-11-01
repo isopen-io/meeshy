@@ -13,9 +13,10 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 const logger = enhancedLogger.child({ module: 'UploadProcessor' });
 import {
   getAttachmentType,
-  getSizeLimit,
   type AttachmentMetadata,
 } from '@meeshy/shared/types/attachment';
+import type { UploaderRole } from '@meeshy/shared/types/upload-limits';
+import { uploadLimitPolicyFromEnv, uploadSizeRefusal, uploaderRole } from './upload-admission.js';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
 import {
   AttachmentEncryptionService,
@@ -33,6 +34,7 @@ import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMim
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
 import { runFfmpeg } from './ffmpeg-run.js';
 import { mediaDescriptionFields } from './mediaDescriptionInput.js';
+import { lensAttributionFields } from '../packs/lensAttribution.js';
 import { triggerMessageAttachmentAltTranslation } from './MessageAttachmentAltTranslationService.js';
 
 export interface FileToUpload {
@@ -200,17 +202,16 @@ export class UploadProcessor {
    * pouvait déclarer n'importe quel mimeType sans qu'aucun octet ne soit
    * jamais regardé.
    */
-  validateFile(file: FileToUpload): AttachmentValidationVerdict {
-    const attachmentType = getAttachmentType(file.mimeType, file.filename);
-    const sizeLimit = getSizeLimit(attachmentType);
-
-    if (file.size > sizeLimit) {
-      const limitGB = Math.floor(sizeLimit / (1024 * 1024 * 1024));
-      return {
-        valid: false,
-        code: 'FILE_TOO_LARGE',
-        error: `Fichier trop volumineux. Taille max: ${limitGB}GB`
-      };
+  validateFile(file: FileToUpload, role: UploaderRole = 'registered'): AttachmentValidationVerdict {
+    // #11266 — la limite est celle du RÔLE de l'appelant (anonymes ÷10).
+    const sizeRefusal = uploadSizeRefusal({
+      policy: uploadLimitPolicyFromEnv(),
+      type: getAttachmentType(file.mimeType, file.filename),
+      role,
+      size: file.size,
+    });
+    if (sizeRefusal) {
+      return { valid: false, code: 'FILE_TOO_LARGE', error: sizeRefusal.message };
     }
 
     const signatureVerdict = verifyDeclaredMimeType(file.mimeType, file.buffer);
@@ -367,7 +368,7 @@ export class UploadProcessor {
       size: file.size,
     });
 
-    const validation = this.validateFile(file);
+    const validation = this.validateFile(file, uploaderRole(isAnonymous));
     if (!validation.valid) {
       logger.error('Validation échouée', { error: validation.error, code: validation.code });
       throwUploadValidationError(validation.code, validation.error);
@@ -464,6 +465,8 @@ export class UploadProcessor {
         uploadedBy: userId,
         isAnonymous: isAnonymous,
         capturedInApp: declaredCaptureInApp(providedMetadata),
+        // #11327 — la lens qui a produit ce média, retenue si publiée ET installée par l'expéditeur.
+        ...(await lensAttributionFields(this.prisma, isAnonymous ? null : userId, providedMetadata?.lensSlug)),
         ...mediaDescriptionFields(providedMetadata?.alt),
         ...(deferred.length > 0 ? { processingState: 'pending' } : {}),
       },
@@ -517,7 +520,7 @@ export class UploadProcessor {
       encryptionMode,
     });
 
-    const validation = this.validateFile(file);
+    const validation = this.validateFile(file, uploaderRole(isAnonymous));
     if (!validation.valid) {
       throwUploadValidationError(validation.code, validation.error);
     }
@@ -631,6 +634,8 @@ export class UploadProcessor {
         uploadedBy: userId,
         isAnonymous: isAnonymous,
         capturedInApp: declaredCaptureInApp(providedMetadata),
+        // #11327 — EN CLAIR à côté d'une pièce chiffrée : métadonnée assumée par le porteur (#11251).
+        ...(await lensAttributionFields(this.prisma, isAnonymous ? null : userId, providedMetadata?.lensSlug)),
         isEncrypted: true,
         encryptionMode: encryptionMode,
         encryptionIv: encryptionResult.metadata.iv,

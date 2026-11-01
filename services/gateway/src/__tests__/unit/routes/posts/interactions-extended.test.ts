@@ -172,6 +172,8 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
       create: jest.fn().mockResolvedValue({}),
       createMany: jest.fn().mockResolvedValue({ count: 2 }),
     },
+    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun ici.
+    user: { findFirst: async () => null },
     post: {
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),

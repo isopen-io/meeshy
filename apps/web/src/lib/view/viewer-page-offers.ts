@@ -96,6 +96,8 @@ export type MediaViewerPage = {
   readonly onReply?: () => void;
   /** Ce que « Partager » remet à la feuille d'envoi — posé par l'hôte qui sait de quoi la pièce est la pièce (message, publication, média nu). */
   readonly share?: SendSheetRequest;
+  /** « Imager » (#13881) — la pièce composée par le moteur des stories ; posé par l'hôte qui sait la composer (média nu d'un commentaire). */
+  readonly imager?: () => void;
 };
 
 const isVideo = (attachment: Attachment): boolean => kindOf(attachment) === 'video';

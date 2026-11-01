@@ -220,6 +220,19 @@ describe('le catalogue Swift des cadres de capture', () => {
     expect(swift).toContain('styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/elegant_essai_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil)]))]');
   });
 
+  it('le nom d’un motif et de ses déclinaisons s’écrit dans chaque langue, juste après `name` ; sans traduction, rien (#13953)', () => {
+    const named = extendedFile({
+      localizedNames: { fr: 'Essai', en: 'Trial', ar: 'تجربة "١"' },
+      styles: [{ id: 'relief', name: 'Relief', localizedNames: { fr: 'Relief', it: 'Rilievo' }, look: {} }],
+    });
+    const swift = renderSwift([named]).map((file) => file.content).join('\n');
+    expect(swift).toContain('localizedNames: ["fr": "Essai", "en": "Trial", "ar": "تجربة \\"١\\""],');
+    expect(swift).toContain('CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "it": "Rilievo"], look: CallFrameLookOverride())');
+    expect(renderSwift([extendedFile()]).map((file) => file.content).join('\n')).not.toContain('localizedNames');
+    expect(() => renderSwift([extendedFile({ localizedNames: { xx: 'Essai' } })])).toThrow(/localizedNames/);
+    expect(() => renderSwift([extendedFile({ localizedNames: { en: '' } })])).toThrow(/localizedNames\.en/);
+  });
+
   it('une déclinaison en double ou une clé inconnue fait échouer la génération en nommant le chemin', () => {
     const twice = extendedFile({ styles: [{ id: 'relief', name: 'Relief', look: {} }, { id: 'relief', name: 'Bis', look: {} }] });
     expect(() => renderSwift([twice])).toThrow(/styles/);

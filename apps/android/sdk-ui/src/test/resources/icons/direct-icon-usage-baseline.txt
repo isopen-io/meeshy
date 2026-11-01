@@ -115,7 +115,6 @@ feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileActions.kt
 feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileScreen.kt
 feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileShareSheet.kt
 feature/profile/src/main/kotlin/me/meeshy/app/profile/ReportUserScreen.kt
-feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelCommentsSheet.kt
 feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelEmptyStates.kt
 feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt
 feature/settings/src/main/kotlin/me/meeshy/app/settings/AboutScreen.kt
@@ -148,7 +147,6 @@ feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerTextElementLayer.k
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerTextToolbar.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerToolRow.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryActionRail.kt
-feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryCommentsSheet.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerScreen.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryDrawingLayer.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryRingCell.kt

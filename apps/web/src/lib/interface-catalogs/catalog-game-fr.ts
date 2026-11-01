@@ -265,6 +265,8 @@ const fr = {
   'game.guide.step.rank.means': 'Frapper, réaliser tes rêves, accomplir des hauts faits : tout fait grandir ta gloire.',
   'game.guide.step.rank.next': 'Immortalisons ton départ en photo.',
   'game.page.back': 'Retour à la progression',
+  'game.page.offline_notice': 'Hors ligne — progression telle qu’à la dernière ouverture',
+  'game.page.offline_notice_brief': 'Hors ligne — tel qu’à la dernière ouverture',
   'game.door.rules': 'Comment ça marche',
   'game.door.notebook': 'La Chronique',
   'game.mint.minted_line': 'Meesh n° {number} frappée, {edition}.',

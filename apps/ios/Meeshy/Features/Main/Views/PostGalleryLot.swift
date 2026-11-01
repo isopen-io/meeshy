@@ -70,6 +70,8 @@ nonisolated struct GallerySceneItem: Equatable {
     var timeline: TimeInterval? = nil
     /// L'auteur du post, que le filigrane d'un enregistrement nomme.
     var authorUsername: String? = nil
+    /// La couleur d'auteur sur laquelle une scène sans fond se lit (#14258).
+    var sceneFloorHex: String? = nil
 
     /// La scène elle-même, et non le document entier : deux pages d'un même
     /// document ne diffèrent que par elle, et comparer le document ferait payer
@@ -402,6 +404,7 @@ nonisolated struct PostGalleryLot {
             thumbnailURL: media.flatMap(thumbnailURL(of:))
         )
         item.authorUsername = post.authorUsername
+        item.sceneFloorHex = post.storyAccentHex
         item.timeline = GallerySceneTimeline.duration(moves: item.moves) { [item] in
             item.renderableSlide(preferredLanguages: []).computedTotalDuration()
         }

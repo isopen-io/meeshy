@@ -1,5 +1,8 @@
 import * as z from 'zod/mini';
+import { FRAME_NAME_LANGUAGES, type FrameLocalizedNames } from './frame-name.js';
 import { captureFrameUsage, type FrameUsage } from './frame-usage.js';
+
+export { FRAME_NAME_LANGUAGES, frameDisplayName, type FrameLocalizedNames, type FrameNameLanguage } from './frame-name.js';
 
 /**
  * **LE VOCABULAIRE DES CADRES DE CAPTURE** — le contrat de
@@ -323,9 +326,18 @@ export const FrameLookSchema = z.object({
  */
 export const MAX_FRAME_STYLES = 6;
 
+const FrameName = z.string().check(z.minLength(1), z.maxLength(40), z.refine((name) => name.trim().length > 0));
+
+/**
+ * Le nom d'un motif ou d'une déclinaison dans chaque langue (#13953). Facultatif : `name` reste le nom
+ * français, celui que lit un client d'avant, et le repli d'une langue absente.
+ */
+const LocalizedNames = z.partialRecord(z.enum(FRAME_NAME_LANGUAGES), FrameName);
+
 const FrameStyleSchema = z.object({
   id: Slug,
-  name: z.string().check(z.minLength(1), z.maxLength(40)),
+  name: FrameName,
+  localizedNames: z.optional(LocalizedNames),
   look: z.partial(FrameLookSchema),
 });
 
@@ -338,6 +350,7 @@ export const FrameMotifSchema = z.object({
   id: z.string().check(z.regex(/^[a-z-]+\.[a-z0-9-]+$/)),
   mood: z.enum(FRAME_MOODS),
   name: z.string().check(z.minLength(1)),
+  localizedNames: z.optional(LocalizedNames),
   credits: z.optional(Credits),
   surfaces: z.optional(Surfaces),
   cost: z.optional(z.enum(FRAME_COSTS)),
@@ -368,6 +381,8 @@ export type CaptureFrame = FrameLook & {
   readonly motif: string;
   readonly mood: FrameMood;
   readonly name: string;
+  /** Le nom dans chaque langue (#13953) ; `frameDisplayName` le lit, `name` en est le repli. */
+  readonly localizedNames?: FrameLocalizedNames;
   readonly bucket: FrameBucket;
   readonly people: readonly [number, number];
   readonly credits?: FrameCredits;

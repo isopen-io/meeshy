@@ -31,6 +31,7 @@ import { buildOwnerSubtitleWithDetail, targetPreviewBody } from '../notification
 import { resolvePostMedia } from '../post-media-thumbnail';
 import { loadServedPostExcerpt } from '../served-post-excerpt';
 import type { NotificationBuilderDependencies } from './dependencies';
+import { relayActivityToEntourage, relayRepostToEntourage } from '../fanout/activity-relay';
 
 export async function createPostLikeNotification(
   deps: NotificationBuilderDependencies,
@@ -81,7 +82,16 @@ export async function createPostLikeNotification(
   // média) descend dans le corps, que la phrase d'action n'occupe plus.
   const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: subtitlePostType });
 
-  return deps.createNotification({
+  // L'entourage de l'auteur ET du réacteur apprend la réaction (#14068), sous le
+  // même débit que la notification de l'auteur ; ce relais ne lève jamais.
+  const relayed = relayActivityToEntourage(deps, {
+    activity: 'reaction',
+    postId: params.postId,
+    actorId: params.actorId,
+    emoji: params.emoji,
+  });
+
+  const notification = await deps.createNotification({
     userId: params.postAuthorId,
     type,
     priority: 'normal',
@@ -120,6 +130,8 @@ export async function createPostLikeNotification(
       ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
     },
   });
+  await relayed;
+  return notification;
 }
 
 // ==============================================
@@ -220,7 +232,27 @@ export async function createPostRepostNotification(
     postCreatedAt?: string | Date;
     /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
     postExpiresAt?: string | Date;
+    /** L'éventail `friend_new_post` de la republication est parti (porte `POST /posts`). */
+    reposterEntourageNotified?: boolean;
   }
+): Promise<Notification | null> {
+  // #14070 / #14072 — l'entourage de l'auteur republié l'apprend, que l'auteur
+  // puisse voir la republication ou non : chacun est admis sur ce qu'IL voit.
+  const [, notification] = await Promise.all([
+    relayRepostToEntourage(deps, {
+      originalPostId: params.originalPostId,
+      repostId: params.repostId,
+      actorId: params.actorId,
+      reposterEntourageNotified: params.reposterEntourageNotified === true,
+    }),
+    notifyRepostedAuthorOnly(deps, params),
+  ]);
+  return notification;
+}
+
+async function notifyRepostedAuthorOnly(
+  deps: NotificationBuilderDependencies,
+  params: Parameters<typeof createPostRepostNotification>[1]
 ): Promise<Notification | null> {
   if (params.actorId === params.postAuthorId) return null;
 

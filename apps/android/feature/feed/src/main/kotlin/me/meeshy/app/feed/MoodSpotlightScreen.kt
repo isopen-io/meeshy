@@ -1,5 +1,11 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.theme.MeeshyTheme
+import androidx.compose.foundation.layout.PaddingValues
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,7 +16,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -20,8 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,8 +32,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,7 +48,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -73,6 +73,7 @@ fun MoodSpotlightScreen(
     viewModel: MoodSpotlightViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mention by viewModel.mention.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
     val snackbar = remember { SnackbarHostState() }
     val sentMessage = stringResource(R.string.mood_spotlight_reply_sent)
@@ -137,7 +138,9 @@ fun MoodSpotlightScreen(
                     authorName = entry?.username.orEmpty(),
                     isSending = state.replyState == MoodReplyState.SENDING,
                     canSend = state.canSend,
+                    mention = mention,
                     onChange = viewModel::onReplyChange,
+                    onMentionSelected = viewModel::onMentionSelected,
                     onSend = { haptics.medium(); viewModel.sendReply() },
                 )
             }
@@ -211,49 +214,34 @@ private fun MoodCard(entry: StatusEntry, avatarUrl: String?) {
     }
 }
 
+/**
+ * La réponse privée à l'humeur, par la barre de commentaire du composer (#13988) — capsule de verre,
+ * emoji, envoi en dégradé —, toujours en sombre au-dessus de la bannière (iOS force `.dark` ici).
+ */
 @Composable
 private fun ReplyBar(
     text: String,
     authorName: String,
     isSending: Boolean,
     canSend: Boolean,
+    mention: MentionAutocompleteState,
     onChange: (String) -> Unit,
+    onMentionSelected: (MentionCandidate) -> Unit,
     onSend: () -> Unit,
 ) {
-    val sendLabel = stringResource(R.string.mood_spotlight_reply_send)
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        TextField(
-            value = text,
-            onValueChange = onChange,
-            placeholder = { Text(stringResource(R.string.mood_spotlight_reply_placeholder, authorName), color = Color.White.copy(alpha = 0.6f)) },
-            maxLines = 4,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
-            shape = RoundedCornerShape(24.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White.copy(alpha = 0.16f),
-                unfocusedContainerColor = Color.White.copy(alpha = 0.16f),
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                cursorColor = Color.White,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-            ),
-            modifier = Modifier.weight(1f),
+    MeeshyTheme(darkTheme = true) {
+        MeeshyCommentComposer(
+            text = text,
+            onTextChange = onChange,
+            placeholder = stringResource(R.string.mood_spotlight_reply_placeholder, authorName),
+            onSend = onSend,
+            isSending = isSending,
+            sendEnabled = canSend,
+            sendLabel = stringResource(R.string.mood_spotlight_reply_send),
+            accentColor = MeeshyPalette.Indigo500,
+            secondaryColor = Color(0xFF8B5CF6),
+            contentPadding = PaddingValues(horizontal = MeeshySpacing.lg, vertical = 10.dp),
+            topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected) },
         )
-        IconButton(
-            onClick = onSend,
-            enabled = canSend,
-            modifier = Modifier.size(44.dp).clip(CircleShape)
-                .background(Brush.linearGradient(listOf(MeeshyPalette.Indigo500, Color(0xFF8B5CF6))))
-                .alpha(if (canSend || isSending) 1f else 0.4f),
-        ) {
-            if (isSending) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-            else Icon(MeeshyIcons.Send, sendLabel, tint = Color.White)
-        }
     }
 }

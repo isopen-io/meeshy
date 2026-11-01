@@ -25,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -42,7 +44,13 @@ import me.meeshy.app.game.pages.rememberGameHidden
 import me.meeshy.sdk.model.game.pages.GamePage
 import me.meeshy.sdk.model.game.pages.GamePageLinks
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
+import me.meeshy.sdk.model.game.GameText
+import me.meeshy.sdk.model.game.progression.FicheHead
 import me.meeshy.sdk.model.game.progression.ProgressionConceptCard
+import me.meeshy.sdk.model.game.progression.ProgressionHeritagePiece
+import me.meeshy.sdk.model.game.progression.ProgressionLeaguePiece
+import me.meeshy.sdk.model.game.progression.ProgressionLevelHero
+import me.meeshy.sdk.model.game.progression.ProgressionMeeshDetail
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameBounceButton
 import me.meeshy.ui.icons.MeeshyIcons
@@ -59,6 +67,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  *
  * « À toi de jouer » range les GESTES du concept (changer un acte, ouvrir l'Offrande, frapper, protéger ou rallumer la
  * Flamme), pilotés par `GameGesturesViewModel` : une intention, la réponse de la passerelle, jamais un solde calculé ici.
+ * [onOpenBadgesGuide] ouvre le carnet des règles à ses médailles ; nul, l'étagère ne montre pas le lien.
  */
 @Composable
 fun ProgressionConceptScreen(
@@ -66,6 +75,8 @@ fun ProgressionConceptScreen(
     onBack: () -> Unit,
     onOpenConcept: (ProgressionConcept) -> Unit,
     onOpenPage: (GamePage) -> Unit = {},
+    onOpenSection: (ProgressionSection) -> Unit = {},
+    onOpenBadgesGuide: (() -> Unit)? = null,
     viewModel: ProgressionViewModel = hiltViewModel(),
     gestures: GameGesturesViewModel = hiltViewModel(),
 ) {
@@ -73,6 +84,7 @@ fun ProgressionConceptScreen(
     val hidden = rememberGameHidden()
     val snapshot = state.snapshot
     val card = snapshot?.cards?.firstOrNull { it.concept == concept }
+    val fiche = snapshot?.fiches?.get(concept)
 
     GamePageScaffold(
         title = stringResource(ConceptCopy.name(concept)),
@@ -88,11 +100,39 @@ fun ProgressionConceptScreen(
         }
         if (state.plan.showsSkeleton) ProgressionSkeleton()
         if (snapshot != null) {
-            if (card != null) ConceptHero(card, snapshot.game)
+            val sparks = (fiche?.head as? FicheHead.Sparks)?.head
+            when {
+                // TA LUMIÈRE (iOS `GameSparksHeadView`) : la poche en grand, le « depuis toujours » en petit.
+                sparks != null -> GameSparksHeadView(sparks, snapshot.game)
+                // UNE pièce, UN héros (iOS `ProgressionConceptPage.hero`, `.piece`) : elle REMPLACE le héros générique.
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Elans -> ElansPiece(snapshot.progress.elan)
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.League ->
+                    ProgressionLeaguePiece.of(snapshot.game?.league)?.let { LeaguePiece(it, onOpen = { onOpenPage(GamePage.League) }) }
+                // L'anneau avec le bloc de jeu ; sans lui, la tête du niveau d'iOS (`ProgressionLevelHero`).
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Level -> snapshot.game
+                    ?.let { LevelPiece(it, snapshot.progress.elan) }
+                    ?: LevelHeroWithoutGame(ProgressionLevelHero.of(snapshot.progress.level))
+                // L'HÉRITAGE puis le cadre de la frappe, EN TÊTE (iOS `GameHeritageHeadView` + `GameMintPreviewView`) ;
+                // sans bloc de jeu, le portefeuille et sa frappe (iOS `ProgressionMeeshDetail`).
+                fiche?.head == FicheHead.Piece && concept == ProgressionConcept.Meesh -> snapshot.game?.let { game ->
+                    val acting by gestures.state.collectAsStateWithLifecycle()
+                    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+                        HeritageAndMint(ProgressionHeritagePiece.served(snapshot.progress, game), game, acting, onMint = { gestures.mint(game.mint) })
+                    }
+                } ?: snapshot.progress.meesh?.let { meesh ->
+                    MeeshDetailWithoutGame(ProgressionMeeshDetail.of(meesh), gestures)
+                }
+                // La ligne du héros s'efface quand les gestes de la fiche la disent déjà (iOS `fiche.heroLine`).
+                card != null -> ConceptHero(card, snapshot.game, line = if (fiche != null) fiche.heroLine else card.line)
+            }
             FicheSection(stringResource(R.string.game_fiche_what)) {
                 Sentence(stringResource(ConceptCopy.what(concept)))
                 Sentence(stringResource(ConceptCopy.why(concept)), strong = true)
                 Sentence(stringResource(ConceptCopy.how(concept)))
+            }
+            // « Où j'en suis » ne redit rien : la section disparaît quand elle n'a rien à ajouter (iOS #11180).
+            if (fiche != null && fiche.hasWhere) {
+                FicheSection(stringResource(R.string.game_fiche_where)) { ConceptWhereContent(fiche, concept) }
             }
             FicheSection(stringResource(R.string.game_fiche_earn)) {
                 Sentence(stringResource(ConceptCopy.tip1(concept)))
@@ -102,15 +142,23 @@ fun ProgressionConceptScreen(
                 Sentence(stringResource(ConceptCopy.use(concept)))
             }
             val game = snapshot.game
-            if (game != null && conceptHasGestures(concept, game)) {
-                FicheSection(stringResource(R.string.game_concept_section_act)) { ConceptGestures(concept, game, gestures) }
+            // La frappe monte en tête avec l'Héritage : « À toi de jouer » ne la redit pas.
+            val acts = game != null && conceptHasGestures(concept, game) && !(concept == ProgressionConcept.Meesh && fiche?.head == FicheHead.Piece)
+            if (acts || conceptHasRevealPiece(concept)) {
+                FicheSection(stringResource(R.string.game_concept_section_act)) {
+                    if (acts && game != null) ConceptGestures(concept, game, gestures)
+                    // Les médailles et le dernier haut fait se TOUCHENT : ils s'ouvrent en grand, en consultation.
+                    ConceptRevealPiece(concept, snapshot.progress, game, hidden.hidden, onOpenBadgesGuide)
+                }
             }
             if (concept == ProgressionConcept.Points) {
                 ConceptLink(stringResource(R.string.game_fiche_light_to_heritage)) { onOpenConcept(ProgressionConcept.Meesh) }
             }
             val pages = GamePageLinks.of(concept)
-            if (pages.isNotEmpty()) {
+            val sections = ProgressionSection.of(concept)
+            if (pages.isNotEmpty() || sections.isNotEmpty()) {
                 FicheSection(stringResource(R.string.game_fiche_more)) {
+                    sections.forEach { section -> ConceptLink(stringResource(sectionLinkTitle(section))) { onOpenSection(section) } }
                     pages.forEach { page -> ConceptLink(stringResource(pageLinkTitle(page))) { onOpenPage(page) } }
                 }
             }
@@ -120,10 +168,10 @@ fun ProgressionConceptScreen(
 
 /** La tête générique : l'emblème en grand, la valeur, la ligne, la jauge qui se remplit à l'ouverture. */
 @Composable
-private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.game.GameBlock?) {
+private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.game.GameBlock?, line: GameText?) {
     val tokens = MeeshyTheme.tokens
     val value = card.value?.let { gameString(it) }.orEmpty()
-    val line = card.line?.let { gameString(it) }
+    val line = line?.let { gameString(it) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -151,7 +199,7 @@ private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.
                 }
             }
         }
-        card.gauge?.let { ConceptGauge(it.toFloat(), card.concept) }
+        card.gauge?.let { ConceptGauge(it.toFloat(), card.concept.tint()) }
     }
 }
 
@@ -160,7 +208,7 @@ private fun ConceptHero(card: ProgressionConceptCard, game: me.meeshy.sdk.model.
  * glisse quand la valeur change. La fraction est lue À LA PEINTURE : aucune recomposition pendant l'animation.
  */
 @Composable
-private fun ConceptGauge(target: Float, concept: ProgressionConcept) {
+internal fun ConceptGauge(target: Float, tint: Color) {
     val reduce = LocalReduceMotion.current
     val tokens = MeeshyTheme.tokens
     val goal = target.coerceIn(0f, 1f)
@@ -168,7 +216,6 @@ private fun ConceptGauge(target: Float, concept: ProgressionConcept) {
     LaunchedEffect(goal, reduce) {
         if (reduce) fill.snapTo(goal) else fill.animateTo(goal, tween(GAUGE_MILLIS))
     }
-    val tint = concept.tint()
     val track = tokens.textMuted.copy(alpha = TRACK_ALPHA)
     Canvas(Modifier.fillMaxWidth().height(GAUGE_HEIGHT)) {
         val radius = CornerRadius(size.height / 2f)
@@ -202,9 +249,12 @@ private fun Sentence(text: String, strong: Boolean = false) {
     )
 }
 
-/** Une ligne simple vers une autre fiche : un titre, un chevron, 44 dp au moins, et le rebond du jeu. */
+/**
+ * Une ligne simple vers une autre page : un pictogramme facultatif, un titre, un chevron, 44 dp au moins, et le rebond
+ * du jeu (iOS `ProgressionConceptRow`).
+ */
 @Composable
-private fun ConceptLink(title: String, onClick: () -> Unit) {
+internal fun ConceptLink(title: String, leading: ImageVector? = null, onClick: () -> Unit) {
     GameBounceButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -216,6 +266,7 @@ private fun ConceptLink(title: String, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            leading?.let { Icon(it, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(20.dp)) }
             Text(
                 title,
                 Modifier.weight(1f),

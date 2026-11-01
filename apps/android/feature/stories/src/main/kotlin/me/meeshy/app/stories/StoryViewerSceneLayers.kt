@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -72,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -125,7 +125,7 @@ import me.meeshy.ui.theme.hexColor
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 
 /** L'arrondi d'un média de premier plan, en fraction de son petit côté — `StoryMediaLayer.cornerRadiusFraction` (iOS). */
-private const val FOREGROUND_CORNER_FRACTION = 0.06f
+internal const val FOREGROUND_CORNER_FRACTION = 0.06f
 
 /**
  * A foreground video/image layer positioned at [StoryForegroundMediaView.x]/[y]
@@ -150,10 +150,11 @@ internal fun StoryForegroundLayer(
 ) {
     if (media.isVideo && !players && restingPosterKind(media.posterUrl, media.thumbHash) == RestingPosterKind.NONE) return
     val animated = media.animated(playheadSeconds)
+    val layered = animated.layered
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val frame = ForegroundMediaFrame.renderedSize(
             aspectRatio = animated.aspectRatio,
-            scale = animated.scale.coerceIn(0.2, 3.0),
+            scale = layered.layout,
             canvasWidth = maxWidth.value.toDouble(),
         )
         val targetWidth = frame.width.toFloat().dp
@@ -161,9 +162,14 @@ internal fun StoryForegroundLayer(
         val offsetX = maxWidth * animated.x.toFloat() - targetWidth / 2
         val offsetY = maxHeight * animated.y.toFloat() - targetHeight / 2
         val layerModifier = Modifier
+            .wrapContentSize(Alignment.TopStart, unbounded = true)
             .offset(x = offsetX, y = offsetY)
             .size(targetWidth, targetHeight)
-            .graphicsLayer { rotationZ = media.rotation.toFloat() }
+            .graphicsLayer {
+                rotationZ = media.rotation.toFloat()
+                scaleX = layered.layerFloat
+                scaleY = layered.layerFloat
+            }
             .clip(RoundedCornerShape(minOf(targetWidth, targetHeight) * FOREGROUND_CORNER_FRACTION))
             .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
         if (media.isVideo && !players) {
@@ -235,8 +241,8 @@ internal fun StoryTextObjectLayer(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 // iOS mesure le texte à 88 % de la scène de 1080 puis agrandit le calque par transform : la largeur
-                // de mesure suit l'échelle de l'objet, pas les contraintes de l'écran ; la scène rogne (#13582).
-                .wrapContentWidth(Alignment.Start, unbounded = true)
+                // de mesure suit l'échelle de l'objet, pas les contraintes de l'écran ; la scène rogne (#13582, #14298).
+                .wrapContentSize(Alignment.TopStart, unbounded = true)
                 .onSizeChanged { textSize = it }
                 .offset {
                     IntOffset(
@@ -244,7 +250,11 @@ internal fun StoryTextObjectLayer(
                         (centerYpx - textSize.height / 2f).roundToInt(),
                     )
                 }
-                .graphicsLayer { rotationZ = animated.rotation.toFloat() }
+                .graphicsLayer {
+                    rotationZ = animated.rotation.toFloat()
+                    scaleX = animated.layered.layerFloat
+                    scaleY = animated.layered.layerFloat
+                }
                 .alpha(animated.opacity.toFloat().coerceIn(0f, 1f)),
         ) {
           FramedTextBox(
@@ -295,30 +305,38 @@ internal fun StoryTextObjectLayer(
 
 /**
  * Un sticker posé par l'auteur, centré sur son point normalisé, à son côté projeté
- * ([StoryStickerView.sideFraction] de la largeur, plancher 8 dp comme iOS), incliné de sa
+ * ([StoryStickerView.sideFraction] de la largeur, sans plancher ni plafond : la mise en page s'arrête à quatre
+ * largeurs et le calque agrandit au-delà, #14298), incliné de sa
  * rotation et fondu selon son enveloppe. Un gabarit connu se dessine ([StickerTemplateArtwork]) ; une image
  * intégrée prime sur l'emoji (iOS `StoryStickerLayer`), qui ne tient la place que tant qu'elle charge.
  */
 @Composable
 internal fun StoryStickerLayer(sticker: StoryStickerView, playheadSeconds: Float, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val side = (maxWidth * sticker.sideFraction.toFloat()).coerceAtLeast(MIN_STICKER_SIDE)
+        val drawn = sticker.drawnSide
+        val side = maxWidth * drawn.layout.toFloat()
         val density = LocalDensity.current
         Box(
             modifier = Modifier
+                .wrapContentSize(Alignment.TopStart, unbounded = true)
                 .offset(
                     x = maxWidth * sticker.x.toFloat() - side / 2,
                     y = maxHeight * sticker.y.toFloat() - side / 2,
                 )
                 .size(side)
-                .graphicsLayer { rotationZ = sticker.rotation.toFloat() }
+                .graphicsLayer {
+                    rotationZ = sticker.rotation.toFloat()
+                    scaleX = drawn.layerFloat
+                    scaleY = drawn.layerFloat
+                }
+                .testTag(STORY_STICKER_TAG)
                 .alpha(sticker.opacity(playheadSeconds).toFloat().coerceIn(0f, 1f)),
             contentAlignment = Alignment.Center,
         ) {
             if (StickerTemplateArtwork.knows(sticker.templateId)) {
-                StickerTemplateArtwork(sticker.templateId, sticker.slots, body = side * STICKER_TEMPLATE_BODY_FRACTION)
+                StickerTemplateArtwork(sticker.templateId, sticker.slots, body = side * StickerArtMetrics.TEMPLATE_BODY_FRACTION)
             } else {
-                StickerGlyphOrImage(sticker, with(density) { (side * STICKER_GLYPH_FRACTION).toSp() })
+                StickerGlyphOrImage(sticker, with(density) { (side * StickerArtMetrics.GLYPH_FRACTION).toSp() })
             }
         }
     }
@@ -342,9 +360,6 @@ private fun StickerGlyphOrImage(sticker: StoryStickerView, glyphSize: androidx.c
     }
 }
 
-/** Le corps de texte d'un gabarit, en part du côté du sticker : un cadre à mots tient dans le carré qu'iOS lui donne. */
-private const val STICKER_TEMPLATE_BODY_FRACTION = 0.16f
-
 /**
  * La puce d'un son de premier plan, aux mesures d'iOS `AudioForegroundChip` (capsule de
  * verre sombre, liseré, onde de marque, marges 12 × 8, contenu 54 ou 92) exprimées sur une
@@ -352,7 +367,7 @@ private const val STICKER_TEMPLATE_BODY_FRACTION = 0.16f
  * scène que chez l'auteur.
  */
 @Composable
-internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = Modifier) {
+internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = Modifier, chipModifier: Modifier = Modifier) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val unit = maxWidth / AUDIO_CHIP_REFERENCE_WIDTH
         val contentWidth = unit * if (chip.credit != null) AUDIO_CHIP_CREDIT_WIDTH else AUDIO_CHIP_WAVE_WIDTH
@@ -366,6 +381,7 @@ internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = 
                     y = maxHeight * chip.y.toFloat() - chipHeight / 2,
                 )
                 .size(width = chipWidth, height = chipHeight)
+                .then(chipModifier)
                 .background(Color.Black.copy(alpha = 0.28f), CircleShape)
                 .border(width = unit, color = Color.White.copy(alpha = 0.25f), shape = CircleShape)
                 .padding(horizontal = unit * AUDIO_CHIP_PAD_X, vertical = unit * AUDIO_CHIP_PAD_Y),
@@ -424,8 +440,6 @@ private fun audioChipBars(samples: List<Float>): List<Float> {
     }
 }
 
-private val MIN_STICKER_SIDE = 8.dp
-private const val STICKER_GLYPH_FRACTION = 0.8f
 private const val AUDIO_CHIP_REFERENCE_WIDTH = 390f
 private const val AUDIO_CHIP_PAD_X = 12f
 private const val AUDIO_CHIP_PAD_Y = 8f
@@ -436,3 +450,6 @@ private const val AUDIO_CHIP_CREDIT_WIDTH = 92f
 private const val AUDIO_CHIP_CREDIT_SIZE = 12f
 private const val AUDIO_CHIP_BARS = 9
 private val DEFAULT_WAVE = listOf(0.35f, 0.7f, 0.5f, 0.95f, 0.6f, 0.85f, 0.4f, 0.65f, 0.3f)
+
+/** La boîte d'un sticker du lecteur, pour les témoins qui mesurent sa taille peinte. */
+internal const val STORY_STICKER_TAG = "story-sticker"

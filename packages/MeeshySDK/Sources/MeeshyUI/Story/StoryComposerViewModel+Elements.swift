@@ -409,51 +409,46 @@ extension StoryComposerViewModel {
     /// Public depuis #4063 — même raison que `deleteElement`.
     public func duplicateElement(id: String) {
         var effects = currentEffects
-        if var text = effects.textObjects.first(where: { $0.id == id }) {
-            // Locked text objects (repost-attribution badge) are not duplicable —
-            // duplicating would create a second editable copy that strips intent.
-            if text.isLocked == true { return }
-            guard canAddText else { return }
-            text.id = UUID().uuidString
-            // Offset is 20 design pixels in the 1080x1920 canvas (≈2% x, ≈1% y).
-            // Small enough that the clone visibly overlaps its source so the
-            // user sees the duplication happened, large enough to be selectable
-            // independently. The previous 0.05 (54 design px) was too wide and
-            // jumped the clone outside the source's selection rect.
-            text.x = min(1.0, text.x + 20.0 / 1080.0)
-            text.y = min(1.0, text.y + 20.0 / 1920.0)
-            effects.textObjects.append(text)
-            selectedElementId = text.id
-        } else if var media = effects.mediaObjects?.first(where: { $0.id == id }) {
+        let copie: String
+        var devant = false
+        if let text = effects.textObjects.first(where: { $0.id == id }) {
+            // Le badge d'attribution d'un repost ne se copie pas.
+            guard text.isLocked != true, canAddText else { return }
+            let clone = StorySceneDuplicate.text(text)
+            effects.textObjects.append(clone)
+            copie = clone.id
+        } else if let media = effects.mediaObjects?.first(where: { $0.id == id }) {
             guard canAddMedia else { return }
-            let newId = UUID().uuidString
-            media.id = newId
-            // Le clone est TOUJOURS un foreground : dupliquer un média de fond
-            // créait un 2e background (invariant « au plus 1 background / slide »
-            // violé) qui remplit tout le canvas en ignorant l'offset → clone
-            // invisible (l'utilisateur ne voyait rien). Bug 2026-06-01.
-            media.isBackground = false
-            media.x = min(1.0, media.x + 0.05)
-            media.y = min(1.0, media.y + 0.05)
-            effects.mediaObjects?.append(media)
-            if let img = loadedImages[id] { loadedImages[newId] = img }
-            if let url = loadedVideoURLs[id] { loadedVideoURLs[newId] = url }
-            selectedElementId = media.id
-        } else if var audio = effects.audioPlayerObjects?.first(where: { $0.id == id }) {
+            let clone = StorySceneDuplicate.media(media)
+            effects.mediaObjects?.append(clone)
+            copie = clone.id
+            if let img = loadedImages[id] { loadedImages[copie] = img }
+            if let url = loadedVideoURLs[id] { loadedVideoURLs[copie] = url }
+        } else if let audio = effects.audioPlayerObjects?.first(where: { $0.id == id }) {
             guard canAddMedia else { return }
-            let newId = UUID().uuidString
-            audio.id = newId
-            // Idem média : le clone est foreground, sinon dupliquer l'audio de
-            // fond créait un 2e background audio (invariant « 1 audio de fond /
-            // slide » violé). Bug 2026-06-01.
-            audio.isBackground = false
-            audio.x = min(1.0, audio.x + 0.05)
-            audio.y = min(1.0, audio.y + 0.05)
-            effects.audioPlayerObjects?.append(audio)
-            if let url = loadedAudioURLs[id] { loadedAudioURLs[newId] = url }
-            selectedElementId = audio.id
+            let clone = StorySceneDuplicate.audio(audio)
+            effects.audioPlayerObjects?.append(clone)
+            copie = clone.id
+            if let url = loadedAudioURLs[id] { loadedAudioURLs[copie] = url }
+        } else if let sticker = effects.stickerObjects?.first(where: { $0.id == id }) {
+            guard canAddSticker else { return }
+            let clone = StorySceneDuplicate.sticker(sticker)
+            effects.stickerObjects?.append(clone)
+            copie = clone.id
+            devant = true
+            if let img = loadedImages[id] { registerLoadedImage(img, for: copie) }
+            if let bytes = loadedStickerAnimations[id] { registerLoadedStickerAnimation(bytes, for: copie) }
+        } else if let lieu = effects.locationObjects.first(where: { $0.id == id }) {
+            let clone = StorySceneDuplicate.place(lieu)
+            effects.locationObjects.append(clone)
+            copie = clone.id
+            devant = true
+        } else {
+            return
         }
+        selectedElementId = copie
         currentEffects = effects
+        if devant { bringToFront(id: copie) }
     }
 
     /// Bascule le statut background pour un media visuel OU un audio.
@@ -470,9 +465,7 @@ extension StoryComposerViewModel {
                 || effects.resolvedBackgroundMedia?.id == id
             let newValue = !current
             if newValue {
-                for i in effects.mediaObjects!.indices {
-                    effects.mediaObjects![i].isBackground = (i == idx) ? true : false
-                }
+                effects.promoteBackgroundMedia(at: idx)
             } else {
                 // Matérialise le flag à `false` pour neutraliser la règle legacy.
                 effects.mediaObjects![idx].isBackground = false
@@ -516,49 +509,45 @@ extension StoryComposerViewModel {
     /// Volume d'un audio (clamp [0, 1]). No-op si l'id ne match aucun audio.
     /// Passe par le mémento : glisser le slider à 0 vaut mute un-bouton, et
     /// l'unmute suivant restaurera le niveau quitté.
-    func setAudioVolume(audioId: String, volume: Float) {
-        var effects = currentEffects
-        guard var audios = effects.audioPlayerObjects,
-              let i = audios.firstIndex(where: { $0.id == audioId }) else { return }
-        audios[i].setVolumePreservingMuteMemento(min(1, volume))
-        effects.audioPlayerObjects = audios
-        currentEffects = effects
+    public func setAudioVolume(audioId: String, volume: Float) {
+        editAudio(id: audioId) { $0.setVolumePreservingMuteMemento(min(1, volume)) }
     }
 
     /// Mute un-bouton d'une piste AUDIO (chip canvas, cellule du panneau Son).
     /// Persisté via `volume` (0 = muet) + mémento de restauration — le reader
     /// d'un autre utilisateur n'entend donc jamais une piste mutée par l'auteur.
-    func toggleAudioMute(id: String) {
-        var effects = currentEffects
-        guard var audios = effects.audioPlayerObjects,
-              let i = audios.firstIndex(where: { $0.id == id }) else { return }
-        audios[i].toggleMute()
-        effects.audioPlayerObjects = audios
-        currentEffects = effects
+    public func toggleAudioMute(id: String) {
+        editAudio(id: id) { $0.toggleMute() }
     }
 
-    /// **Le quart de tour d'un média** (#4082, vue `2d`). La règle vit dans
-    /// `StoryMediaRotation` : elle normalise, et elle porte le SENS du glyphe.
-    ///
-    /// Contrairement au muet, ce geste vaut pour une IMAGE autant que pour une
-    /// vidéo — une photo prise de travers est le cas nominal, pas l'exception.
+    /// **Le quart de tour d'un média** (#4082, vue `2d`), image comme vidéo ;
+    /// la règle et le SENS du glyphe vivent dans `StoryMediaRotation`.
     public func rotateMedia(id: String) {
-        var effects = currentEffects
-        guard var medias = effects.mediaObjects,
-              let i = medias.firstIndex(where: { $0.id == id }) else { return }
-        medias[i].rotation = StoryMediaRotation.turned(medias[i].rotation)
-        effects.mediaObjects = medias
-        currentEffects = effects
+        editMedia(id: id) { $0.rotation = StoryMediaRotation.turned($0.rotation) }
     }
 
-    /// Mute un-bouton d'une piste VIDÉO (bouton canvas, rangée du panneau
-    /// Médias). No-op pour une image — rien à couper.
+    /// Mute un-bouton d'une piste VIDÉO ; no-op pour une image.
     public func toggleMediaMute(id: String) {
+        editMedia(id: id, videoOnly: true) { $0.toggleMute() }
+    }
+
+    /// Volume d'une piste VIDÉO, 0 à `StoryVolume.maxGain` (#13974) ; 0 vaut Muet.
+    public func setMediaVolume(id: String, volume: Float) {
+        editMedia(id: id, videoOnly: true) { $0.setVolumePreservingMuteMemento(min(StoryVolume.maxGain, volume)) }
+    }
+
+    private func editAudio(id: String, _ edit: (inout StoryAudioPlayerObject) -> Void) {
+        guard var audios = currentEffects.audioPlayerObjects,
+              let i = audios.firstIndex(where: { $0.id == id }) else { return }
+        edit(&audios[i])
+        currentEffects.audioPlayerObjects = audios
+    }
+
+    private func editMedia(id: String, videoOnly: Bool = false, _ edit: (inout StoryMediaObject) -> Void) {
         var effects = currentEffects
-        guard var medias = effects.mediaObjects,
-              let i = medias.firstIndex(where: { $0.id == id }),
-              medias[i].kind == .video else { return }
-        medias[i].toggleMute()
+        guard var medias = effects.mediaObjects, let i = medias.firstIndex(where: { $0.id == id }),
+              !videoOnly || medias[i].kind == .video else { return }
+        edit(&medias[i])
         effects.mediaObjects = medias
         currentEffects = effects
     }

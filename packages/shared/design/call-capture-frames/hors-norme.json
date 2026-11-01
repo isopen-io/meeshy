@@ -5,6 +5,15 @@
       "id": "hors-norme.pop-art",
       "mood": "hors-norme",
       "name": "Pop Art",
+      "localizedNames": {
+        "fr": "Pop Art",
+        "en": "Pop Art",
+        "es": "Pop art",
+        "pt": "Pop art",
+        "de": "Pop-Art",
+        "it": "Pop art",
+        "ar": "بوب آرت"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -278,6 +287,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "slot": {
               "shape": "rect",
@@ -341,6 +359,15 @@
       "id": "hors-norme.collage",
       "mood": "hors-norme",
       "name": "Collage",
+      "localizedNames": {
+        "fr": "Collage",
+        "en": "Collage",
+        "es": "Collage",
+        "pt": "Colagem",
+        "de": "Collage",
+        "it": "Collage",
+        "ar": "كولاج"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -540,6 +567,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "solid",
@@ -596,6 +632,15 @@
       "id": "hors-norme.vitrail",
       "mood": "hors-norme",
       "name": "Vitrail",
+      "localizedNames": {
+        "fr": "Vitrail",
+        "en": "Stained Glass",
+        "es": "Vitral",
+        "pt": "Vitral",
+        "de": "Buntglas",
+        "it": "Vetrata",
+        "ar": "زجاج معشّق"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -811,6 +856,15 @@
       "id": "hors-norme.tete-d-affiche",
       "mood": "hors-norme",
       "name": "Tête d’affiche",
+      "localizedNames": {
+        "fr": "Tête d’affiche",
+        "en": "Headliner",
+        "es": "Cabeza de cartel",
+        "pt": "Atração principal",
+        "de": "Hauptattraktion",
+        "it": "Protagonista",
+        "ar": "نجم الملصق"
+      },
       "surfaces": [
         "capture"
       ],
@@ -968,6 +1022,15 @@
         {
           "id": "relief",
           "name": "Relief",
+          "localizedNames": {
+            "fr": "Relief",
+            "en": "Relief",
+            "es": "Relieve",
+            "pt": "Relevo",
+            "de": "Relief",
+            "it": "Rilievo",
+            "ar": "نقش بارز"
+          },
           "look": {
             "background": {
               "kind": "radial",

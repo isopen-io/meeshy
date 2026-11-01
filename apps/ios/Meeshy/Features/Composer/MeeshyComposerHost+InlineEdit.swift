@@ -55,15 +55,18 @@ extension MeeshyComposerHost {
     /// pas. Rouvrir l'objet déjà édité garde son sous-outil ouvert, sauf si la
     /// porte en désigne un autre.
     @discardableResult
-    func beginInlineEdit(_ id: String, section: ComposerObjectEditorSection? = nil) -> Bool {
+    func beginInlineEdit(_ id: String, section: ComposerObjectEditorSection? = nil,
+                         purpose: ComposerInlineEditPurpose = .modify) -> Bool {
         guard let famille = inlineFamily(of: id) else { return false }
-        let gardee = activeInlineEdit?.objectId == id ? activeInlineEdit?.openSection : nil
+        let memeFeuille = activeInlineEdit?.objectId == id && activeInlineEdit?.purpose == purpose
         guard let edition = ComposerInlineEditing.begin(
             objectId: id,
             family: famille,
             onSceneSurface: mountedComposerView == .scene,
-            requested: section ?? gardee,
-            hasTrimmableSource: viewModel.sourceTrim(id: id) != nil) else { return false }
+            requested: section,
+            hasTrimmableSource: viewModel.sourceTrim(id: id) != nil,
+            purpose: purpose,
+            kept: memeFeuille ? activeInlineEdit : nil) else { return false }
         let nouvelle = activeInlineEdit?.objectId != id
         presentedPortal = nil
         openSceneEffect = nil
@@ -90,6 +93,7 @@ extension MeeshyComposerHost {
     /// vide (il la supprime).
     func leaveInlineEdit() {
         if viewModel.textEditingMode.activeTextId != nil {
+            keyboardDock.end()
             dismissTextEditing()
             viewModel.exitTextEditingMode()
         }
@@ -101,37 +105,25 @@ extension MeeshyComposerHost {
         UIAccessibility.post(notification: .announcement, argument: ComposerInlineEditCopy.left)
     }
 
-    /// Les options du sous-outil ouvert, remises à la surface : elle les pose à
-    /// droite de la scène, depuis le haut. Le DESSIN y passe d'abord (#9145) :
-    /// il capture le doigt sur toute la scène, comme il l'emporte sur la
-    /// colonne de droite (`ComposerTrailingColumn.focus`).
+    /// Les options du PINCEAU, remises à la surface (#9145) : le dessin
+    /// capture le doigt sur toute la scène, ses réglages se posent contre sa
+    /// barre. Les propriétés d'un objet, elles, vivent en bas
+    /// (`ComposerSceneSelectionRelay.propertiesSheet`).
     var sceneInlinePanel: AnyView? {
         if viewModel.isDrawingActive { return sceneDrawingOptionsPanel }
-        guard let edition = activeInlineEdit, let section = edition.openSection else { return nil }
-        let porteUnMedia: Bool
-        switch edition.family {
-        case .image, .video, .background: porteUnMedia = true
-        case .text, .audio, .sticker, .place: porteUnMedia = false
-        }
-        return AnyView(ComposerInlineToolPanel(
-            viewModel: viewModel,
-            edit: edition,
-            section: section,
-            plateauTint: tint.color,
-            altText: porteUnMedia ? mediaAltBinding(for: edition.objectId) : nil,
-            onSelectObject: { beginInlineEdit($0, section: .plan) },
-            onCompareLook: { comparingLookObjectId = $0 ? edition.objectId : nil }))
+        return nil
     }
 
-    /// **Les options du pinceau, à droite depuis le haut** (#9145) — la plaque
+    /// **Les options du pinceau, au-dessus de la barre de dessin** (#9145,
+    /// #13839 : la barre est en bas, son panneau s'ouvre contre elle) — la plaque
     /// de l'édition en place, avec le panneau d'options du SDK : le contrôleur
-    /// touché dans la colonne de droite s'y déplie, la scène ne remonte plus.
+    /// touché dans la barre s'y déplie, la scène ne remonte plus.
     var sceneDrawingOptionsPanel: AnyView? {
         guard ComposerFirstView.trailingPanelShowsDrawingOptions(
             drawing: viewModel.isDrawingActive,
             expandedTool: viewModel.drawingEditingMode.expandedTool != nil,
             strokeSelected: viewModel.drawingEditingMode.selectedStrokeId != nil) else { return nil }
-        return AnyView(ComposerTrailingOptionsPlate(plateauTint: tint.color) {
+        return AnyView(ComposerTrailingOptionsPlate(plateauTint: tint.color, preferredEdge: .bottom) {
             MeeshyToolOptionsPanel(viewModel: viewModel)
         })
     }

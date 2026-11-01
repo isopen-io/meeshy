@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_viewer_export_save">Video speichern</string>
+    <string name="stories_viewer_export_share">Video teilen</string>
+    <string name="stories_viewer_export_imager">Als Bild</string>
+    <string name="stories_export_length_title">Welche Dauer rendern?</string>
+    <string name="stories_export_length_subtitle">Ab dem Anfang der Story</string>
+    <string name="stories_export_length_option">%1$d/4 · %2$s</string>
+</resources>

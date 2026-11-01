@@ -143,6 +143,7 @@ function makePrisma(opts: {
       ),
       findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, content: 'hi', authorId: AUTHOR_ID }),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findFirst: jest.fn<any>().mockResolvedValue(opts.isFriend ? { id: 'fr-1' } : null),
     },
@@ -542,6 +543,7 @@ function makeRepostPrisma(
         Promise.resolve(opts.commentOn && where.id === opts.commentOn.id ? { postId: opts.commentOn.postId, post: opts.commentOn.post } : null)),
       findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, content: 'hi', authorId: AUTHOR_ID }),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
     participant: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },

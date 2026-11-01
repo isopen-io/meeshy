@@ -60,6 +60,11 @@ import SwiftUI
 ///
 /// Les déclarer ici sans les servir dit la CIBLE sans la mentir.
 nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
+    /// **◫ LOOK — les filtres, effets et cadres de l'appel** (#13840) : ce que la
+    /// retouche cuisait au « Terminé » est un RÉGLAGE de l'objet
+    /// (`StoryMediaObject.look`), peint en direct par le peintre de l'app et cuit
+    /// à la publication seulement. Servi à toute image ou vidéo, posée ou fond.
+    case look
     /// Les bornes de lecture — existe de bout en bout (`MediaTrimStrip`).
     case trim
     /// Muet et quart de tour — existent tous deux.
@@ -136,7 +141,10 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// `adjust` suit le filtre (#9175) : on choisit un rendu, puis on le règle —
     /// l'ordre de l'éditeur d'image, dont la scène reprend la chaîne. `effects`
     /// suit les réglages, comme l'étage effet clôt cette chaîne.
-    static let served: [MediaEditTool] = [.filter, .adjust, .effects, .trim, .actions, .altText]
+    ///
+    /// `look` ouvre la liste (#13840) : les filtres de l'appel, puis le filtre
+    /// de story — l'ordre de la retouche, qui choisit un rendu avant de le régler.
+    static let served: [MediaEditTool] = [.look, .filter, .adjust, .effects, .trim, .actions, .altText]
 }
 
 nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
@@ -497,6 +505,7 @@ nonisolated enum ComposerObjectEditorRail {
         case .plan:   return "rectangle.grid.1x2"
         case .media(let outil):
             switch outil {
+            case .look:    return "photo.artframe"
             case .trim:    return "scissors"
             case .actions: return "slider.horizontal.3"
             case .crop:    return "crop"

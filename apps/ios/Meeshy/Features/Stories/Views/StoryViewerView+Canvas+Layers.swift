@@ -22,7 +22,7 @@ extension StoryCardView {
         // Le tap toggle le mute *per-piste* via la registry partagée
         // (`StoryReaderAudioMuteRegistry`) — la canvas applique au mixer.
         if let story = currentStory,
-           let audios = story.storyEffects?.audioPlayerObjects,
+           let audios = story.storyEffects.map(SceneAudioStageRule.overlaidAudios(in:)),
            !audios.isEmpty {
             AudioForegroundReaderOverlay(
                 foregroundAudios: audios,

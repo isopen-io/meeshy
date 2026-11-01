@@ -613,3 +613,34 @@ en production. Distinguer coque et native sous `me.meeshy.app` par la version : 
 `me.meeshy.app` servent la native telles quelles. Republier la coque exige une fiche `me.meeshy.webapp`, une
 app Firebase et une entrée `assetlinks.json` à son nom.
 
+
+---
+
+## ADR-029 — La session d'un compte survit à la réinstallation, dans le Block Store, liée à l'appareil
+**Date:** 2026-11-01 · **Status:** accepted · **Issue:** #14058
+
+**Context.** iOS garde ses jetons dans le Keychain (`ThisDeviceOnly`), qui survit à la désinstallation ;
+Android (`allowBackup="false"`) redemandait identifiant et mot de passe après chaque réinstallation.
+
+**Decision.** `BackedUpTokenStore` décore le `TokenStore` : toute session COMPLÈTE de compte (identité, JWT,
+jeton de session — le pair que `POST /auth/refresh` exige ; jamais le mot de passe) est recopiée dans le Block
+Store (`setShouldBackupToCloud(false)`, une clé par serveur), et `clear()` l'efface sous le même verrou. La
+charge porte l'`ANDROID_ID` : un transfert d'appareil à appareil (que le Block Store fait même sans nuage) ne
+s'ouvre pas, il s'efface. Au démarrage sans session, `AuthRepository.restoreBackedUpSession()` renouvelle la
+sauvegarde ; un refus l'efface sans message — un 401, ou un 403 `AGE_BELOW_MINIMUM`, seuls verdicts de la
+passerelle (#14078, `SessionRefresher.refuses`) — ; hors ligne, en panne serveur ou derrière un proxy, elle est gardée.
+Un renouvellement en cours de session suit la même règle : ce qui n'est pas un refus rend `Renewal.Deferred`, la
+session et sa sauvegarde restent (#14078). Un refus sans session locale
+n'annonce plus d'expiration (`SessionRefresher.signalsExpiry`). Une connexion à la main annule la restauration. « Rester connecté » décoché (décision porteur) : aucune
+sauvegarde, et l'entrée existante est effacée (`KeepSignedInConsent`, relu dans `SavedAccount.keepsSession`).
+
+**Rejected.** `allowBackup` + Auto Backup : la sauvegarde part dans le nuage et vers un autre appareil.
+Sauvegarder le mot de passe ou un `CredentialManager` : ce serait garder un secret que l'utilisateur n'a pas
+confié à l'app. Restaurer sans renouveler : l'app s'ouvrirait sur un jeton peut-être révoqué.
+
+**Consequences.** La survie suppose Play Services et la Sauvegarde Google active sur l'appareil ; sinon, le
+comportement d'avant. La copie dort chez Play Services, hors du Keystore de l'app. Les comptes gardés « rester
+connecté » ont chacun leur entrée (#14079, `AccountShelf`, clé `<serveur>.account.<id>`, même liaison à l'appareil),
+les quinze plus récents — le Block Store porte seize entrées, l'une est la session active. `KeptAccountsBackup`
+accorde le coffre à la liste des comptes ; à l'installation neuve, les comptes que l'appareil ne connaît plus
+reviennent au sélecteur avec leur session dormante. Une déconnexion ou un refus n'efface que l'entrée du compte visé.

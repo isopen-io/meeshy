@@ -209,7 +209,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         )
         let canvas = try source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
         XCTAssertTrue(
-            canvas.contains("announcement: BackgroundSoundBadge.announcement(for: playedEffects)"),
+            canvas.contains("announcement: BackgroundSoundBadge.creditAnnouncement(for: playedEffects)"),
             "La note se monte sur l'annonce PARTAGÉE (E1), sur les effets que la scène joue."
         )
     }

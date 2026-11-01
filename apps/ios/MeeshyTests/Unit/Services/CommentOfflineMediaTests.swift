@@ -606,7 +606,7 @@ final class AccountStoreRegistryAdmissionTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
         let code = AppSourceGuard.stripComments(try String(
             contentsOf: root.appendingPathComponent("Meeshy/Core/MessageStoreSession.swift"), encoding: .utf8))
-        XCTAssertTrue(code.contains("if let key, AccountStoreRegistry.admits(databasePath: pool.path, for: key) {"))
+        XCTAssertTrue(code.contains("if let key, AccountStoreRegistry.admits(databasePath: database.path, for: key) {"))
     }
 }
 

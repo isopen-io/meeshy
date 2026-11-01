@@ -12,7 +12,8 @@ import { harness, mount, registerStudioBench } from '@/test-support/story-studio
  * dans le même studio (#7497), et la passerelle lit les `@pseudo` de ce
  * texte (`collectMentionableText`). La publication n'existe pas encore : les
  * contacts viennent du cache, la recherche passe par l'ANNUAIRE dès deux
- * lettres (`/directory/people`, dont la fixture rend Bruno pour `br`).
+ * lettres quand le cache ne trouve personne (`mentionLookupStage`, #14053 —
+ * `/directory/people`, dont la fixture rend Bruno pour `br`).
  */
 registerStudioBench();
 
@@ -67,7 +68,7 @@ describe('le texte de la scène du studio', () => {
     expect(names(host)).toEqual(['claire']);
   });
 
-  test('deux lettres interrogent l’annuaire, et choisir insère le pseudo', async () => {
+  test('deux lettres sans contact correspondant interrogent l’annuaire, et choisir insère le pseudo', async () => {
     appQueryClient.setQueryData(CONTACTS_KEY, contacts, { updatedAt: Date.now() });
     const host = mount(harness({}).deps, 'STORY');
     const field = typeInScene(host, 'Avec @br');

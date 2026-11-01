@@ -40,6 +40,10 @@ private fun androidx.compose.ui.graphics.GraphicsLayerScope.frame(bg: StoryBackg
 /**
  * Le fond d'une scène : vidéo, image (ThumbHash en attendant) ou aplat/dégradé. Site UNIQUE du lecteur de
  * stories et du lecteur de réels — une même publication y est peinte à l'identique.
+ *
+ * Un fond AJUSTÉ ([StorySlideView.backgroundFits], iOS `.resizeAspect`, #14199) tient entier dans la scène, centré, sur ses
+ * bandes ([SceneBackdropLayer]) ; sinon il la remplit, rogné au centre. Le cadrage de l'auteur s'applique par-dessus, dans les
+ * deux cas.
  */
 @Composable
 internal fun StorySceneBackground(
@@ -57,6 +61,7 @@ internal fun StorySceneBackground(
     when {
         slide.backgroundVideoUrl != null && !stillFrame -> {
             val bg = slide.backgroundTransform
+            if (slide.backgroundFits) SceneBackdropLayer(slide.backdrop, slide.backgroundPosterUrl)
             ReelVideoSurface(
                 mediaUrl = slide.backgroundVideoUrl,
                 isActive = playing,
@@ -69,6 +74,7 @@ internal fun StorySceneBackground(
                 sourceStartMs = slide.backgroundVideoWindow?.startMs,
                 sourceEndMs = slide.backgroundVideoWindow?.endMs,
                 onPlayer = onBackgroundPlayer,
+                fit = slide.backgroundFits,
                 modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
             )
         }
@@ -77,10 +83,12 @@ internal fun StorySceneBackground(
             val bg = slide.backgroundTransform
             Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().background(StorySceneFill.resolve(slide.background, slide.accentHex, floor).brush()))
+                if (slide.backgroundFits) SceneBackdropLayer(slide.backdrop, slide.backgroundPosterUrl)
                 StoryRestingPoster(
                     posterUrl = slide.backgroundPosterUrl,
                     thumbHash = slide.backgroundThumbHash,
                     lookRecipe = slide.lookRecipe,
+                    fits = slide.backgroundFits,
                     modifier = Modifier.fillMaxSize().graphicsLayer { frame(bg) },
                 )
             }
@@ -88,10 +96,11 @@ internal fun StorySceneBackground(
         slide.imageUrl != null -> {
             val imageUrl = slide.imageUrl
             val bg = slide.backgroundTransform
+            if (slide.backgroundFits) SceneBackdropLayer(slide.backdrop, imageUrl)
             AsyncImage(
                 model = imageUrl,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = if (slide.backgroundFits) ContentScale.Fit else ContentScale.Crop,
                 colorFilter = SceneLookChain.colorFilter(slide.lookRecipe),
                 // Flou instantané derrière l'image qui charge — aucun éclair noir à froid.
                 placeholder = rememberThumbHashPainter(slide.backgroundThumbHash),

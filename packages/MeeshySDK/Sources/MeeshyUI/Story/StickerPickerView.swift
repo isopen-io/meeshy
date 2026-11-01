@@ -63,6 +63,12 @@ public struct StickerPickerView: View {
     /// contrat : les trois hôtes la présentent en `.sheet`, et un rappel de
     /// plus aurait obligé chacun à redire ce que le système sait déjà faire.
     @Environment(\.dismiss) var dismiss
+    /// Hébergée par le compositeur dans sa feuille ancrée (#13839), la feuille
+    /// y prend son titre et son OK : `dismiss()` y fermerait le compositeur.
+    @Environment(\.meeshySheetClose) var hostClose
+
+    /// L'en-tête propre (✕ · Stickers) n'existe que hors d'une feuille ancrée.
+    public static func showsOwnHeader(hostCloses: Bool) -> Bool { !hostCloses }
     /// Les favoris et les récents. Le magasin est un STORE DE PRÉFÉRENCES,
     /// donc SDK — il retient, il rend, il borne, il ne décide de rien.
     @ObservedObject var usage: StickerUsageStore
@@ -160,10 +166,12 @@ public struct StickerPickerView: View {
         ZStack {
             background
             VStack(spacing: 0) {
-                panelHeader
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .padding(.top, MeeshySpacing.lg)
-                    .padding(.bottom, MeeshySpacing.md)
+                if Self.showsOwnHeader(hostCloses: hostClose != nil) {
+                    panelHeader
+                        .padding(.horizontal, MeeshySpacing.xl)
+                        .padding(.top, MeeshySpacing.lg)
+                        .padding(.bottom, MeeshySpacing.md)
+                }
                 StickerSheetTabBar(selection: displayedPageBinding, entries: tabEntries)
                     .padding(.bottom, MeeshySpacing.sm)
                 tabbedContent
@@ -176,10 +184,13 @@ public struct StickerPickerView: View {
         // reconstruit.
         .sheet(isPresented: $showsPlacePicker) {
             if let storyLocationPicker {
+                // Une feuille SYSTÈME au-dessus de la feuille ancrée : sa propre
+                // fermeture est `dismiss()`, jamais celle de l'hôte.
                 storyLocationPicker.makeView { lieu in
                     showsPlacePicker = false
                     adopterLieuChoisi(lieu)
                 }
+                .environment(\.meeshySheetClose, nil)
             }
         }
         .task {

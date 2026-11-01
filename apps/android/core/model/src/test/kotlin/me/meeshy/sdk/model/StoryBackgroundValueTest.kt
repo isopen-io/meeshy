@@ -103,4 +103,25 @@ class StoryBackgroundValueTest {
         assertThat(StoryBackgroundValue.parse("gradient:ff2e63:08d9d6"))
             .isEqualTo(StoryBackgroundValue.Gradient("ff2e63", "08d9d6"))
     }
+
+    @Test
+    fun `the author gradient is written as the author colour to black, in the gradient form iOS reads`() {
+        val floor = StoryBackgroundValue.authorGradient("34D399")
+
+        assertThat(floor).isEqualTo(StoryBackgroundValue.Gradient("34D399", "000000"))
+        assertThat(floor?.serialized()).isEqualTo("gradient:34D399:000000")
+        assertThat(StoryBackgroundValue.parse(floor!!.serialized())).isEqualTo(floor)
+    }
+
+    @Test
+    fun `an author colour written with a hash is carried bare`() {
+        assertThat(StoryBackgroundValue.authorGradient("#34d399")).isEqualTo(StoryBackgroundValue.Gradient("34D399", "000000"))
+    }
+
+    @Test
+    fun `an unreadable author colour writes no background, and the reader keeps its own floor`() {
+        assertThat(StoryBackgroundValue.authorGradient("nope")).isNull()
+        assertThat(StoryBackgroundValue.authorGradient("")).isNull()
+        assertThat(StoryBackgroundValue.authorGradient("FFF")).isNull()
+    }
 }

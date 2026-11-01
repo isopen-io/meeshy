@@ -1,5 +1,11 @@
 package me.meeshy.app.reels
 
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.ui.component.composer.LocalUniversalComposer
+import me.meeshy.ui.component.composer.UniversalComposerSpec
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,17 +20,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -38,7 +37,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,6 +69,7 @@ fun ReelCommentsSheet(
     viewModel: ReelCommentsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mention by viewModel.mention.collectAsStateWithLifecycle()
     LaunchedEffect(reelId) { viewModel.load(reelId) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -118,7 +117,13 @@ fun ReelCommentsSheet(
                 )
             }
 
-            ReelCommentInput(draft = state.draft, onDraftChange = viewModel::setDraft, onSend = viewModel::post)
+            ReelCommentInput(
+                draft = state.draft,
+                mention = mention,
+                onDraftChange = viewModel::setDraft,
+                onMentionSelected = viewModel::onMentionSelected,
+                onSend = viewModel::post,
+            )
         }
     }
 }
@@ -200,35 +205,26 @@ internal fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) 
 }
 
 @Composable
-private fun ReelCommentInput(draft: String, onDraftChange: (String) -> Unit, onSend: (String) -> Unit) {
-    val canSend = draft.isNotBlank()
-    fun submit() {
-        if (!canSend) return
-        onSend(draft)
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = MeeshySpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        OutlinedTextField(
-            value = draft,
-            onValueChange = onDraftChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text(stringResource(R.string.reels_comments_input_hint)) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { submit() }),
-        )
-        IconButton(onClick = ::submit, enabled = canSend) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Send,
-                contentDescription = stringResource(R.string.reels_comments_send),
-            )
-        }
-    }
+private fun ReelCommentInput(
+    draft: String,
+    mention: MentionAutocompleteState,
+    onDraftChange: (String) -> Unit,
+    onMentionSelected: (MentionCandidate) -> Unit,
+    onSend: (String) -> Unit,
+) {
+    val composer = LocalUniversalComposer.current ?: return
+    composer(
+        UniversalComposerSpec(
+            configuration = ComposerConfiguration.COMMENT,
+            draft = draft,
+            placeholder = stringResource(R.string.reels_comments_composer_hint),
+            canSend = draft.isNotBlank(),
+            onDraftChange = onDraftChange,
+            onSend = { onSend(draft) },
+            topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected) },
+        ),
+        Modifier.padding(top = MeeshySpacing.xs),
+    )
 }
 
 @Composable

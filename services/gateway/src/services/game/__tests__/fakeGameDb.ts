@@ -274,6 +274,8 @@ export type FakeGameDb = {
   readonly atlasStamp: Model;
   readonly achievementRarityStat: Model;
   readonly friendRequest: Model;
+  /** Le lien de proximité (#13927) : `friendship.ts` le lit avant le repli sur la demande acceptée. */
+  readonly userRelation: Model;
   readonly userPreferences: Model;
   readonly notification: Model;
   readonly conversation: Model;
@@ -322,6 +324,7 @@ export function fakeGameDb(): FakeGameDb {
   const atlasStamp = flattenCompound(new Model({ uniques: [['userId', 'language']], optional: ['sentAt', 'receivedAt', 'stampedOn'] }));
   const achievementRarityStat = flattenCompound(new Model({ uniques: [['milestoneKey']] }));
   const friendRequest = new Model();
+  const userRelation = flattenCompound(new Model({ uniques: [['userLowId', 'userHighId']] }));
   const userPreferences = new Model();
   const notification = new Model();
   const conversation = new Model();
@@ -363,6 +366,7 @@ export function fakeGameDb(): FakeGameDb {
     atlasStamp,
     achievementRarityStat,
     friendRequest,
+    userRelation,
     userPreferences,
     notification,
     conversation,
@@ -428,4 +432,10 @@ export const seedUser = (db: FakeGameDb, fields: Record<string, unknown> = {}, i
   const row: Row = { id, timezone: 'UTC', createdAt: new Date('2026-01-01T00:00:00Z'), blockedUserIds: [], guideSeen: [], ...fields };
   db.user.rows.push(row);
   return row;
+};
+
+/** Un lien de cercle entre deux comptes, à un niveau accordé par les DEUX (la loi lit le minimum). */
+export const relateAt = (db: FakeGameDb, a: string, b: string, level: string): void => {
+  const [userLowId, userHighId] = a < b ? [a, b] : [b, a];
+  db.userRelation.rows.push({ id: `rel-${userLowId}-${userHighId}`, userLowId, userHighId, grantedByLow: level, grantedByHigh: level, transitions: [], updatedAt: new Date('2026-10-01T00:00:00Z') });
 };

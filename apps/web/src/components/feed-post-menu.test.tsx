@@ -5,9 +5,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { FeedPost } from '@/lib/api/feed-pages';
 import type { PostActionOutcome } from '@/lib/api/publication-actions';
 import type { ReportReason } from '@/lib/api/reports';
+import * as exportJobs from '@/lib/export/scene/scene-export-jobs';
 import { createDraftStore } from '@/lib/send/draft-store';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { FeedPostCard } from './feed-post-card';
@@ -512,5 +514,30 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       expect(document.activeElement === ailleurs).toBe(true);
       ailleurs.remove();
     });
+  });
+  test('une publication à SCÈNE offre « Sauvegarder » et « Imager » (#13873) ; « Sauvegarder » lance l’export au bandeau', async () => {
+    const { menu } = host('u-me');
+    const scene = { v: 3, scenes: [{ id: 's', objects: [{ id: 't', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 1, transform: {}, payload: { text: 'Salut' } }] }] };
+    monte(post({ storyEffects: scene }), menu);
+    const bouton = container.querySelector<HTMLButtonElement>('[data-feed-post-menu]');
+    act(() => bouton?.click());
+    await act(async () => {
+      await Promise.all([import('./publication-menu-panel'), loadSceneExportCatalog('fr')]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const entrees = [...document.querySelectorAll<HTMLButtonElement>('[data-feed-post-action]')];
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'saveMedia', 'imager', 'save', 'report']);
+    expect(entrees.find((e) => e.dataset.feedPostAction === 'saveMedia')?.textContent).toContain('Sauvegarder');
+    expect(entrees.find((e) => e.dataset.feedPostAction === 'imager')?.textContent).toContain('Imager');
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'saveMedia')?.click());
+    expect(exportJobs.getSnapshot().jobs.map((job) => job.key)).toEqual(['post:p1']);
+    act(() => exportJobs.cancel('post:p1'));
+  });
+
+  test('une publication SANS scène n’offre ni « Sauvegarder » ni « Imager »', async () => {
+    const { menu } = host('u-me');
+    monte(post(), menu);
+    const entrees = await ouvre();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).not.toContain('saveMedia');
   });
 });

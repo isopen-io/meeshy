@@ -7,7 +7,8 @@ import me.meeshy.sdk.model.StoryKeyframe
  * fiables : NaN, infinis, 1e30 ou négatifs ne doivent ni lever dans la mise en page ni geler le lecteur.
  * Chaque grandeur est bornée une fois, à la projection, par la règle de son sens. Aucune borne iOS n'existe
  * pour ces champs (le décodeur Swift les laisse tels quels) : les plafonds se calent sur le plus grand cran
- * du composeur (200 unités de dessin) et sur [SceneObjectScalePolicy] pour l'échelle.
+ * du composeur (200 unités de dessin). L'échelle n'en a aucun (#14298) : [SceneObjectScalePolicy.served] ne
+ * garde que sa finitude, et le lecteur coupe sa taille entre mise en page et calque ([LayeredScale]).
  */
 object SceneObjectNumbers {
 
@@ -22,8 +23,8 @@ object SceneObjectNumbers {
     const val MIN_POSITION: Double = -1.0
     const val MAX_POSITION: Double = 2.0
 
-    /** Un sticker ne couvre pas plus de quatre largeurs de scène. */
-    const val MAX_STICKER_SIDE_FRACTION: Double = 4.0
+    /** Jusqu'où la mise en page d'un sticker suit son côté, en largeurs de scène ; au-delà, son calque l'agrandit. */
+    const val MAX_STICKER_LAYOUT_FRACTION: Double = 4.0
 
     /** Les bornes du ratio d'un média que la passerelle accepte (`StoryMediaObjectSchema.aspectRatio`). */
     const val MIN_ASPECT_RATIO: Double = 0.05
@@ -73,16 +74,18 @@ object SceneObjectNumbers {
         return if (cut.last().isHighSurrogate()) cut.dropLast(1) else cut
     }
 
+    /** Le côté d'un sticker en largeurs de scène, à son échelle entière : fini, sans plafond. */
     fun stickerSideFraction(baseSize: Double, scale: Double): Double {
         val base = if (baseSize.isFinite()) baseSize.coerceAtLeast(0.0) else 0.0
-        return (base * SceneObjectScalePolicy.clamped(scale) / DESIGN_CANVAS_WIDTH).coerceAtMost(MAX_STICKER_SIDE_FRACTION)
+        val side = base * SceneObjectScalePolicy.served(scale) / DESIGN_CANVAS_WIDTH
+        return if (side.isFinite()) side else Double.MAX_VALUE
     }
 
     fun keyframe(frame: StoryKeyframe): StoryKeyframe = frame.copy(
         time = if (frame.time.isFinite()) frame.time else 0f,
         x = frame.x?.takeIf { it.isFinite() }?.let(::position),
         y = frame.y?.takeIf { it.isFinite() }?.let(::position),
-        scale = frame.scale?.takeIf { it.isFinite() }?.let(SceneObjectScalePolicy::clamped),
+        scale = frame.scale?.takeIf { it.isFinite() }?.let(SceneObjectScalePolicy::served),
         opacity = frame.opacity?.takeIf { !it.isNaN() }?.let(::opacity),
     )
 }

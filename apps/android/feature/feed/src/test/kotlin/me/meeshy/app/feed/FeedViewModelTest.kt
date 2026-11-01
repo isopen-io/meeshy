@@ -19,7 +19,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
-import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.report.ReportReason
@@ -29,8 +28,6 @@ import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.SharedPlace
-import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketPostBookmarkedData
@@ -42,19 +39,12 @@ import me.meeshy.sdk.model.SocketMediaCaptionTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.model.SocketPostUpdatedData
-import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.post.InMemoryPostComposerDraftStore
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.publication.PublicationNotice
 import me.meeshy.sdk.publication.PublicationOutbox
-import me.meeshy.sdk.media.MediaUploadQueue
-import me.meeshy.sdk.model.media.TusUploadContext
-import me.meeshy.sdk.net.api.CreatePostRequest
-import kotlinx.coroutines.test.advanceUntilIdle
-import me.meeshy.sdk.outbox.OutboxOwnerSource
-import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -80,12 +70,10 @@ class FeedViewModelTest {
     private val engagement: me.meeshy.sdk.post.FeedEngagementRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
-    private val feedMediaUploader: FeedMediaUploader = mockk(relaxed = true)
     private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
     private val workManager: androidx.work.WorkManager = mockk(relaxed = true)
-    private val publications: PublicationOutbox = mockk(relaxed = true)
-    private val composerDrafts = InMemoryPostComposerDraftStore()
-    private val mediaUploadQueue: MediaUploadQueue = mockk(relaxed = true)
+    private val publicationNotices = MutableSharedFlow<PublicationNotice>(extraBufferCapacity = 4)
+    private val publications: PublicationOutbox = mockk(relaxed = true) { every { notices } returns publicationNotices }
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
@@ -103,7 +91,7 @@ class FeedViewModelTest {
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
 
-    private fun viewModel(hasMore: Boolean = true, fence: AccountFence? = null): FeedViewModel {
+    private fun viewModel(hasMore: Boolean = true): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
         every { socialSocket.postCreated } returns postCreated
@@ -117,7 +105,27 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement, publications, composerDrafts, mediaUploadQueue, fence)
+        return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)
+    }
+
+    @Test
+    fun `a post handed to the device's queue tells the feed it is on its way`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        val vm = viewModel()
+
+        publicationNotices.emit(PublicationNotice.QUEUED)
+
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_QUEUED)
+    }
+
+    @Test
+    fun `a post the device could not queue tells the feed it failed`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        val vm = viewModel()
+
+        publicationNotices.emit(PublicationNotice.FAILED)
+
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
     }
 
     @Test
@@ -465,7 +473,7 @@ class FeedViewModelTest {
         every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager, engagement, publications, composerDrafts, mediaUploadQueue)
+        return FeedViewModel(repository, session, socialSocket, config, reportRepository, workManager, engagement, publications)
     }
 
     @Test
@@ -1113,241 +1121,6 @@ class FeedViewModelTest {
         vm.refresh()
 
         assertThat(vm.state.value.posts.single().commentCount).isEqualTo(2)
-    }
-
-    // --- Create post (publishPost): queued on the device, never lost (#13417) ---
-
-    @Test
-    fun `publishPost queues the post on the device with every field the composer resolved`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val place = SharedPlace(latitude = 48.8566, longitude = 2.3522)
-
-        vm.publishPost(
-            content = "check this out",
-            visibility = "FRIENDS",
-            mediaIds = listOf("m1", "cmid_offline"),
-            type = "REEL",
-            location = place,
-            language = "ja",
-            mediaAlt = mapOf("m1" to "A red bicycle"),
-        )
-
-        coVerify(exactly = 1) {
-            publications.enqueuePost(
-                CreatePostRequest(
-                    content = "check this out",
-                    type = "REEL",
-                    visibility = "FRIENDS",
-                    mediaIds = listOf("m1", "cmid_offline"),
-                    originalLanguage = "ja",
-                    location = place,
-                    mediaAlt = mapOf("m1" to "A red bicycle"),
-                ),
-                null,
-            )
-        }
-        verify(exactly = 1) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
-    }
-
-    @Test
-    fun `a media-only post sends a null content, and no empty media list or alt map`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-
-        vm.publishPost(content = "   ", visibility = "PUBLIC", mediaIds = listOf("m1"))
-        vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-        coVerify(exactly = 1) {
-            publications.enqueuePost(CreatePostRequest(content = null, type = "POST", visibility = "PUBLIC", mediaIds = listOf("m1")), null)
-        }
-        coVerify(exactly = 1) {
-            publications.enqueuePost(CreatePostRequest(content = "hi", type = "POST", visibility = "PUBLIC"), null)
-        }
-    }
-
-    @Test
-    fun `the caption of each media rides the post under PostMedia caption, beside the alt and never in the content`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-
-        vm.publishPost(
-            content = "le post",
-            visibility = "PUBLIC",
-            mediaIds = listOf("m1", "m2"),
-            mediaAlt = mapOf("m1" to "un vélo"),
-            mediaCaption = mapOf("m2" to "Au marché"),
-        )
-
-        coVerify(exactly = 1) {
-            publications.enqueuePost(
-                CreatePostRequest(
-                    content = "le post",
-                    visibility = "PUBLIC",
-                    mediaIds = listOf("m1", "m2"),
-                    mediaAlt = mapOf("m1" to "un vélo"),
-                    mediaCaption = mapOf("m2" to "Au marché"),
-                ),
-                null,
-            )
-        }
-    }
-
-    @Test
-    fun `a post with a scene background publishes it as its story effects`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-
-        vm.publishPost(content = "la vue", visibility = "PUBLIC", background = "302B63")
-
-        coVerify(exactly = 1) {
-            publications.enqueuePost(
-                CreatePostRequest(content = "la vue", visibility = "PUBLIC", storyEffects = StoryEffects(background = "302B63")),
-                null,
-            )
-        }
-    }
-
-    @Test
-    fun `publishPost parks the composer draft with the post instead of erasing it`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val draft = FeedComposerDraft(text = "bonjour").toSnapshot(nowMillis = 1L)
-
-        vm.publishPost(content = "bonjour", visibility = "PUBLIC", draft = draft)
-
-        coVerify(exactly = 1) { publications.enqueuePost(any(), draft) }
-    }
-
-    @Test
-    fun `a queued post says it is on its way, never that it is published, and the feed waits for the server`() =
-        runTest {
-            val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-
-            vm.publishPost(content = "hi", visibility = "PUBLIC")
-
-            assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_QUEUED)
-            assertThat(vm.state.value.posts.map { it.id }).containsExactly("1")
-            assertThat(vm.state.value.newPostsCount).isEqualTo(0)
-        }
-
-    @Test
-    fun `a post that cannot even be queued keeps the text and visibility so the composer reopens on it`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
-        coEvery { publications.enqueuePost(any(), any()) } throws IllegalStateException("disk full")
-
-        vm.publishPost(content = "bonjour", visibility = "FRIENDS")
-        val draft = vm.state.value.unpublishedDraft
-        vm.consumeUnpublishedDraft()
-
-        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.PUBLISH_FAILED)
-        assertThat(draft?.text).isEqualTo("bonjour")
-        assertThat(draft?.visibility).isEqualTo(FeedPostVisibility.FRIENDS)
-        assertThat(vm.state.value.unpublishedDraft).isNull()
-    }
-
-    @Test
-    fun `a composer media the network refused is kept on the device under the post upload context`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val heic = MediaUploadItem(bytes = byteArrayOf(1), fileName = "a.heic", mimeType = "image/heic")
-        coEvery { mediaUploadQueue.enqueue(heic, TusUploadContext.POST) } returns "cmid_heic"
-
-        assertThat(vm.queueMedia(heic)).isEqualTo("cmid_heic")
-    }
-
-    @Test
-    fun `removing a media still waiting on the device discards its upload and bytes, a served one is left`() =
-        runTest {
-            val vm = viewModel(me, flowOf(CacheResult.Empty))
-
-            vm.discardQueuedMedia("cmid_00000000-0000-4000-8000-000000000000")
-            vm.discardQueuedMedia("665f1c2e9b1d8a0012345678")
-
-            coVerify(exactly = 1) { mediaUploadQueue.cancel("cmid_00000000-0000-4000-8000-000000000000") }
-            coVerify(exactly = 0) { mediaUploadQueue.cancel("665f1c2e9b1d8a0012345678") }
-        }
-
-    @Test
-    fun `the composer autosaves its draft, and an emptied composer clears it`() = runTest(dispatcher) {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-
-        vm.persistComposerDraft(FeedComposerDraft(text = "brouillon"))
-        advanceUntilIdle()
-        assertThat(composerDrafts.loadEditing()?.text).isEqualTo("brouillon")
-        assertThat(vm.restorableDraft()?.text).isEqualTo("brouillon")
-
-        vm.persistComposerDraft(FeedComposerDraft(text = "  "))
-        advanceUntilIdle()
-        assertThat(composerDrafts.loadEditing()).isNull()
-        assertThat(vm.restorableDraft()).isNull()
-    }
-
-    @Test
-    fun `a draft written under an account that closed before the save landed never reaches the next account (#13503)`() = runTest(dispatcher) {
-        var owner: String? = "A"
-        val fence = AccountFence(OutboxOwnerSource { owner })
-        val vm = viewModel(fence = fence)
-
-        vm.persistComposerDraft(FeedComposerDraft(text = "les mots de A"))
-        fence.close { owner = null }
-        owner = "B"
-        advanceUntilIdle()
-
-        assertThat(composerDrafts.loadEditing()).isNull()
-    }
-
-    @Test
-    fun `a draft written and saved under the account still signed in lands`() = runTest(dispatcher) {
-        val fence = AccountFence(OutboxOwnerSource { "A" })
-        val vm = viewModel(fence = fence)
-
-        vm.persistComposerDraft(FeedComposerDraft(text = "les mots de A"))
-        advanceUntilIdle()
-
-        assertThat(composerDrafts.loadEditing()?.text).isEqualTo("les mots de A")
-    }
-
-    @Test
-    fun `typing saves once a pause, not per keystroke`() = runTest(dispatcher) {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-
-        vm.persistComposerDraft(FeedComposerDraft(text = "b"))
-        vm.persistComposerDraft(FeedComposerDraft(text = "bo"))
-        vm.persistComposerDraft(FeedComposerDraft(text = "bon"))
-        advanceUntilIdle()
-
-        assertThat(composerDrafts.loadEditing()?.text).isEqualTo("bon")
-    }
-
-    // --- Composer media upload (uploadMedia) ---
-
-    @Test
-    fun `uploadMedia delegates to the feed media uploader and returns its result`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val items = listOf(MediaUploadItem(bytes = byteArrayOf(1), fileName = "a.jpg", mimeType = "image/jpeg"))
-        val uploaded = listOf(
-            UploadedMedia(
-                id = "m1",
-                url = "https://cdn.meeshy.me/m1.jpg",
-                mimeType = "image/jpeg",
-                fileSize = 10,
-                width = null,
-                height = null,
-                durationMs = null,
-                thumbnailUrl = null,
-            ),
-        )
-        coEvery { feedMediaUploader.upload(items) } returns NetworkResult.Success(uploaded)
-
-        val result = vm.uploadMedia(items)
-
-        assertThat(result).isEqualTo(NetworkResult.Success(uploaded))
-        coVerify(exactly = 1) { feedMediaUploader.upload(items) }
-    }
-
-    @Test
-    fun `uploadMedia propagates an uploader failure unchanged`() = runTest {
-        val vm = viewModel(me, flowOf(CacheResult.Empty))
-        val items = listOf(MediaUploadItem(bytes = byteArrayOf(1), fileName = "a.jpg", mimeType = "image/jpeg"))
-        val failure = NetworkResult.Failure(ApiError("offline"))
-        coEvery { feedMediaUploader.upload(items) } returns failure
-
-        assertThat(vm.uploadMedia(items)).isEqualTo(failure)
     }
 
     // --- Fullscreen media gallery (openImageViewer / dismissImageViewer) ---

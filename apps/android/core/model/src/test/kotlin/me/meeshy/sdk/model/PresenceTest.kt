@@ -155,4 +155,21 @@ class PresenceTest {
         org.junit.Assert.assertEquals(UserPresence(false, "2026-01-01T00:00:00Z"), served)
         org.junit.Assert.assertEquals(UserPresence(true, null), UserPresence.served(true, null))
     }
+
+    @Test
+    fun `a served online entry without a date is online at any age, never away, idle or offline`() {
+        val friend = UserPresence(isOnline = true, lastActiveAt = null)
+
+        listOf(0L, 180_001L, 300_001L, 864_000_000L).forEach { elapsed ->
+            assertThat(friend.state(now + elapsed)).isEqualTo(PresenceState.ONLINE)
+        }
+    }
+
+    @Test
+    fun `a served offline entry without a date draws no dot at any age`() {
+        val stranger = UserPresence(isOnline = false, lastActiveAt = null)
+
+        assertThat(stranger.state(now)).isEqualTo(PresenceState.OFFLINE)
+        assertThat(stranger.state(now + 864_000_000L)).isEqualTo(PresenceState.OFFLINE)
+    }
 }

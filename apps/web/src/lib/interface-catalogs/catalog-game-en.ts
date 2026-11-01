@@ -248,6 +248,8 @@ const en = {
   'game.guide.step.rank.means': 'Minting, fulfilling your dreams, performing great deeds: everything makes your glory grow.',
   'game.guide.step.rank.next': 'Let us capture your start in a photo.',
   'game.page.back': 'Back to progress',
+  'game.page.offline_notice': 'Offline — progress as of your last visit',
+  'game.page.offline_notice_brief': 'Offline — as of your last visit',
   'game.door.rules': 'How it works',
   'game.door.notebook': 'The Chronicle',
   'game.mint.minted_line': 'Meesh no. {number} minted, {edition}.',

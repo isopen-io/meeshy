@@ -9,7 +9,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -18,11 +17,15 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -46,13 +49,20 @@ import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.ComposerObjectTiming
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryDraftConfirmation
 import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.ui.component.media.MEDIA_TRIM_END_HANDLE_TAG
+import me.meeshy.ui.component.media.MEDIA_TRIM_START_HANDLE_TAG
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
 import org.junit.Before
+import androidx.compose.ui.test.onChildren
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -61,8 +71,8 @@ import org.robolectric.annotation.Config
 
 /**
  * Le compositeur entier, un élément sélectionné (#13836, état 3 de la maquette) : un cadre autour de l'élément, les
- * outils retirés, une seule barre d'actions libellées au-dessus de Public et Publier, et toucher la scène à vide la
- * referme. Le texte touché n'est pas écrit : c'est son Modifier qui l'écrit.
+ * outils cèdent leur place, dans la colonne, aux options de l'élément — Fermer, l'audience et Publier se retirent (#13956) —, et
+ * toucher la scène à vide rend tout. Le texte touché n'est pas écrit : c'est son Modifier qui l'écrit.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -111,7 +121,7 @@ class ComposerSelectionActionBarTest {
                     StoryComposerSceneFirst(
                         state = state,
                         viewModel = vm,
-                        sceneExport = SceneExportHost(SceneCapture(rememberGraphicsLayer(), SceneCapturePass.NONE), emptyList(), false) {},
+                        sceneExport = SceneExportHost(emptyList(), false) {},
                         doors = StoryComposerDoors(onClose = {}, onOpenAudience = {}, onOpenStickers = {}, onPickMedia = {}, onOpenSoundShelf = {}),
                         morePanel = null,
                         onMorePanel = {},
@@ -129,7 +139,7 @@ class ComposerSelectionActionBarTest {
     }
 
     @Test
-    fun `a touched sticker is framed, the tools step aside and one labelled bar sits above publish`() {
+    fun `a touched sticker is framed, and its options take the place of the tools while close and publish step aside`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onSceneBackgroundTap()
@@ -138,14 +148,13 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithContentDescription("😀").performClick()
 
         compose.onNodeWithContentDescription("😀").assertIsSelected()
-        listOf("Edit", "Duplicate", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
-        listOf("Order", "Timing").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        listOf("Edit", "Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("Order").assertDoesNotExist()
         listOf("Text", "Media", "Sticker", "More options").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
-        compose.onNodeWithContentDescription("Close").assertExists()
+        compose.onNodeWithContentDescription("Close").assertDoesNotExist()
         compose.onNodeWithContentDescription("Undo").assertExists()
-        val bar = compose.onNodeWithTag(SELECTION_BAR_TAG).getUnclippedBoundsInRoot()
-        val publish = compose.onNodeWithContentDescription("Publish story").getUnclippedBoundsInRoot()
-        assertThat(bar.bottom).isAtMost(publish.top)
+        compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
     }
 
     @Test
@@ -156,7 +165,7 @@ class ComposerSelectionActionBarTest {
 
         tapEmptyScene()
 
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
         compose.onNodeWithContentDescription("😀").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
         compose.onNodeWithContentDescription("Text").assertExists()
         assertThat(vm.state.value.selectedSceneObject).isNull()
@@ -176,22 +185,20 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithContentDescription("Finish writing").assertDoesNotExist()
         compose.onNodeWithText("Edit").performClick()
         compose.onNode(hasSetTextAction()).assertIsFocused()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
     }
 
     @Test
-    fun `order opens bring forward and send backward, and moves the sticker`() {
+    fun `the bar serves no Order, touching the sticker below brings it to the front`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onAddSticker("🎉")
         show(vm)
 
-        compose.onNodeWithText("Order").performClick()
-        compose.onNodeWithText("Bring forward").assertExists()
-        compose.onNodeWithText("Send backward").performClick()
+        compose.onNodeWithText("Order").assertDoesNotExist()
+        vm.onSelectSticker(vm.state.value.deck.selectedSlide.stickers.first().id)
 
-        assertThat(vm.state.value.deck.selectedSlide.stickers.first().emoji).isEqualTo("🎉")
-        compose.onNodeWithText("Send backward").assertDoesNotExist()
+        assertThat(vm.state.value.deck.selectedSlide.stickers.last().emoji).isEqualTo("😀")
     }
 
     @Test
@@ -203,23 +210,169 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithText("Remove").performClick()
 
         assertThat(vm.state.value.deck.selectedSlide.stickers).isEmpty()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
         compose.onNodeWithContentDescription("Text").assertExists()
     }
 
     @Test
-    fun `timing is offered in an animated scene and opens the start and duration of the element`() {
+    fun `timing is offered in a still scene and opens the window of the element`() {
         val vm = viewModel()
-        vm.onSceneReduce(StoryComposerSceneReducer::animationToggled)
-        vm.onBandDismiss()
         vm.onAddSticker("😀")
         show(vm)
 
         compose.onNodeWithText("Timing").performClick()
 
-        compose.onNodeWithContentDescription("Text start time").assertExists()
-        compose.onNodeWithContentDescription("Text visible duration").assertExists()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
+        compose.onNodeWithContentDescription("Start").assertExists()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun `Timing on a placed video says its family and window, never the text's words, and lights its own track`() {
+        val vm = viewModel()
+        withPlacedClip(vm)
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+        vm.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, SceneObjectRef(ComposerObjectKind.MEDIA, "p"), ComposerObjectTiming(1.0, 3.0)) }
+        show(vm)
+
+        compose.onNodeWithText("Timing").performScrollTo().performClick()
+
+        compose.onNodeWithText("From 1.0 s to 3.0 s").assertExists()
+        compose.onNodeWithContentDescription("Start").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1.0 s"))
+        compose.onNodeWithContentDescription("End").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "3.0 s"))
+        compose.onNodeWithContentDescription("Text start time").assertDoesNotExist()
+        compose.onNode(hasText("Video") and isSelected()).assertExists()
+    }
+
+    private fun withVoice(vm: StoryComposerViewModel, sourceSeconds: Float?) {
+        val voice = me.meeshy.sdk.model.StoryAudioPlayerObject(id = "a1", postMediaId = "pm", mediaURL = "https://cdn/a1.m4a", x = 0.5, y = 0.7)
+        val sources = sourceSeconds?.let { mapOf("a1" to it) }.orEmpty()
+        vm.onSceneReduce { s -> s.copy(deck = s.deck.copy(slides = s.deck.slides.map { it.copy(audio = listOf(voice), soundSources = sources) })) }
+        vm.onSceneReduce { StoryComposerSelectionReducer.soundSelected(it, "a1") }
+    }
+
+    @Test
+    fun `Timing on a sound chip trims the sound too, beside its window, as on iOS`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+
+        compose.onNode(hasText("Sound") and isSelected()).assertExists()
+        compose.onNodeWithText("Trim").assertExists()
+        compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertExists()
+        compose.onNodeWithTag(MEDIA_TRIM_END_HANDLE_TAG).assertExists()
+        compose.onNodeWithContentDescription("Start").assertExists()
+    }
+
+    @Test
+    fun `a selected sound lays Trim, Volume and Mute flat in the rail before Duplicate, Timing and Remove, its band under the scene, without Edit nor sheet`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        assertThat(soundRail()).containsExactly("Trim", "Volume", "Mute", "Duplicate", "Timing", "Remove").inOrder()
+        compose.onNodeWithText("Edit").assertDoesNotExist()
+
+        compose.onNodeWithText("Trim").performClick()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertExists()
+        compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertExists()
+
+        compose.onNodeWithText("Back").performClick()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertDoesNotExist()
+        compose.onNodeWithText("Duplicate").assertExists()
+    }
+
+    private fun soundRail(): List<String> = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()
+        .mapNotNull { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text } }
+
+    private fun voice(vm: StoryComposerViewModel) = vm.state.value.deck.selectedSlide.audio.single()
+
+    @Test
+    @Config(qualifiers = "fr-w360dp-h740dp")
+    fun `the Trim of a placed sound says the word of the placed video, Couper, never Rogner`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        assertThat(soundRail().first()).isEqualTo("Couper")
+        compose.onNodeWithText("Rogner").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a sound whose source is unknown serves Volume and Mute but no Trim in its rail, as on iOS`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = null)
+        show(vm)
+
+        assertThat(soundRail()).containsExactly("Volume", "Mute", "Duplicate", "Timing", "Remove").inOrder()
+    }
+
+    @Test
+    fun `Volume of a placed sound opens a band whose slider runs from 0 to 100 percent and shows the value, and Back closes it`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        compose.onNodeWithText("Volume").performClick()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertExists()
+        compose.onNodeWithTag(COMPOSER_VOLUME_TAG).performSemanticsAction(SemanticsActions.SetProgress) { it(1.6f) }
+        assertThat(voice(vm).volume).isWithin(1e-4f).of(1f)
+        compose.onNodeWithText("100 %").assertExists()
+        compose.onNodeWithTag(COMPOSER_VOLUME_TAG).performSemanticsAction(SemanticsActions.SetProgress) { it(0.4f) }
+        assertThat(voice(vm).volume).isWithin(1e-4f).of(0.4f)
+        compose.onNodeWithText("40 %").assertExists()
+
+        compose.onNodeWithText("Back").performClick()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertDoesNotExist()
+        assertThat(soundRail()).contains("Volume")
+    }
+
+    @Test
+    fun `Mute of a placed sound silences it at once, lights its pastille, and gives the level back on a second touch`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        vm.onSceneReduce { s -> s.withDeckTransform { it.withSelectedSoundVolume("a1", 0.6f) } }
+        show(vm)
+
+        compose.onNodeWithText("Mute").performClick()
+        assertThat(voice(vm).volume).isEqualTo(0f)
+        compose.onNode(hasText("Mute") and isSelected()).assertExists()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertDoesNotExist()
+
+        compose.onNodeWithText("Mute").performClick()
+        assertThat(voice(vm).volume).isWithin(1e-4f).of(0.6f)
+    }
+
+    @Test
+    fun `a sound whose source length is unknown offers no trim in Timing, only its window`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = null)
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+
+        compose.onNodeWithTag(MEDIA_TRIM_START_HANDLE_TAG).assertDoesNotExist()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
+    }
+
+    @Test
+    fun `Timing on a place names it a place, and its permanent switch closes the window to the slide`() {
+        val vm = viewModel()
+        val place = me.meeshy.sdk.model.StoryLocationObject(id = "l1", place = me.meeshy.sdk.model.SharedPlace(latitude = 48.8, longitude = 2.3, name = "Paris"))
+        vm.onSceneReduce { it.copy(deck = it.deck.addPlaceToSelected(place)) }
+        vm.onSelectPlace("l1")
+        show(vm)
+
+        compose.onNodeWithText("Timing").performClick()
+        compose.onNodeWithText("Place").assertExists()
+        compose.onNode(hasText("Paris") and isSelected()).assertExists()
+        compose.onNodeWithText("Visible from start to end").performSemanticsAction(SemanticsActions.OnClick)
+
+        val stored = vm.state.value.deck.selectedSlide.places.single()
+        assertThat(stored.duration).isEqualTo(vm.state.value.selectedSlideDurationSeconds)
+        compose.onNodeWithContentDescription("End").assertExists()
     }
 
     @Test
@@ -235,7 +388,63 @@ class ComposerSelectionActionBarTest {
 
         assertThat(vm.state.value.selectedMedia).isEqualTo("p")
         compose.onNodeWithContentDescription("Media on the scene").assertIsSelected()
-        listOf("Edit", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        listOf("Filters", "Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("Edit").assertDoesNotExist()
+    }
+
+    private fun assertBarOffersDuplicateAndTiming(select: (StoryComposerViewModel) -> Unit) {
+        val vm = viewModel()
+        select(vm)
+        show(vm)
+        listOf("Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+    }
+
+    @Test
+    fun `a selected text shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm ->
+        vm.onAddTextElement()
+        vm.onTextChange("Bonjour")
+        vm.onSceneBackgroundTap()
+        vm.onSceneReduce { StoryComposerTextReducer.tapped(it, it.deck.selectedSlide.elements.single().id) }
+    }
+
+    @Test
+    fun `a selected sticker shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm -> vm.onAddSticker("😀") }
+
+    @Test
+    fun `a selected placed media shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm ->
+        withPlacedClip(vm)
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+    }
+
+    @Test
+    fun `a selected place shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm ->
+        val place = me.meeshy.sdk.model.StoryLocationObject(id = "l1", place = me.meeshy.sdk.model.SharedPlace(latitude = 48.8, longitude = 2.3, name = "Paris"))
+        vm.onSceneReduce { it.copy(deck = it.deck.addPlaceToSelected(place)) }
+        vm.onSelectPlace("l1")
+    }
+
+    @Test
+    fun `a selected sound chip shows Duplicate and Timing in its bar`() = assertBarOffersDuplicateAndTiming { vm ->
+        val voice = me.meeshy.sdk.model.StoryAudioPlayerObject(id = "a1", postMediaId = "pm", x = 0.5, y = 0.7)
+        vm.onSceneReduce { s -> s.copy(deck = s.deck.copy(slides = s.deck.slides.map { it.copy(audio = listOf(voice)) })) }
+        vm.onSceneReduce { StoryComposerSelectionReducer.soundSelected(it, "a1") }
+    }
+
+    @Test
+    fun `Duplicate on a placed media lands a selected copy of the same file, and Timing opens its window`() {
+        val vm = viewModel()
+        withPlacedClip(vm)
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+        show(vm)
+
+        compose.onNodeWithText("Duplicate").performScrollTo().performClick()
+
+        val slide = vm.state.value.deck.selectedSlide
+        assertThat(slide.placedMedia.map { it.mediaId }).containsExactly("p", "p")
+        assertThat(vm.state.value.selectedMediaId).isEqualTo(slide.placedMedia.last().id)
+        assertThat(slide.mediaIds).containsExactly("p")
+        compose.onNodeWithText("Timing").performScrollTo().performClick()
+        compose.onNodeWithText("From 0.0 s to the end").assertExists()
     }
 
     @Test
@@ -246,15 +455,42 @@ class ComposerSelectionActionBarTest {
         withPlacedClip(vm)
         vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
         show(vm)
-        compose.onNodeWithText("Edit").performClick()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
+        compose.onNodeWithText("Describe").performScrollTo().performClick()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
 
         val text = vm.state.value.deck.selectedSlide.elements.single().id
         compose.runOnIdle { vm.onSceneReduce { StoryComposerSceneReducer.trackSelected(it, text) } }
         compose.waitForIdle()
         compose.runOnIdle { vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") } }
 
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertExists()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
+    }
+
+    @Test
+    fun `the Frames of a placed photo lie flat in its rail, and a touched frame becomes its look`() {
+        val vm = viewModel()
+        val photo = PendingMediaUpload("p", MediaUploadItem(ByteArray(4), "p.jpg", "image/jpeg"))
+        vm.onSceneReduce { state ->
+            val slide = state.deck.selectedSlide
+            state.copy(
+                deck = state.deck.copy(slides = state.deck.slides.map { if (it.id == slide.id) it.copy(mediaIds = listOf("p"), placedMedia = listOf(StoryPlacedMedia("p"))) else it }),
+                pendingUploads = listOf(photo),
+            )
+        }
+        vm.onSceneReduce { StoryComposerSelectionReducer.mediaSelected(it, "p") }
+        show(vm)
+
+        compose.onNodeWithText("Frames").performScrollTo().performClick()
+        tapInSheet("Polaroid")
+
+        assertThat(vm.state.value.mediaLookOf("p")?.frameId).isEqualTo("classic:polaroid")
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).containsExactly("p")
+    }
+
+    /** La feuille de sélection vit dans sa propre fenêtre : sous Robolectric, un toucher par coordonnées tombe sur la scène. */
+    private fun tapInSheet(text: String) {
+        compose.onNodeWithText(text).performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
     }
 
     private fun withPlacedClip(vm: StoryComposerViewModel) {

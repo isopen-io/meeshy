@@ -105,7 +105,7 @@ extension StoryViewModel {
             // Un refus définitif (#7907) ne se rejoue pas : la file le classe
             // en échec au lieu de brûler son budget de réessai.
             guard StoryPublishRetryPolicy.isPermanent(error) else { throw error }
-            throw StoryPublishUnrecoverableError(error.localizedDescription)
+            throw StoryPublishUnrecoverableError(DailyGestureLimitNotice.refusalText(error) ?? error.localizedDescription)
         }
 
         cleanupUploadTempFiles(upload)
@@ -793,17 +793,17 @@ extension StoryViewModel {
                 self.storyUploadSucceeded.send(id)
                 self.activeUploads.removeAll { $0.id == id }
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story publiée", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(StoryPublishCopy.published(finished?.targetType ?? .story))
                 self.releaseUploadSlot(after: id)
             } catch {
                 if !Task.isCancelled {
                     let committed = self.activeUploads.first(where: { $0.id == id })?.publishedPostIds.isEmpty == false
                     switch StoryUploadFailureDisposition.of(error, hasCommittedSlides: committed) {
                     case .rejected(let code):
-                        self.rejectUpload(id: id, message: error.localizedDescription, code: code)
+                        self.rejectUpload(id: id, message: DailyGestureLimitNotice.refusalText(error) ?? error.localizedDescription, code: code)
                     case .retryable:
                         self.mutateUpload(id: id) { $0.phase = .failed(error.localizedDescription) }
-                        FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Échec de la publication de la story", bundle: .main))
+                        FeedbackToastManager.shared.showError(StoryPublishCopy.publishFailed(self.activeUploads.first(where: { $0.id == id })?.targetType ?? .story))
                         // Don't cleanup temp files on failure — retry may need them
                         self.releaseQueueClaimIfNothingCommitted(uploadId: id)
                     }

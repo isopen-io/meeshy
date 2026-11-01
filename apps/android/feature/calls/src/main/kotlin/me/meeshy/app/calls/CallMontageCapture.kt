@@ -229,8 +229,11 @@ internal fun CallMontageCaptureLayer(
     }
 }
 
-/** La photo et le film du montage en cours, avec la permission de la galerie ; chacun marque l'astuce comme vue. */
-internal class CallCaptureShooter(val shoot: () -> Unit, val film: () -> Unit)
+/**
+ * La photo et le film du montage en cours, avec la permission de la galerie ; chacun marque l'astuce comme vue.
+ * [faces] enregistre le portrait de chaque participant (« Chaque visage », #13691).
+ */
+internal class CallCaptureShooter(val shoot: () -> Unit, val film: () -> Unit, val faces: () -> Unit)
 
 @Composable
 internal fun rememberCallCaptureShooter(controller: CallCaptureController, scene: CallCaptureScene, hints: CaptureHintMemory): CallCaptureShooter {
@@ -248,6 +251,7 @@ internal fun rememberCallCaptureShooter(controller: CallCaptureController, scene
                 hints.seen()
                 scope.launch { controller.startRecording({ latestScene }, mayWrite) }
             },
+            faces = { scope.launch { controller.captureFaces(latestScene.subjects, mayWrite) } },
         )
     }
 }

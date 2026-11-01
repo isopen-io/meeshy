@@ -90,6 +90,7 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
           $or: [
             { 'context.postId': { $in: [POST_ID] } },
             { 'metadata.repostId': { $in: [POST_ID] } },
+            { 'metadata.originalPostId': { $in: [POST_ID] } },
           ],
         },
       })

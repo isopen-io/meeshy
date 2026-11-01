@@ -62,6 +62,7 @@ function service(m: Monde) {
       findFirst: jest.fn(async ({ where }: { where?: MongoDocument }) =>
         m.users.find((row) => matchesMongoWhere(row as unknown as MongoDocument, where)) ?? null),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn(async ({ where }: { where?: MongoDocument }) =>
         m.amities.filter((row) => matchesMongoWhere(row as unknown as MongoDocument, where))),
@@ -77,6 +78,7 @@ function service(m: Monde) {
 }
 
 const VISIBLE = { showOnline: true, showLastSeenTimestamp: true };
+const AMI_VISIBLE = { showOnline: true, showLastSeenTimestamp: false };
 const MASQUE = { showOnline: false, showLastSeenTimestamp: false };
 
 describe('#13298 — acceptedFriendIds : l’audience de user:status exclut tout bloqué', () => {
@@ -118,11 +120,37 @@ describe('#13298 — acceptedFriendIds : l’audience de user:status exclut tout
   });
 });
 
+describe('#13928 — acceptedFriendLevels : l’audience nomme le NIVEAU de chaque ami, pas seulement son id', () => {
+  it('l’ami accepté sans ligne de niveau est Ami ; le bloqué (chaque sens) est retiré', async () => {
+    const { svc } = service(monde());
+    expect(await svc.acceptedFriendLevels(SUJET)).toEqual(new Map([[AMIE, 'FRIEND']]));
+  });
+
+  it('un lien Proche est servi tel quel, au niveau du minimum des deux accords', async () => {
+    const m = monde();
+    const { svc, prisma } = service(m);
+    const [low, high] = [SUJET, AMIE].sort();
+    prisma.userRelation.findMany.mockResolvedValue([
+      { userLowId: low, userHighId: high, grantedByLow: 'CLOSE', grantedByHigh: 'BLOOD', updatedAt: new Date(), transitions: [] },
+    ] as never);
+    prisma.userRelation.findUnique.mockResolvedValue(null as never);
+    expect((await svc.acceptedFriendLevels(SUJET)).get(AMIE)).toBe('CLOSE');
+  });
+
+  it('la relation de blocage déjà lue n’est pas relue', async () => {
+    const { svc, prisma } = service(monde());
+    const levels = await svc.acceptedFriendLevels(SUJET, { blockRelated: new Set([JE_BLOQUE, ME_BLOQUE]) });
+    expect([...levels.keys()]).toEqual([AMIE]);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+});
+
 describe('#13298 — resolveForPresenceEvent : presence:snapshot ne part ni vers ni depuis un bloqué', () => {
   it('un lecteur ordinaire : l’ami bloqué (chaque sens) est masqué, l’ami libre visible', async () => {
     const { svc } = service(monde());
     const carte = await svc.resolveForPresenceEvent({ userId: SUJET, role: 'USER' }, [AMIE, JE_BLOQUE, ME_BLOQUE]);
-    expect(carte.get(AMIE)).toEqual(VISIBLE);
+    expect(carte.get(AMIE)).toEqual(AMI_VISIBLE);
     expect(carte.get(JE_BLOQUE)).toEqual(MASQUE);
     expect(carte.get(ME_BLOQUE)).toEqual(MASQUE);
   });

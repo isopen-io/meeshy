@@ -11,29 +11,67 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.StoryDrawingCanvasSpace
 import me.meeshy.ui.theme.hexColor
 
 /**
- * Paints a slide's tile: the fill, the background media (filtered, cropped or contained over its backdrop, zoomed and panned like the composer canvas), the strokes, the multi-line texts in their font, and the stickers, all in the
- * 1080-wide design referential scaled to the tile. Pure drawing on a small [Bitmap]; it never touches a view and is meant to
- * be called OFF the main thread (the rail renders on `Dispatchers.Default`). A blank scene is left black.
+ * Paints a slide's tile as the composer canvas paints the scene (#13867): the fill (the scene's default gradient when
+ * nothing is posed, never black), the background media (filtered, cropped or contained over its backdrop, zoomed and
+ * panned), then the scene's objects in the ONE order of its stack — texts in their font, posed media, stickers — and the
+ * drawing on top, all in the 1080-wide design referential scaled to the tile. Pure drawing on a small [Bitmap]; it never
+ * touches a view and is meant to be called OFF the main thread (the rail renders on `Dispatchers.Default`).
  */
 internal object SlideThumbnailRenderer {
 
-    fun render(spec: SlideThumbnailSpec, background: Bitmap?): Bitmap {
+    /** What the tile paints, bottom to top. */
+    fun passes(spec: SlideThumbnailSpec): List<SlideThumbnailPass> = buildList {
+        add(SlideThumbnailPass.Fill)
+        if (spec.backgroundKey != null) add(SlideThumbnailPass.Background)
+        spec.layers.forEach { add(SlideThumbnailPass.Layer(it)) }
+        if (spec.strokes.isNotEmpty()) add(SlideThumbnailPass.Strokes)
+    }
+
+    fun render(spec: SlideThumbnailSpec, background: Bitmap?, placed: Map<String, Bitmap> = emptyMap()): Bitmap {
         val bitmap = Bitmap.createBitmap(spec.widthPx, spec.heightPx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.Black.toArgb())
-        if (spec.isBlank) return bitmap
         val width = spec.widthPx.toFloat()
         val height = spec.heightPx.toFloat()
-        drawFill(canvas, spec, width, height)
-        background?.let { drawBackground(canvas, spec, it, width, height) }
-        drawStrokes(canvas, spec, width, height)
-        drawTexts(canvas, spec, width, height)
-        drawStickers(canvas, spec, width, height)
+        passes(spec).forEach { pass ->
+            when (pass) {
+                SlideThumbnailPass.Fill -> drawFill(canvas, spec, width, height)
+                SlideThumbnailPass.Background -> background?.let { drawBackground(canvas, spec, it, width, height) }
+                SlideThumbnailPass.Strokes -> drawStrokes(canvas, spec, width, height)
+                is SlideThumbnailPass.Layer -> when (val layer = pass.layer) {
+                    is SlideThumbnailSpec.Text -> drawText(canvas, layer, width, height)
+                    is SlideThumbnailSpec.Sticker -> drawSticker(canvas, layer, width, height)
+                    is SlideThumbnailSpec.Media -> placed[layer.key]?.let { drawMedia(canvas, layer, it, width, height) }
+                }
+            }
+        }
         return bitmap
+    }
+
+    /** A posed media at its place, the size the canvas gives it (iOS `ForegroundMediaFrame`), cropped to its frame and turned about its centre. */
+    private fun drawMedia(canvas: Canvas, media: SlideThumbnailSpec.Media, image: Bitmap, width: Float, height: Float) {
+        val size = ForegroundMediaFrame.renderedSize(media.aspectRatio, media.scale.toDouble(), width.toDouble())
+        val centreX = media.x * width
+        val centreY = media.y * height
+        val frame = RectF(
+            centreX - size.width.toFloat() / 2f, centreY - size.height.toFloat() / 2f,
+            centreX + size.width.toFloat() / 2f, centreY + size.height.toFloat() / 2f,
+        )
+        val source = SlideThumbnailGeometry.imageRect(image.width, image.height, frame.width(), frame.height(), filled = true, framing = ThumbFraming.IDENTITY)
+        canvas.save()
+        canvas.rotate(media.rotationDeg, centreX, centreY)
+        canvas.clipRect(frame)
+        canvas.drawBitmap(
+            image, null,
+            RectF(frame.left + source.left, frame.top + source.top, frame.left + source.right, frame.top + source.bottom),
+            Paint(Paint.FILTER_BITMAP_FLAG),
+        )
+        canvas.restore()
     }
 
     private fun drawFill(canvas: Canvas, spec: SlideThumbnailSpec, width: Float, height: Float) {
@@ -44,7 +82,7 @@ internal object SlideThumbnailRenderer {
             is StorySceneFill.Linear ->
                 paint.shader = LinearGradient(0f, 0f, width, height, argb(fill.start), argb(fill.end), Shader.TileMode.CLAMP)
             is StorySceneFill.AuthorGradient ->
-                paint.shader = LinearGradient(0f, 0f, 0f, height, argb(fill.accentHex), Color.Black.toArgb(), Shader.TileMode.CLAMP)
+                paint.shader = LinearGradient(0f, 0f, width, height, argb(fill.accentHex), Color.Black.toArgb(), Shader.TileMode.CLAMP)
         }
         canvas.drawRect(0f, 0f, width, height, paint)
     }
@@ -91,28 +129,26 @@ internal object SlideThumbnailRenderer {
         }
     }
 
-    /** Every line of every text, in its font, aligned inside its block and tilted about the block's centre — the canvas's own laws. */
-    private fun drawTexts(canvas: Canvas, spec: SlideThumbnailSpec, width: Float, height: Float) {
-        spec.texts.forEach { text ->
-            val face = SlideThumbnailGeometry.typefaceOf(text.style)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = argb(text.colorHex)
-                textAlign = Paint.Align.LEFT
-                typeface = Typeface.create(face.family.platformFamily(), face.platformStyle())
-                letterSpacing = face.letterSpacingEm
-                textSize = StoryTextMetrics.fontPx(text.fontDesignPx.toDouble(), 1.0, width)
-            }
-            val lines = text.text.split('\n')
-            val centreX = text.x * width
-            val centreY = text.y * height
-            val lineHeight = paint.fontSpacing
-            val lefts = SlideThumbnailGeometry.lineLefts(lines.map(paint::measureText), text.align, text.rtl, centreX)
-            val firstBaseline = centreY - lineHeight * lines.size / 2f - paint.ascent()
-            canvas.save()
-            canvas.rotate(text.rotationDeg, centreX, centreY)
-            lines.forEachIndexed { index, line -> canvas.drawText(line, lefts[index], firstBaseline + index * lineHeight, paint) }
-            canvas.restore()
+    /** Every line of a text, in its font, aligned inside its block and tilted about the block's centre — the canvas's own laws. */
+    private fun drawText(canvas: Canvas, text: SlideThumbnailSpec.Text, width: Float, height: Float) {
+        val face = SlideThumbnailGeometry.typefaceOf(text.style)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = argb(text.colorHex)
+            textAlign = Paint.Align.LEFT
+            typeface = Typeface.create(face.family.platformFamily(), face.platformStyle())
+            letterSpacing = face.letterSpacingEm
+            textSize = StoryTextMetrics.fontPx(text.fontDesignPx.toDouble(), 1.0, width)
         }
+        val lines = text.text.split('\n')
+        val centreX = text.x * width
+        val centreY = text.y * height
+        val lineHeight = paint.fontSpacing
+        val lefts = SlideThumbnailGeometry.lineLefts(lines.map(paint::measureText), text.align, text.rtl, centreX)
+        val firstBaseline = centreY - lineHeight * lines.size / 2f - paint.ascent()
+        canvas.save()
+        canvas.rotate(text.rotationDeg, centreX, centreY)
+        lines.forEachIndexed { index, line -> canvas.drawText(line, lefts[index], firstBaseline + index * lineHeight, paint) }
+        canvas.restore()
     }
 
     private fun StoryTextFontFamily.platformFamily(): Typeface = when (this) {
@@ -129,20 +165,26 @@ internal object SlideThumbnailRenderer {
         else -> Typeface.NORMAL
     }
 
-    private fun drawStickers(canvas: Canvas, spec: SlideThumbnailSpec, width: Float, height: Float) {
-        spec.stickers.forEach { sticker ->
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                textAlign = Paint.Align.CENTER
-                textSize = StoryTextMetrics.fontPx(sticker.sizeDesignPx.toDouble(), 1.0, width)
-            }
-            canvas.save()
-            canvas.rotate(sticker.rotationDeg, sticker.x * width, sticker.y * height)
-            canvas.drawText(sticker.emoji, sticker.x * width, sticker.y * height - (paint.ascent() + paint.descent()) / 2f, paint)
-            canvas.restore()
+    private fun drawSticker(canvas: Canvas, sticker: SlideThumbnailSpec.Sticker, width: Float, height: Float) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = Paint.Align.CENTER
+            textSize = StoryTextMetrics.fontPx(sticker.sizeDesignPx.toDouble(), 1.0, width)
         }
+        canvas.save()
+        canvas.rotate(sticker.rotationDeg, sticker.x * width, sticker.y * height)
+        canvas.drawText(sticker.emoji, sticker.x * width, sticker.y * height - (paint.ascent() + paint.descent()) / 2f, paint)
+        canvas.restore()
     }
 
     private const val BLUR_SAMPLES = 12
 
     private fun argb(hex: String): Int = hexColor(hex, Color.Black).toArgb()
+}
+
+/** One step of a tile's painting, bottom to top (#13867). */
+internal sealed interface SlideThumbnailPass {
+    data object Fill : SlideThumbnailPass
+    data object Background : SlideThumbnailPass
+    data class Layer(val layer: SlideThumbnailSpec.Layer) : SlideThumbnailPass
+    data object Strokes : SlideThumbnailPass
 }

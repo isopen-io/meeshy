@@ -1,10 +1,11 @@
 package me.meeshy.app.stories
 
-import me.meeshy.sdk.media.previewModel
 import me.meeshy.sdk.model.StoryDrawingStroke
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookMatrix
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.StoryColorMatrix
@@ -22,8 +23,8 @@ internal data class SlideThumbnailSpec(
     val fill: StorySceneFill,
     val hasBackgroundColor: Boolean,
     val backgroundKey: String?,
-    val texts: List<Text>,
-    val stickers: List<Sticker>,
+    /** The scene's objects in the ONE order of its stack (#13852, #13867): what is hidden in the scene is hidden in the tile. */
+    val layers: List<Layer>,
     val strokes: List<StoryDrawingStroke>,
     /** The slide's filter as a colour matrix, `null` when it changes nothing — applied to the background media only, like the canvas. */
     val look: StoryColorMatrix? = null,
@@ -32,6 +33,9 @@ internal data class SlideThumbnailSpec(
     val filled: Boolean = true,
     val backdrop: StoryBackdrop = StoryBackdrop.BLUR,
 ) {
+    /** One object of the scene the tile paints, at its rank. */
+    sealed interface Layer
+
     data class Text(
         val text: String,
         val colorHex: String,
@@ -42,12 +46,18 @@ internal data class SlideThumbnailSpec(
         val style: StoryTextStyle = StoryTextStyle.BOLD,
         val align: StoryTextAlign = StoryTextAlign.CENTER,
         val rtl: Boolean = false,
-    )
+    ) : Layer
 
-    data class Sticker(val emoji: String, val sizeDesignPx: Float, val x: Float, val y: Float, val rotationDeg: Float)
+    data class Sticker(val emoji: String, val sizeDesignPx: Float, val x: Float, val y: Float, val rotationDeg: Float) : Layer
 
-    /** Nothing to show: the tile paints black, the drawn EMPTY state (iOS #5037), not a gradient pretending a scene. */
-    val isBlank: Boolean get() = backgroundKey == null && !hasBackgroundColor && texts.isEmpty() && stickers.isEmpty() && strokes.isEmpty()
+    /** A media posed on the scene (#13867): its [key] in the fingerprint, its pose, and its measured ratio (`null`: a square, like the readers). */
+    data class Media(val key: String, val x: Float, val y: Float, val scale: Float, val rotationDeg: Float, val aspectRatio: Double?) : Layer
+
+    val texts: List<Text> get() = layers.filterIsInstance<Text>()
+    val stickers: List<Sticker> get() = layers.filterIsInstance<Sticker>()
+
+    /** Nothing posed: the tile shows the scene's own floor — its default gradient — never a black hole (#13867). */
+    val isBlank: Boolean get() = backgroundKey == null && !hasBackgroundColor && layers.isEmpty() && strokes.isEmpty()
 
     companion object {
         private const val STICKER_BASE_DESIGN_PX = 140f
@@ -55,26 +65,34 @@ internal data class SlideThumbnailSpec(
         fun of(
             slide: StorySlide,
             backgroundKey: String?,
-            accentHex: String,
+            accentHex: String?,
             widthPx: Int,
             heightPx: Int,
             canvasWidthPx: Float = 0f,
+            placedMedia: List<ThumbnailPlaced> = emptyList(),
         ): SlideThumbnailSpec {
             val backgroundTransform = slide.frame.backgroundTransform()
+            val texts = slide.elements.filter { it.isPublishable }.associateBy { it.id }
+            val stickers = slide.stickers.filter { it.isPublishable }.associateBy { it.id }
+            val media = placedMedia.associateBy { it.mediaId }
             return SlideThumbnailSpec(
                 widthPx = widthPx,
                 heightPx = heightPx,
                 fill = StorySceneFill.resolve(slide.background, accentHex),
                 hasBackgroundColor = slide.background != null,
                 backgroundKey = backgroundKey,
-                texts = slide.elements.filter { it.isPublishable }.map {
-                    Text(
-                        it.text, it.color, it.size.designSize * it.scale, it.x, it.y, it.rotationDeg,
-                        style = it.style, align = it.align, rtl = it.baseDirection == StoryTextDirection.RTL,
-                    )
-                },
-                stickers = slide.stickers.filter { it.isPublishable }.map {
-                    Sticker(it.emoji, STICKER_BASE_DESIGN_PX * it.scale, it.x, it.y, it.rotationDeg)
+                layers = StorySceneStack.order(slide).mapNotNull { ref ->
+                    when (ref.kind) {
+                        ComposerObjectKind.TEXT -> texts[ref.id]?.let {
+                            Text(
+                                it.text, it.color, it.size.designSize * it.scale, it.x, it.y, it.rotationDeg,
+                                style = it.style, align = it.align, rtl = it.baseDirection == StoryTextDirection.RTL,
+                            )
+                        }
+                        ComposerObjectKind.STICKER -> stickers[ref.id]?.let { Sticker(it.emoji, STICKER_BASE_DESIGN_PX * it.scale, it.x, it.y, it.rotationDeg) }
+                        ComposerObjectKind.MEDIA -> media[ref.id]?.let { Media(it.key, it.x, it.y, it.scale, it.rotationDeg, it.aspectRatio) }
+                        ComposerObjectKind.PLACE, ComposerObjectKind.AUDIO -> null
+                    }
                 },
                 strokes = slide.strokes,
                 look = slide.thumbnailLook().takeUnless { it == StoryColorMatrix.IDENTITY },
@@ -96,15 +114,47 @@ internal object SlideThumbnailRefresh {
 /** The background media of a slide as the tile loads it: [key] is its identity in the fingerprint, [model] what the image loader is handed. */
 internal class ThumbnailBackground(val key: String, val model: Any)
 
-/** The media painted behind [slide]: its designated background, else its first media — exactly what the scene canvas renders. */
+/** A media posed on a slide as the tile loads it (#13867): its identity, what the loader is handed, and its pose. */
+internal class ThumbnailPlaced(
+    val mediaId: String,
+    val key: String,
+    val model: Any,
+    val x: Float,
+    val y: Float,
+    val scale: Float,
+    val rotationDeg: Float,
+    val aspectRatio: Double?,
+)
+
+/**
+ * The media posed on [slide] that the tile can load, by the very picture the scene shows (#14182): an uploaded one by its
+ * url, a video by its served thumbnail or else the first frame of its cut window, a pending one by its file.
+ */
+internal fun StoryComposerUiState.thumbnailPlacedOf(slide: StorySlide, mediaBaseUrl: String?): List<ThumbnailPlaced> =
+    slide.placedMedia.filter { it.mediaId in slide.mediaIds }.mapNotNull { placed ->
+        val uploaded = attachments.firstOrNull { it.id == placed.mediaId }
+        val source = when {
+            uploaded != null -> ComposerPicture.of(uploaded, mediaBaseUrl, atMs = placed.posterAtMs(uploaded)).let { model ->
+                Triple(thumbnailKeyOf(model), model, ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height))
+            }
+            else -> pendingUploads.firstOrNull { it.cmid == placed.mediaId }?.item?.let { item ->
+                ComposerPicture.of(item)?.let { Triple("pending:${placed.mediaId}:${item.sizeBytes}", it, null) }
+            }
+        } ?: return@mapNotNull null
+        ThumbnailPlaced(placed.id, source.first, source.second, placed.x, placed.y, placed.scale, placed.rotationDeg, source.third)
+    }
+
+private fun thumbnailKeyOf(model: Any): String = (model as? ComposerVideoFrame)?.let { "${it.address}@${it.atMs}" } ?: model.toString()
+
+/** The media painted behind [slide]: its designated background, else its first media not posed on the scene (#13853) — exactly what the scene canvas renders, a video by its picture (#13843). */
 internal fun StoryComposerUiState.thumbnailBackgroundOf(slide: StorySlide, mediaBaseUrl: String?): ThumbnailBackground? {
-    val id = slide.backgroundMediaId?.takeIf { it in slide.mediaIds } ?: slide.mediaIds.firstOrNull() ?: return null
+    val posed = slide.placedMedia.mapTo(mutableSetOf()) { it.mediaId }
+    val id = slide.backgroundMediaId?.takeIf { it in slide.mediaIds } ?: slide.mediaIds.firstOrNull { it !in posed } ?: return null
     attachments.firstOrNull { it.id == id }?.let { media ->
-        val url = ComposerMediaAddress.preview(media, mediaBaseUrl)
-        return ThumbnailBackground(url, url)
+        return ThumbnailBackground(ComposerMediaAddress.preview(media, mediaBaseUrl), ComposerPicture.of(media, mediaBaseUrl))
     }
     val item = pendingUploads.firstOrNull { it.cmid == id }?.item ?: return null
-    return ThumbnailBackground("pending:$id:${item.sizeBytes}", item.previewModel)
+    return ComposerPicture.of(item)?.let { ThumbnailBackground("pending:$id:${item.sizeBytes}", it) }
 }
 
 /** La couleur d'une vignette : le filtre de la scène, puis les réglages du fond quand il en porte (ce que le plateau peint, au flou et au grain près). */

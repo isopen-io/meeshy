@@ -55,7 +55,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @Composable
 internal fun UnsentPublicationsEntry(
-    onReopen: (FeedComposerDraft) -> Unit,
+    onReopen: () -> Unit,
     onReopenStory: () -> Unit = {},
     viewModel: UnsentPublicationsViewModel = hiltViewModel(),
 ) {
@@ -63,9 +63,9 @@ internal fun UnsentPublicationsEntry(
     val offline by viewModel.offline.collectAsStateWithLifecycle()
     var showList by remember { mutableStateOf(false) }
     LaunchedEffect(viewModel) {
-        viewModel.reopened.collect { draft ->
+        viewModel.reopened.collect {
             showList = false
-            onReopen(draft)
+            onReopen()
         }
     }
     LaunchedEffect(viewModel) {
@@ -204,6 +204,7 @@ private fun UnsentPublicationRow(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        OnlyUnlinkedRefusalLine(item)
         UnsentPublicationMedia(item, offline)
         Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
             if (UnsentRuptureRule.showsRetry(item, UnsentRuptureRule.rupture(item, offline))) TextButton(onClick = onRetry) { Text(stringResource(R.string.feed_unsent_retry)) }
@@ -213,6 +214,26 @@ private fun UnsentPublicationRow(
             }
         }
     }
+}
+
+/**
+ * Une publication arrêtée par le plafond des personnes choisies sans lien (#14169) le dit en clair, avec ses nombres
+ * quand la passerelle les a donnés ; elle ne se rejoue pas toute seule. Rien pour un autre échec.
+ */
+@Composable
+internal fun OnlyUnlinkedRefusalLine(item: UnsentPublication) {
+    val refusal = item.onlyUnlinkedRefusal ?: return
+    val limit = refusal.limit
+    val unlinked = refusal.unlinked
+    Text(
+        text = if (limit != null && unlinked != null) {
+            stringResource(R.string.feed_unsent_only_unlinked_counted, unlinked, limit)
+        } else {
+            stringResource(R.string.feed_unsent_only_unlinked)
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MeeshyTheme.tokens.error,
+    )
 }
 
 private fun UnsentPublicationKind.labelRes(): Int = when (this) {

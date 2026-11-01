@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.game.GamePrivacyRequest
 import me.meeshy.sdk.model.game.DuoInviteRequest
 import me.meeshy.sdk.model.game.GameWriteRequest
+import me.meeshy.sdk.model.game.GuideSeenRequest
 import me.meeshy.sdk.model.game.LeagueConsentRequest
 import me.meeshy.sdk.model.game.LeaguePseudonymRequest
 import me.meeshy.sdk.model.game.ShowcaseOrderRequest
@@ -101,4 +102,8 @@ interface GameApi {
     /** Renaît : niveau à 1, étincelles à 0, une étoile de plus. */
     @POST("me/game/prestige")
     suspend fun passPrestige(@Body body: GameWriteRequest): ApiResponse<JsonElement>
+
+    /** Marque des cartes du guide comme vues (1 à 32 clés) : la prochaine ouverture les dit en version courte. */
+    @POST("me/game/guide/seen")
+    suspend fun markGuideSeen(@Body body: GuideSeenRequest): ApiResponse<JsonElement>
 }

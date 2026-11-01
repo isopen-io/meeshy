@@ -2,11 +2,26 @@ import { randomUUID } from 'crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { EngagementService } from './engagement/EngagementService.js';
+import { recordFriendship } from './relations/userRelationWriter.js';
+import { isBlockedBetween } from '../utils/blocking.js';
 
 const logger = enhancedLogger.child({ module: 'AffiliateTrackingService' });
 
 /** La durée de vie d'une visite : au plus 30 jours (conformité H-9). */
 export const AFFILIATE_VISIT_RETENTION_DAYS = 30;
+
+/**
+ * Un lien d'invitation PARRAINE un compte qui vient de naître, et lui seul
+ * (#13926) : la conversion noue une amitié FRIEND/FRIEND sans demande, ce
+ * qu'un compte ancien ne doit pas pouvoir obtenir en rejouant le lien d'un
+ * inconnu. L'inscription convertit à la création ; le client rappelle
+ * `POST /affiliate/register` juste après, bien en deçà de cette fenêtre.
+ */
+export const AFFILIATE_CONVERSION_WINDOW_HOURS = 24;
+
+const isFreshAccount = (createdAt: unknown, now: Date): boolean =>
+  createdAt instanceof Date &&
+  now.getTime() - createdAt.getTime() <= AFFILIATE_CONVERSION_WINDOW_HOURS * 60 * 60 * 1000;
 
 export class AffiliateTrackingService {
   /**
@@ -104,6 +119,20 @@ export class AffiliateTrackingService {
         };
       }
 
+      // Ni un blocage, ni un compte ancien : la conversion crée une amitié,
+      // elle ne doit pas effacer un « non » ni lier deux inconnus de longue date.
+      // Le refus reste celui d'un lien invalide : il ne dit pas qui a bloqué.
+      const referred = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, createdAt: true },
+      });
+      if (!referred || !isFreshAccount(referred.createdAt, new Date())) {
+        return { success: false, error: 'Parrainage réservé aux comptes qui viennent de s\'inscrire' };
+      }
+      if (await isBlockedBetween(prisma, affiliateToken.createdBy, userId)) {
+        return { success: false, error: 'Token invalide' };
+      }
+
       // Réserver une place de façon atomique AVANT de créer la relation.
       // Le pré-check `currentUses >= maxUses` (plus haut) est un simple fast-path :
       // deux conversions concurrentes peuvent toutes deux le franchir quand
@@ -170,20 +199,34 @@ export class AffiliateTrackingService {
           },
         });
 
-        if (existingFriendRequest) {
-          if (existingFriendRequest.status !== 'accepted') {
-            await prisma.friendRequest.update({
-              where: { id: existingFriendRequest.id },
-              data: { status: 'accepted', respondedAt: new Date() },
-            });
-          }
-        } else {
+        // Seule une demande EN ATTENTE se promeut : un refus ou un blocage est
+        // un « non » qu'un lien d'invitation n'efface pas, et rien ne s'écrit.
+        const linked = !existingFriendRequest || ['pending', 'accepted'].includes(existingFriendRequest.status);
+
+        if (existingFriendRequest?.status === 'pending') {
+          await prisma.friendRequest.update({
+            where: { id: existingFriendRequest.id, status: 'pending' },
+            data: { status: 'accepted', respondedAt: new Date() },
+          });
+        } else if (!existingFriendRequest) {
           await prisma.friendRequest.create({
             data: {
               senderId: affiliateToken.createdBy,
               receiverId: userId,
-              status: 'accepted' // Accepter automatiquement pour les affiliations
+              status: 'accepted', // Accepter automatiquement pour les affiliations
+              respondedAt: new Date(),
             }
+          });
+        }
+
+        // Le lien (#13926) : la demande acceptée d'une affiliation vaut FRIEND des
+        // deux côtés, par le MÊME écrivain que l'acceptation d'une demande.
+        if (linked) {
+          await recordFriendship(prisma, {
+            userA: affiliateToken.createdBy,
+            userB: userId,
+            origin: 'request',
+            at: new Date(),
           });
         }
       } catch (friendRequestError) {

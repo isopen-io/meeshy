@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.composer.StoryLimits
+import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 
@@ -34,6 +35,10 @@ data class StoryBackgroundMedia(
     val framing: StoryBackgroundFraming = StoryBackgroundFraming.IDENTITY,
     /** Les réglages et effets du fond (#13652) ; ce que le média PEINT part au fil, jamais un réglage qu'aucun rendu ne sert. */
     val adjustments: ImageAdjustments? = null,
+    /** La fenêtre gardée d'une vidéo de fond (#13973) ; une image n'en a pas. */
+    val window: MediaTrimBounds? = null,
+    /** Le quart de tour du fond, et le volume d'une vidéo de fond (#14083) ; au repos, rien de plus au fil. */
+    val setting: StoryBackgroundSetting = StoryBackgroundSetting(),
 ) {
     /** A `video/…` MIME denotes a looping background video; anything else is an image. */
     val isVideo: Boolean get() = mimeType.startsWith("video", ignoreCase = true)
@@ -75,5 +80,10 @@ data class StoryBackgroundMedia(
             loop = if (isVideo) loop else true,
             intrinsicDuration = publishableDuration?.takeIf { isVideo },
             duration = publishableDuration?.takeIf { isVideo },
+            sourceStart = window?.start?.takeIf { isVideo },
+            sourceEnd = window?.end?.takeIf { isVideo },
+            rotation = setting.rotationDeg.toDouble(),
+            volume = if (isVideo) setting.volume else 1f,
+            mutedVolumeMemento = setting.mutedVolumeMemento.takeIf { isVideo },
         )
 }

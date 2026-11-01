@@ -41,6 +41,7 @@
     <string name="bubble_contact_card_a11y_on_meeshy">على Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">على Meeshy</string>
     <string name="bubble_contact_card_shared">جهة اتصال مشتركة</string>
+    <string name="bubble_protection_after_read">يختفي بعد القراءة</string>
     <string name="bubble_story_citation_answer">رد على القصة</string>
     <string name="bubble_story_citation_open_hint">يفتح القصة المقتبسة</string>
     <string name="bubble_story_citation_unavailable">القصة غير متاحة</string>

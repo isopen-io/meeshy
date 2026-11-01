@@ -20,9 +20,11 @@ import {
 } from '../../types/attachment.js';
 
 describe('UPLOAD_LIMITS constants', () => {
-  it('IMAGE is 4GB', () => expect(UPLOAD_LIMITS.IMAGE).toBe(4294967296));
-  it('TEXT is 2GB', () => expect(UPLOAD_LIMITS.TEXT).toBe(2147483648));
-  it('CODE is 2GB', () => expect(UPLOAD_LIMITS.CODE).toBe(2147483648));
+  // #11266 — décision du porteur du 2026-11-01 (#11249 point 6).
+  it('IMAGE is 100 MiB', () => expect(UPLOAD_LIMITS.IMAGE).toBe(100 * 1024 * 1024));
+  it('VIDEO stays 4 GiB', () => expect(UPLOAD_LIMITS.VIDEO).toBe(4294967296));
+  it('TEXT follows DOCUMENT (500 MiB)', () => expect(UPLOAD_LIMITS.TEXT).toBe(500 * 1024 * 1024));
+  it('CODE follows DOCUMENT (500 MiB)', () => expect(UPLOAD_LIMITS.CODE).toBe(500 * 1024 * 1024));
   // Plafond unique d'un message (SOTA 2026-08-16). La valeur est dupliquée
   // dans `ConversationComposerState.maxMediaSelection` (Swift ne peut pas
   // importer ce module) : toute évolution touche les deux sites.

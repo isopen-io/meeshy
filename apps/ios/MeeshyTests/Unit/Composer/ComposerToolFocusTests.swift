@@ -78,8 +78,6 @@ final class ComposerToolFocusTests: XCTestCase {
     @MainActor
     func test_leRail_occupeParUnOutil_sAnnonceCommeSesReglages() throws {
         XCTAssertNotEqual(ComposerRailCopy.toolRailLabel, ComposerRailCopy.railLabel)
-        let rail = try source("Meeshy/Features/Composer/ComposerLeadingRail.swift")
-        XCTAssertTrue(rail.contains("mode.opensTool ? ComposerRailCopy.toolRailLabel : ComposerRailCopy.railLabel"))
     }
 
     // MARK: - Les sites de montage demandent à la règle
@@ -90,25 +88,36 @@ final class ComposerToolFocusTests: XCTestCase {
         for interdit in ["flyoutColumn", "ComposerRailFlyoutAnchorKey", ".flyout("] {
             XCTAssertFalse(surface.contains(interdit), "la colonne en surplus est revenue : \(interdit)")
         }
-        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen)"),
-                      ".topBar doit répondre à l'outil par la règle")
-        // La légende sait QUEL texte on écrit (#9448) — même règle, plus fine.
-        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen, writing: writing)"),
-                      ".description doit répondre à l'outil et au texte écrit par la règle")
+        // **Le repos se pose sur la scène** (#13839) : ✕, ↶ ↷ et la colonne
+        // demandent à `ComposerRestChrome`, nourrie de l'outil et de l'écriture.
+        XCTAssertTrue(surface.contains("ComposerRestChrome.State(toolIsOpen: toolIsOpen,"),
+                      "le chrome du repos doit répondre à l'outil par la règle")
+        // La légende sait QUEL texte on écrit (#9448) — même règle, plus fine ;
+        // elle cède aussi à un objet sélectionné (#13957), d'où `sceneIsFocused`.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description, toolIsOpen: sceneIsFocused, writing: writing)"),
+                      ".description doit répondre à l'outil, à la sélection et au texte écrit par la règle")
         // Le rail droit répond AUSSI à l'écriture (#6131) — même règle.
-        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText)"),
+        XCTAssertTrue(surface.contains("guard ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText)"),
                       ".trailingRail doit répondre à l'outil et à l'écriture par la règle")
         XCTAssertTrue(surface.contains("options: trailingOptions"),
                       "le rail droit porte les réglages de l'outil et leur (x) (#8713)")
-        XCTAssertTrue(surface.contains("case .doors(let servies) = railMode else { return AnyView(EmptyView()) }"),
-                      "un outil ouvert vide le rail gauche : ses réglages vivent à droite")
-        XCTAssertTrue(surface.contains("guard ComposerToolFocus.isShown(.sceneDoors, toolIsOpen: toolIsOpen, writesText: writesText),"),
-                      "l'édition du fond vide aussi les portes (#8847) — par la règle, pas par le seul mode du rail")
+        // L'édition du fond vide aussi les portes (#8847) : `toolIsOpen` est la
+        // règle (`ComposerToolFocus.toolIsOpen`), et la colonne la lit. Une
+        // édition ouverte depuis le rail d'édition en est un NIVEAU, pas un
+        // outil (#13957) : la règle de la sélection le dit.
+        XCTAssertTrue(surface.contains("ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool,"),
+                      "l'outil ouvert se lit de la règle, pas du seul mode du rail")
+        XCTAssertTrue(surface.contains("ComposerSelectionChrome.inlineEditOpensTool(")
+                        && surface.contains("editsInline: editsInline, objectIsSelected: selectionColumn != nil))"),
+                      "l'édition en place n'ouvre un outil que hors du rail d'édition")
+        XCTAssertFalse(surface.contains("ComposerLeadingRail("),
+                       "le rail gauche à glyphes est revenu sur la scène (#13839)")
     }
 
     func test_hote_effaceLeSocle_quandUnOutilDeLaSceneEstOuvert() throws {
         let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
-        XCTAssertTrue(hote.contains("ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)"))
+        XCTAssertTrue(hote.contains("let servi = sceneSelectionRelay.publicationIsShown(toolOwnsScreen: sceneToolOwnsScreen)"),
+                      "le socle cède à l'outil ET à l'édition (#13957)")
         XCTAssertTrue(hote.contains("railMode: sceneRailMode"),
                       "la surface et le socle lisent le MÊME mode")
         XCTAssertFalse(hote.contains("anchorsToDoor"))
@@ -136,22 +145,6 @@ final class ComposerToolFocusTests: XCTestCase {
         XCTAssertGreaterThan(ComposerFloatingRailInk.shadowRadius, 0)
     }
 
-    /// Le gabarit commun peint l'encre de la loi et son relief, sans plus
-    /// aucun disque de verre ; la pastille de compte porte le même relief.
-    func test_10358_leGabaritDuRail_neMontePlusDeVerreParBouton() throws {
-        let rail = try source("Meeshy/Features/Composer/ComposerLeadingRail.swift")
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(rail.contains("structComposerLeadingRail"), "le fichier lu n'est pas le rail")
-        XCTAssertFalse(rail.contains("ComposerRailButtonGlass("), "plus de bulle de verre autour des outils")
-        XCTAssertTrue(rail.contains(".foregroundColor(ComposerFloatingRailInk.glyph(separate:separateButtons,active:isOn,columnTint:tint))"))
-        XCTAssertEqual(rail.components(separatedBy: ".modifier(ComposerRailGlyphRelief(active:separateButtons))").count - 1, 2,
-                       "le glyphe ET la pastille de compte portent l'ombre")
-        XCTAssertTrue(rail.contains(".frame(width:ComposerRailGeometry.railWidth,height:ComposerRailGeometry.railWidth)"),
-                      "la cible reste de 44 pt")
-        XCTAssertTrue(rail.contains("isOn:control.isExpanded"),
-                      "un outil ouvert est une entrée active : jaune, et annoncée sélectionnée")
-    }
-
     // MARK: - #10364 · Plus aucun cercle autour des outils du composer
 
     /// **La loi des boutons d'outil flottants** (retour porteur 2026-10-12 :
@@ -170,11 +163,14 @@ final class ComposerToolFocusTests: XCTestCase {
     }
 
     /// Les colonnes de la scène ne peignent plus que l'encre de repos : les
-    /// options du rail droit sont blanches, supprimer reste rouge.
+    /// options du rail droit sont blanches ; Retirer, dans la barre de la
+    /// sélection (#13839, L5), reste rouge.
     @MainActor
     func test_10364_lesOptionsDuRailDroit_peignentLEncreBlanche() {
         XCTAssertEqual(ComposerTrailingColumnPaint(.exitTool).tint, ComposerFloatingRailInk.rest)
-        XCTAssertEqual(ComposerTrailingColumnPaint(.objectAction(.delete)).tint, MeeshyColors.error)
+        XCTAssertTrue(ComposerSelectionAction.remove.isDestructive)
+        XCTAssertEqual(ComposerSelectionPaint.tint(.remove), MeeshyColors.error)
+        XCTAssertEqual(ComposerSelectionPaint.tint(.modify), ComposerFloatingRailInk.rest)
     }
 
     /// Le rail droit, le couloir de l'éditeur d'objet et la rangée d'outils du
@@ -202,13 +198,6 @@ final class ComposerToolFocusTests: XCTestCase {
         XCTAssertFalse(editeur.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de disque dans l'éditeur d'objet")
         XCTAssertTrue(editeur.contains(".foregroundStyle(ComposerFloatingRailInk.floating(active:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)))"))
         XCTAssertTrue(editeur.contains(".frame(width:44,height:44)"))
-
-        let document = try source("Meeshy/Features/Composer/ComposerDocumentSurface.swift")
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(document.contains("privatefunctoolButton("), "la tuile d'outil du document est introuvable")
-        XCTAssertFalse(document.contains(".adaptiveLiquidGlass(in:Circle()"), "plus de cercle dans la rangée du document")
-        XCTAssertTrue(document.contains(".foregroundColor(ComposerFloatingRailInk.floating(active:showColorPalette))"),
-                      "la palette ouverte passe au jaune")
     }
 
     private func source(_ chemin: String) throws -> String {

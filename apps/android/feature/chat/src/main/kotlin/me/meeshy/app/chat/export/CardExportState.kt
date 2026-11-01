@@ -11,7 +11,6 @@ import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import me.meeshy.ui.component.bubble.BubbleContent
 
 internal enum class CardOutcome { GALLERY, SHARED, DENIED, FAILED }
 
@@ -23,11 +22,10 @@ internal enum class CardOutcome { GALLERY, SHARED, DENIED, FAILED }
  */
 @Stable
 internal class CardExportState(
-    private val bubble: BubbleContent,
+    private val source: CardSource,
     val viewer: CardViewer,
     conversationTitle: String?,
     val store: CardPreferenceStore,
-    private val openedAt: Long,
     private val dateFormat: DateFormat,
     private val timeFormat: DateFormat,
     initialFormat: CardFormat,
@@ -49,10 +47,10 @@ internal class CardExportState(
     private var renderedKey by mutableStateOf<String?>(null)
 
     val title: String? = CardText.nonBlank(conversationTitle)
-    val languages: List<CardLanguage> = CardSubjects.languages(bubble)
+    val languages: List<CardLanguage> = source.languages
     val tabs: List<CardTab> = CardTab.offered(languages.size + 1)
 
-    val subject: CardSubject? get() = CardSubjects.of(bubble, viewer, openedAt, exportLanguage)
+    val subject: CardSubject? get() = source.subject(exportLanguage)
 
     val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}"
     val ready: Boolean get() = rendered != null && renderedKey == renderKey
@@ -120,14 +118,14 @@ internal class CardExportState(
     }
 }
 
-/** L'atelier tel qu'il s'ouvre : le message tel qu'il était à l'ouverture, le format par défaut de l'appareil. */
+/** L'atelier tel qu'il s'ouvre : ce qu'on image tel qu'il était à l'ouverture, le format par défaut de l'appareil. */
 @Composable
-internal fun rememberCardExportState(bubble: BubbleContent, viewer: CardViewer, conversationTitle: String?): CardExportState {
+internal fun rememberCardExportState(source: CardSource, viewer: CardViewer, conversationTitle: String?): CardExportState {
     val context = LocalContext.current
-    return remember(bubble.messageId) {
+    return remember(source.key) {
         val store = AndroidCardPreferenceStore(context)
         CardExportState(
-            bubble, viewer, conversationTitle, store, System.currentTimeMillis(),
+            source, viewer, conversationTitle, store,
             android.text.format.DateFormat.getLongDateFormat(context), android.text.format.DateFormat.getTimeFormat(context),
             initialFormat = CardFormat.readDefault(store) ?: CardFormat.initial,
         )

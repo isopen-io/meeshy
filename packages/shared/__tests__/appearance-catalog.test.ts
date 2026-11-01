@@ -22,10 +22,10 @@ const frames = read('banner-frames/frames.json') as PackFile;
 const wallpaperDesigns = wallpapers.packs.flatMap((pack) => pack.designs ?? []);
 const bannerKeys = banners.packs.flatMap((pack) => pack.designs ?? []).map((design) => (design as { key: string }).key);
 
-describe('le catalogue des 15 modèles de fond (#10632, #10638, § 6)', () => {
-  it('compte cinq packs builtin et 15 modèles que le contrat lit tous', () => {
+describe('le catalogue des 17 modèles de fond (#10632, #10638, #13950, § 6)', () => {
+  it('compte cinq packs builtin et 17 modèles que le contrat lit tous', () => {
     expect(wallpapers.packs.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes']);
-    expect(wallpaperDesigns).toHaveLength(15);
+    expect(wallpaperDesigns).toHaveLength(17);
     wallpapers.packs.forEach((pack) => {
       const contract = parseAppearancePackContract({ domain: 'wallpaper', designs: pack.designs });
       expect(contract?.designs).toHaveLength(pack.designs?.length ?? -1);
@@ -34,7 +34,7 @@ describe('le catalogue des 15 modèles de fond (#10632, #10638, § 6)', () => {
 
   it('ne réutilise aucune clé, ni dans un pack, ni entre les packs de fonds', () => {
     const keys = wallpaperDesigns.map((design) => (design as { key: string }).key);
-    expect(new Set(keys).size).toBe(15);
+    expect(new Set(keys).size).toBe(17);
   });
 
   it('installe « Essentiels » d’office et le garde ; les quatre autres se retirent', () => {
@@ -179,6 +179,68 @@ describe('les couches animées du catalogue (#10638)', () => {
       expect(bytes.length).toBe(ref.bytes);
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(ref.sha256);
       expect(validateLottie(JSON.parse(bytes.toString('utf8')) as unknown, { bytes: bytes.length }).ok).toBe(true);
+    });
+  });
+});
+
+describe('les six décorations animées de profil et de fil de #13950', () => {
+  type Layer = { readonly key: string; readonly lottie?: { readonly src: string; readonly bytes: number; readonly sha256: string } };
+  const keysOf = (file: PackFile, slug: string, field: 'designs' | 'rings') =>
+    (((file.packs.find((pack) => pack.slug === slug) as Record<string, unknown> | undefined)?.[field] as Layer[] | undefined) ?? []).map((item) => item.key);
+  const ADDED = {
+    wallpapers: ['bulles-legeres', 'pluie-de-petales'],
+    banners: ['maree', 'braises'],
+    rings: ['prisme-vivant', 'onde'],
+  } as const;
+  const FRENCH: Readonly<Record<string, string>> = {
+    'bulles-legeres': 'Bulles légères',
+    'pluie-de-petales': 'Pluie de pétales',
+    maree: 'Marée',
+    braises: 'Braises',
+    'prisme-vivant': 'Prisme vivant',
+    onde: 'Onde',
+  };
+  const added = [
+    ...[...wallpapers.packs, ...banners.packs].flatMap((pack) => (pack.designs ?? []) as Layer[]),
+    ...rings.packs.flatMap((pack) => (pack.rings ?? []) as Layer[]),
+  ].filter((item) => Object.keys(FRENCH).includes(item.key));
+  const animation = (item: Layer) => JSON.parse(readFileSync(join(DIR, 'lottie', item.lottie!.src), 'utf8')) as { fr: number; ip: number; op: number };
+
+  it('rejoignent les packs animés installés d’office, après la couche qui les a précédées', () => {
+    expect(keysOf(wallpapers, 'animes', 'designs')).toEqual(['brume-vivante', ...ADDED.wallpapers]);
+    expect(keysOf(banners, 'bannieres-animees', 'designs')).toEqual(['aurore-vive', ...ADDED.banners]);
+    expect(keysOf(rings, 'contours-animes', 'rings')).toEqual(['halo-or', ...ADDED.rings]);
+    expect(parseAppearancePackContract({ domain: 'wallpaper', designs: wallpapers.packs.find((pack) => pack.slug === 'animes')?.designs })?.designs).toHaveLength(3);
+    expect(parseAppearancePackContract({ domain: 'banner', designs: banners.packs.find((pack) => pack.slug === 'bannieres-animees')?.designs })?.designs).toHaveLength(3);
+    expect(parseAvatarRingPackContract({ domain: 'avatar-ring', rings: rings.packs.find((pack) => pack.slug === 'contours-animes')?.rings })?.rings).toHaveLength(3);
+  });
+
+  it('chacune porte SA couche animée, distincte de toutes les autres du catalogue', () => {
+    expect(added).toHaveLength(6);
+    expect(added.every((item) => item.lottie !== undefined)).toBe(true);
+    const everyLayer = [...wallpapers.packs, ...banners.packs, ...rings.packs]
+      .flatMap((pack) => [...((pack.designs ?? []) as Layer[]), ...((pack.rings ?? []) as Layer[])])
+      .flatMap((item) => (item.lottie === undefined ? [] : [item.lottie.src]));
+    expect(everyLayer).toHaveLength(9);
+    expect(new Set(everyLayer).size).toBe(9);
+  });
+
+  it('chaque couche est légère et douce : moins de 8 Ko, 30 images par seconde au plus, une boucle de 4 à 16 secondes', () => {
+    added.forEach((item) => {
+      expect({ key: item.key, light: item.lottie!.bytes < 8 * 1024 }).toEqual({ key: item.key, light: true });
+      const { fr, ip, op } = animation(item);
+      expect(fr).toBeLessThanOrEqual(30);
+      const seconds = (op - ip) / fr;
+      expect({ key: item.key, soft: seconds >= 4 && seconds <= 16 }).toEqual({ key: item.key, soft: true });
+    });
+  });
+
+  it.each(PACK_LANGUAGES.map((lang) => [lang] as const))('%s nomme les six nouvelles venues', (lang) => {
+    const strings = read(`strings/${lang}.json`) as { designs: Record<string, string>; rings: Record<string, string> };
+    Object.keys(FRENCH).forEach((key) => {
+      const name = strings.designs[key] ?? strings.rings[key];
+      expect({ key, named: typeof name === 'string' && name.length > 0 }).toEqual({ key, named: true });
+      if (lang === 'fr') expect(name).toBe(FRENCH[key]);
     });
   });
 });

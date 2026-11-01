@@ -12,7 +12,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -27,6 +26,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.LayoutDirection
@@ -52,6 +53,7 @@ import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
+import me.meeshy.sdk.model.composer.ComposerSceneTool
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryDraftConfirmation
@@ -119,7 +121,7 @@ class ComposerLabeledRailsTest {
                         StoryComposerSceneFirst(
                             state = state,
                             viewModel = vm,
-                            sceneExport = SceneExportHost(SceneCapture(rememberGraphicsLayer(), SceneCapturePass.NONE), emptyList(), false) {},
+                            sceneExport = SceneExportHost(emptyList(), false) {},
                             doors = StoryComposerDoors(onClose = {}, onOpenAudience = {}, onOpenStickers = {}, onPickMedia = {}, onOpenSoundShelf = {}),
                             morePanel = null,
                             onMorePanel = {},
@@ -170,7 +172,7 @@ class ComposerLabeledRailsTest {
     }
 
     @Test
-    fun `the right rail is empty without a selection, then carries the labelled actions of the selection`() {
+    fun `the left rail gives its place to the labelled options of the selection, close and publish step aside`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onSceneBackgroundTap()
@@ -183,9 +185,9 @@ class ComposerLabeledRailsTest {
 
         compose.onNodeWithContentDescription("😀").assertIsSelected()
         val scene = scene()
-        listOf("SELECTION", "Edit", "Duplicate", "Remove").forEach { label -> assertThat(text(label).left).isAtLeast(scene.right) }
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertDoesNotExist()
-        compose.onNodeWithText("Text").assertExists()
+        listOf("SELECTION", "Edit", "Duplicate", "Remove").forEach { label -> assertThat(text(label).right).isAtMost(scene.left) }
+        listOf("Text", "Close").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
     }
 
     @Test
@@ -223,7 +225,7 @@ class ComposerLabeledRailsTest {
         var wide by mutableStateOf(false)
         show(vm, { if (wide) 1280.dp else 360.dp }, { if (wide) 752.dp else 692.dp })
         compose.onNodeWithContentDescription("😀").performClick()
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertExists()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
 
         wide = true
         compose.waitForIdle()
@@ -234,7 +236,7 @@ class ComposerLabeledRailsTest {
         wide = false
         compose.waitForIdle()
 
-        compose.onNodeWithTag(SELECTION_BAR_TAG).assertExists()
+        compose.onNodeWithTag(EDITING_RAIL_TAG).assertExists()
         compose.onNodeWithText("SELECTION").assertDoesNotExist()
     }
 
@@ -282,7 +284,7 @@ class ComposerLabeledRailsTest {
                             showsTools = true,
                             activeTool = null,
                             openEntry = null,
-                            moreEntries = listOf(ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
+                            moreEntries = listOf(ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
                             animated = false,
                             exportEnabled = true,
                         ),
@@ -302,6 +304,39 @@ class ComposerLabeledRailsTest {
     }
 
     @Test
+    fun `the background, the mention and the place are direct rows of the rail, and more never lists them`() {
+        var tool: ComposerSceneTool? = null
+        compose.setContent {
+            MeeshyTheme {
+                Box(Modifier.size(width = 112.dp, height = 1200.dp)) {
+                    StoryLeadingRail(
+                        rail = LeadingRailModel(
+                            showsClose = true,
+                            showsTools = true,
+                            activeTool = null,
+                            openEntry = null,
+                            moreEntries = listOf(ComposerMoreEntry.ADD_SLIDE, ComposerMoreEntry.HASHTAGS),
+                            animated = false,
+                            exportEnabled = true,
+                        ),
+                        onClose = {},
+                        onTool = { tool = it },
+                        onEntry = {},
+                    )
+                }
+            }
+        }
+
+        listOf("Background" to ComposerSceneTool.BACKGROUND, "Mention" to ComposerSceneTool.MENTION, "Place" to ComposerSceneTool.PLACE)
+            .forEach { (label, expected) ->
+                compose.onNodeWithText(label).performScrollTo().performClick()
+                assertThat(tool).isEqualTo(expected)
+            }
+        compose.onNodeWithText("More").performScrollTo().performClick()
+        listOf("Background", "Mention", "Place").forEach { compose.onAllNodesWithText(it).assertCountEquals(1) }
+    }
+
+    @Test
     fun `a rail action is read by its label alone, never announced as not selected`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
@@ -309,7 +344,7 @@ class ComposerLabeledRailsTest {
         showTablet(vm)
         compose.onNodeWithContentDescription("😀").performClick()
 
-        listOf("Close", "Edit", "Duplicate", "Remove", "More").forEach { label ->
+        listOf("Edit", "Duplicate", "Timing", "Remove").forEach { label ->
             compose.onNodeWithText(label).assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
         }
     }
@@ -325,7 +360,7 @@ class ComposerLabeledRailsTest {
                             showsTools = true,
                             activeTool = null,
                             openEntry = ComposerMoreEntry.SLIDE_DURATION,
-                            moreEntries = listOf(ComposerMoreEntry.BACKGROUND, ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
+                            moreEntries = listOf(ComposerMoreEntry.SLIDE_DURATION, ComposerMoreEntry.CAPTION),
                             animated = false,
                             exportEnabled = true,
                         ),

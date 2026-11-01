@@ -224,6 +224,49 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
     expect(notif.createPostCommentNotification).not.toHaveBeenCalled();
   });
 
+  // #14168 — la mention ne prévient qu'un lien du commentateur, SAUF ceux que ce
+  // commentaire prévient déjà : la route doit les nommer, sans quoi un parent
+  // nommé sans lien perdrait la mention ET `comment_reply`.
+  it('nomme au lot de mention l’auteur du commentaire parent d’une réponse (#14168)', async () => {
+    mockAddComment.mockResolvedValue({ id: 'reply-9', content: '@bob bravo', originalLanguage: 'fr' });
+    prismaPostFindUnique.mockResolvedValue(post('STORY', 'story-owner'));
+    prismaCommentFindUnique.mockResolvedValue({ authorId: 'user-bob', content: 'parent text' });
+    mockExtractMentions.mockReturnValue(['bob']);
+    mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: 'user-bob' }]]));
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, body: { content: '@bob bravo', parentId: 'parent-1' } });
+
+    expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ directlyAddressedUserIds: ['user-bob'] })
+    );
+  });
+
+  it('nomme au lot de mention l’auteur du post pour un commentaire de premier niveau (#14168)', async () => {
+    mockAddComment.mockResolvedValue({ id: 'top-9', content: '@bob bravo', originalLanguage: 'fr' });
+    prismaPostFindUnique.mockResolvedValue(post('POST', 'user-bob'));
+    mockExtractMentions.mockReturnValue(['bob']);
+    mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: 'user-bob' }]]));
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, body: { content: '@bob bravo' } });
+
+    expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ directlyAddressedUserIds: ['user-bob'] })
+    );
+  });
+
+  it('passe les nommés au lot des stories en `mentionedUserIds`, jamais en exclusion inconditionnelle (#14168)', async () => {
+    mockAddComment.mockResolvedValue({ id: 'top-10', content: '@carol bravo', originalLanguage: 'fr' });
+    prismaPostFindUnique.mockResolvedValue(post('STORY', 'story-owner'));
+    mockExtractMentions.mockReturnValue(['carol']);
+    mockResolveUsernames.mockResolvedValue(new Map([['carol', { id: 'user-carol' }]]));
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, body: { content: '@carol bravo' } });
+
+    const [params] = notif.createStoryCommentNotificationsBatch.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(params.mentionedUserIds).toEqual(['user-carol']);
+    expect(params.excludeUserIds).toBeUndefined();
+  });
+
   // Un commentaire n'a pas d'audience propre : il hérite de celle du POST. Le
   // lot ne peut décider qui a le droit d'être prévenu que si la route lui
   // transmet l'auteur ET la visibilité du post commenté.

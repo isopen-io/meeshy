@@ -1,7 +1,6 @@
 package me.meeshy.app.stories
 
 import androidx.compose.runtime.remember
-import me.meeshy.sdk.media.previewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,15 +49,14 @@ internal fun MediaPreviewRow(
     pending: List<PendingMediaUpload>,
     mediaBaseUrl: String?,
     backgroundMediaId: String?,
-    backgroundIsVideo: Boolean,
-    backgroundLoop: Boolean,
     onRemove: (String) -> Unit,
     onToggleBackground: (String) -> Unit,
-    onToggleBackgroundLoop: () -> Unit,
     selectedMediaId: String? = null,
     onSelect: ((String) -> Unit)? = null,
     placedMediaIds: Set<String> = emptySet(),
     onTogglePlaced: ((String) -> Unit)? = null,
+    pendingPhase: (String) -> PendingUploadPhase = { PendingUploadPhase.OFFLINE },
+    onRetryPending: ((String) -> Unit)? = null,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
@@ -68,7 +65,7 @@ internal fun MediaPreviewRow(
         items(attachments, key = { it.id }) { media ->
             val isBackground = media.id == backgroundMediaId
             MediaThumbnail(
-                model = ComposerMediaAddress.preview(media, mediaBaseUrl),
+                model = ComposerPicture.of(media, mediaBaseUrl),
                 isPending = false,
                 isBackground = isBackground,
                 selected = media.id == selectedMediaId,
@@ -77,17 +74,16 @@ internal fun MediaPreviewRow(
                 onToggleBackground = { onToggleBackground(media.id) },
                 isPlaced = media.id in placedMediaIds,
                 onTogglePlaced = onTogglePlaced?.takeIf { !isBackground }?.let { toggle -> { toggle(media.id) } },
-                // The loop toggle appears only on the designated background VIDEO — the
-                // one media whose looping is authorable — so the control is never a no-op.
-                backgroundLoop = if (isBackground && backgroundIsVideo) backgroundLoop else null,
-                onToggleBackgroundLoop = onToggleBackgroundLoop,
             )
         }
         items(pending, key = { it.cmid }) { upload ->
+            val phase = pendingPhase(upload.cmid)
             MediaThumbnail(
-                model = remember(upload.cmid) { upload.item.previewModel },
+                model = remember(upload.cmid) { ComposerPicture.of(upload.item) },
                 isPending = true,
+                pendingPhase = phase,
                 onRemove = { onRemove(upload.cmid) },
+                onSelect = onRetryPending?.takeIf { phase == PendingUploadPhase.FAILED }?.let { retry -> { retry(upload.cmid) } },
             )
         }
     }
@@ -104,19 +100,18 @@ internal fun MediaThumbnail(
     model: Any?,
     isPending: Boolean,
     onRemove: () -> Unit,
+    pendingPhase: PendingUploadPhase = PendingUploadPhase.OFFLINE,
     isBackground: Boolean = false,
     onToggleBackground: (() -> Unit)? = null,
-    backgroundLoop: Boolean? = null,
-    onToggleBackgroundLoop: (() -> Unit)? = null,
     selected: Boolean = false,
     onSelect: (() -> Unit)? = null,
     isPlaced: Boolean = false,
     onTogglePlaced: (() -> Unit)? = null,
 ) {
-    val selectLabel = stringResource(R.string.composer_column_media_select)
+    val selectLabel = if (isPending) pendingPhase.label() else stringResource(R.string.composer_column_media_select)
     Box {
         AsyncImage(
-            model = model,
+            model = rememberComposerPicture(model),
             contentDescription = if (onSelect != null) selectLabel else null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -152,17 +147,6 @@ internal fun MediaThumbnail(
                 onClickLabel = if (isPlaced) stringResource(R.string.story_canvas_action_leaveScene) else null,
             )
         }
-        if (backgroundLoop != null && onToggleBackgroundLoop != null) {
-            TileAction(
-                icon = Icons.Filled.Loop,
-                label = stringResource(
-                    if (backgroundLoop) R.string.stories_composer_background_loop_on else R.string.stories_composer_background_loop_off,
-                ),
-                active = backgroundLoop,
-                onClick = onToggleBackgroundLoop,
-                modifier = Modifier.align(Alignment.BottomEnd),
-            )
-        }
         if (isPending) {
             Surface(
                 color = Color.Black.copy(alpha = 0.55f),
@@ -171,7 +155,7 @@ internal fun MediaThumbnail(
                     .fillMaxWidth(),
             ) {
                 Text(
-                    text = stringResource(R.string.stories_composer_media_pending),
+                    text = pendingPhase.label(),
                     color = Color.White,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
@@ -228,3 +212,13 @@ private fun TileAction(
         }
     }
 }
+
+/** Ce que dit la vignette d'un média en file (#13959) : « Hors ligne » sans réseau, « Envoi… » quand il repart, sinon « Échec — Réessayer ». */
+@Composable
+internal fun PendingUploadPhase.label(): String = stringResource(
+    when (this) {
+        PendingUploadPhase.OFFLINE -> R.string.stories_composer_media_pending
+        PendingUploadPhase.SENDING -> R.string.story_composer_upload_resending
+        PendingUploadPhase.FAILED -> R.string.story_composer_upload_failed_retry
+    },
+)

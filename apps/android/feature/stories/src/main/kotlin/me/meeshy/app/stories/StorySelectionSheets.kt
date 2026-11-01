@@ -1,16 +1,12 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -20,11 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerSelectionSubject
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.MediaEditTool
-import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.composer.TextEditTool
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
@@ -43,7 +38,6 @@ internal fun StorySelectionSheet(
     onDone: () -> Unit,
 ) {
     when (open) {
-        StoryComposerSheet.OBJECT_EDIT -> ComposerAnchoredSheet(fill = false) { ObjectEditSheet(state, viewModel, comparison, onDone) }
         StoryComposerSheet.OBJECT_TIME -> ComposerAnchoredSheet(fill = false) { ObjectTimeSheet(state, viewModel, onDone) }
         StoryComposerSheet.STICKER_SWAP -> ComposerAnchoredSheet(fill = true) {
             StickerPickerPanel(
@@ -54,83 +48,55 @@ internal fun StorySelectionSheet(
                 onDismiss = onDone,
             )
         }
-        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
-        StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> Unit
+        StoryComposerSheet.PLACE_REPOINT -> StoryReferenceSheet(open, state, viewModel, onDone)
+        StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
+        StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE, StoryComposerSheet.BACKGROUND_SOURCE,
+        StoryComposerSheet.BACKGROUND_DESCRIPTION -> Unit
     }
 }
 
-/** Une feuille de sélection est servie tant que son élément l'est : retiré ou désélectionné, elle se referme. */
+/**
+ * Une feuille de sélection est servie tant que son élément l'est : retiré ou désélectionné, elle se referme. Les portes du
+ * rail et du socle (stickers, son, audience, références) ne servent aucun élément : elles le sont toujours (#13910).
+ */
 internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = when (sheet) {
     StoryComposerSheet.STICKER_SWAP -> selectedSticker != null
-    StoryComposerSheet.OBJECT_EDIT -> selectedMedia != null || selectedSound != null
-    StoryComposerSheet.OBJECT_TIME -> selectedTextElement != null || selectedSticker != null
-    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE,
-    StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
+    StoryComposerSheet.OBJECT_TIME -> selectedObjectTiming != null
+    StoryComposerSheet.PLACE_REPOINT -> selectedPlace != null
+    StoryComposerSheet.BACKGROUND_SOURCE -> selectionSubject == ComposerSelectionSubject.BACKGROUND
+    StoryComposerSheet.BACKGROUND_DESCRIPTION -> describedMediaFile != null
+    StoryComposerSheet.STICKERS, StoryComposerSheet.SOUND, StoryComposerSheet.AUDIENCE, StoryComposerSheet.MENTION,
+    StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE -> true
 }
 
-/** Le Modifier d'un média ou d'un son : ses sections en pastilles libellées, la section ouverte dessous — ce que la colonne droite portait. */
-@Composable
-private fun ObjectEditSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, comparison: LookComparison, onDone: () -> Unit) {
-    val media = state.selectedMedia
-    val sound = state.selectedSound
-    val sections = media?.let(state::mediaSectionsFor) ?: state.servedSoundSections
-    val open = if (media != null) state.openMediaSection else state.openSoundSection
-    SelectionSheetColumn(stringResource(R.string.story_canvas_action_edit), onDone) {
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            sections.forEach { section ->
-                FilterChip(
-                    selected = section == open,
-                    onClick = { viewModel.onSceneReduce { StoryComposerTrailingReducer.sectionOpened(it, section) } },
-                    label = { Text(stringResource(section.labelRes())) },
-                    leadingIcon = { Icon(section.glyph(), contentDescription = null) },
-                )
-            }
-            state.selectionBar?.let { bar -> bar.sheetActions.forEach { action -> BackgroundChip(bar.ref, action, viewModel) } }
-            media?.let { MakeStickerChip(state, it, viewModel) }
-        }
-        when {
-            media != null -> MediaSectionContent(state, media, viewModel, comparison)
-            sound != null -> SoundSectionContent(state, sound, viewModel)
-        }
-    }
-}
-
-@Composable
-private fun BackgroundChip(ref: SceneObjectRef, action: SceneObjectMenu.Action, viewModel: StoryComposerViewModel) {
-    AssistChip(
-        onClick = { viewModel.onObjectController(ref, action) },
-        label = {
-            Text(
-                stringResource(
-                    if (action == SceneObjectMenu.Action.REPLACE_BACKGROUND) R.string.composer_selection_replace_background
-                    else R.string.composer_selection_set_background,
-                ),
-            )
-        },
-        leadingIcon = { Icon(MeeshyIcons.Wallpaper, contentDescription = null) },
-    )
-}
-
-/** Le Temps d'un texte ou d'un sticker : son départ et sa durée, puis la frise du plan, où toucher une piste sélectionne son objet. */
+/**
+ * Le Temps de l'objet posé (#13902, #13904) — texte, sticker, média, lieu ou pastille de son : sa famille, sa fenêtre en
+ * début et fin (iOS `ComposerObjectTimingControls`), puis la frise du plan, où sa piste est surlignée et où toucher une
+ * autre piste sélectionne son objet. Une pastille de son dont la source est connue s'y rogne aussi (#13903) : iOS sert
+ * ROGNER au côté de la fenêtre pour l'audio (`ComposerObjectEditorRail.entries(.audio)`), le Modifier le garde aussi.
+ */
 @Composable
 private fun ObjectTimeSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
     SelectionSheetColumn(stringResource(R.string.composer_scene_more_timing), onDone) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            state.selectedTextElement?.let { text ->
-                TimingCycleButtons(text.timing, { viewModel.onTextElementCycleStart(text.id) }, { viewModel.onTextElementCycleDuration(text.id) })
-            } ?: state.selectedSticker?.let { sticker ->
-                TimingCycleButtons(
-                    sticker.timing,
-                    { viewModel.onSceneReduce { StoryComposerStickerReducer.startCycled(it, sticker.id) } },
-                    { viewModel.onSceneReduce { StoryComposerStickerReducer.durationCycled(it, sticker.id) } },
-                )
+        // La frise D'ABORD (#14255) : la feuille plafonne à 55 % de l'écran, et sous les glissières la règle et la barre
+        // tombaient hors champ — une scène sans média ne montrait plus ni sa durée ni son objet. Le reste défile dessous.
+        StoryPlanFrise(state, viewModel)
+        Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            val ref = state.selectedSceneObject
+            val window = state.selectedObjectWindow
+            val family = state.selectedObjectFamily
+            if (ref != null && window != null && family != null) {
+                ObjectTimeControls(window, family, state.selectedSlideDurationSeconds) { next ->
+                    viewModel.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, ref, next) }
+                }
             }
-        }
-        Column(Modifier.heightIn(max = FRISE_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
-            StoryPlanFrise(state, viewModel)
+            state.selectedSound?.takeIf { state.trimSourceOf(it) != null }?.let { sound ->
+                Text(stringResource(R.string.composer_column_media_trim), style = MaterialTheme.typography.labelLarge)
+                SoundTrimSection(state, sound, viewModel)
+            }
         }
     }
 }
@@ -152,8 +118,6 @@ private fun SelectionSheetColumn(title: String, onDone: () -> Unit, content: @Co
     }
 }
 
-private val FRISE_MAX_HEIGHT = 220.dp
-
 internal fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
     is ComposerObjectEditorSection.Tool -> when (tool) {
         TextEditTool.STYLE -> MeeshyIcons.TextFields
@@ -167,6 +131,7 @@ internal fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
     }
     ComposerObjectEditorSection.Timing -> MeeshyIcons.ScheduleFilled
     is ComposerObjectEditorSection.Media -> when (tool) {
+        MediaEditTool.LOOK -> MeeshyIcons.Wallpaper
         MediaEditTool.FILTER -> MeeshyIcons.PhotoFilter
         MediaEditTool.ADJUST -> MeeshyIcons.Tune
         MediaEditTool.EFFECTS -> MeeshyIcons.Sparkles
@@ -192,6 +157,7 @@ internal fun ComposerObjectEditorSection.labelRes(): Int = when (this) {
     ComposerObjectEditorSection.Timing -> R.string.composer_column_text_timing
     ComposerObjectEditorSection.Plan -> R.string.composer_column_text_plan
     is ComposerObjectEditorSection.Media -> when (tool) {
+        MediaEditTool.LOOK -> R.string.composer_column_media_look
         MediaEditTool.FILTER -> R.string.composer_column_media_filter
         MediaEditTool.ADJUST -> R.string.composer_column_media_adjust
         MediaEditTool.EFFECTS -> R.string.stories_composer_band_effets

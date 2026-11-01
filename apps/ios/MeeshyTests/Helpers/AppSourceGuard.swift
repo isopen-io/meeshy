@@ -299,19 +299,16 @@ enum AppSourceGuard {
         try unit(conversationViewPath, alsoIncluding: conversationViewCompanions)
     }
 
-    /// L'unité de la surface DOCUMENT : la vue, plus les deux fichiers de règles
-    /// pures qui en sont sortis au #4103 (`ComposerSurfaceRules`,
-    /// `ComposerDocumentRules`). Même raison que pour le meuble : sans l'unité,
-    /// toute garde négative dont l'interdit a suivi les règles passerait au vert
-    /// en lisant la moitié qui ne le contient plus.
-    static let composerSurfacePath = "Meeshy/Features/Composer/ComposerDocumentSurface.swift"
+    /// L'unité de ce qui reste de la surface DOCUMENT : la vue est partie au
+    /// #13864 — un post se compose sur la scène —, ses RÈGLES pures restent
+    /// (`ComposerDocumentRules`, `ComposerSurfaceRules`), lues par le meuble et
+    /// par la publication. Même raison que pour le meuble : sans l'unité, toute
+    /// garde négative dont l'interdit a suivi les règles passerait au vert en
+    /// lisant la moitié qui ne le contient plus.
+    static let composerSurfacePath = "Meeshy/Features/Composer/ComposerDocumentRules.swift"
     static let composerSurfaceCompanions = [
         "Meeshy/Features/Composer/ComposerSurfaceRules.swift",
-        "Meeshy/Features/Composer/ComposerDocumentRules.swift",
-        // **La géométrie de la rangée, extraite le 2026-08-31** — même raison
-        // que les deux ci-dessous : le nom ne porte pas celui du type hôte,
-        // donc le glob ne la voit pas.
-        "Meeshy/Features/Composer/ComposerDocumentToolRow.swift",
+        "Meeshy/Features/Composer/ComposerDocumentSurface+Copy.swift",
         // **Les deux types extraits le 2026-08-30**, quand le fichier a franchi
         // le plafond de 1 100 lignes. Ils ne portent PAS le nom du type, donc le
         // glob `ComposerDocumentSurface+*.swift` ne les voit pas — c'est

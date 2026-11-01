@@ -5,9 +5,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,24 +13,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.media.MediaUploadQueue
-import me.meeshy.sdk.model.PostComposerDraftSnapshot
-import me.meeshy.sdk.model.media.TusUploadContext
-import me.meeshy.sdk.net.api.CreatePostRequest
-import me.meeshy.sdk.post.PostComposerDraftStore
-import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.PostType
-import me.meeshy.sdk.model.SharedPlace
-import me.meeshy.sdk.model.MosaicLayoutMode
-import me.meeshy.sdk.model.composer.PostPhotoScenes
-import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.outbox.OutboxFlushWorker
-import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.model.analytics.ContentSurface
 import me.meeshy.sdk.model.analytics.ImpressionSource
 import me.meeshy.sdk.post.FeedEngagementRepository
@@ -42,11 +28,10 @@ import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.post.writeMediaCaptionTranslationsTo
 import me.meeshy.sdk.post.writePostTranslationsTo
 import me.meeshy.sdk.post.writePostUpdatesTo
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
-import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import javax.inject.Inject
@@ -60,13 +45,10 @@ data class FeedUiState(
      * (« Impossible de charger le fil » + Réessayer, iOS FeedView) instead of the empty one.
      */
     val loadFailed: Boolean = false,
+    /** No usable network: the screen draws the discreet « Hors ligne » band over what the feed keeps (#14263). */
+    val isOffline: Boolean = false,
     /** A one-shot localized feedback (toast), cleared by [FeedViewModel.consumeNotice]. */
     val notice: FeedNotice? = null,
-    /**
-     * The text and visibility of a post whose publication failed, so the composer reopens on
-     * it instead of losing what the author wrote. Cleared by [FeedViewModel.consumeUnpublishedDraft].
-     */
-    val unpublishedDraft: FeedComposerDraft? = null,
     val hasMore: Boolean = true,
     val isLoadingMore: Boolean = false,
     /** Count of posts that arrived via `post:created` since the last acknowledge/refresh. */
@@ -118,14 +100,11 @@ class FeedViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
-    private val feedMediaUploader: FeedMediaUploader,
     private val reportRepository: ReportRepository,
     private val workManager: WorkManager,
     engagement: FeedEngagementRepository,
     private val publications: PublicationOutbox,
-    private val composerDrafts: PostComposerDraftStore,
-    private val mediaUploadQueue: MediaUploadQueue,
-    private val accountFence: AccountFence? = null,
+    private val network: NetworkMonitor = InMemoryNetworkMonitor(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -173,6 +152,12 @@ class FeedViewModel @Inject constructor(
     }
 
     init {
+        viewModelScope.launch {
+            network.isOnline.collect { online -> _state.update { it.copy(isOffline = !online) } }
+        }
+        viewModelScope.launch {
+            publications.notices.collect { notice -> _state.update { it.copy(notice = notice.feedNotice) } }
+        }
         viewModelScope.launch {
             combine(
                 postRepository.feedStream(
@@ -467,11 +452,6 @@ class FeedViewModel @Inject constructor(
         _state.update { it.copy(notice = null) }
     }
 
-    /** The composer has reopened on [FeedUiState.unpublishedDraft]. */
-    fun consumeUnpublishedDraft() {
-        _state.update { it.copy(unpublishedDraft = null) }
-    }
-
     /**
      * Toggles the post's like state through the durable outbox
      * ([PostRepository.toggleLike]'s KDoc), then schedules [OutboxFlushWorker] —
@@ -633,123 +613,8 @@ class FeedViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Publish a post or a reel through the durable outbox (#13417; iOS `enqueueDurableTextPost`):
-     * the pure [FeedComposerDraft]/[FeedPostPublishRequest] already validated the payload. The
-     * post is queued on the device WITH its media — a media still uploading rides as its upload
-     * `cmid` and the post waits on it — and [draft] is parked under the post instead of being
-     * erased: it leaves the device only when the server confirms the post, or when the author
-     * discards it from « Publications non envoyées ». Offline, killed, refused: nothing is lost.
-     *
-     * A blank [content] (a media-only post) is sent as `null`, an empty [mediaIds] or [mediaAlt]
-     * as absent. [type] carries the reel classification, [location] the attached place and
-     * [language] the composer's source language — all forwarded verbatim. Once the gateway
-     * confirms, the post joins the head of the feed (`CREATE_POST` delivery); the immediate
-     * feedback is the « en cours d'envoi » notice and the unsent row.
-     */
-    fun publishPost(
-        content: String,
-        visibility: String,
-        mediaIds: List<String> = emptyList(),
-        type: String = PostType.POST.name,
-        location: SharedPlace? = null,
-        language: String? = null,
-        mediaAlt: Map<String, String> = emptyMap(),
-        mediaCaption: Map<String, String> = emptyMap(),
-        draft: PostComposerDraftSnapshot? = null,
-        background: String? = null,
-        media: List<UploadedMedia> = emptyList(),
-        layout: MosaicLayoutMode? = null,
-    ) {
-        viewModelScope.launch {
-            try {
-                // A pending autosave must not resurrect the editing draft after it was parked.
-                draftSave?.cancelAndJoin()
-                draftSave = null
-                publications.enqueuePost(
-                    CreatePostRequest(
-                        content = content.ifBlank { null },
-                        type = type,
-                        visibility = visibility,
-                        mediaIds = mediaIds.ifEmpty { null },
-                        originalLanguage = language,
-                        location = location,
-                        mediaAlt = mediaAlt.ifEmpty { null },
-                        mediaCaption = mediaCaption.ifEmpty { null },
-                        storyEffects = PostPhotoScenes.storyEffects(type, media, language, layout, background),
-                    ),
-                    draft,
-                )
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-                _state.update { it.copy(notice = FeedNotice.PUBLISH_QUEUED) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.withPublishFailure(content, visibility) }
-            }
-        }
-    }
-
-    /**
-     * A composer media the network refused or could not take now (offline, 4xx, 5xx) is kept on
-     * the device (#13417): its bytes go to the durable upload queue under the `post` context and
-     * the returned `cmid` stands in for its id until the upload lands.
-     */
-    suspend fun queueMedia(item: MediaUploadItem): String = mediaUploadQueue.enqueue(item, TusUploadContext.POST)
-
-    /**
-     * The author removed a media from the composer: a media still waiting on the device is the
-     * author's explicit discard — its upload and its bytes leave. A served media is left alone
-     * (the server sweeps an unclaimed upload by itself).
-     */
-    fun discardQueuedMedia(id: String) {
-        if (!OutboxIds.isCmid(id)) return
-        viewModelScope.launch { runCatching { mediaUploadQueue.cancel(id) } }
-    }
-
-    /** The composer's autosaved draft, or `null` — read when the composer opens. */
-    suspend fun restorableDraft(): FeedComposerDraft? =
-        runCatching { composerDrafts.loadEditing() }.getOrNull()
-            ?.takeIf { it.isWorthRestoring }
-            ?.toComposerDraft()
-
-    /**
-     * Autosaves the composer — an emptied composer (no words, no media) is the author's own
-     * erasure and clears the slot. Debounced so typing writes once a pause, not per keystroke.
-     */
-    fun persistComposerDraft(draft: FeedComposerDraft) {
-        draftSave?.cancel()
-        // The account is the one signed in when the author typed: a save that waits out the debounce lands under
-        // it or not at all — A's words never reach B's slot once A's session closed (#13503).
-        val ticket = accountFence?.ticket()
-        draftSave = viewModelScope.launch {
-            delay(DRAFT_SAVE_DEBOUNCE_MS)
-            val snapshot = draft.toSnapshot(System.currentTimeMillis())
-            runCatching {
-                accountFence.commitOrWrite(ticket) {
-                    if (snapshot.isWorthRestoring) composerDrafts.saveEditing(snapshot) else composerDrafts.clearEditing()
-                }
-            }
-        }
-    }
-
-    private var draftSave: Job? = null
-
-    /**
-     * Uploads freshly-picked composer media as `post`-context TUS attachments — the
-     * network half of the photo/video fast-follow to the text-only Feed composer,
-     * consuming the TUS foundation the story-media fix built (never the legacy
-     * `MessageAttachment`-producing path). A plain suspend delegate (no `_state`
-     * mutation): the composer sheet owns its own upload-in-flight UI state via
-     * `remember`, mirroring the story composer's split between network call and
-     * caller-owned progress state, just without a ViewModel of its own for the sheet.
-     */
-    suspend fun uploadMedia(items: List<MediaUploadItem>): NetworkResult<List<UploadedMedia>> =
-        feedMediaUploader.upload(items)
-
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
-        const val DRAFT_SAVE_DEBOUNCE_MS = 400L
     }
 }
 
@@ -864,17 +729,12 @@ private fun FeedUiState.project(
 
 /**
  * A load failure: with nothing on screen, the drawn error state; with posts already shown,
- * only the localized toast — the reader keeps reading what the cache holds.
+ * only the localized toast — the reader keeps reading what the cache holds. Offline, the band
+ * already says why: no toast over a readable feed (#14263).
  */
-private fun FeedUiState.withLoadFailure(): FeedUiState =
-    if (posts.isEmpty()) copy(loadFailed = true, isSyncing = false, showSkeleton = false)
-    else copy(notice = FeedNotice.LOAD_FAILED, isSyncing = false, showSkeleton = false)
+private fun FeedUiState.withLoadFailure(): FeedUiState = when {
+    posts.isEmpty() -> copy(loadFailed = true, isSyncing = false, showSkeleton = false)
+    isOffline -> copy(isSyncing = false, showSkeleton = false)
+    else -> copy(notice = FeedNotice.LOAD_FAILED, isSyncing = false, showSkeleton = false)
+}
 
-private fun FeedUiState.withPublishFailure(content: String, visibility: String): FeedUiState =
-    copy(
-        notice = FeedNotice.PUBLISH_FAILED,
-        unpublishedDraft = FeedComposerDraft(
-            text = content,
-            visibility = FeedPostVisibility.entries.firstOrNull { it.wire == visibility } ?: FeedPostVisibility.PUBLIC,
-        ),
-    )

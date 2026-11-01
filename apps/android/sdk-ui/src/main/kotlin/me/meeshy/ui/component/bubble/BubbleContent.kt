@@ -100,6 +100,8 @@ public data class BubbleContent(
     val effects: MessageEffects = MessageEffects(),
     /** True when this message is a view-once ("open once, then burn") message. */
     val isViewOnce: Boolean = false,
+    /** #13995 — la flamme-œil : le message disparaît chez le lecteur quand il l'a vu puis a quitté. */
+    val isAfterRead: Boolean = false,
     /**
      * True once THIS reader has opened the view-once message (`consumedByMe`). A view-once
      * is consumed per person (iOS #7579): what other members open never burns it for me.
@@ -134,6 +136,11 @@ public data class BubbleContent(
      * where it reads — never the gateway's `[Encrypted]` literal, never a piece.
      */
     val isEndToEndSealed: Boolean = false,
+    /**
+     * The server already reads this row — written in clear (or server-encrypted) before end-to-end was turned on (#13804):
+     * deleting it for everyone keeps its clear route, as the gateway judges the erasure on the row. Closed by default.
+     */
+    val isReadByServer: Boolean = false,
     /**
      * Les pièces d'un message scellé (#13493) : une rangée « chiffrée » par pièce, sans nom ni adresse — la bulle ne
      * dit pas ce qu'elle ne peut pas lire, mais ne se présente jamais comme un document téléchargeable.

@@ -75,7 +75,8 @@ nonisolated enum ComposerAutosaveCodec {
             audios: state.audios.mapValues(name),
             stickerAnimations: stickers,
             publishChoice: state.publishChoice.map {
-                .init(format: ComposerAutosaveFormatCode.code($0.format), layout: $0.layout?.rawValue)
+                .init(format: ComposerAutosaveFormatCode.code($0.format), layout: $0.layout?.rawValue,
+                      formats: $0.formats.count > 1 ? $0.formats.map(ComposerAutosaveFormatCode.code) : nil)
             },
             fileAliases: aliases.isEmpty ? nil : aliases
         )
@@ -137,9 +138,12 @@ nonisolated enum ComposerAutosaveCodec {
             audios: snapshot.audios.compactMapValues { urls[$0] },
             stickerAnimations: snapshot.stickerAnimations.compactMapValues { restored.blobByFile[$0] },
             publishChoice: snapshot.publishChoice.flatMap { choix in
-                ComposerAutosaveFormatCode.format(choix.format).map {
-                    ComposerPublishChoice(format: $0, layout: choix.layout.flatMap(MosaicLayoutMode.init(rawValue:)))
-                }
+                let disposition = choix.layout.flatMap(MosaicLayoutMode.init(rawValue:))
+                return ComposerPublishChoice(formats: (choix.formats ?? []).compactMap(ComposerAutosaveFormatCode.format),
+                                             layout: disposition)
+                    ?? ComposerAutosaveFormatCode.format(choix.format).map {
+                        ComposerPublishChoice(format: $0, layout: disposition)
+                    }
             }
         )
     }
@@ -282,6 +286,14 @@ nonisolated enum ComposerAutosaveCodec {
     /// session. Une référence dont le fichier est perdu reste sans URL — l'objet
     /// garde sa place, et la publication le signalera plutôt que d'envoyer un
     /// chemin mort.
+    ///
+    /// **Le document v3 relu tombe** (#14189). Le décodeur garde en `canvasV3`
+    /// le document qu'il vient de lire, comme s'il était servi par le fil ; ici
+    /// c'est l'écriture du brouillon, aux références `meeshy-autosave:`. Le
+    /// composer ne lit que le runtime, mais l'aperçu peint ce document dès qu'il
+    /// existe : il cherchait la vidéo de fond à une adresse morte, puis aurait
+    /// peint la diapo d'avant toute retouche. Une diapo rouverte redevient ce
+    /// qu'elle était avant l'écriture, une diapo sans document.
     static func rehydrated(_ slides: [StorySlide], urls: [String: URL]) -> [StorySlide] {
         func url(_ mediaURL: String?) -> String? {
             guard let brut = mediaURL, brut.hasPrefix(fileReferencePrefix) else { return mediaURL }
@@ -289,6 +301,7 @@ nonisolated enum ComposerAutosaveCodec {
         }
         return slides.map { slide in
             var copie = slide
+            copie.effects.canvasV3 = nil
             copie.effects.mediaObjects = slide.effects.mediaObjects?.map { objet in
                 var local = objet
                 local.mediaURL = url(objet.mediaURL)

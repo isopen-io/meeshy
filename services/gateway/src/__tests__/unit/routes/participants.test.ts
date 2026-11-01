@@ -64,7 +64,7 @@ const lawFaithfulVisibility = (viewer: PresenceViewer, id: string, friendsOfView
     ? resolvePresenceVisibility({
         isSelf: viewer.userId === id,
         viewerRole: viewer.role,
-        areConnected: friendsOfViewer.has(id),
+        relationLevel: friendsOfViewer.has(id) ? 'CLOSE' : 'PUBLIC',
         targetShowOnlineStatus: true,
         targetShowLastSeen: true,
         targetIsDeactivated: false,
@@ -1151,7 +1151,7 @@ describe('registerParticipantsRoutes', () => {
       expect(self.lastActiveAt).toEqual(new Date('2026-01-02'));
     });
 
-    it('ami accepté ⇒ présence servie', async () => {
+    it('Proche ⇒ présence détaillée servie', async () => {
       mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([TARGET_USER_ID])));
 
       const [other] = await list({ role: 'USER' });
@@ -2390,7 +2390,7 @@ describe('registerParticipantsRoutes', () => {
         );
       });
 
-      it('ami accepté ⇒ présence de la cible servie', async () => {
+      it('Proche ⇒ présence détaillée de la cible servie', async () => {
         mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver(new Set([TARGET_USER_ID])));
 
         const { payload } = await promote(targetRow());

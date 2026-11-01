@@ -40,13 +40,28 @@ import MeeshySDK
 /// y compris pour un objet tourné. C'est ce que `frame` rend d'un calque qui
 /// porte une transformation, et c'est ce qu'un auteur lit comme « la place que
 /// prend cet objet ». Un cadre tourné serait plus joli et dirait moins.
+/// ## Le cadre plein de la scène d'abord (#13839, L5 ; #14043)
+///
+/// La maquette validée le 2026-10-30 (état 3, « un élément sélectionné »)
+/// redessine le marqueur : un **trait blanc de 2 pt, décalé de 3 pt**, aux
+/// bornes RÉELLES du calque — rotation et échelle comprises —, sans poignées.
+/// Le porteur l'a voulu PLEIN (#14043) : le pointillé reste aux guides (zone
+/// sûre, magnétiques, alignement), il ne désigne jamais une sélection.
+/// Les poignées et le cadre violet de la vue `1c` sont partis avec elle. Le
+/// badge reste au contrat pour les hôtes qui le demandent ; la scène n'en
+/// demande pas.
+///
+/// ## Plus aucun cadre (#14206)
+///
+/// Le porteur l'a retiré : la sélection change déjà le rail et le
+/// toucher amène l'objet au premier plan. Seul le badge d'envoi reste, posé
+/// au-dessus de l'objet.
+///
+/// Le badge est un chrome d'ÉDITION : il vit dans `editOverlayLayer`, que ni
+/// l'export (`StoryExporter`), ni la vignette, ni le lecteur ne reconstruisent
+/// — ils peignent la slide par `StoryRenderer`, jamais ce calque.
 extension StoryCanvasUIView {
 
-    /// L'épaisseur du cadre et la taille des poignées, en points d'écran. Le
-    /// cadre vit dans `editOverlayLayer`, qui n'est PAS mis à l'échelle par la
-    /// géométrie de rendu — ces valeurs sont donc lues telles quelles.
-    static let selectionMarkerLineWidth: CGFloat = 1.5
-    static let selectionMarkerHandleSize: CGFloat = 11
     /// La hauteur du badge, et le creux qui le sépare du cadre.
     static let selectionMarkerBadgeHeight: CGFloat = 18
     static let selectionMarkerBadgeGap: CGFloat = 6
@@ -78,26 +93,12 @@ extension StoryCanvasUIView {
               let cible = itemsContainer.sublayers?.first(where: { $0.name == id })
         else { return }
 
-        let cadre = cible.frame
         // Un calque de largeur ou de hauteur nulle existe pendant la fenêtre où
-        // un objet vient d'être posé et n'a pas encore été mesuré. L'encadrer
-        // peindrait un trait de zéro pixel — visible comme un artefact, jamais
-        // comme une sélection.
-        guard cadre.width > 0.5, cadre.height > 0.5 else { return }
-
-        let bordure = CALayer()
-        bordure.frame = cadre
-        bordure.borderColor = Self.selectionMarkerTint.cgColor
-        bordure.borderWidth = Self.selectionMarkerLineWidth
-        bordure.cornerRadius = 8
-        attachSelectionMarker(bordure)
-
-        for coin in Self.selectionHandleCenters(in: cadre) {
-            attachSelectionMarker(makeSelectionHandle(centre: coin))
-        }
+        // un objet vient d'être posé et n'a pas encore été mesuré.
+        guard cible.frame.width > 0.5, cible.frame.height > 0.5 else { return }
 
         if let badge = selectionMarkerBadge, !badge.isEmpty,
-           let calque = makeSelectionBadge(badge, above: cadre) {
+           let calque = makeSelectionBadge(badge, above: cible.frame) {
             attachSelectionMarker(calque)
         }
     }
@@ -110,27 +111,6 @@ extension StoryCanvasUIView {
     private func attachSelectionMarker(_ calque: CALayer) {
         editOverlayLayer.addSublayer(calque)
         selectionMarkerLayers.append(calque)
-    }
-
-    /// Les quatre coins, débordant du cadre de la moitié d'une poignée — c'est
-    /// ce que la maquette dessine (`left:-6px` pour une poignée de 11 px), et
-    /// c'est aussi ce qui rend la poignée saisissable sur un objet collé au
-    /// bord de la scène.
-    static func selectionHandleCenters(in cadre: CGRect) -> [CGPoint] {
-        [CGPoint(x: cadre.minX, y: cadre.minY),
-         CGPoint(x: cadre.maxX, y: cadre.minY),
-         CGPoint(x: cadre.minX, y: cadre.maxY),
-         CGPoint(x: cadre.maxX, y: cadre.maxY)]
-    }
-
-    private func makeSelectionHandle(centre: CGPoint) -> CALayer {
-        let taille = Self.selectionMarkerHandleSize
-        let poignee = CALayer()
-        poignee.frame = CGRect(x: centre.x - taille / 2, y: centre.y - taille / 2,
-                               width: taille, height: taille)
-        poignee.backgroundColor = Self.selectionMarkerTint.cgColor
-        poignee.cornerRadius = 3
-        return poignee
     }
 
     /// Le badge, posé AU-DESSUS du cadre — et rabattu DEDANS quand le cadre

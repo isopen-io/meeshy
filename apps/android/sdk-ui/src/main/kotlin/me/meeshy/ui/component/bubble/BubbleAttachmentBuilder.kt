@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageTranscriptionSegment
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.piece.PieceSealing
 import me.meeshy.sdk.model.isProtected
@@ -179,7 +180,37 @@ internal object BubbleAttachmentBuilder {
             isTranscriptionTranslated = resolved?.isTranslated == true,
             isAudioTranslated = translatedAudio != null,
             audioLanguage = translatedAudio?.language ?: resolved?.language,
+            transcriptionSegments = servedSegments(attachment, resolved, playedLanguage = translatedAudio?.language),
         )
+    }
+
+    /**
+     * Les segments du texte servi (#13878) : ceux de la transcription d'origine, ou ceux de la traduction servie. Leurs
+     * horodatages ne valent que sur la piste qu'ils décrivent ; servis au-dessus d'une autre voix, ils les perdent et le
+     * karaoké avance à la progression plutôt que d'allumer un mot à contretemps.
+     */
+    private fun servedSegments(
+        attachment: ApiMessageAttachment,
+        served: AttachmentTranscriptPrism.Served?,
+        playedLanguage: String?,
+    ): List<MessageTranscriptionSegment> {
+        served ?: return emptyList()
+        val segments = if (served.isTranslated) {
+            attachment.translations.orEmpty().entries.firstOrNull { it.key.equals(served.language, ignoreCase = true) }?.value?.segments
+        } else {
+            attachment.transcription?.segments
+        }
+        val describesPlayedTrack = if (served.isTranslated) served.language.equals(playedLanguage, ignoreCase = true) else playedLanguage == null
+        return segments.orEmpty().mapNotNull { segment ->
+            segment.text.trim().ifBlank { null }?.let { text ->
+                MessageTranscriptionSegment(
+                    text = text,
+                    startTime = segment.startTime.takeIf { describesPlayedTrack },
+                    endTime = segment.endTime.takeIf { describesPlayedTrack },
+                    speakerId = segment.speakerId,
+                )
+            }
+        }
     }
 
     private data class ResolvedAudio(

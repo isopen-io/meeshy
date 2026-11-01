@@ -555,6 +555,34 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // ambiances de capture, que l'on installe et retire comme des packs). Le web les appelle ; iOS les lira dans
 // #13092 (PackStore apprend le domaine capture-frame). Entrées PRÉMATURÉES, pas des faux morts (#5427). Valeur
 // MESURÉE le 2026-10-25 en CI (Gardes iOS, run 40238145750) et en local : exactement ces quatre entrées nouvelles.
+// ENTRÉES EN ATTENTE DE CLIENT — déclarées, jamais comptées dans la référence.
+//
+// Une route que la passerelle sert AVANT que son client n'existe n'est pas une
+// promesse rompue (#4889) : c'est une promesse datée, dont l'issue nomme qui la
+// tiendra. Relever BASELINE_DEAD_ENTRIES l'aurait noyée dans la dette générale
+// sans dire quand elle se solde ; la déclarer ici l'attache à son issue, et
+// `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
+// arrive — la déclaration doit alors partir dans le même commit.
+const PENDING_CLIENT_ENTRIES = {
+  // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
+  // bulle et la caméra iOS liront (#14094).
+  'LensEndpoint.credits': { issue: 14094, reason: 'GET /lens/credits — le crédit des médias reçus, lu par la bulle iOS' },
+  'LensEndpoint.partnersByPartnerIdLogo': { issue: 14094, reason: 'GET /lens/partners/:partnerId/logo — le logo du double filigrane' },
+  'LensEndpoint.usageBySlug': { issue: 14094, reason: 'POST /lens/usage/:slug — le ping d’usage de la caméra iOS' },
+  // … et le profil partenaire, la file de vérification et ses deux gestes : la console web les porte (#14097),
+  // aucun écran iOS ne les expose — même régime que les entrées `AdminEndpoint` de la référence.
+  'LensEndpoint.partnersMe': { issue: 14097, reason: 'GET|PUT /lens/partners/me — profil partenaire, console web seulement' },
+  'LensEndpoint.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — file de vérification, console web seulement' },
+  'LensEndpoint.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — console web seulement' },
+  'LensEndpoint.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — console web seulement' },
+  // Les cercles (`/api/v1/relations`, #13933, servis depuis la PR #14082) : l'écran iOS « Mes cercles » les appellera
+  // (#13938). Dev a relevé la référence TS de 277 à 281 pour ces quatre entrées, jamais la Swift.
+  'RelationsEndpoint.root': { issue: 13938, reason: 'GET /relations — la lecture des cercles, écran iOS « Mes cercles »' },
+  'RelationsEndpoint.config': { issue: 13938, reason: 'GET /relations/config — la table des cercles, écran iOS « Mes cercles »' },
+  'RelationsEndpoint.byUserIdLevel': { issue: 13938, reason: 'POST /relations/:userId/level — la baisse silencieuse d’un lien' },
+  'RelationsEndpoint.byUserIdRitual': { issue: 13938, reason: 'POST /relations/:userId/ritual — le rituel du Sang' },
+};
+
 const BASELINE_DEAD_ENTRIES = 329;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
@@ -656,6 +684,14 @@ export const applyKnownLiveExceptions = (dead, exceptions) => {
 
 const RESULT = Object.freeze({ OK: 'ok', REGRESSION: 'regression', UNRECORDED_IMPROVEMENT: 'unrecorded-improvement' });
 
+// Une entrée EN ATTENTE DE CLIENT n'existe que sous l'issue qui portera son
+// appelant : une déclaration sans numéro d'issue, ou sans raison écrite, est
+// refusée — elle redeviendrait la « liste qui se périme en silence ».
+export const pendingClientProblems = (pending) =>
+  Object.entries(pending)
+    .filter(([, why]) => !Number.isInteger(why?.issue) || why.issue <= 0 || typeof why?.reason !== 'string' || why.reason.length < 20)
+    .map(([entry]) => entry);
+
 export const evaluateRatchet = (deadCount, baseline) => {
   if (deadCount > baseline) return RESULT.REGRESSION;
   if (deadCount < baseline) return RESULT.UNRECORDED_IMPROVEMENT;
@@ -727,7 +763,18 @@ const selfTest = () => {
     return 1;
   }
 
-  console.log('self-test : 8/8 vérifications passées (comptage, cliquet à deux sens, parseur déclaration≠switch-arm, exceptions #5427).');
+  // Une entrée en attente de client sans issue ni raison est refusée.
+  const problems = pendingClientProblems({
+    'foo.ok': { issue: 1, reason: 'le client web la lira dans son lot' },
+    'foo.noIssue': { reason: 'le client web la lira dans son lot' },
+    'foo.noReason': { issue: 2, reason: '' },
+  });
+  if (JSON.stringify(problems) !== JSON.stringify(['foo.noIssue', 'foo.noReason'])) {
+    console.error(`AVEUGLE : une entrée en attente sans issue ou sans raison doit être refusée, obtenu ${JSON.stringify(problems)}.`);
+    return 1;
+  }
+
+  console.log('self-test : 9/9 vérifications passées (comptage, cliquet à deux sens, parseur déclaration≠switch-arm, exceptions #5427, entrées en attente de client).');
   return 0;
 };
 
@@ -735,12 +782,18 @@ const main = () => {
   if (process.argv.includes('--self-test')) return selfTest();
 
   const world = readWorld(REPO_ROOT);
-  const { filtered, stale } = applyKnownLiveExceptions(deadEntries(world), KNOWN_LIVE_VIA_OPAQUE_SERVER_URL);
+  const unanchored = pendingClientProblems(PENDING_CLIENT_ENTRIES);
+  if (unanchored.length > 0) {
+    console.error(`ENTRÉE EN ATTENTE SANS ISSUE : ${unanchored.join(', ')} — chaque entrée de PENDING_CLIENT_ENTRIES nomme l'issue qui portera son appelant et sa raison.`);
+    return 1;
+  }
+  const exceptions = new Set([...KNOWN_LIVE_VIA_OPAQUE_SERVER_URL, ...Object.keys(PENDING_CLIENT_ENTRIES)]);
+  const { filtered, stale } = applyKnownLiveExceptions(deadEntries(world), exceptions);
 
   if (stale.length > 0) {
     console.error(
       `EXCEPTION PÉRIMÉE (#5427) : ${stale.join(', ')} ne figure(nt) plus parmi les entrées sans appelant — ` +
-        'a/ont regagné un appelant réel, ou disparu du catalogue. Retirez cette entrée de KNOWN_LIVE_VIA_OPAQUE_SERVER_URL.',
+        'a/ont regagné un appelant réel, ou disparu du catalogue. Retirez cette entrée de KNOWN_LIVE_VIA_OPAQUE_SERVER_URL ou de PENDING_CLIENT_ENTRIES (son issue a livré l’appelant).',
     );
     return 1;
   }

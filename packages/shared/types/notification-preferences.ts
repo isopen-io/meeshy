@@ -148,6 +148,7 @@ export function isNotificationTypeEnabled(
     case 'friend_request':
     case 'contact_accepted':
     case 'contact_joined':
+    case 'relation_acquaintance':
       return prefs.contactRequestEnabled;
     case 'contact_recently_active':
       return prefs.contactActivityEnabled !== false;

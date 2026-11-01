@@ -50,6 +50,29 @@ enum GallerySaveSubject {
         }
     }
 
+    /// **Ce que l'enregistrement fera se LIT sur la règle, il ne se rédige pas.**
+    ///
+    /// La note vient du prédicat de la marque lui-même. Une phrase écrite à la
+    /// main dirait ce que son auteur croyait le jour où il l'a tapée ; le jour
+    /// où la règle change, les deux divergeraient sans que rien ne rougisse —
+    /// et le menu affirmerait au lecteur le contraire de ce qui part sur son
+    /// disque.
+    ///
+    /// **Elle se lit sur le SUJET, pas sur la requête** (#7052). Une page scène
+    /// n'a pas de `MediaSaveRequest` — sa pièce est synthétique — et la note
+    /// rendait donc `""` le jour où le menu s'y est monté : le verbe perdait
+    /// son sous-titre sur la SEULE surface dont l'enregistrement porte
+    /// réellement la marque.
+    var brandingNote: String {
+        MeeshyMediaSaveBranding.stamps(origin: branding.origin, kind: branding.kind)
+            ? String(localized: "gallery.menu.brand.meeshy",
+                     defaultValue: "Œuvre composée — l'enregistrement porte la marque Meeshy.",
+                     bundle: .main)
+            : String(localized: "gallery.menu.brand.none",
+                     defaultValue: "Média original — enregistré tel quel, sans marque.",
+                     bundle: .main)
+    }
+
     /// **« Partager » ne s'offre QUE sur une pièce**, et c'est
     /// une décision, pas un oubli. Ce verbe va DROIT à la share sheet système
     /// avec l'URL de la requête ; sur une page scène cette URL est la vignette
@@ -101,7 +124,8 @@ extension ConversationMediaGalleryView {
     }
 
     /// **Le menu ⋯ — ce que la page sait faire, et ce que chacun fera dit sous
-    /// lui.** Enregistrer, Transférer (#12420 : aussi dans le rail) et Partager.
+    /// lui.** Enregistrer, Imager (une scène, #13871), Transférer (#12420 : aussi dans
+    /// le rail) et Partager.
     ///
     /// **Il n'y a pas d'entrée « Enregistrer sans la marque »** : la marque se
     /// déduit de l'ORIGINE du média (#6146, `MeeshyMediaSaveBranding.stamps`), et
@@ -130,11 +154,15 @@ extension ConversationMediaGalleryView {
                         // SOUS-TITRE, glyphe. C'est le seul emplacement où la note
                         // de marque peut vivre sous son verbe plutôt qu'à côté.
                         Text(saveVerb)
-                        Text(brandingNote)
+                        Text(subject.brandingNote)
                         Image(systemName: "arrow.down.to.line")
                     }
                     .accessibilityLabel(saveVerb)
-                    .accessibilityHint(brandingNote)
+                    .accessibilityHint(subject.brandingNote)
+
+                    if case .scene(let scene) = subject {
+                        ImagerMenuButton(action: { imageCurrent(scene) })
+                    }
 
                     if currentOffersForward {
                         Button {
@@ -195,6 +223,15 @@ extension ConversationMediaGalleryView {
         }
     }
 
+    /// **« Imager » une scène** (#13871) : la même œuvre qu'« Enregistrer », et au-delà
+    /// d'une minute la longueur se choisit d'abord. Une pièce transmise n'a pas de
+    /// composition à rendre, donc pas d'« Imager ».
+    func imageCurrent(_ scene: GallerySceneItem) {
+        guard saveCoordinator.mayLeave(currentExitContentId) else { return }
+        HapticFeedback.light()
+        StoryPhotoSaveService.shared.image(scene: scene)
+    }
+
     /// Va DROIT à la share sheet système : c'est tout ce que « Partager » promet.
     func shareCurrentOutsideMeeshy() {
         guard let request = currentSaveRequest, saveCoordinator.mayLeave(currentExitContentId) else { return }
@@ -245,30 +282,6 @@ extension ConversationMediaGalleryView {
     }
 
     // MARK: - Ce que le menu DIT
-
-    /// **Ce que l'enregistrement fera se LIT sur la règle, il ne se rédige pas.**
-    ///
-    /// La note vient du prédicat de la marque lui-même. Une phrase écrite à la
-    /// main dirait ce que son auteur croyait le jour où il l'a tapée ; le jour
-    /// où la règle change, les deux divergeraient sans que rien ne rougisse —
-    /// et le menu affirmerait au lecteur le contraire de ce qui part sur son
-    /// disque.
-    ///
-    /// **Elle se lit sur le SUJET, pas sur la requête** (#7052). Une page scène
-    /// n'a pas de `MediaSaveRequest` — sa pièce est synthétique — et la note
-    /// rendait donc `""` le jour où le menu s'y est monté : le verbe perdait
-    /// son sous-titre sur la SEULE surface dont l'enregistrement porte
-    /// réellement la marque.
-    var brandingNote: String {
-        guard let branding = currentSaveSubject?.branding else { return "" }
-        return MeeshyMediaSaveBranding.stamps(origin: branding.origin, kind: branding.kind)
-            ? String(localized: "gallery.menu.brand.meeshy",
-                     defaultValue: "Œuvre composée — l'enregistrement porte la marque Meeshy.",
-                     bundle: .main)
-            : String(localized: "gallery.menu.brand.none",
-                     defaultValue: "Média original — enregistré tel quel, sans marque.",
-                     bundle: .main)
-    }
 
     private var saveVerb: String {
         String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)

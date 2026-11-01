@@ -34,15 +34,8 @@
     <string name="status_composer_mood_label">Stimmung %1$s</string>
     <string name="feed_composer_open_placeholder">Teile etwas mit der Welt …</string>
     <string name="feed_composer_attach_media">Foto oder Video hinzufügen</string>
-    <string name="feed_composer_take_video">Video aufnehmen</string>
     <string name="feed_composer_remove_media">Medium entfernen</string>
-    <string name="feed_composer_add_location">Meinen Standort hinzufügen</string>
-    <string name="feed_composer_remove_location">Standort entfernen</string>
-    <string name="feed_composer_location_unavailable">Standort nicht verfügbar – prüfe deine Standorteinstellungen und versuche es erneut</string>
     <string name="feed_composer_media_unusable">Dieses Medium konnte nicht angehängt werden</string>
-    <string name="feed_composer_media_alt_label">Beschreibe dieses Foto oder Video für Screenreader (%1$d)</string>
-    <string name="feed_composer_media_alt_placeholder">z. B. Ein rotes Fahrrad an einer Backsteinmauer</string>
-    <string name="feed_composer_language_button">Beitragssprache: %1$s</string>
     <string name="feed_post_options">Beitragsoptionen</string>
     <string name="feed_quote_title">Beitrag zitieren</string>
     <string name="feed_quote_hint">Kommentar hinzufügen</string>

@@ -141,6 +141,7 @@ const fr = {
   'export.card.compose.post': 'Post en tête',
   'export.card.compose.replies': 'Réponses sur la carte',
   'export.card.compose.folded': '+{count} réponses',
+  'export.card.compose.thread': 'Fil de commentaires',
   'export.card.compose.head': 'Média en tête',
   'export.card.compose.head.image': 'Photo {position}',
   'export.card.compose.head.video': 'Vidéo {position}',

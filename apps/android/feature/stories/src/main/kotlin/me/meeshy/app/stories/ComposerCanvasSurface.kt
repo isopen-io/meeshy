@@ -22,12 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -43,6 +38,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.SceneObjectMenu
@@ -52,21 +48,23 @@ import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.ui.component.imageedit.sceneLook
-import me.meeshy.ui.theme.hexColor
 
 /**
  * The 9:16 story canvas for the **selected** slide. Renders that slide's first
- * media as the background, the slide's on-canvas [textElements] on top, and lets the
+ * media as the background, then the scene's objects in the ONE order of its [stack] (#13852: texts, placed media,
+ * stickers, and the [pins] — places and voice chips — interleaved by rank; composition order is paint AND touch order),
+ * the drawing on top, and lets the
  * user pinch-zoom + drag-pan the background and drag / tap / remove each element. All
  * transform and clamp math lives in the pure, unit-tested [StoryCanvasTransform] /
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
  * the measured canvas size into normalised fractions), so this Composable stays
- * declarative glue. A tap on an object selects it — framed by [sceneSelectionFrame], never in a capture —, a tap on the
+ * declarative glue. A tap on an object selects it — no frame, [sceneSelection] (#14207) —, a tap on the
  * empty canvas deselects ([onBackgroundTap], #13836).
  *
  * Only the scene's own objects are painted IN it. The editor's chrome (cross, tools, publish) is laid OVER it by
  * [StorySceneFirstLayout] (#13834, which replaces the « nothing on the canvas » geography of #4561/#4633 for the story):
- * that chrome is a sibling, never a child, so [capture] records the scene alone and the published render never shows it.
+ * that chrome is a sibling, never a child, so the published render never shows it. The export does not read this
+ * surface: it renders every slide from the publish projection, by the stories engine (#13897).
  */
 @Composable
 internal fun StoryCanvasSurface(
@@ -106,19 +104,19 @@ internal fun StoryCanvasSurface(
     modifier: Modifier = Modifier,
     fitMode: String = StoryFitMode.FILL,
     backdrop: StoryBackdrop = StoryBackdrop.BLUR,
-    capture: SceneCapture? = null,
     onBackgroundLongPress: (() -> Unit)? = null,
+    backgroundRotationDeg: Float = 0f,
     selectedMediaId: String? = null,
-    places: @Composable (canvasWidthPx: Float, canvasHeightPx: Float, capturing: Boolean) -> Unit = { _, _, _ -> },
+    stack: List<SceneObjectRef>,
+    pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
+    live: ComposerLiveStage? = null,
 ) {
-    val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
     val backgroundLongPress by rememberUpdatedState(onBackgroundLongPress)
-    val capturing = capture != null && capture.pass != SceneCapturePass.NONE
-    val overlayOnly = capture?.pass == SceneCapturePass.OVERLAY_ONLY
-    val frameShape = if (capturing) RectangleShape else RoundedCornerShape(16.dp)
+    val frameShape = RoundedCornerShape(16.dp)
     val guideColor = MaterialTheme.colorScheme.primary
-    val warnBorder = if (!capturing && snapFeedback?.withinSafeZone == false) {
+    val warnBorder = if (snapFeedback?.withinSafeZone == false) {
         BorderStroke(2.dp, MaterialTheme.colorScheme.error)
     } else {
         null
@@ -133,9 +131,8 @@ internal fun StoryCanvasSurface(
             modifier = Modifier
                 .fillMaxHeight()
                 .aspectRatio(9f / 16f)
-                .then(if (capturing) Modifier.recordInto(capture!!.layer) else Modifier)
                 .clip(frameShape)
-                .then(if (overlayOnly) Modifier else Modifier.background(sceneBrush))
+                .background(sceneBrush)
                 .then(
                     if (warnBorder != null) {
                         Modifier.border(warnBorder, RoundedCornerShape(16.dp))
@@ -170,8 +167,8 @@ internal fun StoryCanvasSurface(
                     },
                 ),
         ) {
-            if (backgroundModel != null && !overlayOnly) {
-                val filled = StoryFitMode.rendersFilled(fitMode)
+            val filled = StoryFitMode.rendersFilled(fitMode)
+            if (backgroundModel != null) {
                 if (!filled) SceneBackdropLayer(backdrop, backgroundModel)
                 AsyncImage(
                     model = backgroundModel,
@@ -184,11 +181,14 @@ internal fun StoryCanvasSurface(
                             scaleY = transform.scale
                             translationX = transform.offsetX
                             translationY = transform.offsetY
+                            rotationZ = backgroundRotationDeg
                         }
                         .sceneLook(look),
                 )
             }
-            if (snapFeedback != null && !capturing) {
+            // La vidéo de fond joue en continu sur la scène (#13863), même avant que son affiche soit décodée.
+            live?.background?.let { slot -> LiveBackground(slot, transform, backgroundRotationDeg, look, fit = !filled) }
+            if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
                     // element is being dragged, draw the viewer-chrome safe rectangle and the
@@ -241,56 +241,65 @@ internal fun StoryCanvasSurface(
                     }
                 }
             }
-            textElements.forEach { element ->
-                TextElementLayer(
-                    element = element,
-                    selected = element.id == selectedElement?.id,
-                    menu = sceneMenu?.takeIf { it.ref.kind == ComposerObjectKind.TEXT && it.ref.id == element.id },
-                    inlineEditEnabled = inlineEditEnabled,
-                    canvasWidthPx = canvasWidthPx,
-                    canvasHeightPx = canvasHeightPx,
-                    onTap = { onElementTap(element.id) },
-                    onLongPress = { onElementLongPress(element.id) },
-                    onMenuAction = onSceneMenuAction,
-                    onMenuDismiss = onSceneMenuDismiss,
-                    onDrag = { dxPx, dyPx ->
-                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                            onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+            val textById = textElements.associateBy { it.id }
+            val stickerById = stickers.associateBy { it.id }
+            val mediaById = placedMedia.associateBy { it.key }
+            stack.forEach { ref ->
+                key(ref.kind, ref.id) {
+                    when (ref.kind) {
+                        ComposerObjectKind.TEXT -> textById[ref.id]?.let { element ->
+                            TextElementLayer(
+                                element = element,
+                                selected = element.id == selectedElement?.id,
+                                menu = sceneMenu?.takeIf { it.ref == ref },
+                                inlineEditEnabled = inlineEditEnabled,
+                                canvasWidthPx = canvasWidthPx,
+                                canvasHeightPx = canvasHeightPx,
+                                onTap = { onElementTap(element.id) },
+                                onLongPress = { onElementLongPress(element.id) },
+                                onMenuAction = onSceneMenuAction,
+                                onMenuDismiss = onSceneMenuDismiss,
+                                onDrag = { dxPx, dyPx ->
+                                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                                        onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                                    }
+                                },
+                                onDragEnd = onElementDragEnd,
+                                onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
+                                onTextChange = onElementTextChange,
+                            )
                         }
-                    },
-                    onDragEnd = onElementDragEnd,
-                    onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
-                    onTextChange = onElementTextChange,
-                    showsSelection = !capturing,
-                )
-            }
-            placedMedia.forEach { frame ->
-                key(frame.key) {
-                    PlacedMediaLayer(frame, canvasWidthPx, canvasHeightPx, placedMediaGestures, selected = !capturing && frame.key == selectedMediaId)
+                        ComposerObjectKind.MEDIA -> mediaById[ref.id]?.let { frame ->
+                            PlacedMediaLayer(
+                                frame, canvasWidthPx, canvasHeightPx, placedMediaGestures,
+                                selected = frame.key == selectedMediaId,
+                                live = live?.placed(frame.key),
+                            )
+                        }
+                        ComposerObjectKind.STICKER -> stickerById[ref.id]?.let { sticker ->
+                            StickerLayer(
+                                sticker = sticker,
+                                selected = sticker.id == selectedStickerId,
+                                menu = sceneMenu?.takeIf { it.ref == ref },
+                                canvasWidthPx = canvasWidthPx,
+                                canvasHeightPx = canvasHeightPx,
+                                onTap = { onStickerTap(sticker.id) },
+                                onLongPress = { onStickerLongPress(sticker.id) },
+                                onMenuAction = onSceneMenuAction,
+                                onMenuDismiss = onSceneMenuDismiss,
+                                onDrag = { dxPx, dyPx ->
+                                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                                        onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                                    }
+                                },
+                                onDragEnd = onStickerDragEnd,
+                                onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
+                            )
+                        }
+                        ComposerObjectKind.PLACE, ComposerObjectKind.AUDIO -> pins(ref, canvasWidthPx, canvasHeightPx)
+                    }
                 }
             }
-            stickers.forEach { sticker ->
-                StickerLayer(
-                    sticker = sticker,
-                    selected = sticker.id == selectedStickerId,
-                    menu = sceneMenu?.takeIf { it.ref.kind == ComposerObjectKind.STICKER && it.ref.id == sticker.id },
-                    canvasWidthPx = canvasWidthPx,
-                    canvasHeightPx = canvasHeightPx,
-                    onTap = { onStickerTap(sticker.id) },
-                    onLongPress = { onStickerLongPress(sticker.id) },
-                    onMenuAction = onSceneMenuAction,
-                    onMenuDismiss = onSceneMenuDismiss,
-                    onDrag = { dxPx, dyPx ->
-                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                            onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
-                        }
-                    },
-                    onDragEnd = onStickerDragEnd,
-                    onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
-                    showsSelection = !capturing,
-                )
-            }
-            places(canvasWidthPx, canvasHeightPx, capturing)
             // Topmost: paints every committed stroke, and — only while isDrawingActive —
             // also captures the drag that draws the next one, blocking the pan/zoom/tap
             // gestures underneath so a stroke never fights the background transform.
@@ -306,34 +315,20 @@ internal fun StoryCanvasSurface(
     }
 }
 
-/** Où en est la capture de la scène pour son export : rien, la scène entière, ou ses objets seuls (fond vidéo). */
-internal enum class SceneCapturePass { NONE, FULL, OVERLAY_ONLY }
-
-internal class SceneCapture(val layer: GraphicsLayer, val pass: SceneCapturePass)
-
-/** Enregistre ce que la scène PEINT dans [layer], puis le rejoue : la capture est exactement ce que l'auteur voit. */
-private fun Modifier.recordInto(layer: GraphicsLayer): Modifier = drawWithContent {
-    layer.record { this@drawWithContent.drawContent() }
-    drawLayer(layer)
-}
-
-/**
- * Le fond des bandes d'un média AJUSTÉ : une teinte unie, ou le flou du média lui-même. Le flou n'existe qu'à partir de
- * l'API 31 ; en dessous le noir tient la place — jamais un flou factice.
- */
+/** La vidéo de fond sélectionnée joue à la place de son affiche, à la même pose, sous le même look (#13973, A-E3). */
 @Composable
-private fun SceneBackdropLayer(backdrop: StoryBackdrop, model: Any) {
-    val hex = backdrop.solidHex
-    when {
-        hex != null -> Box(Modifier.fillMaxSize().background(hexColor(hex)))
-        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> AsyncImage(
-            model = model,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_DP.dp),
-        )
-        else -> Box(Modifier.fillMaxSize().background(hexColor(StoryBackdrop.BLACK.solidHex.orEmpty())))
-    }
+private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransform, rotationDeg: Float, look: SceneLookRecipe, fit: Boolean) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = transform.scale
+                scaleY = transform.scale
+                translationX = transform.offsetX
+                translationY = transform.offsetY
+                rotationZ = rotationDeg
+            }
+            .sceneLook(look),
+    ) { slot.Picture(fit = fit) }
 }
 
-private const val BACKDROP_BLUR_DP = 24

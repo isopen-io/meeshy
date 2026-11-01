@@ -1,3 +1,5 @@
+import { isMentionableIn, mentionReachOf, mergeMentionSuggestions, type MentionReach } from '@meeshy/shared/utils/mention-lookup';
+
 import type { FriendRequestRecord } from '@/lib/api/friend-requests';
 import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 import type { Message } from '@/lib/api/types';
@@ -8,7 +10,9 @@ import { participantAvatarOf } from './conversation';
 /**
  * LES LOIS PURES DE LA MENTION AU COMPOSEUR (#7826) — miroir de
  * `ComposerMentionQuery` (`packages/MeeshySDK/.../Story/ComposerMentionQuery.swift`)
- * et de `MentionComposerController.swift` (filtre local, fusion, seuil).
+ * et de `MentionComposerController.swift` (filtre local, fusion). Le SEUIL de
+ * l'appel distant et la fusion locale → serveur ne sont pas ici : ils sont la
+ * loi partagée `@meeshy/shared/utils/mention-lookup` (#14053).
  *
  * UN ÉCART ASSUMÉ avec iOS : la requête se lit AU CURSEUR, pas en fin de
  * texte. Sur iOS le curseur d'un `TextField` est presque toujours en fin de
@@ -38,11 +42,6 @@ const MAX_QUERY_LENGTH = 32;
 const OPEN_BEFORE_CARET = new RegExp(`(?:^|\\s)@([\\p{L}\\p{N}_.-]{0,${MAX_QUERY_LENGTH}})$`, 'u');
 const HANDLE_AFTER_CARET = /^[\p{L}\p{N}_.-]*/u;
 
-/** À partir de combien de caractères la passerelle est interrogée —
- * `MentionLookupRule.minimumRemoteQueryLength` (iOS). Sous ce seuil, les
- * expéditeurs locaux sont la réponse complète. */
-export const MIN_REMOTE_QUERY_LENGTH = 2;
-
 /** Le plus grand nombre de rangées rendues. La liste est BORNÉE en hauteur
  * (`mention-suggestions.tsx`) et défile : elle ne masque pas le fil, mais
  * les contacts passant en tête (#7846), une borne à huit aurait caché tous
@@ -71,8 +70,6 @@ export function insertMention(
     caret: query.start + inserted.length + (spaced ? 1 : 0),
   };
 }
-
-export const queriesRemote = (query: string): boolean => query.trim().length >= MIN_REMOTE_QUERY_LENGTH;
 
 const nonBlank = (value: string | null | undefined): string | undefined => {
   const trimmed = value?.trim();
@@ -171,23 +168,96 @@ export function mergeMentionCandidates(input: {
   }, []);
 }
 
-/**
- * LA LISTE DE MENTIONS, COMPOSÉE (#7846 — règle du porteur) : les CONTACTS
- * d'abord (on mentionne d'abord qui l'on connaît), puis les PARTICIPANTS du
- * contexte (conversation, publication), puis les AUTRES que la recherche
- * distante a trouvés. Les deux groupes locaux sont filtrés ET triés sous le
- * doigt (`rankMentionCandidates`) ; les distants gardent l'ordre de la
- * passerelle, qui trouve aussi sur des champs que le client ne voit pas.
- */
-export function composeMentionList(input: {
+type LocalMentionInput = {
   readonly contacts: readonly MentionCandidate[];
   readonly participants: readonly MentionCandidate[];
-  readonly remote: readonly MentionCandidate[];
   readonly query: string;
   readonly selfId: string | null;
-}): readonly MentionCandidate[] {
-  const groups = [rankMentionCandidates(input.contacts, input.query), rankMentionCandidates(input.participants, input.query), input.remote];
-  return mergeMentionCandidates({ groups, selfId: input.selfId }).slice(0, MENTION_SUGGESTION_LIMIT);
+  /** La portée de la CONVERSATION (#14071) ; absente hors conversation (post, annuaire). */
+  readonly reach?: MentionReach;
+};
+
+/**
+ * LES CORRESPONDANCES LOCALES (#7846, #14053) : les CONTACTS d'abord (on
+ * mentionne d'abord qui l'on connaît), puis les PARTICIPANTS du contexte
+ * (conversation, publication), chacun filtré ET trié sous le doigt
+ * (`rankMentionCandidates`), sans doublon ni soi. Leur NOMBRE est ce que la
+ * loi de déclenchement (`mentionLookupStage`) compte pour décider si deux
+ * lettres suffisent à interroger le réseau.
+ */
+export function localMentionMatches(input: LocalMentionInput): readonly MentionCandidate[] {
+  const groups = [rankMentionCandidates(input.contacts, input.query), rankMentionCandidates(input.participants, input.query)];
+  const merged = mergeMentionCandidates({ groups, selfId: input.selfId });
+  const { reach } = input;
+  if (reach === undefined) return merged;
+  return merged.filter((candidate) => isMentionableIn({ reach, candidateId: candidate.id, selfId: input.selfId }));
+}
+
+/**
+ * LA LISTE DE MENTIONS, COMPOSÉE (#7846, #14053) : les correspondances
+ * LOCALES d'abord (`localMentionMatches`), puis ce que le SERVEUR a trouvé,
+ * dans SON ordre (connaissances, contexte, contacts, annuaire) — la fusion est
+ * la loi partagée `mergeMentionSuggestions`, sans doublon et sans soi. Le
+ * serveur trouve aussi sur des champs que le client ne voit pas : ses
+ * réponses ne se re-filtrent pas.
+ */
+export function composeMentionList(input: LocalMentionInput & { readonly remote: readonly MentionCandidate[] }): readonly MentionCandidate[] {
+  const local = localMentionMatches(input);
+  const self = input.selfId === null ? {} : { selfId: input.selfId };
+  const reach = input.reach === undefined ? {} : { reach: input.reach };
+  return mergeMentionSuggestions({ local, remote: input.remote, ...self, ...reach }).slice(0, MENTION_SUGGESTION_LIMIT);
+}
+
+/**
+ * LA PORTÉE DE LA CONVERSATION OUVERTE (#14066, #14071) — projetée par la loi
+ * partagée (`mentionReachOf`) depuis son type et l'APPARTENANCE du lecteur.
+ *
+ * Un non-membre ne cite personne : la passerelle lui refuse la recherche et
+ * ignore ses mentions. L'appartenance se PROUVE — `isMember` servi, un rang
+ * (`currentUserRole`, servi au seul participant actif), le lecteur dans le
+ * roster servi, ou une session d'invité (qui est un participant). Sans preuve,
+ * elle n'existe pas (fail-closed) ; un `isMember: false` servi l'emporte.
+ *
+ * Les membres CONNUS sont les seuls participants SERVIS — jamais les auteurs
+ * de l'historique, dont certains sont partis et seraient proposés puis ignorés.
+ * Un membre absent de cette liste (la passerelle la tronque) n'est pas proposé
+ * en local dans une conversation fermée : le serveur, qui les connaît tous, le
+ * rend à la recherche distante.
+ *
+ * UNE exception, l'INVITÉ de lien : la passerelle ne lui sert que sa propre
+ * participation (#10205) et ne lui ouvre aucune recherche. Les auteurs du fil
+ * qu'elle lui a servis (`threadAuthorIds`) sont alors ses membres connus — sans
+ * eux, il ne pourrait citer personne alors que la passerelle accepte ses
+ * mentions de membres.
+ */
+export function conversationMentionReach(input: {
+  readonly conversation:
+    | {
+        readonly type: string;
+        readonly isMember?: boolean | undefined;
+        readonly currentUserRole?: string | null | undefined;
+        readonly participants: readonly { readonly userId?: string | null | undefined }[];
+      }
+    | undefined;
+  readonly viewerId: string | null;
+  readonly isGuest: boolean;
+  readonly threadAuthorIds?: readonly string[];
+}): MentionReach {
+  const { conversation } = input;
+  if (conversation === undefined) return { scope: null, memberIds: [] };
+  const participantIds = conversation.participants.flatMap((p) => (p.userId ? [p.userId] : []));
+  const guestKnown = input.isGuest ? (input.threadAuthorIds ?? []) : [];
+  const memberIds = [...new Set([...participantIds, ...guestKnown])];
+  const proven =
+    conversation.isMember === true ||
+    typeof conversation.currentUserRole === 'string' ||
+    input.isGuest ||
+    (input.viewerId !== null && participantIds.includes(input.viewerId));
+  return mentionReachOf({
+    type: conversation.type,
+    memberIds,
+    isMember: conversation.isMember !== false && proven,
+  });
 }
 
 type MentionablePerson = {

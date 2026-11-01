@@ -137,17 +137,15 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// (à poser AVANT le premier accès à `historyTrigger`, lazy figé).
     var historyDebounceInterval: TimeInterval = 0.5
 
-    /// Publisher STABLE (lazy stored — même piège que `autosaveTrigger` :
-    /// un debounce inline dans `body` serait re-souscrit à chaque render et
-    /// ne tirerait jamais) : émet ~0,5 s après la DERNIÈRE mutation du VM —
-    /// « l'édition s'est posée, capture une étape d'annulation ». Couverture
-    /// TOTALE par construction (toute mutation passe par objectWillChange) ;
-    /// la dédup du HistoryStore absorbe les émissions sans changement de
-    /// `slides` (sélections, états d'UI…).
-    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = objectWillChange
-        .debounce(for: .seconds(historyDebounceInterval), scheduler: DispatchQueue.main)
-        .map { _ in () }
-        .eraseToAnyPublisher()
+    /// Publisher STABLE (lazy stored — même piège que `autosaveTrigger`) :
+    /// « l'édition s'est posée, capture une étape d'annulation », au rythme
+    /// de `StoryComposerHistoryPace` (#14208).
+    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = historyPace.trigger(
+        document: $slides.map { _ in () }.eraseToAnyPublisher(),
+        drawing: $drawingEditingMode.map { _ in () }.eraseToAnyPublisher(),
+        interval: historyDebounceInterval)
+
+    let historyPace = StoryComposerHistoryPace()
 
     /// C9 Inc.3 — purge PARESSEUSE : les bitmaps/URLs des médias supprimés
     /// sont mis de côté (au lieu d'être jetés) tant que l'historique peut les
@@ -205,7 +203,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var drawingWidth: CGFloat = 5
     /// Pinceau actif pour la capture en mode dessin flottant (`StrokeCaptureLayer`).
     /// La couleur et la largeur du pinceau réutilisent `drawingColor`/`drawingWidth`.
-    @Published var activeBrushTool: StrokeTool = .pen
+    @Published public var activeBrushTool: StrokeTool = .pen
     @Published var activeBrushSmoothing: StrokeSmoothing = .raw
     /// Mode d'édition de dessin flottant — contrôleurs posés sur `.ultraThinMaterial`
     /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.

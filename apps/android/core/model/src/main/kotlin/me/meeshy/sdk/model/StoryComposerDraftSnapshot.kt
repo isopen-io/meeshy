@@ -78,6 +78,10 @@ data class StoryDraftTextElementSnapshot(
     val rotationDeg: Float = 0f,
     /** La personne que nomme un badge de mention épinglée (#13846) ; un blob d'avant se lit « un texte ». */
     val referenceUserId: String? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
+    /** Ses images clés (#14271) ; un blob d'avant se lit « aucune ». */
+    val keyframes: List<StoryKeyframe> = emptyList(),
 ) {
     /** True once the element carries publishable content — non-blank [text]. */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -122,6 +126,8 @@ data class StoryDraftStickerElementSnapshot(
     val provider: String? = null,
     val imageUrl: String? = null,
     val animation: String? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
 ) {
     /** True once the sticker carries publishable content — an emoji, a template or an uploaded image. */
     val isPublishable: Boolean get() = emoji.isNotBlank() || templateId.isNotBlank() || postMediaId.isNotBlank()
@@ -144,6 +150,18 @@ data class StoryDraftPlacedMediaSnapshot(
     val sourceEnd: Double? = null,
     /** Le recadrage d'une image posée (#13849), en fractions de la source ; un blob d'avant se lit « source entière ». */
     val crop: StoryMediaCrop? = null,
+    /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
+    val zIndex: Int = 0,
+    /** L'identité de l'OBJET quand elle n'est pas celle de son média (une copie, #13902) ; un blob d'avant se lit `null` : l'objet est son média. */
+    val objectId: String? = null,
+    /** Sa fenêtre d'apparition dans la slide (#13902), en secondes, 0 = dès le début / jusqu'à la fin ; un blob d'avant se lit « toute la slide ». */
+    val startSeconds: Float = 0f,
+    val durationSeconds: Float = 0f,
+    /** Le volume d'auteur d'une vidéo posée (#13973, A-E4) et le niveau que le muet a quitté ; un blob d'avant se lit « à plein, jamais coupé ». */
+    val volume: Float = 1f,
+    val mutedVolumeMemento: Float? = null,
+    /** Ses images clés (#14271) ; un blob d'avant se lit « aucune ». */
+    val keyframes: List<StoryKeyframe> = emptyList(),
 )
 
 /**
@@ -195,12 +213,24 @@ data class StoryDraftSlideSnapshot(
     val placedMedia: List<StoryDraftPlacedMediaSnapshot> = emptyList(),
     /** Les réglages et effets du média de FOND (#13652) ; un blob d'avant se lit « rien de réglé ». */
     val backgroundAdjustments: ImageAdjustments? = null,
+    /** La fenêtre gardée de la vidéo de FOND dans sa source (#13973) ; un blob d'avant se lit « entière ». */
+    val backgroundSourceStart: Double? = null,
+    val backgroundSourceEnd: Double? = null,
+    /** Le quart de tour du média de FOND et le volume d'une vidéo de fond (#14083) ; un blob d'avant se lit « droit, à plein volume ». */
+    val backgroundRotation: Float = 0f,
+    val backgroundVolume: Float = 1f,
+    val backgroundMutedVolumeMemento: Float? = null,
     /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
     val places: List<StoryLocationObject> = emptyList(),
     /** La transcription de chaque piste (#13848) ; un blob d'avant se lit « aucune ». */
     val soundTranscriptions: Map<String, MobileTranscriptionPayload> = emptyMap(),
     /** Les vidéos s'atténuent sous le son de fond ; un blob d'avant se lit « oui ». */
     val videosDuckUnderSound: Boolean = true,
+    /** Le look de chaque média de la diapo (#13841, format v1 d'iOS), posé ou de fond ; un blob d'avant ou illisible se lit « aucun ». */
+    @Serializable(with = StoryMediaLooksSerializer::class)
+    val mediaLooks: Map<String, StoryMediaLook> = emptyMap(),
+    /** Le dessin à main levée de la diapo (#13863) ; un blob d'avant se lit « aucun trait ». */
+    val strokes: List<StoryDrawingStroke> = emptyList(),
 ) {
     /**
      * True once the slide carries content worth restoring: a caption, attached media, a
@@ -212,11 +242,11 @@ data class StoryDraftSlideSnapshot(
      * worth restoring on their own. ([backgroundMediaId] can only ever name an attached media,
      * so it never appears without a [mediaIds] entry that already makes the slide worth
      * restoring; a **blank** text element or sticker likewise carries nothing to restore, so
-     * only a publishable one counts.)
+     * only a publishable one counts.) A drawn [strokes] layer is content of its own.
      */
     val hasContent: Boolean
-        get() = text.isNotBlank() || mediaIds.isNotEmpty() ||
-            elements.any { it.isPublishable } || stickers.any { it.isPublishable } || audio.isNotEmpty() || places.isNotEmpty()
+        get() = text.isNotBlank() || mediaIds.isNotEmpty() || elements.any { it.isPublishable } ||
+            stickers.any { it.isPublishable } || audio.isNotEmpty() || places.isNotEmpty() || strokes.isNotEmpty()
 }
 
 /**
@@ -274,6 +304,13 @@ data class StoryComposerDraftSnapshot(
     /** Mentions, textes alternatifs, légendes et extraction du son (#13451) ; vide pour un blob d'avant. */
     val annotations: StoryDraftAnnotations = StoryDraftAnnotations(),
     val awaitingPublication: List<String> = emptyList(),
+    /** Le texte du post ou du réel (#13863), hors de la scène ; vide pour une story et pour un blob d'avant. */
+    val postText: String = "",
+    /** Le format où la scène était composée (nom de [me.meeshy.sdk.model.composer.ComposerFormat]) ; `null` : une story. */
+    val format: String? = null,
+    /** Les pièces téléversées que la scène porte, avec leur type et leur durée : ce qui qualifie un réel au retour. */
+    val media: List<UploadedMedia> = emptyList(),
+    val formats: List<String> = emptyList(),
 ) {
     /** Whether a publish of this draft is still owed a server confirmation (see [awaitingPublication]). */
     val isAwaitingPublication: Boolean
@@ -293,7 +330,7 @@ data class StoryComposerDraftSnapshot(
      * (a single blank slide) restores nothing, so it never clobbers a freshly opened composer.
      */
     val isWorthRestoring: Boolean
-        get() = isStructurallyValid && slides.any { it.hasContent }
+        get() = isStructurallyValid && (slides.any { it.hasContent } || postText.isNotBlank())
 
     /**
      * Content equality that ignores [updatedAt]: two snapshots are the same *draft* when
@@ -306,7 +343,11 @@ data class StoryComposerDraftSnapshot(
             visibility == other.visibility &&
             repostOfId == other.repostOfId &&
             visibilityUserIds == other.visibilityUserIds &&
-            annotations == other.annotations
+            annotations == other.annotations &&
+            postText == other.postText &&
+            format == other.format &&
+            formats == other.formats &&
+            media == other.media
 
     companion object {
         /** The audience a fresh draft defaults to — parity with the composer's `StoryVisibility.PUBLIC`. */

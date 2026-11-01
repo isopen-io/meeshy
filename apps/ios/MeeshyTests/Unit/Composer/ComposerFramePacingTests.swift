@@ -160,13 +160,13 @@ final class ComposerFramePacingTests: XCTestCase {
     }
 
     private static func sources(under relative: String) throws -> [(path: String, code: String)] {
-        let racine = repoRoot
+        let racine = repoRoot.resolvingSymlinksInPath()
         guard let walker = FileManager.default.enumerator(at: racine.appendingPathComponent(relative),
                                                           includingPropertiesForKeys: nil) else { return [] }
         return try walker.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" }
             .map { url in
-                (url.path.replacingOccurrences(of: racine.path + "/", with: ""),
+                (url.resolvingSymlinksInPath().path.replacingOccurrences(of: racine.path + "/", with: ""),
                  AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
             }
     }

@@ -78,13 +78,17 @@ class ChatPlainSignalGestureTest {
         val hidden: InMemoryLocallyHiddenMessagesStore,
     )
 
-    private fun harness(encryptionMode: String?): Harness {
+    /** [sealedOwn] (#13804) : un message à moi écrit APRÈS l'activation, scellé (`m3`), à côté de `m1` écrit en clair avant elle. */
+    private fun harness(encryptionMode: String?, sealedOwn: Boolean = false): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns flowOf(
             CacheResult.Fresh(
-                listOf(
+                listOfNotNull(
                     LocalMessage(ApiMessage(id = "m1", conversationId = "c1", senderId = "me", content = "à moi")),
                     LocalMessage(ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "à lui", pinnedAt = "2026-10-01T10:00:00Z")),
+                    LocalMessage(
+                        ApiMessage(id = "m3", conversationId = "c1", senderId = "me", content = "U2FsdGVkX1+opaque", isEncrypted = true, encryptionMode = "e2ee"),
+                    ).takeIf { sealedOwn },
                 ),
                 ageMillis = 0,
             ),
@@ -186,14 +190,15 @@ class ChatPlainSignalGestureTest {
     }
 
     @Test
-    fun `en bout en bout, ni epingler ni desepingler ni supprimer pour tous ne part`() = runTest(dispatcher) {
-        val h = harness("e2ee")
+    fun `en bout en bout, ni epingler ni desepingler ni supprimer pour tous un message scelle ne part`() = runTest(dispatcher) {
+        val h = harness("e2ee", sealedOwn = true)
         advanceUntilIdle()
 
         h.vm.togglePin("m1")
         h.vm.togglePin("m2")
-        h.vm.deleteForEveryone("m1")
-        h.vm.deleteSelectionForEveryone(listOf("m1"))
+        h.vm.deleteForEveryone("m3")
+        h.vm.deleteSelectionForEveryone(listOf("m3"))
+        h.vm.deleteForEveryone("absent")
         advanceUntilIdle()
 
         coVerify(exactly = 0) { h.repo.setPinnedOptimistic(any(), any()) }
@@ -226,5 +231,17 @@ class ChatPlainSignalGestureTest {
         coVerify(exactly = 1) { h.repo.toggleReactionOptimistic("m2", "🔥", isAdding = true) }
         coVerify(exactly = 1) { h.repo.setPinnedOptimistic("m1", pin = true) }
         coVerify(exactly = 1) { h.repo.deleteOptimistic("m1") }
+    }
+
+    @Test
+    fun `en bout en bout, un message a moi ecrit en clair avant l'activation se supprime pour tous, comme la passerelle l'admet (#13804)`() = runTest(dispatcher) {
+        val h = harness("e2ee", sealedOwn = true)
+        advanceUntilIdle()
+
+        h.vm.deleteSelectionForEveryone(listOf("m1", "m3"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.deleteOptimistic("m1") }
+        coVerify(exactly = 0) { h.repo.deleteOptimistic("m3") }
     }
 }

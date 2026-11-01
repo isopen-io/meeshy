@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.model.relation.RelationAudienceChoice
 
 /**
  * The wire body for `PATCH /me/preferences/notification` (feature-parity §L).
@@ -50,6 +51,28 @@ public data class NotificationPreferenceSyncBody(
     val showSenderName: Boolean,
     val groupNotifications: Boolean,
     val notificationBadgeEnabled: Boolean,
+    // #14064 — les crans d'entourage, une clé plate par action (#13929). `null` = non connu de cet appareil :
+    // la clé ne part pas (`explicitNulls = false`), si bien qu'un interrupteur basculé ici n'écrase jamais
+    // le cran qu'un autre appareil a réglé.
+    val circlePublicationPost: RelationAudienceChoice? = null,
+    val circlePublicationReel: RelationAudienceChoice? = null,
+    val circlePublicationStory: RelationAudienceChoice? = null,
+    val circlePublicationMood: RelationAudienceChoice? = null,
+    val circlePublicationRepost: RelationAudienceChoice? = null,
+    val circlePublicationShare: RelationAudienceChoice? = null,
+    val circleOnMyContentComment: RelationAudienceChoice? = null,
+    val circleOnMyContentReaction: RelationAudienceChoice? = null,
+    val circleOnMyContentShare: RelationAudienceChoice? = null,
+    val circleOnMyContentRepost: RelationAudienceChoice? = null,
+    val circleOnMyContentQuote: RelationAudienceChoice? = null,
+    val circleOnMyContentReference: RelationAudienceChoice? = null,
+    val circleOnMyContentMention: RelationAudienceChoice? = null,
+    val circleElsewhereComment: RelationAudienceChoice? = null,
+    val circleElsewhereReaction: RelationAudienceChoice? = null,
+    val circleElsewhereShare: RelationAudienceChoice? = null,
+    val circleElsewhereQuote: RelationAudienceChoice? = null,
+    val circleElsewhereReference: RelationAudienceChoice? = null,
+    val circleElsewhereMention: RelationAudienceChoice? = null,
 ) {
     /**
      * Projects the gateway block BACK onto the device-local one — the read half of [from],
@@ -99,7 +122,32 @@ public data class NotificationPreferenceSyncBody(
             showSenderName = showSenderName,
             groupNotifications = groupNotifications,
             notificationBadgeEnabled = notificationBadgeEnabled,
+            circleAudience = current.circleAudience + servedCircleAudience(),
         )
+
+    /** Les crans que la réponse porte ; une clé absente ou un cran inconnu (lu `null`) garde la valeur locale. */
+    private fun servedCircleAudience(): Map<String, RelationAudienceChoice> =
+        listOf(
+            "circlePublicationPost" to circlePublicationPost,
+            "circlePublicationReel" to circlePublicationReel,
+            "circlePublicationStory" to circlePublicationStory,
+            "circlePublicationMood" to circlePublicationMood,
+            "circlePublicationRepost" to circlePublicationRepost,
+            "circlePublicationShare" to circlePublicationShare,
+            "circleOnMyContentComment" to circleOnMyContentComment,
+            "circleOnMyContentReaction" to circleOnMyContentReaction,
+            "circleOnMyContentShare" to circleOnMyContentShare,
+            "circleOnMyContentRepost" to circleOnMyContentRepost,
+            "circleOnMyContentQuote" to circleOnMyContentQuote,
+            "circleOnMyContentReference" to circleOnMyContentReference,
+            "circleOnMyContentMention" to circleOnMyContentMention,
+            "circleElsewhereComment" to circleElsewhereComment,
+            "circleElsewhereReaction" to circleElsewhereReaction,
+            "circleElsewhereShare" to circleElsewhereShare,
+            "circleElsewhereQuote" to circleElsewhereQuote,
+            "circleElsewhereReference" to circleElsewhereReference,
+            "circleElsewhereMention" to circleElsewhereMention,
+        ).mapNotNull { (key, choice) -> choice?.let { key to it } }.toMap()
 
     public companion object {
         /** Projects the device-local block into the gateway wire body (drops `extras`). */
@@ -140,6 +188,25 @@ public data class NotificationPreferenceSyncBody(
                 showSenderName = prefs.showSenderName,
                 groupNotifications = prefs.groupNotifications,
                 notificationBadgeEnabled = prefs.notificationBadgeEnabled,
+                circlePublicationPost = prefs.circleAudience["circlePublicationPost"],
+                circlePublicationReel = prefs.circleAudience["circlePublicationReel"],
+                circlePublicationStory = prefs.circleAudience["circlePublicationStory"],
+                circlePublicationMood = prefs.circleAudience["circlePublicationMood"],
+                circlePublicationRepost = prefs.circleAudience["circlePublicationRepost"],
+                circlePublicationShare = prefs.circleAudience["circlePublicationShare"],
+                circleOnMyContentComment = prefs.circleAudience["circleOnMyContentComment"],
+                circleOnMyContentReaction = prefs.circleAudience["circleOnMyContentReaction"],
+                circleOnMyContentShare = prefs.circleAudience["circleOnMyContentShare"],
+                circleOnMyContentRepost = prefs.circleAudience["circleOnMyContentRepost"],
+                circleOnMyContentQuote = prefs.circleAudience["circleOnMyContentQuote"],
+                circleOnMyContentReference = prefs.circleAudience["circleOnMyContentReference"],
+                circleOnMyContentMention = prefs.circleAudience["circleOnMyContentMention"],
+                circleElsewhereComment = prefs.circleAudience["circleElsewhereComment"],
+                circleElsewhereReaction = prefs.circleAudience["circleElsewhereReaction"],
+                circleElsewhereShare = prefs.circleAudience["circleElsewhereShare"],
+                circleElsewhereQuote = prefs.circleAudience["circleElsewhereQuote"],
+                circleElsewhereReference = prefs.circleAudience["circleElsewhereReference"],
+                circleElsewhereMention = prefs.circleAudience["circleElsewhereMention"],
             )
     }
 }

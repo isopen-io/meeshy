@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,27 +17,34 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import me.meeshy.sdk.model.composer.ComposerFormat
 import me.meeshy.sdk.model.composer.ComposerLimitNotice
+import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.component.retouch.LocalComposerLookAuthor
+import me.meeshy.ui.component.retouch.rememberComposerLookAuthor
+import me.meeshy.ui.component.retouch.rememberStoryMediaLookModel
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.scene.ComposerBackdropFraming
-import me.meeshy.sdk.model.composer.scene.ComposerBackgroundMenuAction
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * The scene of the story composer: the canvas and the long-press menu of its background media. Blank and at rest
+ * The scene of the story composer: the canvas. Touched or held, a background media is selected and lays its « Fond » level
+ * in the rail (#13973) — no menu floats over the scene. Blank and at rest
  * ([captureOffered]), the scene arms [capture]'s viewfinder on a touch, and films on a hold (#13849); armed, the viewfinder
  * covers the scene alone.
  */
@@ -44,20 +52,20 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal fun StoryComposerScene(
     state: StoryComposerUiState,
     viewModel: StoryComposerViewModel,
-    sceneExport: SceneExportHost,
     comparison: LookComparison,
     modifier: Modifier = Modifier,
     capture: StorySceneCapture? = null,
     captureOffered: Boolean = false,
 ) {
-    var backgroundMenuOpen by remember { mutableStateOf(false) }
     val armsCapture = capture?.takeIf { captureOffered }
+    val accentHex = viewModel.observedAuthorAccentHex()
+    CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
-                backgroundModel = state.selectedSlideBackdropModel(viewModel.mediaBaseUrl),
-                sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
-                    StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
+                backgroundModel = rememberStoryMediaLookModel(rememberComposerPicture(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl)), state.backgroundMediaLook(comparison.mediaId)),
+                sceneBrush = remember(state.selectedSlideBackground, accentHex) {
+                    StorySceneFill.resolve(state.selectedSlideBackground, accentHex).brush()
                 },
                 look = state.selectedSlideLook(comparison.mediaId),
                 textElements = state.selectedSlideTextElements,
@@ -85,7 +93,9 @@ internal fun StoryComposerScene(
                 onStickerDrag = viewModel::onStickerMoved,
                 onStickerDragEnd = viewModel::onStickerDragEnd,
                 onStickerTransform = viewModel::onStickerTransform,
-                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, comparison.mediaId) { state.placedMediaFrames(viewModel.mediaBaseUrl, comparison.mediaId) },
+                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, state.isOffline, state.resendingUploads, state.failedUploads, comparison.mediaId) {
+                    state.placedMediaFrames(viewModel.mediaBaseUrl, comparison.mediaId)
+                },
                 placedMediaGestures = remember(viewModel) {
                     PlacedMediaGestures(
                         viewModel::onMediaPlacementMoved,
@@ -94,47 +104,26 @@ internal fun StoryComposerScene(
                         onTap = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
                     )
                 },
-                onBackgroundTap = armsCapture?.let { scene -> { scene.arm() } } ?: viewModel::onSceneBackgroundTap,
+                onBackgroundTap = armsCapture?.let { scene -> { scene.arm() } } ?: { viewModel.onSceneTap() },
                 selectedMediaId = state.selectedMedia,
                 snapFeedback = state.snapFeedback,
                 modifier = Modifier.fillMaxSize(),
                 fitMode = ComposerBackdropFraming.fitMode(state.deck.selectedSlide.frame.backgroundTransform()),
                 backdrop = ComposerBackdropFraming.backdrop(state.deck.selectedSlide.frame.backgroundTransform()),
-                capture = sceneExport.capture,
-                onBackgroundLongPress = state.deck.selectedSlideBackgroundMediaId
-                    ?.let { { backgroundMenuOpen = true } }
+                backgroundRotationDeg = state.paintedBackgroundSetting.rotationDeg,
+                onBackgroundLongPress = state.selectedSlideBackdropMediaId
+                    ?.let { { viewModel.onSelectBackground() } }
                     ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
-                places = { width, height, capturing ->
-                    state.deck.selectedSlide.places.forEach { place ->
-                        key(place.id) {
-                            ComposerPlaceLayer(
-                                place = place,
-                                selected = !capturing && place.id == state.selectedPlaceId,
-                                canvasWidthPx = width,
-                                canvasHeightPx = height,
-                                onTap = { viewModel.onSelectPlace(place.id) },
-                                onDrag = { dx, dy -> viewModel.onPlaceMoved(place.id, dx, dy) },
-                                onDragEnd = viewModel::onStickerDragEnd,
-                            )
-                        }
-                    }
-                },
+                stack = remember(state.deck.selectedSlide) { StorySceneStack.order(state.deck.selectedSlide) },
+                live = LocalComposerLive.current,
+                pins = { ref, width, height -> ScenePin(state, viewModel, ref, width, height) },
             )
-            ComposerBackgroundMenu(
-                expanded = backgroundMenuOpen,
-                onDismiss = { backgroundMenuOpen = false },
-                onAction = { action ->
-                    backgroundMenuOpen = false
-                    val mediaId = state.deck.selectedSlideBackgroundMediaId ?: return@ComposerBackgroundMenu
-                    when (action) {
-                        ComposerBackgroundMenuAction.BRING_FORWARD -> viewModel.onToggleSlideBackgroundMedia(mediaId)
-                        ComposerBackgroundMenuAction.DELETE -> viewModel.onRemoveMedia(mediaId)
-                        ComposerBackgroundMenuAction.EDIT, ComposerBackgroundMenuAction.RETAKE_PHOTO -> Unit
-                    }
-                },
-            )
+            state.selectedSlideBackdropPendingPhase?.let { phase ->
+                IncomingWaitingBadge(phase, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
+            }
             armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
             capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
+    }
     }
 }
 
@@ -177,7 +166,7 @@ internal fun StoryComposerBottomPanel(
 
 /** Le fond lisible d'un panneau posé sur la scène, quelle que soit la couleur de la scène. */
 @Composable
-private fun ScenePanelSurface(content: @Composable ColumnScope.() -> Unit) {
+internal fun ScenePanelSurface(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         color = MeeshyTheme.tokens.backgroundPrimary,
         shape = RoundedCornerShape(MeeshyRadius.lg),
@@ -218,7 +207,7 @@ private fun PanelDone(onDone: () -> Unit) {
     }
 }
 
-/** Les médias de la diapo — fond, posé, boucle, retrait — et leur description : dans le panneau Média, jamais au repos. */
+/** Les médias de la diapo — fond, posé, retrait — et leur description (la Boucle vit dans Fond › Modifier, #13973) : dans le panneau Média, jamais au repos. */
 @Composable
 internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     if (state.selectedSlideAttachments.isEmpty() && state.selectedSlidePending.isEmpty()) return
@@ -227,15 +216,14 @@ internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryCompose
         pending = state.selectedSlidePending,
         mediaBaseUrl = viewModel.mediaBaseUrl,
         backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
-        backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
-        backgroundLoop = state.selectedSlideBackgroundLoop,
         onRemove = viewModel::onRemoveMedia,
         selectedMediaId = state.selectedMedia,
         onSelect = { id -> viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.mediaSelected(s, id) } },
         onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
         placedMediaIds = remember(state.deck.selectedSlide.placedMedia) { state.deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId } },
         onTogglePlaced = viewModel::onTogglePlacedMedia,
-        onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
+        pendingPhase = state::pendingPhase,
+        onRetryPending = viewModel::onRetryPendingUpload,
     )
     ComposerMediaDescription(
         mediaIds = state.deck.selectedSlide.mediaIds,
@@ -253,14 +241,57 @@ internal fun SlideMediaRows(state: StoryComposerUiState, viewModel: StoryCompose
 /** Ce que l'éditeur dit de lui-même, au bas de la scène et seulement quand il a quelque chose à dire. */
 @Composable
 internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error = state.errorMessage) {
-    null -> null
+    null -> publishFailedNotice(state.publishFailedFormats)
     StoryComposerUploadReducer.LOCATION_REFUSED -> stringResource(R.string.stories_composer_media_location_refused)
+    StoryComposerUploadReducer.SLIDES_FULL -> stringResource(R.string.composer_slide_rail_capReached)
+    StoryComposerViewModel.MEDIA_FAILED -> stringResource(R.string.story_composer_incoming_failed)
     StoryComposerViewModel.STICKER_IMAGE_FAILED -> stringResource(R.string.story_sticker_image_failed)
     StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
     StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
     StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)
     StoryEditErrors.UNAVAILABLE -> stringResource(R.string.story_edit_unavailable)
     else -> error
+}
+
+/** Les formats qu'un geste n'a pas fait partir (#13919), chacun nommé, dans l'ordre du menu. */
+@Composable
+private fun publishFailedNotice(failed: List<ComposerFormat>): String? = failed.map { format ->
+    when (format) {
+        ComposerFormat.POST -> stringResource(R.string.composer_publish_failed_post)
+        ComposerFormat.REEL -> stringResource(R.string.composer_publish_failed_reel)
+        else -> stringResource(R.string.composer_publish_failed_story)
+    }
+}.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+
+/** A place or a voice chip of the scene, at its rank in the stack: touched, it is selected; dragged, it moves. */
+@Composable
+private fun ScenePin(state: StoryComposerUiState, viewModel: StoryComposerViewModel, ref: SceneObjectRef, width: Float, height: Float) {
+    val slide = state.deck.selectedSlide
+    when (ref.kind) {
+        ComposerObjectKind.PLACE -> slide.places.firstOrNull { it.id == ref.id }?.let { place ->
+            ComposerPlaceLayer(
+                place = place,
+                selected = place.id == state.selectedPlaceId,
+                canvasWidthPx = width,
+                canvasHeightPx = height,
+                onTap = { viewModel.onSelectPlace(place.id) },
+                onDrag = { dx, dy -> viewModel.onPlaceMoved(place.id, dx, dy) },
+                onDragEnd = viewModel::onStickerDragEnd,
+            )
+        }
+        ComposerObjectKind.AUDIO -> slide.audio.firstOrNull { it.id == ref.id }?.let { track ->
+            ComposerAudioChipLayer(
+                track = track,
+                selected = track.id == state.selectedSoundId,
+                canvasWidthPx = width,
+                canvasHeightPx = height,
+                onTap = { viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.soundSelected(s, track.id) } },
+                onDrag = { dx, dy -> viewModel.onSoundMoved(track.id, dx, dy) },
+                onDragEnd = viewModel::onStickerDragEnd,
+            )
+        }
+        else -> Unit
+    }
 }
 
 /** The open tool's panel, raised over the bottom of the scene, which shrinks whole above it. */
@@ -304,15 +335,25 @@ internal fun StoryComposerPanel(
 
 private val PANEL_MAX_HEIGHT = 320.dp
 
+/** Le badge « en attente » d'un fond hors ligne, sous la barre du haut et la rangée des diapos. */
+private val WAITING_BADGE_TOP = 112.dp
+
 /**
  * Le plan 2D de la scène (iOS `ComposerObjectPlanControls` → `Plan2DView`) : UN montage, deux portes — l'outil « temps »
  * de la bande et la section « plan » de la colonne droite d'un texte. Le même plan, les mêmes gestes ; l'empilement,
  * lui, reste aux actions de l'objet.
  */
+/** L'objet posé qu'une piste de la frise désigne. */
+private fun StoryComposerUiState.friseRef(id: String): SceneObjectRef? =
+    StorySceneStack.order(deck.selectedSlide).firstOrNull { it.id == id }
+
 @Composable
 internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    val names = state.sceneTrackNames
+    val words = SceneObjectFamily.entries.associateWith { familyWord(it) }
     SceneFrise(
         tracks = state.sceneTracks,
+        labels = names.mapValues { (_, track) -> track.name ?: words.getValue(track.family) },
         editableIds = state.sceneEditableTrackIds,
         selectedId = state.selectedSceneObject?.id,
         slideDurationSeconds = state.selectedSlideDurationSeconds.toFloat(),
@@ -323,5 +364,18 @@ internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryCompose
         },
         onScrub = viewModel::onPlayheadMoved,
         onWindow = viewModel::onSceneObjectWindow,
+        splittableIds = StoryComposerSplitReducer.splittableIds(state),
+        // « Couper » à la tête (#14221, #14224) : une réduction, donc un seul pas d'annulation.
+        onSplit = { id ->
+            val newId = java.util.UUID.randomUUID().toString()
+            viewModel.onSceneReduce { s -> StoryComposerSplitReducer.split(s, id, newId) }
+        },
+        visuals = state.friseBarVisuals(),
+        onDuplicate = { id -> state.friseRef(id)?.let { viewModel.onSelectionAction(it, ComposerSelectionAction.DUPLICATE) {} } },
+        onRemove = { id -> state.friseRef(id)?.let { viewModel.onSelectionAction(it, ComposerSelectionAction.REMOVE) {} } },
+        // L'image clé à la tête (#14271) : une réduction, donc un seul pas d'annulation.
+        keyframableIds = StoryComposerKeyframeReducer.keyframableIds(state),
+        keyframeHeld = state.selectedSceneObject?.id?.let { StoryComposerKeyframeReducer.keyframeAtPlayhead(state, it) } != null,
+        onKeyframe = { id -> viewModel.onSceneReduce { s -> StoryComposerKeyframeReducer.toggled(s, id) } },
     )
 }

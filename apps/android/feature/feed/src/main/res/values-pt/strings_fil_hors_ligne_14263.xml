@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_offline_banner">Offline — as publicações que você já viu continuam visíveis.</string>
+    <string name="feed_offline_empty_title">Offline</string>
+    <string name="feed_offline_empty_detail">O feed ainda não foi carregado neste aparelho. Ele aparecerá assim que a rede voltar.</string>
+</resources>

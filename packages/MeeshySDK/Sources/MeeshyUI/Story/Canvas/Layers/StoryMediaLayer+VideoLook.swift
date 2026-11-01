@@ -20,7 +20,8 @@ extension StoryMediaLayer {
     func applyVideoLook(to item: AVPlayerItem?) {
         guard let item else { return }
         let reglages = media.flatMap(StoryVideoAdjustmentsProcessor.paintedAdjustments(for:))
-        let signature = reglages.map(StoryMediaAdjustmentsProcessor.signature) ?? ""
+        let regard = media.flatMap(StoryVideoAdjustmentsProcessor.paintedLook(for:))
+        let signature = StoryVideoAdjustmentsProcessor.signature(look: regard, adjustments: reglages)
         let identite = ObjectIdentifier(item)
         let precedent = appliedVideoLook
         guard precedent?.item != identite || precedent?.signature != signature else { return }
@@ -29,7 +30,7 @@ extension StoryMediaLayer {
         videoLookTask = nil
         appliedVideoLook = (identite, signature)
 
-        guard let reglages else {
+        guard !signature.isEmpty else {
             if precedent?.item == identite, precedent?.signature.isEmpty == false {
                 item.videoComposition = nil
             }
@@ -39,7 +40,8 @@ extension StoryMediaLayer {
         let asset = item.asset
         videoLookTask = Task { @MainActor [weak self, weak item] in
             guard let composition = try? await StoryVideoAdjustmentsProcessor.composition(for: asset,
-                                                                                          adjustments: reglages),
+                                                                                          adjustments: reglages,
+                                                                                          look: regard),
                   !Task.isCancelled, let self, let item,
                   self.appliedVideoLook?.item == ObjectIdentifier(item),
                   self.appliedVideoLook?.signature == signature else { return }

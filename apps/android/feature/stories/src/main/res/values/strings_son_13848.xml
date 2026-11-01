@@ -12,7 +12,7 @@
     <string name="story_sound_sheet_transcription_write">Write</string>
     <string name="story_sound_sheet_transcription_retry">Retry</string>
     <string name="story_sound_sheet_transcription_running">Transcribing on your device…</string>
-    <string name="story_sound_sheet_transcription_server">Your device can\'t transcribe this language: Meeshy will once the story is published.</string>
+    <string name="story_sound_sheet_transcription_server">Your device can\'t transcribe this language: Meeshy will do it on publishing.</string>
     <string name="story_sound_sheet_transcription_failed">The transcription failed.</string>
     <string name="story_sound_sheet_transcription_silent">Nothing was heard.</string>
     <string name="story_sound_sheet_trim">Trim</string>

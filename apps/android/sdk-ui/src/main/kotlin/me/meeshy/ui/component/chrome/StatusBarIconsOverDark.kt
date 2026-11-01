@@ -11,8 +11,8 @@ import androidx.core.view.WindowCompat
 import java.util.WeakHashMap
 
 /**
- * Un écran au fond sombre en plein cadre (les réels) pose des icônes de barre d'état CLAIRES — heure, batterie et
- * réseau lisibles sur le noir comme sur iOS — et rend à la fenêtre l'apparence qu'elle avait en le quittant.
+ * Un écran au fond sombre en plein cadre (les réels, le compositeur) pose des icônes de barre d'état CLAIRES — heure,
+ * batterie et réseau lisibles sur le noir comme sur iOS — et rend à la fenêtre l'apparence qu'elle avait en le quittant.
  * Sans cela, le thème clair de l'application laisse des icônes sombres sur le fond noir.
  *
  * Deux écrans sombres peuvent se relayer (un réel ouvert depuis une notification pendant qu'on regarde les réels) :
@@ -20,35 +20,57 @@ import java.util.WeakHashMap
  */
 @Composable
 public fun StatusBarIconsOverDark() {
+    StatusBarIconsOver(darkBehind = true, layer = StatusBarLayer.SCREEN)
+}
+
+/** Ce qui se tient sous la barre d'état : l'écran, ou une bande opaque posée par-dessus lui, qui l'emporte tant qu'elle est là. */
+internal enum class StatusBarLayer { SCREEN, BAND }
+
+/**
+ * Les icônes de la barre d'état suivent ce qui est DESSOUS : claires sur du sombre, sombres sur du clair. La couche la plus
+ * haute présente décide (une bande l'emporte sur l'écran qu'elle recouvre), la plus récente à couche égale ; au départ de
+ * la dernière, la fenêtre retrouve l'apparence qu'elle avait avant la première.
+ */
+@Composable
+internal fun StatusBarIconsOver(darkBehind: Boolean, layer: StatusBarLayer) {
     val view = LocalView.current
     val window = view.context.findActivity()?.window ?: return
-    DisposableEffect(window) {
+    DisposableEffect(window, darkBehind, layer) {
         val controller = WindowCompat.getInsetsController(window, view)
-        val claim = OverDarkClaims.acquire(window, lightIconsBefore = controller.isAppearanceLightStatusBars)
-        controller.isAppearanceLightStatusBars = false
+        val claim = StatusBarClaims.acquire(window, controller.isAppearanceLightStatusBars, layer, darkBehind)
+        controller.isAppearanceLightStatusBars = StatusBarClaims.appearance(window)
         onDispose {
-            OverDarkClaims.release(window, claim)?.let { controller.isAppearanceLightStatusBars = it }
+            StatusBarClaims.release(window, claim)?.let { controller.isAppearanceLightStatusBars = it }
         }
     }
 }
 
-/** Les écrans sombres présents dans chaque fenêtre, et l'apparence que la fenêtre avait avant le premier. Fil principal. */
-private object OverDarkClaims {
-    private class Holders(val lightIconsBefore: Boolean, val claims: MutableSet<Any> = mutableSetOf())
+/** Ce que chaque fenêtre a sous sa barre d'état, et l'apparence qu'elle avait avant la première demande. Fil principal. */
+private object StatusBarClaims {
+    private class Claim(val layer: StatusBarLayer, val darkBehind: Boolean, val order: Long)
+
+    private class Holders(val lightIconsBefore: Boolean, val claims: MutableList<Claim> = mutableListOf())
 
     private val byWindow = WeakHashMap<Window, Holders>()
+    private var nextOrder = 0L
 
-    fun acquire(window: Window, lightIconsBefore: Boolean): Any {
-        val claim = Any()
+    fun acquire(window: Window, lightIconsBefore: Boolean, layer: StatusBarLayer, darkBehind: Boolean): Any {
+        val claim = Claim(layer, darkBehind, nextOrder++)
         byWindow.getOrPut(window) { Holders(lightIconsBefore) }.claims += claim
         return claim
     }
 
-    /** L'apparence à rendre quand [claim] était le dernier écran sombre de [window] ; `null` sinon. */
+    /** `true` : des icônes sombres. Ce que demande la couche la plus haute, ou l'apparence d'origine quand il n'en reste aucune. */
+    fun appearance(window: Window): Boolean {
+        val holders = byWindow[window] ?: return false
+        val top = holders.claims.maxWithOrNull(compareBy<Claim>({ it.layer.ordinal }, { it.order })) ?: return holders.lightIconsBefore
+        return !top.darkBehind
+    }
+
     fun release(window: Window, claim: Any): Boolean? {
         val holders = byWindow[window] ?: return null
-        holders.claims -= claim
-        if (holders.claims.isNotEmpty()) return null
+        holders.claims.remove(claim)
+        if (holders.claims.isNotEmpty()) return appearance(window)
         byWindow.remove(window)
         return holders.lightIconsBefore
     }

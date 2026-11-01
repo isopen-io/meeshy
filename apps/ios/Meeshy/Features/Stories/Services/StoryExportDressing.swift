@@ -32,16 +32,81 @@ nonisolated struct StoryExportAuthor: Equatable, Sendable {
     let name: String
     var avatarURL: String? = nil
     var avatarRing: ServedProfileDecorItem? = nil
+    /// La présence de l'auteur que le serveur a SERVIE (#13997), jamais une présence que le
+    /// client aurait décidée : `nil` quand rien n'a été servi (pas ami, ou groupe sans charge).
+    var presence: PresenceState? = nil
 
-    init(userId: String?, name: String, avatarURL: String? = nil, avatarRing: ServedProfileDecorItem? = nil) {
+    init(userId: String?, name: String, avatarURL: String? = nil, avatarRing: ServedProfileDecorItem? = nil,
+         presence: PresenceState? = nil) {
         self.userId = userId
         self.name = name
         self.avatarURL = avatarURL
         self.avatarRing = avatarRing
+        self.presence = presence
     }
 
     init(group: StoryGroup) {
-        self.init(userId: group.id, name: group.username, avatarURL: group.avatarURL, avatarRing: group.authorRing)
+        self.init(userId: group.id, name: group.username, avatarURL: group.avatarURL, avatarRing: group.authorRing,
+                  presence: group.authorPresence?.state)
+    }
+
+    /// L'auteur d'un groupe avec la présence la plus fraîche que l'app détient déjà : la carte
+    /// vivante du `PresenceManager` d'abord, la charge servie avec le groupe sinon — la même
+    /// résolution que la carte d'identité de la visionneuse. Aucun appel réseau.
+    @MainActor
+    static func served(from group: StoryGroup) -> StoryExportAuthor {
+        var author = StoryExportAuthor(group: group)
+        author.presence = PresenceManager.shared
+            .servedPresence(for: group.id, fallback: group.authorPresence)?.state
+        return author
+    }
+}
+
+// MARK: - RelationLevelProviding
+
+/// **Le niveau EFFECTIF du lien entre le lecteur et l'auteur, tel que le serveur le SERT**
+/// (#13997) — la source du logo de cercle de l'intro. `nil` ⇒ rien n'est servi, donc aucun logo.
+///
+/// Le point d'accès serveur est `GET /relations/:userId` (#13998) ; `RelationLevelProvider`
+/// l'interroge. Le rendu et le câblage ne dépendent que de ce protocole.
+nonisolated protocol RelationLevelProviding: Sendable {
+    /// Le niveau servi (chaîne brute : `"CLOSE"`, `"BLOOD"`…) du lien avec `userId`.
+    func servedLevel(withUserId userId: String) async -> String?
+}
+
+/// Le corps `data` de `GET /relations/:userId` (`relationLevelResponseSchema`). `PUBLIC` vaut
+/// aussi pour un bloqué ou un inconnu : le serveur ne distingue pas, le client non plus.
+nonisolated struct ServedRelationLevel: Decodable, Sendable, Equatable {
+    let userId: String
+    let effectiveLevel: String
+}
+
+/// L'implémentation réelle : une lecture du niveau EFFECTIF servi, par l'`APIClient`. Toute
+/// erreur (réseau, 400, 401, 429, 500) rend `nil` — l'intro part alors sans logo, jamais avec
+/// un niveau deviné. Le budget de temps reste celui de l'appelant
+/// (`StoryExportAuthorIdentity.levelTimeout`).
+nonisolated final class RelationLevelProvider: RelationLevelProviding {
+    static let shared = RelationLevelProvider()
+
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
+
+    func servedLevel(withUserId userId: String) async -> String? {
+        do {
+            let response: APIResponse<ServedRelationLevel> = try await api.request(
+                RelationsEndpoint.byUserId(userId: userId),
+                method: "GET",
+                body: nil,
+                queryItems: nil
+            )
+            guard response.success else { return nil }
+            return response.data.effectiveLevel
+        } catch {
+            return nil
+        }
     }
 }
 
@@ -118,9 +183,13 @@ struct StoryExportDressingResolver: Sendable {
 
     init(viewerIntro: ViewerIntro? = nil,
          authorIntro: AuthorIntro? = nil,
-         timeout: Duration = BoundedAsyncResolution.defaultTimeout) {
+         timeout: Duration = BoundedAsyncResolution.defaultTimeout,
+         relationLevels: RelationLevelProviding = RelationLevelProvider.shared) {
         self.viewerIntro = viewerIntro ?? StoryExportIntroFactory.currentUser
-        self.authorIntro = authorIntro ?? StoryExportAuthorIdentity.resolve
+        let levelledAuthorIntro: AuthorIntro = { @MainActor @Sendable author in
+            await StoryExportAuthorIdentity.resolve(author, levels: relationLevels)
+        }
+        self.authorIntro = authorIntro ?? levelledAuthorIntro
         self.timeout = timeout
     }
 
@@ -153,12 +222,33 @@ struct StoryExportDressingResolver: Sendable {
 /// la peinture reste au SDK (`StoryExportIntroFactory.content(for:)`).
 enum StoryExportAuthorIdentity {
 
+    /// Borne propre au niveau de lien : une lecture de ce qui est déjà servi, jamais de quoi
+    /// retarder l'avatar ni la bannière — passé ce délai, l'intro part sans logo.
+    static let levelTimeout: Duration = .seconds(1)
+
     @MainActor
-    static func resolve(_ author: StoryExportAuthor) async -> StoryExportIntroContent? {
+    static func resolve(_ author: StoryExportAuthor,
+                        levels: RelationLevelProviding = RelationLevelProvider.shared) async -> StoryExportIntroContent? {
+        async let level = servedLevel(of: author, levels: levels)
         let profile = await profile(of: author)
-        return await StoryExportIntroFactory.content(for: source(for: author, profile: profile))
+        return await StoryExportIntroFactory.content(
+            for: source(for: author, profile: profile, servedLevel: await level))
     }
 
+    /// Le niveau servi du lien avec l'auteur, BORNÉ comme le reste du préambule. Sans identifiant
+    /// d'auteur, le fournisseur n'est même pas interrogé.
+    @MainActor
+    static func servedLevel(of author: StoryExportAuthor,
+                            levels: RelationLevelProviding,
+                            timeout: Duration = levelTimeout) async -> String? {
+        guard let userId = author.userId else { return nil }
+        return await BoundedAsyncResolution.resolve(
+            { @MainActor @Sendable in await levels.servedLevel(withUserId: userId) },
+            timeout: timeout)
+    }
+
+    /// Passé la borne de l'identité, l'intro sobre garde la présence déjà servie ; le niveau,
+    /// lui, n'a pas été attendu : pas de logo.
     @MainActor
     static func unresolved(_ author: StoryExportAuthor) -> StoryExportIntroContent {
         StoryExportIntroFactory.unresolvedContent(for: source(for: author, profile: nil))
@@ -168,11 +258,18 @@ enum StoryExportAuthorIdentity {
     /// tenait sert de nom ET de pseudo. Le contour suit la règle de la carte
     /// d'identité de la visionneuse (`StoryViewModel` : celui du profil, sinon
     /// celui servi avec le groupe).
-    nonisolated static func source(for author: StoryExportAuthor, profile: MeeshyUser?) -> StoryExportIntroSource {
+    ///
+    /// La présence est celle que le serveur a SERVIE pour l'auteur, projetée telle quelle
+    /// (`.offline` ne peint rien) ; `servedLevel` est le niveau de lien servi, ou `nil`.
+    nonisolated static func source(for author: StoryExportAuthor,
+                                   profile: MeeshyUser?,
+                                   servedLevel: String? = nil) -> StoryExportIntroSource {
+        let presence = author.presence.flatMap(StoryExportPresence.init)
         guard let profile else {
             return StoryExportIntroSource(userId: author.userId, displayName: author.name,
                                           username: author.name, avatarURL: author.avatarURL,
-                                          avatarRing: author.avatarRing)
+                                          avatarRing: author.avatarRing,
+                                          presence: presence, servedRelationLevel: servedLevel)
         }
         return StoryExportIntroSource(
             userId: author.userId ?? profile.id,
@@ -184,7 +281,9 @@ enum StoryExportAuthorIdentity {
             avatarURL: profile.avatar ?? author.avatarURL,
             bannerURL: profile.banner,
             backgroundThumbHash: profile.bannerThumbHash ?? profile.avatarThumbHash,
-            avatarRing: profile.profileDecor?.avatarRing ?? author.avatarRing)
+            avatarRing: profile.profileDecor?.avatarRing ?? author.avatarRing,
+            presence: presence,
+            servedRelationLevel: servedLevel)
     }
 
     @MainActor

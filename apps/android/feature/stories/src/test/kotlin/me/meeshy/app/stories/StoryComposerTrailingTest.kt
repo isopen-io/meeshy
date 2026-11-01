@@ -102,8 +102,8 @@ class StoryComposerTrailingTest {
         val actions = (StoryComposerTextReducer.added(withText(), "t2").trailingFocus as Focus.Object).actions
         assertThat(ServedTextSections.filterIsInstance<ComposerObjectEditorSection.Media>()).isEmpty()
         assertThat(ServedTextSections).containsNoDuplicates()
-        // le plan est la frise des pistes : l'empilement reste aux seules actions de l'objet
-        assertThat(actions).containsAtLeast(Action.BRING_FORWARD, Action.SEND_BACKWARD)
+        // le plan est la frise des pistes ; aucun empilement, toucher l'objet le fait passer devant (#13917)
+        assertThat(actions).containsAtLeast(Action.DUPLICATE, Action.DELETE)
     }
 
     @Test

@@ -73,6 +73,64 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
         XCTAssertFalse(BackgroundSoundBadge.showsMuteButton(for: BackgroundSoundBadge.announcement(for: sans)))
     }
 
+    // MARK: - Sans son de fond, la barre nomme le son de la bibliothèque POSÉ (#14245)
+
+    private func posee(id: String = "borrowed-6ada52e99bc6c72f73df09c4",
+                       soundId: String? = "6ada52e99bc6c72f73df09c4") -> StoryAudioPlayerObject {
+        var audio = StoryAudioPlayerObject(id: id, postMediaId: "")
+        audio.soundId = soundId
+        audio.soundAuthorUsername = "recretrait_b"
+        audio.duration = 5.023
+        return audio
+    }
+
+    /// Le post « Recette 14200 texte du post » (staging) : un son de la
+    /// bibliothèque posé AU PREMIER PLAN, sans `isBackground` ni `name`, et
+    /// aucun son de fond. Android le nomme (#14201) ; la barre iOS restait muette.
+    func test_withoutABackgroundSound_theDetailNamesTheLibrarySoundPosedOnTheScene() throws {
+        let document = Data("""
+        {"v":3,"scenes":[{"id":"s1","objects":[
+          {"id":"k1","kind":"sticker","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":2,
+           "transform":{"scale":1,"rotation":0,"opacity":1},"payload":{"emoji":"😀"}},
+          {"id":"borrowed-6ada52e99bc6c72f73df09c4","kind":"audio","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"content","z":1,
+           "transform":{"scale":1,"rotation":0,"opacity":1},
+           "payload":{"duration":5.023,"soundId":"6ada52e99bc6c72f73df09c4","soundAuthorUsername":"recretrait_b",
+                      "soundCreatedAt":"2026-10-22T18:16:09.512Z","postMediaId":null,
+                      "mediaURL":"/api/v1/static/3b5f3f05-b205-4cb4-91a1-966e2be3ca21.m4a","placement":null}}]}]}
+        """.utf8)
+        let recette = try JSONDecoder().decode(StoryEffects.self, from: document)
+
+        XCTAssertEqual(BackgroundSoundBadge.creditedTrace(of: recette)?.soundId, "6ada52e99bc6c72f73df09c4")
+        guard case .credit(let title, let username, let duration, _) = BackgroundSoundBadge.creditAnnouncement(for: recette) else {
+            return XCTFail("le son posé se crédite comme un son de la bibliothèque")
+        }
+        XCTAssertNil(title)
+        XCTAssertEqual(username, "recretrait_b")
+        XCTAssertEqual(try XCTUnwrap(duration), 5.023, accuracy: 0.001)
+    }
+
+    func test_aBackgroundSound_keepsItsPrecedenceOverAPosedLibrarySound() {
+        var e = StoryEffects()
+        e.audioPlayerObjects = [posee(), trace()]
+
+        XCTAssertEqual(BackgroundSoundBadge.creditedTrace(of: e)?.id, "a1")
+        XCTAssertEqual(BackgroundSoundBadge.creditAnnouncement(for: e), BackgroundSoundBadge.announcement(for: e))
+    }
+
+    func test_aPosedSoundThatIsNotBorrowed_namesNothing() {
+        let e = effects(with: posee(soundId: nil))
+
+        XCTAssertNil(BackgroundSoundBadge.creditedTrace(of: e))
+        XCTAssertEqual(BackgroundSoundBadge.creditAnnouncement(for: e), .none)
+    }
+
+    func test_theDetailHeader_mountsTheCreditResolvers() throws {
+        let canvas = MyStoriesSourceCorpus.strippingComments(
+            try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/PostDetailView+Canvas.swift"))
+        XCTAssertTrue(canvas.contains("trace: BackgroundSoundBadge.creditedTrace(of: playedEffects)"))
+        XCTAssertTrue(canvas.contains("announcement: BackgroundSoundBadge.creditAnnouncement(for: playedEffects)"))
+    }
+
     // MARK: - Le TROISIÈME terme de la lecture : la commande du viewer
 
     /// **Le témoin discriminant.** Avant ce lot, `isPaused` ne connaissait que

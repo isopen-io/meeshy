@@ -51,7 +51,7 @@ public class PublishStoryHandler @Inject constructor(
                     runCatching { draftConfirmation.settle(delivered = row.cmid) }
                     SendResult.Success
                 }
-                is NetworkResult.Failure -> SendResult.TransientFailure
+                is NetworkResult.Failure -> result.error.onlyUnlinkedRefusal() ?: SendResult.TransientFailure
             }
         }
 }

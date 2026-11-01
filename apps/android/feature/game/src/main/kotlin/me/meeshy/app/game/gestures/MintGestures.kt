@@ -12,7 +12,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +29,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import me.meeshy.app.game.ceremony.MintCeremonyCover
+import me.meeshy.app.game.ceremony.rememberModestDevice
 import me.meeshy.app.game.gameString
 import me.meeshy.app.game.pages.GameActionButton
 import me.meeshy.app.game.pages.GameCard
@@ -43,8 +51,11 @@ import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.MintFailureKind
 import me.meeshy.sdk.model.game.MintFrameBlocker
 import me.meeshy.sdk.model.game.MintMee
+import me.meeshy.sdk.model.game.ceremony.MintCeremonyRequest
+import me.meeshy.sdk.model.game.ceremony.PreparedMintCeremony
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameMaterial
+import me.meeshy.ui.component.game.PrecompileGameShaders
 import me.meeshy.ui.component.game.rememberGameHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -58,20 +69,40 @@ import me.meeshy.ui.theme.MeeshyTheme
  * manque, ou ce qui la ferme (l'Ombre, un rang).
  *
  * Chaque nombre est celui que la passerelle sert ([GameMintFrame]) ; la pièce frappée, son numéro et son édition sont
- * ceux de la RÉPONSE. La grande cérémonie de frappe est un autre lot (#13327) : ici la pièce rebondit, le choc se sent.
+ * ceux de la RÉPONSE.
+ *
+ * LE TOUCHER ouvre la CÉRÉMONIE DE FRAPPE (iOS `MintCeremonyCover`, #13327) en même temps que la frappe part : la scène
+ * tisse pendant le vol et ne frappe qu'au réglement de la passerelle ([GameGesturesUiState.mintSettlement]).
+ * [onCeremonyStarted] et [onCeremonyEnded] bornent la cérémonie pour la tête de l'Héritage, retenue entre les deux.
+ * À l'ouverture du cadre, les shaders du jeu se compilent et les particules de la prochaine pièce se tirent hors du fil
+ * principal : le toucher n'a plus rien à préparer.
  */
 @Composable
-internal fun MintGestures(game: GameBlock, gestures: GameGesturesUiState, onMint: () -> Unit) {
+internal fun MintGestures(
+    game: GameBlock,
+    gestures: GameGesturesUiState,
+    onMint: () -> Unit,
+    onCeremonyStarted: () -> Unit = {},
+    onCeremonyEnded: () -> Unit = {},
+) {
     val frame = GameMintFrame.of(game.mint, pocket = game.level.sparks ?: game.level.score)
     val celebration = gestures.celebration
     val shownNumber = celebration?.number ?: frame.number
     val haptics = rememberGameHaptics()
     val reduce = LocalReduceMotion.current
     val bounce = remember { Animatable(1f) }
+    val edition = game.mint.edition ?: GameMint.edition(game.mint.number)
+    val modest = rememberModestDevice()
+    var ceremony by remember { mutableStateOf<MintCeremonyRequest?>(null) }
+    val prepared by produceState<PreparedMintCeremony?>(null, game.mint.number, edition, modest, reduce) {
+        value = if (reduce) null else withContext(Dispatchers.Default) { PreparedMintCeremony.of(game.mint.number, edition, modest) }
+    }
+    PrecompileGameShaders()
 
     LaunchedEffect(celebration?.key) {
         if (celebration == null) return@LaunchedEffect
-        haptics.play(GameHapticPattern.strikeInPlace)
+        // La cérémonie vibre elle-même à chaque coup : le cadre ne double pas sa frappe.
+        if (ceremony == null) haptics.play(GameHapticPattern.strikeInPlace)
         if (reduce) return@LaunchedEffect
         bounce.snapTo(STRIKE_FROM)
         bounce.animateTo(1f, spring(dampingRatio = STRIKE_DAMPING, stiffness = STRIKE_STIFFNESS))
@@ -123,7 +154,11 @@ internal fun MintGestures(game: GameBlock, gestures: GameGesturesUiState, onMint
                 title = stringResource(R.string.game_mint_action),
                 busyTitle = stringResource(R.string.game_mint_minting),
                 detail = stringResource(R.string.game_mint_chip_glory, count(glory)),
-                onClick = onMint,
+                onClick = {
+                    ceremony = MintCeremonyRequest(game.mint.number, edition, gestures.mintSettlement)
+                    onCeremonyStarted()
+                    onMint()
+                },
                 busy = gestures.minting,
                 enabled = gestures.online,
                 tint = MeeshyPalette.Warning,
@@ -142,6 +177,10 @@ internal fun MintGestures(game: GameBlock, gestures: GameGesturesUiState, onMint
             )
         }
         if (!gestures.minting) GameErrorLine(mintFailureText(gestures, game))
+    }
+    MintCeremonyCover(ceremony, gestures.mintSettlement, glory = game.mint.gloryGained, prepared = prepared) {
+        ceremony = null
+        onCeremonyEnded()
     }
 }
 
@@ -185,11 +224,16 @@ private fun rankLabel(rank: GloryRank, division5: Int?): String {
 
 /** Le refus d'une frappe : la dette (son montant quand il est connu), la réserve fermée, le prix changé, sinon le repli. */
 @Composable
-private fun mintFailureText(gestures: GameGesturesUiState, game: GameBlock): String? {
+private fun mintFailureText(gestures: GameGesturesUiState, game: GameBlock): String? =
+    mintFailureText(gestures, debt = game.mint.sparksDebt ?: game.level.sparksDebt ?: 0L)
+
+/** Le refus d'une frappe dit SOUS l'action qu'on peut retenter ; sans montant de dette connu, la phrase sans chiffre. */
+@Composable
+internal fun mintFailureText(gestures: GameGesturesUiState, debt: Long): String? {
     val failure = gestures.failures[GameGesture.Mint] ?: return null
     if (failure.offline) return stringResource(R.string.game_mint_offline)
     return when (MintFailureKind.of(failure.code)) {
-        MintFailureKind.Debt -> debtText(game.mint.sparksDebt ?: game.level.sparksDebt ?: 0L)
+        MintFailureKind.Debt -> debtText(debt)
         MintFailureKind.ReserveClosed, MintFailureKind.PriceChanged -> gestureMessage(failure)
         MintFailureKind.Generic -> stringResource(R.string.progression_meesh_mint_error)
     }

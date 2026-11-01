@@ -37,6 +37,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import me.meeshy.ui.theme.MeeshyMessageStateColors
+import me.meeshy.ui.component.protection.FlameEyeGlyph
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -200,8 +202,16 @@ private fun BubbleMetaLeading(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
     ) {
-        if (!content.isDeleted) {
+        if (!content.isDeleted && !content.isAfterRead) {
             EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
+        }
+        if (content.isAfterRead) {
+            val afterReadLabel = stringResource(R.string.bubble_protection_after_read)
+            FlameEyeGlyph(
+                size = 12.dp,
+                tint = MeeshyMessageStateColors.Ephemeral,
+                modifier = Modifier.semantics { contentDescription = afterReadLabel },
+            )
         }
         if (content.isStarred && !content.isDeleted) {
             Icon(

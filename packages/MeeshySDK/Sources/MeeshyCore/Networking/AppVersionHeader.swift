@@ -122,6 +122,19 @@ public struct UpgradeRequirement: Sendable, Equatable {
         }
         return UpgradeRequirement(minVersion: wire.minVersion ?? "", storeUrl: wire.storeUrl)
     }
+
+    /// La même rupture, portée par la socket (#13954) : `error { code:
+    /// "UPGRADE_REQUIRED", minVersion, storeUrl }` émis au handshake, avant la
+    /// coupure. Le code seul déclenche — un `minVersion` absent reste `""`,
+    /// comme un corps 426 illisible (fail-closed).
+    public static func fromSocketErrorPayload(_ data: [Any]) -> UpgradeRequirement? {
+        guard let payload = data.first as? [String: Any],
+              payload["code"] as? String == "UPGRADE_REQUIRED" else { return nil }
+        return UpgradeRequirement(
+            minVersion: payload["minVersion"] as? String ?? "",
+            storeUrl: payload["storeUrl"] as? String
+        )
+    }
 }
 
 public extension Notification.Name {
@@ -144,6 +157,16 @@ public extension UpgradeRequirement {
         DispatchQueue.main.async {
             center.post(name: .meeshyUpgradeRequired, object: nil, userInfo: userInfo)
         }
+    }
+
+    /// Un refus de poignée de main socket sous le plancher arrête le transport
+    /// par `stop` puis pose la porte ; rend `false` pour toute autre erreur.
+    @discardableResult
+    static func stopTransportIfBelowFloor(_ socketErrorPayload: [Any], center: NotificationCenter = .default, stop: () -> Void) -> Bool {
+        guard let requirement = fromSocketErrorPayload(socketErrorPayload) else { return false }
+        stop()
+        requirement.post(via: center)
+        return true
     }
 
     init?(notification: Notification) {

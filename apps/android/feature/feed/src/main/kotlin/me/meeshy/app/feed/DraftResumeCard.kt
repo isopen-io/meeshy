@@ -53,15 +53,15 @@ internal fun DraftResumeSection(
     viewModel: DraftResumeViewModel = hiltViewModel(),
 ) {
     val entries by viewModel.entries.collectAsStateWithLifecycle()
-    var pendingDiscard by remember { mutableStateOf<DraftResumeKind?>(null) }
+    var pendingDiscard by remember { mutableStateOf<DraftResumeSource?>(null) }
     entries.forEach { entry ->
         DraftResumeCard(
             entry = entry,
             onResume = if (entry.kind == DraftResumeKind.STORY) onResumeStory else onResumePost,
-            onDiscard = { pendingDiscard = entry.kind },
+            onDiscard = { pendingDiscard = entry.source },
         )
     }
-    pendingDiscard?.let { kind ->
+    pendingDiscard?.let { source ->
         AlertDialog(
             onDismissRequest = { pendingDiscard = null },
             title = { Text(stringResource(R.string.feed_draft_resume_discard_title)) },
@@ -69,7 +69,7 @@ internal fun DraftResumeSection(
             confirmButton = {
                 TextButton(onClick = {
                     pendingDiscard = null
-                    viewModel.discard(kind)
+                    viewModel.discard(source)
                 }) { Text(stringResource(R.string.feed_unsent_delete), color = MeeshyTheme.tokens.error) }
             },
             dismissButton = {

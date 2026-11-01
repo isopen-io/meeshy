@@ -92,6 +92,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
         anchorInlineEditing(layer: textLayer, editor: editor)
         textLayer.setGlyphsHidden(true)
         setInlineEditScrimVisible(true)
+        inlineEditInputLink?.attach(to: editor)
         editor.becomeFirstResponder()
     }
 
@@ -113,6 +114,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
         }
         let editor = inlineEditor
         inlineEditor = nil
+        inlineEditInputLink?.detach()
         // `inlineEditingTextId` est mis à nil AVANT `resignFirstResponder()` :
         // résigner déclenche un `textViewDidEndEditing` dont la guard sur
         // `inlineEditingTextId` échoue alors — ce qui évite un second

@@ -5,6 +5,7 @@
  * verifies comment existence instead of conversation-participant membership.
  */
 
+import { notePairInteraction } from './relations/pairInteractionRecorder.js';
 import { PrismaClient, CommentReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import type { CommentReactionAggregation } from '@meeshy/shared/types/post';
@@ -159,6 +160,8 @@ export class CommentReactionService {
       });
 
       await this.updateCommentReactionSummary(commentId);
+      // Les cercles (#13932) : réagir au commentaire de l'autre compte pour la paire.
+      notePairInteraction(this.prisma, { actorId: userId, otherId: comment.authorId, nature: 'reaction', at: reaction.createdAt });
       creditPostEngagement(
         this.prisma,
         userId,

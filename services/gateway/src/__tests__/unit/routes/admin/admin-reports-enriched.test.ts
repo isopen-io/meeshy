@@ -268,7 +268,7 @@ describe('signalements — l’entité signalée, genre par genre', () => {
     expect(row.reportedEntity).toMatchObject({ type, owner, excerpt, isProtected: false, deleted: false });
   });
 
-  it.each(['PRIVATE', 'ONLY', 'EXCEPT'])('une publication à audience restreinte (%s) est protégée, sans extrait', async (visibility) => {
+  it.each(['PRIVATE', 'ONLY', 'EXCEPT', 'CLOSE', 'BLOOD'])('une publication à audience restreinte (%s) est protégée, sans extrait', async (visibility) => {
     const prisma = makePrisma({
       posts: [{ id: PRIVATE_POST, content: 'Brouillon secret', visibility, deletedAt: null, author: awa }],
     });

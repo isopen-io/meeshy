@@ -117,6 +117,21 @@ describe('BackgroundJobsManager', () => {
     manager.stopAll();
   });
 
+  it('#13932 — startAll arme le rattrapage des cercles et stopAll le désarme', () => {
+    const { RelationWeeklyJob } = require('../../../jobs/relation-weekly');
+    const start = jest.spyOn(RelationWeeklyJob.prototype, 'start').mockImplementation(() => undefined);
+    const stop = jest.spyOn(RelationWeeklyJob.prototype, 'stop').mockImplementation(() => undefined);
+    manager = new BackgroundJobsManager(makePrisma(), makeEmailService());
+
+    manager.startAll();
+    manager.stopAll();
+
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledTimes(1);
+    start.mockRestore();
+    stop.mockRestore();
+  });
+
   // ─── startAll() ──────────────────────────────────────────────────────────
 
   describe('startAll()', () => {

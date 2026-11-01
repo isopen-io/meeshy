@@ -56,40 +56,21 @@ struct ComposerAudienceSheet: View {
     /// les mesures de contraste de la feuille vraies.
     private var tint: Color { MeeshyColors.brandPrimary }
 
+    /// **Un toucher applique et ferme** (#13839, L3). Le titre et l'OK sont
+    /// ceux de la feuille ancrée qui la porte ; « Appliquer · PUBLIC » et la
+    /// note sur la portée de l'audience sont partis : un réglage qui s'applique
+    /// au toucher n'a rien à valider, et la note parlait le langage du modèle.
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(offered) { candidate in
-                        audienceRow(candidate)
-                    }
-                    mentionsSection
-                    hashtagsSection
-                    scopeNote
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(offered) { candidate in
+                    audienceRow(candidate)
                 }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.bottom, MeeshySpacing.xxl)
+                mentionsSection
+                hashtagsSection
             }
-            applyBar
-        }
-        .background(MeeshyColors.indigo950.ignoresSafeArea())
-        .preferredColorScheme(.dark)
-    }
-
-    // MARK: - L'en-tête
-
-    private var header: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            Text(ComposerAudienceCopy.title)
-                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundStyle(.white)
-            Spacer()
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.mdPlus)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.xxl)
         }
     }
 
@@ -107,7 +88,10 @@ struct ComposerAudienceSheet: View {
             // Un mode qui exige une liste ouvre son sélecteur DANS le même
             // geste : le choisir sans personne dedans laisse une audience que
             // `ComposerDocumentPublishGate` refuse, sans dire pourquoi.
-            if candidate.requiresUserSelection { onChooseUsers(candidate) }
+            switch ComposerAudienceTap.outcome(for: candidate) {
+            case .openList: onChooseUsers(candidate)
+            case .applyAndClose: onClose()
+            }
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: candidate.icon)
@@ -256,45 +240,19 @@ struct ComposerAudienceSheet: View {
             .padding(.bottom, MeeshySpacing.smPlus)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
 
-    private var scopeNote: some View {
-        Text(ComposerAudienceCopy.scopeNote)
-            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-            .foregroundStyle(.white.opacity(0.7))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(MeeshySpacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
-            )
-            .overlay(alignment: .leading) {
-                Rectangle().fill(tint).frame(width: 2)
-            }
-            .padding(.top, MeeshySpacing.xl)
+/// **Ce que fait le toucher d'un mode d'audience** (#13839, L3) : un mode
+/// simple s'applique et ferme ; « Sauf… » et « Seulement… » ouvrent leur liste,
+/// qui s'applique en la quittant.
+nonisolated enum ComposerAudienceTap {
+    enum Outcome: Equatable, Sendable {
+        case applyAndClose
+        case openList
     }
 
-    /// **Le bouton NOMME ce qu'il applique** — la planche l'écrit
-    /// « APPLIQUER · PUBLIC ». Un bouton qui dit seulement « OK » oblige à
-    /// remonter l'écran pour savoir ce qu'on valide.
-    private var applyBar: some View {
-        Button {
-            // La feuille se ferme par son PORTAIL, jamais par `dismiss()` : le
-            // meuble possède `presentedPortal`, et une fermeture qui ne passe
-            // pas par lui laisserait l'état dire « ouverte » sur un écran vide.
-            onClose()
-        } label: {
-            Text("\(ComposerAudienceCopy.apply) · \(selection.label.uppercased())")
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundStyle(Color.black.opacity(0.85))
-                .frame(maxWidth: .infinity, minHeight: 50)
-                .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(tint))
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.top, MeeshySpacing.md)
-        .padding(.bottom, 26)
-        .background(Color.black.opacity(0.35))
+    static func outcome(for mode: PostVisibility) -> Outcome {
+        mode.requiresUserSelection ? .openList : .applyAndClose
     }
 }
 

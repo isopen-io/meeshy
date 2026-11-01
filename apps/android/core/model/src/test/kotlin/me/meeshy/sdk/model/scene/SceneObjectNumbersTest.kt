@@ -71,9 +71,21 @@ class SceneObjectNumbersTest {
             val side = SceneObjectNumbers.stickerSideFraction(baseSize = it, scale = it)
             assertThat(side.isFinite()).isTrue()
             assertThat(side).isAtLeast(0.0)
-            assertThat(side).isAtMost(SceneObjectNumbers.MAX_STICKER_SIDE_FRACTION)
         }
+        assertThat(SceneObjectNumbers.stickerSideFraction(baseSize = Double.MAX_VALUE, scale = Double.MAX_VALUE).isFinite()).isTrue()
         assertThat(SceneObjectNumbers.stickerSideFraction(baseSize = 108.0, scale = 1.0)).isWithin(1e-9).of(0.1)
+    }
+
+    @Test
+    fun `un sticker agrandi au dela de quatre largeurs de scene garde sa taille ecrite`() {
+        assertThat(SceneObjectNumbers.stickerSideFraction(baseSize = 140.0, scale = 100.0)).isWithin(1e-9).of(140.0 * 100.0 / 1080.0)
+        assertThat(SceneObjectNumbers.stickerSideFraction(baseSize = 140.0, scale = 5.0 / 140.0)).isWithin(1e-12).of(5.0 / 1080.0)
+    }
+
+    @Test
+    fun `une keyframe garde une echelle finie et positive, sans plafond ni plancher`() {
+        assertThat(SceneObjectNumbers.keyframe(StoryKeyframe(time = 1f, scale = 50.0)).scale).isEqualTo(50.0)
+        assertThat(SceneObjectNumbers.keyframe(StoryKeyframe(time = 1f, scale = 0.02)).scale).isEqualTo(0.02)
     }
 
     @Test

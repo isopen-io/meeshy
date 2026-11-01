@@ -1,9 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { withMutationLog } from '../../utils/withMutationLog';
-import { logError } from '../../utils/logger';
-import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
-import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { validatePagination } from '../../utils/pagination';
 import {
   cursorPage,
@@ -13,147 +10,24 @@ import {
   type CursorPosition,
   type CursorSort,
 } from '../../utils/cursor-pagination';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { getBlockRelatedUserIds } from '../../utils/blocking';
-import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
-import { EngagementService } from '../../services/engagement/EngagementService';
-import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
-import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
+import { parseRequestLevel } from '@meeshy/shared/types/relation';
+import { judgeRelationRequest } from '../../services/relations/relationRequestGate';
+import {
+  INCLUDE_PARTIES,
+  clauseHorsBlocage,
+  filtreStatut,
+  servirParties,
+  type Resultat,
+} from './friend-request-parties';
+import { trancherDemande } from './friend-request-answer';
+import { retirerDemande } from './friend-request-withdraw';
+
+export { INCLUDE_PARTIES, clauseHorsBlocage, filtreStatut, servirParties } from './friend-request-parties';
+export type { ClauseHorsBlocage, Refus, Resultat } from './friend-request-parties';
 
 /** Le plafond d'une page de demandes. */
 export const LIMITE_MAX_DEMANDES = 100;
 const LIMITE_DEFAUT_DEMANDES = 20;
-
-/**
- * Ce qu'un profil de demande porte — le minimum pour dessiner une ligne, PLUS
- * la présence.
- *
- * Les TROIS clients déclarent `isOnline` / `lastActiveAt` sur la partie d'une
- * demande — `FriendRequestUser` (iOS, `FriendModels.swift`), le même type porté
- * en Kotlin (`core/model/.../Friend.kt`), et `FriendRequest.sender?: User` côté
- * web. Aucun ne les recevait : la projection ne les chargeait pas. Le coût
- * n'était pas seulement une pastille absente — `FriendListAggregator.aggregate`
- * (iOS) TRIE la liste de contacts sur `isOnline` puis `lastActiveAt`, et
- * `useContactsV2` en dérive son ensemble `onlineUserIds` initial : deux tris
- * sur des champs toujours nuls, donc un ordre arbitraire jusqu'à ce qu'un
- * `user:status` arrive par socket — pour ceux qui en reçoivent un.
- *
- * Ces deux colonnes ne sortent JAMAIS brutes : {@link servirParties} est le
- * site unique par lequel toute ligne de demande quitte ce module.
- */
-const PROJECTION_PARTIE = {
-  id: true,
-  username: true,
-  firstName: true,
-  lastName: true,
-  displayName: true,
-  avatar: true,
-  isOnline: true,
-  lastActiveAt: true,
-  // #10945 — le contour équipé, résolu en `profileDecor` par `servirParties`.
-  ...AVATAR_RING_COLUMN,
-} as const;
-
-export const INCLUDE_PARTIES = {
-  sender: { select: PROJECTION_PARTIE },
-  receiver: { select: PROJECTION_PARTIE },
-} as const;
-
-/** Les deux clés d'une demande qui portent une personne — et donc une présence. */
-const CLES_PARTIES = ['sender', 'receiver'] as const;
-
-type PartieAvecPresence = {
-  readonly id: string;
-  readonly isOnline: boolean | null;
-  readonly lastActiveAt?: Date | null;
-  readonly equippedAvatarRing?: string | null;
-};
-
-/**
- * La LOI DE VISIBILITÉ DE LA PRÉSENCE appliquée aux deux parties d'une demande
- * — le site UNIQUE par lequel une ligne de demande sort de ce module.
- *
- * ## Pourquoi ici, et pas dans la route de listing
- *
- * Trois producteurs rendent une ligne portant `INCLUDE_PARTIES` : l'ENVOI, la
- * RÉPONSE et le LISTING. Le premier s'adresse à un INCONNU par définition —
- * envoyer une demande à quelqu'un qu'on ne connaît pas ne doit pas apprendre
- * s'il est en ligne, ni quand il l'était. Un gate posé sur le seul listing
- * aurait donc laissé la fuite exactement là où elle est la plus grave, et
- * `routes/friends.ts` — l'alias historique de l'envoi, qui appelle le même
- * cœur — l'aurait servie sans que rien ne le signale.
- *
- * Directive du 2026-08-25 : hors amitié ACCEPTÉE (ou soi-même, ou ADMIN+), ni
- * `isOnline` ni `lastActiveAt` ne sont servis. La loi n'est pas réécrite ici :
- * `resolveForTargets` la résout par VIEWER, `applyPresenceVisibilityAsOffline`
- * l'applique, et une entrée absente de la carte est masquée
- * (`presenceMissingEntryPolicy`) — fail-closed.
- *
- * L'acceptation est servie APRÈS l'écriture du statut : la loi lit alors une
- * amitié acceptée et rend la présence du nouvel ami, sans cas particulier.
- */
-export async function servirParties<T extends Record<string, unknown>>(
-  fastify: FastifyInstance,
-  request: FastifyRequest,
-  demandes: readonly T[]
-): Promise<T[]> {
-  const viewer = viewerFromRequest(request);
-
-  const identifiants = demandes.flatMap((demande) =>
-    CLES_PARTIES.flatMap((cle) => {
-      const partie = demande[cle] as PartieAvecPresence | null | undefined;
-      return partie?.id ? [partie.id] : [];
-    })
-  );
-
-  if (identifiants.length === 0) return [...demandes];
-
-  const carte = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(viewer, identifiants);
-  const surEntreeAbsente = presenceMissingEntryPolicy(viewer);
-
-  return demandes.map((demande) => {
-    const servie: Record<string, unknown> = { ...demande };
-    for (const cle of CLES_PARTIES) {
-      const partie = servie[cle] as (PartieAvecPresence & Record<string, unknown>) | null | undefined;
-      if (!partie?.id) continue;
-      servie[cle] = servedPerson(applyPresenceVisibilityAsOffline(partie, carte.get(partie.id), {
-        onMissingEntry: surEntreeAbsente,
-      }));
-    }
-    return servie as T;
-  });
-}
-
-export type ClauseHorsBlocage = {
-  readonly senderId?: { notIn: string[] };
-  readonly receiverId?: { notIn: string[] };
-};
-
-/**
- * La clause qui retire d'une liste de demandes toute ligne dont l'AUTRE partie
- * est en relation de blocage avec `acteurId`, dans un sens ou dans l'autre
- * (#13298). Le blocage ne touche pas la `FriendRequest` en base (rompre
- * l'amitié est une décision produit ouverte) : c'est la LECTURE qui le rejoue,
- * et c'est la seule loi des quatre listes (`listerDemandes`, les deux alias de
- * `routes/friends.ts`, `GET /users/friend-requests`).
- *
- * Posée dans le `where`, jamais après la lecture : la page, son curseur et son
- * `total` comptent ce qui est SERVI. Le coût est borné par la relation de
- * blocage elle-même (`getBlockRelatedUserIds`), vide pour presque tout le
- * monde — auquel cas la clause est vide. L'acteur n'est jamais dans
- * l'ensemble, donc borner les DEUX colonnes ne retire que l'autre partie.
- */
-export async function clauseHorsBlocage(
-  fastify: FastifyInstance,
-  acteurId: string
-): Promise<ClauseHorsBlocage> {
-  const lies = [...(await getBlockRelatedUserIds(fastify.prisma, acteurId))];
-  return lies.length === 0 ? {} : { senderId: { notIn: lies }, receiverId: { notIn: lies } };
-}
-
-export type Refus = { code: number; message: string; codeMetier?: string };
-export type Resultat<T> = { valeur: T } | { refus: Refus };
 
 /** Les quatre gestes, et rien d'autre. */
 export type ActionDemande = 'accept' | 'reject' | 'cancel' | 'dismiss';
@@ -179,9 +53,16 @@ export type DirectionDemande = 'received' | 'sent' | 'any';
 export async function envoyerDemande(
   fastify: FastifyInstance,
   request: FastifyRequest,
-  params: { emetteurId: string; receveurId: string; message?: string }
+  params: { emetteurId: string; receveurId: string; message?: string; targetLevel?: unknown }
 ): Promise<Resultat<Record<string, unknown>>> {
   const { emetteurId, receveurId } = params;
+
+  // Absent, le niveau visé est FRIEND (le sens historique) — et suit la même loi :
+  // aucune exception d'ancien client (D-5). Illisible, il est refusé net.
+  const niveau = params.targetLevel === undefined ? 'FRIEND' : parseRequestLevel(params.targetLevel);
+  if (niveau === null) {
+    return { refus: { code: 400, message: 'Niveau demandé illisible', codeMetier: 'RELATION_LEVEL_INVALID' } };
+  }
 
   if (emetteurId === receveurId) {
     return { refus: { code: 400, message: 'You cannot add yourself as a friend' } };
@@ -221,11 +102,17 @@ export async function envoyerDemande(
     return { refus: { code: 409, message: 'Une demande d\'ami existe deja entre vous' } };
   }
 
+  // Une demande EN ATTENTE retient la suivante — et, pour son ÉMETTEUR, une demande
+  // REFUSÉE aussi, avec la MÊME réponse : il la lit « en attente » (`servirParties`),
+  // une réponse différente dirait le refus (RG-07, audit #13933). Il la retire
+  // lui-même (`cancel`) pour redemander, et le cool-down juge alors. Une demande
+  // acceptée est l'histoire d'un cran déjà franchi : la loi des crans dit le reste.
   const existante = await fastify.prisma.friendRequest.findFirst({
     where: {
       OR: [
-        { senderId: emetteurId, receiverId: receveurId },
-        { senderId: receveurId, receiverId: emetteurId },
+        { status: 'pending', senderId: emetteurId, receiverId: receveurId },
+        { status: 'pending', senderId: receveurId, receiverId: emetteurId },
+        { status: 'rejected', senderId: emetteurId, receiverId: receveurId },
       ],
     },
     select: { id: true },
@@ -233,6 +120,13 @@ export async function envoyerDemande(
 
   if (existante) {
     return { refus: { code: 409, message: 'Une demande d\'ami existe deja entre vous' } };
+  }
+
+  const jugement = await judgeRelationRequest(fastify.prisma, {
+    requesterId: emetteurId, otherId: receveurId, targetLevel: niveau, now: new Date(),
+  });
+  if (jugement.allowed === false) {
+    return { refus: { code: 409, message: 'Cette demande n\'est pas possible maintenant', codeMetier: jugement.code } };
   }
 
   const demande = await withMutationLog({
@@ -248,6 +142,7 @@ export async function envoyerDemande(
         senderId: emetteurId,
         receiverId: receveurId,
         message: params.message ? SecuritySanitizer.sanitizeText(params.message) : undefined,
+        targetLevel: niveau,
       },
       include: INCLUDE_PARTIES,
     }),
@@ -314,7 +209,7 @@ export async function repondreDemande(
 
   const demande = await fastify.prisma.friendRequest.findUnique({
     where: { id: demandeId },
-    select: { id: true, senderId: true, receiverId: true, status: true },
+    select: { id: true, senderId: true, receiverId: true, status: true, targetLevel: true },
   });
 
   // Un 404 pour TOUTES les raisons de refus — inexistante, déjà traitée, ou
@@ -325,218 +220,14 @@ export async function repondreDemande(
   }
 
   if (action === 'cancel' || action === 'dismiss') {
-    return { valeur: await retirerDemande(fastify, demande, acteurId) };
+    return retirerDemande(fastify, request, demande, acteurId);
   }
 
   if (demande.status !== 'pending') {
     return { refus: { code: 404, message: 'Demande d\'ami non trouvee ou deja traitee' } };
   }
 
-  return { valeur: await trancherDemande(fastify, request, demande, acteurId, action) };
-}
-
-async function retirerDemande(
-  fastify: FastifyInstance,
-  demande: { id: string; senderId: string; receiverId: string },
-  acteurId: string
-): Promise<Record<string, unknown>> {
-  await fastify.prisma.friendRequest.delete({ where: { id: demande.id } });
-
-  const notifications = fastify.notificationService;
-  if (notifications) {
-    const autre = demande.senderId === acteurId ? demande.receiverId : demande.senderId;
-    notifications.emitFriendRequestCancelled({
-      recipientUserId: autre,
-      friendRequestId: demande.id,
-      cancelledBy: acteurId,
-    });
-
-    // La ligne vient de partir : la notification « X vous a envoyé une demande »
-    // n'a plus rien où mener. On la RETIRE, au lieu de la marquer lue — c'est
-    // ce qui distingue ce geste d'une réponse, qui laisse la ligne en place.
-    // Elle appartient toujours au RECEVEUR, quel que soit celui des deux qui
-    // agit : c'est lui, et lui seul, que la création a notifié.
-    try {
-      await notifications.retractFriendRequestNotifications(demande.receiverId, demande.id);
-    } catch (error) {
-      // Le retrait des notifications ne fait JAMAIS échouer la suppression,
-      // qui est déjà committée.
-      logError(fastify.log, 'Error retracting friend request notifications:', error);
-    }
-  }
-
-  return { id: demande.id, deleted: true, message: 'Demande d\'ami supprimee' };
-}
-
-async function trancherDemande(
-  fastify: FastifyInstance,
-  request: FastifyRequest,
-  demande: { id: string; senderId: string; receiverId: string },
-  acteurId: string,
-  action: 'accept' | 'reject'
-): Promise<Record<string, unknown>> {
-  const statut = action === 'accept' ? 'accepted' : 'rejected';
-
-  const misAJour = await withMutationLog({
-    request,
-    fastify,
-    userId: acteurId,
-    kind: 'respondFriendRequest',
-    replayCost: 'converges',
-    op: () => fastify.prisma.friendRequest.update({
-      where: { id: demande.id },
-      data: { status: statut },
-      include: INCLUDE_PARTIES,
-    }),
-    onDuplicate: (resultId) => fastify.prisma.friendRequest.findUnique({
-      where: { id: resultId },
-      include: INCLUDE_PARTIES,
-    }),
-  });
-
-  const notifications = fastify.notificationService;
-  if (notifications) {
-    try {
-      await notifications.markFriendRequestNotificationsAsRead(acteurId, demande.id);
-    } catch (error) {
-      logError(fastify.log, 'Error marking friend request notification as read:', error);
-    }
-  }
-
-  if (action === 'reject') {
-    if (notifications) {
-      const receveur = misAJour.receiver;
-      const nom = receveur.displayName || receveur.username ||
-        `${receveur.firstName ?? ''} ${receveur.lastName ?? ''}`.trim();
-      await notifications.createSystemNotification({
-        recipientUserId: misAJour.senderId,
-        content: `${nom} a refuse votre demande d'amitie`,
-        priority: 'low',
-        systemType: 'announcement',
-      });
-      notifications.emitFriendRequestRejected({
-        senderId: misAJour.senderId,
-        friendRequestId: demande.id,
-        rejecterId: acteurId,
-      });
-    }
-    // Un REFUS ne crée pas d'amitié : la loi masque donc la présence de celui
-    // qu'on vient d'éconduire, exactement comme avant la demande.
-    const [refusee] = await servirParties(fastify, request, [misAJour as unknown as Record<string, unknown>]);
-    return refusee;
-  }
-
-  fastify.socialEvents?.invalidateFriendsCache(demande.senderId);
-  fastify.socialEvents?.invalidateFriendsCache(demande.receiverId);
-
-  // Axe `social.friendship` (#5766) — **les DEUX parties sont créditées**, et
-  // ce n'est pas une largesse : une amitié n'appartient à personne seul. Ne
-  // créditer que celui qui accepte punirait l'autre d'avoir demandé, alors que
-  // c'est lui qui a fait le premier geste.
-  //
-  // Tir-et-oublie, comme les treize autres axes : un compteur d'engagement ne
-  // fait jamais échouer l'acte qu'il mesure. La cible est l'AUTRE partie :
-  // l'opération paie une fois par personne, si bien qu'une amitié défaite puis
-  // renouée ne recrédite pas.
-  const engagement = new EngagementService(fastify.prisma);
-  const parties = [
-    { partie: demande.senderId, autre: demande.receiverId },
-    { partie: demande.receiverId, autre: demande.senderId },
-  ];
-  for (const { partie, autre } of parties) {
-    engagement.recordActivity(partie, 'social.friendship', { targetId: autre })
-      .catch((err) => logError(fastify.log, 'engagement social.friendship failed:', err));
-  }
-
-  if (notifications) {
-    await notifications.createFriendAcceptedNotification({
-      recipientUserId: misAJour.senderId,
-      accepterUserId: acteurId,
-      conversationId: undefined,
-    });
-  }
-
-  const conversation = await conversationDirecte(fastify, demande.senderId, demande.receiverId);
-
-  notifications?.emitFriendRequestAccepted({
-    senderId: misAJour.senderId,
-    friendRequestId: demande.id,
-    accepterId: acteurId,
-    conversationId: conversation?.id,
-  });
-
-  // `conversation` est SERVIE, et ce n'est pas une addition : le site précédent
-  // la greffait déjà sur l'objet rendu — mais seulement quand il venait de la
-  // CRÉER, et le schéma de réponse ne la déclarait pas, si bien que
-  // fast-json-stringify la supprimait. Le client acceptait une demande, ne
-  // recevait jamais la conversation, et devait relancer une requête.
-  //
-  // Elle est désormais servie dans les DEUX cas — créée ou déjà existante :
-  // « je viens de la créer » n'est pas une propriété qui intéresse l'appelant,
-  // qui veut savoir OÙ parler.
-  // Servie APRÈS l'écriture du statut : la loi lit une amitié désormais
-  // ACCEPTÉE et rend la présence du nouvel ami, sans cas particulier ici.
-  const [acceptee] = await servirParties(fastify, request, [misAJour as unknown as Record<string, unknown>]);
-
-  return { ...acceptee, conversation };
-}
-
-/** La conversation directe des deux amis — créée si elle n'existe pas. */
-async function conversationDirecte(
-  fastify: FastifyInstance,
-  aId: string,
-  bId: string
-): Promise<{ id: string; identifier: string; type: string } | null> {
-  const existante = await fastify.prisma.conversation.findFirst({
-    where: {
-      type: 'direct',
-      participants: { every: { userId: { in: [aId, bId] } } },
-    },
-    select: { id: true, identifier: true, type: true },
-  });
-
-  if (existante) return existante;
-
-  // Identifiant COMPACT (17 car.) : il ne concatène plus les deux ObjectId des
-  // participants — un identifiant public ne doit pas publier qui parle à qui.
-  const [a, b] = await Promise.all([
-    fastify.prisma.user.findUnique({ where: { id: aId }, select: { displayName: true, username: true, ...RECIPIENT_LANG_SELECT } }),
-    fastify.prisma.user.findUnique({ where: { id: bId }, select: { displayName: true, username: true, ...RECIPIENT_LANG_SELECT } }),
-  ]);
-
-  // #6080 — la table vient du site UNIQUE (`services/participantRights.ts`).
-  // Le littéral écrit ici fermait `canSendVideos`/`canSendAudios`, ce que la
-  // garde de pièce jointe (#5151) lit comme un REFUS : deux amis ne pouvaient
-  // s'envoyer ni vidéo, ni vocal, ni document dans le fil que leur amitié
-  // venait d'ouvrir.
-  const permissions = { ...FOUNDING_MEMBER_PERMISSIONS };
-
-  const conversation = await fastify.prisma.conversation.create({
-    data: {
-      identifier: generateCompactConversationIdentifier(),
-      type: 'direct',
-      participants: {
-        create: [
-          { userId: aId, type: 'user', displayName: a?.displayName || a?.username || 'User', role: 'member', language: recipientLanguage(a, 'fr'), permissions },
-          { userId: bId, type: 'user', displayName: b?.displayName || b?.username || 'User', role: 'member', language: recipientLanguage(b, 'fr'), permissions },
-        ],
-      },
-    },
-    select: { id: true, identifier: true, type: true },
-  });
-
-  // Rejoindre les sockets déjà connectés à la nouvelle room, sans quoi les deux
-  // devraient se reconnecter pour recevoir `message:new`.
-  const manager = fastify.socketIOHandler?.getManager();
-  if (manager) {
-    for (const membre of [aId, bId]) {
-      manager.joinUserToConversationRoom(membre, conversation.id).catch(
-        (err: unknown) => logError(fastify.log, 'Failed to auto-join friend to new DM room:', err)
-      );
-    }
-  }
-
-  return conversation;
+  return trancherDemande(fastify, request, demande, acteurId, action);
 }
 
 export type PageDeDemandes = {
@@ -718,7 +409,7 @@ export async function listerDemandes(
       AND: [
         identite,
         horsBlocage,
-        params.status ? { status: params.status } : {},
+        filtreStatut(params.status, params.acteurId),
         filtreTexte,
         ...reprise,
       ],

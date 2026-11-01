@@ -77,6 +77,7 @@ function makePrisma(initial: Partial<Row> = {}, options: { readonly staleReads?:
 }
 
 const revokeAllSessions = jest.fn(async (_userId: string) => undefined);
+const onAgeDeclared = jest.fn((_userId: string) => undefined);
 
 async function buildApp(prisma: ReturnType<typeof makePrisma>, options: { readonly withCors?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -86,7 +87,7 @@ async function buildApp(prisma: ReturnType<typeof makePrisma>, options: { readon
     const userId = req.headers['x-test-user-id'] as string | undefined;
     (req as { auth?: unknown }).auth = userId ? { userId, isAuthenticated: true } : undefined;
   });
-  await app.register(meBirthDateRoutes, { prefix: '/api/v1/me', now: () => NOW, revokeAllSessions });
+  await app.register(meBirthDateRoutes, { prefix: '/api/v1/me', now: () => NOW, revokeAllSessions, onAgeDeclared });
   await app.register(meOnboardingRoutes, { prefix: '/api/v1/me', now: () => NOW });
   await app.ready();
   return app;
@@ -113,6 +114,16 @@ describe('PUT /me/birth-date (#9927)', () => {
     expect(res.json()).toMatchObject({ success: false, code: 'AGE_BELOW_MINIMUM' });
     expect(prisma.state.birthDate?.toISOString()).toBe('2013-10-11T00:00:00.000Z');
     expect(revokeAllSessions).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it('#13932 — une date déclarée fait relire les Connaissances automatiques du déclarant ; une date refusée (409) ne relit rien', async () => {
+    onAgeDeclared.mockClear();
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+    expect((await declare(app, '2010-05-05')).statusCode).toBe(200);
+    expect((await declare(app, '1990-05-05')).statusCode).toBe(409);
+    expect(onAgeDeclared.mock.calls).toEqual([[USER_ID]]);
     await app.close();
   });
 

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.call.CallMicrophoneSamples
 import me.meeshy.sdk.media.CaptureGallery
 import me.meeshy.sdk.model.call.montage.CallCaptureStatus
 
@@ -24,11 +25,18 @@ internal object CallCaptureCopy {
     @StringRes
     fun outcome(status: CallCaptureStatus): Int? = when (status) {
         CallCaptureStatus.Idle, CallCaptureStatus.Working -> null
-        CallCaptureStatus.Saved, is CallCaptureStatus.FacesSaved -> R.string.call_capture_saved
+        CallCaptureStatus.Saved -> R.string.call_capture_saved
+        is CallCaptureStatus.FacesSaved -> R.string.call_capture_faces_saved
         CallCaptureStatus.VideoSaved -> R.string.call_capture_video_saved
         CallCaptureStatus.Denied -> R.string.call_capture_denied
         CallCaptureStatus.NoVideo -> R.string.call_capture_no_video
         CallCaptureStatus.Failed -> R.string.call_capture_failed
+    }
+
+    /** La phrase dite pour [status] : « 3 visages enregistrés » porte son compte. */
+    fun message(context: Context, status: CallCaptureStatus): String? {
+        val text = outcome(status) ?: return null
+        return if (status is CallCaptureStatus.FacesSaved) context.getString(text, status.count) else context.getString(text)
     }
 }
 
@@ -45,12 +53,13 @@ class CallCaptureViewModel @Inject constructor(
     private val toasts: CallToastBus,
     private val haptics: CallHaptics,
     clock: CallClock,
+    microphone: CallMicrophoneSamples,
 ) : ViewModel() {
     val controller = CallCaptureController(
         frames = CallCaptureFrameGrabber(),
         painter = CallCapturePainter(),
         saver = GalleryCallCaptureSaver(gallery),
-        recorders = { CallCaptureRecorder(context.cacheDir) },
+        recorders = { CallCaptureRecorder(context.cacheDir, microphone.frames) },
         scope = viewModelScope,
         clock = clock::nowMs,
         stamp = { SimpleDateFormat(STAMP_PATTERN, Locale.US).format(Date()) },
@@ -64,7 +73,7 @@ class CallCaptureViewModel @Inject constructor(
     }
 
     private fun announce(status: CallCaptureStatus) {
-        val message = CallCaptureCopy.outcome(status)?.let(context::getString) ?: return
+        val message = CallCaptureCopy.message(context, status) ?: return
         if (status.isError == true) toasts.error(message) else toasts.success(message)
         if (status.isError == false) haptics.play(CallHapticKind.Success)
     }

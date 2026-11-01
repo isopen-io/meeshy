@@ -4,8 +4,10 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.media.MediaCacheDirs
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.sdk.model.mediacache.MediaCacheReport
+import me.meeshy.ui.component.media.MeeshyMediaCache
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,35 +26,42 @@ interface MediaCacheStore {
 }
 
 /**
- * File-system backed [MediaCacheStore]. Maps each [MediaCacheCategory] to a directory under the
- * app's [Context.getCacheDir]: `images` targets Coil's default `image_cache` folder (populated
- * today), the others target dedicated `media` sub-folders the media pipeline will fill — scanning or
- * clearing a not-yet-created folder is a graceful no-op, so the feature is honest today and
- * forward-compatible. This is coverage-exempt I/O glue; the tested logic is [MediaCacheScanner].
+ * Disk-backed [MediaCacheStore]. AUDIO and VIDEO are the two Media3 `SimpleCache`s of
+ * [MeeshyMediaCache] (`media-cache/Audio/spans`, `media-cache/Video/spans`): an open SimpleCache
+ * owns its folder, so both size and clear go through its API, never through the files beneath it.
+ * IMAGES is Coil's `image_cache` folder and THUMBNAILS the canonical [MediaCacheDirs] folder,
+ * measured and cleared by [MediaCacheScanner]; a not-yet-created folder is a graceful no-op.
  */
 @Singleton
 class AndroidMediaCacheStore @Inject constructor(
-    @ApplicationContext context: Context,
+    @ApplicationContext private val context: Context,
 ) : MediaCacheStore {
 
     private val cacheRoot: File = context.cacheDir
 
     private val directories: Map<MediaCacheCategory, File> = mapOf(
         MediaCacheCategory.IMAGES to File(cacheRoot, "image_cache"),
-        MediaCacheCategory.AUDIO to File(cacheRoot, "media/audio"),
-        MediaCacheCategory.VIDEO to File(cacheRoot, "media/video"),
-        MediaCacheCategory.THUMBNAILS to File(cacheRoot, "media/thumbnails"),
+        MediaCacheCategory.THUMBNAILS to MediaCacheDirs(cacheRoot, cacheRoot).dirFor(MediaCacheCategory.THUMBNAILS),
     )
+
+    private val media3Categories: Set<MediaCacheCategory> = setOf(MediaCacheCategory.AUDIO, MediaCacheCategory.VIDEO)
+
+    private val media3: MeeshyMediaCache get() = MeeshyMediaCache.get(context)
 
     override suspend fun report(): MediaCacheReport = withContext(Dispatchers.IO) {
         MediaCacheReport.of(
-            directories.mapValues { (_, dir) -> MediaCacheScanner.sizeOf(dir) },
+            directories.mapValues { (_, dir) -> MediaCacheScanner.sizeOf(dir) } +
+                media3Categories.associateWith { media3.diskBytes(it) },
         )
     }
 
     override suspend fun clear(categories: Set<MediaCacheCategory>): Unit = withContext(Dispatchers.IO) {
         categories.forEach { category ->
-            directories[category]?.let(MediaCacheScanner::clear)
+            if (category in media3Categories) {
+                media3.clear(category)
+            } else {
+                directories[category]?.let(MediaCacheScanner::clear)
+            }
         }
     }
 }

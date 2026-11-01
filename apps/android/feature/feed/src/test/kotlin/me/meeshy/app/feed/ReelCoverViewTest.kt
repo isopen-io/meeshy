@@ -54,7 +54,7 @@ class ReelCoverViewTest {
         val scene = ReelCover.Scene(StoryItem(id = "r1"))
         compose.setContent {
             MeeshyTheme {
-                CompositionLocalProvider(LocalReelSceneRenderer provides { item, _, _, _ -> rendered = item }) {
+                CompositionLocalProvider(LocalReelSceneRenderer provides { item, _, _, _, _ -> rendered = item }) {
                     ReelCoverView(scene, "Amina", {}, Modifier.fillMaxWidth())
                 }
             }
@@ -72,7 +72,7 @@ class ReelCoverViewTest {
             MeeshyTheme {
                 CompositionLocalProvider(
                     LocalFeedSceneCoordinator provides coordinator,
-                    LocalReelSceneRenderer provides { item, _, live, _ -> lives[item.id] = live },
+                    LocalReelSceneRenderer provides { item, _, live, _, _ -> lives[item.id] = live },
                 ) {
                     ReelCoverView(ReelCover.Scene(StoryItem(id = "r-elue")), "Amina", {}, sceneId = "elue")
                     ReelCoverView(ReelCover.Scene(StoryItem(id = "r-repos")), "Amina", {}, sceneId = "repos")
@@ -103,7 +103,7 @@ class ReelCoverViewTest {
     fun `la scene d un reel remplit le cadre de la couverture, elle ne garde pas son 9 16 de story`() {
         compose.setContent {
             MeeshyTheme {
-                CompositionLocalProvider(LocalReelSceneRenderer provides { _, _, _, modifier -> Box(modifier.testTag("scene")) }) {
+                CompositionLocalProvider(LocalReelSceneRenderer provides { _, _, _, _, modifier -> Box(modifier.testTag("scene")) }) {
                     Box(Modifier.size(200.dp, 250.dp).testTag("cadre")) {
                         ReelCoverView(ReelCover.Scene(StoryItem(id = "r1")), "Amina", {}, Modifier.fillMaxSize())
                     }
@@ -122,7 +122,7 @@ class ReelCoverViewTest {
         var opened = 0
         compose.setContent {
             MeeshyTheme {
-                CompositionLocalProvider(LocalReelSceneRenderer provides { _, hex, _, _ -> accent = hex }) {
+                CompositionLocalProvider(LocalReelSceneRenderer provides { _, hex, _, _, _ -> accent = hex }) {
                     ReelCoverView(ReelCover.Scene(StoryItem(id = "r1"), accentHex = "FF0000"), "Amina", { opened++ }, Modifier.size(200.dp, 250.dp))
                 }
             }

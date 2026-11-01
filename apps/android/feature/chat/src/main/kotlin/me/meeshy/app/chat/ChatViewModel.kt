@@ -38,10 +38,14 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
+import me.meeshy.sdk.mention.MentionContacts
 import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
+import me.meeshy.sdk.model.mention.MentionLookupLaw
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
@@ -114,6 +118,7 @@ class ChatViewModel @Inject constructor(
     private val blockCache: BlockCache = BlockCache(),
     ownReactionWithdrawals: OwnReactionWithdrawals,
     outOfThreadSendGate: OutOfThreadSendGate,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -203,6 +208,7 @@ class ChatViewModel @Inject constructor(
         composerText = composerTextHolder,
         recentEmojis = recentEmojiStore,
         languageIdentifier = languageIdentifier,
+        mentionContacts = mentionContacts,
     )
 
     private val reactions = ChatReactionController(
@@ -286,6 +292,26 @@ class ChatViewModel @Inject constructor(
 
         reactions.start()
 
+        // #14071, #14183 — la liste « @ » : le roster SERVI et la portée de la conversation ; pour un
+        // invité de lien, les auteurs du fil qui lui sont servis (son roster ne porte que sa ligne).
+        viewModelScope.launch {
+            combine(
+                conversationRepository.conversationStream(conversationId).filterNotNull(),
+                latestMessages,
+            ) { conversation, messages -> conversation to messages }.collect { (conversation, messages) ->
+                val currentUser = sessionRepository.currentUser.value
+                val isGuest = currentUser?.isAnonymous == true
+                composer.updateMentionRoster(
+                    roster = MentionLookupLaw.knownRoster(
+                        roster = MentionRoster.fromParticipants(conversation.participants, excludeUserId = currentUser?.id),
+                        threadAuthors = MentionRoster.fromMessageAuthors(messages.map { it.message }, excludeUserId = currentUser?.id),
+                        isGuest = isGuest,
+                    ),
+                    context = MentionContext.of(conversation, currentUser?.id, isGuest),
+                )
+            }
+        }
+
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
                 if (conversation == null) return@collect
@@ -294,7 +320,6 @@ class ChatViewModel @Inject constructor(
                     participants = conversation.participants,
                     excludeUserId = currentUserId,
                 )
-                composer.updateMentionRoster(roster)
                 avatarByUserId = conversation.participants
                     .associate { (it.userId ?: it.id) to it.avatar }
                 recipientCount.value = conversation.participants
@@ -632,6 +657,9 @@ class ChatViewModel @Inject constructor(
     /** Flip an effect chip in the armed selection. */
     fun toggleEffect(flag: Long) = composer.toggleEffect(flag)
 
+    /** Arm (or disarm, with `null`) the ephemeral [choice] — iOS `ephemeralChoice` (#8303). */
+    fun selectEphemeralChoice(choice: EphemeralChoice?) = composer.selectEphemeralChoice(choice)
+
     /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
     fun selectEphemeralDuration(duration: EphemeralDuration) = composer.selectEphemeralDuration(duration)
 
@@ -921,13 +949,14 @@ class ChatViewModel @Inject constructor(
      * [me.meeshy.sdk.model.MessageDeletability] window (gated in the UI).
      *
      * #13790 — reacting, pinning and deleting for everyone travel as encrypted signals in an
-     * end-to-end conversation, which this device cannot seal: there they have no effect at all
+     * end-to-end conversation, which this device cannot seal: there they have no effect at all —
+     * except deleting a message the server already reads (#13804, [erasesInClear])
      * (no optimistic change, no outbox row), whichever path called. An unknown mode is queued —
      * the outbox reads the mode before anything leaves (`EndToEndOutboxAdmission`).
      */
     fun deleteForEveryone(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
-        if (_state.value.isEndToEnd) return
+        if (_state.value.isEndToEnd && !erasesInClear(messageId)) return
         viewModelScope.launch {
             try {
                 if (messageRepository.deleteOptimistic(messageId)) {
@@ -940,6 +969,13 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * #13804 — in an end-to-end conversation, a message the server already reads (written in clear before the
+     * activation) keeps its clear deletion route, as the gateway judges the erasure on the row; a sealed or absent one does not.
+     */
+    private fun erasesInClear(messageId: String): Boolean =
+        _state.value.messages.firstOrNull { it.messageId == messageId }?.isReadByServer == true
 
     /**
      * "Delete for me" — hides the message locally only (WhatsApp-style), never

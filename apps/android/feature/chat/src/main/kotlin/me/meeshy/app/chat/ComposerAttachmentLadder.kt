@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
 import me.meeshy.sdk.composer.ComposerAffordances
+import me.meeshy.sdk.model.composer.ComposerCapability
+import me.meeshy.sdk.model.composer.ComposerConfiguration
 
 /**
  * The kinds of entry the composer's attachment ladder ("+") can offer, in the
@@ -55,8 +57,10 @@ object ComposerAttachmentLadder {
         showLocation: Boolean = true,
         showVoice: Boolean = true,
         showEmoji: Boolean = true,
+        configuration: ComposerConfiguration = ComposerConfiguration.CONVERSATION,
     ): List<AttachmentTile> {
         val canCapture = affordances.canSendImages || affordances.canSendVideos
+        val offered = TILE_CAPABILITY.filterValues(configuration::offers).keys
         return listOfNotNull(
             AttachmentTile(AttachmentTileKind.Photo, COLOR_PHOTO)
                 .takeIf { canCapture && !hasRecentMediaStrip },
@@ -72,8 +76,19 @@ object ComposerAttachmentLadder {
                 .takeIf { affordances.canSendAudios && showVoice },
             AttachmentTile(AttachmentTileKind.Emoji, COLOR_EMOJI)
                 .takeIf { affordances.canSendText && showEmoji },
-        )
+        ).filter { it.kind in offered }
     }
+
+    /** La porte du réglage (#14265) qui ouvre chaque tuile : une tuile dont le réglage ferme la porte ne s'affiche pas. */
+    private val TILE_CAPABILITY: Map<AttachmentTileKind, ComposerCapability> = mapOf(
+        AttachmentTileKind.Photo to ComposerCapability.PHOTO_LIBRARY,
+        AttachmentTileKind.Camera to ComposerCapability.CAMERA,
+        AttachmentTileKind.File to ComposerCapability.FILE,
+        AttachmentTileKind.Contact to ComposerCapability.CONTACT,
+        AttachmentTileKind.Location to ComposerCapability.LOCATION,
+        AttachmentTileKind.Voice to ComposerCapability.VOICE,
+        AttachmentTileKind.Emoji to ComposerCapability.EMOJI,
+    )
 
     private const val COLOR_PHOTO = "9B59B6"
     private const val COLOR_CAMERA = "F8B500"

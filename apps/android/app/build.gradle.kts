@@ -160,6 +160,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.okhttp)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -171,4 +172,7 @@ dependencies {
     // #13792 — la réponse d'une bannière jugée contre un vrai cache Room (graine FCM, garde de l'outbox).
     testImplementation(project(":core:database"))
     testImplementation(libs.room.runtime)
+    // #13954 — l'écran « Mettre à jour Meeshy » éprouvé par ses nœuds : sans sortie, lu par TalkBack, rien dessous.
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
 }

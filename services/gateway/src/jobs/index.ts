@@ -18,6 +18,7 @@ import { GameMissionWindowJob } from './game-mission-window';
 import { GamePhotoMomentsJob } from './game-photo-moments';
 import { BackupStatusCheckJob } from './backup-status-check';
 import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirror-follow';
+import { RelationWeeklyJob } from './relation-weekly';
 import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
 import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement';
 import { EmailService } from '../services/EmailService';
@@ -49,6 +50,7 @@ export class BackgroundJobsManager {
   private backupStatusCheckJob: BackupStatusCheckJob;
   /** Le miroir continu des médias vers le seau S3 (#11267) : éteint sans MEDIA_S3_MIRROR_FOLLOW=on. */
   private mediaMirrorFollowJob: MediaMirrorFollowJob;
+  private relationWeeklyJob: RelationWeeklyJob;
   /**
    * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
    * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
@@ -92,6 +94,7 @@ export class BackgroundJobsManager {
     this.gamePhotoMomentsJob = new GamePhotoMomentsJob(prisma);
     this.backupStatusCheckJob = new BackupStatusCheckJob({ prisma, emailService });
     this.mediaMirrorFollowJob = processMediaMirrorFollowJob(prisma, logger);
+    this.relationWeeklyJob = new RelationWeeklyJob(prisma);
   }
 
   /**
@@ -117,6 +120,7 @@ export class BackgroundJobsManager {
     this.gamePhotoMomentsJob.start();
     this.backupStatusCheckJob.start();
     this.mediaMirrorFollowJob.start();
+    this.relationWeeklyJob.start();
 
     // Toutes les six heures : une session dont l'échéance est passée cesse de
     // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
@@ -228,6 +232,7 @@ export class BackgroundJobsManager {
     this.gamePhotoMomentsJob.stop();
     this.backupStatusCheckJob.stop();
     this.mediaMirrorFollowJob.stop();
+    this.relationWeeklyJob.stop();
 
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);

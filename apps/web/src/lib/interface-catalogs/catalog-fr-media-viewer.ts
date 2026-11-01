@@ -9,6 +9,7 @@ const frMediaViewer = {
   'media.viewer.react_with': 'Réagir avec {emoji}',
   'media.viewer.reply': 'Répondre',
   'media.viewer.compose': 'Créer avec ce média',
+  'media.viewer.imager': 'Imager',
   'media.viewer.saved': 'Enregistré',
   'media.viewer.save_failed': 'Enregistrement impossible',
   'media.viewer.offline': 'Hors ligne — réessayez une fois connecté',

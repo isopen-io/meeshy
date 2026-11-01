@@ -227,10 +227,10 @@ nonisolated enum ComposerObjectChips {
     ///
     /// ## Pourquoi le PLAN et le Z sont dans le badge
     ///
-    /// Ce n'est pas de l'information technique offerte au passage. `bringForward`
-    /// et `sendBackward` vivent au rail *trailing*, mutent `zIndex` sur le
-    /// modèle, et ne rendent **aucun retour visible** : sur deux objets qui ne se
-    /// chevauchent pas, empiler ne change rien à l'écran. L'auteur empilait à
+    /// Ce n'est pas de l'information technique offerte au passage. Toucher un
+    /// objet le fait passer devant (#13918), mute `zIndex` sur le modèle, et ne
+    /// rend **aucun retour visible** : sur deux objets qui ne se chevauchent
+    /// pas, empiler ne change rien à l'écran. L'auteur empilait à
     /// l'aveugle. Un badge qui porte `z 2` transforme une action muette en action
     /// lisible — dimension 8, « feedback instantané ».
     ///

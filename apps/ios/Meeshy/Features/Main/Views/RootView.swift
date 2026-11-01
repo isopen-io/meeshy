@@ -424,6 +424,12 @@ struct RootView: View {
             )
         }
 
+        // En conversation, la boule de mood ouvre la page plein écran de
+        // l'humeur (#13987) — la même que la notification « nouvelle humeur ».
+        StatusBubbleController.shared.onOpenSpotlight = { entry in
+            router.push(.moodSpotlight(statusId: entry.id))
+        }
+
         // Republication d'un mood : câblé ICI (hôte racine de la bulle)
         // — l'ancien branchement vivait dans un overlay mort de
         // ConversationListView, le bouton « Republier » n'agissait donc

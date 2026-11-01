@@ -58,6 +58,11 @@ struct AudioPostComposerView: View {
     /// fait que rogner dit ce qu'il fait.
     var title: String = String(localized: "composer.audio.title",
                                defaultValue: "Création audio", bundle: .main)
+    /// **Le schéma IMPOSÉ par l'hôte** — le compositeur, sombre en permanence,
+    /// y passe `.dark`. `nil` ⇒ la feuille suit le thème de l'app, comme dans
+    /// le fil. L'imposer ne touche jamais au thème global : la feuille se
+    /// peint avec sa propre palette et ne resynchronise plus rien.
+    var appearance: ColorScheme? = nil
 
     /// Une piste déjà acquise, remise à la vue pour être rognée.
     struct ExistingAudio {
@@ -79,7 +84,12 @@ struct AudioPostComposerView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
-    var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.meeshySheetClose) private var hostClose
+    @Environment(\.themePalette) private var injectedPalette
+    var theme: ThemePalette {
+        appearance.map(ThemePalette.init(colorScheme:))
+            ?? ThemePalette.resolved(injected: injectedPalette, colorScheme: colorScheme)
+    }
     @StateObject private var audioRecorder = AudioRecorderManager()
 
     @State var transcription: OnDeviceTranscription?
@@ -123,7 +133,7 @@ struct AudioPostComposerView: View {
     private let darkCanvasTop = MeeshyColors.surfaceDarkDeep
     private let darkCanvasBase = MeeshyColors.surfaceDarkRaised
 
-    var isDark: Bool { colorScheme == .dark }
+    var isDark: Bool { theme.isDark }
 
     // MARK: - Body
 
@@ -244,19 +254,14 @@ struct AudioPostComposerView: View {
                         .padding(.horizontal, MeeshySpacing.xl)
                         .padding(.top, MeeshySpacing.md)
                         .padding(.bottom, MeeshySpacing.lg)
-                        .background(
-                            LinearGradient(
-                                colors: [Color.clear, backgroundBaseColor.opacity(MeeshyOpacity.heavy), backgroundBaseColor],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                            .ignoresSafeArea(edges: .bottom)
-                        )
+                        .background(alignment: .top) { actionBarBackdrop }
                 }
 
             }
             .task { adopterAudioInitial() }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(appearance, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) {
@@ -275,6 +280,7 @@ struct AudioPostComposerView: View {
                 },
                 onCancel: { showSoundLibrary = false }
             )
+            .preferredColorScheme(appearance)
         }
         .adaptiveOnChange(of: audioRecorder.isRecording) { _, isRecording in
             // La feuille unifiée possède le flux record/stop ; le composer ne
@@ -284,8 +290,11 @@ struct AudioPostComposerView: View {
             }
         }
         .adaptiveOnChange(of: colorScheme) { _, newScheme in
-            theme.syncWithSystem(newScheme)
+            guard appearance == nil else { return }
+            ThemeManager.shared.syncWithSystem(newScheme)
         }
+        .environment(\.colorScheme, appearance ?? colorScheme)
+        .environment(\.themePalette, theme)
         .onDisappear {
             // Swipe-down interactif de la sheet : contourne le bouton Annuler
             // (`cancelAndDismiss`). On coupe micro + transcription — idempotent,
@@ -317,6 +326,20 @@ struct AudioPostComposerView: View {
     }
 
     // MARK: - Action Bar
+
+    /// **Un fond PLEIN sous la barre** : un dégradé qui partait du transparent
+    /// laissait le crédit et les langues défiler SOUS « Refaire », lisibles à
+    /// travers. Le fondu se pose AU-DESSUS de la barre, jamais derrière elle.
+    private var actionBarBackdrop: some View {
+        backgroundBaseColor
+            .ignoresSafeArea(edges: .bottom)
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [Color.clear, backgroundBaseColor], startPoint: .top, endPoint: .bottom)
+                    .frame(height: MeeshySpacing.xl)
+                    .offset(y: -MeeshySpacing.xl)
+                    .allowsHitTesting(false)
+            }
+    }
 
     @ViewBuilder
     private var actionBar: some View {
@@ -648,7 +671,7 @@ struct AudioPostComposerView: View {
         if let url = recordedURL {
             try? FileManager.default.removeItem(at: url)
         }
-        dismiss()
+        MeeshySheetClose.perform(host: hostClose, system: { dismiss() })
     }
 
     /// **Publier applique le ROGNAGE.**

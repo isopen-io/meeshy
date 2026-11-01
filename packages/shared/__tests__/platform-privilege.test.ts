@@ -117,6 +117,7 @@ const ADMINISTRATION_RANK_SITES: Readonly<Record<string, string>> = {
   'services/gateway/src/middleware/authorize.ts': '`requireAdminRank` — rang d’administration (directive 2026-09-16)',
   'services/gateway/src/routes/admin/dashboard.ts': 'console d’administration',
   'services/gateway/src/routes/admin/oversight-viewer.ts': 'lecture de supervision journalisée (rang d’administration)',
+  'services/gateway/src/routes/lens-partners.ts': 'vérification et retrait de l’identité d’un partenaire de lens, et lecture de son logo non vérifié pour le vérifier — BIGBOSS/ADMIN (décision porteur #11251, point 5)',
   'services/gateway/src/routes/notifications.ts': 'purge de TOUTES les notifications de l’instance, exploitation',
   'services/gateway/src/services/world/worldReservedMembers.ts': 'identités réservées de l’amorçage',
   'services/gateway/src/socketio/evictFromAdminRooms.ts': 'rooms de la console d’administration',

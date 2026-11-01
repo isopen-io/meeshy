@@ -34,6 +34,7 @@ internal fun NavGraphBuilder.callNavGraph(
             navArgument(CallRoute.CALL_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
             navArgument(CallRoute.INCOMING_ARG) { type = NavType.BoolType; defaultValue = false },
             navArgument(CallRoute.ANSWER_ARG) { type = NavType.BoolType; defaultValue = false },
+            navArgument(CallRoute.PEER_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
     ) { entry ->
         val args = entry.arguments
@@ -44,6 +45,7 @@ internal fun NavGraphBuilder.callNavGraph(
                 isVideo = args?.getBoolean(CallRoute.VIDEO_ARG),
                 callId = args?.getString(CallRoute.CALL_ID_ARG)?.let(Uri::decode),
                 incoming = args?.getBoolean(CallRoute.INCOMING_ARG) ?: false,
+                peerId = args?.getString(CallRoute.PEER_ID_ARG)?.let(Uri::decode),
             ),
             autoAnswer = args?.getBoolean(CallRoute.ANSWER_ARG) ?: false,
             // Activity-scoped instance (see the hoist above) → the CALL

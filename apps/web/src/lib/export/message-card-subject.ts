@@ -66,7 +66,25 @@ export function cardHandleOf(message: AuthorFields, viewer: Viewer): string | nu
   return handle === null ? null : handle.replace(/^@+/, '');
 }
 
-export type MessageCardSubjectPart = MessageCardPart & { readonly handle: string | null };
+/**
+ * UNE LIGNE DU FIL D'UN COMMENTAIRE (#13922, `MessageCardThreadLine` iOS) — son
+ * auteur (absent : le pli « +N réponses »), son texte, son niveau, et si c'est
+ * la réponse visée : les noms restent des noms jusqu'au format, qui les nomme,
+ * les met en pseudo ou les anonymise ligne à ligne.
+ */
+export type MessageCardSubjectThreadLine = {
+  readonly author: string | null;
+  readonly handle: string | null;
+  readonly text: string;
+  readonly level: number;
+  readonly isReply: boolean;
+};
+
+export type MessageCardSubjectPart = Omit<MessageCardPart, 'thread'> & {
+  readonly handle: string | null;
+  /** Le fil d'un commentaire, ligne par ligne — le bloc s'appelle alors par son titre (`author`). */
+  readonly thread?: readonly MessageCardSubjectThreadLine[];
+};
 
 /**
  * L'AUTEUR D'UN MÉDIA (#9236) — son nom, son pseudo, et le bloc d'où vient la
@@ -105,13 +123,7 @@ export type MessageCardSubject = {
   readonly media: readonly MessageCardMediaItem[];
   /** Ce qui suit la réponse sur la carte — les réponses d'un commentaire (#8734). */
   readonly followUps?: readonly MessageCardSubjectPart[];
-  /** Les commentaires du fil entre la citation et la réponse, chacun à son niveau d'imbrication — vide ou absent : aucun. */
-  readonly context?: readonly MessageCardSubjectContext[];
-  /** Le niveau d'imbrication de la réponse — 0 : premier niveau. */
-  readonly replyDepth?: number;
 };
-
-export type MessageCardSubjectContext = { readonly part: MessageCardSubjectPart; readonly depth: number; readonly folded: boolean };
 
 /** Ce qu'il faut d'une pièce — celle d'un message (`Attachment`) comme celle d'un commentaire (`FeedMedia`). */
 export type CardMediaFields = Pick<Attachment, 'id' | 'fileUrl'> & {

@@ -36,11 +36,10 @@ nonisolated enum ComposerPreUploadCopy {
     static func label(for state: ComposerPreUploadState,
                       locale: Locale = .current) -> String? {
         switch state {
-        case .idle, .failed:
+        // **Prêt ne se dit plus** (#13839, L3) : c'est l'état nominal, et
+        // « aucune puce d'état au repos ». Seule la montée a quelque chose à dire.
+        case .idle, .failed, .ready:
             return nil
-        case .ready:
-            return String(localized: "composer.preupload.ready",
-                          defaultValue: "PRÊT", bundle: .main)
         case let .uploading(sent, total):
             // Le pourcentage est ENTIER : la planche écrit « 34 % », et une
             // décimale sur une barre qui bouge est du bruit qu'aucun œil ne lit.

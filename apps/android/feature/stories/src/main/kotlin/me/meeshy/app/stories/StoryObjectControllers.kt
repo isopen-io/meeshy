@@ -6,6 +6,9 @@ import me.meeshy.sdk.model.composer.SceneObjectMenu.Action
 
 /** Applies a controller of the selected object — its bar, its sheet — to the object it targets; an action the law does not serve does nothing. */
 internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, action: Action) {
+    if (action == Action.DUPLICATE && (ref.kind == ComposerObjectKind.MEDIA || ref.kind == ComposerObjectKind.AUDIO || ref.kind == ComposerObjectKind.PLACE)) {
+        return onDuplicateSceneObject(ref)
+    }
     when (ref.kind) {
         ComposerObjectKind.MEDIA -> return mediaController(ref.id, action)
         ComposerObjectKind.AUDIO -> return if (action == Action.DELETE) onRemoveSound(ref.id) else Unit
@@ -16,8 +19,6 @@ internal fun StoryComposerViewModel.onObjectController(ref: SceneObjectRef, acti
     when (action) {
         Action.DUPLICATE -> if (text) onDuplicateTextElement(ref.id) else onDuplicateSticker(ref.id)
         Action.DELETE -> if (text) onRemoveTextElement(ref.id) else onRemoveSticker(ref.id)
-        Action.BRING_FORWARD -> reorder(ref, StoryZOrder.FORWARD)
-        Action.SEND_BACKWARD -> reorder(ref, StoryZOrder.BACKWARD)
         else -> Unit
     }
 }
@@ -29,9 +30,8 @@ internal fun StoryComposerViewModel.onTapTextElement(id: String) = onSceneReduce
 internal fun StoryComposerViewModel.onSceneBackgroundTap() = onSceneReduce(StoryComposerSelectionReducer::cleared)
 
 /**
- * Une action de la barre de l'élément sélectionné (#13836) : Modifier écrit le texte, ouvre la feuille d'un média ou d'un
- * son, ou l'échange d'un sticker ; Temps ouvre sa feuille ; Dupliquer et Retirer passent par les contrôleurs de l'objet.
- * L'Ordre ouvre son propre menu, dont chaque choix arrive ici par [onObjectController].
+ * Une action de la barre de l'élément sélectionné (#13836) : Modifier écrit le texte, ouvre la feuille d'un son, l'échange
+ * d'un sticker ou le lieu d'une pastille — une image, une vidéo ou un son posés n'en ont plus : leurs outils sont à plat dans le rail (#14047) ; Temps ouvre sa feuille ; Dupliquer et Retirer passent par les contrôleurs de l'objet.
  */
 internal fun StoryComposerViewModel.onSelectionAction(
     ref: SceneObjectRef,
@@ -41,23 +41,37 @@ internal fun StoryComposerViewModel.onSelectionAction(
     ComposerSelectionAction.EDIT -> when (ref.kind) {
         ComposerObjectKind.TEXT -> onSelectTextElement(ref.id)
         ComposerObjectKind.STICKER -> openSheet(StoryComposerSheet.STICKER_SWAP)
-        else -> openSheet(StoryComposerSheet.OBJECT_EDIT)
+        ComposerObjectKind.PLACE -> openSheet(StoryComposerSheet.PLACE_REPOINT)
+        ComposerObjectKind.AUDIO, ComposerObjectKind.MEDIA -> Unit
     }
     ComposerSelectionAction.TIME -> openSheet(StoryComposerSheet.OBJECT_TIME)
     ComposerSelectionAction.DUPLICATE -> onObjectController(ref, Action.DUPLICATE)
     ComposerSelectionAction.REMOVE -> onObjectController(ref, Action.DELETE)
-    ComposerSelectionAction.ORDER -> Unit
 }
 
-private fun StoryComposerViewModel.reorder(ref: SceneObjectRef, op: StoryZOrder) =
-    if (ref.kind == ComposerObjectKind.TEXT) onReorderTextElement(ref.id, op)
-    else onSceneReduce { StoryComposerSceneReducer.stickerReordered(it, ref.id, op) }
+/**
+ * Un média fait fond ou le remplace (la désignation est exclusive et porte sur son FICHIER ; seul l'objet choisi quitte la
+ * scène, ses copies y restent, #13905), ou se retire — sa sélection
+ * tombe avec lui. Retirer un objet dont le fichier est encore posé ailleurs (sa source ou sa copie, #13902) ne retire que
+ * lui : le fichier reste à la slide ; retirer le dernier retire le média.
+ */
+private fun StoryComposerViewModel.mediaController(id: String, action: Action) {
+    val slide = state.value.deck.selectedSlide
+    val file = slide.mediaFileOf(id)
+    when (action) {
+        Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND ->
+            onSceneReduce { StoryComposerBackgroundReducer.backgroundMediaToggled(it, file, objectId = id) }
+        Action.DELETE ->
+            if (slide.placedMedia.any { it.id != id && it.mediaId == file }) onSceneReduce { StoryComposerPlacedMediaReducer.objectRemoved(it, id) }
+            else onRemoveMedia(file)
+        else -> Unit
+    }
+}
 
-/** Un média fait fond ou le remplace (la désignation est exclusive), ou se retire — sa sélection tombe avec lui. */
-private fun StoryComposerViewModel.mediaController(id: String, action: Action) = when (action) {
-    Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND -> onToggleSlideBackgroundMedia(id)
-    Action.DELETE -> onRemoveMedia(id)
-    else -> Unit
+/** Dupliquer un média posé, un lieu ou une pastille de son (#13902) : la copie, neuve, devient la sélection ; un cran d'historique. */
+private fun StoryComposerViewModel.onDuplicateSceneObject(ref: SceneObjectRef) {
+    val newId = java.util.UUID.randomUUID().toString()
+    onSceneReduce { StoryComposerObjectCopyReducer.duplicated(it, ref, newId) }
 }
 
 /**

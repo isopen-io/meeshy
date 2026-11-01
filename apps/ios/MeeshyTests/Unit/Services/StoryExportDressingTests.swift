@@ -202,6 +202,213 @@ final class StoryExportAuthorIdentityTests: XCTestCase {
     }
 }
 
+// MARK: - StoryExportRelationBadgeTests
+
+/// **Présence servie et logo de cercle de l'auteur, de l'app jusqu'à l'intro** (#13997).
+/// La présence est la projection de ce que le serveur a servi (rien servi, rien peint) ; le
+/// niveau vient d'un fournisseur INJECTÉ, dont l'implémentation réelle lit `GET /relations/:userId`.
+@MainActor
+final class StoryExportRelationBadgeTests: XCTestCase {
+
+    private nonisolated struct StubRelationLevels: RelationLevelProviding {
+        let level: String?
+        var delay: Duration? = nil
+
+        func servedLevel(withUserId userId: String) async -> String? {
+            if let delay { try? await Task.sleep(for: delay) }
+            return level
+        }
+    }
+
+    private func grace(presence: PresenceState? = nil) -> StoryExportAuthor {
+        StoryExportAuthor(userId: "u-grace", name: "Grace Hopper", presence: presence)
+    }
+
+    // MARK: Présence
+
+    func test_source_servedOnline_projectsAnOnlinePresence() {
+        let source = StoryExportAuthorIdentity.source(for: grace(presence: .online), profile: nil)
+
+        XCTAssertEqual(source.presence, .online)
+    }
+
+    func test_source_servedAwayAndIdle_projectEachState() {
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: grace(presence: .away), profile: nil).presence, .away)
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: grace(presence: .idle), profile: nil).presence, .idle)
+    }
+
+    func test_source_nothingServed_paintsNoPresence() {
+        XCTAssertNil(StoryExportAuthorIdentity.source(for: grace(), profile: nil).presence)
+    }
+
+    func test_source_servedOffline_paintsNoPresence() {
+        XCTAssertNil(StoryExportAuthorIdentity.source(for: grace(presence: .offline), profile: nil).presence)
+    }
+
+    func test_source_withProfile_keepsTheServedPresenceOfTheAuthor() {
+        let profile = MeeshyUser(id: "u-grace", username: "grace")
+
+        XCTAssertEqual(StoryExportAuthorIdentity.source(for: grace(presence: .away), profile: profile).presence, .away)
+    }
+
+    func test_unresolved_afterTheBound_keepsTheServedPresence() {
+        let content = StoryExportAuthorIdentity.unresolved(grace(presence: .online))
+
+        XCTAssertEqual(content.presence, .online)
+        XCTAssertNil(content.relationLogo, "le niveau n'a pas été attendu : pas de logo")
+    }
+
+    func test_initGroup_copiesTheServedPresenceOfTheGroup() {
+        let group = StoryGroup(id: "u-grace", username: "Grace", avatarColor: "6366F1", stories: [],
+                               authorPresence: UserPresence(isOnline: true))
+
+        XCTAssertEqual(StoryExportAuthor(group: group).presence, .online)
+    }
+
+    func test_initGroup_withoutServedPresence_hasNone() {
+        let group = StoryGroup(id: "u-grace", username: "Grace", avatarColor: "6366F1", stories: [])
+
+        XCTAssertNil(StoryExportAuthor(group: group).presence)
+    }
+
+    /// Le chemin que montent la feuille d'export et « Imager » : sans entrée vivante dans le
+    /// `PresenceManager`, la présence est celle que la passerelle a servie avec le groupe.
+    func test_served_authorUnknownToTheLiveMap_projectsThePresenceServedWithTheGroup() {
+        let group = StoryGroup(id: "u-\(UUID().uuidString)", username: "Grace", avatarColor: "6366F1", stories: [],
+                               authorPresence: UserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-120)))
+
+        XCTAssertEqual(StoryExportAuthor.served(from: group).presence, .away)
+    }
+
+    /// Pas ami : la passerelle ne sert rien, et l'export ne fabrique aucune présence.
+    func test_served_nothingServedNorLive_paintsNoPresence() {
+        let group = StoryGroup(id: "u-\(UUID().uuidString)", username: "Grace", avatarColor: "6366F1", stories: [])
+
+        let author = StoryExportAuthor.served(from: group)
+
+        XCTAssertNil(author.presence)
+        XCTAssertNil(StoryExportAuthorIdentity.unresolved(author).presence)
+    }
+
+    // MARK: Niveau de lien
+
+    func test_servedLevel_injectedClose_reachesTheIntroAsTheFireLogo() async {
+        let author = grace()
+        let level = await StoryExportAuthorIdentity.servedLevel(of: author, levels: StubRelationLevels(level: "CLOSE"))
+
+        let content = StoryExportIntroFactory.unresolvedContent(
+            for: StoryExportAuthorIdentity.source(for: author, profile: nil, servedLevel: level))
+
+        XCTAssertEqual(level, "CLOSE")
+        XCTAssertEqual(content.relationLogo, "🔥")
+    }
+
+    func test_servedLevel_injectedBlood_reachesTheIntroAsTheBloodLogo() async {
+        let author = grace()
+        let level = await StoryExportAuthorIdentity.servedLevel(of: author, levels: StubRelationLevels(level: "BLOOD"))
+
+        let content = StoryExportIntroFactory.unresolvedContent(
+            for: StoryExportAuthorIdentity.source(for: author, profile: nil, servedLevel: level))
+
+        XCTAssertEqual(content.relationLogo, "🩸")
+    }
+
+    func test_servedLevel_friendAndBelow_paintsNothing() async {
+        for served in ["FRIEND", "ACQUAINTANCE", "COMMUNITY", "PUBLIC"] {
+            let author = grace()
+            let level = await StoryExportAuthorIdentity.servedLevel(of: author, levels: StubRelationLevels(level: served))
+
+            let content = StoryExportIntroFactory.unresolvedContent(
+                for: StoryExportAuthorIdentity.source(for: author, profile: nil, servedLevel: level))
+
+            XCTAssertNil(content.relationLogo, served)
+        }
+    }
+
+    func test_servedLevel_realProvider_servesTheEffectiveLevelOfTheServer() async {
+        let api = MockAPIClientForApp()
+        let served: APIResponse<ServedRelationLevel> = JSONStub.decode("""
+        {"success":true,"data":{"userId":"u-grace","effectiveLevel":"CLOSE"}}
+        """)
+        api.stub("/relations/u-grace", result: served)
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: grace(), levels: RelationLevelProvider(api: api))
+
+        XCTAssertEqual(level, "CLOSE")
+        XCTAssertEqual(api.requestEndpoints, ["/relations/u-grace"])
+        XCTAssertEqual(api.requestMethods, ["GET"])
+    }
+
+    func test_servedLevel_realProvider_publicIsServedAsIs_andPaintsNothing() async {
+        let api = MockAPIClientForApp()
+        let served: APIResponse<ServedRelationLevel> = JSONStub.decode("""
+        {"success":true,"data":{"userId":"u-grace","effectiveLevel":"PUBLIC"}}
+        """)
+        api.stub("/relations/u-grace", result: served)
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: grace(), levels: RelationLevelProvider(api: api))
+        let content = StoryExportIntroFactory.unresolvedContent(
+            for: StoryExportAuthorIdentity.source(for: grace(), profile: nil, servedLevel: level))
+
+        XCTAssertEqual(level, "PUBLIC")
+        XCTAssertNil(content.relationLogo)
+    }
+
+    func test_servedLevel_realProvider_serverError_servesNothing() async {
+        let api = MockAPIClientForApp()
+        api.errorToThrow = URLError(.badServerResponse)
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: grace(), levels: RelationLevelProvider(api: api))
+
+        XCTAssertNil(level)
+        XCTAssertEqual(api.requestCount, 1)
+    }
+
+    func test_servedLevel_realProvider_unsuccessfulEnvelope_servesNothing() async {
+        let api = MockAPIClientForApp()
+        let served: APIResponse<ServedRelationLevel> = JSONStub.decode("""
+        {"success":false,"data":{"userId":"u-grace","effectiveLevel":"BLOOD"}}
+        """)
+        api.stub("/relations/u-grace", result: served)
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: grace(), levels: RelationLevelProvider(api: api))
+
+        XCTAssertNil(level)
+    }
+
+    func test_servedLevel_realProvider_authorWithoutIdentifier_makesNoRequest() async {
+        let api = MockAPIClientForApp()
+
+        let level = await StoryExportAuthorIdentity.servedLevel(
+            of: StoryExportAuthor(userId: nil, name: "grace"), levels: RelationLevelProvider(api: api))
+
+        XCTAssertNil(level)
+        XCTAssertEqual(api.requestCount, 0)
+    }
+
+    func test_servedLevel_authorWithoutIdentifier_isNeverAsked() async {
+        let anonymous = StoryExportAuthor(userId: nil, name: "grace")
+
+        let level = await StoryExportAuthorIdentity.servedLevel(of: anonymous, levels: StubRelationLevels(level: "CLOSE"))
+
+        XCTAssertNil(level)
+    }
+
+    func test_servedLevel_slowerThanTheBound_isGivenUp_withoutWaiting() async {
+        let slow = StubRelationLevels(level: "CLOSE", delay: .seconds(3))
+        let start = Date()
+
+        let level = await StoryExportAuthorIdentity.servedLevel(of: grace(), levels: slow, timeout: .milliseconds(100))
+
+        XCTAssertNil(level)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5, "l'export n'attend jamais le niveau au-delà de sa borne")
+    }
+}
+
 // MARK: - StoryExportPathsDressingTests
 
 /// **Un témoin par chemin qui sort une STORY en vidéo** (#10536) : le moteur
@@ -216,10 +423,13 @@ final class StoryExportPathsDressingTests: XCTestCase {
         StoryExportIntroContent(displayName: username.capitalized, username: username, accentColorHex: "6366F1")
     }
 
+    /// Une story qui BOUGE : une scène fixe et muette sort en image, sans
+    /// interlude ni carte de fin (#13871, `StoryStillExportTests`) — ces
+    /// témoins gardent l'habillage de la VIDÉO.
     private func makeStory() -> StoryItem {
         StoryItem(id: "story-\(UUID().uuidString)",
                   content: "Bonjour",
-                  storyEffects: StoryEffects(textObjects: [StoryTextObject(text: "Bonjour")]))
+                  storyEffects: StoryEffects(textObjects: [StoryTextObject(text: "Bonjour", startTime: 1, duration: 3)]))
     }
 
     /// Un auteur qui ne peut pas être l'utilisateur connecté, quelle que soit

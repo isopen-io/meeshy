@@ -231,6 +231,8 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           // #13100 — la loi de sortie lit la durée : sans elle, toute pièce se signerait.
           ephemeralDuration: true,
           isViewOnce: true,
+          // #11269 — lue pour la projection par lecteur, jamais servie.
+          viewOnceBurnedAt: true,
           maxViewOnceCount: true,
           viewOnceCount: true,
           isBlurred: true,

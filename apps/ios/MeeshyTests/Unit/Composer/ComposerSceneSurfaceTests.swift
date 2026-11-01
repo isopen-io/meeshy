@@ -16,38 +16,27 @@ final class ComposerSceneSurfaceTests: XCTestCase {
 
     // MARK: - L'aiguillage
 
-    /// Le point de la règle : `hasScene` n'est lu que pour `.document`.
-    func test_unDocumentAvecScene_monteLaSurfaceDeScene() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .document, hasScene: true), .scene)
+    /// #13864 (R1) — un document, avec ou sans scène, se compose sur la scène :
+    /// il n'existe plus de vue « document sans scène ».
+    func test_unDocument_monteToujoursLaSurfaceDeScene() {
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .document), .scene)
     }
 
-    func test_unDocumentSansScene_resteLeDocument() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .document, hasScene: false), .document)
-    }
-
-    /// **L'atelier EST une scène : la question ne se pose pas.** Lire `hasScene`
-    /// ici l'aurait fait dépendre d'un état qui ne le concerne pas.
-    func test_lAtelier_neDependPasDeHasScene() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .scene, hasScene: false), .atelier)
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .scene, hasScene: true), .atelier)
+    /// **L'atelier EST une scène : la question ne se pose pas.**
+    func test_lAtelier_resteLAtelier() {
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .scene), .atelier)
     }
 
     /// **Un mood n'a pas de scène**, et la tâche 4.3 lui a justement retiré les
     /// exceptions qu'il ne porte pas. Ce témoin garde qu'on ne lui en rend
     /// aucune.
-    func test_leMood_neDependPasDeHasScene() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .mood, hasScene: false), .mood)
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .mood, hasScene: true), .mood)
+    func test_leMood_resteLeMood() {
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .mood), .mood)
     }
 
-    /// Les quatre vues sont atteignables — aucune n'est du code mort.
-    func test_lesQuatreVues_sontToutesAtteignables() {
-        let atteintes = Set([
-            ComposerMountedView.mounted(surface: .scene, hasScene: false),
-            ComposerMountedView.mounted(surface: .document, hasScene: true),
-            ComposerMountedView.mounted(surface: .document, hasScene: false),
-            ComposerMountedView.mounted(surface: .mood, hasScene: false)
-        ])
+    /// Les trois vues sont atteignables — aucune n'est du code mort.
+    func test_lesTroisVues_sontToutesAtteignables() {
+        let atteintes = Set([ComposerSurfaceKind.scene, .document, .mood].map { ComposerMountedView.mounted(surface: $0) })
         XCTAssertEqual(atteintes, Set(ComposerMountedView.allCases))
     }
 
@@ -68,60 +57,70 @@ final class ComposerSceneSurfaceTests: XCTestCase {
     /// **Le fusible.** Sans lui, les gardes négatives qui suivent seraient
     /// vertes par OMISSION le jour où un chemin de fichier change — le mode
     /// d'échec le plus discret de ce dépôt.
-    func test_lesDeuxSources_sontLisiblesEtNonVides() throws {
+    func test_laSourceDeLaScene_estLisibleEtNonVide() throws {
         let scene = try source("ComposerSceneSurface.swift")
-        let document = try source("ComposerDocumentSurface.swift")
         XCTAssertGreaterThan(scene.count, 1_500)
-        XCTAssertGreaterThan(document.count, 5_000)
         XCTAssertTrue(scene.contains("struct ComposerSceneSurface"))
-        XCTAssertTrue(document.contains("struct ComposerDocumentSurface"))
     }
 
-    /// **LA garde de #4070.** Elle rougit si une entrée de scène revient dans le
-    /// document — le geste exact que cette issue existe pour rendre impossible.
-    ///
-    /// Ce n'est pas une préférence de rangement : chaque entrée réintroduite
-    /// oblige la règle du document à porter une exception, et c'est ce que la
-    /// tâche 4.3 a fermé.
-    func test_leDocument_neDeclarePlusAucuneEntreeDeRail() throws {
-        let s = compact(try source("ComposerDocumentSurface.swift"))
-        for interdit in ["varshowsRails", "varrailDoors", "varonRailDoor",
-                         "vartrailingRailActions", "varonTrailingRailAction",
-                         "ComposerLeadingRail(", "ComposerTrailingRail("] {
-            XCTAssertFalse(s.contains(interdit),
-                           "`\(interdit)` est revenu dans le document : la règle 4.3 est rouverte.")
-        }
-    }
-
-    /// La surface de scène, elle, les porte — sinon les deux vues de rail
-    /// n'auraient toujours aucun site de montage.
-    func test_laSurfaceDeScene_monteLesDeuxRails() throws {
+    /// **Le témoin INVERSE de « la surface de scène monte les deux rails »**
+    /// (#13839, directive porteur du 2026-10-30). Le rail gauche à glyphes est
+    /// parti : le repos se pose SUR la scène par `ComposerSceneOverlayChrome`.
+    /// La colonne droite reste pour un outil ouvert ou un objet touché, le temps
+    /// que la barre d'actions de L5 la remplace.
+    func test_laSurfaceDeScene_poseLeReposSurLaScene_sansRailGauche() throws {
         let s = compact(try source("ComposerSceneSurface.swift"))
-        XCTAssertTrue(s.contains("ComposerLeadingRail("))
+        XCTAssertFalse(s.contains("ComposerLeadingRail("), "le rail gauche à glyphes est revenu sur la scène")
+        XCTAssertTrue(s.contains("ComposerSceneOverlayChrome("))
         XCTAssertTrue(s.contains("ComposerTrailingRail("))
     }
 
-    /// L'encastrement se lit de la RÈGLE, et `railsShown: true` DIT ce que
-    /// cette surface est — une scène a ses rails.
-    func test_laSurfaceDeScene_encastreParLaRegle() throws {
-        // La respiration de la carte est la marge de bord de la RÈGLE
-        // (`edgeMargin(roomy:)`, qui vaut `floatingInset` sur téléphone) —
-        // jamais un littéral.
+    /// **Le témoin INVERSE de l'encastrement** : plus de carte ni de couloir.
+    /// La scène est le plus grand 9:16 de la zone, et un panneau du bas la
+    /// RÉDUIT par une échelle — jamais par une marge qui relancerait la mise en
+    /// page du canvas.
+    func test_laSurfaceDeScene_neReserveAucunCouloir_etSeReduitParUneEchelle() throws {
         let code = compact(try source("ComposerSceneSurface.swift"))
-        XCTAssertTrue(code.contains("ComposerRailGeometry.edgeMargin(roomy:isRoomy)"))
-        XCTAssertTrue(code.contains(".padding(.horizontal,edge)"))
-        XCTAssertEqual(ComposerRailGeometry.edgeMargin(roomy: false),
-                       ComposerRailGeometry.sceneInset(railsShown: true),
-                       "Sur téléphone, la marge de bord EST l'encastrement de la scène.")
+        XCTAssertTrue(code.contains("ComposerSceneFit.frame(in:"))
+        XCTAssertTrue(code.contains("ComposerSceneFit.lift(scene:"))
+        XCTAssertTrue(code.contains(".scaleEffect(lift.scale"))
+        XCTAssertFalse(code.contains(".padding(.bottom,sceneLiftInset)"),
+                       "une marge basse relance la mise en page du canvas à chaque image du geste")
+        XCTAssertFalse(code.contains("ComposerTopBar.height"), "la scène ne réserve plus la barre haute")
     }
 
-    /// **La barre haute est PARTAGÉE, pas recopiée.** Deux copies auraient
-    /// divergé au premier ajustement — c'est la raison même de l'extraire
-    /// avant de séparer les surfaces.
-    func test_lesDeuxSurfaces_partagentLaBarreHaute() throws {
-        for fichier in ["ComposerSceneSurface.swift", "ComposerDocumentSurface.swift"] {
-            XCTAssertTrue(compact(try source(fichier)).contains("ComposerTopBar("),
-                          "\(fichier) doit CONSOMMER la barre, jamais la redessiner.")
+    /// **La barre haute a quitté la scène** : ✕, la rangée des diapos et ↶ ↷
+    /// se posent sur la scène.
+    func test_laBarreHaute_aQuitteLaScene() throws {
+        XCTAssertFalse(compact(try source("ComposerSceneSurface.swift")).contains("ComposerTopBar("),
+                       "la barre haute est revenue au-dessus de la scène")
+    }
+
+    /// #13907 — **la barre haute et le rail gauche ont quitté le projet** :
+    /// aucun hôte ne les montait plus. Leurs mots (`ComposerRailCopy`) et le
+    /// visage du ⋯ (`ComposerTopBarMenuFace`) restent, chez qui les sert.
+    func test_laBarreHauteEtLeRailGauche_ontQuitteLeProjet() throws {
+        let ios = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let projet = try String(contentsOf: ios.appendingPathComponent("Meeshy.xcodeproj/project.pbxproj"),
+                                encoding: .utf8)
+        for fichier in ["ComposerTopBar.swift", "ComposerLeadingRail.swift"] {
+            XCTAssertFalse(FileManager.default.fileExists(
+                atPath: ios.appendingPathComponent("Meeshy/Features/Composer/\(fichier)").path), fichier)
+            XCTAssertFalse(projet.contains("/* \(fichier) */"), "\(fichier) reste inscrit au projet")
         }
+        let composer = ios.appendingPathComponent("Meeshy/Features/Composer")
+        let sources = try FileManager.default.contentsOfDirectory(at: composer, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(sources.count, 50, "le dossier lu n'est pas celui du composer")
+        for url in sources {
+            let code = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+            for type in ["structComposerTopBar:", "structComposerTopBarMenu<", "structComposerLeadingRail:",
+                         "structComposerSceneToggleEntry:"] {
+                XCTAssertFalse(code.contains(type), "\(type) revit dans \(url.lastPathComponent)")
+            }
+        }
+        XCTAssertFalse(ComposerRailCopy.label(.media).isEmpty, "les mots du rail servent encore la colonne")
     }
 }

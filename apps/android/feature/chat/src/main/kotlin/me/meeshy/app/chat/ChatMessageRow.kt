@@ -138,6 +138,7 @@ internal fun ChatMessageRow(
             },
             onLocationClick = { location -> actions.onLocationClick(messageId, location) },
             onAudioClick = { audio -> audioPlayer?.toggle(audio, bubble.voiceTrackSource()) },
+            onAudioSeek = { audio, seconds -> audioPlayer?.seek(audio, seconds) },
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onStoryCitationClick = bubble.storyReply?.postId?.takeIf { bubble.storyReply?.opensTarget == true }

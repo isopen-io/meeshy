@@ -98,19 +98,6 @@ final class ComposerCallbackWiringGuardTests: XCTestCase {
                         hote: "MeeshyComposerHost+Surfaces.swift")
     }
 
-    /// **Le document, sa jumelle.** Le porteur demande la cohérence de TOUTES
-    /// les vues : mesurer une seule surface laisserait les trois autres libres
-    /// de déclarer des contrôles morts.
-    func test_laSurfaceDeDocument_aTousSesRappelsBranches() throws {
-        // L'hôte du DOCUMENT est `+DocumentSurface` depuis le #5069 — le
-        // fichier d'origine dépassait le plafond de 1200 lignes, et les cinq
-        // membres de cette surface en sont partis ensemble. La scène garde le
-        // sien : c'est bien deux hôtes, pas un renommage.
-        try assertWired(surface: "ComposerDocumentSurface",
-                        fichierSurface: "ComposerDocumentSurface.swift",
-                        hote: "MeeshyComposerHost+DocumentSurface.swift")
-    }
-
     private func assertWired(surface: String, fichierSurface: String, hote: String) throws {
         let declares = declaredCallbacks(in: try source(fichierSurface))
         guard let site = callSite(of: surface, in: try source(hote)) else {

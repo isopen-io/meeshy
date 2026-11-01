@@ -17,6 +17,7 @@ const makeAttachment = (overrides: Partial<PublishableAttachment> = {}): Publish
   duration: null,
   codec: null,
   thumbHash: 'abc',
+  lensSlug: null,
   ...overrides,
 });
 
@@ -197,6 +198,22 @@ describe('postMediaFieldsFromAttachment — la copie porte son propre emplacemen
     expect(fields.codec).toBe('h264');
     expect(fields.thumbHash).toBe('abc');
     expect(fields.originalName).toBe('photo.jpg');
+  });
+
+  it('N8 (#11327) — le crédit de la lens suit la copie vers le post', () => {
+    const fields = postMediaFieldsFromAttachment({
+      attachment: makeAttachment({ lensSlug: 'aurore' }),
+      duplicated,
+      uploaderId: 'user-2',
+    });
+
+    expect(fields).toMatchObject({ lensSlug: 'aurore' });
+  });
+
+  it('N8 (#11327) — sans lens, aucune colonne de crédit n’est posée', () => {
+    const fields = postMediaFieldsFromAttachment({ attachment: makeAttachment({ lensSlug: null }), duplicated, uploaderId: 'user-2' });
+
+    expect(fields).not.toHaveProperty('lensSlug');
   });
 
   it("naît sans post : c'est la création du post qui l'y rattache", () => {

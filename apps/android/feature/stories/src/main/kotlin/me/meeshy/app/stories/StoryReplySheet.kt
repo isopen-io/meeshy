@@ -1,5 +1,10 @@
 package me.meeshy.app.stories
 
+import androidx.compose.foundation.layout.PaddingValues
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -17,21 +22,14 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -39,13 +37,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -53,7 +49,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.story.StoryReplyRules
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -81,6 +76,8 @@ fun StoryReplySheet(
     viewModel: StoryReplyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mention by viewModel.mention.collectAsStateWithLifecycle()
+    LaunchedEffect(quote.authorId, quote.authorName) { viewModel.attachAuthor(quote.authorId, quote.authorName) }
     val context = LocalContext.current
     val sentMessage = stringResource(R.string.stories_reply_sent)
     LaunchedEffect(state.phase) {
@@ -121,7 +118,9 @@ fun StoryReplySheet(
                 accentHex = quote.accentHex,
                 isSending = state.phase == StoryReplyPhase.SENDING,
                 canSend = StoryReplyRules.canSend(canReply = true, isSending = state.phase == StoryReplyPhase.SENDING, text = state.text),
+                mention = mention,
                 onChange = viewModel::onTextChange,
+                onMentionSelected = viewModel::onMentionSelected,
                 onSend = { viewModel.send(quote.storyId, quote.authorId) },
             )
         }
@@ -175,30 +174,23 @@ private fun ReplyField(
     accentHex: String,
     isSending: Boolean,
     canSend: Boolean,
+    mention: MentionAutocompleteState,
     onChange: (String) -> Unit,
+    onMentionSelected: (MentionCandidate) -> Unit,
     onSend: () -> Unit,
 ) {
-    val sendLabel = stringResource(R.string.stories_reply_send)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = onChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text(stringResource(R.string.stories_reply_placeholder, authorName)) },
-            maxLines = 4,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
-        )
-        IconButton(
-            onClick = onSend,
-            enabled = canSend,
-            modifier = Modifier.alpha(if (canSend || isSending) 1f else 0.4f).semantics { contentDescription = sendLabel },
-        ) {
-            if (isSending) {
-                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp), color = hexColor(accentHex))
-            } else {
-                Icon(MeeshyIcons.Send, contentDescription = null, tint = hexColor(accentHex))
-            }
-        }
-    }
+    val accent = hexColor(accentHex)
+    MeeshyCommentComposer(
+        text = text,
+        onTextChange = onChange,
+        placeholder = stringResource(R.string.stories_reply_placeholder, authorName),
+        onSend = onSend,
+        isSending = isSending,
+        sendEnabled = canSend,
+        sendLabel = stringResource(R.string.stories_reply_send),
+        accentColor = accent,
+        secondaryColor = accent.copy(alpha = 0.75f),
+        contentPadding = PaddingValues(0.dp),
+        topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected, accentColor = accent) },
+    )
 }

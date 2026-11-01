@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import Combine
 import MeeshySDK
 @testable import Meeshy
 
@@ -54,6 +55,37 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
         XCTAssertFalse(ComposerSceneQuickCapture.offers(sceneIsBlank: true, format: .status,
                                                         stage: .off, toolIsOpen: false),
                        "un statut n'a pas de viseur")
+    }
+
+    // MARK: - Un brouillon restauré ne fait pas clignoter l'aide
+
+    /// **L'aide de la scène vide attend la relecture de l'ouverture** (#13899) :
+    /// avant elle, la scène est vide parce qu'elle n'est pas encore remplie, et
+    /// un brouillon restauré montrait l'aide quelques images avant sa matière.
+    @MainActor
+    func test_laRelectureDeLOuverture_estPubliee_memeSansBrouillon() {
+        let autosave = ComposerAutosaveController(store: MockComposerAutosaveStore())
+        var publications = 0
+        let abonnement = autosave.objectWillChange.sink { publications += 1 }
+        XCTAssertFalse(autosave.didBind)
+        _ = autosave.bind(account: nil, opening: .disabled)
+        XCTAssertTrue(autosave.didBind)
+        XCTAssertGreaterThanOrEqual(publications, 1, "la scène vierge doit être redessinée pour montrer l'aide")
+        abonnement.cancel()
+    }
+
+    func test_lAideDeLaSceneVide_attendLaRelectureDeLOuverture() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost+SceneState.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let début = code.range(of: "varsceneQuickCaptureHint:ComposerSceneQuickCapture.Hint?{")
+        else { return XCTFail("l'aide a changé de forme") }
+        let corps = String(code[début.upperBound...].prefix(200))
+        XCTAssertTrue(corps.hasPrefix("guardautosave.didBind,"),
+                      "un brouillon restauré montrait l'aide de la scène vide avant sa matière")
     }
 
     // MARK: - Ce que chaque geste fait
@@ -143,10 +175,8 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
     }
 
     @MainActor
-    func test_hintCopy_estServiDansLesSeptLangues() {
-        let lignes = ComposerSceneQuickCapture.gestureLines(.photoOrVideo).map(ComposerSceneCameraCopy.gestureLine)
-        XCTAssertFalse(lignes.contains(where: \.isEmpty))
-        XCTAssertEqual(Set(lignes).count, lignes.count, "chaque temps a ses propres mots")
+    func test_hintCopy_estServi() {
+        XCTAssertFalse(ComposerSceneCameraCopy.emptySceneLine.isEmpty)
     }
 
     // MARK: - Le flash

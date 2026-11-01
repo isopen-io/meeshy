@@ -16,7 +16,7 @@ class OutboxKindCatalogTest {
     @Test
     fun `only background reports nobody waits for stay out of the sync indicator`() {
         assertThat(OutboxKindCatalog.syncIndicatorExcludedDiskValues)
-            .containsExactly("READ_RECEIPT", "REPORT_ATTACHMENT_STATUS")
+            .containsExactly("READ_RECEIPT", "REPORT_ATTACHMENT_STATUS", "CONSUME_AFTER_READ", "CONSUME_VIEW_ONCE")
         assertThat(OutboxKindCatalog.metaFor(OutboxKind.MARK_UNREAD).countsForSyncIndicator).isTrue()
         assertThat(OutboxKindCatalog.metaFor(OutboxKind.SEND_MESSAGE).countsForSyncIndicator).isTrue()
     }

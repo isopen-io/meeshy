@@ -231,6 +231,12 @@ class StoryComposerDraftSnapshotTest {
     }
 
     @Test
+    fun `a changed set of checked formats is different content`() {
+        val a = sample().copy(format = "POST", formats = listOf("POST", "STORY"))
+        assertThat(a.sameContentAs(a.copy(formats = listOf("POST", "STORY", "REEL")))).isFalse()
+    }
+
+    @Test
     fun `a changed visibility is different content`() {
         val a = sample()
         assertThat(a.sameContentAs(a.copy(visibility = "PUBLIC"))).isFalse()
@@ -609,5 +615,23 @@ class StoryComposerDraftSnapshotTest {
 
         assertThat(decoded.awaitingPublication).containsExactly("cmid_a", "cmid_b").inOrder()
         assertThat(decoded.isAwaitingPublication).isTrue()
+    }
+
+    @Test
+    fun `a drawing survives the round-trip and is content worth restoring on its own`() {
+        val stroke = StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0, points = listOf(StoryDrawingStrokePoint(0.1, 0.2)))
+        val drawn = StoryComposerDraftSnapshot(slides = listOf(StoryDraftSlideSnapshot(id = "s1", strokes = listOf(stroke))), selectedId = "s1")
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), json.encodeToString(StoryComposerDraftSnapshot.serializer(), drawn))
+
+        assertThat(decoded.slides.single().strokes).containsExactly(stroke)
+        assertThat(decoded.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a slide written before drawings were kept reads as drawing nothing`() {
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), """{"slides":[{"id":"s1","text":"a"}],"selectedId":"s1"}""")
+
+        assertThat(decoded.slides.single().strokes).isEmpty()
     }
 }

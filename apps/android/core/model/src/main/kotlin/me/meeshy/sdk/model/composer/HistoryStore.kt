@@ -47,6 +47,9 @@ class HistoryStore<S> private constructor(
         return HistoryStore(kept, kept.size - 1, cap)
     }
 
+    /** Chaque état réécrit par [transform], la position courante et le plafond inchangés. */
+    fun map(transform: (S) -> S): HistoryStore<S> = HistoryStore(entries.map(transform), index, cap)
+
     fun undo(): HistoryStep<S>? =
         if (canUndo) HistoryStep(HistoryStore(entries, index - 1, cap), entries[index - 1]) else null
 
