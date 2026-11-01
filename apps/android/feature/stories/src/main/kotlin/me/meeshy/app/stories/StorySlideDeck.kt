@@ -15,7 +15,6 @@ import me.meeshy.sdk.model.composer.SceneObjectCaps
 import me.meeshy.sdk.model.composer.StoryLimits
 import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.StorySlideDuration
-import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 
@@ -499,13 +498,8 @@ data class StorySlideDeck(
     val selectedSlideDurationSeconds: Double get() = slideDurationSeconds(selectedSlide)
 
     /** La durée effective d'UNE slide : son épingle, sinon celle que son contenu impose. */
-    fun slideDurationSeconds(slide: StorySlide): Double = slide.durationSecondsPin ?: StorySlideDuration.contentDerivedSeconds(
-        mediaObjects = null,
-        audioPlayerObjects = null,
-        textObjects = slide.elements
-            .filter { it.isPublishable }
-            .map { StoryTextObject(id = it.id, text = it.text) },
-    )
+    fun slideDurationSeconds(slide: StorySlide, videoSourceSeconds: (String) -> Double? = { null }): Double =
+        slide.durationSecondsPin ?: StorySlideContentDuration.seconds(slide, videoSourceSeconds)
 
     /** La durée de la story entière : toutes les slides additionnées, bornée à deux heures par [StoryLimits.TOTAL_SECONDS]. */
     val totalDurationSeconds: Double get() = slides.sumOf { slideDurationSeconds(it) }
