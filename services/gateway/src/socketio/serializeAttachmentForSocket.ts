@@ -105,6 +105,8 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
    * (`MessageAttachment.capturedInApp`, `Boolean @default(false)`).
    */
   readonly capturedInApp: boolean;
+  /** #11327 — la lens qui a produit le média (`null` : aucune) ; le client en tire « Lens par X ». */
+  readonly lensSlug: string | null;
   readonly createdAt: Date | string;
   readonly transcription: unknown;
   readonly translations: unknown;
@@ -218,6 +220,7 @@ export function serializeAttachmentForSocket(
     // reflète la valeur de colonne (`@default(false)`) pour un appelant qui
     // aurait requêté sans ce champ.
     capturedInApp: (raw.capturedInApp as boolean | null | undefined) ?? false,
+    lensSlug: typeof raw.lensSlug === 'string' ? raw.lensSlug : null,
     createdAt: raw.createdAt as Date | string,
     // Prisme Linguistique — null = pas encore enrichi, présent = serialize tel quel
     transcription: raw.transcription ?? null,

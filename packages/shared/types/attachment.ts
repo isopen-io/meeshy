@@ -276,6 +276,14 @@ export interface Attachment {
    */
   readonly capturedInApp: boolean;
 
+  /**
+   * La lens qui a produit ce média (#11327), retenue par la passerelle si elle
+   * est publiée et installée par l'expéditeur. EN CLAIR, E2EE compris (#11251).
+   * Optionnel : absente d'une ligne héritée ; le crédit se lit par `GET /lens/credits`.
+   * @see packages/shared/types/lens-partner.ts
+   */
+  readonly lensSlug?: string | null;
+
   // ===== VIEW-ONCE & BLUR =====
   readonly isViewOnce: boolean;
   readonly maxViewOnceCount?: number;

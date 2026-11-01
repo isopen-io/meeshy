@@ -225,7 +225,13 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
     '/partners/:userId/logo',
     {
       onRequest: [fastify.authenticate],
-      schema: { description: 'Le logo d’un partenaire VÉRIFIÉ (#11327), composé dans le filigrane à côté de celui de Meeshy ; 404 sinon.', tags, summary: 'Get a verified partner logo', params: userIdParamsJsonSchema },
+      schema: {
+        description: 'Le logo d’un partenaire VÉRIFIÉ (#11327), composé dans le filigrane à côté de celui de Meeshy ; 404 sinon.',
+        tags,
+        summary: 'Get a verified partner logo',
+        params: userIdParamsJsonSchema,
+        response: { 200: { description: 'Les octets du logo (PNG ou WebP ré-encodé)', type: 'string', format: 'binary' }, ...PACK_ERRORS },
+      },
     },
     guard('[GET /lens/partners/:userId/logo]', async (request, reply) => {
       const logo = await partners.logo((request.params as UserIdRequest['Params']).userId);

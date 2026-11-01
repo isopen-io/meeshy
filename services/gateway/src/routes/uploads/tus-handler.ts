@@ -47,6 +47,7 @@ import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
 import { stripStoredMediaMetadata } from '../../services/attachments/media-metadata-strip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { mediaDescriptionFields } from '../../services/attachments/mediaDescriptionInput';
+import { lensAttributionFields } from '../../services/packs/lensAttribution';
 import { triggerMediaAltTranslations } from '../../services/posts/mediaAltWrites';
 import { triggerMessageAttachmentAltTranslation } from '../../services/attachments/MessageAttachmentAltTranslationService';
 import { originIsAllowed } from '../../config/cors-origins';
@@ -584,6 +585,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
       // #11329 — la description saisie à l'envoi (métadonnée TUS `alt`).
       const description = mediaDescriptionFields(upload.metadata?.alt);
+      // #11327 — la lens qui a produit ce média (métadonnée TUS `lensslug`), retenue si publiée
+      // ET installée par l'uploadeur ; EN CLAIR quel que soit le chiffrement (décision #11251).
+      const lensAttribution = await lensAttributionFields(prisma, isAnonymous ? null : userId, upload.metadata?.lensslug);
       const uploadContext = upload.metadata?.uploadcontext;
       // Les commentaires réutilisent PostMedia (FK `commentId`) — même pipeline
       // d'upload/transcription/traduction que les posts. Le média est créé en
@@ -621,6 +625,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             ...persistedRenditionFields(rendered),
             ...processingFields,
             ...description,
+            ...lensAttribution,
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
@@ -720,6 +725,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             // @see packages/shared/utils/forward-to-publication.ts
             capturedInApp: upload.metadata?.capturedinapp === 'true',
             ...description,
+            ...lensAttribution,
             ...(clientTranscription ? { metadata: { transcription: clientTranscription } } : {}),
           },
         });

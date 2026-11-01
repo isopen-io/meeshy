@@ -91,6 +91,9 @@ export const messageAttachmentSchema = {
     // Provenance — declared by the capturing client, read back by the share
     // sheet to decide whether publishing this media needs confirmation.
     capturedInApp: { type: 'boolean', description: "Media came from the app's own camera or microphone" },
+    // #11327 — the lens that produced this media, in clear even under E2EE (#11251);
+    // clients resolve « Lens par X » through GET /lens/credits.
+    lensSlug: { type: 'string', nullable: true, description: 'Slug of the partner lens that produced this media' },
 
     // View-once / Secret
     isViewOnce: { type: 'boolean', description: 'View-once attachment' },

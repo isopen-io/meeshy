@@ -105,7 +105,7 @@ const viewOf = (row: ProfileRow): PartnerProfileView => ({
   verifiedAt: row.verifiedAt?.toISOString() ?? null,
 });
 
-type LogoColumns = { readonly logoSrc: string | null; readonly logoSha256: string | null; readonly logoMime: string | null; readonly logoBytes: Uint8Array | null; readonly logoSize: number | null };
+type LogoColumns = { readonly logoSrc: string | null; readonly logoSha256: string | null; readonly logoMime: string | null; readonly logoBytes: Uint8Array<ArrayBuffer> | null; readonly logoSize: number | null };
 
 const NO_LOGO: LogoColumns = { logoSrc: null, logoSha256: null, logoMime: null, logoBytes: null, logoSize: null };
 
@@ -270,7 +270,7 @@ export class LensPartners {
     if (logo === null) return { columns: NO_LOGO };
     if (logo.length === 0 || logo.length > PARTNER_PROFILE_LIMITS.maxLogoBytes) return { reason: 'too-large' };
     const outcome = await this.normalizeLogo(logo);
-    if (!outcome.ok) return { reason: outcome.reason };
+    if ('reason' in outcome) return { reason: outcome.reason };
     const { bytes, mimeType } = outcome.image;
     if (!isLogoMime(mimeType)) return { reason: 'not-an-image' };
     const sha256 = createHash('sha256').update(bytes).digest('hex');

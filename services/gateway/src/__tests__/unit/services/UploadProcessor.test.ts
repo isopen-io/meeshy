@@ -40,6 +40,8 @@ const mockPrismaClient = {
     findMany: jest.fn(),
     delete: jest.fn(),
   },
+  lensPack: { findUnique: jest.fn() },
+  userStickerPack: { findFirst: jest.fn() },
 } as any;
 
 jest.mock('../../../services/attachments/MetadataManager', () => ({
@@ -423,6 +425,44 @@ describe('UploadProcessor', () => {
 
       const createCall = mockPrismaClient.messageAttachment.create.mock.calls[0][0] as any;
       expect(createCall.data.capturedInApp).toBe(false);
+    });
+
+    describe('le crédit de lens voyage avec le média (#11327)', () => {
+      const lensPublishedAndInstalled = () => {
+        mockPrismaClient.lensPack.findUnique.mockResolvedValueOnce({ status: 'approved' });
+        mockPrismaClient.userStickerPack.findFirst.mockResolvedValueOnce({ id: 'choice-1' });
+      };
+
+      it('retient la lens déclarée quand elle est publiée et installée par l’expéditeur', async () => {
+        lensPublishedAndInstalled();
+
+        await processor.uploadFile(createTestFile({ mimeType: 'image/jpeg' }), testUserId, false, testMessageId, { lensSlug: 'aurore' });
+
+        const createCall = mockPrismaClient.messageAttachment.create.mock.calls.at(-1)[0] as any;
+        expect(createCall.data.lensSlug).toBe('aurore');
+        expect(mockPrismaClient.userStickerPack.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ userId: testUserId, packSlug: 'lens.aurore' }) }),
+        );
+      });
+
+      it('ne crédite rien quand l’expéditeur n’a pas installé la lens — le média part quand même', async () => {
+        mockPrismaClient.lensPack.findUnique.mockResolvedValueOnce({ status: 'approved' });
+        mockPrismaClient.userStickerPack.findFirst.mockResolvedValueOnce(null);
+
+        await processor.uploadFile(createTestFile({ mimeType: 'image/jpeg' }), testUserId, false, testMessageId, { lensSlug: 'aurore' });
+
+        const createCall = mockPrismaClient.messageAttachment.create.mock.calls.at(-1)[0] as any;
+        expect(createCall.data).not.toHaveProperty('lensSlug');
+      });
+
+      it('un média CHIFFRÉ porte la lens EN CLAIR (décision #11251 : métadonnée assumée)', async () => {
+        lensPublishedAndInstalled();
+
+        await processor.uploadEncryptedFile(createTestFile(), testUserId, 'e2ee' as any, false, testMessageId, { lensSlug: 'aurore' });
+
+        const createCall = mockPrismaClient.messageAttachment.create.mock.calls.at(-1)[0] as any;
+        expect(createCall.data).toMatchObject({ isEncrypted: true, lensSlug: 'aurore' });
+      });
     });
 
     it('should handle anonymous upload', async () => {

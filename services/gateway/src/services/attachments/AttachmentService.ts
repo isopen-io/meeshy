@@ -213,6 +213,7 @@ export class AttachmentService {
     createdAt: Date;
     isForwarded: boolean | null;
     capturedInApp?: boolean | null;
+    lensSlug?: string | null;
     isViewOnce: boolean | null;
     viewOnceCount: number | null;
     isBlurred: boolean | null;
@@ -242,6 +243,7 @@ export class AttachmentService {
       createdAt: attachment.createdAt.toISOString(),
       isForwarded: attachment.isForwarded ?? false,
       capturedInApp: attachment.capturedInApp ?? false,
+      lensSlug: attachment.lensSlug ?? null,
       isViewOnce: attachment.isViewOnce ?? false,
       viewOnceCount: attachment.viewOnceCount ?? 0,
       isBlurred: attachment.isBlurred ?? false,
