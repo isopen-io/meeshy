@@ -122,11 +122,21 @@ struct ShareCard: Equatable {
         }
     }
 
-    /// Le texte qui part dans la conversation : la phrase de la story, sinon le lien.
+    /// Le texte qui part dans la conversation : la phrase qui nomme l'auteur
+    /// (story, publication, réel — #14323), sinon le lien.
     var messageText: String? {
         guard let link = url?.absoluteString else { return title.isEmpty ? nil : title }
-        guard kind == .story, let authorName else { return link }
-        return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .meeshyShare), authorName, link)
+        guard let authorName, let phrase = sharePhrase else { return link }
+        return String(format: phrase, authorName, link)
+    }
+
+    private var sharePhrase: String? {
+        switch kind {
+        case .story: return String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .meeshyShare)
+        case .post: return String(localized: "share.post.shareText", defaultValue: "🔗 Publication de %1$@ : %2$@", bundle: .meeshyShare)
+        case .reel: return String(localized: "share.reel.shareText", defaultValue: "🔗 Réel de %1$@ : %2$@", bundle: .meeshyShare)
+        case .profile, .invitation: return nil
+        }
     }
 }
 
