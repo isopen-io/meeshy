@@ -77,12 +77,23 @@ describe('ZmqRequestSender ne pousse que des langues traduisibles côté serveur
     expect(sent).toHaveLength(0);
   });
 
+  it('envoie la source sous la forme canonique que le filtre a jugée', async () => {
+    const { sender, sent } = buildSender();
+
+    await sender.sendTranslationRequest(request({ sourceLanguage: 'FR-fr', targetLanguages: ['en'] }));
+
+    // Le translator compare la source BRUTE à LANGUAGE_MAPPINGS : `FR-fr`
+    // y serait refusée alors que la passerelle l'a jugée traduisible.
+    expect(sent[0].sourceLanguage).toBe('fr');
+  });
+
   it('laisse une source auto à la détection du translator', async () => {
     const { sender, sent } = buildSender();
 
     await sender.sendTranslationRequest(request({ sourceLanguage: 'auto', targetLanguages: ['en'] }));
 
     expect(sent).toHaveLength(1);
+    expect(sent[0].sourceLanguage).toBe('auto');
   });
 
   it("annonce au translator qu'elle lit le refus UNSUPPORTED_LANGUAGE", async () => {

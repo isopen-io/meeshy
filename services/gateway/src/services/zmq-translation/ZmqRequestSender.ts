@@ -124,7 +124,9 @@ export class ZmqRequestSender {
       taskId: taskId,
       messageId: request.messageId,
       text: request.text,
-      sourceLanguage: request.sourceLanguage,
+      // La forme que `translatableSource` a jugée : le translator la compare
+      // brute à `LANGUAGE_MAPPINGS`, où `fr-FR` refuserait une paire servable.
+      sourceLanguage: request.sourceLanguage ? canonicalLanguage(request.sourceLanguage) : request.sourceLanguage,
       targetLanguages: servableTargetLanguages,
       conversationId: request.conversationId,
       modelType: request.modelType || 'basic',
