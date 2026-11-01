@@ -35,7 +35,7 @@ public struct ConversationCardChange: Equatable, Sendable {
     }
 }
 
-public final class ConversationCardService: ConversationCardServiceProviding, @unchecked Sendable {
+public final class ConversationCardService: ConversationCardServiceProviding, Sendable {
     public static let shared = ConversationCardService()
 
     /// Une carte vue il y a moins d'une minute ne se relit pas.
@@ -43,7 +43,7 @@ public final class ConversationCardService: ConversationCardServiceProviding, @u
     /// Au-delà d'un jour, une carte ne s'affiche plus sans être relue.
     static let staleInterval: TimeInterval = 24 * 60 * 60
 
-    private struct Entry {
+    private struct Entry: Sendable {
         let resolution: ConversationCardResolution
         let storedAt: Date
     }
