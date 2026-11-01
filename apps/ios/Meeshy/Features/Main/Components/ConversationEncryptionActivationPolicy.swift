@@ -2,7 +2,8 @@ import Foundation
 import MeeshySDK
 
 /// QUI peut activer le chiffrement d'une conversation (#12517, #12588,
-/// directives du porteur) — le bout en bout ne se désactive pas (#12949) — miroir de `mayActivateConversationEncryption`
+/// directives du porteur) — le bout en bout ne se désactive pas (#12949), le
+/// chiffrement au repos non plus (2026-11-01) — miroir de `mayActivateConversationEncryption`
 /// (`services/gateway/src/utils/encryption-activation-policy.ts`). Tant que
 /// l'E2EE n'est pas opérationnel, l'activation est réservée à un rôle de
 /// plateforme ANALYST ou supérieur (ANALYST, AUDIT, MODERATOR, ADMIN, BIGBOSS),
@@ -10,12 +11,14 @@ import MeeshySDK
 /// 403 et exige en plus l'appartenance à la conversation. La relâcher se fait
 /// ici et dans la passerelle, nulle part ailleurs. Fermée par défaut : un rôle
 /// absent ou illisible n'accorde rien.
+/// La même règle choisit le bout en bout à la création
+/// (`ConversationCreationEncryption.mayChooseEndToEnd`, SDK) : elle y est lue,
+/// jamais réécrite.
 enum ConversationEncryptionActivationPolicy {
-    static let minimumPlatformRole: PlatformRole = .analyst
+    static let minimumPlatformRole: PlatformRole = ConversationCreationEncryption.endToEndMinimumPlatformRole
 
     static func mayActivate(platformRole: String?) -> Bool {
-        guard let role = PlatformRole(caseFolding: platformRole) else { return false }
-        return role >= minimumPlatformRole
+        ConversationCreationEncryption.mayChooseEndToEnd(platformRole: platformRole)
     }
 
     /// Activer : le droit SERVI par la passerelle (`canToggleEncryption`,
@@ -26,12 +29,9 @@ enum ConversationEncryptionActivationPolicy {
     }
 }
 
-/// Les modes qu'une activation propose — les valeurs que la passerelle accepte.
-enum ConversationEncryptionModeChoice: String, CaseIterable, Sendable {
-    case e2ee
-    case server
-    case hybrid
-}
+/// Les modes qu'une activation ou une bascule propose — les valeurs que la
+/// passerelle accepte, celles de l'écran de création (une seule liste, SDK).
+typealias ConversationEncryptionModeChoice = ConversationCreationEncryption.Mode
 
 /// Ce que la rangée de sécurité de la fiche de conversation rend (#12880) :
 /// tout membre voit l'état de chiffrement et peut ouvrir son explication ; seul
@@ -46,19 +46,35 @@ enum ConversationSecurityRowContent: Equatable {
     }
 }
 
-/// Ce que la feuille de détail du chiffrement rend : seul le chiffrement AU
-/// REPOS (`server`, `hybrid`) se désactive, au rôle autorisé ; le bout en bout
-/// ne se désactive jamais (#12949).
+/// Ce que la feuille de détail du chiffrement rend (directive porteur du
+/// 2026-11-01) : le chiffrement au repos ne se désactive plus
+/// (`409 ENCRYPTION_AT_REST_PERMANENT`) ; une conversation `server` ou `hybrid`
+/// passe directement à un autre mode, bout en bout compris, au rôle autorisé ;
+/// le bout en bout ne se quitte jamais (#12949).
 enum ConversationEncryptionDetailContent: Equatable {
     case loading
-    case active(offersDeactivation: Bool)
+    case active(offersModeSwitch: Bool)
     case activation
     case inactiveReadOnly
 
     static func resolve(isLoading: Bool, isEncrypted: Bool, isEndToEnd: Bool, mayToggle: Bool) -> ConversationEncryptionDetailContent {
         if isLoading { return .loading }
-        if isEncrypted { return .active(offersDeactivation: mayToggle && !isEndToEnd) }
+        if isEncrypted { return .active(offersModeSwitch: mayToggle && !isEndToEnd) }
         return mayToggle ? .activation : .inactiveReadOnly
+    }
+}
+
+/// Les modes vers lesquels une conversation chiffrée au repos peut passer :
+/// tous sauf le sien ; aucun depuis le bout en bout (#12949). Passer au bout
+/// en bout se confirme, parce qu'on n'en revient pas.
+enum ConversationEncryptionModeSwitch {
+    static func targets(from current: ConversationEncryptionModeChoice) -> [ConversationEncryptionModeChoice] {
+        guard current != .e2ee else { return [] }
+        return ConversationEncryptionModeChoice.allCases.filter { $0 != current }
+    }
+
+    static func requiresConfirmation(_ target: ConversationEncryptionModeChoice) -> Bool {
+        target == .e2ee
     }
 }
 

@@ -3,9 +3,12 @@ import Foundation
 /// Lire et basculer le régime de chiffrement d'une conversation (#12522). La
 /// passerelle fait foi : rôle de plateforme ANALYST ou supérieur, membre, rang
 /// de conversation hors tête-à-tête (403), écriture conditionnelle (409
-/// `E2EE_REGIME_CHANGED` quand une autre bascule vient de passer). Seul le
-/// chiffrement AU REPOS (`server`, `hybrid`) se désactive : le bout en bout ne
-/// se désactive jamais (#12949, `409 E2EE_IRREVERSIBLE`).
+/// `E2EE_REGIME_CHANGED` quand une autre bascule vient de passer). Depuis le
+/// 2026-11-01, plus rien ne se désactive : `disable` sur `server` / `hybrid`
+/// rend `409 ENCRYPTION_AT_REST_PERMANENT` (gardé pour la rétrocompatibilité,
+/// l'app ne l'appelle plus) et `enable` passe directement d'un mode au repos à
+/// un autre, bout en bout compris ; le bout en bout ne se quitte jamais
+/// (#12949, `409 E2EE_IRREVERSIBLE`).
 public protocol ConversationEncryptionServiceProviding: Sendable {
     func fetchStatus(conversationId: String) async throws -> ConversationEncryptionStatus
     func enable(conversationId: String, mode: String) async throws -> ConversationEncryptionStatus

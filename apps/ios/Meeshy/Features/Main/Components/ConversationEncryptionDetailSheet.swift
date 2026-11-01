@@ -23,7 +23,8 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var isSwitching = false
     @State private var selectedMode: ConversationEncryptionModeChoice = .server
     @State private var errorMessage: String?
-    @State private var confirmsDeactivation = false
+    /// Le mode vers lequel basculer, en attente de confirmation (le bout en bout ne se quitte pas).
+    @State private var pendingSwitch: ConversationEncryptionModeChoice?
     @State private var isOpeningPair = false
     /// Cet appareil a vu la conversation chiffrée de bout en bout : elle le reste (#12949).
     @State private var remembersEndToEnd = false
@@ -73,15 +74,16 @@ struct ConversationEncryptionDetailSheet: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                case .active(let offersDeactivation):
-                    if let status, let mode = displayedMode.flatMap(ConversationEncryptionModeChoice.init(rawValue:)) {
+                case .active(let offersModeSwitch):
+                    let mode = displayedMode.flatMap(ConversationEncryptionModeChoice.init(rawValue:))
+                    if let status, let mode {
                         activeStateSections(mode: mode, status: status)
                     }
                     if let servedGap { servedGapSection(servedGap) }
                     if explanation.regime == .endToEnd, let peer { readableDirectSection(peer) }
                     pairEndToEndSection
+                    if offersModeSwitch, let mode { modeSwitchSection(from: mode) }
                     ConversationEncryptionExplanationSections(explanation: explanation)
-                    if offersDeactivation { atRestDeactivationSection }
                 case .activation:
                     inactiveStateSection
                     pairEndToEndSection
@@ -114,19 +116,20 @@ struct ConversationEncryptionDetailSheet: View {
             }
             .task { await loadStatus() }
             .confirmationDialog(
-                String(localized: "conversation.encryption.detail.deactivateAtRestConfirmTitle",
-                       defaultValue: "Désactiver le chiffrement sur le serveur ?", bundle: .main),
-                isPresented: $confirmsDeactivation,
-                titleVisibility: .visible
-            ) {
-                Button(String(localized: "conversation.encryption.detail.deactivate",
-                              defaultValue: "Désactiver le chiffrement", bundle: .main), role: .destructive) {
-                    Task { await switchRegime { try await service.disable(conversationId: conversationId) } }
+                String(localized: "conversation.encryption.detail.switchToEndToEndConfirmTitle",
+                       defaultValue: "Passer au chiffrement de bout en bout ?", bundle: .main),
+                isPresented: Binding(get: { pendingSwitch != nil }, set: { if !$0 { pendingSwitch = nil } }),
+                titleVisibility: .visible,
+                presenting: pendingSwitch
+            ) { target in
+                Button(String(localized: "conversation.encryption.detail.switchToEndToEndConfirm",
+                              defaultValue: "Passer en bout en bout", bundle: .main)) {
+                    Task { await switchMode(to: target) }
                 }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-            } message: {
-                Text(String(localized: "conversation.encryption.detail.deactivateAtRestConfirmMessage",
-                            defaultValue: "Les nouveaux messages seront stockés sans chiffrement sur le serveur. Les messages déjà chiffrés le restent. Chaque membre verra ce changement dans le fil.",
+            } message: { _ in
+                Text(String(localized: "conversation.encryption.create.footer",
+                            defaultValue: "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
                             bundle: .main))
             }
         }
@@ -181,32 +184,50 @@ struct ConversationEncryptionDetailSheet: View {
 
     }
 
-    // MARK: - Le chiffrement au repos se désactive (#12522), jamais le bout en bout (#12949)
+    // MARK: - Le chiffrement au repos ne se désactive plus : il change de mode (2026-11-01)
 
-    private var atRestDeactivationSection: some View {
+    /// Une conversation `server` ou `hybrid` passe directement à un autre mode,
+    /// bout en bout compris ; ce dernier se confirme, on n'en revient pas.
+    private func modeSwitchSection(from current: ConversationEncryptionModeChoice) -> some View {
         Section {
-            Button(role: .destructive) {
-                confirmsDeactivation = true
-            } label: {
-                HStack {
-                    Spacer()
-                    if isSwitching {
-                        ProgressView()
+            ForEach(ConversationEncryptionModeSwitch.targets(from: current), id: \.self) { target in
+                Button {
+                    if ConversationEncryptionModeSwitch.requiresConfirmation(target) {
+                        pendingSwitch = target
                     } else {
-                        Image(systemName: "lock.open")
-                            .accessibilityHidden(true)
-                        Text(String(localized: "conversation.encryption.detail.deactivate",
-                                    defaultValue: "Désactiver le chiffrement",
-                                    bundle: .main)).fontWeight(.semibold)
+                        Task { await switchMode(to: target) }
                     }
-                    Spacer()
+                } label: {
+                    HStack(spacing: MeeshySpacing.md) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                            Text(modeLabel(target))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text(modeDescription(target))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.forward")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
+                .disabled(isSwitching)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("encryption-switch-\(target.rawValue)")
             }
-            .disabled(isSwitching)
-            .accessibilityIdentifier("encryption-deactivate")
+        } header: {
+            Text(String(localized: "conversation.encryption.detail.switchHeader",
+                        defaultValue: "Changer de mode",
+                        bundle: .main))
         } footer: {
-            Text(String(localized: "conversation.encryption.detail.deactivateAtRestFooter",
-                        defaultValue: "Seul le chiffrement sur le serveur se désactive : Meeshy lit déjà ces messages, la traduction et la transcription restent disponibles. Le chiffrement de bout en bout, lui, ne se désactive pas.",
+            Text(String(localized: "conversation.encryption.create.footer",
+                        defaultValue: "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
                         bundle: .main))
                 .font(.caption)
         }
@@ -224,7 +245,7 @@ struct ConversationEncryptionDetailSheet: View {
                     Image(systemName: "bubble.left.and.bubble.right")
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.encryption.detail.openPlaintextDirect",
-                                defaultValue: "Ouvrir une conversation non chiffrée avec \(peer.name)",
+                                defaultValue: "Ouvrir une conversation sans chiffrement de bout en bout avec \(peer.name)",
                                 bundle: .main))
                     Spacer()
                     if isOpeningPair { ProgressView() }
@@ -260,7 +281,7 @@ struct ConversationEncryptionDetailSheet: View {
     private func openReadableDirect(with peer: ConversationEncryptionPeer) async {
         guard isOnline() else {
             errorMessage = String(localized: "conversation.encryption.detail.plaintextDirectOffline",
-                                  defaultValue: "Hors connexion : reconnectez-vous pour ouvrir la conversation non chiffrée.",
+                                  defaultValue: "Hors connexion : reconnectez-vous pour ouvrir la conversation sans chiffrement de bout en bout.",
                                   bundle: .main)
             return
         }
@@ -300,10 +321,10 @@ struct ConversationEncryptionDetailSheet: View {
     private func failOpeningReadableDirect(servedGap: Bool = false) {
         errorMessage = servedGap
             ? String(localized: "conversation.encryption.detail.plaintextDirectServedGap",
-                     defaultValue: "Le serveur présente déjà ce tête-à-tête sans chiffrement : rétablissez d’abord le chiffrement de bout en bout ici, puis ouvrez la conversation non chiffrée à côté.",
+                     defaultValue: "Le serveur présente déjà ce tête-à-tête sans chiffrement de bout en bout : rétablissez-le d’abord ici, puis ouvrez à côté la conversation sans chiffrement de bout en bout.",
                      bundle: .main)
             : String(localized: "conversation.encryption.detail.plaintextDirectFailed",
-                     defaultValue: "La conversation non chiffrée n’a pas pu être ouverte. Réessayez.",
+                     defaultValue: "La conversation sans chiffrement de bout en bout n’a pas pu être ouverte. Réessayez.",
                      bundle: .main)
         HapticFeedback.error()
     }
@@ -313,13 +334,13 @@ struct ConversationEncryptionDetailSheet: View {
     private func servedGapSection(_ gap: ConversationEncryptionServedGap) -> some View {
         Section {
             Text(String(localized: "conversation.encryption.detail.servedGap",
-                        defaultValue: "Le serveur présente cette conversation sans chiffrement de bout en bout, mais cet appareil l’a vue chiffrée : rien n’y part en clair. Pour échanger en clair, créez une nouvelle conversation.",
+                        defaultValue: "Le serveur présente cette conversation sans chiffrement de bout en bout, mais cet appareil l’a vue chiffrée de bout en bout : elle le reste ici. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
                         bundle: .main))
                 .font(.subheadline)
             if gap == .restorable {
                 Button {
                     selectedMode = .e2ee
-                    Task { await activate() }
+                    Task { await switchMode(to: .e2ee) }
                 } label: {
                     Text(String(localized: "conversation.encryption.detail.restoreEndToEnd",
                                 defaultValue: "Rétablir le chiffrement de bout en bout",
@@ -349,7 +370,7 @@ struct ConversationEncryptionDetailSheet: View {
                                 bundle: .main))
                         .font(.headline)
                     Text(String(localized: "conversation.encryption.detail.inactiveSubtitle",
-                                defaultValue: "Les messages sont stockés en clair sur le serveur.",
+                                defaultValue: "Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés.",
                                 bundle: .main))
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -385,14 +406,18 @@ struct ConversationEncryptionDetailSheet: View {
                         bundle: .main))
         } footer: {
             Text(String(localized: "conversation.encryption.detail.activationFooterFinal",
-                        defaultValue: "Une fois activé, le chiffrement de bout en bout ne se désactive plus : pour échanger en clair, il faudra une nouvelle conversation. Choisissez le mode adapté à vos besoins de traduction et de confidentialité.",
+                        defaultValue: "Le chiffrement de bout en bout ne se désactive jamais, le chiffrement sur nos serveurs non plus. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
                         bundle: .main))
                 .font(.caption)
         }
 
         Section {
             Button {
-                Task { await activate() }
+                if ConversationEncryptionModeSwitch.requiresConfirmation(selectedMode) {
+                    pendingSwitch = selectedMode
+                } else {
+                    Task { await switchMode(to: selectedMode) }
+                }
             } label: {
                 HStack {
                     Spacer()
@@ -429,39 +454,9 @@ struct ConversationEncryptionDetailSheet: View {
         return String(localized: "conversation.encryption.detail.translation.disabled", defaultValue: "Désactivé", bundle: .main)
     }
 
-    private func modeLabel(_ mode: ConversationEncryptionModeChoice) -> String {
-        switch mode {
-        case .e2ee:
-            return String(localized: "conversation.encryption.mode.e2ee.label",
-                          defaultValue: "Bout en bout (sur vos appareils)",
-                          bundle: .main)
-        case .server:
-            return String(localized: "conversation.encryption.mode.server.label",
-                          defaultValue: "Serveur (AES-256-GCM)",
-                          bundle: .main)
-        case .hybrid:
-            return String(localized: "conversation.encryption.mode.hybrid.label",
-                          defaultValue: "Hybride (chiffré sur le serveur)",
-                          bundle: .main)
-        }
-    }
+    private func modeLabel(_ mode: ConversationEncryptionModeChoice) -> String { mode.label }
 
-    private func modeDescription(_ mode: ConversationEncryptionModeChoice) -> String {
-        switch mode {
-        case .e2ee:
-            return String(localized: "conversation.encryption.mode.e2ee.description",
-                          defaultValue: "Seuls les appareils des participants lisent les messages. La traduction se fait sur l’appareil.",
-                          bundle: .main)
-        case .server:
-            return String(localized: "conversation.encryption.mode.server.description",
-                          defaultValue: "Chiffré sur le serveur. Le serveur peut lire les messages : la traduction reste disponible (recommandé).",
-                          bundle: .main)
-        case .hybrid:
-            return String(localized: "conversation.encryption.mode.hybrid.description",
-                          defaultValue: "Chiffré sur le serveur, comme le mode Serveur : le serveur peut lire et traduire les messages.",
-                          bundle: .main)
-        }
-    }
+    private func modeDescription(_ mode: ConversationEncryptionModeChoice) -> String { mode.summary }
 
     private func loadStatus() async {
         isLoading = true
@@ -480,8 +475,10 @@ struct ConversationEncryptionDetailSheet: View {
         }
     }
 
-    private func activate() async {
-        await switchRegime { try await service.enable(conversationId: conversationId, mode: selectedMode.rawValue) }
+    /// Activer ou changer de mode : `POST /conversations/:id/encryption` passe
+    /// directement de `server` / `hybrid` au mode demandé (2026-11-01).
+    private func switchMode(to mode: ConversationEncryptionModeChoice) async {
+        await switchRegime { try await service.enable(conversationId: conversationId, mode: mode.rawValue) }
     }
 
     /// L'activation : le régime servi devient l'état de la fiche ET ce que le fil
@@ -500,7 +497,7 @@ struct ConversationEncryptionDetailSheet: View {
         } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.directAlreadyEndToEnd {
             await loadStatus()
             errorMessage = String(localized: "conversation.encryption.detail.directAlreadyEndToEnd",
-                                  defaultValue: "Vous avez déjà une conversation chiffrée de bout en bout avec cette personne : ouvrez-la pour échanger chiffré. Celle-ci reste lisible par le serveur.",
+                                  defaultValue: "Vous avez déjà une conversation chiffrée de bout en bout avec cette personne : ouvrez-la pour y échanger. Celle-ci reste chiffrée sur nos serveurs.",
                                   bundle: .main)
             HapticFeedback.error()
         } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.directNotAPair {

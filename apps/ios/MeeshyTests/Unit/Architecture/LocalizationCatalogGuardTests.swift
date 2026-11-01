@@ -372,4 +372,40 @@ final class LocalizationCatalogGuardTests: XCTestCase {
         let source = try String(contentsOf: sheet, encoding: .utf8)
         XCTAssertFalse(source.contains("E2EE + serveur"), "La valeur par défaut du libellé hybride promet encore le bout en bout")
     }
+
+    // MARK: - Le mode se choisit à la création (directive porteur du 2026-11-01)
+
+    /// Les clés de l'écran de création existent dans les sept langues, sous les
+    /// noms que les miroirs Android et web relisent.
+    func test_lesClesDuChoixALaCreationExistentDansLesSeptLangues() throws {
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        for key in [
+            "conversation.encryption.create.header",
+            "conversation.encryption.create.e2ee.soonGroups",
+            "conversation.encryption.create.footer",
+        ] {
+            let byLang = try XCTUnwrap(app.strings[key], "Clé absente du catalogue : \(key)")
+            XCTAssertEqual(byLang.count, 7, "\(key) doit exister dans les sept langues")
+        }
+    }
+
+    /// L'utilisateur lit ce que le mode fait de ses messages, jamais qui détient
+    /// une clé ni un nom d'algorithme : « Meeshy peut lire » et « AES-256-GCM »
+    /// quittent la fiche.
+    func test_laFicheChiffrementNeDitNiQuiLitNiLAlgorithme() throws {
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        let keys = [
+            "conversation.encryption.mode.server.label", "conversation.encryption.mode.hybrid.label",
+            "conversation.encryption.mode.e2ee.label", "conversation.encryption.mode.server.description",
+            "conversation.encryption.mode.hybrid.description", "conversation.encryption.summary.server",
+            "conversation.encryption.summary.hybrid", "conversation.encryption.fact.encryptedOnServerServerReads",
+            "conversation.encryption.fact.storedWithoutEncryption", "conversation.encryption.fact.onlyParticipantsRead",
+        ]
+        for key in keys {
+            let fr = try XCTUnwrap(app.strings[key]?["fr"], "Clé absente du catalogue : \(key)")
+            for word in ["Meeshy peut", "Meeshy n’a pas", "AES-256", "en clair"] {
+                XCTAssertFalse(fr.contains(word), "\(key) dit encore « \(word) » : « \(fr) »")
+            }
+        }
+    }
 }
