@@ -982,6 +982,7 @@
 		3B70A735972D948F6E5A0D6E /* StoryViewerView+RefusedComment.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7133F022DA4FBA9B4083A3B /* StoryViewerView+RefusedComment.swift */; };
 		3B76CA054AD183A43C49D76B /* futuriste_hologramme_front.webp in Resources */ = {isa = PBXBuildFile; fileRef = 0B1E98E56FE53186D3160CF5 /* futuriste_hologramme_front.webp */; };
 		3B97B31EEA2625F025E9AFC8 /* EmailProofErrorTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE2E5F6E2D3249D94F38C827 /* EmailProofErrorTextTests.swift */; };
+		3BA97C1D5B0481DABADDCB36 /* MeeshySendSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DBDF27F3FD334C60DE9E618 /* MeeshySendSheet.swift */; };
 		3BAB7E2E63A2F74294AA42B1 /* ComposerSceneLegendInPlaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF34C45719C7B1F3FDD10CCE /* ComposerSceneLegendInPlaceTests.swift */; };
 		3BB85FC4675858AD213DC795 /* ComposerDocumentLookBake.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400431CDB1C42FDEDD0E6B35 /* ComposerDocumentLookBake.swift */; };
 		3BD4B49033229CCC3585E7FF /* ComposerHydration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53080B456BDAB30585087EEA /* ComposerHydration.swift */; };
@@ -6890,6 +6891,7 @@
 		9D7DBBBDD0C1C88B17DF5A24 /* QuotedMediaOpeningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotedMediaOpeningTests.swift; sourceTree = "<group>"; };
 		9D81A6547D7B043BC4EA1779 /* MessageListScrollSafetyGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListScrollSafetyGuardTests.swift; sourceTree = "<group>"; };
 		9DB8319791CE094652A83989 /* MessageDetailChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailChrome.swift; sourceTree = "<group>"; };
+		9DBDF27F3FD334C60DE9E618 /* MeeshySendSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshySendSheet.swift; sourceTree = "<group>"; };
 		9DCE14E345628BD3517A33F8 /* CallWaitingBannerViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallWaitingBannerViewTests.swift; sourceTree = "<group>"; };
 		9DDE61EC829997C920DAB99F /* ArrivalCelebrationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrivalCelebrationController.swift; sourceTree = "<group>"; };
 		9E0502874EC6FF10E0537FE1 /* CallFrameSpotlight+Generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallFrameSpotlight+Generated.swift"; sourceTree = "<group>"; };
@@ -11745,6 +11747,7 @@
 				F14876F5E03643120B8BFB2F /* MediaReplyComposerBar.swift */,
 				F877BB1BA425CDB7F1E69805 /* MediaReplyKeyboardInset.swift */,
 				511FA48F8D0C002FD01EC165 /* MediaStageVeil.swift */,
+				9DBDF27F3FD334C60DE9E618 /* MeeshySendSheet.swift */,
 				AEEEB3B7461436EF9C523483 /* MessageArrivalAnimator.swift */,
 				D68041ACF314C7157E78E1A7 /* MessageArrivalMotion.swift */,
 				047E349B69099B502C3EF463 /* MessageFrameTracker.swift */,
@@ -15802,6 +15805,7 @@
 				3720FDE7AAD19CD732D144DD /* MeeshyFeatureFlags.swift in Sources */,
 				C155DBA7DC41C19972231C2E /* MeeshyFocusFilter.swift in Sources */,
 				07AF29FC6D16FBEB83B36EF4 /* MeeshyLaunch.swift in Sources */,
+				3BA97C1D5B0481DABADDCB36 /* MeeshySendSheet.swift in Sources */,
 				AE1C6B84E0476760AC41333E /* MeeshyShortcut.swift in Sources */,
 				46DD142B2FAC4D02D11A93C6 /* MeeshyStickerSheet.swift in Sources */,
 				ACD0A740F5823A7AF90AE973 /* MeeshyUIExports.swift in Sources */,

@@ -119,3 +119,21 @@ final class ReelRailSendWiringGuardTests: XCTestCase {
         XCTAssertTrue(sheets.contains("ShareSheet(activityItems:"), "« Partager » ouvre la feuille système.")
     }
 }
+
+/// Le bouton de la barre d'actions d'un post dit « Envoyer » et ouvre la
+/// feuille Meeshy ; « Partager » hors Meeshy reste dans ⋯ (porteur 2026-11-01).
+final class FeedPostSendWiringGuardTests: XCTestCase {
+
+    func test_thePostActionBar_sendsIntoMeeshy_andTheMenuStillSharesOut() throws {
+        let bar = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedPostActionsBar.swift")
+        XCTAssertTrue(bar.contains("\"feed.post.send\""))
+        XCTAssertTrue(bar.contains("sent = SharedContentWrapper(subject: sendSubject)"))
+        XCTAssertTrue(bar.contains(".modifier(MeeshySendSheet(sent: $sent))"))
+        XCTAssertFalse(bar.contains("onShare"), "La barre n'ouvre plus la feuille système.")
+
+        let card = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedPostCard.swift")
+        XCTAssertTrue(card.contains("sendSubject: .publication(id: post.id, isReel: post.isReel"))
+        let header = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
+        XCTAssertTrue(header.contains("onShare?(post.id)"), "« Partager » (feuille système) reste dans ⋯.")
+    }
+}

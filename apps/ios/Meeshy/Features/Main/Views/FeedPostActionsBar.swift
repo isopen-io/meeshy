@@ -32,12 +32,13 @@ struct FeedPostActionsBar: View, Equatable {
     let onRepost: ((String) -> Void)?
     let onQuote: ((String) -> Void)?
     let onBookmark: ((String) -> Void)?
-    let onShare: ((String) -> Void)?
+    let sendSubject: ShareSubject
 
     // Lecture directe sans @ObservedObject — même règle que la carte hôte.
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var showRepostOptions = false
     @State private var likeAnimating = false
+    @State private var sent: SharedContentWrapper?
 
     nonisolated static func == (lhs: FeedPostActionsBar, rhs: FeedPostActionsBar) -> Bool {
         lhs.postId == rhs.postId
@@ -104,9 +105,8 @@ struct FeedPostActionsBar: View, Equatable {
                         .contentTransition(.numericText())
                 }
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
+            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isHeartInFlight)
@@ -133,9 +133,8 @@ struct FeedPostActionsBar: View, Equatable {
                 }
                 .foregroundColor(isCommentsSheetPresented ? theme.accentText(accentColor) : theme.textSecondary)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
+            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(commentCount) commentaires", bundle: .main))
@@ -172,9 +171,8 @@ struct FeedPostActionsBar: View, Equatable {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
+            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isRepostInFlight)
@@ -218,9 +216,8 @@ struct FeedPostActionsBar: View, Equatable {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
+            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isBookmarkInFlight)
@@ -231,14 +228,14 @@ struct FeedPostActionsBar: View, Equatable {
 
             Spacer()
 
-            // Share
+            // Envoyer dans Meeshy (#14310) — « Partager » hors Meeshy vit dans ⋯.
             Button {
-                onShare?(postId)
+                sent = SharedContentWrapper(subject: sendSubject)
                 HapticFeedback.light()
             } label: {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
-                        Image(systemName: "square.and.arrow.up")
+                        Image(systemName: "paperplane")
                             .font(MeeshyFont.relative(17))
                             .opacity(isShareInFlight ? 0 : 1)
                         if isShareInFlight {
@@ -257,15 +254,14 @@ struct FeedPostActionsBar: View, Equatable {
                 .foregroundColor(theme.textSecondary)
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
+            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isShareInFlight)
-            .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
+            .accessibilityLabel(String(localized: "feed.post.send", defaultValue: "Envoyer", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), shareCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main))
+            .accessibilityHint(String(localized: "a11y.feed.post.send.hint", defaultValue: "Envoie cette publication dans une conversation Meeshy", bundle: .main))
 
             // Pas de bouton muet ici en E2 (correctif revue DoD, constat
             // majeur #2) : la carte n'embarque encore AUCUN lecteur local
@@ -277,5 +273,6 @@ struct FeedPostActionsBar: View, Equatable {
             // — un bouton sans lecteur à piloter serait décoratif.
         }
         .padding(.top, MeeshySpacing.xs)
+        .modifier(MeeshySendSheet(sent: $sent))
     }
 }
