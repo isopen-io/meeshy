@@ -284,4 +284,22 @@ class PresenceStoreTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+
+    @Test
+    fun `typing on a friend served online keeps the dot green after five minutes`() = runTest {
+        val f = fixture()
+        f.snapshot.emit(PresenceSnapshotEvent(listOf(UserStatusEvent("friend", "f", true, null))))
+        testScheduler.runCurrent()
+
+        f.typing.emit(TypingEvent(conversationId = "c", userId = "friend"))
+        testScheduler.runCurrent()
+        f.store.presenceOf("friend").test {
+            assertThat(awaitItem()).isEqualTo(PresenceState.ONLINE)
+            testScheduler.advanceTimeBy(600_000)
+            testScheduler.runCurrent()
+            assertThat(f.store.entriesNow()["friend"]).isEqualTo(UserPresence(isOnline = true, lastActiveAt = null))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }
