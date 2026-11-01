@@ -60,7 +60,7 @@ class RefreshAuthenticator(
         val presented = RequestCredential.carriedBy(request)?.bearerToken ?: return null
         return when (val renewal = refresher.renewBlocking(presented, sent?.generation)) {
             is Renewal.Renewed -> RequestCredential.Bearer(renewal.jwt).applyTo(request.newBuilder()).build()
-            Renewal.Abandoned, Renewal.Failed -> null
+            Renewal.Abandoned, Renewal.Deferred, Renewal.Failed -> null
         }
     }
 
