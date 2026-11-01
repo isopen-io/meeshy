@@ -324,3 +324,42 @@ describe('#11265 — par chemin : une clé UUID est écrite une fois, donc immua
     await app.close();
   });
 });
+
+/**
+ * #11269 — un média à vue unique PURGÉ répond par un état stable, jamais 500.
+ *
+ * Un client qui a gardé la référence d'une pièce (cache, ancienne version) la
+ * redemande après la purge. Trois instants, une seule réponse — 404, la forme
+ * d'erreur partagée — pour qu'aucun client ne voie son comportement changer
+ * selon le moment où il arrive : échéance passée mais fichiers en reprise,
+ * octets partis mais ligne encore là, ligne partie.
+ */
+describe.each(ROUTES)('#11269 — %s d une vue unique purgée', (_label, url) => {
+  const PAST = new Date('2026-10-01T00:00:00.000Z');
+
+  it('la ligne est partie avec ses octets : 404 stable, pas 500', async () => {
+    mockGetAttachment.mockResolvedValue(null);
+    const app = await buildApp(makePrisma([], []));
+    const res = await app.inject({ method: 'GET', url });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false });
+    expect(typeof res.json().error).toBe('string');
+    await app.close();
+  });
+
+  it('les fichiers sont en reprise sous une échéance passée : 404, jamais les octets', async () => {
+    const carrier = { id: 'm1', isViewOnce: true, viewOnceBurnAt: PAST, viewOnceBurnedAt: PAST } as Carrier;
+    const app = await buildApp(makePrisma([{ id: ID, filePath: KEY, messageId: 'm1', isViewOnce: true }], [carrier]));
+    const res = await app.inject({ method: 'GET', url });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('les octets sont effacés, la ligne pas encore : 404 stable, pas 500', async () => {
+    mockStat.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    const res = await app.inject({ method: 'GET', url });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
