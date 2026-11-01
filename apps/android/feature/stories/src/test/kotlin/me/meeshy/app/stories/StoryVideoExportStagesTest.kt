@@ -6,7 +6,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.composer.scene.SceneExportDestination
-import me.meeshy.sdk.model.scene.export.ImagerLengthChoice
+import me.meeshy.sdk.model.scene.export.ImagerDecision
+import me.meeshy.sdk.model.scene.export.ImagerOffer
 import me.meeshy.sdk.model.scene.export.ImagerQuarter
 import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
@@ -14,7 +15,8 @@ import org.junit.Test
 
 class StoryVideoExportStagesTest {
 
-    private val choices = ImagerQuarter.entries.map { ImagerLengthChoice(it, it.numerator * 60_000L) }
+    private val offer = ImagerOffer.of(240_000)
+    private val decision = ImagerDecision(SceneExportDestination.SHARE, ImagerQuarter.THREE)
 
     private fun request() = StoryExportPaintRequest(
         slide = StorySlideView(id = "s", text = "", isTranslated = false, imageUrl = null, accentHex = "112233"),
@@ -26,14 +28,30 @@ class StoryVideoExportStagesTest {
         format = StoryExportVideoFormat.of(),
     )
 
-    @Test fun `le choix de longueur attend la reponse de l ecran puis revient au repos`() = runTest {
+    @Test fun `imager ouvre la vue des le geste, avant que la composition soit mesuree`() {
         val stages = StoryVideoExportStages()
-        val asked = async { stages.askLength(choices) }
+        stages.openImager()
+        assertThat(stages.stage.value).isEqualTo(StoryVideoExportStage.Imagining(offer = null))
+    }
+
+    @Test fun `la vue imager recoit l offre mesuree, attend sa decision puis revient au repos`() = runTest {
+        val stages = StoryVideoExportStages()
+        stages.openImager()
+        val asked = async { stages.askImager(offer) }
         runCurrent()
-        assertThat(stages.stage.value).isEqualTo(StoryVideoExportStage.ChoosingLength(choices))
-        stages.answerLength(ImagerQuarter.THREE)
-        assertThat(asked.await()).isEqualTo(ImagerQuarter.THREE)
+        assertThat(stages.stage.value).isEqualTo(StoryVideoExportStage.Imagining(offer))
+        stages.answerImager(decision)
+        assertThat(asked.await()).isEqualTo(decision)
         assertThat(stages.stage.value).isEqualTo(StoryVideoExportStage.Idle)
+    }
+
+    @Test fun `fermer la vue imager rend une decision vide`() = runTest {
+        val stages = StoryVideoExportStages()
+        stages.openImager()
+        val asked = async { stages.askImager(offer) }
+        runCurrent()
+        stages.answerImager(null)
+        assertThat(asked.await()).isNull()
     }
 
     @Test fun `la peinture rend les calques que l ecran a ecrits`() = runTest {
@@ -49,7 +67,8 @@ class StoryVideoExportStagesTest {
 
     @Test fun `annuler pendant une etape la libere et rend le repos`() = runTest {
         val stages = StoryVideoExportStages()
-        val asked = async { runCatching { stages.askLength(choices) } }
+        stages.openImager()
+        val asked = async { runCatching { stages.askImager(offer) } }
         runCurrent()
         stages.reset()
         assertThat(asked.await().isFailure).isTrue()
@@ -58,12 +77,12 @@ class StoryVideoExportStagesTest {
 
     @Test fun `une reponse sans etape ouverte ne fait rien`() {
         val stages = StoryVideoExportStages()
-        stages.answerLength(ImagerQuarter.ONE)
+        stages.answerImager(decision)
         stages.answerPaint(null)
         assertThat(stages.stage.value).isEqualTo(StoryVideoExportStage.Idle)
     }
 
-    @Test fun `enregistrer et imager vont a la photothèque, partager a la feuille de partage`() {
+    @Test fun `enregistrer va a la photothèque, partager a la feuille de partage, imager part vers la galerie jusqu a la decision de sa vue`() {
         assertThat(StoryExportMode.SAVE.destination).isEqualTo(SceneExportDestination.GALLERY)
         assertThat(StoryExportMode.IMAGER.destination).isEqualTo(SceneExportDestination.GALLERY)
         assertThat(StoryExportMode.SHARE.destination).isEqualTo(SceneExportDestination.SHARE)
