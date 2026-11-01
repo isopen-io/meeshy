@@ -261,7 +261,7 @@ struct ComposerSceneFrise: View {
         guard vue != nil, duree > 0 else { return }
         let ascenseur = CGRect(x: CGFloat(visible.start / duree) * taille.width, y: taille.height - 1.5,
                                width: max(6, CGFloat(visible.span / duree) * taille.width), height: 1.5)
-        contexte.fill(Path(roundedRect: ascenseur, cornerRadius: 0.75), with: .color(couleur.opacity(0.8)))
+        contexte.fill(Path(roundedRect: ascenseur, cornerRadius: ascenseur.height / 2), with: .color(couleur.opacity(0.8)))
     }
 
     private func promener(vers secondes: Float, largeur: CGFloat) {

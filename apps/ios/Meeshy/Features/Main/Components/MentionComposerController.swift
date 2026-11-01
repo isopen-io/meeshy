@@ -153,7 +153,7 @@ public final class MentionComposerController: ObservableObject {
     /// (cache d'abord), à la première frappe du `@` : ce sont les membres que la
     /// liste propose en local — et le lecteur parmi eux prouve son appartenance
     /// quand la ligne ouverte ne portait pas son rang.
-    func scope(to target: ConversationMentionTarget, servedMembers: (@Sendable (String) async -> [String])? = nil) {
+    func scope(to target: ConversationMentionTarget, servedMembers: ServedMembersLoader? = nil) {
         if target.conversationId != self.target?.conversationId { servedMemberIds = [] }
         self.target = target
         self.servedMembersLoader = servedMembers
@@ -162,7 +162,7 @@ public final class MentionComposerController: ObservableObject {
 
     /// Les participants actifs servis, lus par `servedMembersLoader`.
     private var servedMemberIds: Set<String> = []
-    private var servedMembersLoader: (@Sendable (String) async -> [String])?
+    private var servedMembersLoader: ServedMembersLoader?
     private var membersTask: Task<Void, Never>?
 
     /// Les membres que le fil SAIT actifs : soi, l'interlocuteur et les
