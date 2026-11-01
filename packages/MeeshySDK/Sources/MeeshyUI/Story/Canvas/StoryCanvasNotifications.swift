@@ -5,7 +5,7 @@ import Foundation
 /// Notification names shared across the story canvas, composer, viewer, and audio player.
 /// Previously defined in StoryCanvasReaderView.swift (legacy); moved here after that file
 /// was deleted in the Phase A4 reader migration.
-public extension Notification.Name {
+public nonisolated extension Notification.Name {
     /// Le composer a été DÉMONTÉ sans sortie demandée (reconstruction de la hiérarchie : fenêtre d'iPad
     /// passée de compact à regular) ; son brouillon est écrit. `object` : l'id du brouillon (`String`), sur
     /// lequel la racine suivante le rouvre.
