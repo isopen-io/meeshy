@@ -14,7 +14,7 @@ import org.junit.Test
 /**
  * La frise et la feuille Temps servent les cinq familles (#13904, iOS `TimelineViewModel.sceneFriseTracks`) : un média
  * posé, un lieu et une pastille de son ont chacun leur piste, nommée par sa famille quand il n'a pas de nom, réglable
- * comme celle d'un texte, et toucher la piste sélectionne l'objet. Le fond n'a pas de piste réglable : il dure la slide.
+ * comme celle d'un texte, et toucher la piste sélectionne l'objet. Le fond a sa piste, verrouillée : il dure la slide (#14281).
  */
 class StoryComposerFriseFamiliesTest {
 
@@ -50,7 +50,7 @@ class StoryComposerFriseFamiliesTest {
 
         val ids = state.sceneTracks.map { it.id }
         assertThat(ids).containsAtLeast("v1", "p1", "l1", "a1")
-        assertThat(ids).doesNotContain("bg")
+        assertThat(ids).contains("bg")
         assertThat(state.sceneEditableTrackIds).containsExactly("v1", "p1", "l1", "a1")
         assertThat(state.sceneTracks.single { it.id == "v1" }.bar).isEqualTo(TrackBar.Timed(1.0, 3.0))
         assertThat(state.sceneTracks.single { it.id == "p1" }.bar).isEqualTo(TrackBar.Ghost)
