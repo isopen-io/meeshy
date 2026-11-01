@@ -49,7 +49,7 @@ function buildPrisma(rows: unknown[]) {
   };
 }
 
-const remover = () => ({ deleteAttachment: jest.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined) });
+const remover = () => ({ deleteAttachment: jest.fn<(id: string, options?: { readonly requireBytesGone?: boolean }) => Promise<void>>().mockResolvedValue(undefined) });
 
 describe('purgeDueViewOnceContent', () => {
   it('efface le contenu et les fichiers, SANS poser deletedAt : la bulle reste', async () => {
