@@ -3702,7 +3702,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/v1/lens/partners/:userId/logo",
+      "path": "/api/v1/lens/partners/:partnerId/logo",
       "module": "lensPartnerRoutes",
       "mountPrefix": "/api/v1/lens",
       "securityLevel": "inconnu",

@@ -13,7 +13,7 @@ import Foundation
 
 public enum LensEndpoint: MeeshyEndpoint, Sendable {
     case credits
-    case partnersByUserIdLogo(userId: String)
+    case partnersByPartnerIdLogo(partnerId: String)
     case partnersByUserIdRevoke(userId: String)
     case partnersByUserIdVerify(userId: String)
     case partnersMe
@@ -23,7 +23,7 @@ public enum LensEndpoint: MeeshyEndpoint, Sendable {
     public var path: String {
         switch self {
         case .credits: return "/api/v1/lens/credits"
-        case .partnersByUserIdLogo(let userId): return "/api/v1/lens/partners/\(userId)/logo"
+        case .partnersByPartnerIdLogo(let partnerId): return "/api/v1/lens/partners/\(partnerId)/logo"
         case .partnersByUserIdRevoke(let userId): return "/api/v1/lens/partners/\(userId)/revoke"
         case .partnersByUserIdVerify(let userId): return "/api/v1/lens/partners/\(userId)/verify"
         case .partnersMe: return "/api/v1/lens/partners/me"

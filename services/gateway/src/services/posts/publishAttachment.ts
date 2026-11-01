@@ -48,6 +48,8 @@ export type PublishableAttachment = {
   readonly duration: number | null;
   readonly codec: string | null;
   readonly thumbHash: string | null;
+  /** La lens qui a produit le média (#11327) : le crédit « Lens par X » suit la copie. */
+  readonly lensSlug: string | null;
 };
 
 export type PublishRefusal =
@@ -149,6 +151,7 @@ export const postMediaFieldsFromAttachment = (input: {
     height: attachment.height,
     duration: attachment.duration,
     codec: attachment.codec,
+    ...(attachment.lensSlug === null ? {} : { lensSlug: attachment.lensSlug }),
   };
 };
 

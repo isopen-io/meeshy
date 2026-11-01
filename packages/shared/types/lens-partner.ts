@@ -51,13 +51,19 @@ export type PartnerProfileInput = { readonly displayName: string; readonly websi
 
 export type PartnerProfileParse = { readonly ok: true; readonly profile: PartnerProfileInput } | { readonly ok: false; readonly reason: 'display-name' | 'website' };
 
-const CONTROL_OR_BIDI = /[\u0000-\u001F\u007F-\u009F‎‏‪-‮⁦-⁩]/;
+/**
+ * Contrôle (Cc), format (Cf : invisibles, jointures, marques bidi, BOM) et
+ * séparateurs de ligne ou de paragraphe : aucun n'a sa place dans un nom qui
+ * s'affiche comme une identité vérifiée — chacun sert à fabriquer un nom qui
+ * se LIT comme un autre.
+ */
+const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 const cleanDisplayName = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null;
-  const name = raw.trim();
+  const name = raw.normalize('NFKC').trim();
   if (name.length === 0 || name.length > PARTNER_PROFILE_LIMITS.maxDisplayNameLength) return null;
-  return CONTROL_OR_BIDI.test(name) ? null : name;
+  return INVISIBLE_OR_CONTROL.test(name) ? null : name;
 };
 
 const cleanWebsite = (raw: unknown): string | null | undefined => {
@@ -85,14 +91,17 @@ export function parsePartnerProfileInput(raw: unknown): PartnerProfileParse {
 export type LensCredit = {
   readonly slug: string;
   readonly name: string;
-  /** `null` : aucun partenaire VÉRIFIÉ — le client écrit le nom de la lens, sans « par ». */
+  /**
+   * `null` : aucun partenaire VÉRIFIÉ — le client écrit le nom de la lens, sans « par ».
+   * `id` est l'identifiant OPAQUE du profil partenaire, jamais le compte qui le porte.
+   */
   readonly partner: { readonly id: string; readonly name: string; readonly logo: string | null } | null;
   /** Le filigrane Meeshy est toujours là ; le logo du partenaire s'y ajoute quand il est vérifié. */
   readonly watermark: { readonly meeshy: true; readonly partnerLogo: string | null };
 };
 
 export type LensCreditLens = { readonly slug: string; readonly name: string; readonly status: string };
-export type LensCreditPartner = { readonly userId: string; readonly displayName: string; readonly verifiedAt: Date | null; readonly logoSrc: string | null };
+export type LensCreditPartner = { readonly id: string; readonly displayName: string; readonly verifiedAt: Date | null; readonly logoSrc: string | null };
 
 /** Le crédit d'une lens PUBLIÉE ; `null` pour toute autre (en attente, refusée, retirée). */
 export function lensCreditOf(lens: LensCreditLens, partner: LensCreditPartner | null): LensCredit | null {
@@ -101,7 +110,7 @@ export function lensCreditOf(lens: LensCreditLens, partner: LensCreditPartner | 
   return {
     slug: lens.slug,
     name: lens.name,
-    partner: verified === null ? null : { id: verified.userId, name: verified.displayName, logo: verified.logoSrc },
+    partner: verified === null ? null : { id: verified.id, name: verified.displayName, logo: verified.logoSrc },
     watermark: { meeshy: true, partnerLogo: verified?.logoSrc ?? null },
   };
 }

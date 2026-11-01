@@ -3,10 +3,10 @@
  *
  *   - `GET    /lens/partners/me`              le profil partenaire de l'appelant (ou `null`) ;
  *   - `PUT    /lens/partners/me`              l'écrire : `{ displayName, website?, logo?: base64 | null }` ;
- *   - `GET    /lens/partners/pending`         la file de vérification (BIGBOSS/ADMIN) ;
- *   - `POST   /lens/partners/:userId/verify`  vérifier une identité (BIGBOSS/ADMIN, jamais la sienne) ;
+ *   - `GET    /lens/partners/pending`         la file de vérification (BIGBOSS/ADMIN), chaque profil avec sa `version` ;
+ *   - `POST   /lens/partners/:userId/verify`  vérifier l'état VU `{ expected: { version } }` (BIGBOSS/ADMIN, jamais la sienne) ;
  *   - `POST   /lens/partners/:userId/revoke`  retirer une vérification (BIGBOSS/ADMIN) ;
- *   - `GET    /lens/partners/:userId/logo`    le logo d'un partenaire vérifié, pour le filigrane ;
+ *   - `GET    /lens/partners/:partnerId/logo` le logo, par l'id OPAQUE du profil : vérifié pour tous, sinon propriétaire et BIGBOSS/ADMIN ;
  *   - `GET    /lens/credits?slugs=a,b`        « Lens par X » des médias reçus (`lensSlug`) ;
  *   - `POST   /lens/usage/:slug`              compter un usage `{ surface }` ;
  *   - `GET    /lens/usage/:slug`              l'agrégat k-anonyme, pour l'auteur et la modération.
@@ -19,16 +19,21 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { LENS_LIMITS, LENS_PATTERNS } from '@meeshy/shared/types/lens-format';
 import { LENS_USAGE_SURFACES, PARTNER_PROFILE_LIMITS, parsePartnerProfileInput } from '@meeshy/shared/types/lens-partner';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { UserRoleEnum } from '@meeshy/shared/types';
 
+import type { UnifiedAuthRequest } from '../middleware/auth';
 import { requireAdminRank } from '../middleware/authorize';
 import { getCacheStore } from '../services/CacheStore';
 import { LensPartners } from '../services/packs/LensPartners';
+import { lensUsageDedupFrom } from '../services/packs/lensUsageDedup';
 import { sendBadRequest, sendError, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
 import { gameRateLimitConfig } from './me/game-shared';
 import { PACK_ERRORS, packEnvelope, packRouteGuard, packSlugParamsJsonSchema, type PackSlugRequest } from './pack-routes';
 
 export const LENS_PARTNER_ERROR_CODES = {
   NOT_FOUND: 'PARTNER_NOT_FOUND',
+  PROFILE_CHANGED: 'PARTNER_PROFILE_CHANGED',
   SELF_VERIFY: 'PARTNER_SELF_VERIFY',
   LOGO_REFUSED: 'PARTNER_LOGO_REFUSED',
   AUDIT_UNAVAILABLE: 'PARTNER_AUDIT_UNAVAILABLE',
@@ -36,6 +41,8 @@ export const LENS_PARTNER_ERROR_CODES = {
 } as const;
 
 const MAX_CREDIT_SLUGS = 50;
+/** Court : une vérification retirée éteint le crédit chez les clients en une minute au plus. */
+const CREDITS_CACHE_CONTROL = 'private, max-age=60';
 const LOGO_BODY_LIMIT = Math.ceil((PARTNER_PROFILE_LIMITS.maxLogoBytes * 4) / 3) + 8_192;
 
 const nullableString = { type: 'string', nullable: true } as const;
@@ -44,12 +51,14 @@ const profileJsonSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    id: { type: 'string' },
     userId: { type: 'string' },
     displayName: { type: 'string' },
     website: nullableString,
     logo: nullableString,
     verified: { type: 'boolean' },
     verifiedAt: nullableString,
+    version: { type: 'string' },
   },
 } as const;
 
@@ -91,8 +100,21 @@ const userIdParamsJsonSchema = {
   properties: { userId: { type: 'string', pattern: '^[0-9a-f]{24}$' } },
 } as const;
 
+const partnerIdParamsJsonSchema = {
+  type: 'object',
+  required: ['partnerId'],
+  properties: { partnerId: { type: 'string', pattern: '^[0-9a-f]{24}$' } },
+} as const;
+
+const verifyBodyJsonSchema = {
+  type: 'object',
+  required: ['expected'],
+  properties: { expected: { type: 'object', required: ['version'], properties: { version: { type: 'string', minLength: 1, maxLength: 64 } } } },
+} as const;
+
 const logoSchema = z.union([z.string().max(LOGO_BODY_LIMIT), z.null()]).optional();
 const revokeSchema = z.object({ note: z.string().max(280).optional() });
+const verifySchema = z.object({ expected: z.object({ version: z.string().min(1).max(64) }) });
 const usageSchema = z.object({ surface: z.enum(LENS_USAGE_SURFACES) });
 const slugsSchema = z
   .string()
@@ -103,15 +125,23 @@ const slugsSchema = z
 export type LensPartnerRoutesOptions = { readonly partners?: LensPartners };
 
 type UserIdRequest = { Params: { userId: string } };
+type PartnerIdRequest = { Params: { partnerId: string } };
+
+const isAdminRank = (request: unknown): boolean => {
+  const role = (request as UnifiedAuthRequest).authContext?.registeredUser?.role;
+  return role === UserRoleEnum.BIGBOSS || role === UserRoleEnum.ADMIN;
+};
 
 export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensPartnerRoutesOptions = {}) {
-  const partners = options.partners ?? new LensPartners({ prisma: fastify.prisma, dedup: getCacheStore() });
+  const partners = options.partners ?? new LensPartners({ prisma: fastify.prisma, dedup: lensUsageDedupFrom(getCacheStore()) });
   const guard = packRouteGuard(fastify, { internalErrorMessage: 'Error handling lens partners' });
   const requireAdmin = requireAdminRank();
   const tags = ['packs'];
   const auditUnavailable = (reply: Parameters<typeof sendError>[0]) =>
     sendError(reply, 500, 'The audit log is unavailable: nothing was changed', { code: LENS_PARTNER_ERROR_CODES.AUDIT_UNAVAILABLE });
   const notFound = (reply: Parameters<typeof sendError>[0]) => sendNotFound(reply, 'No partner profile', { code: LENS_PARTNER_ERROR_CODES.NOT_FOUND });
+  const profileChanged = (reply: Parameters<typeof sendError>[0]) =>
+    sendError(reply, 409, 'The partner profile changed since it was read: read it again', { code: LENS_PARTNER_ERROR_CODES.PROFILE_CHANGED });
 
   fastify.get(
     '/partners/me',
@@ -131,11 +161,12 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
       schema: {
         description:
           'Écrit le profil partenaire (#11327) : `displayName`, `website` (https), `logo` en base64 (absent : gardé ; `null` : retiré). ' +
-          'Le logo est ré-encodé et renommé par son empreinte. Changer le nom ou le logo RETIRE la vérification. 422 PARTNER_LOGO_REFUSED.',
+          'Le logo est ré-encodé et renommé par son empreinte. Changer le nom ou le logo RETIRE la vérification. 422 PARTNER_LOGO_REFUSED ; ' +
+          '409 PARTNER_PROFILE_CHANGED quand une autre écriture est passée entre la relecture et l’écriture (relire, puis réécrire).',
         tags,
         summary: 'Save my partner profile',
         body: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' }, website: { type: 'string', nullable: true }, logo: { type: 'string', nullable: true } } },
-        response: { 200: packEnvelope(profileJsonSchema), 422: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' }, message: { type: 'string' }, code: { type: 'string' }, reason: { type: 'string' } } }, ...PACK_ERRORS },
+        response: { 200: packEnvelope(profileJsonSchema), 409: errorResponseSchema, 422: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' }, message: { type: 'string' }, code: { type: 'string' }, reason: { type: 'string' } } }, ...PACK_ERRORS },
       },
     },
     guard('[PUT /lens/partners/me]', async (request, reply, viewer) => {
@@ -148,6 +179,7 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
       if (outcome.kind === 'logo-refused') {
         return reply.status(422).send({ success: false, error: 'Logo refused', message: 'Logo refused', code: LENS_PARTNER_ERROR_CODES.LOGO_REFUSED, reason: outcome.reason });
       }
+      if (outcome.kind === 'conflict') return profileChanged(reply);
       return sendSuccess(reply, outcome.profile);
     }),
   );
@@ -161,23 +193,27 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
     guard('[GET /lens/partners/pending]', async (_request, reply) => sendSuccess(reply, await partners.pending())),
   );
 
-  fastify.post<UserIdRequest>(
+  fastify.post<UserIdRequest & { Body: unknown }>(
     '/partners/:userId/verify',
     {
       onRequest: [fastify.authenticate, requireAdmin],
       schema: {
         description:
-          'Vérifie l’identité d’un partenaire (#11327, BIGBOSS/ADMIN) : journalisé AVANT d’agir avec le nom et l’empreinte du logo vérifiés ; ' +
-          'l’écriture est conditionnelle sur cet instantané. 403 PARTNER_SELF_VERIFY : personne ne vérifie sa propre identité.',
+          'Vérifie l’identité d’un partenaire (#11327, BIGBOSS/ADMIN) TELLE QUE L’ADMIN L’A VUE : `expected.version` est celle que sert la file. ' +
+          'L’écriture est conditionnelle sur l’état relu et part dans la même transaction que sa ligne de journal (nom et empreinte du logo vérifiés). ' +
+          '409 PARTNER_PROFILE_CHANGED : le profil a changé depuis — rien n’est vérifié ni journalisé. 403 PARTNER_SELF_VERIFY : personne ne vérifie sa propre identité.',
         tags: [...tags, 'admin'],
         summary: 'Verify a partner profile',
         params: userIdParamsJsonSchema,
-        response: { 200: packEnvelope(profileJsonSchema), ...PACK_ERRORS },
+        body: verifyBodyJsonSchema,
+        response: { 200: packEnvelope(profileJsonSchema), 409: errorResponseSchema, ...PACK_ERRORS },
       },
     },
     guard('[POST /lens/partners/:userId/verify]', async (request, reply, viewer) => {
+      const body = verifySchema.safeParse(request.body);
+      if (!body.success) return sendBadRequest(reply, 'The verified state is required', { code: 'VALIDATION_ERROR' });
       const { userId } = request.params as UserIdRequest['Params'];
-      const outcome = await partners.verify(viewer.userId, userId);
+      const outcome = await partners.verify(viewer.userId, userId, body.data.expected);
       switch (outcome.kind) {
         case 'done':
           return sendSuccess(reply, outcome.profile);
@@ -185,6 +221,8 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
           return sendForbidden(reply, 'Nobody verifies their own partner identity', { code: LENS_PARTNER_ERROR_CODES.SELF_VERIFY });
         case 'not-found':
           return notFound(reply);
+        case 'profile-changed':
+          return profileChanged(reply);
         case 'audit-unavailable':
           return auditUnavailable(reply);
       }
@@ -214,6 +252,7 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
           return sendSuccess(reply, outcome.profile);
         case 'not-found':
         case 'self-verify':
+        case 'profile-changed':
           return notFound(reply);
         case 'audit-unavailable':
           return auditUnavailable(reply);
@@ -221,26 +260,30 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
     }),
   );
 
-  fastify.get<UserIdRequest>(
-    '/partners/:userId/logo',
+  fastify.get<PartnerIdRequest>(
+    '/partners/:partnerId/logo',
     {
       onRequest: [fastify.authenticate],
       schema: {
-        description: 'Le logo d’un partenaire VÉRIFIÉ (#11327), composé dans le filigrane à côté de celui de Meeshy ; 404 sinon.',
+        description:
+          'Le logo d’un partenaire (#11327), par l’identifiant OPAQUE de son profil (`partner.id` des crédits) — jamais par son compte. ' +
+          'Vérifié : servi à tous pour le filigrane, revalidé à chaque lecture (`no-cache` + ETag, 304). ' +
+          'Non vérifié : servi à son propriétaire et à BIGBOSS/ADMIN seulement (`no-store`), pour que la vérification ne se fasse pas à l’aveugle ; 404 pour tout autre.',
         tags,
-        summary: 'Get a verified partner logo',
-        params: userIdParamsJsonSchema,
+        summary: 'Get a partner logo',
+        params: partnerIdParamsJsonSchema,
         response: { 200: { description: 'Les octets du logo (PNG ou WebP ré-encodé)', type: 'string', format: 'binary' }, ...PACK_ERRORS },
       },
     },
-    guard('[GET /lens/partners/:userId/logo]', async (request, reply) => {
-      const logo = await partners.logo((request.params as UserIdRequest['Params']).userId);
+    guard('[GET /lens/partners/:partnerId/logo]', async (request, reply, viewer) => {
+      const { partnerId } = request.params as PartnerIdRequest['Params'];
+      const logo = await partners.logo({ userId: viewer.userId, isAdminRank: isAdminRank(request) }, partnerId);
       if (logo === null) return notFound(reply);
-      return reply
-        .header('Content-Type', logo.contentType)
-        .header('Cache-Control', 'private, max-age=3600')
-        .header('ETag', `"${logo.sha256.slice(0, 32)}"`)
-        .send(logo.bytes);
+      if (!logo.verified) return reply.header('Content-Type', logo.contentType).header('Cache-Control', 'no-store').send(logo.bytes);
+      const etag = `"${logo.sha256.slice(0, 32)}"`;
+      reply.header('Cache-Control', 'private, no-cache').header('ETag', etag);
+      if (request.headers['if-none-match'] === etag) return reply.status(304).send();
+      return reply.header('Content-Type', logo.contentType).send(logo.bytes);
     }),
   );
 
@@ -261,7 +304,7 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
     guard('[GET /lens/credits]', async (request, reply) => {
       const slugs = slugsSchema.safeParse((request.query as { slugs?: string }).slugs ?? '');
       if (!slugs.success) return sendBadRequest(reply, 'Invalid lens list', { code: 'VALIDATION_ERROR' });
-      reply.header('Cache-Control', 'private, max-age=300');
+      reply.header('Cache-Control', CREDITS_CACHE_CONTROL);
       return sendSuccess(reply, await partners.credits([...new Set(slugs.data)]));
     }),
   );

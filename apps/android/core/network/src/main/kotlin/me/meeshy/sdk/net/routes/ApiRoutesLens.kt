@@ -13,7 +13,7 @@ package me.meeshy.sdk.net.routes
 
 public object ApiRoutesLens {
     public const val CREDITS: String = "lens/credits"
-    public const val PARTNERS_BY_USER_ID_LOGO: String = "lens/partners/{userId}/logo"
+    public const val PARTNERS_BY_PARTNER_ID_LOGO: String = "lens/partners/{partnerId}/logo"
     public const val PARTNERS_BY_USER_ID_REVOKE: String = "lens/partners/{userId}/revoke"
     public const val PARTNERS_BY_USER_ID_VERIFY: String = "lens/partners/{userId}/verify"
     public const val PARTNERS_ME: String = "lens/partners/me"

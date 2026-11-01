@@ -15,8 +15,8 @@
 /** GET /api/v1/lens/credits */
 export const credits = '/api/v1/lens/credits';
 
-/** GET /api/v1/lens/partners/:userId/logo */
-export const partnersByUserIdLogo = (userId: string): string => `/api/v1/lens/partners/${encodeURIComponent(userId)}/logo`;
+/** GET /api/v1/lens/partners/:partnerId/logo */
+export const partnersByPartnerIdLogo = (partnerId: string): string => `/api/v1/lens/partners/${encodeURIComponent(partnerId)}/logo`;
 
 /** POST /api/v1/lens/partners/:userId/revoke */
 export const partnersByUserIdRevoke = (userId: string): string => `/api/v1/lens/partners/${encodeURIComponent(userId)}/revoke`;
