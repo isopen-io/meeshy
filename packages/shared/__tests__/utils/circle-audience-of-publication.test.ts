@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { POST_VISIBILITIES, isPostVisibility, type PostVisibility } from '../../types/post.js';
+import { POST_VISIBILITIES, type PostVisibility } from '../../types/post.js';
 import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '../../utils/relation-levels.js';
 import { allowedRepostVisibilities, isRepostVisibilityAllowed } from '../../utils/repost-audience.js';
 import { visibilityVariant } from '../../types/engagement-operations.js';
@@ -11,11 +11,6 @@ describe('les audiences de publication', () => {
   it('gardent les six valeurs historiques et ajoutent Connaissances, Proches et Sang', () => {
     [...HISTORIC, ...CIRCLES].forEach((value) => expect(POST_VISIBILITIES).toContain(value));
     expect(POST_VISIBILITIES).toHaveLength(9);
-  });
-
-  it('reconnaissent les neuf valeurs et refusent toute autre', () => {
-    POST_VISIBILITIES.forEach((value) => expect(isPostVisibility(value)).toBe(true));
-    ['ATOM', 'friends', '', null, undefined, 7].forEach((value) => expect(isPostVisibility(value)).toBe(false));
   });
 });
 

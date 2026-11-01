@@ -36,9 +36,6 @@ export const POST_VISIBILITIES = [
 ] as const;
 export type PostVisibility = (typeof POST_VISIBILITIES)[number];
 
-export const isPostVisibility = (value: unknown): value is PostVisibility =>
-  typeof value === 'string' && (POST_VISIBILITIES as readonly string[]).includes(value);
-
 /**
  * Audience par défaut de TOUTE publication — POST, REEL, STORY, STATUS
  * confondus (règle produit 2026-08-23) : on publie public, on restreint

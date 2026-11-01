@@ -125,7 +125,9 @@ describe('#13926 — accepter une demande écrit le lien FRIEND/FRIEND', () => {
     await repondre({ action: 'accept', demandes: [demande(FR_ID, 'pending')], liens: [lien('ACQUAINTANCE', 'ACQUAINTANCE')], socialEvents });
 
     expect(socialEvents.invalidateFriendsCache.mock.calls.map(([id]) => id).sort()).toEqual([MOI, AUTRE].sort());
-    expect(mockFeedCacheDel.mock.calls.map(([key]) => key).sort()).toEqual([`feed:friends:${MOI}`, `feed:friends:${AUTRE}`].sort());
+    expect(mockFeedCacheDel.mock.calls.map(([key]) => key).sort()).toEqual(
+      [`feed:friends:${MOI}`, `feed:friends:${AUTRE}`, `feed:circles:${MOI}`, `feed:circles:${AUTRE}`].sort(),
+    );
   });
 
   it('ne fait pas échouer l’acceptation quand l’écriture du lien échoue — la demande acceptée reste la vérité de repli', async () => {
@@ -158,7 +160,9 @@ describe('#13926 — supprimer une demande ACCEPTÉE rompt le lien, en silence',
     await repondre({ action: 'dismiss', demandes: [demande(FR_ID, 'accepted')], liens: [lien('FRIEND', 'FRIEND')], socialEvents });
 
     expect(socialEvents.invalidateFriendsCache.mock.calls.map(([id]) => id).sort()).toEqual([MOI, AUTRE].sort());
-    expect(mockFeedCacheDel.mock.calls.map(([key]) => key).sort()).toEqual([`feed:friends:${MOI}`, `feed:friends:${AUTRE}`].sort());
+    expect(mockFeedCacheDel.mock.calls.map(([key]) => key).sort()).toEqual(
+      [`feed:friends:${MOI}`, `feed:friends:${AUTRE}`, `feed:circles:${MOI}`, `feed:circles:${AUTRE}`].sort(),
+    );
   });
 
   it('garde l’amitié quand une AUTRE demande acceptée relie encore la paire', async () => {

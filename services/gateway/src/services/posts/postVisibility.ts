@@ -140,11 +140,11 @@ export function buildPostVisibilityOrFilter(
       { visibility: PostVisibility.PUBLIC },
       { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
       { visibility: PostVisibility.FRIENDS, authorId: { in: audienceIds } },
+      { visibility: PostVisibility.EXCEPT, authorId: { in: audienceIds }, NOT: { visibilityUserIds: { has: viewerId } } },
+      { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
       { visibility: PostVisibility.ACQUAINTANCES, authorId: { in: [...circles.acquaintance] } },
       { visibility: PostVisibility.CLOSE, authorId: { in: [...circles.close] } },
       { visibility: PostVisibility.BLOOD, authorId: { in: [...circles.blood] } },
-      { visibility: PostVisibility.EXCEPT, authorId: { in: audienceIds }, NOT: { visibilityUserIds: { has: viewerId } } },
-      { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
     ],
   };
   if (blockedAuthorIds.length === 0) return audience;
