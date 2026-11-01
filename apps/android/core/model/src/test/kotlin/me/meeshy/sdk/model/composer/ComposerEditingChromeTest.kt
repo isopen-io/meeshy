@@ -16,8 +16,7 @@ class ComposerEditingChromeTest {
         armed: Boolean = false,
         gestureOpen: Boolean = false,
         reduced: Boolean = false,
-        lane: Boolean = false,
-    ) = ComposerEditingChrome.resolve(ComposerEditingChrome.Input(subject, drawing, armed, gestureOpen, sceneReduced = reduced, laneCleared = lane))
+    ) = ComposerEditingChrome.resolve(ComposerEditingChrome.Input(subject, drawing, armed, gestureOpen, sceneReduced = reduced))
 
     @Test
     fun `at rest the composer shows close, publication and the six tools`() {
@@ -110,20 +109,34 @@ class ComposerEditingChromeTest {
     }
 
     @Test
-    fun `an object edited beside a scene that cleared its lane puts undo and redo in that lane, never over the scene`() {
-        val edited = chrome(ComposerSelectionSubject.OBJECT, lane = true)
-
-        assertThat(edited.history).isEqualTo(ComposerHistoryPlace.LANE)
-        assertThat(edited.sceneControls).isTrue()
+    fun `a full scene cedes no lane, whatever is selected`() {
+        listOf(ComposerSelectionSubject.NONE, ComposerSelectionSubject.OBJECT, ComposerSelectionSubject.BACKGROUND).forEach { subject ->
+            assertThat(chrome(subject).cedesLane).isFalse()
+        }
     }
 
     @Test
-    fun `a reduced scene or a quiet chrome shows undo and redo nowhere, lane or not`() {
+    fun `a scene reduced under the options of what is edited cedes them its lane, so that nothing covers it`() {
+        assertThat(chrome(ComposerSelectionSubject.OBJECT, reduced = true).cedesLane).isTrue()
+        assertThat(chrome(ComposerSelectionSubject.BACKGROUND, reduced = true).cedesLane).isTrue()
+    }
+
+    @Test
+    fun `a reduced scene with no options laid on it cedes no lane`() {
         listOf(
-            chrome(ComposerSelectionSubject.OBJECT, reduced = true, lane = true),
-            chrome(ComposerSelectionSubject.BACKGROUND, reduced = true, lane = true),
             chrome(ComposerSelectionSubject.NONE, gestureOpen = true, reduced = true),
-            chrome(ComposerSelectionSubject.OBJECT, armed = true, lane = true),
+            chrome(ComposerSelectionSubject.OBJECT, gestureOpen = true, reduced = true),
+            chrome(ComposerSelectionSubject.OBJECT, armed = true, reduced = true),
+        ).forEach { assertThat(it.cedesLane).isFalse() }
+    }
+
+    @Test
+    fun `a reduced scene or a quiet chrome shows undo and redo nowhere`() {
+        listOf(
+            chrome(ComposerSelectionSubject.OBJECT, reduced = true),
+            chrome(ComposerSelectionSubject.BACKGROUND, reduced = true),
+            chrome(ComposerSelectionSubject.NONE, gestureOpen = true, reduced = true),
+            chrome(ComposerSelectionSubject.OBJECT, armed = true),
         ).forEach { assertThat(it.history).isEqualTo(ComposerHistoryPlace.NONE) }
     }
 

@@ -13,7 +13,6 @@ import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerEditingChrome
 import me.meeshy.sdk.model.composer.ComposerHistoryPlace
-import me.meeshy.sdk.model.composer.ComposerRailContent
 import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
 import me.meeshy.sdk.model.composer.ComposerSceneReferences
@@ -102,9 +101,9 @@ private fun SceneFirstFrame(
     val openSheet = sheet.open?.takeIf(state::serves)?.takeIf { !it.servesSelection || openedFor == subject }
     val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), besideScene.editing && openSheet == null, selection,
         quiet = panel != null || typing != null || armed)
-    val reduced = (panel != null || edition.anyBand) && typing == null
-    val objectLane = selection != null && openSheet == null
-    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, sceneReduced = reduced, laneCleared = objectLane)
+    val raised = panel?.takeIf { it.raisedAtBottom }
+    val reduced = typing == null && (raised != null || edition.anyBand)
+    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, sceneReduced = reduced)
     val chrome = editing.sceneControls
     val levels = edition.levels
     val edited = edition.edited
@@ -126,19 +125,15 @@ private fun SceneFirstFrame(
             top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
             strip = { if (chrome) StorySlideStrip(state, viewModel) },
             trailing = {
-                val laneHistory = state.history()?.takeIf { editing.history == ComposerHistoryPlace.LANE }
-                Box(if (laneHistory != null) Modifier.weight(1f) else Modifier) {
-                    SceneRail(
-                        content = editing.rail,
-                        tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column) },
-                        options = { SceneEditingOptions(edited, levels) },
-                        background = { SceneEditingBackground(edited, levels) },
-                    )
-                }
-                laneHistory?.let { SceneLaneHistory(it, viewModel::onUndo, viewModel::onRedo) }
+                SceneRail(
+                    content = editing.rail,
+                    tools = { StorySceneTools(state, viewModel, more, ComposerSceneTools.column) },
+                    options = { SceneEditingOptions(edited, levels) },
+                    background = { SceneEditingBackground(edited, levels) },
+                )
             },
             panel = {
-                panel?.let {
+                raised?.let {
                     StoryComposerBottomPanel(
                         panel = it,
                         state = state,
@@ -160,7 +155,7 @@ private fun SceneFirstFrame(
             typing = typing,
             rails = rails,
             incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
-            clearsTrailingLane = objectLane || (reduced && editing.rail == ComposerRailContent.BACKGROUND_OPTIONS && openSheet == null),
+            clearsTrailingLane = editing.cedesLane && openSheet == null,
         )
         EditingAnnouncer(editing = editedWord(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }

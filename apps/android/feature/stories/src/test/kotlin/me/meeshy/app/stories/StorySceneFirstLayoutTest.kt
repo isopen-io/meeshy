@@ -196,16 +196,6 @@ class StorySceneFirstLayoutTest {
     }
 
     @Test
-    fun `the lane history hides the side with nothing to replay`() {
-        compose.setContent {
-            MeeshyTheme { androidx.compose.foundation.layout.Column { SceneLaneHistory(SceneHistory(canUndo = true, canRedo = false), onUndo = {}, onRedo = {}) } }
-        }
-
-        compose.onNodeWithContentDescription(UNDO).assertIsEnabled()
-        compose.onNodeWithContentDescription(REDO).assertDoesNotExist()
-    }
-
-    @Test
     fun `publish has no chevron unless the host offers another format`() {
         show()
         compose.onNodeWithContentDescription(CHEVRON).assertDoesNotExist()
