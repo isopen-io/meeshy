@@ -1,6 +1,7 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { isCanvasV3OrNewer, remapCanvasV3MediaIds } from './storyEffectsV3';
+import { mappedMediaUrl } from './mediaUrlLookup';
 
 const log = enhancedLogger.child({ module: 'storyEffectsMediaRemap' });
 
@@ -37,7 +38,7 @@ function remapRefs(
   let changed = false;
   const next = items.map((item) => {
     const mapped = item.postMediaId !== undefined ? idMap[item.postMediaId] : undefined;
-    const mappedUrl = typeof item.mediaURL === 'string' ? urlMap[item.mediaURL] : undefined;
+    const mappedUrl = typeof item.mediaURL === 'string' ? mappedMediaUrl(urlMap, item.mediaURL) : undefined;
     const idChanged = mapped !== undefined && mapped !== item.postMediaId;
     const urlChanged = mappedUrl !== undefined && mappedUrl !== item.mediaURL;
     if (!idChanged && !urlChanged) return item;

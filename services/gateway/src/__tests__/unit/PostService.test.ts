@@ -95,7 +95,7 @@ describe('PostService', () => {
       // findFirst is called to detect audio media for Whisper processing
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: { in: ['media-1', 'media-2'] }, mimeType: { startsWith: 'audio/' } },
+          where: { id: { in: ['media-1', 'media-2'] }, postId: 'post-1', mimeType: { startsWith: 'audio/' } },
         }),
       );
       // No audio media found — update is not called
@@ -154,7 +154,7 @@ describe('PostService', () => {
 
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: { in: ['media-audio', 'media-img'] }, mimeType: { startsWith: 'audio/' } },
+          where: { id: { in: ['media-audio', 'media-img'] }, postId: 'post-1', mimeType: { startsWith: 'audio/' } },
           select: { id: true, fileUrl: true },
         }),
       );
@@ -209,7 +209,7 @@ describe('PostService', () => {
       // findFirst is always called to detect audio media (for Whisper fire-and-forget)
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: { in: ['media-img'] }, mimeType: { startsWith: 'audio/' } },
+          where: { id: { in: ['media-img'] }, postId: 'post-1', mimeType: { startsWith: 'audio/' } },
         }),
       );
       // No audio media → no transcription update
