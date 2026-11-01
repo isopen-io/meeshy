@@ -60,6 +60,8 @@
     <string name="composer_frise_exit">Sale aquí</string>
     <string name="composer_frise_exitEarlier">Salir antes</string>
     <string name="composer_frise_exitLater">Salir después</string>
+    <string name="composer_frise_keyframe_add">Añadir un fotograma clave</string>
+    <string name="composer_frise_keyframe_remove">Quitar el fotograma clave</string>
     <string name="composer_frise_later">Después</string>
     <string name="composer_frise_media">Medio</string>
     <string name="composer_frise_panel">Línea de tiempo</string>

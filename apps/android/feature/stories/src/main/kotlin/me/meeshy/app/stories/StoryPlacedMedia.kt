@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryDraftPlacedMediaSnapshot
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.media.MediaTrimBounds
@@ -44,6 +45,8 @@ data class StoryPlacedMedia(
     /** Le volume d'auteur d'une VIDÉO posée (#13973, A-E4, iOS `StoryMediaObject.volume`) : 0 est le muet, le mémento rend le niveau quitté. */
     override val volume: Float = 1f,
     override val mutedVolumeMemento: Float? = null,
+    /** Ses images clés (#14271, iOS `StoryMediaObject.keyframes`) : temps relatif à son départ, pose figée à cet instant. */
+    val keyframes: List<StoryKeyframe> = emptyList(),
 ) : StoryVolumeCarrying {
     /** La fenêtre rognée, ou `null` : la source entière (jamais une borne seule, jamais une fenêtre sous le plancher). */
     val trim: MediaTrimBounds?
@@ -102,6 +105,7 @@ data class StoryPlacedMedia(
             mutedVolumeMemento = mutedVolumeMemento.takeIf { video },
             zIndex = zIndex,
             startTime = timing.startSeconds.takeIf { timing.hasStart }?.toDouble(),
+            keyframes = keyframes.takeIf { it.isNotEmpty() },
         )
     }
 
@@ -110,7 +114,7 @@ data class StoryPlacedMedia(
             id = mediaId, x = x, y = y, scale = scale, rotationDeg = rotationDeg, filter = filter?.wireValue(), adjustments = adjustments,
             sourceStart = sourceStart, sourceEnd = sourceEnd, crop = crop, zIndex = zIndex, objectId = id.takeIf { it != mediaId },
             startSeconds = timing.startSeconds, durationSeconds = timing.durationSeconds,
-            volume = volume, mutedVolumeMemento = mutedVolumeMemento,
+            volume = volume, mutedVolumeMemento = mutedVolumeMemento, keyframes = keyframes,
         )
 
     companion object {
@@ -142,6 +146,7 @@ data class StoryPlacedMedia(
                     id = it.id.ifBlank { it.postMediaId },
                     volume = it.volume,
                     mutedVolumeMemento = it.mutedVolumeMemento,
+                    keyframes = it.keyframes.orEmpty(),
                 ).normalised()
             }
 
@@ -169,6 +174,7 @@ data class StoryPlacedMedia(
                 id = snapshot.objectId?.takeIf { it.isNotBlank() } ?: snapshot.id,
                 volume = snapshot.volume,
                 mutedVolumeMemento = snapshot.mutedVolumeMemento,
+                keyframes = snapshot.keyframes,
             ).normalised()
     }
 }

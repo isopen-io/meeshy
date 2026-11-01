@@ -144,20 +144,25 @@ internal fun SceneToolColumn(
     onMediaSource: (ComposerMediaSource) -> Unit = {},
     cameraServed: Boolean = false,
 ) {
+    // Le « ⋯ » reste TOUJOURS posé au pied de la colonne (#14282, recette S8) : en post, « Texte du post » prend une rangée
+    // au socle, la colonne n'a plus la place de tout montrer, et le dernier bouton passait hors champ sans que rien ne dise
+    // qu'on pouvait défiler. Ce sont les outils au-dessus de lui qui défilent.
     Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        tools.forEach { tool ->
-            if (tool == ComposerSceneTool.MORE) {
-                more()
-            } else {
+        Column(
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            tools.filterNot { it == ComposerSceneTool.MORE }.forEach { tool ->
                 MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, cameraServed), onMediaSource) { press ->
                     SceneRoundButton(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == active, press = press)
                 }
             }
         }
+        if (ComposerSceneTool.MORE in tools) more()
     }
 }
 

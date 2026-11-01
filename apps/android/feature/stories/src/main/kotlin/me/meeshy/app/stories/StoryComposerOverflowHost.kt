@@ -65,7 +65,7 @@ private fun StoryComposerPreviewDialog(state: StoryComposerUiState, viewModel: S
     val slides = remember(state.deck, state.attachments, state.draft) {
         val projector = StorySlideProjector(viewModel.mediaBaseUrl)
         StoryComposerPreview.items(state, viewModel.resolvePublishLanguage(), viewModel.authorFloor)
-            .map { projector.project(it, viewModel.authorAccentHex, NoContentPreferences) }
+            .map { projector.project(it, viewModel.authorAccentHex.orEmpty(), NoContentPreferences) }
     }
     if (slides.isEmpty()) return
     var page by remember { mutableIntStateOf(0) }

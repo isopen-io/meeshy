@@ -44,15 +44,17 @@ public nonisolated enum SceneFriseSourceWindow {
         return debut...fin
     }
 
-    /// La fenêtre de source jouée par la piste `track` (vidéo ou son), `nil`
-    /// pour toute autre famille.
+    /// La fenêtre de source jouée par la piste vidéo ou sonore `id` de [timeline], `nil` pour toute autre famille.
+    /// Ici et non sur `TimelineViewModel`, que le budget de cohésion borne : une lecture du projet, pas un état.
     @MainActor
-    public static func window(of track: SceneFriseTrack, in project: TimelineProject) -> ClosedRange<Double>? {
-        let joue = Double(track.end - track.start)
-        if let media = project.mediaObjects.first(where: { $0.id == track.id }), media.kind == .video {
+    public static func of(_ id: String, in timeline: TimelineViewModel) -> ClosedRange<Double>? {
+        guard let piste = timeline.sceneFriseTracks.first(where: { $0.id == id }) else { return nil }
+        let joue = Double(piste.end - piste.start)
+        let project = timeline.project
+        if let media = project.mediaObjects.first(where: { $0.id == id }), media.kind == .video {
             return range(sourceStart: media.sourceStart, sourceEnd: media.sourceEnd, playedSeconds: joue)
         }
-        if let son = project.audioPlayerObjects.first(where: { $0.id == track.id }) {
+        if let son = project.audioPlayerObjects.first(where: { $0.id == id }) {
             return range(sourceStart: son.sourceStart, sourceEnd: son.sourceEnd, playedSeconds: joue)
         }
         return nil

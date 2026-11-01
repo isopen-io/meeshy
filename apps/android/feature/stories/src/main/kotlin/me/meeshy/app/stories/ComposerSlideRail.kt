@@ -80,7 +80,7 @@ private const val DRAG_LIFT_SCALE = 1.1f
 internal fun ComposerSlideRail(
     deck: StorySlideDeck,
     backgrounds: Map<String, ThumbnailBackground?>,
-    accentHex: String,
+    accentHex: String?,
     canvasWidthPx: Float,
     onSelect: (String) -> Unit,
     onAdd: () -> Unit,
@@ -169,7 +169,7 @@ private fun rememberTileSpec(
     slide: StorySlide,
     background: ThumbnailBackground?,
     placed: List<ThumbnailPlaced>,
-    accentHex: String,
+    accentHex: String?,
     tileWidth: Dp,
     canvasWidthPx: Float,
 ): SlideThumbnailSpec {

@@ -84,6 +84,7 @@ internal fun ComposerInputRow(
     onQuickEmojiLongPress: () -> Unit = {},
     focusRequester: FocusRequester = remember { FocusRequester() },
     onFocusChange: (Boolean) -> Unit = {},
+    placeholder: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -107,6 +108,7 @@ internal fun ComposerInputRow(
             onRequestVoice = onRequestVoice,
             focusRequester = focusRequester,
             onFocusChange = onFocusChange,
+            placeholder = placeholder,
         )
         val showQuickEmoji = !isEditing && !hasSomethingToSend && onQuickEmoji != null && quickEmojis.isNotEmpty()
         ComposerActionSlot(

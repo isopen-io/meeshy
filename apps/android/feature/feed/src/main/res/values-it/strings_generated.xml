@@ -112,9 +112,12 @@
         <item quantity="other">Mostra altre %1$d risposte</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">Mostra le risposte restanti in questo thread</string>
+    <string name="post_comments_media_audio">Audio</string>
     <string name="post_comments_media_image">Immagine del commento</string>
     <string name="post_comments_media_open">Tocca per ingrandire</string>
+    <string name="post_comments_media_pause_audio">Metti in pausa</string>
     <string name="post_comments_media_play">Riproduci il video</string>
+    <string name="post_comments_media_play_audio">Riproduci l\'audio</string>
     <string name="post_comments_media_video">Video</string>
     <string name="post_comments_more_options">Altre opzioni</string>
     <string name="post_comments_reply_a11y_label">%1$s, risposta. %2$s. %3$s</string>

@@ -60,6 +60,8 @@
     <string name="composer_frise_exit">Sort ici</string>
     <string name="composer_frise_exitEarlier">Sortir plus tôt</string>
     <string name="composer_frise_exitLater">Sortir plus tard</string>
+    <string name="composer_frise_keyframe_add">Ajouter une image clé</string>
+    <string name="composer_frise_keyframe_remove">Retirer l’image clé</string>
     <string name="composer_frise_later">Plus tard</string>
     <string name="composer_frise_media">Média</string>
     <string name="composer_frise_panel">Plan temps</string>

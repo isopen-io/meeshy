@@ -60,6 +60,8 @@
     <string name="composer_frise_exit">يخرج هنا</string>
     <string name="composer_frise_exitEarlier">الخروج أبكر</string>
     <string name="composer_frise_exitLater">الخروج لاحقًا</string>
+    <string name="composer_frise_keyframe_add">إضافة إطار رئيسي</string>
+    <string name="composer_frise_keyframe_remove">إزالة الإطار الرئيسي</string>
     <string name="composer_frise_later">لاحقًا</string>
     <string name="composer_frise_media">وسائط</string>
     <string name="composer_frise_panel">المخطط الزمني</string>

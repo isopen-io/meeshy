@@ -29,11 +29,11 @@ sealed interface StorySceneFill {
     companion object {
         fun resolve(
             background: StoryBackgroundValue?,
-            accentHex: String,
+            accentHex: String?,
             floor: SceneFloor = SceneFloor.AUTHOR_GRADIENT,
         ): StorySceneFill {
             val fallback = when (floor) {
-                SceneFloor.AUTHOR_GRADIENT -> AuthorGradient(accentHex)
+                SceneFloor.AUTHOR_GRADIENT -> accentHex?.takeIf(::readable)?.let(::AuthorGradient) ?: Black
                 SceneFloor.BLACK -> Black
             }
             return when (background) {
@@ -44,11 +44,14 @@ sealed interface StorySceneFill {
             }
         }
 
-        /** The author colour the story tray gives an author: display name, else username. */
-        fun authorAccentHex(user: MeeshyUser?): String =
-            DynamicColorGenerator.colorForName(
-                user?.displayName?.takeIf { it.isNotBlank() } ?: user?.username.orEmpty(),
-            )
+        /**
+         * The author colour the story tray gives an author: display name, else username. `null` while the author's identity
+         * is not known (an offline cold start before any identity was kept): the scene waits on black and no colour is
+         * written into the publication, instead of the colour of an empty name (#14264).
+         */
+        fun authorAccentHex(user: MeeshyUser?): String? =
+            (user?.displayName?.takeIf { it.isNotBlank() } ?: user?.username?.takeIf { it.isNotBlank() })
+                ?.let(DynamicColorGenerator::colorForName)
 
         private fun readable(hex: String): Boolean = HexColor.parse(hex) != null
     }

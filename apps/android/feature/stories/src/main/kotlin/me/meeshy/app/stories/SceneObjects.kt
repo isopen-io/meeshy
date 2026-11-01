@@ -93,12 +93,24 @@ val StoryComposerUiState.sceneTracks: List<Plan2DTrack>
         val effects = StoryEffects(
             textObjects = slide.elements.map { it.toTextObject("") },
             stickerObjects = slide.stickers.map { it.toSticker() }.takeIf { it.isNotEmpty() },
-            mediaObjects = slide.placedMedia.map { it.toFriseObject(placedMediaIsVideo(it.id)) }.takeIf { it.isNotEmpty() },
+            mediaObjects = (slide.placedMedia.map { it.toFriseObject(placedMediaIsVideo(it.id)) } + listOfNotNull(friseBackground()))
+                .takeIf { it.isNotEmpty() },
             drawingStrokes = slide.strokes.takeIf { it.isNotEmpty() },
             audioPlayerObjects = slide.audio.takeIf { it.isNotEmpty() },
+            // Le fond a sa piste, en lecture seule (#14281, iOS `Plan2DLayout.tracks(from: currentEffects)`).
+            background = slide.background?.serialized()?.takeIf { selectedSlideBackdropMediaId == null },
         )
         return Plan2DLayout.tracks(effects, selectedSlideDurationSeconds, slide.places)
     }
+
+/**
+ * Le média de FOND tel que la frise le lit (#14281) : le fond PEINT, désigné ou premier média non posé, envoyé ou en file
+ * d'envoi — celui que l'auteur voit. Au plan fond, verrouillé, il dure la diapo.
+ */
+private fun StoryComposerUiState.friseBackground(): StoryMediaObject? {
+    val id = selectedSlideBackdropMediaId ?: return null
+    return StoryMediaObject(id = id, postMediaId = id, mediaType = if (placedMediaIsVideo(id)) "video" else "image", isBackground = true)
+}
 
 /** Un média posé tel que la frise le lit : sa fenêtre d'apparition, jamais la longueur que joue sa source (#13904). */
 private fun StoryPlacedMedia.toFriseObject(video: Boolean) = StoryMediaObject(
@@ -108,6 +120,7 @@ private fun StoryPlacedMedia.toFriseObject(video: Boolean) = StoryMediaObject(
     zIndex = zIndex,
     startTime = timing.startSeconds.toDouble().takeIf { timing.isActive },
     duration = timing.durationSeconds.toDouble().takeIf { timing.isTimed },
+    keyframes = keyframes.takeIf { it.isNotEmpty() },
 )
 
 /**

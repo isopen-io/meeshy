@@ -80,6 +80,8 @@ data class StoryDraftTextElementSnapshot(
     val referenceUserId: String? = null,
     /** Le rang de l'objet dans l'ordre UNIQUE de la scène (#13852) ; un blob d'avant se lit 0 et garde l'ordre des familles. */
     val zIndex: Int = 0,
+    /** Ses images clés (#14271) ; un blob d'avant se lit « aucune ». */
+    val keyframes: List<StoryKeyframe> = emptyList(),
 ) {
     /** True once the element carries publishable content — non-blank [text]. */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -158,6 +160,8 @@ data class StoryDraftPlacedMediaSnapshot(
     /** Le volume d'auteur d'une vidéo posée (#13973, A-E4) et le niveau que le muet a quitté ; un blob d'avant se lit « à plein, jamais coupé ». */
     val volume: Float = 1f,
     val mutedVolumeMemento: Float? = null,
+    /** Ses images clés (#14271) ; un blob d'avant se lit « aucune ». */
+    val keyframes: List<StoryKeyframe> = emptyList(),
 )
 
 /**

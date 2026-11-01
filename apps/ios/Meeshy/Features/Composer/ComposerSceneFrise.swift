@@ -313,7 +313,7 @@ struct ComposerSceneFrise: View {
                             ComposerSceneFriseBarContent(kind: piste.kind,
                                                          url: timeline.loadedURL(for: piste.id),
                                                          publishedSamples: ondePubliee(piste),
-                                                         window: SceneFriseSourceWindow.window(of: piste, in: timeline.project))
+                                                         window: SceneFriseSourceWindow.of(piste.id, in: timeline))
                                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous))
                         }
                         .padding(.vertical, MeeshySpacing.xs)
@@ -765,12 +765,7 @@ nonisolated enum ComposerSceneFriseRuler {
     static func label(_ secondes: Float) -> String {
         let total = Int(secondes.rounded())
         guard total >= 60 else { return "\(total) s" }
-        let heures = total / 3600
-        let minutes = (total % 3600) / 60
-        let reste = total % 60
-        return heures > 0
-            ? String(format: "%d:%02d:%02d", heures, minutes, reste)
-            : String(format: "%d:%02d", minutes, reste)
+        return MediaFormat.duration(total, style: .clockPromotingHours)
     }
 
     /// La tête a-t-elle franchi une graduation majeure entre deux images ?

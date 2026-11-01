@@ -60,6 +60,8 @@
     <string name="composer_frise_exit">Tritt hier aus</string>
     <string name="composer_frise_exitEarlier">Früher ausblenden</string>
     <string name="composer_frise_exitLater">Später ausblenden</string>
+    <string name="composer_frise_keyframe_add">Keyframe hinzufügen</string>
+    <string name="composer_frise_keyframe_remove">Keyframe entfernen</string>
     <string name="composer_frise_later">Später</string>
     <string name="composer_frise_media">Medium</string>
     <string name="composer_frise_panel">Zeitplan</string>

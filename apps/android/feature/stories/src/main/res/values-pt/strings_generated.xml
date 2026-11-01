@@ -60,6 +60,8 @@
     <string name="composer_frise_exit">Sai aqui</string>
     <string name="composer_frise_exitEarlier">Sair antes</string>
     <string name="composer_frise_exitLater">Sair mais tarde</string>
+    <string name="composer_frise_keyframe_add">Adicionar um quadro-chave</string>
+    <string name="composer_frise_keyframe_remove">Remover o quadro-chave</string>
     <string name="composer_frise_later">Mais tarde</string>
     <string name="composer_frise_media">Mídia</string>
     <string name="composer_frise_panel">Linha do tempo</string>

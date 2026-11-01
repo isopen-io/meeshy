@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.scene.StoryElementTiming
@@ -159,6 +160,8 @@ data class StoryTextElement(
     val referenceUserId: String? = null,
     /** Son rang dans l'ordre UNIQUE de la scène (#13852, le `zIndex` d'iOS) : le plus haut se peint au-dessus. */
     val zIndex: Int = 0,
+    /** Ses images clés (#14271, iOS `StoryTextObject.keyframes`) : temps relatif à son départ, pose figée à cet instant. */
+    val keyframes: List<StoryKeyframe> = emptyList(),
 ) {
     /** True once the element carries content worth publishing (non-blank text). */
     val isPublishable: Boolean get() = text.isNotBlank()
@@ -255,6 +258,7 @@ data class StoryTextElement(
         sourceLanguage = StoryTextLanguage.normalised(this.sourceLanguage) ?: sourceLanguage,
         referenceUserId = referenceUserId,
         zIndex = zIndex,
+        keyframes = keyframes.takeIf { it.isNotEmpty() },
     )
 
     companion object {
