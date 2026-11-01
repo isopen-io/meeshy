@@ -29,7 +29,7 @@ class PostScenesViewComposeTest {
     private val painted = mutableListOf<Pair<String, Boolean>>()
     private val read = mutableListOf<Pair<String, Boolean>>()
 
-    private val card: ReelSceneRenderer = { item, _, live, modifier -> painted += item.id to live; Box(modifier) }
+    private val card: ReelSceneRenderer = { item, _, live, _, modifier -> painted += item.id to live; Box(modifier) }
     private val reader: PostSceneReaderRenderer = { item, _, playing, modifier -> read += item.id to playing; Box(modifier) }
     private val exported = mutableListOf<List<String>>()
     private val exporter: PostSceneExportRenderer = { scenes, _, modifier -> exported += scenes.map { it.id }; Box(modifier) }

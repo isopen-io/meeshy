@@ -61,7 +61,7 @@ internal fun ReelCoverView(
                 .clickable(role = Role.Button, onClick = onOpen)
                 .semantics { contentDescription = label },
         ) {
-            sceneRenderer(cover.item, cover.accentHex, live, Modifier.fillMaxSize())
+            sceneRenderer(cover.item, cover.accentHex, live, true, Modifier.fillMaxSize())
         }
         return
     }

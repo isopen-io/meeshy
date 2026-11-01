@@ -323,7 +323,7 @@ internal fun PostDetailContent(
                 val scenes = post.scenes
                 if (scenes != null) {
                     Spacer(Modifier.height(MeeshySpacing.md))
-                    PostScenesView(scenes = scenes, live = true)
+                    PostDetailScenes(scenes = scenes)
                 } else if (post.images.isNotEmpty()) {
                     Spacer(Modifier.height(MeeshySpacing.md))
                     PostImageLayout(
