@@ -37,6 +37,10 @@ public object SceneExportReducer {
     public fun start(state: SceneExportState, destination: SceneExportDestination): SceneExportState =
         if (state is SceneExportState.Running) state else SceneExportState.Running(0f, destination)
 
+    /** La destination qu'une vue a décidée en cours de préparation (Imager, #14326) remplace celle du lancement. */
+    public fun retarget(state: SceneExportState, destination: SceneExportDestination): SceneExportState =
+        (state as? SceneExportState.Running)?.copy(destination = destination) ?: state
+
     /** Monotone et bornée ; une valeur tardive ou non finie n'a aucun effet. */
     public fun progress(state: SceneExportState, fraction: Float): SceneExportState {
         if (state !is SceneExportState.Running || !fraction.isFinite()) return state

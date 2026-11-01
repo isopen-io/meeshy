@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_imager_preparing">جارٍ تحضير التركيبة…</string>
+    <string name="stories_imager_save">حفظ</string>
+    <string name="stories_imager_share">مشاركة</string>
+    <string name="stories_imager_close">إغلاق</string>
+    <string name="stories_imager_duration">المدة · %1$s</string>
+</resources>

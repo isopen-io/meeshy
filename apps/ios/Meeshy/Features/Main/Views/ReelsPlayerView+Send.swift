@@ -13,7 +13,7 @@ import MeeshyUI
 @MainActor
 enum ReelSend {
     static func subject(for reel: FeedPost) -> ShareSubject {
-        .publication(id: reel.id, isReel: true, authorName: reel.authorUsername ?? reel.author, authorId: reel.authorId)
+        .publication(reel, isReel: true)
     }
 
     /// Le toucher : retour haptique, engagement compté, feuille ouverte
