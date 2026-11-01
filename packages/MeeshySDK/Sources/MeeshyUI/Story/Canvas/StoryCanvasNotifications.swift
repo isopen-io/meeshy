@@ -44,6 +44,7 @@ public nonisolated enum StoryCanvasManipulation {
     public static let activeKey = "active"
 
     /// Annonce le début (`active`) ou la fin d'un geste sur `canvas`.
+    @MainActor
     static func announce(active: Bool, by canvas: AnyObject, center: NotificationCenter = .default) {
         center.post(name: .storyCanvasManipulationDidChange, object: canvas, userInfo: [activeKey: active])
     }
