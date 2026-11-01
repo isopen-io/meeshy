@@ -152,7 +152,9 @@ export async function getStoryNotificationRecipients(
  *  - celui du COMMENTATEUR, au cran de « mon activité ailleurs »
  *    (`circleElsewhereComment`, défaut Sang) — sauf quand il commente son
  *    propre contenu, qui n'est pas « ailleurs ».
- * L'union garde l'ordre (entourage de l'auteur d'abord) et la borne de chacun.
+ * Le plus restrictif gagne (#14080) : un destinataire passe les DEUX seuils,
+ * chacun mesuré depuis son propriétaire — l'INTERSECTION, dans l'ordre de
+ * l'entourage de l'auteur. « Personne » chez l'un ⇒ aucun relais.
  */
 async function commentEntourage(
   prisma: PrismaClient,
@@ -165,8 +167,10 @@ async function commentEntourage(
       ? Promise.resolve<Entourage>({ ids: [], truncated: false })
       : resolveEntourage(prisma, { ownerId: commenterId, key: 'circleElsewhereComment', excludeUserIds: [authorId] }),
   ]);
+  if (commenterId === authorId) return ofAuthor;
+  const commenterSide = new Set(ofCommenter.ids);
   return {
-    ids: [...new Set([...ofAuthor.ids, ...ofCommenter.ids])],
+    ids: ofAuthor.ids.filter((id) => commenterSide.has(id)),
     truncated: ofAuthor.truncated || ofCommenter.truncated,
   };
 }
