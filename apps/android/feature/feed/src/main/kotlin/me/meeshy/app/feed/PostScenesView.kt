@@ -66,7 +66,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  *
  * Seule la page COURANTE du carrousel joue, et seulement quand l'hôte l'autorise ([live] : la carte élue du fil, ou le détail).
  * Ce qu'on y entend dépend de l'HÔTE ([host], iOS `PostSceneMosaicHost`) : le fil est muet par construction, la fiche du post
- * fait entendre ses scènes tant que [muted] ne les coupe pas (#13893). Chaque scène porte sa légende là où la place le permet.
+ * fait entendre ses scènes tant que [muted] ne les coupe pas (#13893). Chaque scène porte sa légende là où la place le permet,
+ * et dit dans son coin qu'elle a du son ou qu'elle bouge ([SceneCue], #14201).
  */
 @Composable
 internal fun PostScenesView(
@@ -113,7 +114,8 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean
                 .background(FEED_MEDIA_GROUND),
         ) {
             HorizontalPager(state = pagerState, key = { page -> scenes.items[page].id }, modifier = Modifier.fillMaxSize()) { page ->
-                val label = stringResource(R.string.feed_scene_tile, page + 1)
+                val moves = scenes.moving.getOrNull(page) == true
+                val label = sceneTileLabel(stringResource(R.string.feed_scene_tile, page + 1), moves)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -130,6 +132,12 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean
                     scenes.captionAt(page, tileWidth = 1f)?.let { caption ->
                         FeedMediaCaption(text = caption, maxLines = CAPTION_LINES, modifier = Modifier.align(Alignment.BottomStart))
                     }
+                    SceneCue(
+                        playing = live && page == current,
+                        mutedSound = host.locksMute && scenes.offersSound,
+                        moves = moves,
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                    )
                 }
             }
             if (count > 1) {
@@ -184,11 +192,13 @@ private fun SceneTile(scenes: FeedPostScenes, tile: MosaicTile, box: DpSize, mut
     val item = scenes.items[tile.index]
     val boxWidth = box.width
     val boxHeight = box.height
-    val label = if (tile.overflow > 0) {
+    val moves = scenes.moving.getOrNull(tile.index) == true
+    val place = if (tile.overflow > 0) {
         stringResource(R.string.feed_scene_more, tile.index + 1, tile.overflow)
     } else {
         stringResource(R.string.feed_scene_tile, tile.index + 1)
     }
+    val label = sceneTileLabel(place, moves)
     Box(
         modifier = Modifier
             .offset(x = boxWidth * tile.x, y = boxHeight * tile.y)
@@ -203,6 +213,9 @@ private fun SceneTile(scenes: FeedPostScenes, tile: MosaicTile, box: DpSize, mut
         }
         scenes.captionAt(tile.index, tile.width, tile.overflow)?.let { caption ->
             FeedMediaCaption(text = caption, maxLines = CAPTION_LINES, modifier = Modifier.align(Alignment.BottomStart))
+        }
+        if (tile.overflow == 0) {
+            SceneCue(playing = false, mutedSound = false, moves = moves, modifier = Modifier.align(Alignment.BottomEnd))
         }
         if (tile.overflow > 0) {
             Box(
