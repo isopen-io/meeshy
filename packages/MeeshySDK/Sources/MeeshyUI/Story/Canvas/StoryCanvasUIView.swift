@@ -425,9 +425,9 @@ public final class StoryCanvasUIView: UIView {
     var rotationRecognizer: UIRotationGestureRecognizer!
     var singleTapRecognizer: UITapGestureRecognizer!
     var doubleTapRecognizer: UITapGestureRecognizer!
-    /// **L'appui long sur le FOND** — jamais sur un objet, où
-    /// `UIContextMenuInteraction` règne déjà (`hitTestItem` y rend un id, et
-    /// le menu se configure ; sur le fond il rend `nil`, laissant la place).
+    /// **L'appui long immobile** : le geste du FOND, et le menu d'un objet quand
+    /// l'hôte le peint (#14206). Sans hôte, `UIContextMenuInteraction` garde le
+    /// menu système des objets.
     var backgroundLongPressRecognizer: UILongPressGestureRecognizer!
     /// Pinch à 3 doigts dédié au zoom du viewport (canvas entier). Séparé du
     /// `pinchRecognizer` 2-doigts qui agit sur un élément/fond : sans cette

@@ -78,14 +78,16 @@ final class StoryCanvasLongPressLiftGuardTests: XCTestCase {
     }
 
     /// **Le fond est un calque de `itemsContainer`** (#13974) : `hitTestItem`
-    /// le rend. L'appui long du fond ne garde donc que le PREMIER PLAN, et le
-    /// menu contextuel lui cède le fond chez un hôte qui le sélectionne — sans
-    /// quoi l'appui long sur une photo de fond ouvrait un menu vide.
+    /// le rend. L'appui long ne distingue donc que le PREMIER PLAN — un objet
+    /// y ouvre le menu de l'hôte (#14206), jamais le viseur — et le menu
+    /// contextuel cède le fond chez un hôte qui le sélectionne, sans quoi
+    /// l'appui long sur une photo de fond ouvrait un menu vide.
     func test_lAppuiLongDuFond_neGardeQueLePremierPlan_etLeMenuLuiCedeLeFond() throws {
         let nu = try gestures()
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\n", with: "")
-        XCTAssertTrue(nu.contains("guardhitTestForegroundItem(at:recognizer.location(in:self))==nilelse{return}"))
+        XCTAssertTrue(nu.contains(
+            "ifletobjet=hitTestForegroundItem(at:recognizer.location(in:self)){requestItemMenu(id:objet,at:recognizer.location(in:self))return}"))
         XCTAssertFalse(nu.contains("guardhitTestItem(at:recognizer.location(in:self))==nilelse{return}"))
         let menu = try sdkSource("Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+ContextMenu.swift")
             .replacingOccurrences(of: " ", with: "")

@@ -32,6 +32,7 @@ extension StoryCanvasUIView {
         singleTapRecognizer.require(toFail: doubleTapRecognizer)
         backgroundLongPressRecognizer = UILongPressGestureRecognizer(
             target: self, action: #selector(handleBackgroundLongPress(_:)))
+        backgroundLongPressRecognizer.allowableMovement = Self.longPressTolerance
         canvasZoomPinchRecognizer = ThreeFingerPinchGestureRecognizer(
             target: self,
             action: #selector(handleCanvasZoomPinch(_:))
@@ -44,16 +45,23 @@ extension StoryCanvasUIView {
         addInteraction(UIContextMenuInteraction(delegate: self))
     }
 
-    /// **L'appui long sur le FOND, et rien d'autre.**
+    /// **La tolérance du doigt immobile, le slop système** (#14206) : au-delà,
+    /// l'appui long échoue et le glissé prend la main.
+    static let longPressTolerance: CGFloat = 10
+
+    /// **L'appui long IMMOBILE : le menu d'un objet, ou le geste du fond.**
     ///
-    /// Trois conditions, chacune pour une raison distincte :
+    /// Trois gestes ne se chevauchent jamais (#14206) : toucher sélectionne,
+    /// toucher-déplacer déplace, appui long immobile ouvre le menu. Le menu peint
+    /// par l'hôte partait de `UIContextMenuInteraction`, qui le demande dès que le
+    /// doigt se pose ; il part d'ici, d'un appui qui échoue au-delà de
+    /// `longPressTolerance` et qui s'exclut du glissé.
     ///
     /// - `mode == .edit` — en lecture, la scène se regarde ;
     /// - `.began` — l'appui long émet `.began` puis `.changed`/`.ended` ; sans
-    ///   ce filtre l'hôte serait appelé plusieurs fois pour un seul geste, et
-    ///   ouvrirait plusieurs viseurs ;
-    /// - `hitTestForegroundItem(at:) == nil` — le premier plan appartient au menu
-    ///   contextuel ; le FOND, que `hitTestItem` rend aussi, à ce geste (#13974).
+    ///   ce filtre l'hôte serait appelé plusieurs fois pour un seul geste ;
+    /// - un objet de premier plan sous le doigt ⇒ son menu ; sinon le FOND, que
+    ///   `hitTestItem` rend aussi, garde ce geste (#13974).
     @objc func handleBackgroundLongPress(_ recognizer: UILongPressGestureRecognizer) {
         // **La LEVÉE d'abord** (#5041) : un appui long ARMÉ doit rendre sa durée
         // et sa fin, sinon le viseur n'a de quoi ouvrir un objectif, jamais de
@@ -79,7 +87,10 @@ extension StoryCanvasUIView {
             break
         }
         guard mode == .edit, recognizer.state == .began else { return }
-        guard hitTestForegroundItem(at: recognizer.location(in: self)) == nil else { return }
+        if let objet = hitTestForegroundItem(at: recognizer.location(in: self)) {
+            requestItemMenu(id: objet, at: recognizer.location(in: self))
+            return
+        }
         guard inlineEditingTextId == nil else { return }
         // **« Aucun objet devant » n'est pas « scène vide »** (#5041). La garde
         // ci-dessus interroge `itemsContainer`, qui ne contient que le PREMIER
