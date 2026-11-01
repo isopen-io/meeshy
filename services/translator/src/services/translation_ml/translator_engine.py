@@ -19,8 +19,11 @@ from config.settings import LANGUAGE_MAPPINGS
 from utils.sentence_plan import SentencePlan, plan_sentences
 from utils.text_segmentation import (
     has_translatable_text,
+    is_placeholder,
+    placeholders_kept,
     protect_entities,
     restore_entities,
+    split_on_placeholders,
     strip_entities,
 )
 
@@ -352,7 +355,39 @@ class TranslatorEngine:
         translated = await self._translate_masked_text(
             masked_text, source_lang, target_lang, model_type
         )
+        translated = await self._keeping_placeholders(
+            masked_text, translated, source_lang, target_lang, model_type
+        )
         return restore_entities(translated, entities)
+
+    async def _keeping_placeholders(
+        self, masked_text: str, translated: str, source_lang: str, target_lang: str, model_type: str
+    ) -> str:
+        """Une sortie qui a perdu ou altéré un marqueur n'est jamais servie (#14327).
+
+        Repli : traduire seulement le texte libre ENTRE les marqueurs, chaque
+        entité restant à sa place ; si même ce repli ne rend pas chaque marqueur,
+        le texte d'origine est servi."""
+        if placeholders_kept(masked_text, translated):
+            return translated
+        logger.warning("[TRANSLATOR] Marqueur perdu par le modèle : traduction entre les marqueurs")
+        pieces = [
+            await self._translate_free_piece(part, source_lang, target_lang, model_type)
+            for part in split_on_placeholders(masked_text)
+        ]
+        fallback = "".join(pieces)
+        return fallback if placeholders_kept(masked_text, fallback) else masked_text
+
+    async def _translate_free_piece(
+        self, part: str, source_lang: str, target_lang: str, model_type: str
+    ) -> str:
+        if is_placeholder(part) or not has_translatable_text(part):
+            return part
+        core = part.strip()
+        lead = part[:len(part) - len(part.lstrip())]
+        trail = part[len(part.rstrip()):]
+        translated = await self._translate_masked_text(core, source_lang, target_lang, model_type)
+        return lead + translated.strip() + trail
 
     def _plan(self, masked_text: str, source_lang: str, target_lang: str) -> SentencePlan:
         """Les phrases du message, chacune résolue par le lexique ou confiée au modèle (#9723).
@@ -529,12 +564,15 @@ class TranslatorEngine:
 
         results: List[str] = []
         cursor = 0
-        for text, plan, (_, entities) in zip(texts, plans, protected):
+        for text, plan, (masked, entities) in zip(texts, plans, protected):
             if plan is None:
                 results.append(text)
                 continue
             taken = len(plan.model_inputs)
-            results.append(restore_entities(plan.assemble(outputs[cursor:cursor + taken]), entities))
+            assembled = await self._keeping_placeholders(
+                masked, plan.assemble(outputs[cursor:cursor + taken]), source_lang, target_lang, model_type
+            )
+            results.append(restore_entities(assembled, entities))
             cursor += taken
         return results
 
