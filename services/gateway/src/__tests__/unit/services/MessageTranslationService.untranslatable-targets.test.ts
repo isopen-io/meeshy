@@ -13,8 +13,26 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { EventEmitter } from 'events';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
+const NEVER_SERVED_BY_THE_TRANSLATOR = new Set(['byv', 'bas']);
+
+type PushedRequest = { messageId: string; conversationId: string; targetLanguages: readonly string[] };
+
+/**
+ * Le translator ne sert jamais `byv` : une telle requête finit en
+ * `translationError` (les relances épuisées), que le service rediffuse en
+ * `translationFailed`. Sans ce comportement, le témoin « aucun échec
+ * annoncé » restait vert même filtre retiré.
+ */
 class FakeZmqClient extends EventEmitter {
-  sendTranslationRequest = jest.fn(async (_request: unknown) => 'task-1');
+  sendTranslationRequest = jest.fn(async (request: unknown) => {
+    const pushed = request as PushedRequest;
+    if (pushed.targetLanguages.some((lang) => NEVER_SERVED_BY_THE_TRANSLATOR.has(lang))) {
+      setImmediate(() => this.emit('translationError', {
+        taskId: 'task-1', messageId: pushed.messageId, conversationId: pushed.conversationId, error: 'retries exhausted',
+      }));
+    }
+    return 'task-1';
+  });
   healthCheck = jest.fn(async () => true);
   close = jest.fn(async () => undefined);
 }
@@ -63,7 +81,7 @@ async function newMessage(options: { originalLanguage: string; readers: readonly
   const service = new MessageTranslationService(prisma);
   await service.initialize();
   const failed = jest.fn();
-  service.on('translationError', failed);
+  service.on('translationFailed', failed);
   await service.handleNewMessage({
     id: MSG_ID, conversationId: CONV_ID, senderId: 'sender-1', content: 'Bonjour à tous',
     originalLanguage: options.originalLanguage, messageType: 'text', replyToId: null,
@@ -86,8 +104,9 @@ describe('une langue sans code NLLB-200 ne part jamais au translator', () => {
   });
 
   it('un lecteur byv parmi d’autres : seules les langues servies partent', async () => {
-    await newMessage({ originalLanguage: 'fr', readers: ['en', 'byv', 'de'] });
+    const { failed } = await newMessage({ originalLanguage: 'fr', readers: ['en', 'byv', 'de'] });
 
+    expect(failed).not.toHaveBeenCalled();
     expect(pushedTargets()).toHaveLength(1);
     expect([...(pushedTargets()[0] as string[])].sort()).toEqual(['de', 'en']);
   });
