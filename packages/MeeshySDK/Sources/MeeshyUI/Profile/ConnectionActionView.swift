@@ -42,11 +42,11 @@ public struct ConnectionActionView: View {
         userId: String,
         userName: String,
         accentColor: Color = MeeshyColors.indigo500,
-        friendService: FriendServiceProviding = FriendService.shared,
-        resolver: UserRelationshipResolver = .shared,
-        offlineQueue: OfflineQueueing = OfflineQueue.shared,
-        friendshipCache: FriendshipCache = .shared,
-        blockService: BlockService = .shared,
+        friendService: FriendServiceProviding,
+        resolver: UserRelationshipResolver,
+        offlineQueue: OfflineQueueing,
+        friendshipCache: FriendshipCache,
+        blockService: BlockService,
         onError: ((String) -> Void)? = nil,
         onSuccess: ((String) -> Void)? = nil
     ) {
