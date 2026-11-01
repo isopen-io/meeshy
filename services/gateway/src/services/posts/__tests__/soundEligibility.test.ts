@@ -16,6 +16,7 @@ describe('feedsSoundLibrary', () => {
   const EXCLUDED = [
     PostVisibility.FRIENDS, PostVisibility.PRIVATE,
     PostVisibility.EXCEPT, PostVisibility.ONLY,
+    PostVisibility.ACQUAINTANCES, PostVisibility.CLOSE, PostVisibility.BLOOD,
   ];
 
   it('test_everyVisibilityOfTheEnumIsDecided', () => {

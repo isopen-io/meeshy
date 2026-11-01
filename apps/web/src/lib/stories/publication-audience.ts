@@ -1,4 +1,5 @@
 import type { PostVisibility } from '@meeshy/shared/types/post';
+import type { PostCircleVisibility } from '@meeshy/shared/utils/relation-levels';
 import { repostVisibilityInheritsAudienceList } from '@meeshy/shared/utils/repost-audience';
 
 import type { PublicationKind } from '@/lib/stories/publication-kind';
@@ -22,6 +23,15 @@ export type AudienceLabelKey =
 export type AudienceRefusalKey = 'story.studio.audience.refusal.people';
 
 /**
+ * Les audiences que le studio OFFRE aujourd'hui : les six historiques. Les trois
+ * audiences de cercle (`ACQUAINTANCES`, `CLOSE`, `BLOOD`, #13931) existent côté
+ * serveur et dans l'union partagée, mais leur sélecteur est le lot `ui-audience`
+ * (#13939) : tant qu'il n'est pas livré, le studio ne les offre pas, et il ne
+ * les range pas non plus dans la mémoire du dernier choix.
+ */
+export type StudioAudience = Exclude<PostVisibility, PostCircleVisibility>;
+
+/**
  * **L'AUDIENCE DU STUDIO** (#7683, première tranche du registre #7463 —
  * ligne « audience ») — le miroir web de `PostVisibility.swift:6-13/48-50`
  * (`packages/MeeshySDK/Sources/MeeshyUI/Story/PostVisibility.swift`) : les
@@ -31,7 +41,7 @@ export type AudienceRefusalKey = 'story.studio.audience.refusal.people';
  * `story-compose.tsx` (orchestration) et `story-compose-audience.tsx`
  * (présentation) appellent, jamais une seconde table écrite à la main.
  */
-export const STUDIO_AUDIENCES: readonly PostVisibility[] = ['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE'];
+export const STUDIO_AUDIENCES: readonly StudioAudience[] = ['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE'];
 
 /**
  * **CE QUE LE STUDIO OFFRE** — la loi D-100 importée telle quelle
@@ -43,14 +53,14 @@ export const STUDIO_AUDIENCES: readonly PostVisibility[] = ['PUBLIC', 'COMMUNITY
  * (`repostOfId` reste `null` en pratique) — la loi est importée maintenant
  * pour que le jour où il en a un, aucune réécriture ne soit nécessaire ici.
  */
-export function offeredAudiences(params: { readonly repostOfId: string | null }): readonly PostVisibility[] {
+export function offeredAudiences(params: { readonly repostOfId: string | null }): readonly StudioAudience[] {
   if (params.repostOfId === null) return STUDIO_AUDIENCES;
   return STUDIO_AUDIENCES.filter((visibility) => !repostVisibilityInheritsAudienceList(visibility));
 }
 
 /** Les audiences que le studio sait CHOISIR aujourd'hui — toutes sauf les
  * deux modes NOMINATIFS, faute de sélecteur de personnes. */
-export type ChoosableAudience = Exclude<PostVisibility, 'EXCEPT' | 'ONLY'>;
+export type ChoosableAudience = Exclude<StudioAudience, 'EXCEPT' | 'ONLY'>;
 
 /** Un type SOMME : choisissable (et alors l'audience est RÉTRÉCIE au type
  * qui le prouve), ou refusée AVEC la clé de sa raison. */
@@ -65,7 +75,7 @@ export type AudienceAvailability =
  * « audience », seconde tranche) : ils restent AU MENU, non choisissables,
  * avec leur raison dite.
  */
-export function audienceAvailability(visibility: PostVisibility): AudienceAvailability {
+export function audienceAvailability(visibility: StudioAudience): AudienceAvailability {
   if (visibility === 'EXCEPT' || visibility === 'ONLY') return { choosable: false, reasonKey: 'story.studio.audience.refusal.people' };
   return { choosable: true, audience: visibility };
 }
@@ -79,7 +89,7 @@ export function audienceAvailability(visibility: PostVisibility): AudienceAvaila
  * `false` sur toute valeur qui n'est pas l'une des six (donnée corrompue).
  */
 export function isRememberableAudience(value: unknown): value is ChoosableAudience {
-  return typeof value === 'string' && STUDIO_AUDIENCES.includes(value as PostVisibility) && value !== 'EXCEPT' && value !== 'ONLY';
+  return typeof value === 'string' && STUDIO_AUDIENCES.includes(value as StudioAudience) && value !== 'EXCEPT' && value !== 'ONLY';
 }
 
 /**
@@ -134,7 +144,7 @@ export function requestedAudienceFromSearch(search: URLSearchParams): ChoosableA
   return REQUESTABLE[search.get('audience') ?? ''] ?? null;
 }
 
-const AUDIENCE_LABEL_KEY: Readonly<Record<PostVisibility, AudienceLabelKey>> = {
+const AUDIENCE_LABEL_KEY: Readonly<Record<StudioAudience, AudienceLabelKey>> = {
   PUBLIC: 'story.studio.audience.public',
   COMMUNITY: 'story.studio.audience.community',
   FRIENDS: 'story.studio.audience.friends',
@@ -143,4 +153,4 @@ const AUDIENCE_LABEL_KEY: Readonly<Record<PostVisibility, AudienceLabelKey>> = {
   PRIVATE: 'story.studio.audience.private',
 };
 
-export const audienceLabelKey = (visibility: PostVisibility): AudienceLabelKey => AUDIENCE_LABEL_KEY[visibility];
+export const audienceLabelKey = (visibility: StudioAudience): AudienceLabelKey => AUDIENCE_LABEL_KEY[visibility];

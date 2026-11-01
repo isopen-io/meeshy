@@ -11,7 +11,9 @@ import { doUsersShareCommunity } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
 import { verdictFor } from './referenceAccess';
 import { NOT_DELETED } from './softDelete';
-import { amitieAcceptee } from '../friendship';
+import { amitieAcceptee, niveauEffectif } from '../friendship';
+import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
+import { postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 
 export type PostVisibilityRecord = {
   /**
@@ -49,6 +51,23 @@ export type PostAclPrisma = Pick<
   PrismaClient,
   'post' | 'postComment' | 'friendRequest' | 'userRelation' | 'communityMember' | 'participant' | 'postMention'
 >;
+
+/**
+ * Les CERCLES d'un lecteur, pour le filtre de liste (#13931) : les auteurs dont le
+ * niveau effectif avec lui atteint AU MOINS Connaissance, Proche, Sang. Un auteur
+ * Sang figure donc dans les trois listes — c'est ce qui rend les branches du
+ * filtre indépendantes (`ACQUAINTANCES` ⊇ `CLOSE` ⊇ `BLOOD` côté lecteur).
+ *
+ * Vide par défaut : un appelant qui ne les fournit pas ne sert AUCUNE audience de
+ * cercle (fail-closed), jamais « tous les amis ».
+ */
+export type PostCircles = {
+  readonly acquaintance: readonly string[];
+  readonly close: readonly string[];
+  readonly blood: readonly string[];
+};
+
+export const NO_POST_CIRCLES: PostCircles = { acquaintance: [], close: [], blood: [] };
 
 /**
  * G5 — canonical Prisma OR-filter for post visibility, the single source both
@@ -112,7 +131,8 @@ export function buildPostVisibilityOrFilter(
   viewerId: string,
   audienceIds: string[],
   communityCoMemberIds: string[] = [],
-  blockedAuthorIds: readonly string[] = []
+  blockedAuthorIds: readonly string[] = [],
+  circles: PostCircles = NO_POST_CIRCLES
 ) {
   const audience = {
     OR: [
@@ -122,6 +142,9 @@ export function buildPostVisibilityOrFilter(
       { visibility: PostVisibility.FRIENDS, authorId: { in: audienceIds } },
       { visibility: PostVisibility.EXCEPT, authorId: { in: audienceIds }, NOT: { visibilityUserIds: { has: viewerId } } },
       { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
+      { visibility: PostVisibility.ACQUAINTANCES, authorId: { in: [...circles.acquaintance] } },
+      { visibility: PostVisibility.CLOSE, authorId: { in: [...circles.close] } },
+      { visibility: PostVisibility.BLOOD, authorId: { in: [...circles.blood] } },
     ],
   };
   if (blockedAuthorIds.length === 0) return audience;
@@ -134,6 +157,8 @@ export function buildPostVisibilityOrFilter(
  * PUBLIC    → everyone
  * COMMUNITY → author + members sharing at least one community with the author
  * FRIENDS   → post author + accepted friends of author
+ * ACQUAINTANCES / CLOSE / BLOOD → author + effective level (minimum of both grants)
+ *              of at least Connaissance / Proche / Sang — never a DM contact (#13931)
  * PRIVATE   → author only
  * ONLY      → userId must be in visibilityUserIds
  * EXCEPT    → userId must NOT be in visibilityUserIds, AND must be a friend
@@ -215,6 +240,11 @@ async function matchesPostAudience(
     case PostVisibility.COMMUNITY:
       return doUsersShareCommunity(prisma, post.authorId, userId);
 
+    case PostVisibility.ACQUAINTANCES:
+    case PostVisibility.CLOSE:
+    case PostVisibility.BLOOD:
+      return circleAudienceAdmits(prisma, post.authorId, userId, post.visibility);
+
     case PostVisibility.FRIENDS:
     case PostVisibility.EXCEPT: {
       // EXCEPT exclut nommément AVANT toute lecture du graphe : un utilisateur
@@ -232,6 +262,29 @@ async function matchesPostAudience(
 
     default:
       return false;
+  }
+}
+
+/**
+ * Le niveau EFFECTIF de `viewerId` avec l'auteur atteint-il celui que l'audience de
+ * cercle `visibility` exige ? Le seul verdict unitaire des cercles : lu par
+ * `niveauEffectif` (le minimum des deux accords, RG-01), sans contact de message
+ * direct, et sans comparaison de niveaux écrite ici (garde
+ * `relation-access-single-site-guard`). Une valeur qui n'est pas un cercle, ou une
+ * lecture en échec, ne donne jamais accès.
+ */
+export async function circleAudienceAdmits(
+  prisma: Pick<PrismaClient, 'friendRequest' | 'userRelation'>,
+  authorId: string,
+  viewerId: string,
+  visibility: string
+): Promise<boolean> {
+  const floor = postCircleAudienceFloor(visibility);
+  if (!floor) return false;
+  try {
+    return relationLevelIfAtLeast(await niveauEffectif(prisma, authorId, viewerId), floor) !== null;
+  } catch {
+    return false;
   }
 }
 

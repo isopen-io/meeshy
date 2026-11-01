@@ -4126,11 +4126,14 @@ enum PostType {
 /// Visibilité d'un post
 enum PostVisibility {
   PUBLIC    // Visible par tous
-  FRIENDS   // Amis uniquement
+  FRIENDS   // Amis et au-dessus (niveau effectif Ami, Proche, Sang)
   COMMUNITY // Membres de la communauté uniquement
   PRIVATE   // Brouillon / seulement l'auteur
   EXCEPT    // Amis sauf ceux dans visibilityUserIds
   ONLY      // Uniquement les utilisateurs dans visibilityUserIds
+  ACQUAINTANCES // Niveau effectif Connaissance et au-dessus (cercles, #13931)
+  CLOSE     // Niveau effectif Proche et au-dessus
+  BLOOD     // Niveau effectif Sang uniquement ; jamais repartageable (RG-18)
 }
 
 /// Contenu social unifié (posts permanents, stories éphémères, status/moods)

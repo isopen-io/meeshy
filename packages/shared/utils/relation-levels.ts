@@ -69,6 +69,32 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
 };
 
 /**
+ * Les audiences de PUBLICATION qui suivent un cercle (`PostVisibility`, #13931) et
+ * la feature de la matrice qui fixe leur plancher. `FRIENDS` n'y figure pas : son
+ * sens historique « Amis et au-dessus » garde son chemin (amis ∪ contacts de
+ * message direct), aucune feature ne le porte.
+ */
+export const POST_CIRCLE_AUDIENCE_FEATURE = {
+  ACQUAINTANCES: 'audience.acquaintances',
+  CLOSE: 'audience.close',
+  BLOOD: 'audience.blood',
+} as const satisfies Readonly<Record<string, RelationFeature>>;
+
+export type PostCircleVisibility = keyof typeof POST_CIRCLE_AUDIENCE_FEATURE;
+
+export const POST_CIRCLE_VISIBILITIES = Object.keys(POST_CIRCLE_AUDIENCE_FEATURE) as readonly PostCircleVisibility[];
+
+/**
+ * Le niveau EFFECTIF minimal qu'exige une audience de cercle, `null` pour toute
+ * autre valeur (historique, inconnue, absente) : l'appelant garde alors son
+ * chemin, et une valeur inconnue ne devient jamais un cercle.
+ */
+export const postCircleAudienceFloor = (visibility: unknown): RelationLevel | null =>
+  typeof visibility === 'string' && Object.prototype.hasOwnProperty.call(POST_CIRCLE_AUDIENCE_FEATURE, visibility)
+    ? RELATION_FEATURE_MIN_LEVEL[POST_CIRCLE_AUDIENCE_FEATURE[visibility as PostCircleVisibility]]
+    : null;
+
+/**
  * Les features qui exigent un CONSENTEMENT explicite et refusable, à tout âge
  * (§ 1.8) : Bring (à l'entrée en Ami), talkie et catégorie d'écoute (à l'entrée
  * en Proche), titre d'écoute et position (au rituel Sang). La loi dit le

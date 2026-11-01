@@ -10,11 +10,13 @@ const ALL: readonly PostVisibility[] = ['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEP
 
 describe('allowedRepostVisibilities', () => {
   it('lets a PUBLIC original be republished to any audience — all are subsets of « everyone »', () => {
-    expect(new Set(allowedRepostVisibilities('PUBLIC'))).toEqual(new Set(ALL));
+    expect(new Set(allowedRepostVisibilities('PUBLIC'))).toEqual(new Set([...ALL, 'ACQUAINTANCES', 'CLOSE', 'BLOOD']));
   });
 
-  it('restricts a FRIENDS original to FRIENDS or PRIVATE', () => {
-    expect(new Set(allowedRepostVisibilities('FRIENDS'))).toEqual(new Set<PostVisibility>(['FRIENDS', 'PRIVATE']));
+  it('restricts a FRIENDS original to FRIENDS, the narrower circles or PRIVATE', () => {
+    expect(new Set(allowedRepostVisibilities('FRIENDS'))).toEqual(
+      new Set<PostVisibility>(['FRIENDS', 'CLOSE', 'BLOOD', 'PRIVATE']),
+    );
   });
 
   it('restricts a COMMUNITY original to COMMUNITY or PRIVATE', () => {

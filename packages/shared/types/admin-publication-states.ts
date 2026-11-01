@@ -9,10 +9,12 @@
  * (`visibility = PRIVATE` sans retrait) > publiée.
  */
 
+import { POST_VISIBILITIES } from './post.js';
+
 export const ADMIN_POST_STATES = ['published', 'offline', 'private', 'expired', 'deleted'] as const;
 export type AdminPostState = (typeof ADMIN_POST_STATES)[number];
 
-export const ADMIN_POST_VISIBILITIES = ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY'] as const;
+export const ADMIN_POST_VISIBILITIES = POST_VISIBILITIES;
 export type AdminPostVisibility = (typeof ADMIN_POST_VISIBILITIES)[number];
 
 /** Les audiences que l'administration pose ; `EXCEPT` et `ONLY` exigent une liste que seul l'auteur choisit. */
