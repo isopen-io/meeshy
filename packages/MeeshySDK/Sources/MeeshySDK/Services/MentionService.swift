@@ -2,6 +2,17 @@ import Foundation
 
 // MARK: - Models
 
+/// **D'où vient une suggestion** (#14052) — la passerelle range sa liste dans
+/// cet ordre : connaissances, personnes du contexte (intervenants d'un post,
+/// membres d'une conversation), contacts de tout cercle, annuaire. Miroir de
+/// `MentionSuggestionGroup` (`packages/shared/types/mention.ts`).
+public enum MentionSuggestionGroup: String, Codable, Sendable {
+    case known
+    case context
+    case contact
+    case directory
+}
+
 public struct MentionSuggestion: Codable, Identifiable, Sendable, ProfileDecorWearer {
     public let id: String
     public let username: String
@@ -13,6 +24,9 @@ public struct MentionSuggestion: Codable, Identifiable, Sendable, ProfileDecorWe
     /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
     /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
     public let profileDecor: ServedProfileDecor?
+    /// Le groupe de la suggestion (#14052). Additif et tolérant : absent (passerelle
+    /// antérieure) ou inconnu (groupe ajouté plus tard) ⇒ `nil`, jamais un échec de la liste.
+    public let group: MentionSuggestionGroup?
 
     public init(
         id: String,
@@ -22,7 +36,8 @@ public struct MentionSuggestion: Codable, Identifiable, Sendable, ProfileDecorWe
         badge: String? = nil,
         inConversation: Bool? = nil,
         isFriend: Bool? = nil,
-        profileDecor: ServedProfileDecor? = nil
+        profileDecor: ServedProfileDecor? = nil,
+        group: MentionSuggestionGroup? = nil
     ) {
         self.profileDecor = profileDecor
         self.id = id
@@ -32,6 +47,25 @@ public struct MentionSuggestion: Codable, Identifiable, Sendable, ProfileDecorWe
         self.badge = badge
         self.inConversation = inConversation
         self.isFriend = isFriend
+        self.group = group
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, username, displayName, avatar, badge, inConversation, isFriend, profileDecor, group
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        username = try c.decode(String.self, forKey: .username)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        avatar = try c.decodeIfPresent(String.self, forKey: .avatar)
+        badge = try c.decodeIfPresent(String.self, forKey: .badge)
+        inConversation = try c.decodeIfPresent(Bool.self, forKey: .inConversation)
+        isFriend = try c.decodeIfPresent(Bool.self, forKey: .isFriend)
+        profileDecor = try c.decodeIfPresent(ServedProfileDecor.self, forKey: .profileDecor)
+        group = (try? c.decodeIfPresent(String.self, forKey: .group))
+            .flatMap(MentionSuggestionGroup.init(rawValue:))
     }
 }
 
