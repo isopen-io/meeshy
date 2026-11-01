@@ -14,6 +14,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { MentionSuggestionFinder } from '../../../services/mentions/mentionSuggestions';
 
 const MOI = '507f1f77bcf86cd799439099';
+const POST_ID = '6a0000000000000000000001';
 const AMI = '507f1f77bcf86cd799439012';
 const BLOQUE = '507f1f77bcf86cd799439013';
 
@@ -43,7 +44,7 @@ function fakePrisma(blocks: BlockLists) {
     userRelation: { findMany: jest.fn(async () => []) },
     userContact: { findMany: jest.fn(async () => []) },
     post: {
-      findFirst: jest.fn(async () => ({ id: 'p1', authorId: MOI, visibility: 'PUBLIC', visibilityUserIds: [], expiresAt: null })),
+      findFirst: jest.fn(async () => ({ id: POST_ID, authorId: MOI, visibility: 'PUBLIC', visibilityUserIds: [], expiresAt: null })),
     },
     postComment: { findMany: jest.fn(async () => []) },
     postReaction: { findMany: jest.fn(async () => []) },
@@ -88,7 +89,7 @@ describe('#13350 — suggestions de mention sans personne bloquée', () => {
   });
 
   it.each(SENS)('mention sous un post (amis, annuaire) — %s', async (_sens, blocks) => {
-    const ids = (await new MentionSuggestionFinder(fakePrisma(blocks), cache).forPost('p1', MOI, 'bl')).map((s) => s.id);
+    const ids = (await new MentionSuggestionFinder(fakePrisma(blocks), cache).forPost(POST_ID, MOI, 'bl')).map((s) => s.id);
     expect(ids).toContain(AMI);
     expect(ids).not.toContain(BLOQUE);
   });
