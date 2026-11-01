@@ -70,6 +70,7 @@ import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { logError, logWarn } from '../../utils/logger.js';
 import { OnlyUnlinkedBudgetRefused, refuseOnlyUnlinkedBudget, releaseOnlyUnlinkedBudget, spendOnlyUnlinkedBudget } from './onlyUnlinkedBudget';
+import { spendOnlyUnlinkedBudgetOnEdit } from './onlyUnlinkedBudgetOnEdit';
 
 /**
  * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
@@ -179,35 +180,6 @@ function rejectUnclaimedCanvasMedia(
  * Ce qu'elle laisse comme leçon : une garde MORTE est pire qu'une garde
  * absente. L'absence se cherche ; la présence rassure.
  */
-
-/**
- * #14105 — à l'édition, seuls les choisis AJOUTÉS à un post ONLY original comptent
- * au plafond des choisis sans lien ; une liste EXCEPT qui devient ONLY n'était
- * pas une liste de choisis. Une republication aussi : à l'édition, sa liste est
- * celle que l'auteur écrit, plus celle de sa source.
- */
-async function spendOnlyUnlinkedBudgetOnEdit(
-  fastify: FastifyInstance,
-  prisma: PrismaClient,
-  params: { postId: string; authorId: string; update: { visibility?: string; visibilityUserIds?: string[] } }
-) {
-  const allowed = { allowed: true, retryAfter: 0, unlinked: 0 };
-  if (params.update.visibility === undefined && params.update.visibilityUserIds === undefined) return allowed;
-  const stored = await prisma.post.findFirst({
-    where: { id: params.postId, authorId: params.authorId },
-    select: { visibility: true, visibilityUserIds: true },
-  });
-  const visibility = params.update.visibility ?? stored?.visibility;
-  if (!stored || visibility !== 'ONLY') return allowed;
-  const storedChosen = stored.visibility === 'ONLY' ? stored.visibilityUserIds ?? [] : [];
-  return spendOnlyUnlinkedBudget({
-    fastify,
-    prisma,
-    authorId: params.authorId,
-    chosenIds: params.update.visibilityUserIds ?? storedChosen,
-    previouslyChosen: storedChosen,
-  });
-}
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,

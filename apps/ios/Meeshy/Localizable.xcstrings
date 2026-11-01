@@ -17074,147 +17074,6 @@
         }
       }
     },
-    "composer.camera.gesture.holdFilm": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اضغط مطولًا: صوّر فيديو"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Halten: filmen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hold: record"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mantén: grabar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maintenir : filmer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tieni premuto: filma"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Segure: filmar"
-          }
-        }
-      }
-    },
-    "composer.camera.gesture.tapArm": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المس: افتح عدسة الكاميرا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tippen: Sucher öffnen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap: open the viewfinder"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca: abre el visor"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toucher : ouvrir le viseur"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tocca: apri il mirino"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque: abrir o visor"
-          }
-        }
-      }
-    },
-    "composer.camera.gesture.tapAgainPhoto": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ثم المس مرتين: صورة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dann doppeltippen: Foto"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Then double-tap: photo"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Luego toca dos veces: foto"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Puis toucher deux fois : photo"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Poi tocca due volte: foto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Depois toque duas vezes: foto"
-          }
-        }
-      }
-    },
     "composer.capture.saveToPhotos": {
       "extractionState": "manual",
       "localizations": {
@@ -20975,96 +20834,49 @@
         }
       }
     },
-    "composer.scene.empty.title": {
+    "composer.scene.empty.line": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا مشهدك"
+            "value": "المس المشهد لفتح الكاميرا"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das ist deine Szene"
+            "value": "Tippe auf die Szene für die Kamera"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This is your scene"
+            "value": "Tap the scene for the camera"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta es tu escena"
+            "value": "Toca la escena para la cámara"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ceci est votre scène"
+            "value": "Touchez la scène pour la caméra"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa è la tua scena"
+            "value": "Tocca la scena per la fotocamera"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta é a sua cena"
-          }
-        }
-      }
-    },
-    "composer.scene.empty.invite": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أضِف نصًا أو رسمًا أو صورة أو فيديو، واجعله على طريقتك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Füge Text, eine Zeichnung, ein Bild oder ein Video hinzu – und mach sie zu deiner."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drop in text, a drawing, a photo or a video — and make it yours."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añade texto, un dibujo, una imagen o un vídeo, y hazla tuya."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajoutez-y un texte, un dessin, une image ou une vidéo — et faites-la vôtre."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aggiungi un testo, un disegno, un’immagine o un video: rendila tua."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Coloque um texto, um desenho, uma imagem ou um vídeo — e deixe do seu jeito."
+            "value": "Toque na cena para a câmera"
           }
         }
       }

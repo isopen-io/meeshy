@@ -164,6 +164,8 @@ public final class StoryBackgroundLayer: CALayer {
     /// cette classe sont `nonisolated` pour interopérer avec `CALayer` — elle
     /// est donc posée après `super.init()`, jamais avant (voir les deux inits).
     @MainActor public let playbackQoE: StoryBackgroundPlaybackQoE
+    /// Le voile d'un fond vidéo qui attend sa première image (#14180).
+    @MainActor lazy var videoWaitVeil = StoryVideoWaitVeil()
 
     /// Marks the final bitmap as stamped and notifies `onFinalImageStamped`.
     @MainActor
@@ -771,21 +773,17 @@ extension StoryBackgroundLayer {
                 break
             }
 
-            // Fast-path : URL locale immédiate ou cache disk hit → AVPlayer
-            // direct, sans placeholder noir ni ThumbHash (la première frame
-            // de la vidéo est rendue très vite).
-            if remoteURL.isFileURL {
-                storyMediaLog.info("bg video path=local-file")
-                backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
-                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
-                                       fitOverride: self.transform3D.videoFitMode)
-                break
-            }
-            if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
-                storyMediaLog.info("bg video path=disk-hit")
+            // Fast-path : fichier local ou cache disque → AVPlayer direct, sans
+            // placeholder noir ; la scène du composer y attend la première image
+            // sous l'affiche du fond, comme une vidéo posée (#14180).
+            if let local = remoteURL.isFileURL ? remoteURL
+                : CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
+                storyMediaLog.info("bg video path=\(remoteURL.isFileURL ? "local-file" : "disk-hit", privacy: .public)")
                 backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
                 attachBackgroundPlayer(url: local, looping: looping, mute: mute,
                                        fitOverride: self.transform3D.videoFitMode)
+                videoWaitVeil.cover(avPlayerLayer, playing: local, thumbHash: thumbHash, look: activeMediaLook,
+                                    adjustments: activeAdjustments, fitMode: transform3D.videoFitMode)
                 break
             }
             storyMediaLog.info("bg video path=cache-miss → readable cache transfer")

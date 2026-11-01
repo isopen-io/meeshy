@@ -302,6 +302,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // Les curseurs de look du composer repeignent le fond HORS du fil
         // principal (#9873). Le prefetcher du lecteur, lui aussi en `.edit`, non.
         view.backgroundLayer.bakesLookOffMainThread = true
+        // Un fond vidéo y attend sa première image sous son affiche (#14180).
+        view.backgroundLayer.videoWaitVeil.isEnabled = true
         // Pincer ou tourner un calque modifie la slide à la cadence du doigt :
         // le canvas UIKit la dessine depuis sa propre copie, et le binding —
         // dont chaque écriture réévalue le composer — suit à 30 Hz au plus.

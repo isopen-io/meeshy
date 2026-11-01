@@ -134,6 +134,7 @@ extension StoryBackgroundLayer {
     @MainActor
     func releaseBackgroundPlayer() {
         playbackQoE.finish(reason: .swiped)
+        videoWaitVeil.cancel()
         avPlayerLayer?.removeFromSuperlayer()
         avPlayer?.pause()
         avPlayer = nil

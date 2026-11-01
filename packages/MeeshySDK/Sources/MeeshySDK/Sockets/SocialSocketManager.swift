@@ -556,13 +556,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// main comme celle de `MessageSocketManager` : le transport s'arrête et la
     /// porte « Mettre à jour » se pose. Toute autre erreur n'est que journalisée.
     func handleSocketError(_ data: [Any], center: NotificationCenter = .default) {
-        guard let requirement = UpgradeRequirement.fromSocketErrorPayload(data) else {
-            Logger.socket.error("SocialSocket error: \(data)")
-            return
+        let stopped = UpgradeRequirement.stopTransportIfBelowFloor(data, center: center) {
+            Logger.socket.warning("SocialSocket: client below the version floor — reconnection stopped")
+            disconnect()
         }
-        Logger.socket.warning("SocialSocket: client below the version floor — reconnection stopped")
-        disconnect()
-        requirement.post(via: center)
+        if !stopped { Logger.socket.error("SocialSocket error: \(data)") }
     }
 
     func handleTransportConnected() {

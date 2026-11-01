@@ -152,6 +152,7 @@ internal fun SceneExportStatus(
     SceneExportBand(
         fraction = exportState.veilFraction,
         onCancel = onCancel,
+        verifying = exportState.isVerifying,
         outcome = shown,
         onRetry = onRetry,
         onOutcomeShown = { outcome = null },

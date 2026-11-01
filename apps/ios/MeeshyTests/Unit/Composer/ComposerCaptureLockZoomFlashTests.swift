@@ -148,15 +148,11 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
     // MARK: - Le vocabulaire, dans les sept langues
 
     private static let clesNeuves = [
-        "composer.scene.empty.title",
-        "composer.scene.empty.invite",
+        "composer.scene.empty.line",
         "composer.camera.lock.hint",
         "composer.camera.lock.done",
         "composer.camera.zoom",
         "composer.camera.flashIntensity",
-        "composer.camera.gesture.tapArm",
-        "composer.camera.gesture.tapAgainPhoto",
-        "composer.camera.gesture.holdFilm",
     ]
 
     func test_catalogue_serLesClesNeuvesDansLesSeptLangues() throws {
@@ -171,50 +167,29 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
 
     func test_catalogue_laSceneVideParleAuRegistreDuComposer() throws {
         let catalogue = try Self.catalogue()
-        let titre = try XCTUnwrap(catalogue["composer.scene.empty.title"])
-        XCTAssertTrue(titre["fr"]?.contains("votre") == true, "le composer vouvoie en français")
-        XCTAssertTrue(titre["de"]?.contains("deine") == true, "et tutoie en allemand, comme son catalogue")
+        let ligne = try XCTUnwrap(catalogue["composer.scene.empty.line"])
+        XCTAssertTrue(ligne["fr"]?.hasPrefix("Touchez") == true, "le composer vouvoie en français")
+        XCTAssertTrue(ligne["de"]?.hasPrefix("Tippe") == true, "et tutoie en allemand, comme son catalogue")
     }
+
+    // MARK: - La scène vide : UNE ligne (#13899, inventaire B13 du composer « scène d'abord »)
 
     @MainActor
-    func test_sceneVide_ditTitreInvitationPuisGestes() {
-        let parle = ComposerSceneCameraCopy.emptySceneSpoken(.photoOrVideo)
-        XCTAssertTrue(parle.hasPrefix(ComposerSceneCameraCopy.emptySceneTitle))
-        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.emptySceneInvite))
-        XCTAssertTrue(parle.hasSuffix(ComposerSceneCameraCopy.gestureLine(.holdFilm)))
-        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.gestureLine(.tapArm)))
-        XCTAssertTrue(parle.contains(ComposerSceneCameraCopy.gestureLine(.tapAgainPhoto)))
-    }
-
-    // MARK: - Les gestes : une ligne chacun, précédée de son icône (complément porteur)
-
-    /// **L'indication dit les DEUX temps de la photo** (#8711) : toucher arme,
-    /// toucher encore prend — puis la vidéo au maintien.
-    func test_gestes_armerPuisPhotographierPuisFilmer_chacunSaLigne() {
-        XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.photoOrVideo), [.tapArm, .tapAgainPhoto, .holdFilm])
-        XCTAssertEqual(ComposerSceneQuickCapture.gestureLines(.videoOnly), [.holdFilm],
-                       "un réel n'offre pas la photo : sa ligne ne s'affiche pas")
-    }
-
-    func test_gestes_chaqueLigneASonIcone() {
-        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.tapArm.symbol, "camera.viewfinder")
-        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.tapAgainPhoto.symbol, "camera")
-        XCTAssertEqual(ComposerSceneQuickCapture.GestureLine.holdFilm.symbol, "video")
-    }
-
-    func test_laSceneVide_nePorteAucunAppareilPhotoAuDessusDuTitre() throws {
-        let cadre = try source("Meeshy/Features/Composer/ComposerSceneCameraFrame.swift")
-        XCTAssertFalse(cadre.contains("hint == .videoOnly ? \"video\" : \"camera\""),
-                       "l'appareil photo au-dessus du titre ne représente pas une scène")
-        XCTAssertTrue(cadre.contains("ComposerSceneQuickCapture.gestureLines(hint)"))
+    func test_sceneVide_neDitQuUneLigne_quelQueSoitLeFormat() {
+        XCTAssertEqual(ComposerSceneCameraCopy.emptySceneSpoken(.photoOrVideo), ComposerSceneCameraCopy.emptySceneLine)
+        XCTAssertEqual(ComposerSceneCameraCopy.emptySceneSpoken(.videoOnly), ComposerSceneCameraCopy.emptySceneLine)
+        XCTAssertFalse(ComposerSceneCameraCopy.emptySceneLine.contains("\n"))
     }
 
     // MARK: - Le câblage
 
-    func test_laSceneVideMontreLeTitreEtLInvitation() throws {
+    func test_laSceneVideMontreUneSeuleLigne() throws {
         let cadre = try source("Meeshy/Features/Composer/ComposerSceneCameraFrame.swift")
-        XCTAssertTrue(cadre.contains("ComposerSceneCameraCopy.emptySceneTitle"))
-        XCTAssertTrue(cadre.contains("ComposerSceneCameraCopy.emptySceneInvite"))
+        XCTAssertTrue(cadre.contains("ComposerSceneCameraCopy.emptySceneLine"))
+        XCTAssertFalse(cadre.contains("emptySceneTitle"), "le titre de vente a quitté la scène vide")
+        XCTAssertFalse(cadre.contains("emptySceneInvite"), "l'invitation a quitté la scène vide")
+        XCTAssertFalse(cadre.contains("gestureLines"), "les trois lignes de gestes ont quitté la scène vide")
+        XCTAssertTrue(cadre.contains(".lineLimit(1)"))
     }
 
     func test_laBarreMontreLeCadenasLeZoomEtLeCurseur() throws {

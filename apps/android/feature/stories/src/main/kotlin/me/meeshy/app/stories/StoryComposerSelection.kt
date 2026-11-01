@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.composer.look.ComposerCropPreset
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.ComposerObjectEditorRail
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
 import me.meeshy.sdk.model.composer.ComposerObjectKind
@@ -167,9 +168,20 @@ internal fun StoryComposerUiState.placedMediaIsVideo(id: String): Boolean {
 internal fun StoryComposerUiState.placedTrimSourceOf(id: String): Double? {
     if (deck.selectedSlide.placedMedia.none { it.id == id } || !placedMediaIsVideo(id)) return null
     val file = deck.selectedSlide.mediaFileOf(id)
-    val seconds = attachments.firstOrNull { it.id == file }?.durationMs?.let { it / 1000.0 } ?: return null
-    return seconds.takeIf { it.isFinite() && it >= MediaTrimRule.MINIMUM_DURATION }?.coerceAtMost(SoundTrimLaw.MAX_SOURCE_SECONDS)
+    return attachments.firstOrNull { it.id == file }?.trimSourceSeconds
 }
+
+/** La durée de source qu'une vidéo envoyée offre à la coupe ; `null` quand elle est inconnue ou trop courte pour se couper. */
+internal val UploadedMedia.trimSourceSeconds: Double?
+    get() = durationMs?.let { it / 1000.0 }
+        ?.takeIf { it.isFinite() && it >= MediaTrimRule.MINIMUM_DURATION }
+        ?.coerceAtMost(SoundTrimLaw.MAX_SOURCE_SECONDS)
+
+/** L'instant de l'affiche de cette vidéo posée sur [media] : le début de sa fenêtre coupée (#13863), le début de la source sinon. */
+internal fun StoryPlacedMedia.posterAtMs(media: UploadedMedia): Long =
+    media.trimSourceSeconds?.let { (MediaTrimRule.resolved(sourceStart, sourceEnd, it).start * MILLIS_PER_SECOND).toLong() } ?: 0L
+
+private const val MILLIS_PER_SECOND = 1_000
 
 /** La fenêtre EFFECTIVE de la vidéo posée [id] dans sa source : entière tant qu'elle n'est pas rognée. */
 internal fun StoryComposerUiState.placedTrimOf(id: String): MediaTrimBounds? {

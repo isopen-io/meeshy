@@ -61,6 +61,15 @@ class SceneExportBandComposeTest {
     }
 
     @Test
+    fun `once rendered, the band says it is checking the video instead of a silent full bar`() {
+        compose.setContent { SceneExportBand(fraction = 1f, verifying = true, onCancel = {}) }
+
+        compose.onNodeWithText("Checking…").assertExists()
+        compose.onNodeWithText("Exporting…").assertDoesNotExist()
+        compose.onNodeWithText("Cancel").assertExists()
+    }
+
+    @Test
     fun `the scene being painted travels with the band`() {
         compose.setContent {
             SceneExportBand(fraction = 0f, onCancel = {}, painting = { Box(Modifier.testTag("peintre")) })

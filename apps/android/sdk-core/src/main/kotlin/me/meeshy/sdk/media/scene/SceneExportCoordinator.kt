@@ -70,7 +70,10 @@ public class SceneExportCoordinator(
                 deliverStill(destination, still, image)
             } else {
                 runner.run(job) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
+                mutableState.update(SceneExportReducer::verifying)
+                val checking = nowMillis()
                 proof.verify(job)
+                SceneExportLog.info("vérification du rendu : ${nowMillis() - checking} ms")
                 deliver(destination, output)
             }
         } catch (cancelled: CancellationException) {

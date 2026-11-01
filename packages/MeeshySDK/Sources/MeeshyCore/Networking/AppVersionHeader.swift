@@ -159,6 +159,16 @@ public extension UpgradeRequirement {
         }
     }
 
+    /// Un refus de poignée de main socket sous le plancher arrête le transport
+    /// par `stop` puis pose la porte ; rend `false` pour toute autre erreur.
+    @discardableResult
+    static func stopTransportIfBelowFloor(_ socketErrorPayload: [Any], center: NotificationCenter = .default, stop: () -> Void) -> Bool {
+        guard let requirement = fromSocketErrorPayload(socketErrorPayload) else { return false }
+        stop()
+        requirement.post(via: center)
+        return true
+    }
+
     init?(notification: Notification) {
         guard notification.name == .meeshyUpgradeRequired else { return nil }
         let userInfo = notification.userInfo ?? [:]

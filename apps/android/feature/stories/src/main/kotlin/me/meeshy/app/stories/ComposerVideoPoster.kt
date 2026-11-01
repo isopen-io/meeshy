@@ -49,10 +49,14 @@ internal fun rememberComposerPicture(model: Any?): Any? {
     val frame = model as? ComposerVideoFrame ?: return model
     val context = LocalContext.current
     val bitmap by produceState(VideoFrames.cached(frame), frame) {
-        value = VideoFrames.cached(frame) ?: withContext(Dispatchers.IO) { VideoFrames.extract(context, frame) }
+        value = composerVideoFrameBitmap(context, frame)
     }
     return bitmap
 }
+
+/** L'image de [frame], hors du fil principal : celle déjà extraite, sinon décodée de la vidéo (`null` si elle ne se lit pas). */
+internal suspend fun composerVideoFrameBitmap(context: Context, frame: ComposerVideoFrame): Bitmap? =
+    VideoFrames.cached(frame) ?: withContext(Dispatchers.IO) { VideoFrames.extract(context, frame) }
 
 /** Les images extraites, gardées le temps de la composition : une vignette et la scène ne décodent pas deux fois la même. */
 private object VideoFrames {

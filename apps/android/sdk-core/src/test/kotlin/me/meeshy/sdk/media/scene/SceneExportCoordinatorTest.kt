@@ -289,6 +289,24 @@ class SceneExportCoordinatorTest {
     }
 
     @Test
+    fun `pendant la relecture du rendu, l etat dit qu il verifie et un echec s annonce`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val seen = mutableListOf<SceneExportState>()
+        lateinit var c: SceneExportCoordinator
+        c = coordinator(FakeRunner(), proof = { seen += c.state.value; gate.await(); throw IllegalStateException("noire") })
+        c.export(SceneExportDestination.GALLERY) { out, _ -> job(out) }
+        advanceUntilIdle()
+
+        assertThat(seen.single().isVerifying).isTrue()
+        assertThat(c.state.value.isVerifying).isTrue()
+        assertThat(c.state.value.veilFraction).isEqualTo(1f)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Failed)
+    }
+
+    @Test
     fun `la preuve relit le rendu termine, avant la remise`() = runTest {
         val read = mutableListOf<String>()
         val c = coordinator(FakeRunner(), proof = { job -> read += job.output.readText() })

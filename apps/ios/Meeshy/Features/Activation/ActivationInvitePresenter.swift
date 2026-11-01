@@ -6,8 +6,11 @@ import MeeshyUI
 /// **« Validez votre compte » se pose PAR-DESSUS TOUT (#14046, directive porteur :
 /// « il faut rendre la bannière opaque par-dessus tout »).**
 ///
-/// L'invitation est une feuille (#8239) : elle ne recouvre aucun contrôle, on la
-/// lit puis on la ferme. Posée par `.sheet` sur la racine, elle ne trouvait
+/// L'invitation est une feuille (#8239), posée à mi-hauteur et sans voile : ce
+/// qu'elle ne couvre pas reste visible ET touchable — le ✕ du composer
+/// compris. Seule la carte prend les touchers de sa fenêtre
+/// (`ActivationInviteOverlayWindow`) ; le reste traverse jusqu'à l'écran du
+/// dessous. Posée par `.sheet` sur la racine, elle ne trouvait
 /// nulle part où se présenter dès que la racine présentait déjà quelque chose —
 /// composer, visionneuse, réels, une autre feuille : UIKit ne présente qu'un
 /// contrôleur modal par présentateur, et le jour était consommé quand même.
@@ -90,7 +93,7 @@ final class ActivationInviteWindowHost: NSObject, ActivationInviteWindowHosting,
         // que cette fenêtre : il recouvrirait la feuille.
         main?.endEditing(true)
 
-        let overlay = UIWindow(windowScene: scene)
+        let overlay = ActivationInviteOverlayWindow(windowScene: scene)
         overlay.windowLevel = ActivationInvitePresentation.windowLevel
         overlay.overrideUserInterfaceStyle = main?.overrideUserInterfaceStyle ?? .unspecified
         let presenter = UIViewController()
@@ -102,8 +105,14 @@ final class ActivationInviteWindowHost: NSObject, ActivationInviteWindowHosting,
 
         let sheet = UIHostingController(rootView: ActivationInviteView(model: model))
         sheet.view.backgroundColor = ActivationInvitePresentation.surface(isDark: ThemeManager.shared.mode.isDark)
-        // Carte centrée sur iPad, feuille basse sur iPhone (largeur compacte).
+        // Carte centrée sur iPad, feuille basse à mi-hauteur sur iPhone, sans
+        // voile : le haut de l'écran du dessous reste lisible et touchable.
         sheet.modalPresentationStyle = .formSheet
+        if let feuille = sheet.sheetPresentationController {
+            feuille.detents = [.medium()]
+            feuille.largestUndimmedDetentIdentifier = .medium
+            feuille.prefersGrabberVisible = true
+        }
         sheet.presentationController?.delegate = self
         presenter.present(sheet, animated: !UIAccessibility.isReduceMotionEnabled)
         return true
@@ -132,5 +141,20 @@ final class ActivationInviteWindowHost: NSObject, ActivationInviteWindowHosting,
         let restoreKey = previousKeyWindow
         previousKeyWindow = nil
         restoreKey?.makeKey()
+    }
+}
+
+/// **La fenêtre de l'invitation ne prend que les touchers de sa carte.** Tout
+/// autre point la traverse jusqu'à la fenêtre du dessous : l'écran recouvert
+/// garde ses contrôles, le ✕ du composer compris.
+final class ActivationInviteOverlayWindow: UIWindow {
+    nonisolated deinit {}
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let touche = super.hitTest(point, with: event),
+              let feuille = rootViewController?.presentedViewController else { return nil }
+        let carte = feuille.presentationController?.presentedView ?? feuille.view
+        guard let carte, touche.isDescendant(of: carte) else { return nil }
+        return touche
     }
 }
