@@ -60,6 +60,19 @@ const FORBIDDEN = /\bresolvePrefsOnly\b/;
 const FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT = /\bareConnected\b/;
 
 /**
+ * QUATRIÈME CLAUSE (#13928) — UN site demande à la loi d'accès ce qu'un lecteur voit
+ * de la présence : `resolvePresenceVisibility`. Un fichier qui interrogerait lui-même
+ * `presence.online` / `presence.detailed` rendrait un second verdict, et le jour où
+ * les deux divergent, un Ami recevrait la dernière connexion par la porte d'à côté.
+ * La matrice (`relation-levels.ts`) DÉCLARE les features ; elle ne les interroge pas.
+ */
+const PRESENCE_FEATURE_LITERAL = /['"]presence\.(?:online|detailed)['"]/;
+const PRESENCE_FEATURE_SITES: readonly string[] = [
+  'packages/shared/utils/presence-visibility.ts',
+  'packages/shared/utils/relation-levels.ts',
+];
+
+/**
  * Une clé de tri liée DIRECTEMENT à un champ homonyme de la requête —
  * `sortBy: query.sortBy`, `sortOrder: q.sortOrder ?? 'desc'`. Le défaut ne vit pas
  * dans l'opérateur de repli (`||`, `??`) mais dans l'absence de RÉSOLVEUR : la
@@ -151,10 +164,18 @@ describe('garde — la présence se lit sur le niveau, jamais sur un booléen d\
     expect(offenders).toEqual([]);
   });
 
-  it('la loi décide la dernière connexion d\'un Ami : un seul site la pose à `true` pour un lecteur ordinaire', () => {
-    const law = readFileSync(join(SHARED_ROOT, 'utils/presence-visibility.ts'), 'utf8');
+  it('reconnaît une interrogation directe des features de présence', () => {
+    expect(PRESENCE_FEATURE_LITERAL.test("feature: 'presence.detailed',")).toBe(true);
+    expect(PRESENCE_FEATURE_LITERAL.test('feature: "presence.online"')).toBe(true);
+    expect(PRESENCE_FEATURE_LITERAL.test("feature: 'post.read',")).toBe(false);
+  });
 
-    expect(law).toContain("'presence.detailed'");
-    expect(law).toContain("'presence.online'");
+  it('seule la loi de présence interroge `presence.online` / `presence.detailed` — aucune porte ne rend un second verdict', () => {
+    const sites = scannedFiles()
+      .filter((file) => PRESENCE_FEATURE_LITERAL.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(REPO_ROOT, file))
+      .sort();
+
+    expect(sites).toEqual([...PRESENCE_FEATURE_SITES].sort());
   });
 });
