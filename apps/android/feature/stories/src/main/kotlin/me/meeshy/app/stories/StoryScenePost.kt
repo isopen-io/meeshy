@@ -93,15 +93,7 @@ internal val StoryComposerUiState.postSceneSlides: List<StorySlide>
 internal fun StoryComposerUiState.postScenesWithBackdrops(): List<StorySlide> {
     val slides = postSceneSlides
     if (ComposerMosaicChoice.offered(slides.size, format).isEmpty()) return slides
-    val known = attachments.mapTo(mutableSetOf()) { it.id } + pendingUploads.map { it.cmid }
-    return slides.map { slide -> slide.withBackdropDesignated(known) }
-}
-
-private fun StorySlide.withBackdropDesignated(known: Set<String>): StorySlide {
-    if (backgroundMediaId != null) return this
-    val posed = placedMedia.mapTo(mutableSetOf()) { it.mediaId }
-    val backdrop = mediaIds.firstOrNull { it !in posed && it in known } ?: return this
-    return copy(backgroundMediaId = backdrop)
+    return slides.map { slide -> StoryPublishBackground.designated(slide, this) }
 }
 
 /** Une scène vierge, dans le format que l'hôte compose : abandonner ou publier ne change pas de format. */

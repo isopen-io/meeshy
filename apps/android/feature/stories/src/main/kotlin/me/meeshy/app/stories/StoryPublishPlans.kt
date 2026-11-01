@@ -31,35 +31,48 @@ internal fun publishPlans(
 ): List<PublishPlan> {
     val pendingCmids = current.pendingUploads.mapTo(mutableSetOf(), PendingMediaUpload::cmid)
     return slides.map { slide ->
-        val draft = StoryComposerDraft(
-            text = slide.text,
-            visibility = current.draft.visibility,
-            mediaIds = slide.mediaIds,
-            textElements = slide.elements,
-            stickers = slide.stickers,
-            strokes = slide.strokes,
-            filter = slide.filter,
-            filterIntensity = slide.filterIntensity,
-            durationSecondsPin = slide.durationSecondsPin,
-            background = slide.background,
-            floor = floor,
-            backgroundMedia = StoryPublishBackground.resolve(slide, current),
-            placedMedia = StoryPublishPlacedMedia.resolve(slide, current),
-            repostOfId = current.draft.repostOfId,
-            visibilityUserIds = current.draft.visibilityUserIds,
-            mentions = ComposerSceneReferences.declaredFor(current.draft.mentions, slide.badges),
-            mediaAlt = current.draft.mediaAlt,
-            mediaCaption = current.draft.mediaCaption,
-            allowSoundExtraction = current.draft.allowSoundExtraction,
-            audio = slide.audio,
-            frame = slide.frame,
-            places = slide.places,
-            soundTranscriptions = slide.soundTranscriptions,
-            videosDuckUnderSound = slide.videosDuckUnderSound,
-        )
         PublishPlan(
-            request = draft.toCreateStoryRequest(language),
+            request = sceneRequest(slide, current, language, floor),
             dependsOn = slide.mediaIds.filter { it in pendingCmids || OutboxIds.isCmid(it) },
         )
     }
 }
+
+/**
+ * La requête d'une slide : une scène qui part porte le fond que le plateau lui peint (#14302) — un sticker, un texte ou un
+ * son posé sur une vidéo jamais désignée publiait la scène sans elle. Une slide qui ne compose rien d'autre que son média
+ * reste la publication d'avant, sans scène.
+ */
+private fun sceneRequest(slide: StorySlide, current: StoryComposerUiState, language: String, floor: StoryBackgroundValue?): CreateStoryRequest {
+    val plain = slide.draft(current, floor).toCreateStoryRequest(language)
+    val painted = StoryPublishBackground.designated(slide, current)
+    if (plain.storyEffects == null || painted == slide) return plain
+    return painted.draft(current, floor).toCreateStoryRequest(language)
+}
+
+private fun StorySlide.draft(current: StoryComposerUiState, floor: StoryBackgroundValue?): StoryComposerDraft = StoryComposerDraft(
+    text = text,
+    visibility = current.draft.visibility,
+    mediaIds = mediaIds,
+    textElements = elements,
+    stickers = stickers,
+    strokes = strokes,
+    filter = filter,
+    filterIntensity = filterIntensity,
+    durationSecondsPin = durationSecondsPin,
+    background = background,
+    floor = floor,
+    backgroundMedia = StoryPublishBackground.resolve(this, current),
+    placedMedia = StoryPublishPlacedMedia.resolve(this, current),
+    repostOfId = current.draft.repostOfId,
+    visibilityUserIds = current.draft.visibilityUserIds,
+    mentions = ComposerSceneReferences.declaredFor(current.draft.mentions, badges),
+    mediaAlt = current.draft.mediaAlt,
+    mediaCaption = current.draft.mediaCaption,
+    allowSoundExtraction = current.draft.allowSoundExtraction,
+    audio = audio,
+    frame = frame,
+    places = places,
+    soundTranscriptions = soundTranscriptions,
+    videosDuckUnderSound = videosDuckUnderSound,
+)
