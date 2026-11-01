@@ -113,6 +113,7 @@ internal fun StorySceneFirstLayout(
     typing: StoryTypingSlot? = null,
     rails: StorySceneRails? = null,
     incoming: (@Composable () -> Unit)? = null,
+    clearsTrailingLane: Boolean = false,
 ) {
     BoxWithConstraints(
         modifier = modifier
@@ -146,6 +147,7 @@ internal fun StorySceneFirstLayout(
                     sheetContent = sheetContent,
                     typing = typing,
                     incoming = incoming,
+                    clearsTrailingLane = clearsTrailingLane && !onRails,
                 )
             }
             if (onRails) LabeledRailSlot(busy) { if (railsServe) rails?.trailing?.invoke(this) }
@@ -223,6 +225,7 @@ private fun SceneFirstStage(
     sheetContent: @Composable (StoryComposerSheet) -> Unit,
     typing: StoryTypingSlot?,
     incoming: (@Composable () -> Unit)? = null,
+    clearsTrailingLane: Boolean = false,
 ) {
     val busy = incoming != null
     val pull = rememberComposerPullDismiss(if (sheet != null) onSheetDismiss else onDismiss)
@@ -240,6 +243,8 @@ private fun SceneFirstStage(
         var frameBottom by remember { mutableFloatStateOf(0f) }
         var frameHeight by remember { mutableFloatStateOf(0f) }
         var frameWidth by remember { mutableFloatStateOf(0f) }
+        var frameRight by remember { mutableFloatStateOf(0f) }
+        var trailingLeft by remember { mutableFloatStateOf(Float.MAX_VALUE) }
         var panelTop by remember { mutableFloatStateOf(Float.MAX_VALUE) }
         val sheetTop = sheet?.let { constraints.maxHeight - (sheetHeights[it] ?: 0) }?.toFloat()
         val overlap = when {
@@ -250,9 +255,13 @@ private fun SceneFirstStage(
         val framing = remember(sheetTop != null || reduced, frameWidth, frameHeight, overlap) {
             sceneFraming(sheetTop != null || reduced, frameWidth, frameHeight, overlap)
         }
+        val gutter = with(LocalDensity.current) { LANE_GUTTER.toPx() }
+        val lane = if (clearsTrailingLane && typing == null && sheet == null) (frameRight - trailingLeft + gutter).coerceAtLeast(0f) else 0f
+        val cleared = framing.clearingTrailingLane(lane, frameWidth, frameHeight)
         val reduceMotion = LocalReduceMotion.current
-        val scale by animateFloatAsState(framing.scale, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstScale")
-        val offsetY by animateFloatAsState(framing.offsetY, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstOffset")
+        val scale by animateFloatAsState(cleared.scale, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstScale")
+        val offsetY by animateFloatAsState(cleared.offsetY, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstOffset")
+        val offsetX by animateFloatAsState(cleared.offsetX, ComposerSceneMotion.spec(reduceMotion), label = "sceneFirstOffsetX")
         val reserve = if (reservesBelow) BELOW_RESERVE else 0.dp
         Box(
             modifier = Modifier
@@ -263,6 +272,7 @@ private fun SceneFirstStage(
                     frameWidth = it.size.width.toFloat()
                     frameHeight = it.size.height.toFloat()
                     frameBottom = it.positionInRoot().y + frameHeight
+                    frameRight = it.positionInRoot().x + frameWidth
                 },
         ) {
             val keyboard = typing?.keyboard ?: windowKeyboard
@@ -273,6 +283,7 @@ private fun SceneFirstStage(
                     Modifier.fillMaxSize().graphicsLayer {
                         scaleX = scale
                         scaleY = scale
+                        translationX = offsetX
                         translationY = offsetY
                     }
                 }.then(if (busy) Modifier.clearAndSetSemantics {} else Modifier),
@@ -282,7 +293,7 @@ private fun SceneFirstStage(
             } else if (sheet != null) {
                 SheetDismissCatcher(onSheetDismiss)
             } else {
-                SceneOverlays(pull, overlays, onPanelTop = { panelTop = it }, veiled = busy)
+                SceneOverlays(pull, overlays, onPanelTop = { panelTop = it }, onTrailingLeft = { trailingLeft = it }, veiled = busy)
             }
             incoming?.let { placeholder ->
                 TouchShield()
@@ -290,6 +301,7 @@ private fun SceneFirstStage(
                     Modifier.fillMaxSize().graphicsLayer {
                         scaleX = scale
                         scaleY = scale
+                        translationX = offsetX
                         translationY = offsetY
                     },
                 ) { placeholder() }
@@ -349,7 +361,13 @@ private fun BoxScope.AnchoredSheetHost(
  * et le socle ; [veiled] pendant un ajout (R5 de #13863) — estompés et retirés de TalkBack, le bouclier prend leurs touchers.
  */
 @Composable
-private fun SceneOverlays(pull: ComposerPullDismiss, slots: SceneOverlaySlots, onPanelTop: (Float) -> Unit, veiled: Boolean = false) {
+private fun SceneOverlays(
+    pull: ComposerPullDismiss,
+    slots: SceneOverlaySlots,
+    onPanelTop: (Float) -> Unit,
+    onTrailingLeft: (Float) -> Unit,
+    veiled: Boolean = false,
+) {
     Column(modifier = Modifier.fillMaxSize().veiledWhen(veiled).padding(OVERLAY_INSET)) {
         Box(
             modifier = Modifier.fillMaxWidth().draggable(
@@ -362,7 +380,7 @@ private fun SceneOverlays(pull: ComposerPullDismiss, slots: SceneOverlaySlots, o
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Spacer(Modifier.weight(1f))
             Column(
-                modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs),
+                modifier = Modifier.fillMaxHeight().padding(top = MeeshySpacing.xs).onGloballyPositioned { onTrailingLeft(it.positionInRoot().x) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
                 content = slots.trailing,
@@ -418,6 +436,25 @@ private fun SheetDismissCatcher(onSheetDismiss: () -> Unit) {
 private const val SHEET_MAX_FRACTION = 0.55f
 
 private val OVERLAY_INSET = 10.dp
+
+/** Entre le rail et la scène qui lui cède son couloir : sans elle, une option semblerait posée sur la scène. */
+private val LANE_GUTTER = 8.dp
+
+/** Où se pose la scène : son échelle et son décalage, en `graphicsLayer` autour de son centre. */
+private class SceneFrameTransform(val scale: Float, val offsetX: Float, val offsetY: Float)
+
+/**
+ * La scène qui cède au rail son couloir ([lane], en px, à droite) quand un objet sélectionné s'y édite (#14083, comme le
+ * couloir d'iOS, `ComposerRailGeometry.lane`) : le 9:16 se réduit à la largeur qui reste et se range contre le bord
+ * opposé, son haut là où le cadrage le posait ; un objet posé à droite n'est jamais sous les libellés du rail.
+ */
+private fun StoryCanvasFraming.Result.clearingTrailingLane(lane: Float, width: Float, height: Float): SceneFrameTransform {
+    if (lane <= 0f || width <= 0f || lane >= width) return SceneFrameTransform(scale, 0f, offsetY)
+    val cleared = minOf(scale, (width - lane) / width)
+    val top = height / 2f * (1f - scale) + offsetY
+    val offsetX = minOf(0f, (width - lane) - width / 2f * (1f + cleared))
+    return SceneFrameTransform(cleared, offsetX, top - height / 2f * (1f - cleared))
+}
 
 private val RAIL_MARGIN = ComposerSceneArrangement.MARGIN.dp
 private val BELOW_GAP = 8.dp

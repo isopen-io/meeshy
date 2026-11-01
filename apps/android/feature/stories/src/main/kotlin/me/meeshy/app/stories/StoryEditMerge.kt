@@ -177,7 +177,8 @@ internal object StoryEditMerge {
         }
         val backgroundKept = slide.backgroundMediaId == hydrated.backgroundMediaId &&
             slide.backgroundLoop == hydrated.backgroundLoop && slide.transform == hydrated.transform &&
-            slide.backgroundAdjustments == hydrated.backgroundAdjustments && slide.backgroundTrim == hydrated.backgroundTrim
+            slide.backgroundAdjustments == hydrated.backgroundAdjustments && slide.backgroundTrim == hydrated.backgroundTrim &&
+            slide.backgroundSetting == hydrated.backgroundSetting
         val nowBackground = built.firstOrNull { it.isBackground }
         val background = if (backgroundKept) opening.originalBackground else nowBackground?.let { fresh ->
             opening.originalBackground?.takeIf { it.postMediaId == fresh.postMediaId }?.let { served ->
@@ -187,7 +188,7 @@ internal object StoryEditMerge {
         return (listOfNotNull(background) + foreground).ifEmpty { null }
     }
 
-    /** Le fond servi, dont seuls les traits que le geste a changés (cadrage, boucle, réglages) prennent la forme du composeur. */
+    /** Le fond servi, dont seuls les traits que le geste a changés (cadrage, boucle, réglages, coupe, quart de tour, volume) prennent la forme du composeur. */
     private fun changedBackground(served: StoryMediaObject, fresh: StoryMediaObject, slide: StorySlide, hydrated: StorySlide): StoryMediaObject =
         BACKGROUND_TRAITS.filter { (changed, _) -> changed(slide, hydrated) }.fold(served) { background, (_, take) -> take(background, fresh) }
 
@@ -196,6 +197,9 @@ internal object StoryEditMerge {
         { a: StorySlide, b: StorySlide -> a.backgroundLoop != b.backgroundLoop } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(loop = w.loop) },
         { a: StorySlide, b: StorySlide -> a.backgroundAdjustments != b.backgroundAdjustments } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(adjustments = w.adjustments) },
         { a: StorySlide, b: StorySlide -> a.backgroundTrim != b.backgroundTrim } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(sourceStart = w.sourceStart, sourceEnd = w.sourceEnd) },
+        { a: StorySlide, b: StorySlide -> a.backgroundSetting.rotationDeg != b.backgroundSetting.rotationDeg } to { o: StoryMediaObject, w: StoryMediaObject -> o.copy(rotation = w.rotation) },
+        { a: StorySlide, b: StorySlide -> a.backgroundSetting.volume != b.backgroundSetting.volume || a.backgroundSetting.mutedVolumeMemento != b.backgroundSetting.mutedVolumeMemento } to
+            { o: StoryMediaObject, w: StoryMediaObject -> o.copy(volume = w.volume, mutedVolumeMemento = w.mutedVolumeMemento) },
     )
 
     /** Les médias que la slide tenait et qu'elle ne tient plus : seuls ceux-là sont retirés du post. */

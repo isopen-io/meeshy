@@ -58,7 +58,8 @@ internal fun StoryComposerUiState.liveCues(mediaBaseUrl: String?, soundUrl: (Sto
 private fun StoryComposerUiState.backgroundVideoCue(mediaBaseUrl: String?): ComposerLiveCue? {
     val id = selectedSlideBackdropMediaId?.takeIf(::placedMediaIsVideo) ?: return null
     val url = playableVideoUrl(id, mediaBaseUrl) ?: return null
-    return ComposerLiveCue(ComposerLiveSubject(id, ComposerLiveKind.VIDEO, background = true), url, ComposerLivePlayback.window(backgroundTrimOf(id)), FULL_VOLUME)
+    val volume = paintedBackgroundSetting.let { ComposerLivePlayback.volume(it.volume, it.isMuted) }
+    return ComposerLiveCue(ComposerLiveSubject(id, ComposerLiveKind.VIDEO, background = true), url, ComposerLivePlayback.window(backgroundTrimOf(id)), volume)
 }
 
 private fun StoryComposerUiState.placedVideoCues(mediaBaseUrl: String?): List<ComposerLiveCue> =

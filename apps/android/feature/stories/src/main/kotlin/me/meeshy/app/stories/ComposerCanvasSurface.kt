@@ -107,6 +107,7 @@ internal fun StoryCanvasSurface(
     fitMode: String = StoryFitMode.FILL,
     backdrop: StoryBackdrop = StoryBackdrop.BLUR,
     onBackgroundLongPress: (() -> Unit)? = null,
+    backgroundRotationDeg: Float = 0f,
     selectedMediaId: String? = null,
     stack: List<SceneObjectRef>,
     pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
@@ -182,12 +183,13 @@ internal fun StoryCanvasSurface(
                             scaleY = transform.scale
                             translationX = transform.offsetX
                             translationY = transform.offsetY
+                            rotationZ = backgroundRotationDeg
                         }
                         .sceneLook(look),
                 )
             }
             // La vidéo de fond joue en continu sur la scène (#13863), même avant que son affiche soit décodée.
-            live?.background?.let { slot -> LiveBackground(slot, transform, look, fit = !filled) }
+            live?.background?.let { slot -> LiveBackground(slot, transform, backgroundRotationDeg, look, fit = !filled) }
             if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
@@ -336,7 +338,7 @@ private fun SceneBackdropLayer(backdrop: StoryBackdrop, model: Any) {
 
 /** La vidéo de fond sélectionnée joue à la place de son affiche, à la même pose, sous le même look (#13973, A-E3). */
 @Composable
-private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransform, look: SceneLookRecipe, fit: Boolean) {
+private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransform, rotationDeg: Float, look: SceneLookRecipe, fit: Boolean) {
     Box(
         Modifier
             .fillMaxSize()
@@ -345,6 +347,7 @@ private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransfo
                 scaleY = transform.scale
                 translationX = transform.offsetX
                 translationY = transform.offsetY
+                rotationZ = rotationDeg
             }
             .sceneLook(look),
     ) { slot.Picture(fit = fit) }

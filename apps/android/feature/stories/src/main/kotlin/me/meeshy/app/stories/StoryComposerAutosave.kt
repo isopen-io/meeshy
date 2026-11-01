@@ -200,6 +200,9 @@ fun StorySlideDeck.toDraftSnapshot(
             backgroundAdjustments = it.backgroundAdjustments,
             backgroundSourceStart = it.backgroundTrim?.start,
             backgroundSourceEnd = it.backgroundTrim?.end,
+            backgroundRotation = it.backgroundSetting.rotationDeg,
+            backgroundVolume = it.backgroundSetting.volume,
+            backgroundMutedVolumeMemento = it.backgroundSetting.mutedVolumeMemento,
             places = it.places,
             soundTranscriptions = it.soundTranscriptions,
             videosDuckUnderSound = it.videosDuckUnderSound,
@@ -253,6 +256,8 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 placedMedia = it.placedMedia.map(StoryPlacedMedia::from).filter { placed -> placed.mediaId in it.mediaIds },
                 backgroundAdjustments = it.backgroundAdjustments?.takeIf { adjustments -> !adjustments.isNeutral && it.backgroundMediaId != null },
                 backgroundTrim = StoryBackgroundTrimWire.read(it.backgroundSourceStart, it.backgroundSourceEnd).takeIf { _ -> it.backgroundMediaId != null },
+                backgroundSetting = if (it.backgroundMediaId == null) StoryBackgroundSetting()
+                else StoryBackgroundSettingWire.read(it.backgroundRotation.toDouble(), it.backgroundVolume, it.backgroundMutedVolumeMemento),
                 places = it.places,
                 soundTranscriptions = SoundTranscriptions.pruned(it.soundTranscriptions, it.audio),
                 videosDuckUnderSound = it.videosDuckUnderSound,
