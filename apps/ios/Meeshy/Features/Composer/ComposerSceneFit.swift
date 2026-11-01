@@ -19,6 +19,18 @@ nonisolated enum ComposerSceneFit {
 
     static let minimumScale: CGFloat = 0.35
 
+    /// **L'air au-dessus de la scène quand elle prend toute la hauteur** — un
+    /// écran court (iPhone SE) collait son bord haut à la barre d'état.
+    static let topBreathing: CGFloat = 12
+
+    /// La zone où la scène se pose : entière tant qu'un 9:16 pleine largeur y
+    /// laisse déjà cet air en haut, sinon privée de lui.
+    static func zone(in size: CGSize, aspectRatio ratio: CGFloat) -> CGRect {
+        let entiere = CGRect(origin: .zero, size: size)
+        guard ratio.isFinite, ratio > 0, size.height - size.width / ratio < 2 * topBreathing else { return entiere }
+        return CGRect(x: 0, y: topBreathing, width: size.width, height: max(size.height - topBreathing, 0))
+    }
+
     static func frame(in zone: CGRect, aspectRatio ratio: CGFloat) -> CGRect {
         guard isUsable(zone), ratio.isFinite, ratio > 0 else { return .zero }
         let largeurParHauteur = zone.height * ratio

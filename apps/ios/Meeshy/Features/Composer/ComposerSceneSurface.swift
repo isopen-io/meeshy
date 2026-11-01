@@ -663,14 +663,14 @@ struct ComposerSceneSurface: View {
     /// objet ne saute pendant le geste (`ComposerSceneFit`).
     private var sceneLayer: some View {
         GeometryReader { geo in
-            let zone = CGRect(origin: .zero, size: geo.size)
+            let zone = ComposerSceneFit.zone(in: geo.size, aspectRatio: aspectRatio)
             let scene = ComposerSceneFit.frame(in: zone, aspectRatio: aspectRatio)
             let lift = ComposerSceneFit.lift(scene: scene, visibleBottom: visibleBottom(in: geo))
             sceneCanvas
-                .frame(width: geo.size.width, height: geo.size.height)
+                .frame(width: zone.width, height: zone.height)
                 .scaleEffect(lift.scale,
-                             anchor: UnitPoint(x: 0.5, y: geo.size.height > 0 ? scene.minY / geo.size.height : 0))
-                .offset(y: lift.offsetY)
+                             anchor: UnitPoint(x: 0.5, y: zone.height > 0 ? (scene.minY - zone.minY) / zone.height : 0))
+                .offset(y: zone.minY + lift.offsetY)
                 .animation(keyboard.liftAnimation(reduceMotion: reduceMotion, now: Date()), value: lift)
         }
         .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
