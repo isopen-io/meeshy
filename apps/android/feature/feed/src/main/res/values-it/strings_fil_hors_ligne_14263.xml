@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="feed_offline_banner">Offline: i post che hai già visto restano visibili.</string>
+    <string name="feed_offline_empty_title">Offline</string>
+    <string name="feed_offline_empty_detail">Il feed non è ancora stato caricato su questo dispositivo. Apparirà appena torna la rete.</string>
 </resources>

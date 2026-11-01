@@ -31,10 +31,11 @@ class PostRepositoryFeedDiskTest {
         override fun nowMillis(): Long = NOW
     }
 
+    /** Un disque en mémoire : comme l'écrivain de l'appareil, il garde la page sans faire attendre l'appelant. */
     private class MemoryFeedDisk(var stored: KeyedJsonDocument<List<ApiPost>>? = null) : FeedDiskCache {
         val writes = mutableListOf<List<ApiPost>>()
         override suspend fun read(): KeyedJsonDocument<List<ApiPost>>? = stored
-        override suspend fun write(posts: List<ApiPost>, ticket: AccountTicket?) {
+        override fun keep(posts: List<ApiPost>, ticket: AccountTicket?) {
             writes += posts
             stored = KeyedJsonDocument(posts, NOW)
         }
@@ -100,6 +101,21 @@ class PostRepositoryFeedDiskTest {
         repository(disk).refresh()
 
         assertThat(disk.writes.single().map { it.id }).containsExactly("n1", "n2").inOrder()
+    }
+
+    @Test
+    fun `the first page the feed stream reads from the gateway is kept on disk, even though the stream moves on`() = runTest {
+        val page = listOf(ApiPost(id = "n1"), ApiPost(id = "n2"))
+        coEvery { api.getFeed(any(), any()) } returns ApiResponse(success = true, data = page, pagination = Pagination(nextCursor = null, hasMore = false))
+        val disk = MemoryFeedDisk()
+
+        repository(disk).feedStream().test {
+            assertThat(awaitItem()).isEqualTo(CacheResult.Empty)
+            assertThat(awaitItem().postIds()).containsExactly("n1", "n2").inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertThat(disk.writes.map { posts -> posts.map { it.id } }).containsExactly(listOf("n1", "n2"))
     }
 
     @Test

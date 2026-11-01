@@ -453,7 +453,7 @@ class PostRepository @Inject constructor(
                         feedCursor = response.pagination?.nextCursor
                         _feedHasMore.value = response.pagination?.hasMore ?: false
                     }
-                    if (committed != null) feedDisk.write(page, ticket)
+                    if (committed != null) feedDisk.keep(page, ticket)
                 }
                 is NetworkResult.Failure -> onError(Exception(result.error.message))
             }

@@ -134,7 +134,7 @@ fun FeedScreen(
                     },
                 )
             }
-            FeedOfflineBand(visible = state.isOffline)
+            FeedOfflineBand(visible = state.showsOfflineBand)
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,
                 onRefresh = {
@@ -145,11 +145,12 @@ fun FeedScreen(
                     .fillMaxSize()
                     .weight(1f),
             ) {
-            when {
-                state.showSkeleton -> FeedHeadColumn(storyRail, composerHead) { FeedSkeleton() }
-                state.posts.isEmpty() && state.loadFailed -> FeedHeadColumn(storyRail, composerHead) { FeedErrorState(onRetry = viewModel::refresh) }
-                state.posts.isEmpty() -> FeedHeadColumn(storyRail, composerHead) { FeedEmptyState() }
-                else -> LazyColumn(
+            when (state.body) {
+                FeedBody.SKELETON -> FeedHeadColumn(storyRail, composerHead) { FeedSkeleton() }
+                FeedBody.OFFLINE_EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedOfflineEmptyState(onRetry = viewModel::refresh) }
+                FeedBody.LOAD_ERROR -> FeedHeadColumn(storyRail, composerHead) { FeedErrorState(onRetry = viewModel::refresh) }
+                FeedBody.EMPTY -> FeedHeadColumn(storyRail, composerHead) { FeedEmptyState() }
+                FeedBody.POSTS -> LazyColumn(
                     state = listState,
                     modifier = Modifier.sceneViewport(),
                     // Aucune marge horizontale de contenu : le rail court d'un bord à l'autre, comme en tête des

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="feed_offline_banner">غير متصل — المنشورات التي رأيتها من قبل تبقى ظاهرة.</string>
+    <string name="feed_offline_empty_title">غير متصل</string>
+    <string name="feed_offline_empty_detail">لم يُحمَّل الموجز على هذا الجهاز بعد. سيظهر فور عودة الشبكة.</string>
 </resources>

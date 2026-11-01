@@ -7,6 +7,14 @@
         {
           "androidName": "feed_offline_banner",
           "status": "android-only"
+        },
+        {
+          "androidName": "feed_offline_empty_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_offline_empty_detail",
+          "status": "android-only"
         }
       ]
     }

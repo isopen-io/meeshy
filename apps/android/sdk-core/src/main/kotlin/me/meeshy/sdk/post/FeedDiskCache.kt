@@ -5,6 +5,11 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
@@ -25,29 +30,43 @@ public interface FeedDiskCache {
     /** Le fil gardé et l'instant où le serveur l'a servi ; `null` à froid ou si la charge ne se lit plus. */
     public suspend fun read(): KeyedJsonDocument<List<ApiPost>>?
 
-    /** Garde [posts] pour le compte de [ticket] ; une écriture qui échoue ne garde rien et ne lève jamais. */
-    public suspend fun write(posts: List<ApiPost>, ticket: AccountTicket?)
+    /**
+     * Garde [posts] pour le compte de [ticket] sans jamais faire attendre l'appelant : publier la page relance le flux du
+     * fil, qui annule le bloc appelant, et une écriture suspendue dans ce bloc n'atteindrait jamais le disque. Une
+     * écriture qui échoue ne garde rien et ne lève jamais.
+     */
+    public fun keep(posts: List<ApiPost>, ticket: AccountTicket?)
 
     public companion object {
         /** Aucun disque : le fil ne vit qu'en mémoire (tests, aperçus). */
         public val NONE: FeedDiskCache = object : FeedDiskCache {
             override suspend fun read(): KeyedJsonDocument<List<ApiPost>>? = null
-            override suspend fun write(posts: List<ApiPost>, ticket: AccountTicket?) = Unit
+            override fun keep(posts: List<ApiPost>, ticket: AccountTicket?) = Unit
         }
     }
 }
 
 /**
- * [FeedDiskCache] sur le cache JSON du disque (`feed:home`). La frontière de compte est celle du cache : une page d'un
- * compte fermé ne s'écrit pas, et la purge de session vide la table entière.
+ * [FeedDiskCache] sur le cache JSON du disque (`feed:home`). Les écritures passent l'une après l'autre sur son propre
+ * écrivain et seule la plus récente compte. La frontière de compte est celle du cache : une page d'un compte fermé ne
+ * s'écrit pas, et la purge de session vide la table entière.
  */
 @Singleton
-public class KeyedFeedDiskCache(private val cache: KeyedJsonCache) : FeedDiskCache {
+public class KeyedFeedDiskCache(private val cache: KeyedJsonCache, scope: CoroutineScope) : FeedDiskCache {
 
     @Inject
-    public constructor(dao: KeyedJsonCacheDao, fence: AccountFence) : this(KeyedJsonCache(dao, fence = fence))
+    public constructor(dao: KeyedJsonCacheDao, fence: AccountFence) :
+        this(KeyedJsonCache(dao, fence = fence), CoroutineScope(SupervisorJob() + Dispatchers.IO))
 
     private val serializer = ListSerializer(ApiPost.serializer())
+
+    private class Pending(val posts: List<ApiPost>, val ticket: AccountTicket?)
+
+    private val pending = Channel<Pending>(Channel.CONFLATED)
+
+    init {
+        scope.launch { for (page in pending) write(page) }
+    }
 
     override suspend fun read(): KeyedJsonDocument<List<ApiPost>>? = try {
         cache.get(NAMESPACE, KEY, serializer)
@@ -57,9 +76,13 @@ public class KeyedFeedDiskCache(private val cache: KeyedJsonCache) : FeedDiskCac
         null
     }
 
-    override suspend fun write(posts: List<ApiPost>, ticket: AccountTicket?) {
+    override fun keep(posts: List<ApiPost>, ticket: AccountTicket?) {
+        pending.trySend(Pending(posts, ticket))
+    }
+
+    private suspend fun write(page: Pending) {
         try {
-            cache.put(NAMESPACE, KEY, posts, serializer, ticket)
+            cache.put(NAMESPACE, KEY, page.posts, serializer, page.ticket)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

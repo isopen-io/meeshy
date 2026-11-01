@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="feed_offline_banner">Hors ligne — les publications déjà vues restent affichées.</string>
+    <string name="feed_offline_empty_title">Hors ligne</string>
+    <string name="feed_offline_empty_detail">Le fil n’a pas encore été chargé sur cet appareil. Il s’affichera dès le retour du réseau.</string>
 </resources>
