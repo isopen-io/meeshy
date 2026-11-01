@@ -7,8 +7,9 @@ import XCTest
 /// gardait les deux rangées du plateau (#4561, #4633).
 ///
 /// Au repos, la scène porte : ✕ en haut à gauche, ↶ ↷ seulement avec un
-/// historique, la rangée des diapos dès deux diapos, et une colonne de SIX
-/// boutons ronds — Texte, Média, Sticker, Son, Dessin, ⋯. Le reste vit dans ⋯.
+/// historique, la rangée des diapos dès deux diapos, et la colonne des boutons
+/// ronds — Texte, Média, Sticker, Son, Dessin, puis Fond, Mention et Lieu en
+/// entrées directes (porteur 2026-10-31, #14050), puis ⋯. Le reste vit dans ⋯.
 final class ComposerSceneRestChromeTests: XCTestCase {
 
     private let portesDeLaStory = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
@@ -16,9 +17,23 @@ final class ComposerSceneRestChromeTests: XCTestCase {
 
     // MARK: - La colonne
 
-    func test_tools_enStory_sixBoutonsDansLOrdreDeLaMaquette() {
+    func test_tools_enStory_lesCinqOutils_puisFondMentionLieu_puisPlus() {
         XCTAssertEqual(ComposerRestChrome.tools(offered: portesDeLaStory),
-                       [.text, .media, .sticker, .sound, .drawing, .more])
+                       [.text, .media, .sticker, .sound, .drawing, .background, .mention, .place, .more],
+                       "le même ordre et les mêmes mots qu'Android (#14049)")
+    }
+
+    /// Un fond MÉDIA retire la porte de la palette, pas l'entrée « Fond » :
+    /// elle sélectionne alors le fond, et son rail d'outils à plat paraît.
+    func test_tools_unFondMedia_garde_Fond_quiLeSelectionne() throws {
+        let sansPalette = portesDeLaStory.filter { $0 != .background }
+        XCTAssertFalse(ComposerRestChrome.tools(offered: sansPalette).contains(.background))
+        XCTAssertEqual(ComposerRestChrome.tools(offered: sansPalette, hasBackgroundMedia: true)
+                        .filter { $0 == .background }, [.background])
+        let repos = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Rest.swift")
+        XCTAssertTrue(repos.contains("if tool == .background, let fond = sceneBackgroundMedia?.id { return selectSceneBackground(fond) }"),
+                      "avec un média de fond, « Fond » sélectionne le fond au lieu d'ouvrir la palette")
+        XCTAssertTrue(repos.contains("hasBackgroundMedia: sceneBackgroundMedia != nil"))
     }
 
     func test_tools_lePlusEstToujoursLeDernier_memeSansAucunePorte() {
@@ -31,12 +46,25 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertFalse(ComposerRestChrome.tools(offered: sansSon).contains(.sound))
     }
 
-    /// Mention, hashtag, lieu, fond : ils quittent la colonne pour ⋯.
-    func test_tools_neRangentJamaisLesPortesQuiQualifientLaPublication() {
+    /// Fond, Mention, Lieu : sur le rail, en entrées directes (#14050) ; le
+    /// hashtag, la description et le texte du post restent ailleurs.
+    func test_tools_fondMentionLieuSontSurLeRail_leRestePasse() {
         let portes = ComposerRestChrome.tools(offered: ComposerRailDoor.allCases).compactMap(\.door)
-        for porte in [ComposerRailDoor.mention, .hashtag, .place, .background, .description, .content] {
-            XCTAssertFalse(portes.contains(porte), "\(porte.rawValue) doit vivre dans ⋯, pas sur la scène")
+        for porte in [ComposerRailDoor.background, .mention, .place] {
+            XCTAssertTrue(portes.contains(porte), "\(porte.rawValue) doit être une entrée directe du rail")
         }
+        for porte in [ComposerRailDoor.hashtag, .description, .content] {
+            XCTAssertFalse(portes.contains(porte), "\(porte.rawValue) doit vivre ailleurs que sur la scène")
+        }
+    }
+
+    /// **Le rail défile s'il dépasse** : la colonne n'écrase jamais ses
+    /// boutons, elle passe en défilement.
+    func test_column_scrollsWhenItOverflows() throws {
+        let chrome = try ComposerSceneArrangementTests.source("ComposerSceneOverlayChrome.swift")
+        XCTAssertTrue(chrome.contains("ViewThatFits(in: .vertical)"), "la colonne se mesure à la hauteur libre")
+        XCTAssertTrue(chrome.contains("ScrollView(.vertical, showsIndicators: false) { toolButtons }"),
+                      "au-delà, elle défile")
     }
 
     func test_tools_chaqueBoutonAUnLibelleNonVide() {

@@ -2,7 +2,10 @@ package me.meeshy.app.feed
 
 import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.foundation.layout.PaddingValues
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -70,6 +73,7 @@ fun MoodSpotlightScreen(
     viewModel: MoodSpotlightViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mention by viewModel.mention.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
     val snackbar = remember { SnackbarHostState() }
     val sentMessage = stringResource(R.string.mood_spotlight_reply_sent)
@@ -134,7 +138,9 @@ fun MoodSpotlightScreen(
                     authorName = entry?.username.orEmpty(),
                     isSending = state.replyState == MoodReplyState.SENDING,
                     canSend = state.canSend,
+                    mention = mention,
                     onChange = viewModel::onReplyChange,
+                    onMentionSelected = viewModel::onMentionSelected,
                     onSend = { haptics.medium(); viewModel.sendReply() },
                 )
             }
@@ -218,7 +224,9 @@ private fun ReplyBar(
     authorName: String,
     isSending: Boolean,
     canSend: Boolean,
+    mention: MentionAutocompleteState,
     onChange: (String) -> Unit,
+    onMentionSelected: (MentionCandidate) -> Unit,
     onSend: () -> Unit,
 ) {
     MeeshyTheme(darkTheme = true) {
@@ -233,6 +241,7 @@ private fun ReplyBar(
             accentColor = MeeshyPalette.Indigo500,
             secondaryColor = Color(0xFF8B5CF6),
             contentPadding = PaddingValues(horizontal = MeeshySpacing.lg, vertical = 10.dp),
+            topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected) },
         )
     }
 }

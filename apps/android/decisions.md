@@ -613,3 +613,28 @@ en production. Distinguer coque et native sous `me.meeshy.app` par la version : 
 `me.meeshy.app` servent la native telles quelles. Republier la coque exige une fiche `me.meeshy.webapp`, une
 app Firebase et une entrée `assetlinks.json` à son nom.
 
+
+---
+
+## ADR-029 — La session d'un compte survit à la réinstallation, dans le Block Store, liée à l'appareil
+**Date:** 2026-11-01 · **Status:** accepted · **Issue:** #14058
+
+**Context.** iOS garde ses jetons dans le Keychain (`ThisDeviceOnly`), qui survit à la désinstallation ;
+Android (`allowBackup="false"`) redemandait identifiant et mot de passe après chaque réinstallation.
+
+**Decision.** `BackedUpTokenStore` décore le `TokenStore` : toute session COMPLÈTE de compte (identité, JWT,
+jeton de session — le pair que `POST /auth/refresh` exige ; jamais le mot de passe) est recopiée dans le Block
+Store (`setShouldBackupToCloud(false)`, une clé par serveur), et `clear()` l'efface sous le même verrou. La
+charge porte l'`ANDROID_ID` : un transfert d'appareil à appareil (que le Block Store fait même sans nuage) ne
+s'ouvre pas, il s'efface. Au démarrage sans session, `AuthRepository.restoreBackedUpSession()` renouvelle la
+sauvegarde ; un refus 4xx l'efface sans message, hors ligne elle est gardée. Un refus sans session locale
+n'annonce plus d'expiration (`SessionRefresher.signalsExpiry`). Une connexion à la main annule la restauration. « Rester connecté » décoché (décision porteur) : aucune
+sauvegarde, et l'entrée existante est effacée (`KeepSignedInConsent`, relu dans `SavedAccount.keepsSession`).
+
+**Rejected.** `allowBackup` + Auto Backup : la sauvegarde part dans le nuage et vers un autre appareil.
+Sauvegarder le mot de passe ou un `CredentialManager` : ce serait garder un secret que l'utilisateur n'a pas
+confié à l'app. Restaurer sans renouveler : l'app s'ouvrirait sur un jeton peut-être révoqué.
+
+**Consequences.** La survie suppose Play Services et la Sauvegarde Google active sur l'appareil ; sinon, le
+comportement d'avant. La copie dort chez Play Services, hors du Keystore de l'app. Seul le compte ACTIF est
+sauvegardé : les comptes dormants « rester connecté » ne survivent pas à une réinstallation.

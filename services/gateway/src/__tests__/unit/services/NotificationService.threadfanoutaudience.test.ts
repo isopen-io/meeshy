@@ -58,6 +58,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     postComment: { findMany: jest.fn() },
     postReaction: { findMany: jest.fn() },
     friendRequest: { findMany: jest.fn() },
+    userRelation: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
     communityMember: { findMany: jest.fn() },
     participant: { findMany: jest.fn() },
   };
@@ -86,6 +87,16 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+
+/**
+ * L'AUTEUR a réglé son entourage à « Ami » (#13929) : ces témoins éprouvent les
+ * seaux et l'admission sur ses amis. Le cran par défaut (Proche pour l'auteur,
+ * Sang pour le commentateur) a ses témoins dans `notifs-cercles-13929.test.ts`.
+ */
+const AUTHOR_ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
+const authorEntourageFriend = ({ where }: { where: { userId: string } }) =>
+  Promise.resolve(where.userId === AUTHOR_ID ? AUTHOR_ENTOURAGE_FRIEND : null);
 
 const AUTHOR_ID = '507f1f77bcf86cd799439001';
 const COMMENTER_ID = '507f1f77bcf86cd799439002';
@@ -108,7 +119,7 @@ describe('NotificationService — le fan-out du fil suit l’audience ACTUELLE d
     service = new NotificationService(prisma);
     service.setSocketIO({ to: jest.fn().mockReturnThis(), emit: jest.fn() } as any, new Map());
 
-    prisma.userPreferences.findUnique.mockResolvedValue(null);
+    prisma.userPreferences.findUnique.mockImplementation(authorEntourageFriend);
     prisma.user.findUnique.mockResolvedValue({
       username: 'actor',
       displayName: 'Actor',
@@ -201,10 +212,11 @@ describe('NotificationService — le fan-out du fil suit l’audience ACTUELLE d
     expect(notifiedUserIds()).toContain(EX_ENGAGED_ID);
   });
 
-  it('refuse l’engagé antérieur quand le graphe d’audience est illisible', async () => {
+  it('refuse l’engagé antérieur ET l’entourage quand le graphe d’audience est illisible', async () => {
     prisma.friendRequest.findMany.mockImplementation(async ({ where }: any) => {
-      // L'énumérateur d'amis de l'auteur répond ; l'intersection bornée du test
-      // d'admission échoue. Seul le seau arbitraire doit en pâtir.
+      // L'énumérateur d'amis de l'auteur répond ; les lectures bornées (niveau
+      // de chaque candidat, admission) échouent. Depuis #13929, l'entourage
+      // passe lui aussi par l'admission : rien ne part sur un graphe illisible.
       if (where?.OR?.[0]?.receiverId?.in) throw new Error('mongo down');
       return [{ senderId: AUTHOR_ID, receiverId: FRIEND_ID }];
     });
@@ -212,6 +224,7 @@ describe('NotificationService — le fan-out du fil suit l’audience ACTUELLE d
     await fanOut('FRIENDS');
 
     expect(notifiedUserIds()).not.toContain(EX_ENGAGED_ID);
-    expect(notifiedUserIds()).toContain(FRIEND_ID);
+    expect(notifiedUserIds()).not.toContain(FRIEND_ID);
+    expect(notifiedUserIds()).toContain(AUTHOR_ID);
   });
 });

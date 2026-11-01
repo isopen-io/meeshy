@@ -69,7 +69,8 @@ internal class ComposerLiveFirstFrame : Player.Listener {
  * geste de Couper. Plusieurs jouent ensemble (fond, vidéos posées, sons) : aucun ne prend le focus audio, qui ferait taire
  * les autres — la scène se tait, elle, hors premier plan. La fenêtre est tenue sur la source entière — un message posé à sa fin ramène la tête au début, une boucle de la
  * source aussi ([ComposerLivePlayback.rewindTo]) — et chaque fenêtre nouvelle déplace la tête là où l'auteur regarde
- * ([ComposerLivePlayback.seekOnChange]). Le volume suit à chaud ; [playing] faux le fige sans rembobiner.
+ * ([ComposerLivePlayback.seekOnChange]). Le volume suit à chaud ; [playing] faux le fige sans rembobiner. Chacun ne charge
+ * d'avance que quelques secondes, 8 Mo au plus ([ComposerLiveBuffer]).
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -86,6 +87,7 @@ fun rememberComposerLivePlayer(
         PlayerCensus.record()
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaCache.mediaSourceFactory(category, mediaUrl))
+            .setLoadControl(ComposerLiveBuffer.loadControl())
             .build().apply {
                 setAudioAttributes(LIVE_AUDIO_ATTRIBUTES, false)
                 setMediaItem(MediaItem.fromUri(mediaUrl))

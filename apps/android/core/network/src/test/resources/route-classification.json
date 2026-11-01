@@ -314,7 +314,6 @@
     "GET /api/v1/me/starred-messages",
     "GET /api/v1/me/stickers",
     "GET /api/v1/me/terms",
-    "GET /api/v1/mentions/suggestions",
     "GET /api/v1/messages/:messageId",
     "GET /api/v1/messages/:messageId/status-details",
     "GET /api/v1/messages/:messageId/translations",

@@ -12,7 +12,8 @@ nonisolated enum ComposerLabeledRailEntry: Hashable, Sendable {
 
 /// **Le rail gauche, ce qu'on AJOUTE à la scène** (#13839, L6, maquette validée, spec iOS § 2.5).
 ///
-/// Fermer · Texte · Média · Sticker · Son · Dessin · Fond, puis les entrées de ⋯ qui tiennent dans la hauteur, dans
+/// Fermer · Texte · Média · Sticker · Son · Dessin · Fond · Mention · Lieu (#14050), puis les entrées de ⋯ qui
+/// tiennent dans la hauteur, dans
 /// leur ordre du menu, puis « ⋯ Plus » pour le reste. Aucune entrée n'est perdue : ce que le rail ne pose pas, Plus
 /// le sert. Animation (un sous-menu) et Tout effacer (une confirmation) restent toujours derrière Plus.
 nonisolated enum ComposerLabeledRailLayout {
@@ -26,12 +27,10 @@ nonisolated enum ComposerLabeledRailLayout {
 
     static func resolve(tools: [ComposerRestTool], moreEntries: [ComposerMoreMenuEntry],
                         availableHeight: CGFloat, rowHeight: CGFloat, spacing: CGFloat) -> Layout {
-        let fond: [ComposerLabeledRailEntry] = moreEntries.contains(.background) ? [.more(.background)] : []
-        let fixes = [ComposerLabeledRailEntry.close] + tools.filter { $0 != .more }.map { .tool($0) } + fond
-        let restantes = moreEntries.filter { $0 != .background }
-        let candidates = restantes.filter { !keptBehindPlus.contains($0) }
+        let fixes = [ComposerLabeledRailEntry.close] + tools.filter { $0 != .more }.map { .tool($0) }
+        let candidates = moreEntries.filter { !keptBehindPlus.contains($0) }
         let posees = Array(candidates.prefix(max(0, capacity(availableHeight, rowHeight, spacing) - fixes.count - 1)))
-        let plus = restantes.filter { !posees.contains($0) }
+        let plus = moreEntries.filter { !posees.contains($0) }
         return Layout(rows: fixes + posees.map { .more($0) } + (plus.isEmpty ? [] : [.plus]), plus: plus)
     }
 
@@ -46,7 +45,7 @@ nonisolated enum ComposerLabeledRailLayout {
         if drawing { return .tool(.drawing) }
         if typing { return .tool(.text) }
         if let portal, let entree = entry(portal) { return entree }
-        if let band { return band == .frame ? .more(.backgroundFraming) : .more(.background) }
+        if let band { return band == .frame ? .more(.backgroundFraming) : .tool(.background) }
         if let effect { return effect == .opening ? .more(.transitions) : .more(.visualEffect) }
         return nil
     }
@@ -55,11 +54,11 @@ nonisolated enum ComposerLabeledRailLayout {
         switch portal {
         case .sticker: return .tool(.sticker)
         case .sound, .soundLibrary: return .tool(.sound)
-        case .background: return .more(.background)
+        case .background: return .tool(.background)
         case .slideDuration: return .more(.slideDuration)
-        case .location: return .more(.place)
+        case .location: return .tool(.place)
         case .hashtag: return .more(.hashtags)
-        case .reference: return .more(.mention)
+        case .reference: return .tool(.mention)
         default: return nil
         }
     }
@@ -86,10 +85,10 @@ nonisolated enum ComposerLabeledRailCopy {
         String(localized: "composer.rail.add", defaultValue: "Ajouter à la scène", bundle: .main)
     }
 
-    static func label(_ entry: ComposerLabeledRailEntry) -> String {
+    static func label(_ entry: ComposerLabeledRailEntry, backgroundIsMedia: Bool = false) -> String {
         switch entry {
         case .close: return ComposerDocumentCopy.close
-        case .tool(let outil): return ComposerRestChromeCopy.label(outil)
+        case .tool(let outil): return ComposerRestChromeCopy.label(outil, backgroundIsMedia: backgroundIsMedia)
         case .more(let entree): return ComposerMoreMenuCopy.label(entree)
         case .plus: return plus
         }
@@ -106,11 +105,13 @@ nonisolated enum ComposerLabeledRailCopy {
         case .tool(.sound): return String(localized: "composer.rail.title.sound", defaultValue: "Son", bundle: .main)
         case .tool(.drawing):
             return String(localized: "composer.rail.title.drawing", defaultValue: "Dessin", bundle: .main)
-        case .more(.mention):
+        case .tool(.background):
+            return String(localized: "composer.rail.title.background", defaultValue: "Fond", bundle: .main)
+        case .tool(.mention):
             return String(localized: "composer.rail.title.mention", defaultValue: "Mention", bundle: .main)
         case .more(.hashtags):
             return String(localized: "composer.rail.title.hashtags", defaultValue: "Hashtags", bundle: .main)
-        case .more(.place): return String(localized: "composer.rail.title.place", defaultValue: "Lieu", bundle: .main)
+        case .tool(.place): return String(localized: "composer.rail.title.place", defaultValue: "Lieu", bundle: .main)
         case .more(.addSlide):
             return String(localized: "composer.rail.title.addSlide", defaultValue: "Diapo", bundle: .main)
         case .more(.saveToPhotos):
@@ -123,8 +124,6 @@ nonisolated enum ComposerLabeledRailCopy {
     /// Les entrées de ⋯ que le rail peut poser, au mot court : leur libellé de menu ne tient pas dans 112 pt.
     private static func moreTitle(_ entree: ComposerMoreMenuEntry) -> String? {
         switch entree {
-        case .background:
-            return String(localized: "composer.rail.title.background", defaultValue: "Fond", bundle: .main)
         case .transitions:
             return String(localized: "composer.rail.title.transitions", defaultValue: "Transitions", bundle: .main)
         case .visualEffect:
@@ -208,6 +207,7 @@ struct ComposerLabeledRail: View {
     var mediaLongPress: ComposerRailDoorLongPressHandler?
     var sound = ComposerSceneOverlayChrome.Sound()
     var pasteEntry: AnyView?
+    var backgroundIsMedia = false
 
     @ScaledMetric(relativeTo: .caption) private var rowHeight: CGFloat = 44
     @State private var press = ComposerRailDoorPress()
@@ -275,7 +275,7 @@ struct ComposerLabeledRail: View {
                                    isOn: ouverte)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(ComposerLabeledRailCopy.label(entree)))
+        .accessibilityLabel(Text(ComposerLabeledRailCopy.label(entree, backgroundIsMedia: backgroundIsMedia)))
         .accessibilityAddTraits(ouverte ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier(id)
     }

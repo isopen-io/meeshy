@@ -98,6 +98,83 @@ export const RELATION_PRESENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<
   'presence.detailed',
 ]);
 
+/**
+ * LE RÉGLAGE D'ENTOURAGE (#13929, directives porteur du 2026-10-31) — chacun
+ * choisit, action par action, le cran minimal de son entourage qui est PRÉVENU.
+ * Il ne gouverne que la diffusion à l'entourage : la personne directement visée
+ * (l'auteur commenté, la personne mentionnée) est prévenue par ses propres
+ * notifications, hors de ce réglage.
+ *
+ * `NOBODY` ferme ; `COMMUNITY` ajoute les co-membres d'une communauté ;
+ * `PUBLIC` n'envoie jamais à « tout Meeshy » : sans modèle d'abonnés, il vise
+ * les mêmes personnes NOMMÉES que `COMMUNITY` (tous les liens, communauté
+ * comprise) — ADR `2026-10-31-l-entourage-prevenu-se-regle-action-par-action-13929`.
+ * Le réglage ne peut jamais ouvrir plus que le cercle : la loi compare le
+ * niveau EFFECTIF au cran choisi, et le blocage coupe tout.
+ */
+export const RELATION_AUDIENCE_CHOICES = ['NOBODY', 'BLOOD', 'CLOSE', 'FRIEND', 'ACQUAINTANCE', 'COMMUNITY', 'PUBLIC'] as const;
+export type RelationAudienceChoice = (typeof RELATION_AUDIENCE_CHOICES)[number];
+
+export const isRelationAudienceChoice = (value: unknown): value is RelationAudienceChoice =>
+  typeof value === 'string' && (RELATION_AUDIENCE_CHOICES as readonly string[]).includes(value);
+
+/** Les trois familles d'actions relayées à l'entourage, et la feature de la loi qui les porte. */
+export const CIRCLE_NOTIFY_FAMILIES = {
+  /** A — mes publications. */
+  publication: { feature: 'notify.newContent', actions: ['post', 'reel', 'story', 'mood', 'repost', 'share'] },
+  /** B — l'activité des autres sur MES contenus, relayée à mon entourage. */
+  onMyContent: {
+    feature: 'relay.commentersOnMyPosts',
+    actions: ['comment', 'reaction', 'share', 'repost', 'quote', 'reference', 'mention'],
+  },
+  /** C — mon activité AILLEURS, montrée à mon entourage. */
+  elsewhere: {
+    feature: 'relay.myCommentsElsewhere',
+    actions: ['comment', 'reaction', 'share', 'quote', 'reference', 'mention'],
+  },
+} as const satisfies Readonly<
+  Record<string, { readonly feature: RelationFeature; readonly actions: readonly string[] }>
+>;
+
+export type CircleNotifyFamily = keyof typeof CIRCLE_NOTIFY_FAMILIES;
+export type CircleNotifyAction<F extends CircleNotifyFamily> = (typeof CIRCLE_NOTIFY_FAMILIES)[F]['actions'][number];
+/** La clé de préférence (`notification.<clé>`) : `circle` + famille + action, ex. `circlePublicationPost`. */
+export type CircleNotifyKey = {
+  [F in CircleNotifyFamily]: `circle${Capitalize<F>}${Capitalize<CircleNotifyAction<F>>}`;
+}[CircleNotifyFamily];
+
+const capitalize = <S extends string>(value: S): Capitalize<S> =>
+  `${value.charAt(0).toUpperCase()}${value.slice(1)}` as Capitalize<S>;
+
+export const circleNotifyKey = <F extends CircleNotifyFamily>(family: F, action: CircleNotifyAction<F>): CircleNotifyKey =>
+  `circle${capitalize(family)}${capitalize(action)}` as CircleNotifyKey;
+
+/** Toutes les clés, avec la feature qui les porte — dix-neuf actions. */
+export const CIRCLE_NOTIFY_KEY_FEATURE: Readonly<Record<CircleNotifyKey, RelationFeature>> = Object.fromEntries(
+  (Object.keys(CIRCLE_NOTIFY_FAMILIES) as CircleNotifyFamily[]).flatMap((family) =>
+    CIRCLE_NOTIFY_FAMILIES[family].actions.map((action) => [
+      circleNotifyKey(family, action as CircleNotifyAction<typeof family>),
+      CIRCLE_NOTIFY_FAMILIES[family].feature,
+    ]),
+  ),
+) as Record<CircleNotifyKey, RelationFeature>;
+
+export const CIRCLE_NOTIFY_KEYS = Object.keys(CIRCLE_NOTIFY_KEY_FEATURE) as readonly CircleNotifyKey[];
+
+/**
+ * Le défaut d'une action : le niveau minimal de SA feature dans la matrice
+ * (A → Proche, B → Proche, C → Sang). Une seule source : changer la matrice
+ * change le défaut servi par la route de préférences.
+ */
+export const CIRCLE_NOTIFY_DEFAULTS: Readonly<Record<CircleNotifyKey, RelationAudienceChoice>> = Object.fromEntries(
+  CIRCLE_NOTIFY_KEYS.map((key) => [key, RELATION_FEATURE_MIN_LEVEL[CIRCLE_NOTIFY_KEY_FEATURE[key]]]),
+) as Record<CircleNotifyKey, RelationAudienceChoice>;
+
+/** Les features dont le PROPRIÉTAIRE du contenu choisit le cran (entrée `ownerAudience` de la loi). */
+export const RELATION_TUNABLE_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>(
+  Object.values(CIRCLE_NOTIFY_FAMILIES).map((family) => family.feature),
+);
+
 export type RelationLevelPresentation = { readonly labelKey: string; readonly icon: string };
 
 export const RELATION_LEVEL_PRESENTATION: Readonly<Record<RelationLevel, RelationLevelPresentation>> = {

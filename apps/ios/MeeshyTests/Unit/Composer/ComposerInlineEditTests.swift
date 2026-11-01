@@ -633,11 +633,10 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(ComposerInlineEditing.chips(.time, family: .sticker, served: sections), [.timing, .plan])
     }
 
-    func test_chips_tempsDUnSon_porteAussiSonRognage() {
+    func test_chips_tempsDUnSon_sonRognageEstPasseAuRail() {
         let sections = ComposerInlineEditing.sections(for: .audio, hasTrimmableSource: true)
-        XCTAssertEqual(ComposerInlineEditing.chips(.time, family: .audio, served: sections),
-                       [.timing, .plan, .media(.trim)],
-                       "le son se règle à Modifier par sa feuille : ses bornes ne doivent pas se perdre")
+        XCTAssertEqual(ComposerInlineEditing.chips(.time, family: .audio, served: sections), [.timing, .plan],
+                       "Couper est à plat dans le rail du son posé (#14048)")
     }
 
     func test_begin_temps_ouvreLaFenetreDeTemps() throws {

@@ -511,25 +511,15 @@ extension StoryComposerViewModel {
     /// Volume d'un audio (clamp [0, 1]). No-op si l'id ne match aucun audio.
     /// Passe par le mémento : glisser le slider à 0 vaut mute un-bouton, et
     /// l'unmute suivant restaurera le niveau quitté.
-    func setAudioVolume(audioId: String, volume: Float) {
-        var effects = currentEffects
-        guard var audios = effects.audioPlayerObjects,
-              let i = audios.firstIndex(where: { $0.id == audioId }) else { return }
-        audios[i].setVolumePreservingMuteMemento(min(1, volume))
-        effects.audioPlayerObjects = audios
-        currentEffects = effects
+    public func setAudioVolume(audioId: String, volume: Float) {
+        editAudio(id: audioId) { $0.setVolumePreservingMuteMemento(min(1, volume)) }
     }
 
     /// Mute un-bouton d'une piste AUDIO (chip canvas, cellule du panneau Son).
     /// Persisté via `volume` (0 = muet) + mémento de restauration — le reader
     /// d'un autre utilisateur n'entend donc jamais une piste mutée par l'auteur.
-    func toggleAudioMute(id: String) {
-        var effects = currentEffects
-        guard var audios = effects.audioPlayerObjects,
-              let i = audios.firstIndex(where: { $0.id == id }) else { return }
-        audios[i].toggleMute()
-        effects.audioPlayerObjects = audios
-        currentEffects = effects
+    public func toggleAudioMute(id: String) {
+        editAudio(id: id) { $0.toggleMute() }
     }
 
     /// **Le quart de tour d'un média** (#4082, vue `2d`), image comme vidéo ;
@@ -546,6 +536,13 @@ extension StoryComposerViewModel {
     /// Volume d'une piste VIDÉO, 0 à `StoryVolume.maxGain` (#13974) ; 0 vaut Muet.
     public func setMediaVolume(id: String, volume: Float) {
         editMedia(id: id, videoOnly: true) { $0.setVolumePreservingMuteMemento(min(StoryVolume.maxGain, volume)) }
+    }
+
+    private func editAudio(id: String, _ edit: (inout StoryAudioPlayerObject) -> Void) {
+        guard var audios = currentEffects.audioPlayerObjects,
+              let i = audios.firstIndex(where: { $0.id == id }) else { return }
+        edit(&audios[i])
+        currentEffects.audioPlayerObjects = audios
     }
 
     private func editMedia(id: String, videoOnly: Bool = false, _ edit: (inout StoryMediaObject) -> Void) {

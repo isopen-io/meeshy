@@ -29,7 +29,7 @@ import Foundation
 ///
 /// ## La SÉLECTION, ni un menu ni l'éditeur (#13974, grammaire d'édition)
 ///
-/// > Décision porteur 2026-10-31 : une option d'édition n'a que trois places —
+/// > Décision porteur : une option d'édition n'a que trois places —
 /// > le rail du bas remplacé, des rails superposés par niveaux, une feuille
 /// > basse —, jamais un menu flottant.
 ///
