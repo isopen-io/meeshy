@@ -139,6 +139,8 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
       'messageSource',
       'messageType',
       'updatedAt',
+      // #11269 — l'estampille de purge, épinglée : lue pour la projection par lecteur, jamais servie.
+      'viewOnceBurnedAt',
       'viewOnceCount',
     ]);
     await app.close();
@@ -168,7 +170,7 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
     // `conversations` n'est pas nommée : elle garde son profil par défaut ENTIER.
     expect(Object.keys(changedSelect(prisma.conversation.findMany)).length).toBeGreaterThan(10);
     expect(Object.keys(changedSelect(prisma.message.findMany)).sort())
-      .toEqual(['conversationId', 'createdAt', 'expiresAt', 'id', 'messageSource', 'messageType', 'updatedAt']);
+      .toEqual(['conversationId', 'createdAt', 'expiresAt', 'id', 'messageSource', 'messageType', 'updatedAt', 'viewOnceBurnedAt']);
     await app.close();
   });
 });

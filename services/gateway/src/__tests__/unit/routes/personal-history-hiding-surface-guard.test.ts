@@ -478,6 +478,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "et de portée globale (`viewOnceBurnAt`) : elle ne sert rien à personne. " +
       "Masquer ou réparer ici laisserait survivre un contenu que tous ont ouvert.",
   },
+  // #11269 — le rattrapage des médias à vue unique lus par tous : même famille
+  // que la purge, dont il ne fait que réarmer l'échéance.
+  'messaging/viewOnceMediaCatchUp.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Rattrapage serveur, sans lecteur et de portée globale (`isViewOnce`), qui " +
+      "réarme l'échéance de purge des vues uniques lues par tous : il ne sert rien " +
+      "à personne. Masquer ici laisserait survivre des octets que tous ont ouverts.",
+  },
   'messaging/freezeMessageStatus.ts': {
     kind: 'exempt',
     reads: 1,

@@ -132,6 +132,8 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   // (#4885 : c'est la recopie à la main qui avait laissé la recherche servir
   // un message à vue unique comme un message ordinaire).
   ...MESSAGE_PROTECTION_SELECT,
+  // #11269 — lue pour la projection par lecteur, jamais servie.
+  viewOnceBurnedAt: true,
   // #11381, #12822 — le chiffré au repos est LU pour que la passerelle ouvre un
   // message `server`/`hybrid` et ses traductions (`revealAtRestRows`) ; il ne
   // sort pas (`syncMessageSchema` ne déclare ni `encryptedContent` ni
@@ -194,7 +196,10 @@ export const SYNC_MESSAGE_SERVED_FIELDS = Object.keys(syncMessageSelect) as read
 // `messageSource`, `messageType`, `expiresAt` : la marque d'un avis de capture
 // (#9629), lue pour le CLASSER, jamais servie hors projection — sans elle, toute
 // ligne projetée partirait au classement.
-const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt', 'messageSource', 'messageType', 'expiresAt'] as const;
+// #11269 — `viewOnceBurnedAt` aussi : la projection par lecteur retient tout
+// d'une vue unique purgée, quelle que soit la projection demandée. Lue, jamais
+// servie (`syncMessageSchema` ne la déclare pas).
+const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt', 'messageSource', 'messageType', 'expiresAt', 'viewOnceBurnedAt'] as const;
 
 /**
  * Les SIX colonnes de `MESSAGE_PROTECTION_SELECT`, relevées mécaniquement
