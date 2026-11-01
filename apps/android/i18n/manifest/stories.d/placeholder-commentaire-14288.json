@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "notifications.action.commentPlaceholder", "androidName": "stories_comments_composer_hint", "status": "adopted" }
+      ]
+    }
+  }
+}

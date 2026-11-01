@@ -99,6 +99,8 @@
     <string name="nearby_retry">Try again</string>
     <string name="nearby_title">Nearby</string>
     <string name="post_comments_cancel_reply">Cancel reply</string>
+    <string name="post_comments_composer_hint">Comment…</string>
+    <string name="post_comments_composer_reply_hint">Reply…</string>
     <string name="post_comments_copy_text">Copy text</string>
     <string name="post_comments_delete_error">Couldn\'t delete the comment</string>
     <string name="post_comments_deleted">Comment deleted</string>

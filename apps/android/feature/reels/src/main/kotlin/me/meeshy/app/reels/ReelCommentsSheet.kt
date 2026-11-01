@@ -217,7 +217,7 @@ private fun ReelCommentInput(
         UniversalComposerSpec(
             configuration = ComposerConfiguration.COMMENT,
             draft = draft,
-            placeholder = stringResource(R.string.reels_comments_input_hint),
+            placeholder = stringResource(R.string.reels_comments_composer_hint),
             canSend = draft.isNotBlank(),
             onDraftChange = onDraftChange,
             onSend = { onSend(draft) },

@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -81,8 +82,8 @@ import me.meeshy.ui.theme.hexColor
  * The comment thread beneath a post in [PostDetailScreen]. Hosts its own
  * [PostCommentsViewModel] (scoped to the same nav entry, so it reads the same `postId`)
  * and renders — top to bottom — a section header, the projected comments (each Prisme-
- * resolved, an optimistic row dimmed until confirmed), an optional "show more" affordance,
- * and a pinned composer. Accent-coherent (Indigo) with the post card above it.
+ * resolved, an optimistic row dimmed until confirmed) and an optional "show more" affordance;
+ * its composer is [PostCommentsComposerBar], pinned by the screen. Accent-coherent (Indigo) with the post card above it.
  */
 @Composable
 internal fun PostCommentsSection(
@@ -191,8 +192,22 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
             }
         }
 
-        Spacer(Modifier.height(MeeshySpacing.md))
-        val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
+    }
+}
+
+/**
+ * #14285 — le composeur des commentaires, ÉPINGLÉ sous le fil comme la barre de saisie d'iOS : l'écran du détail le pose
+ * hors du défilement, au-dessus du clavier. Il lit le même [PostCommentsViewModel] que la section (même entrée de
+ * navigation), donc le brouillon, la cible de la réponse et les pièces jointes restent une seule source.
+ */
+@Composable
+internal fun PostCommentsComposerBar(
+    viewModel: PostCommentsViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
+    Box(modifier.fillMaxWidth()) {
         CommentComposer(
             draft = state.draft,
             mention = state.mention,
@@ -268,14 +283,16 @@ private fun CommentRow(
                     )
                 }
             }
-            SelectionContainer {
-                RichMessageText(
-                    text = comment.content,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    linkColor = MeeshyPalette.Indigo500,
-                    mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
-                )
+            if (comment.hasBody) {
+                SelectionContainer {
+                    RichMessageText(
+                        text = comment.content,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        linkColor = MeeshyPalette.Indigo500,
+                        mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
+                    )
+                }
             }
             }
             CommentMediaStrip(comment.media)
@@ -541,7 +558,7 @@ private fun CommentComposer(
     val intake = rememberComposerMediaIntake(onAttach)
     val canAttach = !attachments.isFull && !isSubmitting
     val focusTrigger = rememberReplyFocusTrigger(replyTarget)
-    val placeholder = stringResource(if (replyTarget != null) R.string.post_comments_reply_hint else R.string.post_comments_input_hint)
+    val placeholder = stringResource(if (replyTarget != null) R.string.post_comments_composer_reply_hint else R.string.post_comments_composer_hint)
     composer(
         UniversalComposerSpec(
             configuration = ComposerConfiguration.COMMENT,

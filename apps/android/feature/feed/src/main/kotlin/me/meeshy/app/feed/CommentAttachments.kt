@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -54,6 +53,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val PieceShape = RoundedCornerShape(MeeshyRadius.md)
 private val PieceSize = 56.dp
+private val PieceRemoveDisc = 20.dp
+private val PieceRemoveTouch = 32.dp
 private val MediaSize = 120.dp
 
 /**
@@ -122,13 +123,30 @@ internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentP
                     PieceThumbnail(piece)
                     if (piece.uploaded == null) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                 }
-                IconButton(
-                    onClick = { onRemove(piece.id) },
-                    modifier = Modifier.size(20.dp).align(Alignment.TopEnd).background(Color.Black.copy(alpha = 0.6f), CircleShape),
-                ) {
-                    Icon(MeeshyIcons.Close, contentDescription = removeLabel, tint = MeeshyPalette.White, modifier = Modifier.size(12.dp))
-                }
+                PieceRemoveButton(label = removeLabel, onClick = { onRemove(piece.id) }, modifier = Modifier.align(Alignment.TopEnd))
             }
+        }
+    }
+}
+
+/**
+ * Le ✕ d'une pièce (#14287) : un rond net de 20 dp dans le coin de la vignette. La zone touchée, plus large, reste
+ * transparente ; un `IconButton` l'aurait portée à 48 dp et peinte en gris, débordant en demi-disque derrière le ✕.
+ */
+@Composable
+private fun PieceRemoveButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(PieceRemoveTouch)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Box(
+            Modifier.size(PieceRemoveDisc).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(12.dp))
         }
     }
 }

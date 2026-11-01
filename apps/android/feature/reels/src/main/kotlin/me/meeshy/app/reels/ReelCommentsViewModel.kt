@@ -240,7 +240,7 @@ class ReelCommentsViewModel @Inject constructor(
     private fun send(reel: String, clientId: String, content: String) {
         viewModelScope.launch {
             try {
-                val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
+                val language = ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
                 when (val result = postRepository.addComment(reel, content, originalLanguage = language)) {
                     is NetworkResult.Success -> {
                         val server = result.data.toReelComment(prefs())

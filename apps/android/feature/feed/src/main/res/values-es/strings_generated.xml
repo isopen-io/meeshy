@@ -101,6 +101,8 @@
     <string name="nearby_retry">Reintentar</string>
     <string name="nearby_title">Cerca</string>
     <string name="post_comments_cancel_reply">Cancelar respuesta</string>
+    <string name="post_comments_composer_hint">Comentar…</string>
+    <string name="post_comments_composer_reply_hint">Responder…</string>
     <string name="post_comments_copy_text">Copiar texto</string>
     <string name="post_comments_delete_error">No se pudo eliminar el comentario</string>
     <string name="post_comments_deleted">Comentario eliminado</string>

@@ -158,6 +158,7 @@
     <string name="stories_cancel">Cancel</string>
     <string name="stories_caption_see_less">see less</string>
     <string name="stories_caption_see_more">see more</string>
+    <string name="stories_comments_composer_hint">Comment…</string>
     <plurals name="stories_comments_count">
         <item quantity="one">%1$d comment</item>
         <item quantity="other">%1$d comments</item>

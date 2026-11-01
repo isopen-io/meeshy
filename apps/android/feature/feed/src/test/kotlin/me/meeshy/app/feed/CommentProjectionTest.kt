@@ -269,4 +269,14 @@ class CommentProjectionTest {
         assertThat(piece.height).isEqualTo(1280)
         assertThat(piece.durationMillis).isEqualTo(12_500)
     }
+
+    @Test
+    fun `a comment without text renders no body, one with text does`() {
+        val voice = comment().copy(
+            content = "",
+            media = listOf(me.meeshy.sdk.model.ApiPostMedia(id = "a", mimeType = "audio/mp4", fileUrl = "/u/a.m4a")),
+        )
+        assertThat(CommentProjection.build(voice, Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").hasBody).isFalse()
+        assertThat(CommentProjection.build(comment(), Prefs(systemLanguage = "fr"), "https://gate.meeshy.me").hasBody).isTrue()
+    }
 }

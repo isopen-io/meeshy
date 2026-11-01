@@ -174,7 +174,7 @@ private fun CommentInput(
         UniversalComposerSpec(
             configuration = ComposerConfiguration.COMMENT,
             draft = draft,
-            placeholder = stringResource(R.string.stories_comments_input_hint),
+            placeholder = stringResource(R.string.stories_comments_composer_hint),
             canSend = draft.isNotBlank(),
             onDraftChange = {
                 draft = it

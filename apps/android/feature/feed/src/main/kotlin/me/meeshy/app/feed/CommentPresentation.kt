@@ -53,6 +53,9 @@ data class CommentPresentation(
     /** Le compte de l'auteur : sa présence servie se lit sur la carte unique. */
     val authorId: String? = null,
 ) {
+    /** Un commentaire sans texte (un vocal, une photo seule) ne rend aucun corps : pas de ligne vide sous l'auteur (#14289). */
+    val hasBody: Boolean get() = content.isNotBlank()
+
     /**
      * Libellé TalkBack d'une ligne — iso `ReplyCell.accessibilityLabel` : « <nom>, réponse. <contenu>.
      * <heure> ». [format] est le gabarit localisé à trois arguments positionnels ; [unknownAuthor]

@@ -158,6 +158,7 @@
     <string name="stories_cancel">Abbrechen</string>
     <string name="stories_caption_see_less">weniger anzeigen</string>
     <string name="stories_caption_see_more">mehr anzeigen</string>
+    <string name="stories_comments_composer_hint">Kommentieren…</string>
     <plurals name="stories_comments_count">
         <item quantity="one">%1$d Kommentar</item>
         <item quantity="other">%1$d Kommentare</item>

@@ -74,14 +74,14 @@ class ReelCommentsViewModelTest {
     }
 
     @Test
-    fun post_leavesInTheAuthorsLanguageWithoutAClearSignal() = runTest {
+    fun post_leavesTheLanguageToTheServerWithoutAClearSignal_neverTheAuthors() = runTest {
         coEvery { repo.getComments("r1") } returns NetworkResult.Success(emptyList())
         val vm = viewModel(LanguageIdentifying { LanguageIdentification("pt", 0.4) })
         vm.load("r1")
 
         vm.post("Commentaire test")
 
-        coVerify(exactly = 1) { repo.addComment("r1", "Commentaire test", null, null, null, "fr") }
+        coVerify(exactly = 1) { repo.addComment("r1", "Commentaire test", null, null, null, null) }
     }
 
     // MARK: - Loading

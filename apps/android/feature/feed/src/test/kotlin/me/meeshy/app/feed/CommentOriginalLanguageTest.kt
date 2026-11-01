@@ -67,19 +67,19 @@ class CommentOriginalLanguageTest {
     private val doubtfulPortuguese = LanguageIdentifying { LanguageIdentification("pt", 0.4) }
 
     @Test
-    fun `a comment without a clear signal leaves in its author's language`() = runTest {
+    fun `a comment without a clear signal leaves its language to the server, never its author's (#14284)`() = runTest {
         val vm = viewModel(doubtfulPortuguese)
 
         vm.onDraftChange("Commentaire test")
         vm.submit()
 
         coVerify(exactly = 1) {
-            repository.addComment("p1", "Commentaire test", null, null, null, "fr")
+            repository.addComment("p1", "Commentaire test", null, null, null, null)
         }
     }
 
     @Test
-    fun `a reply without a clear signal leaves in its author's language`() = runTest {
+    fun `a reply without a clear signal leaves its language to the server, never its author's (#14284)`() = runTest {
         val vm = viewModel(doubtfulPortuguese)
         vm.beginReply("c1")
 
@@ -87,7 +87,7 @@ class CommentOriginalLanguageTest {
         vm.submit()
 
         coVerify(exactly = 1) {
-            repository.addComment("p1", "Commentaire test", "c1", null, null, "fr")
+            repository.addComment("p1", "Commentaire test", "c1", null, null, null)
         }
     }
 

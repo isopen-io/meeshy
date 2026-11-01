@@ -4,6 +4,7 @@ import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.media.MediaIntake
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -119,14 +120,22 @@ internal fun ChatComposer(
     val haptics = rememberMeeshyHaptics()
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        if (onPickUris != null) return@rememberLauncherForActivityResult onPickUris(uris)
+    val receivePicked: (List<Uri>) -> Unit = receive@{ uris ->
+        if (uris.isEmpty()) return@receive
+        if (onPickUris != null) return@receive onPickUris(uris)
         ioScope.launch {
             val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
             onPickFile(picked.file, picked.fileName, picked.mimeType)
         }
     }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents(), receivePicked)
+    // La photothèque est le sélecteur de photos du système (#14286), comme la grille des médias récents — jamais
+    // celui des fichiers, qui ouvrait documentsui.
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(RecentMediaSource.HEAD_SAMPLE_COUNT),
+        receivePicked,
+    )
+    val openPhotos: () -> Unit = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
     val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
     var minimized by rememberSaveable { mutableStateOf(false) }
     var fieldFocused by remember { mutableStateOf(false) }
@@ -381,7 +390,7 @@ internal fun ChatComposer(
                         },
                         onPickLanguage = onPickLanguage,
                         onLibrary = if (canCapture && configuration.offers(ComposerCapability.PHOTO_LIBRARY)) {
-                            { interact(); filePicker.launch("image/*") }
+                            { interact(); openPhotos() }
                         } else {
                             null
                         },
@@ -511,7 +520,7 @@ internal fun ChatComposer(
                         onTileClick = { kind ->
                             attachmentTrayOpen = false
                             when (kind) {
-                                AttachmentTileKind.Photo -> filePicker.launch("image/*")
+                                AttachmentTileKind.Photo -> openPhotos()
                                 AttachmentTileKind.File ->
                                     if (guestAllowance.isRestricted) guestSheetOpen = true else filePicker.launch("*/*")
                                 AttachmentTileKind.Voice -> voice.request()

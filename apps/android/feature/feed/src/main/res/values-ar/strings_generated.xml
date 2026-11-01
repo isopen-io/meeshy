@@ -107,6 +107,8 @@
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
     <string name="post_comments_cancel_reply">إلغاء الرد</string>
+    <string name="post_comments_composer_hint">تعليق…</string>
+    <string name="post_comments_composer_reply_hint">رد…</string>
     <string name="post_comments_copy_text">نسخ النص</string>
     <string name="post_comments_delete_error">تعذّر حذف التعليق</string>
     <string name="post_comments_deleted">تم حذف التعليق</string>
