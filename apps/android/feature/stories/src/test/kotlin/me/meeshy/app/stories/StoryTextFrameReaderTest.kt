@@ -45,13 +45,13 @@ class StoryTextFrameReaderTest {
     }
 
     @Test
-    fun `a hostile published scale reads as the scene object bounds, NaN zero or negative as identity`() {
+    fun `a published scale lays out up to 4 and below any old floor, NaN zero or negative as identity`() {
         fun pxPerDesign(scale: Double) = project(StoryTextObject(id = "t", text = "x", scale = scale)).framePxPerDesign(1080f)
         assertThat(pxPerDesign(Double.NaN)).isEqualTo(1f)
         assertThat(pxPerDesign(Double.POSITIVE_INFINITY)).isEqualTo(1f)
         assertThat(pxPerDesign(-2.0)).isEqualTo(1f)
         assertThat(pxPerDesign(1e30)).isEqualTo(4f)
-        assertThat(pxPerDesign(0.01)).isWithin(1e-6f).of(0.3f)
+        assertThat(pxPerDesign(0.01)).isWithin(1e-6f).of(0.01f)
         val huge = project(StoryTextObject(id = "t", text = "x", scale = 1e30, borderWidth = 2.0))
         assertThat(huge.fontPx(1080f)).isEqualTo(64f * 4f)
         assertThat(huge.outlinePx(1080f)).isEqualTo(8f)

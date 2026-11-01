@@ -2079,7 +2079,7 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `onTextElementTransform accumulates across successive gestures and clamps`() = runTest {
+    fun `onTextElementTransform accumulates across successive gestures without a ceiling`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
         val id = vm.state.value.selectedTextElement!!.id
@@ -2088,7 +2088,7 @@ class StoryComposerViewModelTest {
         vm.onTextElementTransform(id, scaleBy = 10f, rotateByDeg = 0f)
 
         assertThat(vm.state.value.selectedSlideTextElements.single().scale)
-            .isEqualTo(StoryTextElement.MAX_SCALE)
+            .isWithin(1e-4f).of(20f)
     }
 
     @Test

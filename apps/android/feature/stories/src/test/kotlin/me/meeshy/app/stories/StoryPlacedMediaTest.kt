@@ -32,12 +32,12 @@ class StoryPlacedMediaTest {
     }
 
     @Test
-    fun `a hostile placement is pulled back into the canvas`() {
+    fun `a hostile placement is pulled back into the canvas, its scale kept without a ceiling`() {
         val tame = StoryPlacedMedia(mediaId = "m", x = 9f, y = Float.NaN, scale = 99f, rotationDeg = 540f).normalised()
 
         assertThat(tame.x).isEqualTo(1f)
         assertThat(tame.y).isEqualTo(0.5f)
-        assertThat(tame.scale).isAtMost(4f)
+        assertThat(tame.scale).isEqualTo(99f)
         assertThat(tame.rotationDeg).isAtLeast(-180f)
         assertThat(tame.rotationDeg).isAtMost(180f)
     }

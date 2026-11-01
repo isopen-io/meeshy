@@ -42,7 +42,6 @@ import coil.size.Size
 import kotlin.math.min
 import kotlin.math.roundToInt
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaLook
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookRecipe
@@ -92,8 +91,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                 PlacedMediaFrame(
                     placed = placed,
                     model = ComposerPicture.of(uploaded, mediaBaseUrl, atMs = placed.posterAtMs(uploaded)),
-                    aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height)
-                        ?.let { measured -> StoryMediaCrop.effectiveRatio(measured, placed.crop.takeUnless { isVideo }) },
+                    aspectRatio = placedAspectRatio(placed),
                     isVideo = isVideo,
                     mediaLook = look,
                 )

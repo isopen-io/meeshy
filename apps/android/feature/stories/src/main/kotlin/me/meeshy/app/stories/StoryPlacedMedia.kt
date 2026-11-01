@@ -8,6 +8,8 @@ import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.media.MediaTrimRule
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 import me.meeshy.sdk.model.scene.StoryElementTiming
 import me.meeshy.sdk.model.scene.StoryVolumeCarrying
 import me.meeshy.sdk.model.scene.wireValue
@@ -55,7 +57,7 @@ data class StoryPlacedMedia(
     fun normalised(): StoryPlacedMedia = copy(
         x = coord(x),
         y = coord(y),
-        scale = StoryTextElement.clampScale(scale),
+        scale = StoryTextElement.servedScale(scale),
         rotationDeg = StoryTextElement.normaliseRotation(rotationDeg),
         adjustments = adjustments?.takeUnless { it.isNeutral },
         sourceStart = trim?.start,
@@ -64,8 +66,12 @@ data class StoryPlacedMedia(
         volume = volume.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f,
     )
 
-    fun transformed(scaleBy: Float, rotateByDeg: Float): StoryPlacedMedia = copy(
-        scale = StoryTextElement.clampScale(scale * scaleBy),
+    /**
+     * Pincer / tourner : l'échelle grandit sans plafond et ne descend pas sous 5 pixels de la scène de référence sur le
+     * plus petit côté du cadre que peignent les lecteurs pour [aspectRatio] (#14298) ; un facteur dégénéré la laisse.
+     */
+    fun transformed(scaleBy: Float, rotateByDeg: Float, aspectRatio: Double? = null): StoryPlacedMedia = copy(
+        scale = SceneObjectScalePolicy.settled(scale, scaleBy, smallestSideDesignPx = ForegroundMediaFrame.baseDesignSize(aspectRatio).smallestSide),
         rotationDeg = StoryTextElement.normaliseRotation(rotationDeg + rotateByDeg),
     )
 
