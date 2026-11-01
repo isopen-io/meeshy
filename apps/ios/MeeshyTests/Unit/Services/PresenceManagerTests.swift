@@ -399,6 +399,33 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(sut.presenceState(for: "friend-1"), .online)
     }
 
+    /// presence-ami-binaire (#13928) : un Ami n'a pas de `lastActiveAt` servi.
+    /// Une entrée `(online, date)` reçue quand il était Proche est REMPLACÉE par
+    /// le snapshot, jamais prolongée par la date locale.
+    func test_ingestSnapshot_friendWithoutLastActiveAt_replacesAProcheEntry() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: true, lastActiveAt: nil)])
+
+        XCTAssertNil(sut.presenceMap["friend-1"]?.lastActiveAt)
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .online)
+    }
+
+    func test_ingestSnapshot_friendOffline_replacesAProcheEntry_andRendersNothing() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: false, lastActiveAt: nil)])
+
+        XCTAssertNil(sut.presenceMap["friend-1"]?.lastActiveAt)
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .offline)
+    }
+
+    func test_resolvedState_friendServedOnlineWithoutLastActiveAt_isOnline() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        XCTAssertEqual(sut.resolvedState(userId: "friend-1", isOnline: false, lastActiveAt: Date().addingTimeInterval(-120)), .online)
+    }
+
     func test_disconnect_isWiredToNoteSocketDisconnected() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/PresenceManager.swift"))
         let wiring = try XCTUnwrap(source.range(of: "self?.noteSocketDisconnected()"), "la coupure du socket doit atteindre noteSocketDisconnected")
