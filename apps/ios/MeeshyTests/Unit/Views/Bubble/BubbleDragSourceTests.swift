@@ -218,11 +218,17 @@ final class BubbleDragSourceTests: XCTestCase {
         XCTAssertEqual(calls.count, 1)
     }
 
+    /// Le dossier scratch est PROPRE au test : la purge de la déconnexion, qu'un
+    /// autre témoin déclenche en tâche de fond, vide le temporaire de l'app et y
+    /// effaçait la copie pendant que le fournisseur la lisait.
     func test_provider_cachedMedia_vendsACopyNamedLikeTheOriginal() async throws {
-        let cached = FileManager.default.temporaryDirectory.appendingPathComponent("cache-\(UUID().uuidString).bin")
+        let scratch = try scratchBase()
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let cached = scratch.appendingPathComponent("cache-\(UUID().uuidString).bin")
         try Data("pixels".utf8).write(to: cached)
         let provider = BubbleDragItemProvider.make(
             .media(remoteURL: "https://cdn.example/p1.jpg", kind: .image, suggestedName: "plage.jpg", typeIdentifier: "public.jpeg"),
+            scratch: scratch,
             resolveCachedFile: { _, _ in cached }
         )
         let (url, error) = await load(provider, type: "public.jpeg")

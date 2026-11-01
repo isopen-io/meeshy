@@ -162,6 +162,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
+        // #14056 — les règles pures de l'éditeur (refus d'identité compris) ont
+        // quitté `ProfileView.swift` pour la taille : leurs clés suivent.
+        "apps/ios/Meeshy/Features/Profile/Views/MeeshyUser+ProfileEdits.swift",
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",  // 32
         // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour

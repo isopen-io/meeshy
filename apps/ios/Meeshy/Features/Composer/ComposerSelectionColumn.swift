@@ -43,7 +43,8 @@ struct ComposerSelectionColumn: View {
 
     private var entries: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            ForEach(items.filter { !$0.isDestructive }, id: \.self) { item in entry(item) }
+            ForEach(items.filter { !$0.isDestructive }.map { AsyncRenderRow(id: $0, content: entry($0)) },
+                    content: asyncRenderRowContent)
             if let retirer = items.first(where: \.isDestructive) {
                 entry(retirer).padding(.top, MeeshySpacing.sm)
             }

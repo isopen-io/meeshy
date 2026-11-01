@@ -107,7 +107,7 @@ struct ComposerAnchoredSheet<Content: View>: View {
         .offset(y: drag)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { onClose() }
+        .dismissOnEscape { onClose() }
     }
 
     private func grip(height: CGFloat) -> some View {

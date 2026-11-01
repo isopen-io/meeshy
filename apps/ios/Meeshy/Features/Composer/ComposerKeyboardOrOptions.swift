@@ -95,3 +95,27 @@ nonisolated enum ComposerKeyboardMotion {
         .timingCurve(0.38, 0.7, 0.125, 1.0, duration: timing.duration)
     }
 }
+
+/// **Le clavier tel que la scène le suit** : où il s'arrête, et le mouvement
+/// qui l'y amène. La scène se cale sur ce mouvement tant qu'il dure, puis
+/// reprend son propre ressort (`ComposerKeyboardMotion.drivesLift`).
+nonisolated struct ComposerSceneKeyboard: Equatable, Sendable {
+    /// Le haut du clavier, repère global ; `nil` quand il ne soulève rien.
+    private(set) var top: CGFloat?
+    private(set) var timing: ComposerKeyboardMotion.Timing?
+
+    mutating func moved(duration: Double?, endFrame: CGRect?, windowFrame: CGRect?, hidden: Bool, at date: Date) {
+        timing = ComposerKeyboardMotion.timing(duration: duration, at: date)
+        top = hidden ? nil : endFrame.flatMap {
+            ComposerKeyboardMotion.keyboardTop(endFrame: $0, windowFrame: windowFrame)
+        }
+    }
+
+    func liftAnimation(reduceMotion: Bool, now: Date) -> Animation? {
+        guard !reduceMotion else { return nil }
+        guard let timing, ComposerKeyboardMotion.drivesLift(timing, now: now) else {
+            return .spring(response: 0.32, dampingFraction: 0.88)
+        }
+        return ComposerKeyboardMotion.animation(timing)
+    }
+}

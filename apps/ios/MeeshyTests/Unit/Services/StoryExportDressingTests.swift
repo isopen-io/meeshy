@@ -423,10 +423,13 @@ final class StoryExportPathsDressingTests: XCTestCase {
         StoryExportIntroContent(displayName: username.capitalized, username: username, accentColorHex: "6366F1")
     }
 
+    /// Une story qui BOUGE : une scène fixe et muette sort en image, sans
+    /// interlude ni carte de fin (#13871, `StoryStillExportTests`) — ces
+    /// témoins gardent l'habillage de la VIDÉO.
     private func makeStory() -> StoryItem {
         StoryItem(id: "story-\(UUID().uuidString)",
                   content: "Bonjour",
-                  storyEffects: StoryEffects(textObjects: [StoryTextObject(text: "Bonjour")]))
+                  storyEffects: StoryEffects(textObjects: [StoryTextObject(text: "Bonjour", startTime: 1, duration: 3)]))
     }
 
     /// Un auteur qui ne peut pas être l'utilisateur connecté, quelle que soit

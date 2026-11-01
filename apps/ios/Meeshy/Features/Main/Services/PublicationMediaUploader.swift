@@ -16,13 +16,13 @@ nonisolated struct PublicationMediaUploads: Equatable, Sendable {
 /// sortie de `dispatchCreatePost` pour que ses verdicts se testent sans réseau :
 /// le téléverseur est une fermeture, la ligne outbox deux crochets.
 nonisolated enum PublicationMediaUploader {
-    typealias Send = @Sendable (_ fileURL: URL, _ mimeType: String) async throws -> TusUploadResult
+    typealias Send = @Sendable @concurrent (_ fileURL: URL, _ mimeType: String) async throws -> TusUploadResult
 
     struct Hooks: Sendable {
         /// #10321 — l'auteur a pu retirer la publication entre deux montées.
-        let throwIfCancelled: @Sendable () async throws -> Void
+        let throwIfCancelled: @Sendable @concurrent () async throws -> Void
         /// #5830 — un succès est GRAVÉ sur la ligne, il ne se re-monte jamais.
-        let recordUploaded: @Sendable (UploadedPostMedia) async -> Void
+        let recordUploaded: @Sendable @concurrent (UploadedPostMedia) async -> Void
     }
 
     private static let logger = MeeshyLog.logger(.outboxDispatcher, subsystem: .legacyIOS)

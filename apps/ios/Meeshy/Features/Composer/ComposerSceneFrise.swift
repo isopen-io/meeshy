@@ -250,7 +250,7 @@ struct ComposerSceneFrise: View {
             contexte.fill(Path(trait), with: .color(couleur.opacity(graduation.isMajor ? 0.55 : 0.25)))
             guard let libelle = graduation.label else { continue }
             var texte = contexte.resolve(Text(libelle)
-                .font(MeeshyFont.relative(9, weight: .medium).monospacedDigit()))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium).monospacedDigit()))
             texte.shading = .color(couleur.opacity(0.6))
             let mesure = texte.measure(in: taille)
             let centre = min(max(mesure.width / 2, x), taille.width - mesure.width / 2)
