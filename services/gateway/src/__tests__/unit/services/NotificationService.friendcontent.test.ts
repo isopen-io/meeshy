@@ -466,7 +466,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       );
     });
 
-    it('test_createFriendContentNotificationsBatch_friendQueryCappedAt500PlusWitnessRow', async () => {
+    it('test_createFriendContentNotificationsBatch_friendQueryReadsTheLivingWindowPlusWitnessRow', async () => {
       (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.createFriendContentNotificationsBatch({
@@ -476,7 +476,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       });
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 501 })
+        expect.objectContaining({ take: 1001 })
       );
     });
 
