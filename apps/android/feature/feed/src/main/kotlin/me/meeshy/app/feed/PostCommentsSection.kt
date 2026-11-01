@@ -91,6 +91,7 @@ internal fun PostCommentsSection(
     modifier: Modifier = Modifier,
     onNotice: suspend (CommentNotice) -> Unit = {},
     support: PostCommentCardPost? = null,
+    showsTitle: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) {
@@ -101,7 +102,7 @@ internal fun PostCommentsSection(
     }
 
     val imaging = rememberCommentImaging(viewModel, support)
-    CommentMediaFullscreen { CommentsColumn(state, viewModel, modifier, imaging) }
+    CommentMediaFullscreen { CommentsColumn(state, viewModel, modifier, imaging, showsTitle) }
 }
 
 /**
@@ -125,15 +126,17 @@ private fun rememberCommentImaging(viewModel: PostCommentsViewModel, support: Po
 }
 
 @Composable
-private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsViewModel, modifier: Modifier, imaging: CommentImaging?) {
+private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsViewModel, modifier: Modifier, imaging: CommentImaging?, showsTitle: Boolean) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.post_comments_title),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MeeshyTheme.tokens.textPrimary,
-            modifier = Modifier.padding(bottom = MeeshySpacing.sm),
-        )
+        if (showsTitle) {
+            Text(
+                text = stringResource(R.string.post_comments_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textPrimary,
+                modifier = Modifier.padding(bottom = MeeshySpacing.sm),
+            )
+        }
 
         when {
             state.showSkeleton -> CommentsSkeleton()
@@ -201,7 +204,7 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
  * navigation), donc le brouillon, la cible de la réponse et les pièces jointes restent une seule source.
  */
 @Composable
-internal fun PostCommentsComposerBar(
+fun PostCommentsComposerBar(
     viewModel: PostCommentsViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
 ) {

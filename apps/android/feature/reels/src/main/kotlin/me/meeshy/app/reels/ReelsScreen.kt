@@ -171,16 +171,14 @@ fun ReelsScreen(
 
     val openCommentsReelId = commentsReelId
     if (openCommentsReelId != null && !inVideoWindow) {
-        ReelCommentsSheet(
+        ReelCommentsThread(
             reelId = openCommentsReelId,
+            serverCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
             onDismiss = { commentsReelId = null },
             onOpenPost = {
                 commentsReelId = null
                 onOpenPost(openCommentsReelId)
             },
-            // The reel row's own server-known total, so the sheet's title never regresses
-            // to "how many are loaded on screen" (a page-capped undercount).
-            initialCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
         )
     }
 }
