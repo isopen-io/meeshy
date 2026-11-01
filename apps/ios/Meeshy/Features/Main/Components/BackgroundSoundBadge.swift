@@ -225,13 +225,40 @@ extension BackgroundSoundBadge {
     }
 
     static func announcement(for storyEffects: StoryEffects?) -> BackgroundAudioAnnouncement {
-        let backgroundEntry = backgroundTrace(of: storyEffects)
-        return AudioChipDisplay.backgroundAnnouncement(
-            sound: backgroundSound(of: storyEffects),
-            libraryTitle: backgroundEntry?.name,
-            libraryUsername: backgroundEntry?.soundAuthorUsername,
-            libraryDuration: backgroundEntry?.duration.map(TimeInterval.init),
-            libraryReleasedAt: backgroundEntry?.soundReleaseDate
+        libraryAnnouncement(sound: backgroundSound(of: storyEffects), entry: backgroundTrace(of: storyEffects))
+    }
+
+    /// **La piste que la barre de la fiche NOMME** (#14245, parité Android
+    /// #14201) : le son de fond d'abord ; sans aucun son de fond, le premier
+    /// son de la bibliothèque POSÉ sur la scène — c'est lui que la fiche fait
+    /// entendre.
+    static func creditedTrace(of storyEffects: StoryEffects?) -> StoryAudioPlayerObject? {
+        backgroundTrace(of: storyEffects) ?? posedLibrarySound(of: storyEffects)
+    }
+
+    /// L'annonce de `creditedTrace(of:)` : celle du son de fond quand il
+    /// existe, sinon le crédit du son de la bibliothèque posé sur la scène.
+    static func creditAnnouncement(for storyEffects: StoryEffects?) -> BackgroundAudioAnnouncement {
+        guard let posed = posedLibrarySound(of: storyEffects), let soundId = posed.soundId else {
+            return announcement(for: storyEffects)
+        }
+        return libraryAnnouncement(sound: BackgroundSoundV3(source: .library(soundId: soundId), volume: 1),
+                                   entry: posed)
+    }
+
+    private static func posedLibrarySound(of storyEffects: StoryEffects?) -> StoryAudioPlayerObject? {
+        guard backgroundSound(of: storyEffects) == nil else { return nil }
+        return storyEffects?.audioPlayerObjects?.first { !($0.soundId ?? "").isEmpty }
+    }
+
+    private static func libraryAnnouncement(sound: BackgroundSoundV3?,
+                                            entry: StoryAudioPlayerObject?) -> BackgroundAudioAnnouncement {
+        AudioChipDisplay.backgroundAnnouncement(
+            sound: sound,
+            libraryTitle: entry?.name,
+            libraryUsername: entry?.soundAuthorUsername,
+            libraryDuration: entry?.duration.map(TimeInterval.init),
+            libraryReleasedAt: entry?.soundReleaseDate
         )
     }
 
