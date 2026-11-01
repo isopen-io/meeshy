@@ -138,7 +138,7 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
         // `CallKitDelegateProxy.provider(_:didActivate:)`. Si CallKit ne
         // fire jamais didActivate (cas d'erreur), `outgoingRingTimeoutTask`
         // de 45s prend le relais comme avant.
-        call.startOutgoingRingTimeout()
+        call.ringTimeouts.startOutgoingRingTimeout()
 
         let uuid = beginOutgoingRing(userId: userId, displayName: displayName, isVideo: isVideo)
 

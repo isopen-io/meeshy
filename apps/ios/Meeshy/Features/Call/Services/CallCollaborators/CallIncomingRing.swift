@@ -486,7 +486,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         // Force displayMode = .fullScreen (cf. startCall pour le rationale).
         call.displayMode = .fullScreen
         call.callState = .ringing(isOutgoing: false)
-        call.startIncomingRingTimeout()
+        call.ringTimeouts.startIncomingRingTimeout()
     }
 
     /// Ringing-time setup shared by both incoming paths once the peer connection

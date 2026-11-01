@@ -409,12 +409,6 @@ final class CallManager: ObservableObject, Sendable {
     /// Drives the graceful audio-only survival layer from quality samples.
     let videoSurvivalController: VideoSurvivalController
     let ringbackPlayer = RingbackTonePlayer()
-    // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
-    // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
-    // are cooperative, energy-efficient (no RunLoop wakeup overhead), and
-    // immediately stop their work loop on cancel.
-    var durationTask: Task<Void, Never>?
-    var heartbeatTask: Task<Void, Never>?
     /// Phase 2 fix — Bug 2 (caller stays ringing while callee shows Connecting).
     /// Tracks the startLocalMedia Task so that:
     ///   1. `emitCallJoin` can be sent IMMEDIATELY (decoupled from media init)
@@ -444,14 +438,6 @@ final class CallManager: ObservableObject, Sendable {
     /// From `CallKitDelegateProxy.provider(_:timedOutPerforming:)`.
     func discardTimedOutAnswerAction(_ action: CXAnswerCallAction) { answerActionHold.discardTimedOut(action) }
 
-    /// Caller-side ringing timeout — ends the call as `.missed` if the recipient
-    /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
-    /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
-    var outgoingRingTimeoutTask: Task<Void, Never>?
-    /// Callee-side twin: an incoming call still ringing well past the ring budget — its `call:ended` lost (socket
-    /// mounted after the caller hung up, `call_cancel` push missed) — ends locally as missed. Without it the state
-    /// stayed `.ringing` with no exit: every later incoming call answered « busy » and `startCall` refused.
-    var incomingRingTimeoutTask: Task<Void, Never>?
     /// Task de setup d'un appel sortant (force-leave + ACK + media + listen).
     /// Auparavant un Task non-tracké : si endCallInternal fire pendant le
     /// setup (ex: CallKit teardown), le Task continuait à tourner — gardant
@@ -697,6 +683,10 @@ final class CallManager: ObservableObject, Sendable {
     let reliabilityMonitor: CallReliabilityMonitorProviding
     /// Le chemin réseau pendant l'appel (`CallNetworkPathObserver`).
     let networkPathObserver: CallNetworkPathObserverProviding
+    /// Les délais de sonnerie de l'appelant et de l'appelé (`CallRingTimeouts`).
+    let ringTimeouts: CallRingTimeoutsProviding
+    /// Le chrono affiché et le battement de cœur (`CallLiveClock`).
+    let liveClock: CallLiveClockProviding
 
     private init(
         signalingRouter: CallSignalingRouterProviding = CallSignalingRouter(),
@@ -707,7 +697,9 @@ final class CallManager: ObservableObject, Sendable {
         outgoingDial: CallOutgoingDialProviding = CallOutgoingDial(),
         turnCredentials: CallTurnCredentialsProviding = CallTurnCredentials(),
         reliabilityMonitor: CallReliabilityMonitorProviding = CallReliabilityMonitor(),
-        networkPathObserver: CallNetworkPathObserverProviding = CallNetworkPathObserver()
+        networkPathObserver: CallNetworkPathObserverProviding = CallNetworkPathObserver(),
+        ringTimeouts: CallRingTimeoutsProviding = CallRingTimeouts(),
+        liveClock: CallLiveClockProviding = CallLiveClock()
     ) {
         self.signalingRouter = signalingRouter
         self.sdpSignaler = sdpSignaler
@@ -718,6 +710,8 @@ final class CallManager: ObservableObject, Sendable {
         self.turnCredentials = turnCredentials
         self.reliabilityMonitor = reliabilityMonitor
         self.networkPathObserver = networkPathObserver
+        self.ringTimeouts = ringTimeouts
+        self.liveClock = liveClock
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
@@ -755,6 +749,8 @@ final class CallManager: ObservableObject, Sendable {
         outgoingDial.attach(to: self)
         turnCredentials.attach(to: self)
         reliabilityMonitor.attach(to: self)
+        ringTimeouts.attach(to: self)
+        liveClock.attach(to: self)
         signalingRouter.start(routingTo: self)
         networkPathObserver.start(observing: self)
         audioSystemObserver.start(observing: self)
