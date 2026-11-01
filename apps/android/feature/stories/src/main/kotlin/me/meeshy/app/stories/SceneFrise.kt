@@ -84,6 +84,7 @@ import me.meeshy.sdk.model.composer.ComposerLimitNotice
 import me.meeshy.sdk.model.composer.ComposerObjectChips
 import me.meeshy.sdk.model.composer.timeline.ClipWindowResolver
 import me.meeshy.sdk.model.composer.timeline.FriseBarDrag
+import me.meeshy.sdk.model.composer.timeline.FrisePlayClock
 import me.meeshy.sdk.model.composer.timeline.FriseRuler
 import me.meeshy.sdk.model.composer.timeline.FriseViewport
 import me.meeshy.sdk.model.composer.timeline.Plan2DTrack
@@ -142,17 +143,25 @@ internal fun SceneFrise(
     }
     var playing by transport::playing
     val currentPlayhead by rememberUpdatedState(playheadSeconds)
-    val currentScrub by rememberUpdatedState(onScrub)
-    // **Lire la scène** : la tête avance au rythme de l'horloge d'affichage, s'arrête à la fin ; la frise zoomée la suit.
+    val hostScrub by rememberUpdatedState(onScrub)
+    // Un scrub de l'auteur pendant la lecture réancre l'horloge (#14293) : la tête repart de là où il l'a posée.
+    var seek by remember { mutableStateOf<Float?>(null) }
+    val userScrub: (Float) -> Unit = { at ->
+        if (playing) seek = at
+        hostScrub(at)
+    }
+    // **Lire la scène** : la tête vaut le temps écoulé depuis l'origine de la lecture (#14293), jamais un pas par image
+    // ajouté à la tête que l'hôte rend avec retard ; elle s'arrête à la fin, la frise zoomée la suit.
     LaunchedEffect(playing, duration) {
         if (!playing) return@LaunchedEffect
-        if (currentPlayhead >= duration) currentScrub(0f)
-        var last = withFrameNanos { it }
+        val from = if (currentPlayhead >= duration) 0f else currentPlayhead
+        if (from != currentPlayhead) hostScrub(from)
+        var clock = FrisePlayClock(from, withFrameNanos { it })
         while (playing) {
             withFrameNanos { now ->
-                val next = FriseViewport.advanced(currentPlayhead, (now - last) / 1_000_000_000f, duration)
-                last = now
-                currentScrub(next)
+                seek?.let { clock = FrisePlayClock(it, now); seek = null }
+                val next = clock.headAt(now, duration)
+                hostScrub(next)
                 zoom = zoom?.clamped(duration)?.showing(next, duration)
                 if (next >= duration) playing = false
             }
@@ -194,7 +203,7 @@ internal fun SceneFrise(
             },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Ruler(view = view, duration = duration, zoomed = zoom != null, onScrub = onScrub, onLaneWidth = { laneWidthPx = it })
+                Ruler(view = view, duration = duration, zoomed = zoom != null, onScrub = userScrub, onLaneWidth = { laneWidthPx = it })
                 if (tracks.isEmpty()) {
                     Text(
                         text = stringResource(R.string.composer_frise_empty),
@@ -221,6 +230,7 @@ internal fun SceneFrise(
                             onSnap = haptics::light,
                             onSelect = { at ->
                                 haptics.light()
+                                if (playing) seek = at
                                 onSelectTrack(track.id, at)
                             },
                             onCommit = { w -> onWindow(track.id, w.startSeconds, w.durationSeconds) },
