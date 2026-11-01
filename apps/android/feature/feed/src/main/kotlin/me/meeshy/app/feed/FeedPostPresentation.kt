@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.PostMediaPresentation
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.SceneShape
 import me.meeshy.sdk.model.card.PostCommentCardPost
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
@@ -49,7 +50,7 @@ data class FeedPostImage(
  * Les scènes d'un post composé sur la scène (#13863 R7, iOS `PostSceneCard` / `PostSceneMosaic`) : elles se peignent à la place
  * de ses médias, dans la disposition que l'auteur a choisie, sur la couleur de l'auteur. [captions] : la légende propre de chaque
  * scène, rang pour rang ([PostSceneCaptions]) ; [offersSound] : une scène a quelque chose à faire entendre, que la fiche du post
- * laisse couper (#13893).
+ * laisse couper (#13893) ; [frames] : ce que la carte montre de chaque scène, rang pour rang ([PostSceneFrames], #14199).
  */
 @Immutable
 data class FeedPostScenes(
@@ -58,7 +59,11 @@ data class FeedPostScenes(
     val accentHex: String?,
     val captions: List<String?> = emptyList(),
     val offersSound: Boolean = false,
-)
+    val frames: List<SceneCardFraming> = emptyList(),
+) {
+    /** Le rapport du carrousel : sa page la plus HAUTE, pour n'en rogner aucune ; le gabarit 9:16 sans cadrage connu. */
+    val carouselAspect: Double get() = frames.mapNotNull(SceneCardFraming::pageAspect).minOrNull() ?: SceneShape.ASPECT
+}
 
 /**
  * A feed post projected for rendering: Prisme-resolved content, the viewer's own
@@ -227,6 +232,7 @@ object FeedPostBuilder {
                     accentHex = post.authorAccentHex(),
                     captions = PostSceneCaptions.of(read.items, media),
                     offersSound = PostSceneSound.offers(read.items),
+                    frames = PostSceneFrames.of(PostSceneFrames.documents(post.storyEffects, read.items)),
                 )
             },
             commentCardSupport = CommentCardReading.support(post, content),

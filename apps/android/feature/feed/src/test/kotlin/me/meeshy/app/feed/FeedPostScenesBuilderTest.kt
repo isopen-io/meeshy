@@ -80,6 +80,20 @@ class FeedPostScenesBuilderTest {
     }
 
     @Test
+    fun `each scene is framed on what it shows - a photo at its own shape, a text scene on its text`() {
+        val photos = requireNotNull(build("""{ "id": "p1", "type": "POST", "media": $media, "storyEffects": ${fixture("post-photo-scenes-2")} }""").scenes)
+        val text = requireNotNull(build("""{ "id": "p2", "type": "POST", "content": "un texte", "storyEffects": ${fixture("minimal-text")} }""").scenes)
+
+        assertThat(photos.frames.map { it.focus }).containsExactly(null, null).inOrder()
+        assertThat(photos.frames.map { it.pageAspect!! }).containsExactly(1.5003663003663004, 0.75).inOrder()
+        assertThat(photos.carouselAspect).isWithin(1e-9).of(0.75)
+        val focus = requireNotNull(text.frames.single().focus)
+        assertThat(focus.top).isAtMost(0.42)
+        assertThat(focus.bottom).isAtLeast(0.42)
+        assertThat(focus.height).isLessThan(1.0)
+    }
+
+    @Test
     fun `a reel keeps its own reel card`() {
         val reel = build("""{ "id": "r1", "type": "REEL", "storyEffects": ${fixture("v1-legacy-rich.v3")} }""")
 
