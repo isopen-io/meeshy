@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.transformLatest
 import me.meeshy.sdk.cache.CacheClock
@@ -71,10 +73,12 @@ class PostRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock = SystemCacheClock,
     private val fence: AccountFence? = null,
+    private val feedDisk: FeedDiskCache = FeedDiskCache.NONE,
 ) : PerAccountCache {
-    // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
     private val _feedCache = MutableStateFlow<List<ApiPost>?>(null)
     private val _feedSyncedAt = MutableStateFlow<Long?>(null)
+
+    private val diskRestore = FeedDiskRestore(feedDisk)
 
     // Cursor pagination state (port of FeedViewModel.nextCursor / hasMore).
     @Volatile
@@ -111,7 +115,12 @@ class PostRepository @Inject constructor(
     fun feedStream(
         policy: CachePolicy = CachePolicy.Feed,
         onSyncError: (Throwable) -> Unit = {},
-    ): Flow<CacheResult<List<ApiPost>>> =
+    ): Flow<CacheResult<List<ApiPost>>> = flow {
+        restoreFromDisk()
+        emitAll(cacheFirstFeed(policy, onSyncError))
+    }
+
+    private fun cacheFirstFeed(policy: CachePolicy, onSyncError: (Throwable) -> Unit): Flow<CacheResult<List<ApiPost>>> =
         combine(_feedCache, _feedSyncedAt) { data, syncedAt -> data to syncedAt }
             .distinctUntilChanged()
             .transformLatest { (data, syncedAt) ->
@@ -133,6 +142,20 @@ class PostRepository @Inject constructor(
                     }
                 }
             }
+
+    /** Le fil gardé sur le disque et son âge, lus AVANT que le flux ne s'abonne : sa première valeur les porte déjà (#14263). */
+    private suspend fun restoreFromDisk() {
+        if (_feedCache.value != null) return
+        val ticket = fence?.currentTicket()
+        diskRestore.once { kept ->
+            fence.commitOrWrite(ticket) {
+                if (_feedCache.value == null) {
+                    _feedCache.value = kept.value
+                    _feedSyncedAt.value = kept.fetchedAt
+                }
+            }
+        }
+    }
 
     suspend fun refresh() = revalidateFeed()
 
@@ -183,6 +206,7 @@ class PostRepository @Inject constructor(
 
     /** The feed held in memory belongs to the signed-in account: a second account starts cold. */
     override suspend fun clear() {
+        diskRestore.reset()
         _feedCache.value = null
         _feedSyncedAt.value = null
         feedCursor = null
@@ -422,13 +446,14 @@ class PostRepository @Inject constructor(
                         onError(Exception(response.error ?: response.message ?: "Unknown error"))
                         return
                     }
-                    fence.commitOrWrite(ticket) {
+                    val committed = fence.commitOrWrite(ticket) {
                         _feedCache.value = page
                         page.forEach { likeFlips.forgetPost(it.id); bookmarkFlips.forgetPost(it.id) }
                         _feedSyncedAt.value = clock.nowMillis()
                         feedCursor = response.pagination?.nextCursor
                         _feedHasMore.value = response.pagination?.hasMore ?: false
                     }
+                    if (committed != null) feedDisk.write(page, ticket)
                 }
                 is NetworkResult.Failure -> onError(Exception(result.error.message))
             }

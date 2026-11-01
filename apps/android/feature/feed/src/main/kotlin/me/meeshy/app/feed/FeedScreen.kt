@@ -134,6 +134,7 @@ fun FeedScreen(
                     },
                 )
             }
+            FeedOfflineBand(visible = state.isOffline)
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,
                 onRefresh = {
