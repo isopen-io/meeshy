@@ -126,7 +126,7 @@ describe('applyPresenceVisibility — projection sans mutation', () => {
   });
 
   it('showOnline=true / lastSeen=false ⇒ isOnline conservé, lastActiveAt masqué', () => {
-    const out = applyPresenceVisibility(profile(), { showOnline: true, showLastSeenTimestamp: false });
+    const out = applyPresenceVisibility(profile(), { showOnline: true, showLastSeenTimestamp: false }, 0);
     expect(out.isOnline).toBe(true);
     expect(out.lastActiveAt).toBeNull();
   });

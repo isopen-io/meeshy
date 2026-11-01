@@ -33,7 +33,7 @@ const inputFor = (relationLevel: RelationLevel): PresenceVisibilityInput => ({
 });
 
 const rendered = (relationLevel: RelationLevel, row: { isOnline: boolean; lastActiveAt: Date | null }) =>
-  getUserPresenceStatus(applyPresenceVisibility(row, resolvePresenceVisibility(inputFor(relationLevel))), NOW);
+  getUserPresenceStatus(applyPresenceVisibility(row, resolvePresenceVisibility(inputFor(relationLevel)), NOW), NOW);
 
 const ROWS = [true, false].flatMap((isOnline) =>
   [10_000, 120_000, 240_000, 20 * 60_000, null].map((elapsed) => ({

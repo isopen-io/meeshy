@@ -1,6 +1,7 @@
 import type { RelationLevel } from '../types/relation.js';
 import type { GlobalUserRoleType } from '../types/role-types.js';
 import { resolveRelationAccess } from './relation-access.js';
+import { PRESENCE_IDLE_WINDOW_MS } from './user-presence.js';
 
 export type PresenceVisibilityInput = {
   readonly isSelf: boolean;
@@ -93,6 +94,23 @@ export const resolvePresenceVisibility = (input: PresenceVisibilityInput): Prese
 };
 
 /**
+ * « En ligne » servi SANS la date (l'Ami, binaire) : la garde anti-stale de 5 min
+ * se calcule sur `lastActiveAt`, que l'Ami ne reçoit pas. Elle s'applique donc ICI,
+ * avant le masquage : une ligne `isOnline: true` dont la dernière activité a plus de
+ * 5 min (heartbeat perdu) ne sort jamais « en ligne » chez l'Ami, là où le Proche,
+ * qui rend la date, ne verrait rien. Sans date connue, la valeur est inchangée.
+ */
+const servedOnlineValue = (
+  profile: { isOnline: boolean | null; lastActiveAt?: Date | null },
+  visibility: PresenceVisibility,
+  now: number,
+): boolean | null => {
+  if (profile.isOnline !== true || visibility.showLastSeenTimestamp) return profile.isOnline;
+  const last = profile.lastActiveAt ? new Date(profile.lastActiveAt).getTime() : Number.NaN;
+  return Number.isNaN(last) || now - last <= PRESENCE_IDLE_WINDOW_MS ? true : false;
+};
+
+/**
  * Applique le résultat de visibilité sur un objet profil, sans mutation.
  * `showOnline:false` ⇒ `isOnline=null` (non montrable, pas de pastille).
  */
@@ -101,9 +119,10 @@ export const applyPresenceVisibility = <
 >(
   profile: T,
   visibility: PresenceVisibility,
+  now: number = Date.now(),
 ): Omit<T, 'isOnline' | 'lastActiveAt'> & { isOnline: boolean | null; lastActiveAt: Date | null } => ({
   ...profile,
-  isOnline: visibility.showOnline ? profile.isOnline : null,
+  isOnline: visibility.showOnline ? servedOnlineValue(profile, visibility, now) : null,
   lastActiveAt: visibility.showLastSeenTimestamp ? profile.lastActiveAt : null,
 });
 
@@ -173,14 +192,14 @@ export function applyPresenceVisibilityAsOffline<
 >(
   profile: T,
   visibility: PresenceVisibility | undefined,
-  options?: { readonly onMissingEntry?: PresenceMissingEntryPolicy },
+  options?: { readonly onMissingEntry?: PresenceMissingEntryPolicy; readonly now?: number },
 ): Omit<T, 'isOnline' | 'lastActiveAt'> & { isOnline: boolean; lastActiveAt?: Date | null } {
   const effective =
     visibility ?? (options?.onMissingEntry === 'reveal' ? REVEALED : HIDDEN);
 
   return {
     ...profile,
-    isOnline: effective.showOnline ? profile.isOnline === true : false,
+    isOnline: effective.showOnline ? servedOnlineValue(profile, effective, options?.now ?? Date.now()) === true : false,
     ...('lastActiveAt' in profile
       ? { lastActiveAt: effective.showLastSeenTimestamp ? profile.lastActiveAt ?? null : null }
       : {}),

@@ -2236,7 +2236,7 @@ describe('MeeshySocketIOManager', () => {
       });
     }
 
-    const SEEN_AT = new Date('2026-08-25T09:00:00.000Z');
+    const SEEN_AT = new Date(Date.now() - 30_000);
     let rec: ReturnType<typeof recordPresenceEmissions>;
 
     beforeEach(() => {
@@ -4675,7 +4675,7 @@ describe('MeeshySocketIOManager', () => {
       ['un AMI', { role: 'USER', blockedUserIds: [] }, false],
     ])('masque un contact DÉSACTIVÉ même à %s — encore connecté, il ressort hors ligne sans dernière connexion', async (_viewer, viewerRow, seesLastSeen) => {
       const socket = makeSocket('sock-ps-deactivated');
-      const seenAt = new Date('2026-08-20T00:00:00.000Z');
+      const seenAt = new Date(Date.now() - 30_000);
       (manager as any).presenceSnapshotCache.set('user-viewer', {
         users: [
           { userId: 'user-deactivated', username: 'gone', isOnline: false, lastActiveAt: seenAt },
@@ -5458,7 +5458,7 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('_emitPresenceSnapshot - visibilité par relation', () => {
-    const SEEN_AT = new Date('2026-08-20T12:00:00.000Z');
+    const SEEN_AT = new Date(Date.now() - 30_000);
 
     function warmSnapshot(viewerKey: string) {
       (manager as any).presenceSnapshotCache.set(viewerKey, {

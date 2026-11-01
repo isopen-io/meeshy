@@ -117,7 +117,7 @@ describe('applyPresenceVisibility', () => {
   });
 
   it('keeps isOnline but nulls the timestamp when only showLastSeenTimestamp is off', () => {
-    const out = applyPresenceVisibility(profile, { showOnline: true, showLastSeenTimestamp: false });
+    const out = applyPresenceVisibility(profile, { showOnline: true, showLastSeenTimestamp: false }, 0);
     expect(out.isOnline).toBe(true);
     expect(out.lastActiveAt).toBeNull();
   });
@@ -151,7 +151,7 @@ describe('applyPresenceVisibilityAsOffline', () => {
   });
 
   it('keeps isOnline but nulls the timestamp when only showLastSeenTimestamp is off', () => {
-    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: true, showLastSeenTimestamp: false });
+    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: true, showLastSeenTimestamp: false }, { now: 0 });
     expect(out.isOnline).toBe(true);
     expect(out.lastActiveAt).toBeNull();
   });
@@ -274,7 +274,22 @@ describe('resolvePresenceVisibility — projection du niveau effectif', () => {
     const friend = resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND' }));
     const profile = { isOnline: false as boolean | null, lastActiveAt: new Date(1000) as Date | null };
 
-    expect(applyPresenceVisibilityAsOffline(profile, friend)).toEqual({ isOnline: false, lastActiveAt: null });
-    expect(applyPresenceVisibilityAsOffline({ ...profile, isOnline: true }, friend)).toEqual({ isOnline: true, lastActiveAt: null });
+    expect(applyPresenceVisibilityAsOffline(profile, friend, { now: 0 })).toEqual({ isOnline: false, lastActiveAt: null });
+    expect(applyPresenceVisibilityAsOffline({ ...profile, isOnline: true }, friend, { now: 0 })).toEqual({ isOnline: true, lastActiveAt: null });
+  });
+});
+
+describe('l\'Ami ne reçoit jamais « en ligne » sur une ligne périmée (#13928)', () => {
+  const friend = resolvePresenceVisibility(baseInput({ relationLevel: 'FRIEND' }));
+  const NOW = 10 * 60_000;
+  const row = (agoMs: number) => ({ isOnline: true as boolean | null, lastActiveAt: new Date(NOW - agoMs) as Date | null });
+
+  it('isOnline vrai mais dernière activité > 5 min : hors ligne chez l\'Ami', () => {
+    expect(applyPresenceVisibilityAsOffline(row(6 * 60_000), friend, { now: NOW })).toEqual({ isOnline: false, lastActiveAt: null });
+    expect(applyPresenceVisibility(row(6 * 60_000), friend, NOW).isOnline).toBe(false);
+  });
+
+  it('isOnline vrai et activité récente : en ligne chez l\'Ami', () => {
+    expect(applyPresenceVisibilityAsOffline(row(60_000), friend, { now: NOW }).isOnline).toBe(true);
   });
 });

@@ -21,7 +21,7 @@ const VIEWER_ID = '507f1f77bcf86cd799439a22';
 const FRIEND_ID = '507f1f77bcf86cd799439a33';
 const VIEWER_PARTICIPANT_ID = '507f1f77bcf86cd799439a44';
 const FRIEND_PARTICIPANT_ID = '507f1f77bcf86cd799439a55';
-const LAST_SEEN = new Date('2026-10-31T07:41:13.537Z');
+const LAST_SEEN = new Date(Date.now() - 30_000);
 const JOINED = new Date('2026-09-01T08:00:00.000Z');
 
 type Level = 'FRIEND' | 'CLOSE';
