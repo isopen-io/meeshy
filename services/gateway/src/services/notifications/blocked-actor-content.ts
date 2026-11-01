@@ -18,6 +18,7 @@ const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<NotificationT
   'friend_new_post',
   'friend_new_mood',
   'friend_story_comment',
+  'friend_content_reaction',
   // Interactions sociales : l'acteur réagit, commente, répond ou republie.
   // Commenter et réagir se refusent déjà entre l'acteur et l'AUTEUR du post
   // (`isBlockedWithAny`), mais pas entre l'acteur et l'auteur d'un commentaire

@@ -107,7 +107,7 @@ import { NotificationService } from '../../../services/notifications/Notificatio
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
 import { sharedFriendships } from '../../helpers/shared-friendships';
-import { aliveAndUnblocked, userRelationRows } from '../../helpers/linked-to-everyone';
+import { everyoneLinkedInThisBlock } from '../../helpers/linked-to-everyone';
 
 /** Entourage de l'AUTEUR réglé à « Ami » (#13929) ; les défauts : `notifs-cercles-13929.test.ts`. */
 const AUTHOR_ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
@@ -832,22 +832,9 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
     };
 
     beforeEach(() => {
-      prisma.user.findUnique.mockResolvedValue({
-        username: 'commenter_user',
-        displayName: 'Commenter',
-        avatar: null,
-      });
-      // Tous liés (#14168) : ces cas portent sur la forme de la mention, la règle
-      // de lien est tenue par `mention-lien-14168.test.ts`.
-      prisma.userRelation.findMany.mockImplementation(userRelationRows());
-      prisma.user.findMany.mockImplementation(aliveAndUnblocked());
-      prisma.participant.findMany.mockResolvedValue([]);
+      prisma.user.findUnique.mockResolvedValue({ username: 'commenter_user', displayName: 'Commenter', avatar: null });
     });
-
-    afterEach(() => {
-      prisma.userRelation.findMany.mockResolvedValue([]);
-      prisma.user.findMany.mockResolvedValue([]);
-    });
+    everyoneLinkedInThisBlock(() => prisma);
 
     it('both @alice and @bob receive user_mentioned notification', async () => {
       prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
@@ -1302,22 +1289,9 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
     const P2_POST_ID = 'eeeeeeeeeeeeeeeeeeeeeeee';
 
     beforeEach(() => {
-      prisma.user.findUnique.mockResolvedValue({
-        username: 'poster_user',
-        displayName: 'Poster',
-        avatar: null,
-      });
-      // Tous liés (#14168) : ces cas portent sur la forme de la mention, la règle
-      // de lien est tenue par `mention-lien-14168.test.ts`.
-      prisma.userRelation.findMany.mockImplementation(userRelationRows());
-      prisma.user.findMany.mockImplementation(aliveAndUnblocked());
-      prisma.participant.findMany.mockResolvedValue([]);
+      prisma.user.findUnique.mockResolvedValue({ username: 'poster_user', displayName: 'Poster', avatar: null });
     });
-
-    afterEach(() => {
-      prisma.userRelation.findMany.mockResolvedValue([]);
-      prisma.user.findMany.mockResolvedValue([]);
-    });
+    everyoneLinkedInThisBlock(() => prisma);
 
     it('test_createPostMentionNotificationsBatch_aliceAndBob_bothReceiveUserMentioned', async () => {
       prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
