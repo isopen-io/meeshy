@@ -129,11 +129,17 @@ export async function retractPostNotifications(
   for (let batch = 0; batch < MAX_RETRACTION_BATCHES; batch += 1) {
     const raw = (await prisma.$runCommandRaw({
       find: 'Notification',
-      // Deux chemins, parce qu'une ligne `post_repost` nomme le post sous DEUX
-      // clés : `context.postId` porte l'ORIGINAL (c'est lui qu'elle ouvre) et
-      // `metadata.repostId` le repost qui l'a produite. Supprimer le repost
-      // doit la retirer, et seul le second chemin le sait — le premier la
-      // laissait en base, annonçant un repost qui n'existe plus.
+      // Trois chemins, parce qu'une ligne peut nommer le post sous une AUTRE
+      // clé que celle qu'elle ouvre :
+      //  - `post_repost` : `context.postId` porte l'ORIGINAL (c'est lui qu'elle
+      //    ouvre) et `metadata.repostId` le repost qui l'a produite. Supprimer
+      //    le repost doit la retirer, et seul le second chemin le sait ;
+      //  - les relais d'entourage d'une republication ou d'une citation
+      //    (`friend_content_repost` / `friend_content_quote`, #14070, #14072) :
+      //    `context.postId` porte la REPUBLICATION et `metadata.originalPostId`
+      //    l'original (la racine d'une chaîne). Supprimer l'original doit les
+      //    retirer — « X a republié une publication de Y » n'a plus d'objet —,
+      //    et seul le troisième chemin le sait (#14243).
       // La notification qui explique à l'auteur le retrait de son contenu nomme
       // ce même post : la retirer avec lui effacerait l'explication au moment
       // exact où elle sert (#11160).
@@ -142,6 +148,7 @@ export async function retractPostNotifications(
         $or: [
           { 'context.postId': { $in: targets } },
           { 'metadata.repostId': { $in: targets } },
+          { 'metadata.originalPostId': { $in: targets } },
         ],
       },
       // `delivery.pushSent` : la révocation push ne réveille un appareil que
