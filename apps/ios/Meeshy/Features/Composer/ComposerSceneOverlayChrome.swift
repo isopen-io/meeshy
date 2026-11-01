@@ -103,7 +103,7 @@ struct ComposerSceneOverlayChrome: View {
 
     private var toolButtons: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            ForEach(tools, id: \.self) { outil in toolButton(outil) }
+            ForEach(tools.map { AsyncRenderRow(id: $0, content: toolButton($0)) }, content: asyncRenderRowContent)
             if let pasteEntry { pasteEntry }
         }
     }
