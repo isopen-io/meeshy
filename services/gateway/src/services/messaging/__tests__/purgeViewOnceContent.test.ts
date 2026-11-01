@@ -17,6 +17,7 @@ import {
   isLegacyViewOnceBurn,
   purgeDueViewOnceContent,
   reevaluateLegacyViewOnceBurn,
+  type ViewOncePurgeAttachmentRemover,
 } from '../purgeViewOnceContent';
 import { sharedTranslationRow, sharedTranslationTable } from '../../../__tests__/helpers/shared-translation-table';
 
@@ -49,7 +50,9 @@ function buildPrisma(rows: unknown[]) {
   };
 }
 
-const remover = () => ({ deleteAttachment: jest.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined) });
+type DeleteAttachment = ViewOncePurgeAttachmentRemover['deleteAttachment'];
+
+const remover = () => ({ deleteAttachment: jest.fn<DeleteAttachment>().mockResolvedValue(undefined) });
 
 describe('purgeDueViewOnceContent', () => {
   it('efface le contenu et les fichiers, SANS poser deletedAt : la bulle reste', async () => {
@@ -109,7 +112,7 @@ describe('purgeDueViewOnceContent', () => {
  */
 describe('purgeDueViewOnceContent — effacement des octets, fail-closed (#11269)', () => {
   const failing = () => ({
-    deleteAttachment: jest.fn<(id: string) => Promise<void>>().mockRejectedValue(new Error('disk busy')),
+    deleteAttachment: jest.fn<DeleteAttachment>().mockRejectedValue(new Error('disk busy')),
   });
 
   it("une pièce qui résiste : le contenu part, mais l'échéance reste PASSÉE pour que la passe suivante reprenne les fichiers", async () => {
