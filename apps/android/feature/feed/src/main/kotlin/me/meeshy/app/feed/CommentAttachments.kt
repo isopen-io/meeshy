@@ -109,7 +109,7 @@ internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentP
     if (!tray.hasMedia) return
     val removeLabel = stringResource(R.string.feed_composer_remove_media)
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = MeeshySpacing.xs),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         tray.pieces.forEach { piece ->
