@@ -20,6 +20,12 @@ import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.mention.MentionAutocomplete
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionContacts
+import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -53,12 +59,35 @@ class StoryReplyViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val accountFence: AccountFence? = null,
     private val endToEndRegime: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    mentionSearch: MentionSearch = MentionSearch.None,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryReplyUiState())
     val state: StateFlow<StoryReplyUiState> = _state.asStateFlow()
 
-    fun onTextChange(text: String) = _state.update { it.copy(text = text) }
+    /** The « @ » list of the reply (#14053): cached contacts at once, the quoted story's suggestions (`contextType=post`) by the law. */
+    private val mentions = MentionAutocomplete(
+        scope = viewModelScope,
+        search = mentionSearch,
+        contacts = mentionContacts,
+        selfId = { sessionRepository.currentUser.value?.id },
+    )
+    val mention: StateFlow<MentionAutocompleteState> = mentions.state
+
+    /** The story the sheet quotes: the context the network is asked about for the « @ » list. */
+    fun attachStory(storyId: String) = mentions.bind(MentionContext.post(storyId))
+
+    fun onTextChange(text: String) {
+        _state.update { it.copy(text = text) }
+        mentions.onTextChange(text)
+    }
+
+    /** Puts the picked person's handle in place of the `@fragment` being typed, and closes the list. */
+    fun onMentionSelected(candidate: MentionCandidate) {
+        val text = mentions.select(candidate, _state.value.text)
+        _state.update { it.copy(text = text) }
+    }
 
     fun consumeOutcome() = _state.update { it.copy(phase = StoryReplyPhase.IDLE) }
 
@@ -68,6 +97,7 @@ class StoryReplyViewModel @Inject constructor(
         if (!StoryReplyRules.canSend(canReply = true, isSending = current.phase == StoryReplyPhase.SENDING, text = current.text)) return
         val text = current.text.trim()
         _state.update { it.copy(text = "", phase = StoryReplyPhase.SENDING) }
+        mentions.reset()
         // The reply belongs to the account of the gesture: opening the conversation may outlast a sign-out, and the
         // words of A must never be queued, nor shown, under B (#13558).
         val gesture = accountFence?.ticket()

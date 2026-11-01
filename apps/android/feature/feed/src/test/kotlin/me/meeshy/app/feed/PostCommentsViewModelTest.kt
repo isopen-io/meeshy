@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentUpdatedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
@@ -94,11 +95,17 @@ class PostCommentsViewModelTest {
         private val throwOn: Set<String> = emptySet(),
     ) : MentionSearch {
         val queries = mutableListOf<String>()
+        val contexts = mutableListOf<MentionContext?>()
 
         override suspend fun search(query: String): List<MentionCandidate> {
             queries += query
             if (query in throwOn) throw RuntimeException("directory offline")
             return byQuery[query] ?: default
+        }
+
+        override suspend fun suggest(query: String, context: MentionContext?): List<MentionCandidate> {
+            contexts += context
+            return search(query)
         }
     }
 
@@ -1531,19 +1538,33 @@ class PostCommentsViewModelTest {
     // --- Composer @-mention: remote directory merge ---
 
     @Test
-    fun `a two-character at-fragment merges directory results below the local roster`() = runTest {
+    fun `a two-character at-fragment with a local match stays on the thread roster`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "alex")))
+        val vm = viewModel(mentionSearch = remote)
+        vm.onDraftChange("hey @al")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(remote.queries).isEmpty()
+        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alice")
+    }
+
+    @Test
+    fun `a three-character at-fragment merges the post suggestions below the local roster`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns
             NetworkResult.Success(listOf(authored("c1", name = "Alice")))
         val remote = FakeMentionSearch(
             default = listOf(MentionCandidate(id = "u9", username = "alex", displayName = "Alex R")),
         )
         val vm = viewModel(mentionSearch = remote)
-        vm.onDraftChange("hey @al")
+        vm.onDraftChange("hey @ali")
         dispatcher.scheduler.advanceUntilIdle()
 
         assertThat(vm.state.value.mention.suggestions.map { it.username })
             .containsExactly("alice", "alex").inOrder()
-        assertThat(remote.queries).containsExactly("al")
+        assertThat(remote.queries).containsExactly("ali")
+        assertThat(remote.contexts).containsExactly(MentionContext.post("p1"))
     }
 
     @Test
@@ -1601,7 +1622,7 @@ class PostCommentsViewModelTest {
             NetworkResult.Success(listOf(authored("c1", name = "Alice")))
         val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "alex")))
         val vm = viewModel(mentionSearch = remote)
-        vm.onDraftChange("hey @al")
+        vm.onDraftChange("hey @ali")
         vm.onMentionSelected(vm.state.value.mention.suggestions.first())
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -1613,13 +1634,13 @@ class PostCommentsViewModelTest {
     fun `a failed directory lookup degrades to the local roster`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns
             NetworkResult.Success(listOf(authored("c1", name = "Alice"), authored("c2", name = "Alan")))
-        val remote = FakeMentionSearch(throwOn = setOf("al"))
+        val remote = FakeMentionSearch(throwOn = setOf("ala"))
         val vm = viewModel(mentionSearch = remote)
-        vm.onDraftChange("hey @al")
+        vm.onDraftChange("hey @ala")
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertThat(remote.queries).containsExactly("al")
-        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alice", "alan").inOrder()
+        assertThat(remote.queries).containsExactly("ala")
+        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alan")
     }
 
     // --- What the reader sees when the thread fails (iOS FeedCommentsSheet+Loading, toasts) ---
