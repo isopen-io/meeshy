@@ -611,11 +611,6 @@ final class CallManager: ObservableObject, Sendable {
     /// resumes automatically on unhold. Cleared on unhold or call teardown.
     var isVideoSuspendedByHold = false
 
-    // Network monitoring
-    let networkMonitor = NWPathMonitor()
-    let networkQueue = DispatchQueue(label: "me.meeshy.callmanager.network")
-    var lastNetworkPath: NWPath.Status = .satisfied
-    var lastNetworkInterfaceType: NWInterface.InterfaceType? = nil
     let thermalMonitor = ThermalStateMonitor()
 
     // CallKit
@@ -700,6 +695,8 @@ final class CallManager: ObservableObject, Sendable {
     let turnCredentials: CallTurnCredentialsProviding
     /// La surveillance des états transitoires (`CallReliabilityMonitor`).
     let reliabilityMonitor: CallReliabilityMonitorProviding
+    /// Le chemin réseau pendant l'appel (`CallNetworkPathObserver`).
+    let networkPathObserver: CallNetworkPathObserverProviding
 
     private init(
         signalingRouter: CallSignalingRouterProviding = CallSignalingRouter(),
@@ -709,7 +706,8 @@ final class CallManager: ObservableObject, Sendable {
         incomingRing: CallIncomingRingProviding = CallIncomingRing(),
         outgoingDial: CallOutgoingDialProviding = CallOutgoingDial(),
         turnCredentials: CallTurnCredentialsProviding = CallTurnCredentials(),
-        reliabilityMonitor: CallReliabilityMonitorProviding = CallReliabilityMonitor()
+        reliabilityMonitor: CallReliabilityMonitorProviding = CallReliabilityMonitor(),
+        networkPathObserver: CallNetworkPathObserverProviding = CallNetworkPathObserver()
     ) {
         self.signalingRouter = signalingRouter
         self.sdpSignaler = sdpSignaler
@@ -719,6 +717,7 @@ final class CallManager: ObservableObject, Sendable {
         self.outgoingDial = outgoingDial
         self.turnCredentials = turnCredentials
         self.reliabilityMonitor = reliabilityMonitor
+        self.networkPathObserver = networkPathObserver
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
@@ -757,7 +756,7 @@ final class CallManager: ObservableObject, Sendable {
         turnCredentials.attach(to: self)
         reliabilityMonitor.attach(to: self)
         signalingRouter.start(routingTo: self)
-        startNetworkMonitoring()
+        networkPathObserver.start(observing: self)
         audioSystemObserver.start(observing: self)
         Logger.calls.info("CallManager initialized")
     }

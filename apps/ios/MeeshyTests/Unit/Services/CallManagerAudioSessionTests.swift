@@ -4377,8 +4377,8 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
     /// hors fenêtre alors qu'aucun comportement n'avait changé — exactement le
     /// défaut que `DeclarationBodyScanner` existe pour éliminer (cf. son en-tête).
     private func startNetworkMonitoringBody(_ source: String) throws -> String {
-        guard let body = DeclarationBodyScanner.body(containing: "func startNetworkMonitoring()", in: source) else {
-            XCTFail("startNetworkMonitoring not found"); return ""
+        guard let body = DeclarationBodyScanner.body(containing: "static func evaluate(", in: source) else {
+            XCTFail("CallNetworkPathChange.evaluate not found"); return ""
         }
         return body
     }
@@ -4396,7 +4396,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
             "set a local `interfaceChanged` flag when the active interface type changes."
         )
         XCTAssertTrue(
-            handlerBody.contains("attemptReconnection"),
+            handlerBody.contains(".handoff") && (try callManagerSource()).contains("call.attemptReconnection()"),
             "networkMonitor.pathUpdateHandler must call attemptReconnection() on an " +
             "interface change — stale ICE candidates from the old interface require a " +
             "full ICE restart to re-negotiate valid candidates on the new interface."
