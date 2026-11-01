@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.composer.edit.ComposerBackgroundSource
 import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.composer.scene.ComposerSceneEffect
+import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -68,6 +69,7 @@ internal fun StoryComposerSceneFirst(
     keyboard: TypingKeyboard? = null,
     capture: StorySceneCapture? = null,
 ) {
+    StatusBarIconsOverDark()
     // La scène, ses feuilles et son socle nomment le format qu'elle compose (#13913) : posé ici, sous chaque porte.
     CompositionLocalProvider(LocalComposerSceneNoun provides state.variant.noun) {
         SceneFirstFrame(state, viewModel, sceneExport, doors, morePanel, onMorePanel, formatChevron, sheet, keyboard, capture)
