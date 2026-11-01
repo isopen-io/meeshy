@@ -20,9 +20,14 @@ private const val MICROS_PER_SECOND = 1_000_000L
  * Les instants (en microsecondes) où la bande de rognage prend ses vignettes : [count] points au milieu de tranches
  * égales de la source, jamais la dernière image (souvent noire). Pure.
  */
-internal fun trimFrameTimesMicros(sourceSeconds: Double, count: Int = FRAME_COUNT): List<Long> {
-    if (!(sourceSeconds > 0.0) || count <= 0) return emptyList()
-    return List(count) { index -> ((index + 0.5) / count * sourceSeconds * MICROS_PER_SECOND).toLong() }
+internal fun trimFrameTimesMicros(sourceSeconds: Double, count: Int = FRAME_COUNT): List<Long> =
+    windowFrameTimesMicros(0.0, sourceSeconds, count)
+
+/** Les mêmes instants dans la seule fenêtre [startSeconds]…[endSeconds] de la source (la frise, #14268). Pure. */
+internal fun windowFrameTimesMicros(startSeconds: Double, endSeconds: Double, count: Int = FRAME_COUNT): List<Long> {
+    val span = endSeconds - startSeconds
+    if (!(span > 0.0) || startSeconds < 0.0 || count <= 0) return emptyList()
+    return List(count) { index -> ((startSeconds + (index + 0.5) / count * span) * MICROS_PER_SECOND).toLong() }
 }
 
 /**
@@ -30,18 +35,22 @@ internal fun trimFrameTimesMicros(sourceSeconds: Double, count: Int = FRAME_COUN
  * se garnit). Un échec de lecture laisse la bande sans vignettes : le rognage reste utilisable.
  */
 @Composable
-internal fun rememberVideoFrames(url: String, sourceSeconds: Double): List<ImageBitmap> {
-    val frames by produceState(initialValue = emptyList<ImageBitmap>(), url, sourceSeconds) {
-        value = withContext(Dispatchers.IO) { extractFrames(url, sourceSeconds) }
+internal fun rememberVideoFrames(url: String, sourceSeconds: Double): List<ImageBitmap> = rememberVideoFrames(url, 0.0, sourceSeconds)
+
+/** Les vignettes de la seule fenêtre [startSeconds]…[endSeconds] de la vidéo [url] (la frise, #14268). */
+@Composable
+internal fun rememberVideoFrames(url: String, startSeconds: Double, endSeconds: Double): List<ImageBitmap> {
+    val frames by produceState(initialValue = emptyList<ImageBitmap>(), url, startSeconds, endSeconds) {
+        value = withContext(Dispatchers.IO) { extractFrames(url, windowFrameTimesMicros(startSeconds, endSeconds)) }
     }
     return frames
 }
 
-private suspend fun extractFrames(url: String, sourceSeconds: Double): List<ImageBitmap> {
+private suspend fun extractFrames(url: String, times: List<Long>): List<ImageBitmap> {
     val retriever = MediaMetadataRetriever()
     return try {
         runCatching { retriever.setDataSource(url, emptyMap()) }.getOrElse { return emptyList() }
-        trimFrameTimesMicros(sourceSeconds).mapNotNull { at ->
+        times.mapNotNull { at ->
             coroutineContext.ensureActive()
             runCatching { retriever.getFrameAtTime(at, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) }.getOrNull()?.scaledToHeight()
         }

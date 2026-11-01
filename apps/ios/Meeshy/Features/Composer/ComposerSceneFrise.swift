@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
@@ -311,7 +312,8 @@ struct ComposerSceneFrise: View {
                         .overlay {
                             ComposerSceneFriseBarContent(kind: piste.kind,
                                                          url: timeline.loadedURL(for: piste.id),
-                                                         publishedSamples: ondePubliee(piste))
+                                                         publishedSamples: ondePubliee(piste),
+                                                         window: timeline.sourceWindow(for: piste.id))
                                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous))
                         }
                         .padding(.vertical, MeeshySpacing.xs)
@@ -600,6 +602,16 @@ nonisolated enum ComposerSceneFriseMetrics {
         piste.kind != .place
     }
 
+    /// Les échantillons de la seule fenêtre `window` d'une source de
+    /// `sourceDuration` secondes (#14268), au moins un ; durée ou fenêtre
+    /// inconnue ⇒ l'onde entière.
+    static func samples(_ tous: [Float], window: ClosedRange<Double>?, sourceDuration: Double?) -> [Float] {
+        guard !tous.isEmpty, let window, let total = sourceDuration, total > 0, total.isFinite else { return tous }
+        let premier = min(Int((window.lowerBound / total * Double(tous.count)).rounded()), tous.count - 1)
+        let dernier = min(max(Int((window.upperBound / total * Double(tous.count)).rounded()), premier + 1), tous.count)
+        return Array(tous[max(0, premier)..<dernier])
+    }
+
     static func canRemove(_ piste: SceneFriseTrack) -> Bool {
         [.text, .image, .video, .audio].contains(piste.kind)
     }
@@ -847,9 +859,13 @@ struct ComposerSceneFriseBarContent: View {
     let kind: SceneFriseTrack.Kind
     let url: URL?
     let publishedSamples: [Float]
+    /// La fenêtre de source que le clip JOUE (#14268) : un clip coupé ne
+    /// montre que ses vignettes et son onde. `nil` ⇒ la source entière.
+    var window: ClosedRange<Double>?
 
     @State private var vignettes: [UIImage] = []
     @State private var mesure: [Float] = []
+    @State private var duree: Double?
     @Environment(\.displayScale) private var echelle
 
     var body: some View {
@@ -875,23 +891,39 @@ struct ComposerSceneFriseBarContent: View {
         .opacity(0.85)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .task(id: url) {
+        .task(id: ComposerSceneFriseBarKey(url: url, window: window)) {
             guard let url else { return }
-            vignettes = await VideoFilmstrip.frames(url: url, count: ComposerSceneFriseMetrics.filmstripFrames,
-                                                    maxHeight: 22, scale: echelle)
+            if let window {
+                vignettes = await VideoFilmstrip.frames(url: url, count: ComposerSceneFriseMetrics.filmstripFrames,
+                                                        window: window, maxHeight: 22, scale: echelle)
+            } else {
+                vignettes = await VideoFilmstrip.frames(url: url, count: ComposerSceneFriseMetrics.filmstripFrames,
+                                                        maxHeight: 22, scale: echelle)
+            }
         }
     }
 
     private var onde: some View {
         // La mesure locale prime (haute résolution, amplitude réelle) ; le
         // champ publié reste le repli d'un brouillon rouvert (#9886).
-        WaveformStrip(samples: mesure.isEmpty ? publishedSamples : mesure,
+        WaveformStrip(samples: mesure.isEmpty ? ComposerSceneFriseMetrics.samples(publishedSamples, window: window,
+                                                                                 sourceDuration: duree) : mesure,
                       tint: Color.white.opacity(0.8),
                       reading: mesure.isEmpty ? .published : .measured)
             .allowsHitTesting(false)
-            .task(id: url) {
+            .task(id: ComposerSceneFriseBarKey(url: url, window: window)) {
                 guard let url else { return }
-                mesure = (try? await WaveformCache.shared.samples(from: url, count: ComposerSceneFriseMetrics.waveformSamples)) ?? []
+                let source = try? await AVURLAsset(url: url).load(.duration).seconds
+                duree = source
+                let fines = (try? await WaveformCache.shared.samples(
+                    from: url, count: ComposerSceneFriseMetrics.waveformSamples * 4)) ?? []
+                mesure = ComposerSceneFriseMetrics.samples(fines, window: window, sourceDuration: source)
             }
     }
+}
+
+/// Ce qui relance l'extraction d'une barre : son fichier OU sa fenêtre coupée.
+struct ComposerSceneFriseBarKey: Equatable {
+    let url: URL?
+    let window: ClosedRange<Double>?
 }

@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
@@ -130,7 +131,13 @@ internal fun SceneFrise(
     // La portion du temps montrée (#13481, iso iOS #14213) : `null`, la slide entière ; pincer la resserre autour de la tête.
     var zoom by remember { mutableStateOf<FriseViewport?>(null) }
     val view = (zoom ?: FriseViewport.whole(duration)).clamped(duration)
-    var playing by remember { mutableStateOf(false) }
+    // Le transport de l'hôte quand il en tend un (#13481) : la scène vivante joue avec la tête ; sinon un transport à soi.
+    val transport = LocalFriseTransport.current ?: remember { FriseTransport() }
+    DisposableEffect(transport) {
+        transport.mount()
+        onDispose { transport.unmount() }
+    }
+    var playing by transport::playing
     val currentPlayhead by rememberUpdatedState(playheadSeconds)
     val currentScrub by rememberUpdatedState(onScrub)
     // **Lire la scène** : la tête avance au rythme de l'horloge d'affichage, s'arrête à la fin ; la frise zoomée la suit.
@@ -560,7 +567,7 @@ private fun FriseTrackRow(
 private fun FriseBarContent(visual: FriseBarVisual) {
     when (visual) {
         is FriseBarVisual.Filmstrip -> {
-            val frames = rememberVideoFrames(visual.url, visual.sourceSeconds)
+            val frames = rememberVideoFrames(visual.url, visual.startSeconds, visual.endSeconds)
             Row(Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)).graphicsLayer { alpha = 0.85f }) {
                 frames.forEach { frame ->
                     Image(

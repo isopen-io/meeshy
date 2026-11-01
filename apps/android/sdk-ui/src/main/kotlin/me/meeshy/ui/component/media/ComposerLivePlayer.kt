@@ -32,6 +32,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.PlayerMessage
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import me.meeshy.sdk.model.composer.live.ComposerLiveFollow
 import me.meeshy.sdk.model.composer.live.ComposerLivePlayback
 import me.meeshy.sdk.model.composer.live.ComposerLiveWindow
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
@@ -80,6 +81,7 @@ fun rememberComposerLivePlayer(
     volume: Float,
     playing: Boolean,
     category: MediaCacheCategory = MediaCacheCategory.VIDEO,
+    follow: ComposerLiveFollow? = null,
 ): ComposerLivePlayerState {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
@@ -99,7 +101,9 @@ fun rememberComposerLivePlayer(
     val live = remember(player) { ComposerLiveHead(player) }
     LaunchedEffect(live, window) { live.follow(window) }
     LaunchedEffect(player, volume) { player.volume = volume }
-    LaunchedEffect(player, playing) { player.playWhenReady = playing }
+    // La frise ouverte (#13481) : le lecteur suit sa tête — il joue avec elle, se fige sur l'image de l'instant à l'arrêt,
+    // se tait hors de sa fenêtre. Fermée, la scène joue en continu.
+    LaunchedEffect(player, playing, follow) { player.obey(playing, follow) }
     DisposableEffect(player) {
         val releaseLease = mediaCache.lease(mediaUrl)
         val listener = object : Player.Listener {
@@ -118,6 +122,17 @@ fun rememberComposerLivePlayer(
         }
     }
     return remember(player) { ComposerLivePlayerState(player, firstFrame.waiting) }
+}
+
+private fun ExoPlayer.obey(playing: Boolean, follow: ComposerLiveFollow?) {
+    if (follow == null) {
+        playWhenReady = playing
+        return
+    }
+    val target = follow.targetMs
+    val runs = playing && follow.playing && target != null
+    if (target != null && ComposerLivePlayback.drifts(currentPosition, target, runs)) seekTo(target)
+    playWhenReady = runs
 }
 
 /** La tête du lecteur vivant : elle suit la fenêtre courante et reboucle sur son début. */
