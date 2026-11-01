@@ -14,3 +14,15 @@
 
 /** GET /api/v1/relations/:userId */
 export const byUserId = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}`;
+
+/** POST /api/v1/relations/:userId/level */
+export const byUserIdLevel = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/level`;
+
+/** POST /api/v1/relations/:userId/ritual */
+export const byUserIdRitual = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/ritual`;
+
+/** GET /api/v1/relations/config */
+export const config = '/api/v1/relations/config';
+
+/** GET /api/v1/relations */
+export const root = '/api/v1/relations';

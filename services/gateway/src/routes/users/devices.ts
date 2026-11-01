@@ -10,7 +10,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams } from './types';
 import { validatePagination } from '../../utils/pagination';
-import { INCLUDE_PARTIES, servirParties, clauseHorsBlocage } from '../directory/friend-requests-core';
+import { INCLUDE_PARTIES, servirParties, clauseHorsBlocage, filtreStatut } from '../directory/friend-requests-core';
 
 /**
  * Bloc `pagination` de la réponse de `GET /users/friend-requests`.
@@ -95,12 +95,13 @@ export async function getFriendRequests(fastify: FastifyInstance) {
 
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
+      // Le filtre de statut est celui de `directory` : l'émetteur lit sa demande
+      // refusée « en attente », jamais « refusée » (RG-07, #13933).
       const whereClause = {
-        OR: [
-          { senderId: userId },
-          { receiverId: userId }
+        AND: [
+          { OR: [{ senderId: userId }, { receiverId: userId }] },
+          filtreStatut(status, userId),
         ],
-        ...(status ? { status } : {}),
         ...(await clauseHorsBlocage(fastify, userId))
       };
 

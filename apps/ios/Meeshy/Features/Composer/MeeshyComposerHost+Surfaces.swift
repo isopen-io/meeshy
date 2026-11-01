@@ -454,10 +454,10 @@ extension MeeshyComposerHost {
             bandBackdrop: sceneBackdrop,
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
-            // **Le repos posé sur la scène** (#13839) : ⋯ porte la nouvelle
-            // diapo, le Fond, l'Animation (éclair et Temps fondus), la Durée.
+            // **Le repos posé sur la scène** (#13839, #14050) : ⋯ porte la diapo,
+            // l'Animation (éclair et Temps fondus), la Durée ; Fond, Mention, Lieu sont au rail.
             slideCount: viewModel.slides.count,
-            restTools: sceneRestTools,
+            restTools: sceneRestTools, restBackgroundIsMedia: sceneBackgroundMedia != nil,
             onRestTool: { handleRestTool($0) },
             moreMenu: sceneMoreMenu,
             drawingBar: sceneDrawingBar,

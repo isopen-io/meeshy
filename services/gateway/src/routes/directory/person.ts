@@ -136,10 +136,13 @@ async function relationAvec(
     hasBlocked(fastify.prisma, viewerId, cibleId),
   ]);
 
+  // Un REFUS ne se voit pas (RG-07, #13933) : son émetteur lit sa demande refusée
+  // « en attente », comme sa liste la lui sert (`servirParties`).
+  const refuseeChezEmetteur = lien?.status === 'rejected' && lien.senderId === viewerId;
   const fil = ((): string => {
     if (!lien) return 'none';
     if (lien.status === 'accepted') return 'friend';
-    if (lien.status !== 'pending') return 'none';
+    if (lien.status !== 'pending' && !refuseeChezEmetteur) return 'none';
     return lien.senderId === viewerId ? 'pending_sent' : 'pending_received';
   })();
 

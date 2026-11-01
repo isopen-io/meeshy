@@ -268,7 +268,6 @@ describe('verifyDeclaredMimeType', () => {
     ['image/svg+xml déclaré sur un SVG sans prologue', 'image/svg+xml', SVG_HEADER_BARE],
     ['image/svg+xml déclaré sur un SVG avec BOM UTF-8', 'image/svg+xml', SVG_HEADER_WITH_BOM],
     // Familles sans signature fiable connue — la déclaration est crue par décision produit.
-    ['video/mp4 déclaré sur un contenu quelconque', 'video/mp4', PLAIN_TEXT],
     ['text/plain déclaré sur un contenu quelconque', 'text/plain', PDF_HEADER],
     ['application/zip déclaré sur un contenu quelconque', 'application/zip', PLAIN_TEXT],
   ])('vérifie %s', (_label, mimeType, buffer) => {

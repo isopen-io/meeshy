@@ -1,7 +1,10 @@
 package me.meeshy.app.reels
 
 import androidx.compose.foundation.layout.PaddingValues
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,6 +68,7 @@ fun ReelCommentsSheet(
     viewModel: ReelCommentsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val mention by viewModel.mention.collectAsStateWithLifecycle()
     LaunchedEffect(reelId) { viewModel.load(reelId) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -112,7 +116,13 @@ fun ReelCommentsSheet(
                 )
             }
 
-            ReelCommentInput(draft = state.draft, onDraftChange = viewModel::setDraft, onSend = viewModel::post)
+            ReelCommentInput(
+                draft = state.draft,
+                mention = mention,
+                onDraftChange = viewModel::setDraft,
+                onMentionSelected = viewModel::onMentionSelected,
+                onSend = viewModel::post,
+            )
         }
     }
 }
@@ -194,13 +204,20 @@ internal fun ReelCommentRow(comment: ReelCommentPresentation, onRetry: (String) 
 }
 
 @Composable
-private fun ReelCommentInput(draft: String, onDraftChange: (String) -> Unit, onSend: (String) -> Unit) {
+private fun ReelCommentInput(
+    draft: String,
+    mention: MentionAutocompleteState,
+    onDraftChange: (String) -> Unit,
+    onMentionSelected: (MentionCandidate) -> Unit,
+    onSend: (String) -> Unit,
+) {
     MeeshyCommentComposer(
         text = draft,
         onTextChange = onDraftChange,
         placeholder = stringResource(R.string.reels_comments_input_hint),
         onSend = { onSend(draft) },
         contentPadding = PaddingValues(top = MeeshySpacing.xs),
+        topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected) },
     )
 }
 

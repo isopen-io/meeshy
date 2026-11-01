@@ -3,7 +3,7 @@
  *
  * Covers:
  *  - createFriendContentNotificationsBatch: type mapping per contentType
- *  - Fan-out to all accepted friends, capped at 500
+ *  - Fan-out to the author's entourage (here set to « Ami », #13929), capped at 500
  *  - Self-author skip (paranoid check)
  *  - excludeUserIds dedup (user_mentioned takes priority over friend_new_*)
  *  - Duplicate friend dedup (seenIds)
@@ -75,6 +75,8 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     communityMember: {
       findMany: jest.fn(),
     },
+    userRelation: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
+    participant: { findMany: jest.fn().mockResolvedValue([]) },
   };
 
   return {
@@ -116,6 +118,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
 
 // -------------------------------------------------------
 // Test helpers & fixtures
@@ -126,6 +129,9 @@ const FRIEND_1 = '507f1f77bcf86cd799439012';
 const FRIEND_2 = '507f1f77bcf86cd799439013';
 const FRIEND_3 = '507f1f77bcf86cd799439014';
 const POST_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+const AUTHOR_ENTOURAGE_FRIEND = Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND']));
+const authorPrefs = (others: unknown) => ({ where }: { where: { userId: string } }) =>
+  Promise.resolve(where.userId === AUTHOR_ID ? { notification: AUTHOR_ENTOURAGE_FRIEND } : others);
 
 function makeNotif(type: string) {
   return {
@@ -178,8 +184,8 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
 
     service.setSocketIO(mockIO as any, new Map());
 
-    // Default: allow all notifications (no prefs override)
-    (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(null);
+    // No prefs override; the AUTHOR's entourage is « Ami » (#13929 — defaults in notifs-cercles-13929.test.ts)
+    (prisma.userPreferences.findUnique as jest.Mock).mockImplementation(authorPrefs(null));
 
     // Author found by default
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({
@@ -506,7 +512,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
 
       expect(warnMock()).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ postId: POST_ID, authorId: AUTHOR_ID, cap: 500 })
+        expect.objectContaining({ ownerId: AUTHOR_ID, cap: 500 })
       );
       // Le témoin compte, il ne diffuse pas : sans le `slice`, la borne
       // passerait silencieusement de 500 à 501.
@@ -611,11 +617,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
     });
 
     it('test_createFriendContentNotificationsBatch_multipleExcluded_allSkipped', async () => {
-      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
-        makeFriendRequest(AUTHOR_ID, FRIEND_1),
-        makeFriendRequest(AUTHOR_ID, FRIEND_2),
-        makeFriendRequest(AUTHOR_ID, FRIEND_3),
-      ]);
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([FRIEND_1, FRIEND_2, FRIEND_3].map((f) => makeFriendRequest(AUTHOR_ID, f)));
 
       await service.createFriendContentNotificationsBatch({
         postId: POST_ID,
@@ -1046,6 +1048,8 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
     it('test_createFriendContentNotificationsBatch_ONLY_excludesExcludeUserIds', async () => {
       (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
         makeFriendRequest(AUTHOR_ID, FRIEND_1),
+        makeFriendRequest(AUTHOR_ID, FRIEND_2),
+        makeFriendRequest(AUTHOR_ID, FRIEND_3),
       ]);
 
       await service.createFriendContentNotificationsBatch({
@@ -1063,13 +1067,14 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       const recipientIds = calls.map((c) => c[0].data.userId);
       expect(recipientIds).not.toContain(FRIEND_2);
       expect(recipientIds).toContain(FRIEND_3);
+      expect(recipientIds).not.toContain(FRIEND_1);
     });
 
-    it('test_createFriendContentNotificationsBatch_COMMUNITY_notifiesCoMembersNotFriends', async () => {
-      // R1: une action dans une communauté est OBLIGATOIREMENT notifiée à TOUS
-      // les membres de la communauté — pas aux contacts (friends) de l'auteur.
+    it('test_createFriendContentNotificationsBatch_COMMUNITY_notifiesCoMembersOfTheEntourageOnly', async () => {
+      // #13929 : entourage « Ami » (qui est PRÉVENU) ∩ admission COMMUNITY (qui peut VOIR).
       (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
         makeFriendRequest(AUTHOR_ID, FRIEND_1), // contact, NOT a community member
+        makeFriendRequest(AUTHOR_ID, FRIEND_2), // contact AND community member
       ]);
       // getCommunityCoMemberIds: 1er findMany → appartenances de l'auteur,
       // 2e findMany → co-membres actifs de ces communautés.
@@ -1089,12 +1094,15 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       >;
       const recipientIds = calls.map((c) => c[0].data.userId);
       expect(recipientIds).toContain(FRIEND_2);
-      expect(recipientIds).toContain(FRIEND_3);
+      expect(recipientIds).not.toContain(FRIEND_3);
       expect(recipientIds).not.toContain(FRIEND_1);
     });
 
     it('test_createFriendContentNotificationsBatch_COMMUNITY_excludesAuthorAndExcludeUserIds', async () => {
-      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_2),
+        makeFriendRequest(AUTHOR_ID, FRIEND_3),
+      ]);
       (prisma.communityMember.findMany as jest.Mock)
         .mockResolvedValueOnce([{ communityId: 'community-1' }])
         .mockResolvedValueOnce([{ userId: AUTHOR_ID }, { userId: FRIEND_2 }, { userId: FRIEND_3 }]);
@@ -1117,7 +1125,9 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
     });
 
     it('test_createFriendContentNotificationsBatch_ONLY_doesNotSendToAuthor', async () => {
-      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
 
       await service.createFriendContentNotificationsBatch({
         postId: POST_ID,
@@ -1153,7 +1163,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
         (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
           makeFriendRequest(AUTHOR_ID, FRIEND_1),
         ]);
-        (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(disabledPrefs);
+        (prisma.userPreferences.findUnique as jest.Mock).mockImplementation(authorPrefs(disabledPrefs));
 
         await service.createFriendContentNotificationsBatch({
           postId: POST_ID,
@@ -1169,9 +1179,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
         makeFriendRequest(AUTHOR_ID, FRIEND_1),
       ]);
-      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
-        notification: {},
-      });
+      (prisma.userPreferences.findUnique as jest.Mock).mockImplementation(authorPrefs({ notification: {} }));
 
       await service.createFriendContentNotificationsBatch({
         postId: POST_ID,

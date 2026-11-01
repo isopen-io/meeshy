@@ -47,7 +47,10 @@
     <string name="composer_edit_background_framing">Enquadrar</string>
     <string name="composer_edit_frames">Molduras</string>
     <string name="composer_edit_loop">Loop</string>
+    <string name="composer_edit_mute">Mudo</string>
+    <string name="composer_edit_rotate">Girar</string>
     <string name="composer_edit_trim">Cortar</string>
+    <string name="composer_edit_volume">Volume</string>
     <string name="composer_family_text">Texto</string>
     <string name="composer_frise_earlier">Mais cedo</string>
     <string name="composer_frise_empty">Adicione um texto ou um sticker: cada objeto vira uma faixa.</string>

@@ -5,8 +5,8 @@ import MeeshyUI
 /// **Le chrome du repos, posé SUR la scène** (#13839).
 ///
 /// ✕ en haut à gauche, la rangée des diapos au centre dès deux diapos, ↶ ↷ en
-/// haut à droite seulement avec un historique, puis la colonne des six boutons
-/// ronds sous ↶ ↷. Ce chrome est de l'éditeur : il n'entre ni dans l'export,
+/// haut à droite seulement avec un historique, puis la colonne des boutons
+/// ronds sous ↶ ↷ — elle défile quand elle dépasse la hauteur (#14050). Ce chrome est de l'éditeur : il n'entre ni dans l'export,
 /// ni dans la capture du player, ni dans la vignette, et un toucher qui le vise
 /// n'atteint jamais le canvas. Hors de ses boutons, la scène garde ses gestes.
 struct ComposerSceneOverlayChrome: View {
@@ -30,6 +30,7 @@ struct ComposerSceneOverlayChrome: View {
     var moreMenu: AnyView?
     var sound = Sound()
     var pasteEntry: AnyView?
+    var backgroundIsMedia = false
     /// Le niveau du haut du rail d'édition (#13957, #13974, R6) : il prend la
     /// place de la colonne des outils, jamais une barre en plus.
     var selection: ComposerSelectionColumn?
@@ -92,12 +93,19 @@ struct ComposerSceneOverlayChrome: View {
     }
 
     private var toolColumn: some View {
+        ViewThatFits(in: .vertical) {
+            toolButtons
+            ScrollView(.vertical, showsIndicators: false) { toolButtons }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(ComposerRestChromeCopy.column))
+    }
+
+    private var toolButtons: some View {
         VStack(spacing: MeeshySpacing.sm) {
             ForEach(tools, id: \.self) { outil in toolButton(outil) }
             if let pasteEntry { pasteEntry }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(ComposerRestChromeCopy.column))
     }
 
     @ViewBuilder
@@ -114,7 +122,8 @@ struct ComposerSceneOverlayChrome: View {
         case .sound:
             soundButton
         default:
-            roundButton(symbol: outil.symbol, label: ComposerRestChromeCopy.label(outil),
+            roundButton(symbol: outil.symbol,
+                        label: ComposerRestChromeCopy.label(outil, backgroundIsMedia: backgroundIsMedia),
                         id: "composer.rest.\(outil.rawValue)", action: { tap(outil) })
         }
     }

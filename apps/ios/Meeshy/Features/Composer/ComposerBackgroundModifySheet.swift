@@ -10,6 +10,23 @@ import MeeshyUI
 /// Réinitialiser — et, sous Son, le curseur seul du Volume (I-E4). Chaque contenu est celui que l'édition en place montait
 /// déjà : chaque geste écrit le modèle, la scène se repeint au fil du doigt.
 struct ComposerBackgroundModifySheet: View {
+
+    /// **Ce que la feuille montre, lu du seul chemin** : le curseur d'un
+    /// réglage (N3), le curseur du Volume, la bande du Cadrage d'un fond, ou
+    /// le contenu de l'entrée ouverte.
+    nonisolated enum Content: Equatable, Sendable {
+        case adjustment(AdjustmentKind)
+        case volume
+        case framingBand
+        case entry(ComposerBackgroundModifyEntry?)
+
+        static func of(_ path: ComposerBackgroundModifyPath, isBackground: Bool) -> Content {
+            if let kind = path.adjustment { return .adjustment(kind) }
+            if path.volume { return .volume }
+            return path.entry == .framing && isBackground ? .framingBand : .entry(path.entry)
+        }
+    }
+
     @ObservedObject var viewModel: StoryComposerViewModel
     let mediaId: String
     var isBackground = true
@@ -29,7 +46,7 @@ struct ComposerBackgroundModifySheet: View {
     }
 
     var body: some View {
-        if path.adjustment == nil, !path.volume, path.entry == .framing, isBackground {
+        if Content.of(path, isBackground: isBackground) == .framingBand {
             ComposerFrameBand(fitMode: framing.fitMode, backdrop: framing.backdrop, plateauTint: plateauTint,
                               onPickFitMode: framing.onPickFitMode, onPickBackdrop: framing.onPickBackdrop)
                 .accessibilityIdentifier("composer.background.modify.framing")
@@ -48,12 +65,11 @@ struct ComposerBackgroundModifySheet: View {
 
     @ViewBuilder
     private var content: some View {
-        if let kind = path.adjustment {
+        switch Content.of(path, isBackground: isBackground) {
+        case .adjustment(let kind):
             ComposerMediaAdjustPanel(viewModel: viewModel, mediaId: mediaId, onCompare: onCompare, only: kind)
-        } else if path.volume {
-            ComposerMediaVolumeDial(viewModel: viewModel, mediaId: mediaId)
-        } else {
-            entryContent
+        case .volume: ComposerMediaVolumeDial(viewModel: viewModel, mediaId: mediaId)
+        case .framingBand, .entry: entryContent
         }
     }
 
@@ -64,7 +80,9 @@ struct ComposerBackgroundModifySheet: View {
             if let media { ComposerMediaCropPads(viewModel: viewModel, media: media) }
         case .trim:
             if let source = viewModel.sourceTrim(id: mediaId) {
-                ComposerMediaTrimBand(viewModel: viewModel, objectId: mediaId, source: source)
+                ComposerMediaTrimBand(viewModel: viewModel, objectId: mediaId, source: source,
+                                      waveform: ComposerMediaTrimBand.waveform(viewModel: viewModel,
+                                                                               objectId: mediaId))
             }
         case .filters:
             if let media { ComposerMediaFilterGrid(viewModel: viewModel, media: media, isBackground: isBackground) }

@@ -314,7 +314,6 @@
     "GET /api/v1/me/starred-messages",
     "GET /api/v1/me/stickers",
     "GET /api/v1/me/terms",
-    "GET /api/v1/mentions/suggestions",
     "GET /api/v1/messages/:messageId",
     "GET /api/v1/messages/:messageId/status-details",
     "GET /api/v1/messages/:messageId/translations",
@@ -445,7 +444,10 @@
     "PUT /api/v1/me/terms",
     "PUT /api/v1/messages/:messageId",
     "PUT /api/v1/user-preferences/communities/:communityId",
-    "PUT /api/v1/voice/profile/:profileId"
+    "PUT /api/v1/voice/profile/:profileId",
+    "GET /api/v1/relations",
+    "POST /api/v1/relations/:userId/level",
+    "POST /api/v1/relations/:userId/ritual"
    ]
   },
   {

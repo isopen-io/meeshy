@@ -12,9 +12,9 @@ import {
   filterMentionCandidates,
   insertMention,
   localMentionCandidates,
+  localMentionMatches,
   mergeMentionCandidates,
   peopleMentionCandidates,
-  queriesRemote,
   rankMentionCandidates,
 } from './mention-query';
 
@@ -114,11 +114,17 @@ describe('insertMention — `@username ` à la place de la requête', () => {
   });
 });
 
-describe('queriesRemote — la passerelle n’est interrogée qu’à partir de deux caractères', () => {
-  test('seuil', () => {
-    expect(queriesRemote('')).toBe(false);
-    expect(queriesRemote('a')).toBe(false);
-    expect(queriesRemote('al')).toBe(true);
+describe('localMentionMatches — les correspondances LOCALES que compte la loi de déclenchement (#14053)', () => {
+  const contacts = [candidate({ id: 'c1', username: 'claire', badge: 'friend' }), candidate({ id: 'p1', username: 'paula', badge: 'friend' })];
+  const participants = [candidate({ id: 'p1', username: 'paula' }), candidate({ id: 'p2', username: 'pierre' }), candidate({ id: 'me', username: 'moi' })];
+
+  test('contacts puis participants, filtrés et triés par la saisie, sans doublon ni soi', () => {
+    expect(localMentionMatches({ contacts, participants, query: 'p', selfId: 'me' }).map((c) => c.id)).toEqual(['p1', 'p2']);
+    expect(localMentionMatches({ contacts, participants, query: '', selfId: 'me' }).map((c) => c.id)).toEqual(['c1', 'p1', 'p2']);
+  });
+
+  test('deux lettres sans personne en local : aucune correspondance', () => {
+    expect(localMentionMatches({ contacts, participants, query: 'zz', selfId: 'me' })).toEqual([]);
   });
 });
 
@@ -200,6 +206,13 @@ describe('composeMentionList — contacts, puis participants, puis autres, sans 
   test('les distants ferment la marche, dédoublonnés, jamais soi-même', () => {
     const list = composeMentionList({ contacts, participants, remote, query: '', selfId: 'me' });
     expect(list.map((c) => c.id)).toEqual(['c1', 'p1', 'p2', 'o1']);
+  });
+
+  test('le serveur suit les locaux dans SON ordre, privé de ce qu’ils ont déjà rendu', () => {
+    const served = [candidate({ id: 'o2', username: 'oscar' }), candidate({ id: 'c1', username: 'claire' }), candidate({ id: 'o1', username: 'olga' })];
+    const list = composeMentionList({ contacts, participants, remote: served, query: '', selfId: 'me' });
+    expect(list.map((c) => c.id)).toEqual(['c1', 'p1', 'p2', 'o2', 'o1']);
+    expect(list[0]?.badge).toBe('friend');
   });
 
   test('un contact qui parle dans le fil reste dans le groupe des contacts', () => {

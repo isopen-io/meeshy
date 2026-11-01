@@ -207,7 +207,9 @@ class AccessScreensFormWidthTest {
         compose.waitForIdle()
     }
 
-    private fun authRepository(): AuthRepository = mockk(relaxed = true)
+    private fun authRepository(): AuthRepository = mockk<AuthRepository>(relaxed = true).also {
+        coEvery { it.restoreBackedUpSession() } returns null
+    }
 
     private fun authViewModel(): AuthViewModel = AuthViewModel(
         authRepository(),

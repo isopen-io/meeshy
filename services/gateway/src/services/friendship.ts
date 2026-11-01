@@ -4,6 +4,7 @@ import {
   minRelationLevel,
   parseRelationLevel,
   relationPairKey,
+  RELATION_LEVELS,
   type RelationLevel,
 } from '@meeshy/shared/types/relation';
 import { friendshipBackfillProjection, type UserRelationRow } from './relations/userRelationWriter';
@@ -343,4 +344,58 @@ export function plusProchesDabord(ids: ReadonlyArray<string>, niveaux: ReadonlyM
     .map((id, rang) => ({ id, rang, niveau: niveaux.get(id) ?? 'PUBLIC' }))
     .sort((a, b) => compareRelationLevel(b.niveau, a.niveau) || a.rang - b.rang)
     .map(({ id }) => id);
+}
+
+/**
+ * Les comptes liés à `sujet` par un niveau effectif d'AU MOINS `plancher`, du plus
+ * proche au plus lointain — l'énumérateur des éventails d'entourage (#13929).
+ *
+ * La lecture DESCEND les niveaux (Sang, puis Proche, puis Ami, puis Connaissance)
+ * et s'arrête dès qu'un cran remplit la borne : chaque requête ne rend que les
+ * lignes dont les DEUX accords atteignent le cran lu, et les crans déjà lus sont
+ * gardés. Une foule de Connaissances récentes n'évince donc jamais un Sang ancien.
+ * Les demandes acceptées ne sont lues que si le plancher est au plus `FRIEND`
+ * (une demande acceptée ne vaut jamais plus). Chaque niveau repasse par
+ * {@link niveauxParmi}, la même loi que partout. `PUBLIC` et `COMMUNITY` ne
+ * s'énumèrent pas ici (aucune ligne ne les porte) : la communauté appartient à
+ * l'appelant, le blocage aussi. L'appelant borne le résultat.
+ */
+export async function comptesAuMoins(
+  prisma: RelationLevelDb,
+  sujet: string,
+  plancher: RelationLevel,
+  options: { readonly limit: number }
+): Promise<CompteLie[]> {
+  if (!sujet || compareRelationLevel(plancher, 'ACQUAINTANCE') < 0) return [];
+  const crans = RELATION_LEVELS.filter((niveau) => compareRelationLevel(niveau, plancher) >= 0).reverse();
+
+  const lus = new Set<string>();
+  for (const cran of crans) {
+    const admis = RELATION_LEVELS.filter((niveau) => compareRelationLevel(niveau, cran) >= 0);
+    const lignes = await prisma.userRelation.findMany({
+      where: {
+        AND: [
+          { OR: [{ userLowId: sujet }, { userHighId: sujet }] },
+          { grantedByLow: { in: [...admis] } },
+          { grantedByHigh: { in: [...admis] } },
+        ],
+      },
+      select: { userLowId: true, userHighId: true },
+      orderBy: { updatedAt: 'desc' },
+      take: options.limit,
+    });
+    lignes.forEach((ligne) => lus.add(otherSide(ligne, sujet)));
+    if (lus.size >= options.limit) break;
+  }
+
+  const amis =
+    lus.size < options.limit && compareRelationLevel(plancher, MIN_FRIEND) <= 0
+      ? await amisAcceptes(prisma, sujet, { limit: options.limit })
+      : [];
+  const ordre = [...new Set([...lus, ...amis])].filter((id) => id && id !== sujet);
+  const niveaux = await niveauxParmi(prisma, sujet, ordre);
+
+  return plusProchesDabord(ordre, niveaux)
+    .map((id) => ({ id, niveau: niveaux.get(id) ?? 'PUBLIC' }))
+    .filter((lien) => compareRelationLevel(lien.niveau, plancher) >= 0);
 }

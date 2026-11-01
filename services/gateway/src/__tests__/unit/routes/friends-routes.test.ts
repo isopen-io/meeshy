@@ -133,6 +133,7 @@ function makePrisma(opts: PrismaOpts = {}) {
   return {
     user: {
       findUnique: mockFn(opt(opts.userFindUnique, DB_USER)), findMany: jest.fn(async () => []), // #13298 blocage
+      findFirst: jest.fn(async () => null), // #13933 blocage relu avant d'accepter
     },
     friendRequest: {
       findFirst: mockFn(opt(opts.friendRequestFindFirst, null)),
@@ -166,6 +167,17 @@ function makePrisma(opts: PrismaOpts = {}) {
       update: mockFn(opt(opts.friendRequestUpdate, { ...DB_FRIEND_REQUEST, status: 'accepted' })),
       deleteMany: mockFn(opt(opts.friendRequestDelete, { count: 1 })),
     },
+    // Depuis les crans (#13933), un envoi est jugé sur le lien de la paire : par défaut, les
+    // deux sont déjà Connaissances, le cran qui précède Ami.
+    userRelation: {
+      findUnique: jest.fn(async () => ({
+        id: 'aa0000000000000000000099', userLowId: USER_ID, userHighId: RECEIVER_ID,
+        grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE', transitions: [],
+      })),
+      findMany: jest.fn(async () => []),
+      updateMany: jest.fn(async () => ({ count: 1 })),
+    },
+    pairInteractionDay: { findMany: jest.fn(async () => []) },
     notification: {
       findMany: mockFn(opt(opts.notificationFindMany, [DB_NOTIFICATION])),
       update: mockFn(opt(opts.notificationUpdate, DB_NOTIFICATION)),
@@ -636,7 +648,7 @@ describe('DELETE /friend-requests/:id', () => {
     await appAsSender.close();
   });
 
-  it('emits FRIEND_REQUEST_CANCELLED to the sender when the receiver removes it', async () => {
+  it('stays SILENT towards the sender when the receiver removes a pending request — an ignorance is a silent refusal (RG-07)', async () => {
     const notifService = makeNotifService();
     const appAsReceiver = await buildApp({
       prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
@@ -649,11 +661,7 @@ describe('DELETE /friend-requests/:id', () => {
       headers: AUTH,
     });
     expect(res.statusCode).toBe(200);
-    expect(notifService.emitFriendRequestCancelled).toHaveBeenCalledWith({
-      recipientUserId: USER_ID,
-      friendRequestId: FR_ID,
-      cancelledBy: RECEIVER_ID,
-    });
+    expect(notifService.emitFriendRequestCancelled).not.toHaveBeenCalled();
     await appAsReceiver.close();
   });
 
@@ -714,7 +722,7 @@ describe('DELETE /friend-requests/:id', () => {
     const notifService = makeNotifService();
     notifService.retractFriendRequestNotifications.mockRejectedValueOnce(new Error('notification db crash'));
     const appErr = await buildApp({
-      authUserId: RECEIVER_ID,
+      authUserId: USER_ID, // l'émetteur annule : c'est son geste, le receveur en est prévenu
       prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
       notifService,
     });
@@ -906,7 +914,7 @@ describe('PATCH /friend-requests/:id — notification service (accepted)', () =>
     await app.close();
   });
 
-  it('calls createSystemNotification with rejection message when rejected', async () => {
+  it('does NOT notify the sender when rejected — a refusal is silent (RG-07)', async () => {
     const notifService = makeNotifService();
     const rejectedRequest = { ...DB_FRIEND_REQUEST, status: 'rejected' };
     const app = await buildApp({
@@ -914,81 +922,20 @@ describe('PATCH /friend-requests/:id — notification service (accepted)', () =>
       prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, friendRequestUpdate: rejectedRequest as typeof DB_FRIEND_REQUEST },
       notifService,
     });
-    await app.inject({
+    const res = await app.inject({
       method: 'PATCH',
       url: `/friend-requests/${FR_ID}`,
       headers: { ...AUTH, 'content-type': 'application/json' },
       body: JSON.stringify({ status: 'rejected' }),
     });
-    expect(notifService.createSystemNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ recipientUserId: USER_ID, priority: 'low' })
-    );
+    expect(res.statusCode).toBe(200);
+    expect(notifService.createSystemNotification).not.toHaveBeenCalled();
+    expect(notifService.emitFriendRequestRejected).not.toHaveBeenCalled();
     expect(notifService.createFriendAcceptedNotification).not.toHaveBeenCalled();
     expect(notifService.emitFriendRequestAccepted).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it('emits FRIEND_REQUEST_REJECTED to the original sender when rejected', async () => {
-    const notifService = makeNotifService();
-    const rejectedRequest = { ...DB_FRIEND_REQUEST, status: 'rejected' };
-    const app = await buildApp({
-      authUserId: RECEIVER_ID,
-      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, friendRequestUpdate: rejectedRequest as typeof DB_FRIEND_REQUEST },
-      notifService,
-    });
-    await app.inject({
-      method: 'PATCH',
-      url: `/friend-requests/${FR_ID}`,
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ status: 'rejected' }),
-    });
-    expect(notifService.emitFriendRequestRejected).toHaveBeenCalledWith({
-      senderId: USER_ID,
-      friendRequestId: FR_ID,
-      rejecterId: RECEIVER_ID,
-    });
-    await app.close();
-  });
-
-  it('uses receiver.username as receiverName when displayName absent', async () => {
-    const notifService = makeNotifService();
-    const rejectedRequest = { ...DB_FRIEND_REQUEST, status: 'rejected', receiver: { ...DB_USER, displayName: null, username: 'bob_u' } };
-    const app = await buildApp({
-      authUserId: RECEIVER_ID,
-      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, friendRequestUpdate: rejectedRequest as typeof DB_FRIEND_REQUEST },
-      notifService,
-    });
-    const res = await app.inject({
-      method: 'PATCH',
-      url: `/friend-requests/${FR_ID}`,
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ status: 'rejected' }),
-    });
-    expect(res.statusCode).toBe(200);
-    expect(notifService.createSystemNotification).toHaveBeenCalled();
-    await app.close();
-  });
-
-  it('uses firstName+lastName as receiverName when displayName and username absent', async () => {
-    const notifService = makeNotifService();
-    const rejectedRequest = { ...DB_FRIEND_REQUEST, status: 'rejected', receiver: { ...DB_USER, displayName: null, username: null, firstName: 'Bob', lastName: 'J' } };
-    const app = await buildApp({
-      authUserId: RECEIVER_ID,
-      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, friendRequestUpdate: rejectedRequest as typeof DB_FRIEND_REQUEST },
-      notifService,
-    });
-    const res = await app.inject({
-      method: 'PATCH',
-      url: `/friend-requests/${FR_ID}`,
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ status: 'rejected' }),
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-describe('PATCH /friend-requests/:id — social events', () => {
   it('calls invalidateFriendsCache for both users on accept when socialEvents present', async () => {
     const socialEvents = makeSocialEvents();
     const app = await buildApp({

@@ -21,6 +21,7 @@
 import { ADMIN_METRICS_CLIENT_EVENTS, ADMIN_METRICS_SERVER_EVENTS } from './admin-metrics-event-names.js';
 import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from './call-recording-event-names.js';
 import { E2EE_CLIENT_EVENTS, E2EE_SERVER_EVENTS } from './e2ee-event-names.js';
+import { RELATION_SERVER_EVENTS } from './relation-event-names.js';
 import { SESSION_SERVER_EVENTS } from './session-event-names.js';
 import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
 
@@ -176,6 +177,7 @@ export const SERVER_EVENTS = {
    * cache entries. */
   CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   ...SESSION_SERVER_EVENTS,
+  ...RELATION_SERVER_EVENTS,
   ...E2EE_SERVER_EVENTS,
   ERROR: 'error',
   NOTIFICATION_NEW: 'notification:new',
