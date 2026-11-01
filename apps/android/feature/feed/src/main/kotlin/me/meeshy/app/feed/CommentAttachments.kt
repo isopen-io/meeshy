@@ -1,12 +1,7 @@
 package me.meeshy.app.feed
 
-import me.meeshy.sdk.media.readMediaUploadItem
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,7 +46,6 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
-import me.meeshy.ui.component.message.MessageComposerGlassAction
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -69,6 +63,14 @@ private val MediaSize = 120.dp
 @Composable
 internal fun CommentMediaStrip(media: List<CommentMediaPreview>) {
     if (media.isEmpty()) return
+    media.filter { it.isAudio }.forEach { CommentAudioChip(it) }
+    val visual = media.filterNot { it.isAudio }
+    if (visual.isEmpty()) return
+    CommentVisualStrip(visual)
+}
+
+@Composable
+private fun CommentVisualStrip(media: List<CommentMediaPreview>) {
     val open = LocalCommentMediaOpener.current
     val photoLabel = stringResource(R.string.post_comments_media_image)
     val videoLabel = stringResource(R.string.post_comments_media_video)
@@ -133,8 +135,8 @@ internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentP
 
 @Composable
 private fun PieceThumbnail(piece: CommentPendingPiece) {
-    if (piece.isVideo) {
-        Icon(MeeshyIcons.Video, contentDescription = null, tint = MeeshyPalette.Indigo500)
+    if (piece.isVideo || piece.isAudio) {
+        Icon(if (piece.isAudio) MeeshyIcons.Mic else MeeshyIcons.Video, contentDescription = null, tint = MeeshyPalette.Indigo500)
         return
     }
     val bitmap = remember(piece.item) {
@@ -147,24 +149,6 @@ private fun PieceThumbnail(piece: CommentPendingPiece) {
         }.getOrNull()
     }
     bitmap?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-}
-
-/** Le bouton « joindre » du composeur : la galerie, photo ou vidéo ; ce qui se lit part au bandeau. */
-@Composable
-internal fun CommentAttachButton(enabled: Boolean, onPicked: (MediaUploadItem) -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
-        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let(onPicked) }
-    }
-    MessageComposerGlassAction(
-        icon = MeeshyIcons.PhotoFilled,
-        contentDescription = stringResource(R.string.feed_composer_attach_media),
-        onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-        enabled = enabled,
-        tint = MeeshyPalette.Indigo500,
-    )
 }
 
 /**
