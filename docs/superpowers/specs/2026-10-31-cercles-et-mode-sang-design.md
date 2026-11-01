@@ -324,6 +324,16 @@ Chaque lot a **une** issue (milestone #215) : `rel-modele` #13926, `rel-loi-acce
 | `conformite-cercles` | AIPD, **bloque la production** | | | |
 | `entitlements-apple` #14112 | action du porteur : PushToTalk et Critical Alerts auprès d'Apple, avec un brouillon de justification | | | |
 
+**Position temporaire — compléments du porteur (2026-11-01, #14109).**
+- **« Jusqu'à l'arrivée »** : l'émetteur choisit une destination. L'ETA et la distance restante sont calculées sur son appareil. Chez le destinataire, une **notification dynamique** affiche « X arrive — 12 min · 2,4 km », mise à jour par push et close à l'arrivée ou à l'arrêt.
+  - **iOS** : une Live Activity (ActivityKit, push `liveactivity`), qui ajoute un coordinateur à `LiveActivityBackend.swift` ; quatre coordinateurs y existent déjà, pour l'appel, l'enregistrement vocal, la lecture vocale et l'envoi.
+  - **Android** : les Live Updates d'Android 16 (notification en cours promue, `ProgressStyle`), et une notification en cours classique avant l'API 36.
+  - **Web** : un bandeau dans l'onglet ouvert, sans rien simuler.
+- **Carte des positions** : la carte des posts d'« À proximité » (iOS `FeedPostsMapView.swift`, en `MKMapView` avec regroupement ; Android `TileMapView.kt`) est **réutilisée** pour les positions des proches. On n'ajoute pas de seconde carte ; « Mon univers », au lot `sang-position-historique`, est la même.
+  - Les épingles portent l'avatar, l'accent de la conversation, l'anneau de présence servie et un cercle de flou selon la précision. Elles se regroupent.
+  - Elles sont **chargées selon l'emprise visible** (`GET /relations/locations?bbox=`). Une position n'apparaît que si son partage est actif pour le lecteur **et** que le cercle l'autorise, à la précision du cercle.
+  - Le web n'a aujourd'hui aucune carte ; la créer est justifié.
+
 **Jalon 3 — production** : `prod-promotion` #14111. Le code passe d'abord, puis le rattrapage `UserRelation` sur feu vert et après une sauvegarde vérifiée, puis `MIN_APP_VERSION`, relevé seulement quand les versions sont dans les stores.
 
 **Matrice des cas** : chaque ligne est jouée par un témoin serveur et par la recette.
@@ -374,6 +384,8 @@ Plateformes : iOS 16 → 26 et iPad, Android API cible, navigateurs courants, r�
 | Sonnerie | iOS `Ringtone.caf` (30 s), `RingbackTonePlayer.swift` ; Android `CallToneController.kt`, canal d'appel `IncomingCallNotificationPresenter.kt:50-71` | Bring : réutilisés ; Android : un canal `USAGE_ALARM` |
 | Audio | `MessageHandler.ts:461`, `upload.ts:87`, `audio-normalization.ts`, `MediaSessionCoordinator.swift:576`, `CallAudioRouteService.swift`, `VoicePlaybackService.kt`, `mini-audio-player.tsx` | talkie réutilise ce pipeline |
 | Écoute | iOS `ConversationAudioCoordinator+NowPlaying.swift` ; Android `VoicePlaybackSessionController.kt` ; web `web-now-playing.ts` | source Meeshy ; Apple Music, Spotify et MediaSession **à créer** (rien n'existe) |
+| Carte | iOS `FeedPostsMapView.swift` (187 l, `MKMapView` avec regroupement, « À proximité »), `NearbyDensityOverlay.swift`, SDK `AdaptiveMap.swift` ; Android `TileMapView.kt` ; web : aucune | **réutilisée** pour les positions des proches et « Mon univers » |
+| Notifications dynamiques | iOS `LiveActivityBackend.swift` + quatre coordinateurs, `MeeshyWidgets` ; Android `CallOngoingNotificationFactory.kt`, `OutboxOngoingNotifications.kt` | + Live Activity et Live Update « X arrive » |
 | Position | `LocationHandler.ts` (registre mémoire, audience = room de conversation), iOS `LocationService.swift` (aucun appelant), Android `LiveLocation*` (émetteur complet, pas de background), web rien | étendre au scope Sang ; historique TTL ; émetteur iOS et lecture web à créer |
 | Chiffrement au repos | `utils/secret-at-rest.ts` (`sealSecret` :97) | coordonnées de l'historique |
 | Flags | aucun système serveur ; locaux `MeeshyFeatureFlags.swift`, `LentilleFeatureFlagsStore.kt` | `GET /me/features` (env + liste blanche), justifié |
