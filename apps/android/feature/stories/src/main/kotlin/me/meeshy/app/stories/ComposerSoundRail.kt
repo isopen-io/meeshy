@@ -9,6 +9,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
+import me.meeshy.sdk.model.composer.MediaEditTool
+import me.meeshy.sdk.model.composer.edit.ComposerPlacedMediaTool
 import me.meeshy.ui.icons.MeeshyIcons
 
 internal const val SOUND_BAND_TAG = "composer-sound-band"
@@ -24,8 +26,9 @@ private fun PlacedSoundTool.glyph(): ImageVector = when (this) {
     PlacedSoundTool.Volume -> MeeshyIcons.VolumeUp
 }
 
+/** Le mot de l'outil ; Couper dit le mot de la vidéo posée et de l'outil iOS du son posé (« Couper », jamais « Rogner »). */
 private fun PlacedSoundTool.labelRes(): Int = when (this) {
-    is PlacedSoundTool.Section -> section.labelRes()
+    is PlacedSoundTool.Section -> if (section.isTrim) ComposerPlacedMediaTool.TRIM.labelRes() else section.labelRes()
     PlacedSoundTool.Volume -> R.string.composer_edit_volume
 }
 
@@ -72,3 +75,6 @@ internal fun SoundBand(tool: PlacedSoundTool, state: StoryComposerUiState, viewM
         }
     }
 }
+
+private val ComposerObjectEditorSection.isTrim: Boolean
+    get() = this is ComposerObjectEditorSection.Media && tool == MediaEditTool.TRIM

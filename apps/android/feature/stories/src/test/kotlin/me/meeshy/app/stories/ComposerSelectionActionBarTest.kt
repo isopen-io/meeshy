@@ -290,6 +290,17 @@ class ComposerSelectionActionBarTest {
     private fun voice(vm: StoryComposerViewModel) = vm.state.value.deck.selectedSlide.audio.single()
 
     @Test
+    @Config(qualifiers = "fr-w360dp-h740dp")
+    fun `the Trim of a placed sound says the word of the placed video, Couper, never Rogner`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        assertThat(soundRail().first()).isEqualTo("Couper")
+        compose.onNodeWithText("Rogner").assertDoesNotExist()
+    }
+
+    @Test
     fun `a sound whose source is unknown serves Volume and Mute but no Trim in its rail, as on iOS`() {
         val vm = viewModel()
         withVoice(vm, sourceSeconds = null)
