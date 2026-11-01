@@ -2,7 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
 import { postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 import { comptesAuMoins, niveauxParmi } from '../friendship';
-import { getCommunityCoMemberIds } from './communityVisibility';
+import { filterCommunityCoMembersAmong } from './communityVisibility';
 import { filterDirectContactIdsAmong } from './directContactVisibility';
 
 /**
@@ -90,7 +90,7 @@ export interface PostAudienceParams {
  * la règle est explicite.
  *
  * **En panne, on REFUSE.** Le graphe illisible n'admet personne, et
- * `getCommunityCoMemberIds` rend déjà `[]` sur exception — même politique. Cette
+ * `filterCommunityCoMembersAmong` rend déjà un ensemble vide sur exception — même politique. Cette
  * fonction garde une frontière de confidentialité : l'échec d'une notification
  * légitime est réparable (la mention est persistée, elle reste visible en
  * ouvrant le post), la fuite d'un extrait de post privé sur un écran verrouillé
@@ -115,7 +115,8 @@ export async function filterPostConsumers(params: PostAudienceParams): Promise<s
   if (visibility === 'ONLY') return admit((id) => visibilityUserIdSet.has(id));
 
   if (visibility === 'COMMUNITY') {
-    const coMemberIds = new Set(await getCommunityCoMemberIds(prisma, authorId));
+    // Les seuls candidats, jamais la communauté entière (#14081).
+    const coMemberIds = await filterCommunityCoMembersAmong(prisma, authorId, others);
     return admit((id) => coMemberIds.has(id));
   }
 

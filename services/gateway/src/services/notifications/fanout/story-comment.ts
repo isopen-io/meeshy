@@ -11,7 +11,7 @@ import { truncateMessage } from '../notification-preview';
 import { FANOUT_ROW_CAP } from './row-cap';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import type { FanoutDependencies } from './dependencies';
-import { resolveEntourage, type Entourage } from './entourage';
+import { mentionReceivers, resolveEntourage, type Entourage } from './entourage';
 
 /** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
 export type FanoutBucket = 'previousComments' | 'entourage' | 'reactors';
@@ -194,12 +194,17 @@ export type StoryCommentFanoutParams = {
   /** Date d'expiration ISO du contenu commenté (story/status éphémère). */
   postExpiresAt?: string | Date;
   /**
-   * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
-   * Use to pass mentionedUserIds so users who received user_mentioned don't also get
-   * a lower-priority story thread/friend notification.
-   * The story author always gets STORY_NEW_COMMENT regardless of this list.
+   * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment),
+   * unconditionally. The story author always gets STORY_NEW_COMMENT regardless of this list.
    */
   excludeUserIds?: string[];
+  /**
+   * Les personnes que le commentaire NOMME : celles que la mention prévient
+   * réellement (liens du commentateur, ou l'auteur du contenu, #14168) ne
+   * reçoivent que `user_mentioned` ; un nommé sans lien garde son
+   * `story_thread_reply` / `friend_story_comment`.
+   */
+  mentionedUserIds?: readonly string[];
   /**
    * Visibilité du post commenté. Filtre les buckets fan-out (thread + amis)
    * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
@@ -350,7 +355,12 @@ export async function createStoryCommentNotificationsBatch(
     avatar: actor.avatar,
   };
 
-  const excludeSet = new Set(params.excludeUserIds ?? []);
+  const mentioned = await mentionReceivers(deps.prisma, {
+    mentionerId: params.commenterId,
+    mentionedUserIds: params.mentionedUserIds ?? [],
+    alreadyAddressedUserIds: [params.storyAuthorId],
+  });
+  const excludeSet = new Set([...(params.excludeUserIds ?? []), ...mentioned]);
   const tasks: Array<Promise<unknown>> = [];
 
   // 1. Story author notification — always sent regardless of excludeUserIds

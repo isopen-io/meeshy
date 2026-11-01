@@ -70,8 +70,11 @@
     <string name="feed_scene_previous">Scène précédente</string>
     <string name="feed_scene_resume">Reprend la lecture de la scène</string>
     <string name="feed_scene_sound_mute">Couper le son</string>
+    <string name="feed_scene_sound_muted">Son coupé — ouvrir en plein écran pour l\'entendre</string>
+    <string name="feed_scene_sound_track">Son de fond</string>
     <string name="feed_scene_sound_unmute">Réactiver le son</string>
     <string name="feed_scene_tile">Scène %1$d</string>
+    <string name="feed_scene_video">vidéo</string>
     <string name="feed_secondary_translation_a11y">Traduction en %1$s : %2$s</string>
     <string name="feed_translated">Traduction disponible</string>
     <string name="feed_translation_available">Traductions disponibles</string>

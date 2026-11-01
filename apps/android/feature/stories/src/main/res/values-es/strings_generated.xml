@@ -55,7 +55,11 @@
     <string name="composer_frise_earlier">Antes</string>
     <string name="composer_frise_empty">Añade un texto o un sticker: cada objeto se convierte en una pista.</string>
     <string name="composer_frise_entry">Entra aquí</string>
+    <string name="composer_frise_entryEarlier">Entrar antes</string>
+    <string name="composer_frise_entryLater">Entrar después</string>
     <string name="composer_frise_exit">Sale aquí</string>
+    <string name="composer_frise_exitEarlier">Salir antes</string>
+    <string name="composer_frise_exitLater">Salir después</string>
     <string name="composer_frise_later">Después</string>
     <string name="composer_frise_media">Medio</string>
     <string name="composer_frise_panel">Línea de tiempo</string>

@@ -55,7 +55,11 @@
     <string name="composer_frise_earlier">Mais cedo</string>
     <string name="composer_frise_empty">Adicione um texto ou um sticker: cada objeto vira uma faixa.</string>
     <string name="composer_frise_entry">Entra aqui</string>
+    <string name="composer_frise_entryEarlier">Entrar antes</string>
+    <string name="composer_frise_entryLater">Entrar mais tarde</string>
     <string name="composer_frise_exit">Sai aqui</string>
+    <string name="composer_frise_exitEarlier">Sair antes</string>
+    <string name="composer_frise_exitLater">Sair mais tarde</string>
     <string name="composer_frise_later">Mais tarde</string>
     <string name="composer_frise_media">Mídia</string>
     <string name="composer_frise_panel">Linha do tempo</string>

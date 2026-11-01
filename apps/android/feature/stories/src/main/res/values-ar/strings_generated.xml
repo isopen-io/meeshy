@@ -55,7 +55,11 @@
     <string name="composer_frise_earlier">أبكر</string>
     <string name="composer_frise_empty">ضع نصًا أو ملصقًا: يصبح كل عنصر مسارًا.</string>
     <string name="composer_frise_entry">يدخل هنا</string>
+    <string name="composer_frise_entryEarlier">الدخول أبكر</string>
+    <string name="composer_frise_entryLater">الدخول لاحقًا</string>
     <string name="composer_frise_exit">يخرج هنا</string>
+    <string name="composer_frise_exitEarlier">الخروج أبكر</string>
+    <string name="composer_frise_exitLater">الخروج لاحقًا</string>
     <string name="composer_frise_later">لاحقًا</string>
     <string name="composer_frise_media">وسائط</string>
     <string name="composer_frise_panel">المخطط الزمني</string>
