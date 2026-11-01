@@ -62,6 +62,7 @@
     <string name="composer_a11y_recentVideo">Vídeo recente</string>
     <string name="composer_a11y_selectedState">Selecionado</string>
     <string name="composer_attach_contact">Contato</string>
+    <string name="composer_attach_sticker">Figurinha</string>
     <string name="composer_chip_kind_location">LOCAL</string>
     <string name="composer_drop_unnamedItem">item sem nome</string>
     <string name="composer_recent_accessDenied">Acesso às fotos negado</string>
