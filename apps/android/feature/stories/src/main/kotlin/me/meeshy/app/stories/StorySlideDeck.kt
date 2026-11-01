@@ -498,8 +498,12 @@ data class StorySlideDeck(
     val selectedSlideDurationSeconds: Double get() = slideDurationSeconds(selectedSlide)
 
     /** La durée effective d'UNE slide : son épingle, sinon celle que son contenu impose. */
-    fun slideDurationSeconds(slide: StorySlide, videoSourceSeconds: (String) -> Double? = { null }): Double =
-        slide.durationSecondsPin ?: StorySlideContentDuration.seconds(slide, videoSourceSeconds)
+    fun slideDurationSeconds(
+        slide: StorySlide,
+        backdropId: String? = slide.backgroundMediaId,
+        videoSourceSeconds: (String) -> Double? = { null },
+    ): Double =
+        slide.durationSecondsPin ?: StorySlideContentDuration.seconds(slide, backdropId, videoSourceSeconds)
 
     /** La durée de la story entière : toutes les slides additionnées, bornée à deux heures par [StoryLimits.TOTAL_SECONDS]. */
     val totalDurationSeconds: Double get() = slides.sumOf { slideDurationSeconds(it) }

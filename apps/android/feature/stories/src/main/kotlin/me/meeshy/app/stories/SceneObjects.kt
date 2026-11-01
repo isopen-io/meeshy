@@ -98,16 +98,18 @@ val StoryComposerUiState.sceneTracks: List<Plan2DTrack>
             drawingStrokes = slide.strokes.takeIf { it.isNotEmpty() },
             audioPlayerObjects = slide.audio.takeIf { it.isNotEmpty() },
             // Le fond a sa piste, en lecture seule (#14281, iOS `Plan2DLayout.tracks(from: currentEffects)`).
-            background = slide.background?.serialized()?.takeIf { slide.backgroundMediaId == null },
+            background = slide.background?.serialized()?.takeIf { selectedSlideBackdropMediaId == null },
         )
         return Plan2DLayout.tracks(effects, selectedSlideDurationSeconds, slide.places)
     }
 
-/** Le média de FOND tel que la frise le lit (#14281) : au plan fond, verrouillé, il dure la diapo. */
+/**
+ * Le média de FOND tel que la frise le lit (#14281) : le fond PEINT, désigné ou premier média non posé, envoyé ou en file
+ * d'envoi — celui que l'auteur voit. Au plan fond, verrouillé, il dure la diapo.
+ */
 private fun StoryComposerUiState.friseBackground(): StoryMediaObject? {
-    val id = deck.selectedSlide.backgroundMediaId ?: return null
-    val video = attachments.firstOrNull { it.id == id }?.mimeType?.startsWith("video", ignoreCase = true) == true
-    return StoryMediaObject(id = id, postMediaId = id, mediaType = if (video) "video" else "image", isBackground = true)
+    val id = selectedSlideBackdropMediaId ?: return null
+    return StoryMediaObject(id = id, postMediaId = id, mediaType = if (placedMediaIsVideo(id)) "video" else "image", isBackground = true)
 }
 
 /** Un média posé tel que la frise le lit : sa fenêtre d'apparition, jamais la longueur que joue sa source (#13904). */
