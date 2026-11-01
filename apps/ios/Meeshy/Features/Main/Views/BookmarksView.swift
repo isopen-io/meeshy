@@ -41,7 +41,7 @@ struct BookmarksView: View {
         var label: String {
             switch self {
             case .all: return String(localized: "bookmarks.filter.all", defaultValue: "Tout", bundle: .main)
-            case .posts: return String(localized: "bookmarks.filter.posts", defaultValue: "Postes", bundle: .main)
+            case .posts: return String(localized: "bookmarks.filter.posts", defaultValue: "Publications", bundle: .main)
             case .reels: return String(localized: "bookmarks.filter.reels", defaultValue: "Réels", bundle: .main)
             }
         }

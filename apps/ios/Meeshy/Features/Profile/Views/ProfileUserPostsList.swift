@@ -110,7 +110,7 @@ private struct ProfilePostsStatsBand: View {
     var body: some View {
         HStack(spacing: MeeshySpacing.sm) {
             chip(icon: "square.grid.2x2.fill", value: counts.posts,
-                 label: String(localized: "profile.posts.stat.posts", defaultValue: "Postes", bundle: .main),
+                 label: String(localized: "profile.posts.stat.posts", defaultValue: "Publications", bundle: .main),
                  isSelected: selectedFilter == .posts,
                  action: { onSelectFilter?(.posts) })
             chip(icon: "play.rectangle.fill", value: counts.reels,

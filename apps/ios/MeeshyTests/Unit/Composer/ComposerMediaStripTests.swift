@@ -92,7 +92,7 @@ final class ComposerMediaStripTests: XCTestCase {
             // pour la conversation, où une scène est une pièce du message. Quand elle est
             // fournie, la vignette la peint et la touche demande confirmation avant de retirer.
             rail.contains("letonDelete:((Int)->Void)?")
-                && rail.contains("ifletonDelete,")
+                && (rail.contains("ifletonDelete,") || rail.contains("ifonDelete!=nil,"))
                 && rail.contains("Button{deletion=deletion.asking(index:index)}")
                 && rail.contains("onDelete?(cible)"),
             "Chaque vignette doit pouvoir se RETIRER — la croix que le constat porteur du "

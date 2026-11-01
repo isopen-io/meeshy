@@ -295,16 +295,9 @@ struct ComposerSceneSurface: View {
     /// La barre collée au clavier et le panneau qui le remplace (#13839, L4).
     var inlineEditInputLink: StoryInlineEditInputLink?
 
-    /// **La bande de mention du texte de SCÈNE n'est pas sur cette surface.**
-    ///
-    /// Elle interprète la frappe INLINE sur le canvas. Or la frappe
-    /// n'a pas lieu ici : `openObjectEditor` est le seul chemin vers l'édition
-    /// d'un texte — `enterTextEditingMode` n'a que deux appelants, et
-    /// tous deux montent l'écran modal par-dessus cette surface. La bande serait
-    /// donc peinte sous un écran plein, pour une requête `@` qui se forme
-    /// ailleurs.
-    ///
-    /// Elle vit dans `ComposerObjectEditorView`, où le doigt tape.
+    /// **La bande de mention du texte de SCÈNE n'est pas sur cette surface** :
+    /// elle suit la frappe, donc la barre collée au clavier
+    /// (`ComposerKeyboardDock`), et l'éditeur d'objet pour ses autres champs.
 
     /// **Le volet de description, replié ou non.** Construit par le
     /// MEUBLE — la surface n'a ni le texte, ni le binding de repli, ni le
@@ -422,6 +415,12 @@ struct ComposerSceneSurface: View {
 
     private var historyIsOnTheScene: Bool { ComposerRestChrome.historyIsShown(restState) }
 
+    /// La trace du son de fond, la MÊME pour le repos et pour le rail libellé.
+    private var backgroundSoundTrace: ComposerSceneOverlayChrome.Sound {
+        .init(trace: backgroundSound, onEdit: onEditBackgroundSound,
+              onDelete: onDeleteBackgroundSound, onPromote: onPromoteBackgroundSound)
+    }
+
     private var railLaneLeading: CGFloat {
         ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: false).leading
     }
@@ -437,9 +436,7 @@ struct ComposerSceneSurface: View {
                                          onMore: rails.onMore,
                                          plus: rails.plus,
                                          mediaLongPress: onRailDoorLongPress,
-                                         sound: .init(trace: backgroundSound, onEdit: onEditBackgroundSound,
-                                                      onDelete: onDeleteBackgroundSound,
-                                                      onPromote: onPromoteBackgroundSound),
+                                         sound: backgroundSoundTrace,
                                          pasteEntry: railSystemEntry, backgroundIsMedia: restBackgroundIsMedia),
             selection: ComposerSelectionRail(selection: nil, onUndo: onUndo, onRedo: onRedo),
             objectSelection: selectionColumn.map { ComposerSelectionRail(selection: $0) },
@@ -473,10 +470,7 @@ struct ComposerSceneSurface: View {
                                    onTool: onRestTool,
                                    mediaLongPress: onRailDoorLongPress,
                                    moreMenu: moreMenu,
-                                   sound: .init(trace: backgroundSound,
-                                                onEdit: onEditBackgroundSound,
-                                                onDelete: onDeleteBackgroundSound,
-                                                onPromote: onPromoteBackgroundSound),
+                                   sound: backgroundSoundTrace,
                                    pasteEntry: railSystemEntry,
                                    backgroundIsMedia: restBackgroundIsMedia,
                                    selection: selectionColumn)
@@ -655,9 +649,7 @@ struct ComposerSceneSurface: View {
     }
 
     @State private var floorHash: String?
-    /// Le haut du clavier (repère global) et le mouvement qui l'y amène.
-    @State private var keyboardTop: CGFloat?
-    @State private var keyboardTiming: ComposerKeyboardMotion.Timing?
+    @State private var keyboard = ComposerSceneKeyboard()
 
     /// **La scène est le plus grand 9:16 de la zone** (#13839) : ni carte ni
     /// couloir, et elle descend sous le socle, qui se pose dessus. Un panneau
@@ -674,7 +666,7 @@ struct ComposerSceneSurface: View {
                 .scaleEffect(lift.scale,
                              anchor: UnitPoint(x: 0.5, y: geo.size.height > 0 ? scene.minY / geo.size.height : 0))
                 .offset(y: lift.offsetY)
-                .animation(liftAnimation, value: lift)
+                .animation(keyboard.liftAnimation(reduceMotion: reduceMotion, now: Date()), value: lift)
         }
         .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
         .ignoresSafeArea(.container, edges: arrangement == .rails ? [] : .bottom)
@@ -690,21 +682,10 @@ struct ComposerSceneSurface: View {
 
     /// **La scène se réduit DANS le mouvement du clavier** (#13839, L4) : la
     /// durée et la courbe de la notification, sinon son propre ressort.
-    private var liftAnimation: Animation? {
-        guard !reduceMotion else { return nil }
-        guard let timing = keyboardTiming, ComposerKeyboardMotion.drivesLift(timing, now: Date()) else {
-            return .spring(response: 0.32, dampingFraction: 0.88)
-        }
-        return ComposerKeyboardMotion.animation(timing)
-    }
-
     private func keyboardMoved(_ note: Notification, hidden: Bool = false) {
-        let duree = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double
-        let fin = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
-        keyboardTiming = ComposerKeyboardMotion.timing(duration: duree, at: Date())
-        keyboardTop = hidden ? nil : fin.flatMap {
-            ComposerKeyboardMotion.keyboardTop(endFrame: $0, windowFrame: WindowMetrics.activeWindowFrameInScreen)
-        }
+        keyboard.moved(duration: note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double,
+                       endFrame: note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+                       windowFrame: WindowMetrics.activeWindowFrameInScreen, hidden: hidden, at: Date())
     }
 
     /// Le bas visible de la scène, dans son propre repère : le haut des étages
@@ -715,7 +696,7 @@ struct ComposerSceneSurface: View {
         let panneau: CGFloat? = sceneLiftInset > 0 && !freeZoneFrame.isNull ? freeZoneFrame.maxY : nil
         // La barre et le clavier — ou le panneau qui le remplace, de la même
         // hauteur — bornent la scène pendant qu'on écrit SUR elle.
-        let clavier: CGFloat? = editingTextId != nil ? keyboardTop : nil
+        let clavier: CGFloat? = editingTextId != nil ? keyboard.top : nil
         return ComposerSceneFraming.visibleBottom(zoneHeight: geo.size.height,
                                                   zoneMinY: geo.frame(in: .global).minY,
                                                   obstructionTops: [panneau, anchoredSheetTop, clavier])
@@ -923,23 +904,9 @@ struct ComposerSceneSurface: View {
         }
     }
 
-    /// « Temps » reste où il était — AU-DESSUS de l'historique : la
-    /// frise masque annuler et rétablir (elle réécrit la slide à sa fermeture),
-    /// mais leur place est gardée, sans quoi le bouton qui la RANGE descendrait
-    /// sous le doigt qui vient de l'ouvrir.
     private var friseRail: some View {
-        HStack {
-            Spacer(minLength: 0)
-            ComposerTrailingRail(actions: [],
-                                 plateauTint: plateauTint,
-                                 pushesToThumb: false,
-                                 separateButtons: true,
-                                 onTime: onTimeButton,
-                                 timeIsOpen: timeIsOpen)
-                .padding(.trailing, ComposerRailGeometry.outerMargin)
-                .padding(.bottom, ComposerRailGeometry.floatingBottomInset
-                                  + ComposerRailGeometry.historyReserve(undo: onUndo != nil, redo: onRedo != nil))
-        }
+        ComposerFriseRail(plateauTint: plateauTint, onTime: onTimeButton, timeIsOpen: timeIsOpen,
+                          reservesUndo: onUndo != nil, reservesRedo: onRedo != nil)
     }
 
     @ViewBuilder

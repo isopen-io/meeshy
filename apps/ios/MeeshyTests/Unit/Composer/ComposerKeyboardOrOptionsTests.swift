@@ -74,6 +74,29 @@ final class ComposerKeyboardOrOptionsTests: XCTestCase {
                                                        windowFrame: fenetre), "flottant : il ne soulève rien")
     }
 
+    func test_sceneKeyboard_movedThenHidden_forgetsItsTop_butKeepsTheMotion() {
+        let fenetre = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let clavier = CGRect(x: 0, y: 874 - 380, width: 402, height: 380)
+        let t0 = Date(timeIntervalSince1970: 0)
+        var suivi = ComposerSceneKeyboard()
+        suivi.moved(duration: 0.4, endFrame: clavier, windowFrame: fenetre, hidden: false, at: t0)
+        XCTAssertEqual(suivi.top, 494)
+        XCTAssertEqual(suivi.timing?.duration, 0.4)
+
+        suivi.moved(duration: 0.3, endFrame: clavier, windowFrame: fenetre, hidden: true, at: t0)
+        XCTAssertNil(suivi.top, "un clavier qui se range ne borne plus la scène")
+        XCTAssertEqual(suivi.timing?.duration, 0.3, "la scène suit aussi le clavier qui descend")
+    }
+
+    func test_sceneKeyboard_liftAnimation_isNoneUnderReduceMotion() {
+        var suivi = ComposerSceneKeyboard()
+        let t0 = Date(timeIntervalSince1970: 0)
+        suivi.moved(duration: 0.25, endFrame: nil, windowFrame: nil, hidden: false, at: t0)
+        XCTAssertNil(suivi.liftAnimation(reduceMotion: true, now: t0))
+        XCTAssertNotNil(suivi.liftAnimation(reduceMotion: false, now: t0))
+        XCTAssertNotNil(ComposerSceneKeyboard().liftAnimation(reduceMotion: false, now: t0), "sans clavier, le ressort")
+    }
+
     func test_timing_usesTheKeyboardDuration_orTheSystemDefault() {
         let t0 = Date(timeIntervalSince1970: 0)
         XCTAssertEqual(ComposerKeyboardMotion.timing(duration: 0.4, at: t0).duration, 0.4)

@@ -18202,53 +18202,6 @@
         }
       }
     },
-    "composer.edit.putOnScene": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "وضعه على المشهد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auf die Szene setzen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Place on the scene"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Colocar en la escena"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mettre sur la scène"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Metti sulla scena"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Colocar na cena"
-          }
-        }
-      }
-    },
     "composer.edit.replace": {
       "extractionState": "manual",
       "localizations": {
@@ -18292,53 +18245,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Substituir"
-          }
-        }
-      }
-    },
-    "composer.edit.source.files": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الملفات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dateien"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Files"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Archivos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fichiers"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "File"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arquivos"
           }
         }
       }
@@ -321129,6 +321035,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "As legendas não podem ser abertas: não foi possível verificar a criptografia desta conversa."
+          }
+        }
+      }
+    },
+    "e2ee.signal.offline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اتصل بالإنترنت: في محادثة مشفّرة، يُرسَل هذا الإجراء مشفّرًا ولا يمكنه الانتظار دون اتصال."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geh online: In einer verschlüsselten Unterhaltung wird diese Aktion verschlüsselt gesendet und kann nicht offline warten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go online: in an encrypted conversation, this action is sent encrypted and can't wait offline."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conéctate: en una conversación cifrada, este gesto se envía cifrado y no puede esperar sin conexión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connectez-vous : dans une conversation chiffrée, ce geste part chiffré et n'attend pas hors ligne."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connettiti: in una conversazione crittografata, questo gesto parte crittografato e non può attendere offline."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecte-se: em uma conversa criptografada, este gesto é enviado criptografado e não pode esperar offline."
           }
         }
       }

@@ -168,14 +168,17 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// **LE témoin de la directive.** Créer et modifier passent par le même
     /// site : recopier ses lignes chez l'un des deux est exactement ce qui les
     /// faisait diverger. Pour un TEXTE, ce site est la saisie sur scène depuis
-    /// #8680 (`ComposerSceneTextEditingTests`) ; les autres familles gardent
-    /// l'éditeur d'objet.
+    /// #8680 (`ComposerSceneTextEditingTests`) ; un média, un sticker ou un
+    /// lieu s'éditent EN PLACE depuis #9138 et #13840 — par `modifySceneItem`,
+    /// le site que la barre de la sélection emprunte aussi.
     func test_creerEtModifier_empruntentLeMemeSite() throws {
         let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("funcopenObjectEditor("),
                       "Le site unique est introuvable — re-pointer la garde.")
-        XCTAssertTrue(code.contains("openObjectEditor(id)"),
-                      "« Modifier » sur un média, un sticker ou un lieu ouvre l'éditeur d'objet.")
+        XCTAssertTrue(code.contains("case.media,.sticker,.place:sceneSelectionRelay.modifySceneItem(id)"),
+                      "« Modifier » sur un média, un sticker ou un lieu prend le chemin de la barre de la sélection.")
+        XCTAssertTrue(code.contains("case.modify:modifySceneItem(id)"),
+                      "La barre de la sélection et le double toucher ouvrent la MÊME édition.")
         XCTAssertTrue(code.contains("ifletobjet=viewModel.addText(){beginSceneTextEditing(objet.id)}"),
                       "Créer un texte ouvre la saisie sur scène.")
         XCTAssertTrue(code.contains("case.text:beginSceneTextEditing(id)"),

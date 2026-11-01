@@ -501,3 +501,30 @@ nonisolated enum ComposerTrailingRailPolicy {
     }
 }
 
+/// **« Temps », seul au rail droit pendant que la frise est ouverte.** Il reste
+/// où il était — AU-DESSUS de l'historique : la frise masque annuler et
+/// rétablir (elle réécrit la slide à sa fermeture), mais leur place est
+/// gardée, sans quoi le bouton qui la RANGE descendrait sous le doigt qui
+/// vient de l'ouvrir.
+struct ComposerFriseRail: View {
+    let plateauTint: Color
+    let onTime: (() -> Void)?
+    let timeIsOpen: Bool
+    let reservesUndo: Bool
+    let reservesRedo: Bool
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 0)
+            ComposerTrailingRail(actions: [],
+                                 plateauTint: plateauTint,
+                                 pushesToThumb: false,
+                                 separateButtons: true,
+                                 onTime: onTime,
+                                 timeIsOpen: timeIsOpen)
+                .padding(.trailing, ComposerRailGeometry.outerMargin)
+                .padding(.bottom, ComposerRailGeometry.floatingBottomInset
+                                  + ComposerRailGeometry.historyReserve(undo: reservesUndo, redo: reservesRedo))
+        }
+    }
+}

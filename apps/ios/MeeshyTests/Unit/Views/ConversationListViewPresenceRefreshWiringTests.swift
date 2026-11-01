@@ -98,6 +98,7 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
     private static let readsWithoutLivePresence: [String: String] = [
         "Features/Main/Services/PresenceManager.swift": "le manager lui-même",
         "Features/Main/Services/WidgetDataManager.swift": "hors vue — cliché du widget, republié à son rythme",
+        "Features/Stories/Services/StoryExportDressing.swift": "hors vue — l'export grave dans le fichier la présence de l'instant où il part",
         "Features/Navigation/SocialChromeEnvironment.swift": "fournisseur posé à la racine — les vues du SDK se repeignent par MeeshyLivePresence",
         "Features/Main/Views/RootLayers/RootViewLayers.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/RootLayers/iPadRootViewLayers.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
