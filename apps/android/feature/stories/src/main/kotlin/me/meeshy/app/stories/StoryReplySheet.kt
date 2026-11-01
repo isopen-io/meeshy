@@ -1,9 +1,10 @@
 package me.meeshy.app.stories
 
-import androidx.compose.foundation.layout.PaddingValues
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
-import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.ui.component.composer.LocalUniversalComposer
+import me.meeshy.ui.component.composer.UniversalComposerSpec
 import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -17,8 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -88,12 +88,11 @@ fun StoryReplySheet(
         }
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    // Les encarts (barre de navigation, clavier) sont ceux du composeur universel : la feuille n'en pose aucun (#14313).
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, contentWindowInsets = { WindowInsets(0, 0, 0, 0) }) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .imePadding()
-                .navigationBarsPadding()
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         ) {
@@ -167,6 +166,10 @@ private fun QuotedStory(quote: StoryReplyQuote) {
     }
 }
 
+/**
+ * La saisie de la réponse : LE composeur universel des conversations (#14313), réglé pour un texte seul — la réponse
+ * part dans la conversation directe, où la feuille ne joint aucune pièce. Plus de barre jumelle.
+ */
 @Composable
 private fun ReplyField(
     text: String,
@@ -180,17 +183,18 @@ private fun ReplyField(
     onSend: () -> Unit,
 ) {
     val accent = hexColor(accentHex)
-    MeeshyCommentComposer(
-        text = text,
-        onTextChange = onChange,
-        placeholder = stringResource(R.string.stories_reply_placeholder, authorName),
-        onSend = onSend,
-        isSending = isSending,
-        sendEnabled = canSend,
-        sendLabel = stringResource(R.string.stories_reply_send),
-        accentColor = accent,
-        secondaryColor = accent.copy(alpha = 0.75f),
-        contentPadding = PaddingValues(0.dp),
-        topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected, accentColor = accent) },
+    val composer = LocalUniversalComposer.current ?: return
+    composer(
+        UniversalComposerSpec(
+            configuration = ComposerConfiguration.COMMENT,
+            draft = text,
+            placeholder = stringResource(R.string.stories_reply_placeholder, authorName),
+            canSend = canSend && !isSending,
+            onDraftChange = onChange,
+            onSend = onSend,
+            accentColor = accent,
+            topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected, accentColor = accent) },
+        ),
+        Modifier,
     )
 }

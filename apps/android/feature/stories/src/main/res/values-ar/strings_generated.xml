@@ -151,7 +151,9 @@
     <string name="stories_action_reply">رد</string>
     <string name="stories_action_report">إبلاغ</string>
     <string name="stories_action_repost">إعادة النشر</string>
+    <string name="stories_action_send">إرسال</string>
     <string name="stories_action_translations">الترجمات</string>
+    <string name="stories_action_views">المشاهدات</string>
     <string name="stories_add">إضافة</string>
     <string name="stories_audience_picker_cancel">إلغاء</string>
     <string name="stories_audience_picker_done">تم</string>

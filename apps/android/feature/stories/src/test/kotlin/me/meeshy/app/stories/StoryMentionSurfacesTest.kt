@@ -31,7 +31,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
-/** « @ » in the story comment field and in the story reply sheet (#14053): the story is the post context. */
+/** « @ » in the story reply sheet (#14053) ; the story comment field is the post thread's since #14313. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class StoryMentionSurfacesTest {
 
@@ -61,14 +61,6 @@ class StoryMentionSurfacesTest {
         override suspend fun refresh() = Unit
     }
 
-    private fun commentsViewModel(search: MentionSearch): StoryCommentsViewModel {
-        val repo = mockk<StoryRepository>(relaxed = true)
-        coEvery { repo.comments(any()) } returns NetworkResult.Success(emptyList())
-        val socket = mockk<SocialSocketManager>(relaxed = true)
-        every { socket.commentAdded } returns MutableSharedFlow<SocketCommentAddedData>()
-        return StoryCommentsViewModel(repo, session, socket, mentionSearch = search, mentionContacts = contacts)
-    }
-
     private fun replyViewModel(search: MentionSearch) = StoryReplyViewModel(
         mockk<ConversationRepository>(relaxed = true),
         mockk<MessageRepository>(relaxed = true),
@@ -79,35 +71,6 @@ class StoryMentionSurfacesTest {
         mentionSearch = search,
         mentionContacts = contacts,
     )
-
-    @Test
-    fun `the story comment field opens the cached contacts on a bare at sign`() = runTest(dispatcher) {
-        val search = RecordingSearch(emptyList())
-        val vm = commentsViewModel(search)
-        vm.load("s1")
-        advanceUntilIdle()
-
-        vm.onDraftChange("@")
-        advanceUntilIdle()
-
-        assertThat(vm.mention.value.suggestions.map { it.username }).containsExactly("anna")
-        assertThat(search.asked).isEmpty()
-    }
-
-    @Test
-    fun `the story comment field asks the story as a post context from the third character`() = runTest(dispatcher) {
-        val search = RecordingSearch(listOf(MentionCandidate(id = "u9", username = "zoe")))
-        val vm = commentsViewModel(search)
-        vm.load("s1")
-        advanceUntilIdle()
-
-        vm.onDraftChange("coucou @zoe")
-        advanceUntilIdle()
-
-        assertThat(search.asked).containsExactly("zoe" to MentionContext.post("s1"))
-        assertThat(vm.selectMention(vm.mention.value.suggestions.single(), "coucou @zoe")).isEqualTo("coucou @zoe ")
-        assertThat(vm.mention.value.isActive).isFalse()
-    }
 
     @Test
     fun `the story reply offers the author alone and never asks the story's context (#14071)`() = runTest(dispatcher) {
