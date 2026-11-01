@@ -248,6 +248,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// `MessageSocketManager.hasPendingReconnect`).
     var hasPendingReconnect: Bool { reconnectTask != nil }
 
+    /// Whether a transport object exists (test seam).
+    var hasTransport: Bool { socket != nil }
+
     /// Unconditionally rebuild the socket. Safe to call from any lifecycle
     /// hook — used to bypass the stale `isConnected` flag. R1 — suspends the
     /// transport (not a full disconnect) so `hadPreviousConnection` survives
@@ -539,14 +542,27 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             self?.handleReconnectAttempt()
         }
 
-        socket.on(clientEvent: .error) { data, _ in
-            // Log but NEVER force a logout from a socket error. Loose string
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            // NEVER force a logout from a socket error. Loose string
             // matching on error payloads produced false positives that kicked
             // the user out on transient failures. Socket.IO's built-in
             // reconnect loop will retry; only APIClient 401 can trigger a
             // silent token refresh, and even that preserves the session.
-            Logger.socket.error("SocialSocket error: \(data)")
+            self?.handleSocketError(data)
         }
+    }
+
+    /// #13954 — sous le plancher de version, le serveur refuse CETTE poignée de
+    /// main comme celle de `MessageSocketManager` : le transport s'arrête et la
+    /// porte « Mettre à jour » se pose. Toute autre erreur n'est que journalisée.
+    func handleSocketError(_ data: [Any], center: NotificationCenter = .default) {
+        guard let requirement = UpgradeRequirement.fromSocketErrorPayload(data) else {
+            Logger.socket.error("SocialSocket error: \(data)")
+            return
+        }
+        Logger.socket.warning("SocialSocket: client below the version floor — reconnection stopped")
+        disconnect()
+        requirement.post(via: center)
     }
 
     func handleTransportConnected() {

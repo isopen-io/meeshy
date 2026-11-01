@@ -27,6 +27,7 @@
 import { NotificationService } from '../../../../services/notifications/NotificationService';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+import { sharedFriendships } from '../../../helpers/shared-friendships';
 
 /** Entourage réglé à « Ami » (#13929) : ces cas portent sur le wording, pas sur le cran. */
 const ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
@@ -517,7 +518,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
     beforeEach(() => {
       prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_ID }]);
       prisma.userPreferences.findUnique.mockResolvedValue(ENTOURAGE_FRIEND);
-      prisma.friendRequest.findMany.mockResolvedValue([
+      sharedFriendships(prisma.friendRequest.findMany, RECIPIENT_ID, ACTOR_ID)([
         { senderId: RECIPIENT_ID, receiverId: FRIEND_ID },
       ]);
     });

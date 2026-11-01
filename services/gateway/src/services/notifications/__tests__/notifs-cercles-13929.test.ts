@@ -76,6 +76,7 @@ type World = {
   readonly settings?: Readonly<Record<string, Partial<Record<CircleNotifyKey, RelationAudienceChoice>>>>;
   readonly blocks?: Readonly<Record<string, readonly string[]>>;
   readonly communities?: Readonly<Record<string, readonly string[]>>;
+  readonly deleted?: readonly string[];
 };
 
 const COMMUNAUTE_PAR_DEFAUT = { 'c-1': [AUTEUR, CO_MEMBRE] };
@@ -102,8 +103,12 @@ function monde(world: World = {}) {
         avatar: null,
         blockedUserIds: [...blockedOf(args.where.id)],
       }),
-      findMany: async (args: { where: { id: { in: string[] }; blockedUserIds: { has: string } } }) =>
-        args.where.id.in.filter((id) => blockedOf(id).includes(args.where.blockedUserIds.has)).map((id) => ({ id })),
+      findMany: async (args: { where: { id: { in: string[] }; blockedUserIds?: { has: string }; deletedAt?: null; isActive?: boolean } }) => {
+        const { blockedUserIds } = args.where;
+        if (blockedUserIds) return args.where.id.in.filter((id) => blockedOf(id).includes(blockedUserIds.has)).map((id) => ({ id }));
+        if (args.where.deletedAt !== null || args.where.isActive !== true) return [];
+        return args.where.id.in.filter((id) => !(world.deleted ?? []).includes(id)).map((id) => ({ id }));
+      },
     },
     userPreferences: {
       findUnique: async (args: { where: { userId: string } }) => {
@@ -258,43 +263,78 @@ describe('A — mes publications (friend_new_post / story / mood, reels compris)
   });
 });
 
-describe('B et C — le relais d’un commentaire (friend_story_comment)', () => {
-  it('par défaut, l’entourage de l’AUTEUR à Proche et au-dessus : Proche prévenu, Ami non', async () => {
-    const { notified } = await commenter({});
-    const relayed = notified('friend_story_comment');
-    expect(relayed).toEqual(expect.arrayContaining([SANG, PROCHE]));
-    expect(relayed).not.toContain(AMI);
-    expect(relayed).not.toContain(CONNAISSANCE);
+/**
+ * #14080 — le plus restrictif gagne : un destinataire du relais passe le seuil B de
+ * l'AUTEUR (mesuré depuis l'auteur) ET le seuil C du COMMENTATEUR (mesuré depuis
+ * le commentateur). « Personne » chez l'un ⇒ aucun relais.
+ */
+const COMMUN_PROCHE = '6000000000000000000000d1';
+const COMMUN_CONNAISSANCE_PROCHE = '6000000000000000000000d2';
+const COMMUN_CONNAISSANCE_AMI = '6000000000000000000000d3';
+const LIENS_COMMUNS: readonly Link[] = [
+  [AUTEUR, COMMUN_PROCHE, 'CLOSE'],
+  [COMMENTATEUR, COMMUN_PROCHE, 'BLOOD'],
+  [AUTEUR, COMMUN_CONNAISSANCE_PROCHE, 'ACQUAINTANCE'],
+  [COMMENTATEUR, COMMUN_CONNAISSANCE_PROCHE, 'CLOSE'],
+  [AUTEUR, COMMUN_CONNAISSANCE_AMI, 'ACQUAINTANCE'],
+  [COMMENTATEUR, COMMUN_CONNAISSANCE_AMI, 'FRIEND'],
+];
+const relais = async (settings: World['settings'] = {}, world: World = {}) =>
+  (await commenter({ ...world, settings, extraLinks: LIENS_COMMUNS })).notified('friend_story_comment').sort();
+
+describe('B ∩ C — le relais d’un commentaire passe les DEUX seuils (friend_story_comment, #14080)', () => {
+  it('par défaut (auteur Proche, commentateur Sang) : seul qui est Proche+ de l’auteur ET Sang du commentateur', async () => {
+    expect(await relais()).toEqual([COMMUN_PROCHE]);
   });
 
-  it('par défaut, l’entourage du COMMENTATEUR à Sang SEUL : son Sang prévenu, son Proche non', async () => {
-    const relayed = (await commenter({})).notified('friend_story_comment');
-    expect(relayed).toContain(SANG_DU_COMMENTATEUR);
-    expect(relayed).not.toContain(PROCHE_DU_COMMENTATEUR);
+  it('le Sang de l’auteur seul, ou le Sang du commentateur seul, n’est plus relayé', async () => {
+    const relayed = await relais();
+    expect(relayed).not.toContain(SANG);
+    expect(relayed).not.toContain(SANG_DU_COMMENTATEUR);
   });
 
-  it('chaque moitié suit le réglage de SON propriétaire', async () => {
-    const world: World = {
-      settings: {
-        [AUTEUR]: { circleOnMyContentComment: 'NOBODY' },
-        [COMMENTATEUR]: { circleElsewhereComment: 'CLOSE' },
-      },
+  it('commentateur sur « Personne » ⇒ aucun relais, même si l’auteur a « Public »', async () => {
+    const settings = {
+      [AUTEUR]: { circleOnMyContentComment: 'PUBLIC' as const },
+      [COMMENTATEUR]: { circleElsewhereComment: 'NOBODY' as const },
     };
-    const relayed = (await commenter(world)).notified('friend_story_comment');
-    expect(relayed.sort()).toEqual([SANG_DU_COMMENTATEUR, PROCHE_DU_COMMENTATEUR].sort());
+    expect(await relais(settings)).toEqual([]);
+  });
+
+  it('auteur sur « Personne » ⇒ aucun relais, même si le commentateur a « Public »', async () => {
+    const settings = {
+      [AUTEUR]: { circleOnMyContentComment: 'NOBODY' as const },
+      [COMMENTATEUR]: { circleElsewhereComment: 'PUBLIC' as const },
+    };
+    expect(await relais(settings)).toEqual([]);
+  });
+
+  it('auteur « Public », commentateur « Proche » : la Connaissance de l’auteur qui est Proche du commentateur oui, son Ami non', async () => {
+    const settings = {
+      [AUTEUR]: { circleOnMyContentComment: 'PUBLIC' as const },
+      [COMMENTATEUR]: { circleElsewhereComment: 'CLOSE' as const },
+    };
+    expect(await relais(settings)).toEqual([COMMUN_PROCHE, COMMUN_CONNAISSANCE_PROCHE].sort());
+  });
+
+  it('un commentaire sur son propre contenu ne relève que du seuil B de l’auteur', async () => {
+    const m = await commenter({ extraLinks: LIENS_COMMUNS }, { commenterId: AUTEUR });
+    expect(m.notified('friend_story_comment').sort()).toEqual([COMMUN_PROCHE, PROCHE, SANG].sort());
   });
 
   it('un bloqué avec l’auteur n’est jamais relayé', async () => {
-    const relayed = (await commenter(reglage('circleOnMyContentComment', 'PUBLIC'))).notified('friend_story_comment');
-    expect(relayed).not.toContain(SANG_BLOQUE);
+    const settings = {
+      [AUTEUR]: { circleOnMyContentComment: 'PUBLIC' as const },
+      [COMMENTATEUR]: { circleElsewhereComment: 'PUBLIC' as const },
+    };
+    expect(await relais(settings, { blocks: { [AUTEUR]: [SANG_BLOQUE, COMMUN_PROCHE] } })).not.toContain(COMMUN_PROCHE);
   });
 
-  it('un bloqué avec le commentateur ne reçoit pas son activité ailleurs', async () => {
-    const world: World = { blocks: { [AUTEUR]: [SANG_BLOQUE], [COMMENTATEUR]: [SANG_DU_COMMENTATEUR] } };
-    expect((await commenter(world)).notified('friend_story_comment')).not.toContain(SANG_DU_COMMENTATEUR);
+  it('un bloqué avec le commentateur n’est jamais relayé', async () => {
+    expect(await relais({}, { blocks: { [AUTEUR]: [SANG_BLOQUE], [COMMENTATEUR]: [COMMUN_PROCHE] } })).toEqual([]);
   });
 
-  it('l’auteur commenté reste prévenu (story_new_comment), même entourage fermé et sans aucun lien', async () => {
+  it('l’auteur commenté reste prévenu (story_new_comment), même entourages fermés et sans aucun lien', async () => {
     const world: World = {
       settings: {
         [AUTEUR]: { circleOnMyContentComment: 'NOBODY' },
@@ -304,6 +344,44 @@ describe('B et C — le relais d’un commentaire (friend_story_comment)', () =>
     const { notified } = await commenter(world);
     expect(notified('story_new_comment')).toEqual([AUTEUR]);
     expect(notified('friend_story_comment')).toEqual([]);
+  });
+});
+
+describe('ONLY — les personnes choisies sont toujours prévenues de la publication (#14080)', () => {
+  const choisis = (ids: string[]) => ({ visibility: 'ONLY', visibilityUserIds: ids });
+
+  it('un destinataire choisi est prévenu même si l’auteur a réglé « Personne »', async () => {
+    expect(await publier(reglage('circlePublicationPost', 'NOBODY'), choisis([INCONNU]))).toEqual([INCONNU]);
+  });
+
+  it('un destinataire choisi sans aucun lien est prévenu au réglage par défaut, et seuls les choisis le sont', async () => {
+    expect((await publier({}, choisis([INCONNU, PROCHE]))).sort()).toEqual([INCONNU, PROCHE].sort());
+  });
+
+  it('un destinataire choisi mais bloqué, dans un sens ou dans l’autre, ne l’est jamais', async () => {
+    const world: World = { blocks: { [AUTEUR]: [SANG_BLOQUE], [INCONNU]: [AUTEUR] } };
+    expect(await publier(world, choisis([SANG_BLOQUE, INCONNU, AMI]))).toEqual([AMI]);
+  });
+
+  it('un compte supprimé ou inactif, même choisi, n’est jamais prévenu', async () => {
+    expect(await publier({ deleted: [INCONNU] }, choisis([INCONNU, AMI]))).toEqual([AMI]);
+  });
+
+  it('une republication ONLY n’hérite pas des choisis de la source : elle suit le réglage du republieur', async () => {
+    const repost = { ...choisis([INCONNU, PROCHE]), isRepost: true };
+    expect(await publier(reglage('circlePublicationRepost', 'NOBODY'), repost)).toEqual([]);
+    expect(await publier({}, repost)).toEqual([PROCHE]);
+  });
+
+  it('un destinataire choisi et mentionné ne reçoit que la mention', async () => {
+    expect(await publier({}, { ...choisis([INCONNU]), excludeUserIds: [INCONNU] })).toEqual([]);
+  });
+
+  it('les membres d’une communauté (post COMMUNITY) suivent le réglage de l’auteur', async () => {
+    const communities = { 'c-1': [AUTEUR, CO_MEMBRE] };
+    const post = { visibility: 'COMMUNITY', visibilityUserIds: ['c-1'] };
+    expect(await publier({ communities }, post)).not.toContain(CO_MEMBRE);
+    expect(await publier({ communities, ...reglage('circlePublicationPost', 'COMMUNITY') }, post)).toContain(CO_MEMBRE);
   });
 });
 

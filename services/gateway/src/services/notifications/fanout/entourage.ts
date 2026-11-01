@@ -66,6 +66,32 @@ export async function readCircleSetting(
   }
 }
 
+/**
+ * Les personnes CHOISIES pour une publication (`ONLY`) : toujours prévenues,
+ * quel que soit le cran du propriétaire (#14080), sauf blocage dans un sens ou
+ * dans l'autre, compte supprimé ou inactif et exclusions de l'appelant (mentions). Bornées
+ * à `FANOUT_ROW_CAP` ; une lecture qui échoue n'envoie rien.
+ */
+export async function resolveChosenAudience(
+  prisma: Pick<PrismaClient, 'user'>,
+  params: { readonly ownerId: string; readonly chosenUserIds: readonly string[]; readonly excludeUserIds?: readonly string[] }
+): Promise<string[]> {
+  const excluded = new Set([params.ownerId, ...(params.excludeUserIds ?? [])]);
+  const chosen = [...new Set(params.chosenUserIds)].filter((id) => !excluded.has(id)).slice(0, FANOUT_ROW_CAP);
+  if (chosen.length === 0) return [];
+  try {
+    const [blocked, living] = await Promise.all([
+      getBlockedUserIdsAmong(prisma, params.ownerId, chosen),
+      prisma.user.findMany({ where: { id: { in: chosen }, deletedAt: null, isActive: true }, select: { id: true } }),
+    ]);
+    const alive = new Set(living.map((row) => row.id));
+    return chosen.filter((id) => alive.has(id) && !blocked.has(id));
+  } catch (error) {
+    notificationLogger.error('Destinataires choisis abandonnés : lecture illisible', { ownerId: params.ownerId, error });
+    return [];
+  }
+}
+
 type EntourageParams = { readonly ownerId: string; readonly key: CircleNotifyKey; readonly excludeUserIds?: readonly string[] };
 
 /** L'entourage prévenu ; une lecture qui échoue (réglage, liens, niveaux, blocage) n'envoie RIEN. */

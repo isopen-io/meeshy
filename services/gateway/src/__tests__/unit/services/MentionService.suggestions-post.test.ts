@@ -68,10 +68,10 @@ function fakePrisma(scenario: Scenario) {
       ),
     },
     postComment: {
-      findMany: jest.fn(async () => (scenario.commenters ?? []).map((c) => ({ authorId: c.id, author: c }))),
+      findMany: jest.fn(async () => (scenario.commenters ?? []).map((c) => ({ authorId: c.id }))),
     },
     postReaction: {
-      findMany: jest.fn(async () => (scenario.reactors ?? []).map((r) => ({ userId: r.id, user: r }))),
+      findMany: jest.fn(async () => (scenario.reactors ?? []).map((r) => ({ userId: r.id }))),
     },
     postMention: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) },
     communityMember: { findMany: jest.fn(async () => []), findFirst: jest.fn(async () => null) },
@@ -126,12 +126,12 @@ describe('MentionService.getUserSuggestionsForPost', () => {
       expect(ids(await suggestionsFor({ post: { authorId: CURRENT_USER_ID } }))).not.toContain(CURRENT_USER_ID);
     });
 
-    it("les commentateurs suivent l'auteur, puis ceux qui ont réagi", async () => {
+    it("les commentateurs suivent l'auteur ; qui a réagi ne sort pas pour un tiers (#14057)", async () => {
       const list = await suggestionsFor({
         commenters: [user(COMMENTER_ID, 'commenter')],
         reactors: [user(REACTOR_ID, 'reactor')],
       });
-      expect(ids(list)).toEqual([AUTHOR_ID, COMMENTER_ID, REACTOR_ID]);
+      expect(ids(list)).toEqual([AUTHOR_ID, COMMENTER_ID]);
       expect(list.every((s) => s.badge === 'conversation')).toBe(true);
     });
 
