@@ -90,8 +90,18 @@ function buildPrisma(rows: MessageRow[]) {
     findFirst: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue(null),
     update: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({}),
   };
+  // #11269 (F5) — la purge d'une vue unique pose son estampille par une
+  // écriture CONDITIONNÉE ; le double la fait passer par `update`, où les
+  // témoins lisent déjà les écritures et en simulent les échecs.
+  const messageWithStamp = {
+    ...message,
+    updateMany: jest.fn<(args: unknown) => Promise<{ count: number }>>().mockImplementation(async (args) => {
+      await message.update(args);
+      return { count: 1 };
+    }),
+  };
   return {
-    message,
+    message: messageWithStamp,
     conversation: {
       findUnique: jest.fn<(args: unknown) => Promise<unknown>>()
         .mockResolvedValue({ lastMessageAt: NOW, createdAt: NOW }),

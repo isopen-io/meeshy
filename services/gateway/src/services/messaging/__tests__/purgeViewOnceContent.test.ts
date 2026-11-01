@@ -27,10 +27,18 @@ function dueRow(overrides: Record<string, unknown> = {}) {
 }
 
 function buildPrisma(rows: unknown[]) {
+  const update = jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({});
   return {
     message: {
       findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue(rows),
-      update: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({}),
+      update,
+      // L'estampille se pose par une écriture CONDITIONNÉE (#11269, F5) : ce
+      // double la fait passer par `update`, pour que chaque témoin lise toutes
+      // les écritures — et leurs échecs — au même endroit.
+      updateMany: jest.fn<(args: unknown) => Promise<{ count: number }>>().mockImplementation(async (args) => {
+        await update(args);
+        return { count: 1 };
+      }),
     },
     messageAttachment: { count: jest.fn<(args: unknown) => Promise<number>>().mockResolvedValue(0) },
     messageStatusEntry: { findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]) },

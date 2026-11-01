@@ -118,6 +118,40 @@ async function forgetDerivedContent(
   }
 }
 
+type PurgedContent = {
+  readonly content: '';
+  readonly encryptedContent: null;
+  readonly encryptionMetadata: null;
+  readonly translations: null;
+  readonly metadata: null;
+  readonly viewOnceBurnAt: Date | null;
+};
+
+/**
+ * Écrit la purge et rend `true` si CETTE passe a posé l'estampille — la seule
+ * qui annonce (#11269, F5). L'estampille se pose par une écriture CONDITIONNÉE
+ * à son absence : deux passes concurrentes qui ont toutes deux lu « pas encore
+ * purgée » ne gagnent pas toutes deux, et `message:view-once-purged` ne part
+ * qu'une fois. Une ligne déjà estampillée (reprise des fichiers) s'écrit sans
+ * elle, et garde la date d'origine.
+ */
+async function writePurge(
+  prisma: ViewOncePurgePrisma,
+  message: DueViewOnce,
+  data: PurgedContent,
+  now: Date,
+): Promise<boolean> {
+  if (!(message.viewOnceBurnedAt instanceof Date)) {
+    const stamped = await prisma.message.updateMany({
+      where: { id: message.id, ...unsetOrNull('viewOnceBurnedAt') },
+      data: { ...data, viewOnceBurnedAt: now },
+    });
+    if (stamped.count > 0) return true;
+  }
+  await prisma.message.update({ where: { id: message.id }, data });
+  return false;
+}
+
 export async function purgeDueViewOnceContent(
   prisma: ViewOncePurgePrisma & Pick<PrismaClient, 'messageAttachment'> & SharedTranslationErasureClient,
   options: PurgeViewOnceOptions,
@@ -153,21 +187,17 @@ export async function purgeDueViewOnceContent(
         ),
       );
       const filesPending = message.attachments.length > 0 && !(await attachmentsGone(prisma, message.id));
-      const firstPurge = !(message.viewOnceBurnedAt instanceof Date);
       if (filesPending) await forgetDerivedContent(prisma, message.id, options.onError);
+      let firstPurge: boolean;
       try {
-        await prisma.message.update({
-          where: { id: message.id },
-          data: {
-            content: '',
-            encryptedContent: null,
-            encryptionMetadata: null,
-            translations: null,
-            metadata: null,
-            viewOnceBurnAt: filesPending ? options.now : null,
-            ...(firstPurge ? { viewOnceBurnedAt: options.now } : {}),
-          },
-        });
+        firstPurge = await writePurge(prisma, message, {
+          content: '',
+          encryptedContent: null,
+          encryptionMetadata: null,
+          translations: null,
+          metadata: null,
+          viewOnceBurnAt: filesPending ? options.now : null,
+        }, options.now);
       } catch (err) {
         options.onError?.(message.id, err);
         continue;
