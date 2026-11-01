@@ -228,3 +228,47 @@ describe('catchUpConsumedViewOnceMedia — balayage borné', () => {
     });
   });
 });
+
+/**
+ * #11269 (audit adversarial, F4) — le rattrapage écrit ses réarmements UN PAR
+ * UN, et dit ce qu'il a écrit avant une erreur : un `Promise.all` lançait
+ * toutes les écritures à la fois, et une erreur laissait l'opérateur sans
+ * savoir lesquelles avaient pris — donc lesquelles le balayage allait effacer.
+ */
+describe('catchUpConsumedViewOnceMedia — écritures une à une, journal de ce qui a pris (F4)', () => {
+  const burned = (id: string) => viewOnce({ id, viewOnceBurnedAt: new Date('2026-10-01T00:00:00.000Z') });
+
+  it('une écriture qui lève arrête la suite, et le journal nomme celles qui ont pris avant elle', async () => {
+    const prisma = buildPrisma([burned('m1'), burned('m2'), burned('m3')], []);
+    prisma.message.update.mockImplementation(async (args: unknown) => {
+      if ((args as { where: { id: string } }).where.id === 'm2') throw new Error('mongo down');
+      return {};
+    });
+    const rearmed: Array<{ messageId: string; kind: string }> = [];
+
+    await expect(
+      catchUpConsumedViewOnceMedia(prisma as any, {
+        now: NOW,
+        apply: true,
+        onRearmed: (entry) => rearmed.push({ messageId: entry.messageId, kind: entry.kind }),
+      }),
+    ).rejects.toThrow('mongo down');
+
+    expect(rearmed).toEqual([{ messageId: 'm1', kind: 'burned-with-media' }]);
+    const written = prisma.message.update.mock.calls.map((call) => (call[0] as { where: { id: string } }).where.id);
+    expect(written).toEqual(['m1', 'm2']);
+  });
+
+  it('chaque réarmement réussi est journalisé, y compris la programmation d’une vue unique lue par tous', async () => {
+    const prisma = buildPrisma([viewOnce(), burned('m2')], openedByBob);
+    const rearmed: string[] = [];
+
+    await catchUpConsumedViewOnceMedia(prisma as any, {
+      now: NOW,
+      apply: true,
+      onRearmed: (entry) => rearmed.push(`${entry.kind}:${entry.messageId}`),
+    });
+
+    expect(rearmed).toEqual(['consumed-unscheduled:m1', 'burned-with-media:m2']);
+  });
+});
