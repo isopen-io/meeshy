@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -258,10 +259,12 @@ private fun FeedPostScenes.captionAt(index: Int, tileWidth: Float, overflow: Int
 }
 
 private const val CAPTION_LINES = 2
+private const val READER_CAPTION_LINES = 4
 
 /**
  * Le plein écran des scènes, ouvert sur celle qu'on a touchée : une page par scène, seule la page montrée joue, son compris. Son
- * menu « … » exporte le post entier en vidéo (#13896).
+ * menu « … » exporte le post entier en vidéo (#13896). La légende de la scène LUE se pose en bas, bornée en lignes, sous les
+ * contrôles du haut qu'elle ne couvre jamais (#14200).
  */
 @Composable
 private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, onDismiss: () -> Unit) {
@@ -273,6 +276,13 @@ private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSc
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             HorizontalPager(state = pagerState, key = { page -> scenes.items[page].id }, modifier = Modifier.fillMaxSize()) { page ->
                 renderer(scenes.items[page], scenes.accentHex, page == pagerState.currentPage, Modifier.fillMaxSize())
+            }
+            PostSceneCaptions.reader(scenes, pagerState.currentPage)?.let { caption ->
+                FeedMediaCaption(
+                    text = caption,
+                    maxLines = READER_CAPTION_LINES,
+                    modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(bottom = MeeshySpacing.sm),
+                )
             }
             if (scenes.items.size > 1) {
                 PageCounter(position = pagerState.currentPage + 1, count = scenes.items.size, modifier = Modifier.align(Alignment.TopStart))

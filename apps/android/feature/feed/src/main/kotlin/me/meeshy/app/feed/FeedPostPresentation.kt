@@ -50,7 +50,8 @@ data class FeedPostImage(
  * Les scènes d'un post composé sur la scène (#13863 R7, iOS `PostSceneCard` / `PostSceneMosaic`) : elles se peignent à la place
  * de ses médias, dans la disposition que l'auteur a choisie, sur la couleur de l'auteur. [captions] : la légende propre de chaque
  * scène, rang pour rang ([PostSceneCaptions]) ; [offersSound] : une scène a quelque chose à faire entendre, que la fiche du post
- * laisse couper (#13893) ; [frames] : ce que la carte montre de chaque scène, rang pour rang ([PostSceneFrames], #14199).
+ * laisse couper (#13893) ; [frames] : ce que la carte montre de chaque scène, rang pour rang ([PostSceneFrames], #14199) ;
+ * [carrierText] : le texte du post servi par le Prisme, qui légende en plein écran une scène sans légende propre (#14200).
  */
 @Immutable
 data class FeedPostScenes(
@@ -60,6 +61,7 @@ data class FeedPostScenes(
     val captions: List<String?> = emptyList(),
     val offersSound: Boolean = false,
     val frames: List<SceneCardFraming> = emptyList(),
+    val carrierText: String? = null,
 ) {
     /** Le rapport du carrousel : sa page la plus HAUTE, pour n'en rogner aucune ; le gabarit 9:16 sans cadrage connu. */
     val carouselAspect: Double get() = frames.mapNotNull(SceneCardFraming::pageAspect).minOrNull() ?: SceneShape.ASPECT
@@ -233,6 +235,7 @@ object FeedPostBuilder {
                     captions = PostSceneCaptions.of(read.items, media),
                     offersSound = PostSceneSound.offers(read.items),
                     frames = PostSceneFrames.of(PostSceneFrames.documents(post.storyEffects, read.items)),
+                    carrierText = content.trim().takeIf(String::isNotEmpty),
                 )
             },
             commentCardSupport = CommentCardReading.support(post, content),

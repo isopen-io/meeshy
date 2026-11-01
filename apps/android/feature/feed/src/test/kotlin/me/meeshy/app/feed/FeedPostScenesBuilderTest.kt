@@ -94,6 +94,15 @@ class FeedPostScenesBuilderTest {
     }
 
     @Test
+    fun `the scenes carry the post text served by the Prisme, never a blank one, to caption the full screen`() {
+        val post = build("""{ "id": "p1", "type": "POST", "content": "  deux vues  ", "media": $media, "storyEffects": ${fixture("post-photo-scenes-2")} }""")
+        val bare = build("""{ "id": "p2", "type": "POST", "content": "   ", "media": $media, "storyEffects": ${fixture("post-photo-scenes-2")} }""")
+
+        assertThat(requireNotNull(post.scenes).carrierText).isEqualTo("deux vues")
+        assertThat(requireNotNull(bare.scenes).carrierText).isNull()
+    }
+
+    @Test
     fun `a reel keeps its own reel card`() {
         val reel = build("""{ "id": "r1", "type": "REEL", "storyEffects": ${fixture("v1-legacy-rich.v3")} }""")
 
