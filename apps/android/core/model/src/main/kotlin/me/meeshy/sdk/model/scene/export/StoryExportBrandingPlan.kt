@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model.scene.export
 
 import kotlin.math.floor
+import kotlin.math.roundToLong
+import me.meeshy.sdk.model.brand.MeeshyBrandJingle
 
 /** Fenêtre [startMillis, startMillis + durationMillis). */
 public data class StoryExportTimeRange(val startMillis: Long, val durationMillis: Long) {
@@ -37,12 +39,32 @@ public data class StoryExportBrandingPlan(
         else -> 1f - (atMillis - introFade.startMillis).toFloat() / introFade.durationMillis.toFloat()
     }
 
-    /** Courbe de volume du jingle d'ouverture : plein pendant la tenue, éteint avec le fondu. */
-    public fun introJingleEnvelope(): List<StoryExportVolumePoint> = listOf(
-        StoryExportVolumePoint(0L, 1f),
-        StoryExportVolumePoint(introFade.startMillis, 1f),
-        StoryExportVolumePoint(introFade.endMillis, 0f),
-    )
+    /**
+     * Courbe de volume du jingle d'ouverture : AUCUNE — il joue en entier, jusqu'à sa propre extinction ; c'est le son de
+     * la story qui lui fait place (miroir de `StoryExportJingleMix` iOS). L'éteindre sur le fondu coupait sa résolution.
+     */
+    public fun introJingleEnvelope(): List<StoryExportVolumePoint> = emptyList()
+
+    /** La fenêtre où le son de la story monte de 0 à 1 : la queue du jingle d'ouverture. `null` sans intro. */
+    public fun storyFadeIn(storyDurationMillis: Long): StoryExportTimeRange? {
+        if (!hasIntro) return null
+        val end = minOf(INTRO_JINGLE_MILLIS, storyEndMillis(storyDurationMillis))
+        if (end <= storyStartMillis) return null
+        return StoryExportTimeRange(storyStartMillis, end - storyStartMillis)
+    }
+
+    /**
+     * La fenêtre où le son de la story s'éteint : il est muet quand le jingle de fermeture entre — sur le fondu de la carte
+     * d'auteur, ou en [LOGO_OUTRO_DUCK_MILLIS] avant le logo seul, qui porte son jingle dès son entrée.
+     */
+    public fun storyFadeOut(storyDurationMillis: Long): StoryExportTimeRange {
+        val floor = storyFadeIn(storyDurationMillis)?.endMillis ?: storyStartMillis
+        val entry = outroStartMillis(storyDurationMillis) + outroJingleOffsetMillis
+        val end = minOf(maxOf(entry, floor), storyEndMillis(storyDurationMillis))
+        val length = if (hasAuthorOutro) OUTRO_OVERLAP_MILLIS else LOGO_OUTRO_DUCK_MILLIS
+        val start = maxOf(end - length, floor)
+        return StoryExportTimeRange(start, end - start)
+    }
 
     /** Opacité de la carte de fin à [atMillis] : elle recouvre la fin de la story sur le chevauchement, puis reste pleine. */
     public fun outroAlpha(atMillis: Long, storyDurationMillis: Long): Float {
@@ -73,6 +95,8 @@ public data class StoryExportBrandingPlan(
         public const val AUTHOR_IDENTITY_FADE_IN_MILLIS: Long = 400
         public const val AUTHOR_CLIP_MILLIS: Long = AUTHOR_LOGO_PHASE_MILLIS + AUTHOR_IDENTITY_PHASE_MILLIS
         public const val AUTHOR_WATERMARK_OPACITY: Double = 0.22
+        public const val LOGO_OUTRO_DUCK_MILLIS: Long = 500
+        public val INTRO_JINGLE_MILLIS: Long = (MeeshyBrandJingle.DURATION_SECONDS * 1_000).roundToLong()
 
         public fun make(hasIntro: Boolean, hasAuthorOutro: Boolean): StoryExportBrandingPlan {
             val start = if (hasIntro) INTRO_HOLD_MILLIS else 0L

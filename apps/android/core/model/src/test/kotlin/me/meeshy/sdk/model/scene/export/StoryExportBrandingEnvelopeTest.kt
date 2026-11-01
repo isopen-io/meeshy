@@ -50,9 +50,46 @@ class StoryExportBrandingEnvelopeTest {
     }
 
     @Test
-    fun `the opening jingle holds then dies with the fade`() {
-        assertThat(plan.introJingleEnvelope()).containsExactly(
-            StoryExportVolumePoint(0, 1f), StoryExportVolumePoint(1_200, 1f), StoryExportVolumePoint(1_700, 0f),
+    fun `the opening jingle plays whole, the story makes room for it`() {
+        assertThat(plan.introJingleEnvelope()).isEmpty()
+        assertThat(plan.storyFadeIn(story)).isEqualTo(StoryExportTimeRange(1_200, 1_000))
+        assertThat(StoryExportBrandingPlan.INTRO_JINGLE_MILLIS).isEqualTo(2_200)
+    }
+
+    @Test
+    fun `with the author card the story fades under the card and is silent when its jingle enters`() {
+        val fall = plan.storyFadeOut(story)
+        assertThat(fall).isEqualTo(StoryExportTimeRange(plan.outroStartMillis(story), 1_500))
+        assertThat(fall.endMillis).isEqualTo(plan.outroStartMillis(story) + plan.outroJingleOffsetMillis)
+    }
+
+    @Test
+    fun `with the logo card the story is silent before its jingle enters with the logo`() {
+        val logo = StoryExportBrandingPlan.make(hasIntro = true, hasAuthorOutro = false)
+        val fall = logo.storyFadeOut(story)
+        assertThat(fall.endMillis).isEqualTo(logo.outroStartMillis(story))
+        assertThat(fall.durationMillis).isEqualTo(StoryExportBrandingPlan.LOGO_OUTRO_DUCK_MILLIS)
+    }
+
+    @Test
+    fun `on a short story the rise and the fall never overlap`() {
+        val short = 1_500L
+        val rise = plan.storyFadeIn(short)!!
+        val fall = plan.storyFadeOut(short)
+        assertThat(fall.startMillis).isAtLeast(rise.endMillis)
+        assertThat(fall.endMillis).isAtMost(plan.storyEndMillis(short))
+    }
+
+    @Test
+    fun `without an intro the story does not rise`() {
+        assertThat(StoryExportBrandingPlan.make(hasIntro = false, hasAuthorOutro = true).storyFadeIn(story)).isNull()
+    }
+
+    @Test
+    fun `a sound under the opening jingle tail rises from silence`() {
+        val placed = StoryExportBrandedSounds.of(listOf(sound(end = 2_000)), plan, story, withOutro = false).single()
+        assertThat(placed.envelope).containsExactly(
+            StoryExportVolumePoint(1_200, 0f), StoryExportVolumePoint(2_200, 0.5f),
         ).inOrder()
     }
 
@@ -73,14 +110,16 @@ class StoryExportBrandingEnvelopeTest {
     fun `a sound still playing under the end card is faded to silence across the overlap`() {
         val placed = StoryExportBrandedSounds.of(listOf(sound()), plan, story, withOutro = true).single()
         assertThat(placed.envelope).containsExactly(
+            StoryExportVolumePoint(1_200, 0f),
+            StoryExportVolumePoint(2_200, 0.5f),
             StoryExportVolumePoint(plan.outroStartMillis(story), 0.5f),
             StoryExportVolumePoint(plan.storyEndMillis(story), 0f),
         ).inOrder()
     }
 
     @Test
-    fun `a sound that ended before the end card is left alone`() {
-        val placed = StoryExportBrandedSounds.of(listOf(sound(end = 2_000)), plan, story, withOutro = true).single()
+    fun `a sound that ended before the end card is not faded out`() {
+        val placed = StoryExportBrandedSounds.of(listOf(sound(start = 1_500, end = 3_000)), plan, story, withOutro = true).single()
         assertThat(placed.envelope).isEmpty()
     }
 
@@ -89,7 +128,7 @@ class StoryExportBrandingEnvelopeTest {
         val curve = listOf(StoryExportVolumePoint(0, 1f), StoryExportVolumePoint(9_000, 0.2f))
         val placed = StoryExportBrandedSounds.of(listOf(sound(envelope = curve)), plan, story, withOutro = true).single()
         val from = plan.outroStartMillis(story)
-        assertThat(placed.envelope.first()).isEqualTo(StoryExportVolumePoint(1_200, 1f))
+        assertThat(placed.envelope.first()).isEqualTo(StoryExportVolumePoint(1_200, 0f))
         assertThat(placed.envelope.last()).isEqualTo(StoryExportVolumePoint(plan.storyEndMillis(story), 0f))
         assertThat(placed.envelope.map { it.atMillis }).isInStrictOrder()
         assertThat(placed.envelope.any { it.atMillis == from }).isTrue()
