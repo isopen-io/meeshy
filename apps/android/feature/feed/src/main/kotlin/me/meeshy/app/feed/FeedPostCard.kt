@@ -100,6 +100,7 @@ internal fun PostCard(
                 onQuote = onQuote,
                 onSend = onSend,
             )
+            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments) }
         }
     }
 }

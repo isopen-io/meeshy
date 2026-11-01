@@ -88,6 +88,7 @@
     <string name="feed_translations_badge_hint">Affiche les langues disponibles</string>
     <string name="feed_unknown_author">Inconnu</string>
     <string name="feed_unlike">Je n\'aime plus</string>
+    <string name="feed_view_comments">Voir les %1$d commentaires</string>
     <string name="hashtag_results_empty">Aucun post avec #%1$s</string>
     <string name="mood_bubble_react">Réaction %1$s</string>
     <string name="mood_bubble_reply">Répondre</string>
