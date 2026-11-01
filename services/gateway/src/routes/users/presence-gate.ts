@@ -106,7 +106,8 @@ export function presenceFor(
  * Applique le gate de présence sur un objet profil, en masquant
  * `isOnline`/`lastActiveAt` selon la visibilité résolue par VIEWER
  * (`resolveForTarget`) : servie à soi-même et à ADMIN/BIGBOSS, à un ami
- * ACCEPTÉ selon les préférences de la cible, masquée à tout autre lecteur —
+ * ACCEPTÉ selon son NIVEAU (Ami : « en ligne » seulement, jamais `lastActiveAt` ;
+ * Proche et au-dessus : le détail, sous les préférences de la cible), masquée à tout autre lecteur —
  * MODERATOR compris (aucun bypass), affiliation/parrainage jamais comptés,
  * anonyme/non authentifié (viewer `null`) masqué.
  */

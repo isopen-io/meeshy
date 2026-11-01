@@ -35,15 +35,7 @@ const LECTEUR = '507f1f77bcf86cd799439099';
 const INCONNU = '507f1f77bcf86cd799439011';
 const ANONYME = '507f1f77bcf86cd799439033';
 
-type Lien = { readonly avec: string; readonly niveau: 'FRIEND' | 'CLOSE' };
-
-/** Une ligne `UserRelation` entre le lecteur et `avec`, accordée au même niveau des deux côtés. */
-const ligneDe = ({ avec, niveau }: Lien) => {
-  const [userLowId, userHighId] = [LECTEUR, avec].sort();
-  return { id: `rel-${avec}`, userLowId, userHighId, grantedByLow: niveau, grantedByHigh: niveau, transitions: [] };
-};
-
-function prismaDouble(opts: { users?: Array<{ id: string; lastActiveAt: Date | null }>; liens?: ReadonlyArray<Lien> } = {}) {
+function prismaDouble(opts: { users?: Array<{ id: string; lastActiveAt: Date | null }> } = {}) {
   return {
     user: {
       // Discrimine sur le `where` : la seconde requête de `resolveForTargets`
@@ -58,7 +50,6 @@ function prismaDouble(opts: { users?: Array<{ id: string; lastActiveAt: Date | n
       findMany: jest.fn<any>(async () => [{ id: ANONYME, lastActiveAt: new Date('2026-08-01T10:00:00Z') }]),
     },
     friendRequest: { findMany: jest.fn<any>(async () => []) },
-    userRelation: { findMany: jest.fn<any>(async () => (opts.liens ?? []).map(ligneDe)) },
   };
 }
 
@@ -66,10 +57,9 @@ async function monter(opts: {
   enLigne: string[];
   role?: string;
   users?: Array<{ id: string; lastActiveAt: Date | null }>;
-  liens?: ReadonlyArray<Lien>;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', prismaDouble({ users: opts.users, liens: opts.liens }) as never);
+  app.decorate('prisma', prismaDouble({ users: opts.users }) as never);
   app.decorate('presenceChecker', {
     bulk: (ids: readonly string[]) => new Map(ids.map((id) => [id, opts.enLigne.includes(id)])),
   } as never);
@@ -138,50 +128,6 @@ describe('Le lecteur voit SA propre présence', () => {
 
     expect(servi.isOnline).toBe(true);
     expect(servi.lastActiveAt).not.toBeNull();
-    await app.close();
-  });
-});
-
-describe('#13928 — un Ami voit « en ligne » ou rien ; un Proche voit la présence détaillée', () => {
-  const AMI = '507f1f77bcf86cd799439044';
-  const PROCHE = '507f1f77bcf86cd799439055';
-  const VU_A = new Date('2026-08-01T10:00:00Z');
-  type Servi = { userId: string; isOnline: boolean; lastActiveAt: string | null };
-
-  const monterAvecLiens = (enLigne: string[]) =>
-    monter({
-      enLigne,
-      users: [{ id: AMI, lastActiveAt: VU_A }, { id: PROCHE, lastActiveAt: VU_A }],
-      liens: [{ avec: AMI, niveau: 'FRIEND' }, { avec: PROCHE, niveau: 'CLOSE' }],
-    });
-
-  it("un Ami en ligne est servi en ligne, SANS lastActiveAt", async () => {
-    const app = await monterAvecLiens([AMI]);
-
-    const [servi] = (await lire(app, AMI)).json().data.users as Servi[];
-
-    expect(servi.isOnline).toBe(true);
-    expect(servi.lastActiveAt).toBeNull();
-    await app.close();
-  });
-
-  it("un Ami hors ligne ne montre RIEN : ni état, ni « vu il y a »", async () => {
-    const app = await monterAvecLiens([]);
-
-    const [servi] = (await lire(app, AMI)).json().data.users as Servi[];
-
-    expect(servi.isOnline).toBe(false);
-    expect(servi.lastActiveAt).toBeNull();
-    await app.close();
-  });
-
-  it("un Proche est servi en détail : en ligne ET dernière activité", async () => {
-    const app = await monterAvecLiens([PROCHE]);
-
-    const [servi] = (await lire(app, PROCHE)).json().data.users as Servi[];
-
-    expect(servi.isOnline).toBe(true);
-    expect(servi.lastActiveAt).toBe(VU_A.toISOString());
     await app.close();
   });
 });

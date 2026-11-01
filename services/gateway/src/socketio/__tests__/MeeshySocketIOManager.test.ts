@@ -2210,10 +2210,23 @@ describe('MeeshySocketIOManager', () => {
      */
     function stubPresenceRelations(opts: {
       friendIds?: string[];
+      closeIds?: string[];
       adminIds?: string[];
       blockerIds?: string[];
     } = {}) {
-      const { friendIds = [], adminIds = [], blockerIds = [] } = opts;
+      const { friendIds = [], closeIds = [], adminIds = [], blockerIds = [] } = opts;
+      // Un Proche est une ligne `UserRelation` accordée CLOSE des deux côtés (#13928).
+      prisma.userRelation.findMany.mockResolvedValue(
+        closeIds.map((id) => ({
+          id: `rel-${id}`,
+          userLowId: 'user-subject',
+          userHighId: id,
+          grantedByLow: 'CLOSE',
+          grantedByHigh: 'CLOSE',
+          transitions: [],
+          updatedAt: new Date(),
+        })),
+      );
       // `senderId` porte l'ami : le résolveur rend l'AUTRE bout, quel que soit
       // le sens de la demande — ce témoin n'a donc pas à connaître le sujet.
       prisma.friendRequest.findMany.mockResolvedValue(
@@ -2282,7 +2295,7 @@ describe('MeeshySocketIOManager', () => {
       expect(rec.rooms()).toEqual([ROOMS.user('user-subject')]);
     });
 
-    it('adresse la transition à un AMI accepté', async () => {
+    it('adresse la transition à un AMI accepté — « en ligne » SANS lastActiveAt (#13928)', async () => {
       stubSubject();
       stubPresenceRelations({ friendIds: ['user-friend'] });
 
@@ -2293,8 +2306,32 @@ describe('MeeshySocketIOManager', () => {
         userId: 'user-subject',
         username: 'Alice',
         isOnline: true,
+        lastActiveAt: null,
+      });
+    });
+
+    it('adresse un PROCHE avec la présence détaillée : lastActiveAt servi (#13928)', async () => {
+      stubSubject();
+      stubPresenceRelations({ closeIds: ['user-close'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.payloadForRoom(ROOMS.user('user-close'))).toEqual({
+        userId: 'user-subject',
+        username: 'Alice',
+        isOnline: true,
         lastActiveAt: SEEN_AT,
       });
+    });
+
+    it('un Ami et un Proche d\'un même sujet reçoivent deux charges : jamais lastActiveAt à l\'Ami (#13928)', async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], closeIds: ['user-close'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', false, false);
+
+      expect(rec.payloadForRoom(ROOMS.user('user-friend'))?.lastActiveAt).toBeNull();
+      expect(rec.payloadForRoom(ROOMS.user('user-close'))?.lastActiveAt).toEqual(SEEN_AT);
     });
 
     it('sert un ADMIN même quand showOnlineStatus est FAUX — et tait alors l\'ami', async () => {
