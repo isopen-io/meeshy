@@ -62,6 +62,7 @@ import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-va
 import { detectContentLanguage } from '../utils/content-language';
 import { unclaimedContentLanguage } from './posts/unclaimedContentLanguage';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { resolveServerTargetLanguages } from './message-translation/serverTargetLanguages';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -505,9 +506,11 @@ export class PostService {
       // dans une langue déjà parlée par (une partie de) son audience
       // déclenche un aller-retour NLLB source→source qui réécrit
       // `translations.<source>` avec une paraphrase de l'original au lieu de
-      // le laisser intact.
+      // le laisser intact. Une langue sans code NLLB-200 (#3659) ne se demande
+      // ni ne se compte : `expectedCount` attendait sinon 60 s une langue
+      // refusée avant de retirer l'écouteur.
       const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
-      const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
+      const targetLanguages = resolveServerTargetLanguages(sourceLanguage, allTargetLanguages);
 
       if (targetLanguages.length === 0) {
         log.info('StoryTranslation: no target languages', { postId });
