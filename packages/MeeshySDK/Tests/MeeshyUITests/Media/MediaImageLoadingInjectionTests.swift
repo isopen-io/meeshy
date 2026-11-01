@@ -9,12 +9,12 @@ private final class SpyMediaImageLoader: MediaImageLoading, @unchecked Sendable 
         var calls: [String] = []
         var pixelSizes: [CGFloat] = []
         var persistedFile: URL?
-        var dataFailure: Error?
+        var dataFailure: (any Error & Sendable)?
     }
 
     private let lock = OSAllocatedUnfairLock(initialState: State())
 
-    init(persistedFile: URL? = nil, dataFailure: Error? = nil) {
+    init(persistedFile: URL? = nil, dataFailure: (any Error & Sendable)? = nil) {
         lock.withLock { $0.persistedFile = persistedFile; $0.dataFailure = dataFailure }
     }
 
