@@ -66,3 +66,20 @@ fun rememberStoryItemExport(key: String, accentHex: String? = null): (StoryItem,
     return remember(projector, accent) { { item, mode -> current.start(mode, listOf(item to projector.slideOf(item, accentHex = accent))) } }
 }
 
+
+/**
+ * La vue Imager des menus ⋯ du fil (#14329) — carte de post, carte de réel, détail d'un post : montée UNE fois par
+ * l'application, elle reçoit au geste les scènes d'une œuvre composée et la couleur de son auteur, puis ouvre la vue Imager.
+ */
+@Composable
+fun rememberSceneImager(key: String): (scenes: List<StoryItem>, accentHex: String?) -> Unit {
+    val projector: RepostSceneViewModel = hiltViewModel()
+    val export = rememberSceneVideoExport(key) { emptyList() }
+    val current by rememberUpdatedState(export)
+    return remember(projector) {
+        { items, accentHex ->
+            val accent = accentHex ?: EXPORT_FALLBACK_ACCENT
+            current.start(StoryExportMode.IMAGER, items.map { it to projector.slideOf(it, accentHex = accent) })
+        }
+    }
+}

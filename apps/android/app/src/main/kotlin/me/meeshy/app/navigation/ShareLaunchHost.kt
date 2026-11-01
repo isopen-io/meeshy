@@ -14,12 +14,14 @@ import me.meeshy.app.feed.CommentCardExporter
 import me.meeshy.app.feed.LocalCommentCardExporter
 import me.meeshy.app.feed.LocalPostSceneCardRenderer
 import me.meeshy.app.feed.LocalPostSceneExportRenderer
+import me.meeshy.app.feed.LocalPostSceneImager
 import me.meeshy.app.feed.LocalPostSceneReaderRenderer
 import me.meeshy.app.feed.LocalReelSceneRenderer
 import me.meeshy.app.feed.LocalRepostSceneRenderer
 import me.meeshy.app.feed.LocalSceneItemExportHost
 import me.meeshy.app.feed.LocalStoryOpener
 import me.meeshy.app.feed.PostSceneExportRenderer
+import me.meeshy.app.feed.PostSceneImager
 import me.meeshy.app.feed.PostSceneReaderRenderer
 import me.meeshy.app.feed.ReelSceneRenderer
 import me.meeshy.app.feed.RepostSceneRenderer
@@ -29,6 +31,7 @@ import me.meeshy.app.stories.PostSceneExportMenu
 import me.meeshy.app.stories.PostSceneReaderScene
 import me.meeshy.app.stories.ReelCardScene
 import me.meeshy.app.stories.RepostSceneCard
+import me.meeshy.app.stories.rememberSceneImager
 import me.meeshy.app.stories.rememberStoryItemExport
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.component.composer.LocalUniversalComposer
@@ -38,6 +41,8 @@ import me.meeshy.app.stories.ComposerEmojiStickerSheet
 import me.meeshy.ui.component.composer.UniversalComposer
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.ShareLauncher
+
+private const val POST_SCENE_IMAGER_KEY = "post-scene-imager"
 
 private data class PendingShare(val subject: ShareSubject, val onDismissed: () -> Unit)
 
@@ -63,6 +68,9 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     val postSceneExport: PostSceneExportRenderer = remember { { scenes, accent, modifier -> PostSceneExportMenu(scenes, accent, modifier) } }
     // Le média d'un commentaire, ouvert en plein écran, s'image et sort entier par ce même moteur (#13915).
     val sceneItemExport: SceneItemExportHost = remember { { key -> rememberStoryItemExport(key) } }
+    // « Imager » une œuvre composée depuis un menu ⋯ du fil ouvre la vue Imager, montée ici une fois pour tout le fil (#14329).
+    val sceneImager = rememberSceneImager(POST_SCENE_IMAGER_KEY)
+    val postSceneImager: PostSceneImager = remember(sceneImager) { { scenes -> sceneImager(scenes.items, scenes.accentHex) } }
     // « Imager » un commentaire peint sa carte par l'atelier des conversations, que le fil ne connaît pas (#13922).
     val commentCardExport: CommentCardExporter = remember { { key, card, onDismiss -> CommentCardExportSheet(key, card, onDismiss) } }
     // Les commentaires s'écrivent dans le composeur des conversations, réglé pour un commentaire (#14265).
@@ -79,6 +87,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
         LocalPostSceneReaderRenderer provides postSceneReader,
         LocalPostSceneExportRenderer provides postSceneExport,
         LocalSceneItemExportHost provides sceneItemExport,
+        LocalPostSceneImager provides postSceneImager,
         LocalCommentCardExporter provides commentCardExport,
         LocalStoryOpener provides openStory,
         LocalUniversalComposer provides universalComposer,

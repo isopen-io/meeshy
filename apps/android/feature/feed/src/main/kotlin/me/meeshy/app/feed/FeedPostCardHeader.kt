@@ -99,6 +99,7 @@ internal fun FeedPostCardHeader(
             onPin = onPin,
             onReport = onReport,
             onDelete = onDelete,
+            onImager = rememberPostImager(post),
         )
     }
 }

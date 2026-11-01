@@ -79,4 +79,20 @@ class PostActionMenuTest {
         val actions = PostActionMenu.actions(PostActionContext(isOwn = true, isBookmarked = false, hasText = false))
         assertThat(actions).doesNotContain(PostAction.CopyText)
     }
+
+    // iOS `PostSaveMenuItems` : « Imager » suit l'enregistrement, et seulement sur une oeuvre composee (#14329).
+    @Test
+    fun `a composed work offers imager right after the bookmark entry`() {
+        listOf(false, true).forEach { bookmarked ->
+            val actions = PostActionMenu.actions(PostActionContext(isOwn = false, isBookmarked = bookmarked, imageable = true))
+            val save = if (bookmarked) PostAction.Unbookmark else PostAction.Bookmark
+            assertThat(actions.indexOf(PostAction.Imager)).isEqualTo(actions.indexOf(save) + 1)
+        }
+    }
+
+    @Test
+    fun `a post without a composed work never offers imager`() {
+        val actions = PostActionMenu.actions(PostActionContext(isOwn = true, isBookmarked = false))
+        assertThat(actions).doesNotContain(PostAction.Imager)
+    }
 }

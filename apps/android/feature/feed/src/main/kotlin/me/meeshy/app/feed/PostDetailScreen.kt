@@ -158,6 +158,7 @@ fun PostDetailScreen(
                             )
                         }
                     },
+                    actions = { state.post?.let { PostDetailImagerMenu(it) } },
                 )
             },
             snackbarHost = { SnackbarHost(snackbar) },
