@@ -345,7 +345,7 @@ const makeReply = () => {
 const PRESENCE_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
 
 const lawFaithfulResolver =
-  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  (friendsOfViewer: ReadonlySet<string> = new Set(), level: 'FRIEND' | 'CLOSE' = 'CLOSE') =>
   async (viewer: PresenceViewer, ids: readonly string[]) =>
     new Map(
       ids.map((id) => [
@@ -354,7 +354,7 @@ const lawFaithfulResolver =
           ? resolvePresenceVisibility({
               isSelf: viewer.userId === id,
               viewerRole: viewer.role,
-              relationLevel: friendsOfViewer.has(id) ? 'FRIEND' : 'PUBLIC',
+              relationLevel: friendsOfViewer.has(id) ? level : 'PUBLIC',
               targetShowOnlineStatus: true,
               targetShowLastSeen: true,
               targetIsDeactivated: false,
@@ -1708,7 +1708,19 @@ describe('registerCoreRoutes', () => {
         expect(row.participants[0].isOnline).toBe(true);
       });
 
-      it('ami accepté ⇒ présence du participant ET de l\'expéditeur servie', async () => {
+      it('Ami ⇒ « en ligne » du participant ET de l\'expéditeur, jamais lastActiveAt (#13928)', async () => {
+        mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([OTHER_USER_ID]), 'FRIEND'));
+
+        const row = await list(makeViewerRequest({ role: 'USER' }));
+
+        expect(row.participants[0].isOnline).toBe(true);
+        expect(row.participants[0].lastActiveAt).toBeNull();
+        expect(row.participants[0].user.lastActiveAt).toBeNull();
+        expect(row.lastMessage.sender.isOnline).toBe(true);
+        expect(row.lastMessage.sender.lastActiveAt).toBeNull();
+      });
+
+      it('Proche ⇒ présence du participant ET de l\'expéditeur servie', async () => {
         mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([OTHER_USER_ID])));
 
         const row = await list(makeViewerRequest({ role: 'USER' }));
@@ -2096,13 +2108,22 @@ describe('registerCoreRoutes', () => {
         expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'USER' }, [OTHER_USER_ID]);
       });
 
-      it('ami accepté ⇒ présence servie', async () => {
+      it('Proche ⇒ présence détaillée servie', async () => {
         mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([OTHER_USER_ID])));
 
         const served = await detail(makeViewerRequest({ role: 'USER' }, { params: { id: CONV_ID } }));
 
         expect(served.isOnline).toBe(true);
         expect(served.lastActiveAt).toEqual(LAST_SEEN);
+      });
+
+      it('Ami ⇒ « en ligne » servi, lastActiveAt JAMAIS (#13928)', async () => {
+        mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([OTHER_USER_ID]), 'FRIEND'));
+
+        const served = await detail(makeViewerRequest({ role: 'USER' }, { params: { id: CONV_ID } }));
+
+        expect(served.isOnline).toBe(true);
+        expect(served.lastActiveAt).toBeNull();
       });
 
       it('co-participant NON ami ⇒ isOnline false et lastActiveAt null', async () => {
