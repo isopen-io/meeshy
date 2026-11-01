@@ -385,3 +385,24 @@ extension StoryMediaObject {
                   sourceEnd: sourceEnd)
     }
 }
+
+extension StoryEffects {
+    /// **Le média d'indice `index` devient LE fond, et se pose cadré** (#14195),
+    /// comme un fond neuf : centré, à l'échelle 1, sans rotation. Ni sa
+    /// géométrie de premier plan (cascade de pose, réduction, rotation), ni le
+    /// zoom et le décalage de l'ancien fond ne le suivent ; l'ajustement et le
+    /// fond des bandes, choix de la scène, restent.
+    public mutating func promoteBackgroundMedia(at index: Int) {
+        mediaObjects = mediaObjects?.enumerated().map { position, media in
+            var copie = media
+            copie.isBackground = position == index
+            guard position == index else { return copie }
+            copie.x = 0.5
+            copie.y = 0.5
+            copie.scale = 1
+            copie.rotation = 0
+            return copie
+        }
+        backgroundTransform = backgroundTransform?.sceneChoices
+    }
+}

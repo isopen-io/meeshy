@@ -118,20 +118,56 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertFalse(ComposerRestChrome.toolColumnIsShown(etat(camera: true)))
     }
 
-    /// Un panneau du bas (fond, cadrage, effets) n'a qu'un geste à côté de lui :
-    /// le fermer. La colonne s'efface, ✕ reste.
-    func test_unPanneauEnBas_effaceLaColonne_gardeLaCroix() {
-        let fond = etat(panneau: true)
-        XCTAssertTrue(ComposerRestChrome.topRowIsShown(fond))
-        XCTAssertFalse(ComposerRestChrome.toolColumnIsShown(fond))
+    /// **La scène réduite est nue** (#14191, jumelle d'Android #14186) : un
+    /// panneau du bas (fond, cadrage, effets, frise) réduit la scène au-dessus
+    /// de lui, et rien de ce qu'elle portait en plein écran ne s'y pose plus —
+    /// ni ✕, ni ↶ ↷, ni la rangée des diapos, ni la colonne. Seuls la scène
+    /// réduite et le panneau restent.
+    func test_unPanneauEnBas_laisseLaSceneReduiteNue() {
+        for fond in [etat(panneau: true), etat(panneau: true, frise: true)] {
+            XCTAssertFalse(ComposerRestChrome.closeIsShown(fond), "✕ ne se pose plus sur la scène réduite")
+            XCTAssertFalse(ComposerRestChrome.historyIsShown(fond), "↶ ↷ non plus")
+            XCTAssertFalse(ComposerRestChrome.slideRowIsShown(fond, slideCount: 3), "ni la rangée des diapos")
+            XCTAssertFalse(ComposerRestChrome.toolColumnIsShown(fond), "ni la colonne des outils")
+        }
     }
 
-    /// La frise réécrit la slide à sa fermeture : défaire pendant qu'elle est
-    /// ouverte serait écrasé.
-    func test_laFriseOuverte_masqueLHistorique() {
-        let frise = etat(panneau: true, frise: true)
-        XCTAssertFalse(ComposerRestChrome.historyIsShown(frise))
-        XCTAssertTrue(ComposerRestChrome.topRowIsShown(frise))
+    /// ↶ ↷ quittent la scène réduite sans passer au rail droit : le repos réduit
+    /// n'a qu'un geste, fermer le panneau.
+    func test_unPanneauEnBas_auRepos_retireLHistoriqueSansLeDeplacer() {
+        XCTAssertTrue(ComposerRestChrome.historyIsWithdrawn(etat(panneau: true)))
+        XCTAssertFalse(ComposerRestChrome.historyIsWithdrawn(etat()), "au repos, ↶ ↷ sont sur la scène")
+        XCTAssertFalse(ComposerRestChrome.historyIsWithdrawn(etat(outil: true, panneau: true)),
+                       "un outil ouvert garde ↶ ↷ dans SON rail")
+    }
+
+    /// Les propriétés d'un objet sélectionné réduisent aussi la scène : ses
+    /// options restent dans leur colonne, ↶ ↷ et la rangée des diapos partent.
+    func test_lesProprietesDUnObjet_gardentSesOptions_retirentLaRangeeDuHaut() {
+        let proprietes = ComposerRestChrome.State(toolIsOpen: false, writesText: false, cameraIsArmed: false,
+                                                  bottomPanelIsOpen: false, timelineIsOpen: false,
+                                                  objectIsSelected: true, propertiesAreOpen: true)
+        XCTAssertTrue(ComposerRestChrome.selectionColumnIsShown(proprietes), "les options de l'objet restent")
+        XCTAssertFalse(ComposerRestChrome.closeIsShown(proprietes))
+        XCTAssertFalse(ComposerRestChrome.historyIsShown(proprietes))
+        XCTAssertFalse(ComposerRestChrome.slideRowIsShown(proprietes, slideCount: 3))
+    }
+
+    func test_auRepos_laRangeeDesDiaposParait_desDeuxDiapos() {
+        XCTAssertTrue(ComposerRestChrome.slideRowIsShown(etat(), slideCount: 2))
+        XCTAssertFalse(ComposerRestChrome.slideRowIsShown(etat(), slideCount: 1))
+        XCTAssertFalse(ComposerRestChrome.slideRowIsShown(etat(outil: true), slideCount: 3))
+    }
+
+    /// Le chrome posé sur la scène lit la loi, pas le seul compte des diapos ;
+    /// la surface lui dit quand les propriétés occupent le bas, et le rail
+    /// droit ne recueille pas un historique retiré.
+    func test_laSurface_brancheLaLoiDeLaSceneReduite() throws {
+        let chrome = try ComposerSceneArrangementTests.source("ComposerSceneOverlayChrome.swift")
+        XCTAssertTrue(chrome.contains("ComposerRestChrome.slideRowIsShown(state, slideCount: slideCount)"))
+        let surface = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
+        XCTAssertTrue(surface.contains("propertiesAreOpen: propertiesSheet != nil"))
+        XCTAssertTrue(surface.contains("ComposerRestChrome.historyIsWithdrawn(restState)"))
     }
 
     // MARK: - L'historique

@@ -82,6 +82,37 @@ export async function getCommunityCoMemberIdsBounded(
 }
 
 /**
+ * Les co-membres actifs de `userId` PARMI `candidates` — l'intersection, jamais la
+ * communauté entière (#14081) : les appartenances de `userId`, puis, dans ses
+ * communautés, celles des seuls candidats. Coût en O(candidats × communautés de
+ * `userId`), quelle que soit la taille des communautés ; aucun `take`, qui
+ * couperait un candidat présent dans plusieurs d'entre elles. Panne ⇒ ensemble
+ * vide (personne n'est admis).
+ */
+export async function filterCommunityCoMembersAmong(
+  prisma: CommunityVisibilityPrisma,
+  userId: string,
+  candidates: readonly string[],
+): Promise<Set<string>> {
+  const others = [...new Set(candidates)].filter((id) => id !== userId);
+  if (others.length === 0) return new Set();
+  try {
+    const memberships = await prisma.communityMember.findMany({
+      where: { userId, isActive: true },
+      select: { communityId: true },
+    });
+    if (memberships.length === 0) return new Set();
+    const coMembers = await prisma.communityMember.findMany({
+      where: { communityId: { in: memberships.map((m) => m.communityId) }, userId: { in: others }, isActive: true },
+      select: { userId: true },
+    });
+    return new Set(coMembers.map((m) => m.userId));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
  * Vrai ssi `a` et `b` partagent au moins une appartenance active à une communauté.
  * Pour le check ACL d'un post unitaire (canUserViewPost) — évite de matérialiser
  * toute la liste de co-membres.

@@ -9,11 +9,12 @@
  * `SocialEventsHandler.getVisibilityFilteredRecipients`,
  * `StoryTextObjectTranslationService.resolveBroadcastRecipients`.
  *
- * `createPostMentionNotificationsBatch`, lui, NE FILTRE PLUS : nommer
- * quelqu'un dans un post lui OUVRE désormais le contenu (`resolveReferenceAccess`),
- * donc taire sa notification reviendrait à cacher l'accès qu'on vient de lui
- * donner. Ce qui protège à sa place vit dans le composer, pas ici — il avertit
- * l'auteur quand la personne choisie n'appartient pas à son audience.
+ * `createPostMentionNotificationsBatch`, lui, NE FILTRE PLUS par l'audience :
+ * nommer quelqu'un dans un post lui OUVRE désormais le contenu
+ * (`resolveReferenceAccess`). Mais être autorisé à lire n'est pas être PRÉVENU
+ * (#14168) : dans les deux lots, seul un LIEN de celui qui nomme reçoit la
+ * mention. Ici tout le monde est lié sauf `STRANGER_ID` ; la règle de lien
+ * elle-même est tenue par `mention-lien-14168.test.ts`.
  *
  * @jest-environment node
  */
@@ -60,6 +61,9 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       findUnique: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    userRelation: {
+      findMany: jest.fn(),
+    },
     userPreferences: {
       findUnique: jest.fn(),
     },
@@ -71,6 +75,11 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     },
     participant: {
       findMany: jest.fn(),
+    },
+    message: {
+      findMany: jest.fn(async ({ where }: { where: { senderId: { in: string[] } } }) =>
+        where.senderId.in.map((senderId) => ({ senderId }))
+      ),
     },
   };
 
@@ -104,6 +113,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { aliveAndUnblocked, userRelationRows } from '../../helpers/linked-to-everyone';
 
 const AUTHOR_ID = '507f1f77bcf86cd799439001';
 const FRIEND_ID = '507f1f77bcf86cd799439002';
@@ -130,7 +140,8 @@ describe('NotificationService — les mentions respectent l’audience du post',
       displayName: 'Author',
       avatar: null,
     });
-    prisma.user.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockImplementation(aliveAndUnblocked());
+    prisma.userRelation.findMany.mockImplementation(userRelationRows('FRIEND', [STRANGER_ID]));
     prisma.notification.create.mockResolvedValue({
       id: 'notif-1',
       type: 'user_mentioned',
@@ -158,7 +169,7 @@ describe('NotificationService — les mentions respectent l’audience du post',
         ? [{ conversationId: DM_CONVERSATION_ID }]
         : (where?.userId?.in as string[] ?? [])
             .filter((id) => id === DM_CONTACT_ID)
-            .map((id) => ({ userId: id }))
+            .map((id) => ({ id: `participant-${id}`, userId: id }))
     );
   };
 
@@ -169,7 +180,7 @@ describe('NotificationService — les mentions respectent l’audience du post',
     );
 
   describe('createPostMentionNotificationsBatch', () => {
-    it('notifie DÉSORMAIS un inconnu nommé dans un post réservé aux amis — le nommer lui ouvre le post', async () => {
+    it('un post réservé aux amis ne décide plus : l’ami nommé est prévenu, l’inconnu nommé ne l’est pas (#14168)', async () => {
       await service.createPostMentionNotificationsBatch({
         postId: POST_ID,
         posterId: AUTHOR_ID,
@@ -178,10 +189,10 @@ describe('NotificationService — les mentions respectent l’audience du post',
         visibility: 'FRIENDS',
       });
 
-      expect(notifiedUserIds()).toEqual([FRIEND_ID, STRANGER_ID]);
+      expect(notifiedUserIds()).toEqual([FRIEND_ID]);
     });
 
-    it('notifie DÉSORMAIS tout le monde même sur un post PRIVATE — être nommé ouvre le contenu quelle que soit sa visibilité', async () => {
+    it('même sur un post PRIVATE, la visibilité ne décide pas : seul le lien le fait (#14168)', async () => {
       await service.createPostMentionNotificationsBatch({
         postId: POST_ID,
         posterId: AUTHOR_ID,
@@ -190,10 +201,10 @@ describe('NotificationService — les mentions respectent l’audience du post',
         visibility: 'PRIVATE',
       });
 
-      expect(notifiedUserIds()).toEqual([FRIEND_ID, STRANGER_ID]);
+      expect(notifiedUserIds()).toEqual([FRIEND_ID]);
     });
 
-    it('notifie DÉSORMAIS un mentionné ABSENT de la liste blanche ONLY — l\'appartenance à ONLY ne décide plus', async () => {
+    it('l\'appartenance à ONLY ne décide plus : un lien hors liste est prévenu, un inconnu sur la liste ne l\'est pas (#14168)', async () => {
       await service.createPostMentionNotificationsBatch({
         postId: POST_ID,
         posterId: AUTHOR_ID,
@@ -203,7 +214,7 @@ describe('NotificationService — les mentions respectent l’audience du post',
         visibilityUserIds: [STRANGER_ID],
       });
 
-      expect(notifiedUserIds()).toEqual([FRIEND_ID, STRANGER_ID]);
+      expect(notifiedUserIds()).toEqual([FRIEND_ID]);
     });
 
     it('notifie DÉSORMAIS un ami explicitement exclu par EXCEPT — l\'exclusion de visibilité ne décide plus', async () => {
@@ -219,7 +230,7 @@ describe('NotificationService — les mentions respectent l’audience du post',
       expect(notifiedUserIds()).toEqual([FRIEND_ID]);
     });
 
-    it('notifie un INCONNU nommé dans un post PUBLIC — un post public se lit par tous', async () => {
+    it('ne prévient pas un INCONNU nommé dans un post PUBLIC — il peut le lire, rien ne le lui pousse (#14168)', async () => {
       await service.createPostMentionNotificationsBatch({
         postId: POST_ID,
         posterId: AUTHOR_ID,
@@ -228,12 +239,10 @@ describe('NotificationService — les mentions respectent l’audience du post',
         visibility: 'PUBLIC',
       });
 
-      expect(notifiedUserIds()).toEqual([STRANGER_ID]);
-      // Un post public n'a aucune raison d'interroger le graphe ami.
-      expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+      expect(notifiedUserIds()).toEqual([]);
     });
 
-    it('notifie un contact DM non-ami nommé dans un post FRIENDS ET le stranger désormais nommé à côté — le feed n\'est plus ce qui décide', async () => {
+    it('prévient un contact DM nommé dans un post FRIENDS, pas l\'inconnu nommé à côté — le feed n\'est plus ce qui décide', async () => {
       givenAuthorHasDirectContact();
 
       await service.createPostMentionNotificationsBatch({
@@ -244,7 +253,7 @@ describe('NotificationService — les mentions respectent l’audience du post',
         visibility: 'FRIENDS',
       });
 
-      expect(notifiedUserIds()).toEqual([DM_CONTACT_ID, STRANGER_ID]);
+      expect(notifiedUserIds()).toEqual([DM_CONTACT_ID]);
     });
 
     it('notifie DÉSORMAIS un contact DM explicitement exclu par EXCEPT', async () => {
@@ -303,7 +312,7 @@ describe('NotificationService — les mentions respectent l’audience du post',
       await service.createCommentMentionNotificationsBatch({
         commentId: COMMENT_ID,
         postId: POST_ID,
-        commenterId: STRANGER_ID,
+        commenterId: DM_CONTACT_ID,
         postAuthorId: AUTHOR_ID,
         mentionedUserIds: [FRIEND_ID],
         commentExcerpt: 'coucou @friend',
@@ -315,18 +324,18 @@ describe('NotificationService — les mentions respectent l’audience du post',
       expect(JSON.stringify(where)).toContain(AUTHOR_ID);
     });
 
-    it('notifie normalement sur un post PUBLIC', async () => {
+    it('notifie normalement un lien du commentateur sur un post PUBLIC — jamais un inconnu (#14168)', async () => {
       await service.createCommentMentionNotificationsBatch({
         commentId: COMMENT_ID,
         postId: POST_ID,
         commenterId: FRIEND_ID,
         postAuthorId: AUTHOR_ID,
-        mentionedUserIds: [STRANGER_ID],
+        mentionedUserIds: [STRANGER_ID, DM_CONTACT_ID],
         commentExcerpt: 'coucou @stranger',
         visibility: 'PUBLIC',
       });
 
-      expect(notifiedUserIds()).toEqual([STRANGER_ID]);
+      expect(notifiedUserIds()).toEqual([DM_CONTACT_ID]);
     });
 
     it('notifie un contact DM non-ami nommé dans un commentaire sur un post FRIENDS', async () => {

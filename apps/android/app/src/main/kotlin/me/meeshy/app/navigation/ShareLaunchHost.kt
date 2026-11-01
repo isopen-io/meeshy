@@ -46,7 +46,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     // La scène d'une story reposté se dessine dans le fil par le lecteur du module des stories (#13654).
     val repostScene: RepostSceneRenderer = remember { { item, author, live, open, modifier -> RepostSceneCard(item, author, live, open, modifier) } }
     // La scène d'un réel remplit sa carte (iOS `ReelCardSceneBackdrop`), au lieu de la carte 9:16 d'une story.
-    val reelScene: ReelSceneRenderer = remember { { item, accent, live, modifier -> ReelCardScene(item, accent, live, modifier) } }
+    val reelScene: ReelSceneRenderer = remember { { item, accent, live, muted, modifier -> ReelCardScene(item, accent, live, modifier, muted = muted) } }
     // Une scène de post touchée s'ouvre en plein écran, entière et sonore (iOS `PostSceneCardContainer`).
     val postSceneReader: PostSceneReaderRenderer = remember { { item, accent, playing, modifier -> PostSceneReaderScene(item, accent, playing, modifier) } }
     // Son menu « … » exporte le post entier, toutes ses scènes, par le moteur d'export des stories (#13896).

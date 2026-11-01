@@ -110,17 +110,21 @@ class StoryMentionSurfacesTest {
     }
 
     @Test
-    fun `the story reply asks the quoted story as a post context when two letters find nobody locally`() = runTest(dispatcher) {
+    fun `the story reply offers the author alone and never asks the story's context (#14071)`() = runTest(dispatcher) {
         val search = RecordingSearch(listOf(MentionCandidate(id = "u9", username = "zoe")))
         val vm = replyViewModel(search)
-        vm.attachStory("s7")
+        vm.attachAuthor(authorId = "a1", authorUsername = "zola")
         advanceUntilIdle()
 
-        vm.onTextChange("@zo")
+        vm.onTextChange("@")
+        advanceUntilIdle()
+        assertThat(vm.mention.value.suggestions.map { it.username }).containsExactly("zola")
+
+        vm.onTextChange("@zol")
         advanceUntilIdle()
 
-        assertThat(search.asked).containsExactly("zo" to MentionContext.post("s7"))
+        assertThat(search.asked).isEmpty()
         vm.onMentionSelected(vm.mention.value.suggestions.single())
-        assertThat(vm.state.value.text).isEqualTo("@zoe ")
+        assertThat(vm.state.value.text).isEqualTo("@zola ")
     }
 }

@@ -53,7 +53,6 @@ final class ConversationViewModelStickerTests: XCTestCase {
         // Le chemin d'envoi en ligne consulte le singleton : l'aligner sur
         // le moniteur injecté garde le test déterministe.
         MessageSocketManager.shared.isConnected = isOnline
-        let persistence = MessagePersistenceActor(dbWriter: pool)
         let sut = ConversationViewModel(
             conversationId: conversationId,
             authManager: auth,
@@ -62,24 +61,25 @@ final class ConversationViewModelStickerTests: XCTestCase {
             reactionService: MockReactionService(),
             reportService: MockReportService(),
             messageSocket: messageSocket,
-            dependencies: ConversationDependencies(
-                persistence: persistence,
-                // Isole le test du régime E2EE process-wide (#14240) :
-                // `EndToEndRegimeLedger.shared` est MONOTONE et ne se réinitialise
-                // jamais — un envoi sans ce ledger dédié peut se faire rescéller
-                // par un apprentissage laissé par un autre test qui partage ce
-                // conversationId, et l'envoi d'un sticker se retrouve dérouté vers
-                // `sendSealed()` sans aucune session libsignal.
-                collaborators: ConversationCollaborators(
-                    persistence: persistence, syncEngine: ConversationSyncEngine.shared,
-                    messageService: messageService, regimeLedger: EndToEndRegimeLedger()
-                )
-            ),
+            // Un registre du régime NEUF : celui de `.shared` est persistant, et
+            // un autre témoin qui y a appris ce fil chiffré scellerait l'envoi.
+            dependencies: makeDependencies(pool: pool, messageService: messageService),
             networkMonitor: FakeNetworkMonitor(isOnline: isOnline),
             offlineQueue: offlineQueue
         )
         sut.start()
         return Fixture(sut: sut, messageService: messageService, messageSocket: messageSocket, offlineQueue: offlineQueue)
+    }
+
+    private func makeDependencies(pool: DatabaseQueue, messageService: MockMessageService) -> ConversationDependencies {
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        return ConversationDependencies(
+            persistence: persistence,
+            collaborators: ConversationCollaborators(
+                persistence: persistence, syncEngine: ConversationSyncEngine.shared,
+                messageService: messageService, regimeLedger: EndToEndRegimeLedger()
+            )
+        )
     }
 
     /// Un sticker GABARIT du catalogue réel — id, emplacements figés, mouvement

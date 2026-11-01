@@ -6,6 +6,7 @@ import { notificationLogger } from '../../../utils/logger-enhanced';
 import { filterPostConsumers } from '../../posts/postAudience';
 import { truncateMessage } from '../notification-preview';
 import type { FanoutDependencies } from './dependencies';
+import { mentionReceivers } from './entourage';
 
 export type CommentMentionFanoutParams = {
   commentId: string;
@@ -33,13 +34,19 @@ export type CommentMentionFanoutParams = {
   visibility: string | null | undefined;
   /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
   visibilityUserIds?: readonly string[];
+  /**
+   * Ceux que ce commentaire prévient DÉJÀ par ailleurs — l'auteur du commentaire
+   * parent pour une réponse, l'auteur du post pour un commentaire de premier
+   * niveau : les nommer n'est pas pousser une notification à un inconnu (#14168).
+   */
+  directlyAddressedUserIds?: readonly string[];
 };
 
 /**
  * Envoie des notifications user_mentioned en batch pour les mentions dans un commentaire.
  *
  * Priority dedup: user_mentioned > story_new_comment > story_thread_reply > friend_story_comment
- * Les mentionedUserIds doivent être passés en excludeUserIds dans createStoryCommentNotificationsBatch
+ * Les mentionedUserIds doivent être passés en `mentionedUserIds` à createStoryCommentNotificationsBatch
  * pour éviter la double notification.
  *
  * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE par paire sender:recipient).
@@ -74,11 +81,21 @@ export async function createCommentMentionNotificationsBatch(
     candidateUserIds: params.mentionedUserIds,
   });
   if (audience.length === 0) return;
+  // Pouvoir LIRE n'est pas être PRÉVENU (#14168) : seul un lien du commentateur
+  // (Connaissance et plus, ou conversation directe où il a écrit) reçoit la
+  // mention, ou quelqu'un que ce commentaire prévient déjà (auteur du post ou du
+  // commentaire parent, selon l'appelant). Le blocage coupe toujours.
+  const linked = await mentionReceivers(deps.prisma, {
+    mentionerId: params.commenterId,
+    mentionedUserIds: audience,
+    alreadyAddressedUserIds: params.directlyAddressedUserIds,
+  });
+  if (linked.length === 0) return;
 
   const content = params.commentExcerpt
     ? truncateMessage(params.commentExcerpt)
     : '';
-  const langs = await deps.resolveRecipientLangs(audience);
+  const langs = await deps.resolveRecipientLangs(linked);
 
   const actorInfo = {
     id: params.commenterId,
@@ -89,7 +106,7 @@ export async function createCommentMentionNotificationsBatch(
 
   const tasks: Array<Promise<unknown>> = [];
 
-  for (const userId of audience) {
+  for (const userId of linked) {
     if (userId === params.commenterId) continue;
 
     if (!deps.shouldCreateMentionNotification(params.commenterId, userId)) {

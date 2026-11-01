@@ -3,6 +3,9 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.model.SceneEntryWindow
 import me.meeshy.sdk.model.composer.ComposerObjectKind
 import me.meeshy.sdk.model.composer.StoryToolMode
+import me.meeshy.sdk.model.composer.timeline.ClipWindowResolver
+import me.meeshy.sdk.model.composer.timeline.FriseBarDrag
+import me.meeshy.sdk.model.composer.timeline.TrackBar
 import me.meeshy.sdk.model.scene.StoryElementTiming
 
 /** Réducteurs de l'éditeur de scène : fenêtres d'objet, menu d'appui long des stickers, frise. */
@@ -32,6 +35,27 @@ internal object StoryComposerSceneReducer {
             selectedTextElementId = null,
             errorMessage = null,
         )
+    }
+
+    /**
+     * **« Couper » à la tête** (#14221, iso iOS `splitSelectedAtPlayhead`) : un TEXTE devient deux objets qui se suivent,
+     * au même endroit, l'original jusqu'à la tête, sa copie [newId] après ; une seule réduction, donc un seul pas
+     * d'annulation. La tête hors de la fenêtre, ou une autre famille, ne coupe rien.
+     */
+    fun textSplit(state: StoryComposerUiState, id: String, newId: String): StoryComposerUiState {
+        if (state.deck.selectedSlide.elements.none { it.id == id }) return state
+        val slide = state.selectedSlideDurationSeconds.toFloat()
+        val window = when (val bar = state.sceneTracks.firstOrNull { it.id == id }?.bar) {
+            is TrackBar.Timed -> ClipWindowResolver.Window(bar.start.toFloat(), (bar.end - bar.start).toFloat())
+            else -> ClipWindowResolver.Window(0f, slide)
+        }
+        val at = state.playheadSeconds
+        if (!FriseBarDrag.canSplit(window, at)) return state
+        if (!state.deck.selectedCanAddTextElement) return state.copy(errorMessage = StoryComposerViewModel.TEXT_ELEMENT_LIMIT)
+        val left = FriseBarDrag.stored(ClipWindowResolver.Window(window.start, at - window.start), slide)
+        val right = FriseBarDrag.stored(ClipWindowResolver.Window(at, window.end - at), slide)
+        val duplicated = state.copy(deck = state.deck.duplicateTextElement(id, newId, 0f, 0f))
+        return windowed(windowed(duplicated, id, left.startSeconds, left.durationSeconds), newId, right.startSeconds, right.durationSeconds)
     }
 
     fun playheadMoved(state: StoryComposerUiState, seconds: Float): StoryComposerUiState =

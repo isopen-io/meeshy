@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.MentionCandidate
 
@@ -27,6 +28,26 @@ object MentionRoster {
                 avatarURL = participant.avatar,
             )
         }
+
+    /**
+     * The registered authors of the loaded thread, most recent first, without the caller nor a
+     * guest (no public handle). Only a share-link guest's roster takes them in (#14183,
+     * `MentionLookupLaw.knownRoster`): the gateway serves it nothing else.
+     */
+    fun fromMessageAuthors(messages: List<ApiMessage>, excludeUserId: String?): List<MentionCandidate> =
+        messages.asReversed().mapNotNull { message ->
+            val sender = message.sender ?: return@mapNotNull null
+            if (sender.type == "anonymous") return@mapNotNull null
+            val username = (sender.username ?: sender.user?.username)?.trim().orEmpty()
+            val id = sender.userId ?: return@mapNotNull null
+            if (username.isEmpty() || id == excludeUserId) return@mapNotNull null
+            MentionCandidate(
+                id = id,
+                username = username,
+                displayName = sender.displayName?.trim()?.ifEmpty { null } ?: username,
+                avatarURL = sender.avatar,
+            )
+        }.distinctBy { it.id }
 
     /** username → display name map for resolving `@mentions` in rendered bubbles. */
     fun displayNames(candidates: List<MentionCandidate>): Map<String, String> =

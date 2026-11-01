@@ -12,7 +12,14 @@
  * une valeur inconnue se lit « moi seul »), puis `canViewShowcase` — dans cet
  * ordre, et APRÈS le blocage : deux comptes qui se sont bloqués ne se voient
  * jamais, même sur « tout le monde ». L'amitié est celle de la loi de présence
- * (`amitieAcceptee`), rien d'autre ; ADMIN/BIGBOSS voient (`isGlobalAdmin`).
+ * (`niveauEffectif`, lue par la LOI des cercles `resolveRelationAccess`, #13930) ; ADMIN/BIGBOSS voient (`isGlobalAdmin`).
+ *
+ * ## Le jeu suit le cercle (RG-25, RG-28)
+ *
+ * Visibilité servie = minimum(réglage du jeu, droits du cercle). Le lecteur est classé par la loi : `game.basic`
+ * (Ami) fait de lui un « friend » — niveau, titres, rang — et `game.sparksGlory` (Proche) lui ouvre en plus les
+ * étincelles et la gloire. Sous Ami, il n'est qu'un lecteur public. Le réglage (`friends`, `me`) ne peut donc jamais
+ * ouvrir plus que le cercle : il ne fait que restreindre ce que la loi accorde.
  *
  * Aucune lecture n'échoue « ouvert » : un réglage illisible se lit « moi seul ». Un identifiant
  * malformé, un compte supprimé ou désactivé se lisent comme un compte inconnu — ADMIN compris —
@@ -34,7 +41,9 @@ import {
   type ShowcaseVisibility,
 } from '@meeshy/shared/utils/game/trophies';
 import { loadPrivacyPreferencesCached } from '../preferences/privacy-cache';
-import { amitieAcceptee } from '../friendship';
+import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
+import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
+import { niveauEffectif } from '../friendship';
 import type { PresenceViewer } from '../PresenceVisibilityService';
 import { isBlockedBetween } from '../../utils/blocking';
 
@@ -101,6 +110,13 @@ export function settingsOf(stored: StoredProfile | null | undefined): GameSettin
   };
 }
 
+/** Ce que le cercle ouvre à un lecteur : sa classe pour les réglages, et si les étincelles et la gloire en font partie. */
+export type GameReach = { readonly kind: ShowcaseViewer | 'blocked'; readonly sparksGlory: boolean };
+
+const PUBLIC_REACH: GameReach = { kind: 'other', sparksGlory: false };
+/** Un identifiant malformé se lit comme un compte inconnu : fermé, sans toucher la base. */
+const CLOSED_REACH: GameReach = { kind: 'blocked', sparksGlory: false };
+
 export type VisibilityPatch = Partial<Record<GameFacet, ShowcaseVisibility>>;
 
 export class GameProfileService {
@@ -151,13 +167,32 @@ export class GameProfileService {
     return kept;
   }
 
-  /** Quel lecteur est CE lecteur pour ce membre — ni plus, ni moins que la loi de présence. */
-  async viewerKind(viewer: PresenceViewer, targetId: string): Promise<ShowcaseViewer | 'blocked'> {
-    if (viewer === null) return 'other';
-    if (viewer.userId === targetId) return 'self';
-    if (isGlobalAdmin(viewer.role)) return 'admin';
-    if (await isBlockedBetween(this.prisma, viewer.userId, targetId)) return 'blocked';
-    return (await amitieAcceptee(this.prisma, viewer.userId, targetId)) ? 'friend' : 'other';
+  /**
+   * Quel lecteur est CE lecteur pour ce membre : la loi des cercles, rien d'autre. `kind` classe pour les réglages
+   * (`friends` s'ouvre à Ami+) ; `sparksGlory` dit si le cercle ouvre aussi les étincelles et la gloire (Proche+).
+   * Soi et ADMIN/BIGBOSS voient tout ; le blocage ferme ; l'anonyme est le public.
+   */
+  async viewerReach(viewer: PresenceViewer, targetId: string): Promise<GameReach> {
+    if (!isValidObjectId(targetId)) return CLOSED_REACH;
+    if (viewer === null) return PUBLIC_REACH;
+    if (viewer.userId === targetId) return { kind: 'self', sparksGlory: true };
+    if (isGlobalAdmin(viewer.role)) return { kind: 'admin', sparksGlory: true };
+    if (await isBlockedBetween(this.prisma, viewer.userId, targetId)) return { kind: 'blocked', sparksGlory: false };
+    const level = await niveauEffectif(this.prisma, viewer.userId, targetId);
+    const opens = (feature: RelationFeature): boolean =>
+      resolveRelationAccess({
+        viewerId: viewer.userId,
+        targetId,
+        grantedByViewer: level,
+        grantedByTarget: level,
+        sharesCommunity: false,
+        blockedEitherWay: false,
+        viewerMinor: 'unknown',
+        targetMinor: 'unknown',
+        viewerRole: viewer.role,
+        feature,
+      }).allowed;
+    return { kind: opens('game.basic') ? 'friend' : 'other', sparksGlory: opens('game.sparksGlory') };
   }
 
   /**
@@ -179,11 +214,13 @@ export class GameProfileService {
     readonly viewer: PresenceViewer;
     readonly targetId: string;
     readonly facets: readonly GameFacet[];
+    /** Le cercle déjà lu par l'appelant : évite une seconde traversée du blocage et du niveau. */
+    readonly reach?: GameReach;
   }): Promise<Readonly<Partial<Record<GameFacet, boolean>>>> {
     const { viewer, targetId, facets } = params;
     const verdict = (allowed: boolean): Partial<Record<GameFacet, boolean>> => Object.fromEntries(facets.map((facet) => [facet, allowed]));
     if (!isValidObjectId(targetId)) return verdict(false);
-    const kind = await this.viewerKind(viewer, targetId);
+    const { kind } = params.reach ?? (await this.viewerReach(viewer, targetId));
     if (kind === 'blocked') return verdict(false);
     if (kind === 'self') return verdict(true);
 

@@ -1,4 +1,5 @@
 import { NotificationService } from '../../../services/notifications/NotificationService';
+import { aliveAndUnblocked, userRelationRows } from '../../helpers/linked-to-everyone';
 import {
   formatSingleAttachmentLabelI18n,
   buildMessageNotificationBodyI18n,
@@ -105,7 +106,7 @@ function makeContentHarness(usersById: Record<string, any>) {
     },
     message: { findUnique: async () => null },
   };
-  return { svc: new NotificationService(prisma as any), created };
+  return { svc: new NotificationService(prisma as any), created, prisma };
 }
 
 describe('contenu localisé par destinataire', () => {
@@ -168,9 +169,13 @@ describe('contenu localisé par destinataire', () => {
 
 describe('batch — langue par destinataire', () => {
   it('mentions : chaque destinataire reçoit son contenu localisé', async () => {
-    const { svc, created } = makeContentHarness({
+    const { svc, created, prisma } = makeContentHarness({
       a: { systemLanguage: 'en' }, b: { systemLanguage: 'de' }, x: { displayName: 'X' },
     });
+    // Tous liés (#14168) : ce cas porte sur la LANGUE, la règle de lien est tenue ailleurs.
+    prisma.userRelation = { findMany: userRelationRows() };
+    prisma.participant = { findMany: async () => [] };
+    prisma.user.findMany = aliveAndUnblocked(prisma.user.findMany);
     // Audience PUBLIC : ce cas porte sur la LANGUE du contenu, pas sur le droit
     // de voir. Un post public admet tout le monde, la garde est un no-op ici.
     await svc.createPostMentionNotificationsBatch({ postId: 'p', posterId: 'x', mentionedUserIds: ['a', 'b'], visibility: 'PUBLIC' });

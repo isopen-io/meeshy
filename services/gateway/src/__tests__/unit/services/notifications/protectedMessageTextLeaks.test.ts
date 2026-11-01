@@ -160,7 +160,7 @@ const makeMentionPrisma = () => ({
   },
   participant: {
     findMany: jest.fn().mockResolvedValue([]),
-    findUnique: jest.fn().mockResolvedValue({ userId: AUTHOR_ID }),
+    findUnique: jest.fn().mockResolvedValue({ userId: AUTHOR_ID, isActive: true, conversationId: CONV_ID }),
   },
   user: {
     findUnique: jest.fn().mockResolvedValue({ username: 'alice', displayName: 'Alice', avatar: null }),

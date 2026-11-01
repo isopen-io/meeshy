@@ -84,6 +84,9 @@ public final class MentionComposerController: ObservableObject {
     private let currentUserId: String?
     private let debounceNanoseconds: UInt64
     private var participants: () -> [MentionCandidate]
+    /// Ce qu'une mention ferait dans la conversation (#14066, #14071), posé par
+    /// l'hôte qui la connaît ; `nil` hors conversation (post, brouillon).
+    private(set) var target: ConversationMentionTarget?
     /// Les « autres » rendus par la DERNIÈRE recherche distante. Ils restent
     /// affichés, refiltrés par la requête courante, pendant que la suivante
     /// est en vol — c'est ce qui affine sans clignoter.
@@ -140,6 +143,60 @@ public final class MentionComposerController: ObservableObject {
         recompute()
     }
 
+    /// **Borne la liste à ce qu'une mention ferait ICI** (#14071) : le type de
+    /// la conversation (`direct`, `group`, `public`…) et, pour une directe, son
+    /// interlocuteur. Une suggestion sans effet à l'envoi n'est pas affichée ;
+    /// un type inconnu, ou un lecteur qui n'est pas membre, ne propose personne
+    /// et n'interroge pas le réseau.
+    ///
+    /// `servedMembers` lit les participants ACTIFS servis de la conversation
+    /// (cache d'abord), à la première frappe du `@` : ce sont les membres que la
+    /// liste propose en local — et le lecteur parmi eux prouve son appartenance
+    /// quand la ligne ouverte ne portait pas son rang.
+    func scope(to target: ConversationMentionTarget, servedMembers: (@Sendable (String) async -> [String])? = nil) {
+        if target.conversationId != self.target?.conversationId { servedMemberIds = [] }
+        self.target = target
+        self.servedMembersLoader = servedMembers
+        recompute()
+    }
+
+    /// Les participants actifs servis, lus par `servedMembersLoader`.
+    private var servedMemberIds: Set<String> = []
+    private var servedMembersLoader: (@Sendable (String) async -> [String])?
+    private var membersTask: Task<Void, Never>?
+
+    /// Les membres que le fil SAIT actifs : soi, l'interlocuteur et les
+    /// participants servis. Jamais les auteurs de l'historique, dont certains
+    /// sont partis et seraient proposés puis ignorés à l'envoi — sauf pour un
+    /// INVITÉ de lien, à qui la passerelle ne sert que ces auteurs (#10205).
+    private var reach: MentionReach? {
+        guard let target else { return nil }
+        let guestAuthors = target.isGuest ? participants().map(\.id) : []
+        let known = [target.interlocutorId, currentUserId].compactMap { $0 } + guestAuthors
+        let member = target.isMember || currentUserId.map(servedMemberIds.contains) == true
+        return MentionReach(conversationType: target.conversationType, isMember: member,
+                            memberIds: Set(known).union(servedMemberIds))
+    }
+
+    /// Sans portée (type inconnu, non-membre), la passerelle refuserait la
+    /// recherche ; un invité n'y a pas accès (`allowAnonymous: false`).
+    private var mayAskTheNetwork: Bool {
+        guard let reach else { return true }
+        return reach.scope != nil && target?.isGuest != true
+    }
+
+    private func loadServedMembers() {
+        guard let loader = servedMembersLoader, let conversationId = target?.conversationId,
+              target?.isGuest != true else { return }
+        membersTask?.cancel()
+        membersTask = Task { [weak self] in
+            let ids = await loader(conversationId)
+            guard let self, !Task.isCancelled, self.target?.conversationId == conversationId else { return }
+            self.servedMemberIds = Set(ids)
+            self.recompute()
+        }
+    }
+
     /// Change le contexte distant d'un hôte qui SURVIT à son sujet (la barre
     /// du lecteur de story passe d'une story à la suivante sans se démonter).
     /// Une liste ouverte sur l'ancien contexte se referme.
@@ -170,9 +227,9 @@ public final class MentionComposerController: ObservableObject {
         let stage = MentionLookupRule.stage(for: query, localMatchCount: localMatchCount(for: query))
         if stage != .remote { dropOthers() }
         recompute()
-        if opening { warmContacts() }
+        if opening { warmContacts(); loadServedMembers() }
 
-        guard stage == .remote else {
+        guard stage == .remote, mayAskTheNetwork else {
             isResolving = false
             return
         }
@@ -281,7 +338,8 @@ public final class MentionComposerController: ObservableObject {
             contacts: contacts.snapshot,
             participants: participants(),
             query: query,
-            excludingUserId: currentUserId
+            excludingUserId: currentUserId,
+            reach: reach
         ).count
     }
 
@@ -293,7 +351,8 @@ public final class MentionComposerController: ObservableObject {
             others: others,
             othersQuery: othersQuery,
             query: query,
-            excludingUserId: currentUserId
+            excludingUserId: currentUserId,
+            reach: reach
         )
     }
 }

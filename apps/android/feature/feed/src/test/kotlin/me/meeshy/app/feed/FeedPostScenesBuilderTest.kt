@@ -52,6 +52,57 @@ class FeedPostScenesBuilderTest {
     }
 
     @Test
+    fun `each scene carries the caption of the media it shows, never the post text nor another scene's`() {
+        val captioned = """[
+            { "id": "64b000000000000000000001", "fileUrl": "https://cdn.meeshy.me/1.jpg", "mimeType": "image/jpeg", "caption": "Le port au matin" },
+            { "id": "64b000000000000000000002", "fileUrl": "https://cdn.meeshy.me/2.jpg", "mimeType": "image/jpeg" }
+        ]"""
+        val post = build("""{ "id": "p1", "type": "POST", "content": "deux vues", "media": $captioned, "storyEffects": ${fixture("post-photo-scenes-2")} }""")
+
+        assertThat(requireNotNull(post.scenes).captions).containsExactly("Le port au matin", null).inOrder()
+    }
+
+    @Test
+    fun `a scene document that designates no media is captioned by the first visual of the post`() {
+        val one = """[{ "id": "64b000000000000000000009", "fileUrl": "https://cdn.meeshy.me/9.jpg", "mimeType": "image/jpeg", "caption": "Coucher de soleil" }]"""
+        val post = build("""{ "id": "p1", "type": "POST", "content": "un texte", "media": $one, "storyEffects": ${fixture("minimal-text")} }""")
+
+        assertThat(requireNotNull(post.scenes).captions).containsExactly("Coucher de soleil")
+    }
+
+    @Test
+    fun `a post with a background sound offers it in the detail, a silent photo post does not`() {
+        val photos = build("""{ "id": "p1", "type": "POST", "media": $media, "storyEffects": ${fixture("post-photo-scenes-2")} }""")
+        val sound = build("""{ "id": "p2", "type": "POST", "media": $media, "storyEffects": ${fixture("post-carousel-sound-library")} }""")
+
+        assertThat(requireNotNull(photos.scenes).offersSound).isFalse()
+        assertThat(requireNotNull(sound.scenes).offersSound).isTrue()
+    }
+
+    @Test
+    fun `each scene is framed on what it shows - a photo at its own shape, a text scene on its text`() {
+        val photos = requireNotNull(build("""{ "id": "p1", "type": "POST", "media": $media, "storyEffects": ${fixture("post-photo-scenes-2")} }""").scenes)
+        val text = requireNotNull(build("""{ "id": "p2", "type": "POST", "content": "un texte", "storyEffects": ${fixture("minimal-text")} }""").scenes)
+
+        assertThat(photos.frames.map { it.focus }).containsExactly(null, null).inOrder()
+        assertThat(photos.frames.map { it.pageAspect!! }).containsExactly(1.5003663003663004, 0.75).inOrder()
+        assertThat(photos.carouselAspect).isWithin(1e-9).of(0.75)
+        val focus = requireNotNull(text.frames.single().focus)
+        assertThat(focus.top).isAtMost(0.42)
+        assertThat(focus.bottom).isAtLeast(0.42)
+        assertThat(focus.height).isLessThan(1.0)
+    }
+
+    @Test
+    fun `the scenes carry the post text served by the Prisme, never a blank one, to caption the full screen`() {
+        val post = build("""{ "id": "p1", "type": "POST", "content": "  deux vues  ", "media": $media, "storyEffects": ${fixture("post-photo-scenes-2")} }""")
+        val bare = build("""{ "id": "p2", "type": "POST", "content": "   ", "media": $media, "storyEffects": ${fixture("post-photo-scenes-2")} }""")
+
+        assertThat(requireNotNull(post.scenes).carrierText).isEqualTo("deux vues")
+        assertThat(requireNotNull(bare.scenes).carrierText).isNull()
+    }
+
+    @Test
     fun `a reel keeps its own reel card`() {
         val reel = build("""{ "id": "r1", "type": "REEL", "storyEffects": ${fixture("v1-legacy-rich.v3")} }""")
 

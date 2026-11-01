@@ -7,7 +7,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -132,6 +134,7 @@ fun StoryComposerScreen(
         onCloseSheet = if (sheet?.let(state::serves) == true && !capture.armed) ({ sheet = null }) else null,
     )
     CompositionLocalProvider(LocalComposerLive provides live) {
+    Box(Modifier.closesGestureOnLift(viewModel::onGestureLifted)) {
     StoryComposerSceneFirst(
         state = state,
         viewModel = viewModel,
@@ -154,6 +157,7 @@ fun StoryComposerScreen(
         },
         capture = capture,
     )
+    }
     }
 }
 

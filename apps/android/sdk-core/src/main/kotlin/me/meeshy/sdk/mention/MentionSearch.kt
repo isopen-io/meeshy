@@ -83,7 +83,9 @@ class ContextualMentionSearch @Inject constructor(
 
     override suspend fun suggest(query: String, context: MentionContext?): List<MentionCandidate> {
         if (context == null) return directory.search(query)
-        return when (val result = apiCall { mentionsApi.suggestions(context.id, context.type.wire, query) }) {
+        val type = context.type ?: return emptyList()
+        if (context.scope == null) return emptyList()
+        return when (val result = apiCall { mentionsApi.suggestions(context.id, type.wire, query) }) {
             is NetworkResult.Success -> result.data.mapNotNull { it.toMentionCandidate() }
                 .also { candidates -> candidates.forEach { displayNames.track(it.username, it.displayName) } }
             is NetworkResult.Failure -> emptyList()

@@ -66,8 +66,15 @@
     <string name="feed_retry">Tentar novamente</string>
     <string name="feed_scene_more">Cena %1$d, e mais %2$d</string>
     <string name="feed_scene_next">Cena seguinte</string>
+    <string name="feed_scene_pause">Interrompe a reprodução da cena</string>
     <string name="feed_scene_previous">Cena anterior</string>
+    <string name="feed_scene_resume">Retoma a reprodução da cena</string>
+    <string name="feed_scene_sound_mute">Silenciar o som</string>
+    <string name="feed_scene_sound_muted">Som desativado — abra em tela cheia para ouvir</string>
+    <string name="feed_scene_sound_track">Som de fundo</string>
+    <string name="feed_scene_sound_unmute">Reativar o som</string>
     <string name="feed_scene_tile">Cena %1$d</string>
+    <string name="feed_scene_video">vídeo</string>
     <string name="feed_secondary_translation_a11y">Tradução em %1$s: %2$s</string>
     <string name="feed_translated">Tradução disponível</string>
     <string name="feed_translation_available">Traduções disponíveis</string>

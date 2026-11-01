@@ -77,7 +77,7 @@ fun StoryReplySheet(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val mention by viewModel.mention.collectAsStateWithLifecycle()
-    LaunchedEffect(quote.storyId) { viewModel.attachStory(quote.storyId) }
+    LaunchedEffect(quote.authorId, quote.authorName) { viewModel.attachAuthor(quote.authorId, quote.authorName) }
     val context = LocalContext.current
     val sentMessage = stringResource(R.string.stories_reply_sent)
     LaunchedEffect(state.phase) {
