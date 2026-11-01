@@ -61,9 +61,6 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       findUnique: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
     },
-    userRelation: {
-      findMany: jest.fn(),
-    },
     userPreferences: {
       findUnique: jest.fn(),
     },
