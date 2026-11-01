@@ -41,7 +41,7 @@ class PostScenesViewComposeTest {
     private fun show(post: FeedPostPresentation) {
         compose.setContent {
             CompositionLocalProvider(
-                LocalReelSceneRenderer provides card,
+                LocalPostSceneCardRenderer provides card,
                 LocalPostSceneReaderRenderer provides reader,
                 LocalPostSceneExportRenderer provides exporter,
             ) {

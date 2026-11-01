@@ -11,6 +11,8 @@ import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StorySourceWindow
 import me.meeshy.sdk.model.StorySourceWindowMs
+import me.meeshy.sdk.model.composer.scene.StoryBackdrop
+import me.meeshy.sdk.model.composer.scene.StoryFitMode
 import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
@@ -61,6 +63,8 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             backgroundVideoWindow = background.window,
             backgroundLoop = background.loop,
             backgroundTransform = background.transform,
+            backgroundFits = !StoryFitMode.rendersFilled(storyEffects?.backgroundTransform?.videoFitMode),
+            backdrop = StoryBackdrop.resolve(storyEffects?.backgroundTransform?.backdrop),
             backgroundThumbHash = StorySlidePlaceholder.resolve(this)
                 ?: StorySlidePlaceholder.resolve(effectsThumbHash = null, backgroundImageThumbHash = background.posterThumbHash),
             backgroundPosterUrl = background.posterUrl,

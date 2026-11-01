@@ -22,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -49,7 +48,6 @@ import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.ui.component.imageedit.sceneLook
-import me.meeshy.ui.theme.hexColor
 
 /**
  * The 9:16 story canvas for the **selected** slide. Renders that slide's first
@@ -317,25 +315,6 @@ internal fun StoryCanvasSurface(
     }
 }
 
-/**
- * Le fond des bandes d'un média AJUSTÉ : une teinte unie, ou le flou du média lui-même. Le flou n'existe qu'à partir de
- * l'API 31 ; en dessous le noir tient la place — jamais un flou factice.
- */
-@Composable
-private fun SceneBackdropLayer(backdrop: StoryBackdrop, model: Any) {
-    val hex = backdrop.solidHex
-    when {
-        hex != null -> Box(Modifier.fillMaxSize().background(hexColor(hex)))
-        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> AsyncImage(
-            model = model,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_DP.dp),
-        )
-        else -> Box(Modifier.fillMaxSize().background(hexColor(StoryBackdrop.BLACK.solidHex.orEmpty())))
-    }
-}
-
 /** La vidéo de fond sélectionnée joue à la place de son affiche, à la même pose, sous le même look (#13973, A-E3). */
 @Composable
 private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransform, rotationDeg: Float, look: SceneLookRecipe, fit: Boolean) {
@@ -353,4 +332,3 @@ private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransfo
     ) { slot.Picture(fit = fit) }
 }
 
-private const val BACKDROP_BLUR_DP = 24

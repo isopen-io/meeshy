@@ -53,7 +53,7 @@ class PostScenesFramingComposeTest {
 
     private fun show(scenes: FeedPostScenes) {
         compose.setContent {
-            CompositionLocalProvider(LocalReelSceneRenderer provides card) {
+            CompositionLocalProvider(LocalPostSceneCardRenderer provides card) {
                 FeedPostCardMediaSlot(post = feedPostPresentation(id = "p1").copy(scenes = scenes), onImageTap = {}, onOpenPost = {})
             }
         }

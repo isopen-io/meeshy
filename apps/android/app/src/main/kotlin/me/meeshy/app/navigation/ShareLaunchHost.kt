@@ -11,6 +11,7 @@ import me.meeshy.app.chat.AppShareSheetHost
 import me.meeshy.app.chat.export.CommentCardExportSheet
 import me.meeshy.app.feed.CommentCardExporter
 import me.meeshy.app.feed.LocalCommentCardExporter
+import me.meeshy.app.feed.LocalPostSceneCardRenderer
 import me.meeshy.app.feed.LocalPostSceneExportRenderer
 import me.meeshy.app.feed.LocalPostSceneReaderRenderer
 import me.meeshy.app.feed.LocalReelSceneRenderer
@@ -22,6 +23,7 @@ import me.meeshy.app.feed.PostSceneReaderRenderer
 import me.meeshy.app.feed.ReelSceneRenderer
 import me.meeshy.app.feed.RepostSceneRenderer
 import me.meeshy.app.feed.SceneItemExportHost
+import me.meeshy.app.stories.PostSceneCard
 import me.meeshy.app.stories.PostSceneExportMenu
 import me.meeshy.app.stories.PostSceneReaderScene
 import me.meeshy.app.stories.ReelCardScene
@@ -47,6 +49,8 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     val repostScene: RepostSceneRenderer = remember { { item, author, live, open, modifier -> RepostSceneCard(item, author, live, open, modifier) } }
     // La scène d'un réel remplit sa carte (iOS `ReelCardSceneBackdrop`), au lieu de la carte 9:16 d'une story.
     val reelScene: ReelSceneRenderer = remember { { item, accent, live, muted, modifier -> ReelCardScene(item, accent, live, modifier, muted = muted) } }
+    // La scène d'un post a le cadre d'un réel et le sol d'une story : sans fond déclaré, le dégradé de son auteur (#14223).
+    val postSceneCard: ReelSceneRenderer = remember { { item, accent, live, muted, modifier -> PostSceneCard(item, accent, live, modifier, muted = muted) } }
     // Une scène de post touchée s'ouvre en plein écran, entière et sonore (iOS `PostSceneCardContainer`).
     val postSceneReader: PostSceneReaderRenderer = remember { { item, accent, playing, modifier -> PostSceneReaderScene(item, accent, playing, modifier) } }
     // Son menu « … » exporte le post entier, toutes ses scènes, par le moteur d'export des stories (#13896).
@@ -61,6 +65,7 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
         LocalShareLauncher provides launcher,
         LocalRepostSceneRenderer provides repostScene,
         LocalReelSceneRenderer provides reelScene,
+        LocalPostSceneCardRenderer provides postSceneCard,
         LocalPostSceneReaderRenderer provides postSceneReader,
         LocalPostSceneExportRenderer provides postSceneExport,
         LocalSceneItemExportHost provides sceneItemExport,
