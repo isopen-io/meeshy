@@ -19,7 +19,7 @@ import MeeshySDK
 /// côté app : la forme générique a fait tomber l'optimiseur Swift 6.3.2
 /// (`EarlyPerfInliner`) sur le `deinit` synthétisé en Release
 /// `-O -whole-module-optimization`. Un autre call site = une autre copie typée.
-private final class StoryMediaLayerWeakBox: @unchecked Sendable {
+final class StoryMediaLayerWeakBox: @unchecked Sendable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
@@ -186,11 +186,16 @@ public final class StoryMediaLayer: CALayer {
     /// plus la layer si le token a depuis incrémenté — protection race entre
     /// `await videoLocalFileURLAwait` et `prune(keepIds:)` → `tearDownPlayback`
     /// → re-`configure(...)` rapide sur le même layer.
-    private nonisolated var videoLoadGeneration: UInt64 { get { layerState[unchecked: \.videoLoadGeneration] } set { layerState[unchecked: \.videoLoadGeneration] = newValue } }
+    nonisolated var videoLoadGeneration: UInt64 { get { layerState[unchecked: \.videoLoadGeneration] } set { layerState[unchecked: \.videoLoadGeneration] = newValue } }
 
     /// Placeholder CALayer affichant le ThumbHash décodé pendant le fetch
     /// vidéo. Retiré avec un fade out 200 ms quand l'AVPlayer est prêt.
-    private nonisolated var placeholderLayer: CALayer? { get { layerState[unchecked: \.placeholderLayer] } set { layerState[unchecked: \.placeholderLayer] = newValue } }
+    nonisolated var placeholderLayer: CALayer? { get { layerState[unchecked: \.placeholderLayer] } set { layerState[unchecked: \.placeholderLayer] = newValue } }
+
+    /// L'affiche décodée d'une vidéo posée (#13864) — `StoryMediaLayer+Poster.swift`.
+    nonisolated var posterTask: Task<Void, Never>? { get { layerState[unchecked: \.posterTask] } set { layerState[unchecked: \.posterTask] = newValue } }
+    nonisolated var posterImage: CGImage? { get { layerState[unchecked: \.posterImage] } set { layerState[unchecked: \.posterImage] = newValue } }
+    nonisolated var readyForDisplayObservation: NSKeyValueObservation? { get { layerState[unchecked: \.readyForDisplayObservation] } set { layerState[unchecked: \.readyForDisplayObservation] = newValue } }
 
     /// URL actuellement attachée au player. Garde d'idempotence
     /// d'`attachPlayer` : reconfigurer la layer avec la MÊME URL (cache `.edit`
@@ -396,7 +401,10 @@ public final class StoryMediaLayer: CALayer {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         if needsRadius { cornerRadius = targetRadius }
-        if needsPlayerFrame { avPlayerLayer?.frame = bounds }
+        if needsPlayerFrame {
+            avPlayerLayer?.frame = bounds
+            placeholderLayer?.frame = bounds
+        }
         CATransaction.commit()
     }
 
@@ -424,13 +432,19 @@ public final class StoryMediaLayer: CALayer {
         }
 
         // Fast-path cache chaud : si l'URL est déjà locale (file://) OU si le
-        // cache disk a déjà le fichier, on attache directement le player SANS
-        // afficher de placeholder ThumbHash — évite le flash visuel quand on
-        // revisite une story déjà vue / pré-chauffée par le prefetcher.
+        // cache disk a déjà le fichier, on attache directement le player — en
+        // lecture SANS placeholder ThumbHash, ce qui évite le flash visuel quand
+        // on revisite une story déjà vue / pré-chauffée par le prefetcher.
         if let immediateLocalURL = synchronouslyResolvedLocalVideoURL(remoteURL) {
             currentVideoLoadTask?.cancel()
             videoLoadGeneration &+= 1
-            // Pas de placeholder — le bitmap réel est instantané.
+            // Sur la scène du composer, l'affiche — la première image de la
+            // fenêtre coupée — tient la place tant que le player n'a rien
+            // peint (#13864). La lecture garde sa porte de contenu prêt.
+            if mode == .edit {
+                applyThumbHashPlaceholder(media.thumbHash)
+                showPoster(of: media, from: immediateLocalURL)
+            }
             // Loop UNIQUEMENT hors lecture reader : en `.play` une vidéo
             // foreground est un composant de timeline qui joue UNE fois puis
             // disparaît (cf. `attachPlayer`). Seul le composer (`.edit`) boucle.
@@ -570,7 +584,8 @@ public final class StoryMediaLayer: CALayer {
             // playhead (rattrapage d'une arrivée tardive / ouverture à t>0).
             if isPlaybackActive { alignToTimelineThenPlay() }
         case .edit:
-            player.seek(to: .zero)
+            player.seek(to: CMTime(seconds: max(0, media?.sourceStart ?? 0), preferredTimescale: 600),
+                        toleranceBefore: .zero, toleranceAfter: .zero)
             // Composer live preview : la vidéo joue (et boucle, cf. `loop`
             // ci-dessous) tant que `playsInEditMode` est levé par le canvas.
             if playsInEditMode { player.play() }
@@ -630,9 +645,8 @@ public final class StoryMediaLayer: CALayer {
             }
         }
 
-        // Fade out du placeholder une fois la lecture lancée. Best-effort —
-        // la vidéo peut encore buffer mais l'utilisateur perçoit la transition.
-        fadeOutPlaceholder(duration: 0.2)
+        // Le voile d'attente part à la première image peinte par le player.
+        fadeOutPlaceholderWhenReadyForDisplay()
     }
 
     /// Cale le player foreground sur le playhead unifié de la slide puis lance
@@ -799,9 +813,19 @@ public final class StoryMediaLayer: CALayer {
         placeholderLayer?.removeFromSuperlayer()
         placeholderLayer = nil
         guard let hash, let img = ThumbHashDecoder.decodeIfAvailable(hash) else { return }
+        installPlaceholder(contents: CanvasImageOrientation.displayCGImage(img))
+    }
+
+    /// Le voile d'attente sous le player : un ThumbHash, ou l'affiche qui le remplace.
+    @MainActor
+    func installPlaceholder(contents: Any?) {
+        if let existing = placeholderLayer {
+            existing.contents = contents
+            return
+        }
         let placeholder = CALayer()
         placeholder.frame = bounds
-        placeholder.contents = CanvasImageOrientation.displayCGImage(img)
+        placeholder.contents = contents
         placeholder.contentsGravity = .resizeAspectFill
         placeholder.masksToBounds = true
         // Insert sous l'AVPlayerLayer (placeholderLayer = z minimum). Si
@@ -815,7 +839,7 @@ public final class StoryMediaLayer: CALayer {
     }
 
     @MainActor
-    private func fadeOutPlaceholder(duration: TimeInterval) {
+    func fadeOutPlaceholder(duration: TimeInterval) {
         guard let layer = placeholderLayer else { return }
         CATransaction.begin()
         CATransaction.setAnimationDuration(duration)
@@ -861,6 +885,7 @@ public final class StoryMediaLayer: CALayer {
         attachedURL = nil
         hasPlayedToEnd = false
         currentTrimBounds = nil
+        cancelPoster()
         placeholderLayer?.removeFromSuperlayer()
         placeholderLayer = nil
     }
