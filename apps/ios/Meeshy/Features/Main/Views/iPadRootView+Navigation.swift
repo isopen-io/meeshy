@@ -482,7 +482,7 @@ extension iPadRootView {
                 } catch {
                     Logger.messages.error("[iPadRootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                     if attempt == 0 {
-                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        _ = await cancellableSleep(for: .milliseconds(600))
                     }
                 }
             }

@@ -61,7 +61,7 @@ final class EphemeralExpiryCoordinator {
         task = Task { @MainActor [weak self] in
             let delay = next.timeIntervalSinceNow
             if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard await cancellableSleep(for: .seconds(delay)) else { return }
             }
             guard !Task.isCancelled, let self else { return }
             self.scheduledWake = nil
@@ -141,7 +141,7 @@ extension ConversationViewModel {
         let reduceMotion = UIAccessibility.isReduceMotionEnabled
         Task { @MainActor [weak self] in
             let duration = EphemeralBurn.duration(reduceMotion: reduceMotion)
-            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard await cancellableSleep(for: .seconds(duration)) else { return }
             guard let self else { return }
             for id in burning { EphemeralReceiptLedger.shared.noteDestruction(of: id) }
             // Le repli des voisins est ANIMÉ : c'est la seconde moitié de

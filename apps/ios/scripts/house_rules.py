@@ -41,6 +41,7 @@ RULES = (
     _pattern("nonisolated-unsafe", r"nonisolated\(unsafe\)"),
     _pattern("try-sleep", r"try\?\s*await\s+Task\.sleep"),
     _pattern("async-after", r"[\w)\]]\.asyncAfter\("),
+    _pattern("sink-task", r"\.sink\s*(?:\(\s*receiveValue:\s*)?\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*?(?:(?<![\w)\]?] = )|(?<=\b_ = ))\bTask(?:\.detached)?\s*(?:\(\s*priority:[^)]*\)\s*)?\{"),
     _pattern("sleep-nanoseconds", r"Task\.sleep\(nanoseconds:"),
     _pattern(
         "logger-subsystem",

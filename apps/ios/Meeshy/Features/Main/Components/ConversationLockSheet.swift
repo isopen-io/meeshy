@@ -453,7 +453,7 @@ struct ConversationLockSheet: View {
             shakeOffset = 8
         }
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard await cancellableSleep(for: .milliseconds(450)) else { return }
             shakeOffset = 0
             pin = ""
             confirmPin = ""
