@@ -4,27 +4,18 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.AdjustmentFamily
 import me.meeshy.sdk.model.composer.ComposerObjectKind
@@ -40,7 +31,6 @@ import me.meeshy.ui.theme.MeeshySpacing
 
 internal const val PLACED_BAND_TAG = "composer-placed-band"
 internal const val PLACED_MUTE_TAG = "composer-placed-mute"
-internal const val PLACED_VOLUME_TAG = "composer-placed-volume"
 
 internal fun ComposerPlacedMediaTool.glyph(): ImageVector = composerEditIcon(ComposerPlacedMediaEditLevel.entryOf(this).material) ?: MeeshyIcons.Edit
 
@@ -186,23 +176,11 @@ private fun CropPresets(state: StoryComposerUiState, mediaId: String, viewModel:
     }
 }
 
-/** Son › Volume et Muet de la vidéo posée : le curseur écrit le volume à chaque valeur, Muet coupe et rend le niveau quitté. */
+/** Son › Volume et Muet de la vidéo posée : le curseur écrit le volume à chaque valeur et le dit en %, Muet coupe et rend le niveau quitté. */
 @Composable
 private fun PlacedVolume(state: StoryComposerUiState, mediaId: String, viewModel: StoryComposerViewModel) {
     val placed = state.deck.selectedSlide.placedMedia.firstOrNull { it.id == mediaId } ?: return
-    val label = stringResource(R.string.composer_edit_volume)
-    val percent = "${(placed.volume * 100).roundToInt()} %"
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        Slider(
-            value = placed.volume,
-            onValueChange = { v -> viewModel.onSceneGesture("volume-$mediaId") { StoryComposerPlacedMediaReducer.volumeSet(it, mediaId, v) } },
-            valueRange = 0f..1f,
-            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp).testTag(PLACED_VOLUME_TAG).semantics {
-                contentDescription = label
-                stateDescription = percent
-            },
-        )
+    ComposerVolumeRow(placed.volume, { v -> viewModel.onSceneGesture("volume-$mediaId") { StoryComposerPlacedMediaReducer.volumeSet(it, mediaId, v) } }) {
         FilterChip(
             selected = placed.isMuted,
             onClick = { viewModel.onSceneReduce { StoryComposerPlacedMediaReducer.muteToggled(it, mediaId) } },

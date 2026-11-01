@@ -153,7 +153,7 @@ private fun SelectionRailBlock(bar: SceneSelectionBar, tools: List<RailTool>, on
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(horizontal = MeeshySpacing.xs, vertical = MeeshySpacing.xs).semantics { heading() },
     )
-    tools.forEach { tool -> LabeledRailItem(icon = tool.icon, label = stringResource(tool.label), onClick = tool.onClick) }
+    tools.forEach { tool -> LabeledRailItem(icon = tool.icon, label = stringResource(tool.label), onClick = tool.onClick, active = tool.active) }
     bar.actions.forEach { action -> RailActionItem(action) { onAction(action) } }
 }
 

@@ -51,6 +51,8 @@ data class StorySlide(
     val backgroundLoop: Boolean = true,
     /** La fenêtre gardée de la vidéo de FOND dans sa source (iOS `sourceStart`/`sourceEnd` de l'objet `isBackground`, #13973) ; `null` : entière. */
     val backgroundTrim: MediaTrimBounds? = null,
+    /** Le quart de tour du FOND et le volume d'une vidéo de fond (iOS `rotation` / `volume` de l'objet `isBackground`, #14083). */
+    val backgroundSetting: StoryBackgroundSetting = StoryBackgroundSetting(),
     /** Les sons de la slide (fond + premier plan) : le fond appartient à la SLIDE, pas à la publication. */
     val audio: List<StoryAudioPlayerObject> = emptyList(),
     /** Cadrage du fond média, fond de ses bandes, ouverture et fermeture : ce que le panneau Cadre et les effets règlent. */
@@ -222,6 +224,7 @@ data class StorySlideDeck(
                     backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
                     backgroundTrim = slide.backgroundTrim.takeIf { !clearsBackground },
                     backgroundAdjustments = slide.backgroundAdjustments.takeIf { !clearsBackground },
+                    backgroundSetting = if (clearsBackground) StoryBackgroundSetting() else slide.backgroundSetting,
                     mediaLooks = slide.mediaLooks - mediaId,
                 )
             } else {
@@ -577,6 +580,7 @@ data class StorySlideDeck(
                     backgroundLoop = true,
                     backgroundTrim = null,
                     backgroundAdjustments = null,
+                    backgroundSetting = StoryBackgroundSetting(),
                     placedMedia = when {
                         next == null -> slide.placedMedia
                         objectId != null && slide.placedMedia.any { it.id == objectId && it.mediaId == next } ->

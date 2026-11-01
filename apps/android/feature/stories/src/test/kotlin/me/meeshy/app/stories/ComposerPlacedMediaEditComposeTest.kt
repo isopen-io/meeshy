@@ -255,13 +255,28 @@ class ComposerPlacedMediaEditComposeTest {
         assertThat(railShown()).containsAtLeast("Trim", "Filters", "Adjust", "Sound", "Rotate", "Describe", *selectionActions).inOrder()
         assertThat(railShown()).containsNoneOf("Crop", "Effects", "Make a sticker")
         tapRail("Sound")
-        compose.onNodeWithTag(PLACED_VOLUME_TAG).performSemanticsAction(SemanticsActions.SetProgress) { it(0.3f) }
+        compose.onNodeWithTag(COMPOSER_VOLUME_TAG).performSemanticsAction(SemanticsActions.SetProgress) { it(0.3f) }
         assertThat(placed().volume).isWithin(1e-4f).of(0.3f)
+        compose.onNodeWithText("30 %").assertExists()
 
         compose.onNodeWithTag(PLACED_MUTE_TAG).performClick()
         assertThat(placed().volume).isEqualTo(0f)
         compose.onNodeWithTag(PLACED_MUTE_TAG).performClick()
         assertThat(placed().volume).isWithin(1e-4f).of(0.3f)
+    }
+
+    @Test
+    fun `the rail never masks the selected object, a media posed on the right edge stays clear of the lane of the rail`() {
+        vm = viewModel()
+        withPlaced(vm)
+        vm.onSceneReduce { s -> s.copy(deck = s.deck.copy(slides = s.deck.slides.map { slide -> slide.copy(placedMedia = slide.placedMedia.map { it.copy(x = 0.8f, scale = 0.3f) }) })) }
+        show(vm)
+        compose.waitForIdle()
+
+        val media = compose.onNodeWithTag("placed-media", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val rail = compose.onNodeWithTag(EDITING_RAIL_TAG).fetchSemanticsNode().boundsInRoot
+        assertThat(media.width).isGreaterThan(0f)
+        assertThat(media.right).isAtMost(rail.left)
     }
 
     @Test
@@ -294,7 +309,7 @@ class ComposerPlacedMediaEditComposeTest {
         tapRail("Set as background")
 
         assertThat(railShown()).containsExactly(
-            "Framing", "Trim", "Filters", "Adjust", "Loop", "Describe", "Replace", "Place on the scene", "Remove",
+            "Framing", "Trim", "Filters", "Adjust", "Sound", "Loop", "Rotate", "Describe", "Replace", "Place on the scene", "Remove",
         ).inOrder()
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
         tapRail("Adjust")

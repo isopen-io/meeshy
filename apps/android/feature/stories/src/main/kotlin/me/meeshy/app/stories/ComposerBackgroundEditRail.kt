@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,7 +64,9 @@ internal fun ComposerBackgroundTool.labelRes(): Int = when (this) {
     ComposerBackgroundTool.FRAMES -> R.string.composer_edit_frames
     ComposerBackgroundTool.ADJUST -> R.string.composer_column_media_adjust
     ComposerBackgroundTool.EFFECTS -> R.string.stories_composer_band_effets
+    ComposerBackgroundTool.SOUND -> R.string.composer_capture_tool_sound
     ComposerBackgroundTool.LOOP -> R.string.composer_edit_loop
+    ComposerBackgroundTool.ROTATE -> R.string.composer_edit_rotate
     ComposerBackgroundTool.DESCRIPTION -> R.string.composer_column_media_alt_text
 }
 
@@ -74,7 +78,7 @@ internal fun ComposerBackgroundTool.labelRes(): Int = when (this) {
 internal class BackgroundTools(val tools: List<ComposerBackgroundTool>, val looping: Boolean, val onTool: (ComposerBackgroundTool) -> Unit)
 
 /**
- * Ce que touche un outil du fond : Boucle bascule aussitôt, Décrire ouvre sa feuille basse, toute autre
+ * Ce que touche un outil du fond : Boucle bascule aussitôt, Pivoter tourne d'un quart, Décrire ouvre sa feuille basse, toute autre
  * pose sa bande au-dessus du niveau ([onBand]) — ce que l'arbre dit qu'elle ouvre.
  */
 internal fun backgroundTools(
@@ -88,6 +92,7 @@ internal fun backgroundTools(
     onTool = { tool ->
         when (tool) {
             ComposerBackgroundTool.LOOP -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.paintedBackgroundLoopSet(it, !state.selectedSlideBackgroundLoop) }
+            ComposerBackgroundTool.ROTATE -> viewModel.onSceneReduce(StoryComposerBackgroundReducer::rotated)
             ComposerBackgroundTool.DESCRIPTION -> onDescribe()
             else -> onBand(tool)
         }
@@ -166,7 +171,8 @@ internal fun SceneLevelTitle(icon: ImageVector, label: String) {
 
 /**
  * La bande du réglage ouvert, au bas de la scène qui se réduit au-dessus d'elle (#13973) : le Cadrage (le panneau Cadre),
- * Couper (la frise de la source), Filtres (le filtre de la scène puis ceux de l'appel), Cadres, Réglages, Effets. Chaque
+ * Couper (la frise de la source), Filtres (le filtre de la scène puis ceux de l'appel), Cadres, Réglages, Effets, le Son
+ * d'une vidéo (son volume en %, et Muet). Chaque
  * geste écrit sa valeur à chaque image : la scène se repeint pendant le geste.
  */
 @Composable
@@ -188,8 +194,23 @@ internal fun BackgroundBand(tool: ComposerBackgroundTool, state: StoryComposerUi
             ComposerBackgroundTool.FRAMES -> LookFamilies(state, id, viewModel, listOf(ComposerLookFamily.FRAMES))
             ComposerBackgroundTool.ADJUST -> AdjustSection(state, id, AdjustmentFamily.TONE, viewModel, comparison)
             ComposerBackgroundTool.EFFECTS -> AdjustSection(state, id, AdjustmentFamily.EFFECT, viewModel, comparison)
-            ComposerBackgroundTool.LOOP, ComposerBackgroundTool.DESCRIPTION -> Unit
+            ComposerBackgroundTool.SOUND -> BackgroundVolume(state, viewModel)
+            ComposerBackgroundTool.LOOP, ComposerBackgroundTool.ROTATE, ComposerBackgroundTool.DESCRIPTION -> Unit
         }
+    }
+}
+
+/** Son › Volume et Muet de la vidéo de fond (#14083) : le curseur écrit le volume à chaque valeur et le dit en %, Muet coupe et rend le niveau quitté. */
+@Composable
+private fun BackgroundVolume(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    val setting = state.paintedBackgroundSetting
+    ComposerVolumeRow(setting.volume, { v -> viewModel.onSceneGesture("background-volume") { StoryComposerBackgroundReducer.volumeSet(it, v) } }) {
+        FilterChip(
+            selected = setting.isMuted,
+            onClick = { viewModel.onSceneReduce(StoryComposerBackgroundReducer::muteToggled) },
+            label = { Text(stringResource(R.string.composer_edit_mute)) },
+            modifier = Modifier.heightIn(min = 48.dp),
+        )
     }
 }
 

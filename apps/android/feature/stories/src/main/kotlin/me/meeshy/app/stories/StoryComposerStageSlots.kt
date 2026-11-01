@@ -108,6 +108,7 @@ internal fun StoryComposerScene(
                 modifier = Modifier.fillMaxSize(),
                 fitMode = ComposerBackdropFraming.fitMode(state.deck.selectedSlide.frame.backgroundTransform()),
                 backdrop = ComposerBackdropFraming.backdrop(state.deck.selectedSlide.frame.backgroundTransform()),
+                backgroundRotationDeg = state.paintedBackgroundSetting.rotationDeg,
                 onBackgroundLongPress = state.selectedSlideBackdropMediaId
                     ?.let { { viewModel.onSelectBackground() } }
                     ?: armsCapture?.takeIf { scene -> scene.offer?.allowsVideo == true }?.let { scene -> { scene.arm(films = true) } },
