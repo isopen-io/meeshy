@@ -98,6 +98,14 @@ final class ComposerMediaStripTests: XCTestCase {
             "Chaque vignette doit pouvoir se RETIRER — la croix que le constat porteur du "
                 + "2026-09-06 a fait rétablir après qu'un lot l'eut perdue."
         )
+        XCTAssertTrue(
+            ComposerHeaderTiles.showsDelete(sceneIndex: 1, currentIndex: 1, sceneCount: 2),
+            "La vignette COURANTE d'une série porte sa croix."
+        )
+        XCTAssertFalse(
+            ComposerHeaderTiles.showsDelete(sceneIndex: 0, currentIndex: 0, sceneCount: 1),
+            "Une scène seule ne se retire pas par sa vignette."
+        )
     }
 
     // 3 — le meuble CÂBLE son média à la surface, et le retrait ôte du modèle.
