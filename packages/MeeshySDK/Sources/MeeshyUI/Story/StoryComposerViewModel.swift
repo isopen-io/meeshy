@@ -144,10 +144,23 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// TOTALE par construction (toute mutation passe par objectWillChange) ;
     /// la dédup du HistoryStore absorbe les émissions sans changement de
     /// `slides` (sélections, états d'UI…).
-    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = objectWillChange
+    ///
+    /// **Le DOCUMENT seul le réarme** (#14208) : `slides`, la sortie du dessin, et
+    /// la fin d'un geste du canvas. Toute autre publication — l'horloge de
+    /// lecture, la sélection, la progression d'un envoi — repoussait la capture
+    /// tant qu'elle publiait, et plusieurs actions finissaient en un seul pas.
+    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = $slides.map { _ in () }
+        .merge(with: $drawingEditingMode.map { _ in () }, historyNudge.eraseToAnyPublisher())
         .debounce(for: .seconds(historyDebounceInterval), scheduler: DispatchQueue.main)
-        .map { _ in () }
         .eraseToAnyPublisher()
+
+    /// Réarme la capture sans changement du document : la fin d'un geste.
+    let historyNudge = PassthroughSubject<Void, Never>()
+    /// Un geste du canvas est en cours : ses états intermédiaires ne sont pas des pas.
+    var historyCaptureHeld = false
+    /// Un instantané est en cours d'application : ce n'est pas une action.
+    var isApplyingHistory = false
+    var historyObservers: Set<AnyCancellable> = []
 
     /// C9 Inc.3 — purge PARESSEUSE : les bitmaps/URLs des médias supprimés
     /// sont mis de côté (au lieu d'être jetés) tant que l'historique peut les

@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StorySourceWindowMs
 import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
@@ -210,6 +211,13 @@ data class StorySlideView(
      * aspect-fill — a video background or a legacy/flat story never carries one yet.
      */
     val backgroundTransform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
+    /**
+     * Le fond est AJUSTÉ (`backgroundTransform.videoFitMode == "fit"`, iOS `.resizeAspect`, #14199) : le média tient ENTIER dans
+     * la scène, centré, et ses bandes se peignent de [backdrop]. Faux — l'absence comprise — il la REMPLIT, rogné au centre.
+     */
+    val backgroundFits: Boolean = false,
+    /** Le fond des bandes d'un média ajusté : le flou du média par défaut, ou la teinte que l'auteur a choisie. */
+    val backdrop: StoryBackdrop = StoryBackdrop.BLUR,
     /**
      * The ThumbHash the viewer decodes into an instant blur behind the background
      * [imageUrl] while it loads — no black flash on cold load. Resolved once at

@@ -32,6 +32,9 @@ data class ApiResponse<T>(
     val violations: List<ApiViolation>? = null,
     val pagination: Pagination? = null,
     val meta: ApiResponseMeta? = null,
+    /** Les nombres d'un refus de plafond, étalés à la racine par `sendError` (`ONLY_UNLINKED_RECIPIENTS_LIMIT`, #14169). */
+    val limit: Int? = null,
+    val unlinked: Int? = null,
 )
 
 /**

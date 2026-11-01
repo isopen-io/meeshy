@@ -39,7 +39,7 @@ import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-c
 import { keepDiscoverable } from '../profile-discoverability';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { comptesLies, niveauxParmi, plusProchesDabord, type CompteLie } from '../friendship';
-import { resolveConsumptionTarget } from '../posts/postVisibility';
+import { resolveConsumptionTarget, type PostRedirectRecord } from '../posts/postVisibility';
 import { commentThreadOf } from '../posts/commentHome';
 import { viewerListAccess } from '../posts/viewerListAccess';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
@@ -83,8 +83,10 @@ export const POST_ACCESS_DENIED = 'Post non trouvé ou accès refusé';
 const KNOWN_FLOOR: RelationLevel = 'ACQUAINTANCE';
 const FRIEND_FLOOR: RelationLevel = 'FRIEND';
 const ADDRESS_BOOK_CAP = 500;
-/** Les intervenants lus par post : assez pour dix suggestions filtrées, jamais tout un post viral. */
+/** Les intervenants lus par post : 200 PERSONNES distinctes, assez pour dix suggestions filtrées. */
 const THREAD_READ_CAP = 200;
+/** Borne de lignes lues pour les trouver : un fil viral ne se lit jamais en entier. */
+const THREAD_ROW_BUDGET = 1000;
 
 const isKnownLevel = (level: RelationLevel | undefined): boolean =>
   level !== undefined && relationLevelIfAtLeast(level, KNOWN_FLOOR) !== null;
@@ -232,6 +234,10 @@ export class MentionSuggestionFinder {
 
   private cacheKey(conversationId: string, currentUserId: string, query: string): string {
     return `${CACHE_PREFIX}:${conversationId}:${currentUserId}:${query.toLowerCase().trim()}`;
+  }
+
+  private postCacheKey(postId: string, currentUserId: string, query: string): string {
+    return `${CACHE_PREFIX}:post:${postId}:${currentUserId}:${query.toLowerCase().trim()}`;
   }
 
   private async readCache(key: string): Promise<MentionSuggestion[] | null> {
@@ -491,13 +497,8 @@ export class MentionSuggestionFinder {
     currentUserId: string,
     withReactors: boolean
   ): Promise<SuggestedUser[]> {
-    const [comments, reactions] = await Promise.all([
-      this.prisma.postComment.findMany({
-        where: { postId: threadId, authorId: { not: currentUserId }, ...unsetOrNull('deletedAt') },
-        select: { authorId: true },
-        orderBy: { createdAt: 'asc' },
-        take: THREAD_READ_CAP
-      }),
+    const [commenterIds, reactions] = await Promise.all([
+      this.distinctCommenters(threadId, currentUserId),
       withReactors
         ? this.prisma.postReaction.findMany({
             where: { postId: threadId, userId: { not: currentUserId } },
@@ -509,10 +510,35 @@ export class MentionSuggestionFinder {
     ]);
     const ordered = [
       ...authorIds,
-      ...comments.map(comment => comment.authorId),
+      ...commenterIds,
       ...reactions.map(reaction => reaction.userId)
     ].filter(userId => userId && userId !== currentUserId);
     return this.usersInOrder([...new Set(ordered)]);
+  }
+
+  /**
+   * Les commentateurs d'un fil, dans l'ordre de leur premier commentaire : on lit
+   * par pages jusqu'à THREAD_READ_CAP personnes distinctes, sans dépasser
+   * THREAD_ROW_BUDGET lignes. Un compte qui commente en rafale ne cache donc pas
+   * ceux qui écrivent après lui, et un fil viral reste borné.
+   */
+  private async distinctCommenters(threadId: string, currentUserId: string): Promise<string[]> {
+    const where = { postId: threadId, authorId: { not: currentUserId }, ...unsetOrNull('deletedAt') };
+    const seen = new Set<string>();
+    for (let skip = 0; skip < THREAD_ROW_BUDGET && seen.size < THREAD_READ_CAP; skip += THREAD_READ_CAP) {
+      const page = await this.prisma.postComment.findMany({
+        where,
+        select: { authorId: true },
+        orderBy: { createdAt: 'asc' },
+        skip,
+        take: THREAD_READ_CAP
+      });
+      page.forEach(comment => {
+        if (seen.size < THREAD_READ_CAP) seen.add(comment.authorId);
+      });
+      if (page.length < THREAD_READ_CAP) break;
+    }
+    return [...seen];
   }
 
   /**
@@ -539,6 +565,29 @@ export class MentionSuggestionFinder {
       'author';
 
     const blocked = await getBlockRelatedUserIds(this.prisma, currentUserId);
+    const key = this.postCacheKey(postId, currentUserId, query);
+    const cached = await this.readCache(key);
+    if (cached) return cached.filter(s => !blocked.has(s.id));
+
+    const suggestions = await this.postSuggestions({ target, withReactors, currentUserId, query, blocked });
+    await this.writeCache(key, suggestions);
+    return suggestions;
+  }
+
+  private async postSuggestions({
+    target,
+    withReactors,
+    currentUserId,
+    query,
+    blocked
+  }: {
+    readonly target: PostRedirectRecord;
+    readonly withReactors: boolean;
+    readonly currentUserId: string;
+    readonly query: string;
+    readonly blocked: ReadonlySet<string>;
+  }): Promise<MentionSuggestion[]> {
+    const thread = target.redirectedFrom ?? target;
     const matches = (user: SuggestedUser): boolean => !blocked.has(user.id) && queryMatcher(query)(user);
     const [ties, participants] = await Promise.all([
       this.tiesOf(currentUserId),

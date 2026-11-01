@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -341,6 +342,10 @@ private val WAITING_BADGE_TOP = 112.dp
  * de la bande et la section « plan » de la colonne droite d'un texte. Le même plan, les mêmes gestes ; l'empilement,
  * lui, reste aux actions de l'objet.
  */
+/** L'objet posé qu'une piste de la frise désigne. */
+private fun StoryComposerUiState.friseRef(id: String): SceneObjectRef? =
+    StorySceneStack.order(deck.selectedSlide).firstOrNull { it.id == id }
+
 @Composable
 internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     val names = state.sceneTrackNames
@@ -358,11 +363,14 @@ internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryCompose
         },
         onScrub = viewModel::onPlayheadMoved,
         onWindow = viewModel::onSceneObjectWindow,
-        splittableIds = state.deck.selectedSlide.elements.map { it.id }.toSet(),
-        // « Couper » à la tête (#14221) : une réduction, donc un seul pas d'annulation.
+        splittableIds = StoryComposerSplitReducer.splittableIds(state),
+        // « Couper » à la tête (#14221, #14224) : une réduction, donc un seul pas d'annulation.
         onSplit = { id ->
-            val newId = newTextElementId()
-            viewModel.onSceneReduce { s -> StoryComposerSceneReducer.textSplit(s, id, newId) }
+            val newId = java.util.UUID.randomUUID().toString()
+            viewModel.onSceneReduce { s -> StoryComposerSplitReducer.split(s, id, newId) }
         },
+        visuals = state.friseBarVisuals(),
+        onDuplicate = { id -> state.friseRef(id)?.let { viewModel.onSelectionAction(it, ComposerSelectionAction.DUPLICATE) {} } },
+        onRemove = { id -> state.friseRef(id)?.let { viewModel.onSelectionAction(it, ComposerSelectionAction.REMOVE) {} } },
     )
 }

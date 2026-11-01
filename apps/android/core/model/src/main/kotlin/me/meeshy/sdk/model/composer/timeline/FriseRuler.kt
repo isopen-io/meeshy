@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.composer.timeline
 
 import java.util.Locale
+import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
@@ -27,16 +28,21 @@ object FriseRuler {
 
     fun majorStep(duration: Float, widthDp: Float): Float = chosen(duration, widthDp).seconds
 
-    fun ticks(duration: Float, widthDp: Float): List<Tick> {
-        if (duration <= 0f || !duration.isFinite() || widthDp <= 0f) return emptyList()
-        val step = chosen(duration, widthDp)
+    fun ticks(duration: Float, widthDp: Float): List<Tick> = ticks(FriseViewport.whole(duration), widthDp)
+
+    /** Les graduations de la seule fenêtre VISIBLE (#13481) : zoomée sur une minute de deux heures, la règle n'en dessine pas plus. */
+    fun ticks(view: FriseViewport, widthDp: Float): List<Tick> {
+        if (view.span <= 0f || !view.span.isFinite() || !view.start.isFinite() || widthDp <= 0f) return emptyList()
+        val step = chosen(view.span, widthDp)
         val minor = step.seconds / step.divisions
-        val withMinors = minor / duration * widthDp >= MINOR_GAP_DP
+        val withMinors = minor / view.span * widthDp >= MINOR_GAP_DP
         val pitch = if (withMinors) minor else step.seconds
         val perMajor = if (withMinors) step.divisions else 1
-        val count = floor(duration / pitch + 0.0001f).toInt()
-        return (0..count).map { rank ->
-            val time = minOf(duration, (rank / perMajor) * step.seconds + (rank % perMajor) * minor)
+        val first = ceil(view.start / pitch - 0.0001f).toInt()
+        val last = floor(view.end / pitch + 0.0001f).toInt()
+        if (first > last) return emptyList()
+        return (first..last).map { rank ->
+            val time = minOf(view.end, (rank / perMajor) * step.seconds + (rank % perMajor) * minor)
             val major = rank % perMajor == 0
             Tick(time, major, if (major) label(time) else null)
         }

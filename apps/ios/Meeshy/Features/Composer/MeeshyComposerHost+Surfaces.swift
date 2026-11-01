@@ -413,7 +413,7 @@ extension MeeshyComposerHost {
             // absent, jamais grisé.
             onUndo: sceneUndo,
             onRedo: sceneRedo,
-            // **La sélection se VOIT** (#13839, L5) : un cadre pointillé peint hors de l'export ; la barre dit le reste.
+            // **La sélection change le rail, sans cadre sur l'objet** (#14206) ; l'id ne descend que pour le badge d'envoi.
             // Le badge ne parle que du pré-envoi de l'objet (« Envoi 40 % », #13864, R5), qui ne retient rien.
             selectedItemId: sceneTypesInline ? nil : selectedSceneItemId,
             selectionBadge: ComposerSceneIntakeCopy.sendingBadge(for: selectedSceneItemPreUpload),

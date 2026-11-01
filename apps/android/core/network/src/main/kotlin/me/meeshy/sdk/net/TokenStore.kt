@@ -25,6 +25,15 @@ interface TokenStore {
      * worth offering (iOS `hasPreservedSession`). A store without a per-account vault holds none.
      */
     fun accountsWithTokens(candidates: Collection<String>): Set<String> = emptySet()
+
+    /** The tokens [userId] holds on this device — the active account's or a dormant one's; `null` when it holds none. */
+    fun tokensOf(userId: String): AccountTokens? = null
+
+    /**
+     * Puts [tokens] to sleep under [userId] without making it active — a kept account brought back after a reinstall
+     * (#14079). The active account is never overwritten this way.
+     */
+    fun keepDormant(userId: String, tokens: AccountTokens) = Unit
 }
 
 /** Volatile token store — for tests and previews. */
@@ -33,9 +42,25 @@ class InMemoryTokenStore(
     override var sessionToken: String? = null,
     override var userId: String? = null,
 ) : TokenStore {
+    private var dormant: Map<String, AccountTokens> = emptyMap()
+
     override val isAuthenticated: Boolean get() = jwt != null || sessionToken != null
 
+    override fun accountsWithTokens(candidates: Collection<String>): Set<String> =
+        candidates.filterTo(mutableSetOf()) { tokensOf(it) != null }
+
+    override fun tokensOf(userId: String): AccountTokens? {
+        if (userId == this.userId) return AccountTokens(jwt, sessionToken).takeUnless { it.isEmpty }
+        return dormant[userId]
+    }
+
+    override fun keepDormant(userId: String, tokens: AccountTokens) {
+        if (userId == this.userId || tokens.isEmpty) return
+        dormant = dormant + (userId to tokens)
+    }
+
     override fun clear() {
+        userId?.let { dormant = dormant - it }
         jwt = null
         sessionToken = null
         userId = null

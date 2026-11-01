@@ -171,11 +171,19 @@ public class SessionRefresher(
          */
         public fun isRefusal(failure: Throwable): Boolean {
             if (failure !is retrofit2.HttpException) return false
-            return when (failure.code()) {
-                401 -> true
-                403 -> codeOf(failure) == AGE_BELOW_MINIMUM
-                else -> false
-            }
+            return refuses(failure.code()) { codeOf(failure) }
+        }
+
+        /**
+         * La même règle sur un statut et un code déjà lus — la restauration d'une session sauvegardée (#14058) la suit :
+         * une session qui n'a pas été refusée garde sa sauvegarde.
+         */
+        public fun refuses(httpStatus: Int?, code: String?): Boolean = refuses(httpStatus) { code }
+
+        private inline fun refuses(httpStatus: Int?, code: () -> String?): Boolean = when (httpStatus) {
+            401 -> true
+            403 -> code() == AGE_BELOW_MINIMUM
+            else -> false
         }
 
         private fun codeOf(failure: retrofit2.HttpException): String? {

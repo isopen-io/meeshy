@@ -51,16 +51,17 @@ import MeeshySDK
 /// badge reste au contrat pour les hôtes qui le demandent ; la scène n'en
 /// demande pas.
 ///
-/// Le cadre est un chrome d'ÉDITION : il vit dans `editOverlayLayer`, que ni
+/// ## Plus aucun cadre (#14206)
+///
+/// Le porteur l'a retiré le 2026-11-01 : la sélection change déjà le rail et le
+/// toucher amène l'objet au premier plan. Seul le badge d'envoi reste, posé
+/// au-dessus de l'objet.
+///
+/// Le badge est un chrome d'ÉDITION : il vit dans `editOverlayLayer`, que ni
 /// l'export (`StoryExporter`), ni la vignette, ni le lecteur ne reconstruisent
 /// — ils peignent la slide par `StoryRenderer`, jamais ce calque.
 extension StoryCanvasUIView {
 
-    /// Le trait et son décalage hors du calque, en points d'écran.
-    /// Le cadre vit dans `editOverlayLayer`, qui n'est PAS mis à l'échelle par la
-    /// géométrie de rendu — ces valeurs sont donc lues telles quelles.
-    static let selectionMarkerLineWidth: CGFloat = 2
-    static let selectionMarkerOffset: CGFloat = 3
     /// La hauteur du badge, et le creux qui le sépare du cadre.
     static let selectionMarkerBadgeHeight: CGFloat = 18
     static let selectionMarkerBadgeGap: CGFloat = 6
@@ -93,28 +94,8 @@ extension StoryCanvasUIView {
         else { return }
 
         // Un calque de largeur ou de hauteur nulle existe pendant la fenêtre où
-        // un objet vient d'être posé et n'a pas encore été mesuré. L'encadrer
-        // peindrait un trait de zéro pixel — visible comme un artefact, jamais
-        // comme une sélection.
+        // un objet vient d'être posé et n'a pas encore été mesuré.
         guard cible.frame.width > 0.5, cible.frame.height > 0.5 else { return }
-
-        let cadre = CAShapeLayer()
-        cadre.frame = editOverlayLayer.bounds
-        cadre.path = StorySelectionFrame.path(bounds: cible.bounds, position: cible.position,
-                                             anchorPoint: cible.anchorPoint,
-                                             transform: cible.affineTransform(),
-                                             offset: Self.selectionMarkerOffset)
-        cadre.fillColor = nil
-        cadre.strokeColor = UIColor.white.cgColor
-        cadre.lineWidth = Self.selectionMarkerLineWidth
-        cadre.lineDashPattern = nil
-        cadre.lineJoin = .round
-        // Une ombre douce garde le trait lisible sur un fond blanc.
-        cadre.shadowColor = UIColor.black.cgColor
-        cadre.shadowOpacity = 0.35
-        cadre.shadowRadius = 1.5
-        cadre.shadowOffset = .zero
-        attachSelectionMarker(cadre)
 
         if let badge = selectionMarkerBadge, !badge.isEmpty,
            let calque = makeSelectionBadge(badge, above: cible.frame) {
@@ -165,33 +146,5 @@ extension StoryCanvasUIView {
     /// s'apprenne.
     static var selectionMarkerTint: UIColor {
         UIColor(red: 0.561, green: 0.490, blue: 0.973, alpha: 1)
-    }
-}
-
-/// **Le cadre de la sélection, en géométrie pure** (#13839, L5).
-nonisolated enum StorySelectionFrame {
-
-    /// **Le contour, aux bornes réelles du calque** — un rectangle tourné de
-    /// l'angle du calque, agrandi par son échelle, décalé de `offset` points
-    /// d'ÉCRAN vers l'extérieur (une échelle ×2 ne double pas le décalage).
-    ///
-    /// Les quatre arguments sont ceux d'un `CALayer` : la boîte `frame` d'un
-    /// calque tourné est sa boîte englobante alignée sur les axes, qui dirait
-    /// « la place prise » et non « l'objet ».
-    static func path(bounds: CGRect, position: CGPoint, anchorPoint: CGPoint,
-                     transform: CGAffineTransform, offset: CGFloat) -> CGPath {
-        let angle = atan2(transform.b, transform.a)
-        let echelleX = hypot(transform.a, transform.b)
-        let echelleY = hypot(transform.c, transform.d)
-        let centreLocal = CGPoint(x: (0.5 - anchorPoint.x) * bounds.width,
-                                  y: (0.5 - anchorPoint.y) * bounds.height)
-        let centre = CGPoint(x: position.x + centreLocal.x * transform.a + centreLocal.y * transform.c + transform.tx,
-                             y: position.y + centreLocal.x * transform.b + centreLocal.y * transform.d + transform.ty)
-        let largeur = bounds.width * echelleX + 2 * offset
-        let hauteur = bounds.height * echelleY + 2 * offset
-        var pose = CGAffineTransform(translationX: centre.x, y: centre.y).rotated(by: angle)
-        let rect = CGRect(x: -largeur / 2, y: -hauteur / 2, width: largeur, height: hauteur)
-        let rayon = min(6, largeur / 2, hauteur / 2)
-        return CGPath(roundedRect: rect, cornerWidth: rayon, cornerHeight: rayon, transform: &pose)
     }
 }

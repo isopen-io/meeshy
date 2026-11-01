@@ -21,13 +21,15 @@ public object RetryDecision {
     public val RETRYABLE_STATUS_CODES: Set<Int> = setOf(429, 503)
 
     /**
-     * Une limite QUOTIDIENNE de gestes tient jusqu'à `resetAt`, et le mode lent des
-     * nouveaux comptes se DIT à l'auteur : ni l'un ni l'autre ne se rejoue en silence.
+     * Une limite QUOTIDIENNE de gestes tient jusqu'à `resetAt`, le mode lent des
+     * nouveaux comptes et le plafond des personnes choisies sans lien ([OnlyUnlinkedRefusal])
+     * se DISENT à l'auteur : aucun ne se rejoue en silence.
      */
     public val NEVER_REPLAYED_429_CODES: Set<String> = setOf(
         "DAILY_COMMENT_LIMIT",
         "DAILY_REACTION_LIMIT",
         "NEWCOMER_SLOW_MODE",
+        OnlyUnlinkedRefusal.CODE,
     )
 
     public fun shouldRetry(

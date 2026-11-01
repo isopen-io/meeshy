@@ -1,8 +1,19 @@
 package me.meeshy.app.stories
 
 import androidx.compose.foundation.background
+import me.meeshy.sdk.model.composer.sound.SoundTraceBars
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,10 +27,16 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import me.meeshy.ui.icons.MeeshyIcons
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,12 +44,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -62,6 +81,7 @@ import me.meeshy.sdk.model.composer.ComposerObjectChips
 import me.meeshy.sdk.model.composer.timeline.ClipWindowResolver
 import me.meeshy.sdk.model.composer.timeline.FriseBarDrag
 import me.meeshy.sdk.model.composer.timeline.FriseRuler
+import me.meeshy.sdk.model.composer.timeline.FriseViewport
 import me.meeshy.sdk.model.composer.timeline.Plan2DTrack
 import me.meeshy.sdk.model.composer.timeline.TimelineGeometry
 import me.meeshy.sdk.model.composer.timeline.TrackBar
@@ -98,9 +118,33 @@ internal fun SceneFrise(
     modifier: Modifier = Modifier,
     splittableIds: Set<String> = emptySet(),
     onSplit: (id: String) -> Unit = {},
+    visuals: Map<String, FriseBarVisual> = emptyMap(),
+    onDuplicate: (id: String) -> Unit = {},
+    onRemove: (id: String) -> Unit = {},
 ) {
     val duration = maxOf(slideDurationSeconds, ClipWindowResolver.MINIMUM_DURATION)
     var laneWidthPx by remember { mutableStateOf(0) }
+    // La portion du temps montrée (#13481, iso iOS #14213) : `null`, la slide entière ; pincer la resserre autour de la tête.
+    var zoom by remember { mutableStateOf<FriseViewport?>(null) }
+    val view = (zoom ?: FriseViewport.whole(duration)).clamped(duration)
+    var playing by remember { mutableStateOf(false) }
+    val currentPlayhead by rememberUpdatedState(playheadSeconds)
+    val currentScrub by rememberUpdatedState(onScrub)
+    // **Lire la scène** : la tête avance au rythme de l'horloge d'affichage, s'arrête à la fin ; la frise zoomée la suit.
+    LaunchedEffect(playing, duration) {
+        if (!playing) return@LaunchedEffect
+        if (currentPlayhead >= duration) currentScrub(0f)
+        var last = withFrameNanos { it }
+        while (playing) {
+            withFrameNanos { now ->
+                val next = FriseViewport.advanced(currentPlayhead, (now - last) / 1_000_000_000f, duration)
+                last = now
+                currentScrub(next)
+                zoom = zoom?.clamped(duration)?.showing(next, duration)
+                if (next >= duration) playing = false
+            }
+        }
+    }
     val haptics = rememberMeeshyHaptics()
     val panel = stringResource(R.string.composer_frise_panel)
     val interfaceDirection = LocalLayoutDirection.current
@@ -109,6 +153,8 @@ internal fun SceneFrise(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         FriseTransport(
+            playing = playing,
+            onPlayPause = { playing = !playing },
             playheadSeconds = playheadSeconds,
             duration = duration,
             selected = tracks.firstOrNull { it.id == selectedId }?.takeIf { it.id in editableIds },
@@ -119,13 +165,21 @@ internal fun SceneFrise(
                     FriseBarDrag.canSplit(ClipWindowResolver.Window(s, e - s), playheadSeconds)
                 },
             onSplit = { selectedId?.let(onSplit) },
+            onDuplicate = { selectedId?.let(onDuplicate) },
+            onRemove = { selectedId?.let(onRemove) },
         )
         // L'axe du temps se lit de gauche à droite dans toutes les langues (#14219) : en RTL, `offset` est miroité mais
         // la position du doigt ne l'est pas — la tête et les barres fuyaient le doigt. Les noms gardent l'interface.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier.fillMaxWidth().pinchToZoom { scale, panPx ->
+                val zoomed = view.zoomed(scale, currentPlayhead, duration)
+                val panned = if (laneWidthPx > 0) zoomed.panned(panPx / laneWidthPx, duration) else zoomed
+                zoom = panned.takeIf { it.span < duration }
+            },
+        ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Ruler(duration = duration, onScrub = onScrub, onLaneWidth = { laneWidthPx = it })
+                Ruler(view = view, duration = duration, zoomed = zoom != null, onScrub = onScrub, onLaneWidth = { laneWidthPx = it })
                 if (tracks.isEmpty()) {
                     Text(
                         text = stringResource(R.string.composer_frise_empty),
@@ -143,6 +197,9 @@ internal fun SceneFrise(
                             selected = track.id == selectedId,
                             allTracks = tracks,
                             duration = duration,
+                            view = view,
+                            visual = visuals[track.id],
+                            onPan = { fraction -> if (zoom != null) zoom = view.panned(fraction, duration) },
                             playheadSeconds = playheadSeconds,
                             laneWidthPx = laneWidthPx,
                             labelDirection = interfaceDirection,
@@ -156,7 +213,7 @@ internal fun SceneFrise(
                     }
                 }
             }
-            Playhead(playheadSeconds / duration, laneWidthPx)
+            Playhead(view.fraction(playheadSeconds), laneWidthPx)
         }
         }
     }
@@ -164,6 +221,8 @@ internal fun SceneFrise(
 
 @Composable
 private fun FriseTransport(
+    playing: Boolean,
+    onPlayPause: () -> Unit,
     playheadSeconds: Float,
     duration: Float,
     selected: Plan2DTrack?,
@@ -171,8 +230,11 @@ private fun FriseTransport(
     onExit: () -> Unit,
     canSplit: Boolean,
     onSplit: () -> Unit,
+    onDuplicate: () -> Unit,
+    onRemove: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PlayPauseButton(playing, onPlayPause)
         // L'horloge ne dit rien tant que la tête n'a pas quitté le début (#13838) ; sa place reste réservée, la frise ne saute pas.
         val clock = ComposerLimitNotice.showsPlanClock(playheadSeconds)
         Text(
@@ -187,7 +249,71 @@ private fun FriseTransport(
             TextChip(stringResource(R.string.composer_frise_entry), onEntry)
             TextChip(stringResource(R.string.composer_frise_exit), onExit)
             if (canSplit) TextChip(stringResource(R.string.composer_object_editor_split), onSplit)
+            // Dupliquer et Retirer l'objet choisi sans quitter la frise (#14221) : un pas d'annulation chacun.
+            GlyphChip(MeeshyIcons.Copy, stringResource(R.string.story_canvas_action_duplicate), onDuplicate)
+            GlyphChip(MeeshyIcons.Delete, stringResource(R.string.composer_selection_remove), onRemove)
         }
+    }
+}
+
+@Composable
+private fun GlyphChip(glyph: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    val haptics = rememberMeeshyHaptics()
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clickable {
+                haptics.light()
+                onClick()
+            }
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(glyph, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/** Lecture / pause de la scène (iso iOS : un disque blanc de 36 dp dans une cible de 44). */
+@Composable
+private fun PlayPauseButton(playing: Boolean, onClick: () -> Unit) {
+    val haptics = rememberMeeshyHaptics()
+    val label = stringResource(if (playing) R.string.composer_frise_pause else R.string.composer_frise_play)
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clickable {
+                haptics.light()
+                onClick()
+            }
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(36.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (playing) MeeshyIcons.Pause else MeeshyIcons.Play,
+                contentDescription = null,
+                tint = Color.Black.copy(alpha = 0.9f),
+            )
+        }
+    }
+}
+
+/**
+ * **Deux doigts zooment et font défiler la frise** (#13481) : lus AVANT les barres, pour qu'un pincement ne devienne
+ * jamais le glissé d'une barre ; un seul doigt reste aux barres, aux poignées et à la règle.
+ */
+private fun Modifier.pinchToZoom(onTransform: (scale: Float, panPx: Float) -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (event.changes.count { it.pressed } >= 2) {
+                val scale = event.calculateZoom()
+                val pan = event.calculatePan().x
+                if (scale != 1f || pan != 0f) onTransform(scale, pan)
+                event.changes.forEach { it.consume() }
+            }
+        } while (event.changes.any { it.pressed })
     }
 }
 
@@ -213,7 +339,7 @@ private fun TextChip(label: String, onClick: () -> Unit) {
  * dessinées en une seule passe ; le doigt sent la tête franchir une graduation majeure.
  */
 @Composable
-private fun Ruler(duration: Float, onScrub: (Float) -> Unit, onLaneWidth: (Int) -> Unit) {
+private fun Ruler(view: FriseViewport, duration: Float, zoomed: Boolean, onScrub: (Float) -> Unit, onLaneWidth: (Int) -> Unit) {
     val label = stringResource(R.string.composer_frise_ruler)
     val currentScrub by rememberUpdatedState(onScrub)
     val haptics = rememberMeeshyHaptics()
@@ -223,8 +349,9 @@ private fun Ruler(duration: Float, onScrub: (Float) -> Unit, onLaneWidth: (Int) 
     val labelStyle = TextStyle(fontSize = 9.sp, color = ink.copy(alpha = 0.6f))
     var widthPx by remember { mutableStateOf(0) }
     val widthDp = with(density) { widthPx.toDp().value }
-    val ticks = remember(duration, widthDp) { FriseRuler.ticks(duration, widthDp) }
-    val majorStep = remember(duration, widthDp) { FriseRuler.majorStep(duration, widthDp) }
+    val ticks = remember(view, widthDp) { FriseRuler.ticks(view, widthDp) }
+    val majorStep = remember(view.span, widthDp) { FriseRuler.majorStep(view.span, widthDp) }
+    val currentView by rememberUpdatedState(view)
     Box(
         modifier = Modifier.fillMaxWidth().height(24.dp).padding(start = LABEL_LANE),
         contentAlignment = Alignment.CenterStart,
@@ -238,7 +365,7 @@ private fun Ruler(duration: Float, onScrub: (Float) -> Unit, onLaneWidth: (Int) 
                 }
                 .drawBehind {
                     ticks.forEach { tick ->
-                        val x = (tick.time / duration).coerceIn(0f, 1f) * size.width
+                        val x = view.fraction(tick.time).coerceIn(0f, 1f) * size.width
                         val h = (if (tick.isMajor) 7.dp else 4.dp).toPx()
                         drawRect(
                             color = ink.copy(alpha = if (tick.isMajor) 0.55f else 0.25f),
@@ -251,10 +378,19 @@ private fun Ruler(duration: Float, onScrub: (Float) -> Unit, onLaneWidth: (Int) 
                             drawText(layout, topLeft = Offset(left, 0f))
                         }
                     }
+                    // L'ascenseur : où la fenêtre zoomée se tient dans la slide.
+                    if (zoomed && duration > 0f) {
+                        val h = 1.5.dp.toPx()
+                        drawRect(
+                            color = ink.copy(alpha = 0.8f),
+                            topLeft = Offset(view.start / duration * size.width, size.height - h),
+                            size = Size(maxOf(6.dp.toPx(), view.span / duration * size.width), h),
+                        )
+                    }
                 }
                 .semantics { contentDescription = label }
                 .pointerInput(duration) {
-                    detectTapGestures { currentScrub((it.x / size.width).coerceIn(0f, 1f) * duration) }
+                    detectTapGestures { currentScrub(currentView.timeAt(it.x / size.width)) }
                 }
                 .pointerInput(duration, majorStep) {
                     var last: Float? = null
@@ -264,7 +400,7 @@ private fun Ruler(duration: Float, onScrub: (Float) -> Unit, onLaneWidth: (Int) 
                         onDragCancel = { last = null },
                     ) { change, _ ->
                         change.consume()
-                        val at = (change.position.x / size.width).coerceIn(0f, 1f) * duration
+                        val at = currentView.timeAt(change.position.x / size.width)
                         last?.let { if (FriseRuler.crossesMajor(it, at, majorStep)) haptics.light() }
                         last = at
                         currentScrub(at)
@@ -281,6 +417,7 @@ private fun Playhead(fraction: Float, laneWidthPx: Int) {
             .fillMaxHeight()
             .width(2.dp)
             .offset { IntOffset(LABEL_LANE.roundToPx() + (fraction.coerceIn(0f, 1f) * laneWidthPx).roundToInt() - 1, 0) }
+            .graphicsLayer { alpha = if (fraction in 0f..1f) 1f else 0f }
             .background(MeeshyPalette.Warning),
     )
 }
@@ -293,6 +430,9 @@ private fun FriseTrackRow(
     selected: Boolean,
     allTracks: List<Plan2DTrack>,
     duration: Float,
+    view: FriseViewport,
+    visual: FriseBarVisual?,
+    onPan: (Float) -> Unit,
     playheadSeconds: Float,
     laneWidthPx: Int,
     labelDirection: LayoutDirection,
@@ -306,9 +446,11 @@ private fun FriseTrackRow(
     }
     var live by remember(track.id) { mutableStateOf<ClipWindowResolver.Window?>(null) }
     val window = live ?: stored
-    val geometry = remember(laneWidthPx, duration) {
-        TimelineGeometry(zoomScale = laneWidthPx / (TimelineGeometry.BASE_PIXELS_PER_SECOND * duration))
+    val geometry = remember(laneWidthPx, view.span) {
+        TimelineGeometry(zoomScale = laneWidthPx / (TimelineGeometry.BASE_PIXELS_PER_SECOND * view.span))
     }
+    val currentView by rememberUpdatedState(view)
+    val currentPan by rememberUpdatedState(onPan)
     val candidates = remember(allTracks, track.id, playheadSeconds, duration) {
         FriseBarDrag.candidates(allTracks, track.id, playheadSeconds, duration)
     }
@@ -343,9 +485,17 @@ private fun FriseTrackRow(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .clipToBounds()
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f), RoundedCornerShape(4.dp))
                 .pointerInput(track.id, duration) {
-                    detectTapGestures { currentSelect((it.x / size.width).coerceIn(0f, 1f) * duration) }
+                    detectTapGestures { currentSelect(currentView.timeAt(it.x / size.width)) }
+                }
+                // Glisser le fond d'une piste fait défiler la frise zoomée.
+                .pointerInput(track.id) {
+                    detectHorizontalDragGestures { change, amount ->
+                        if (size.width > 0) currentPan(amount / size.width)
+                        change.consume()
+                    }
                 },
         ) {
             val barColor = when {
@@ -356,8 +506,8 @@ private fun FriseTrackRow(
             val dashColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(((window.start / duration) * laneWidthPx).roundToInt(), 0) }
-                    .width(with(androidx.compose.ui.platform.LocalDensity.current) { ((window.duration / duration) * laneWidthPx).coerceAtLeast(4f).toDp() })
+                    .offset { IntOffset((view.fraction(window.start) * laneWidthPx).roundToInt(), 0) }
+                    .width(with(androidx.compose.ui.platform.LocalDensity.current) { ((window.duration / view.span) * laneWidthPx).coerceAtLeast(4f).toDp() })
                     .fillMaxHeight()
                     .padding(vertical = 4.dp)
                     .background(barColor, RoundedCornerShape(4.dp))
@@ -372,15 +522,17 @@ private fun FriseTrackRow(
                             Modifier
                         },
                     ),
-            )
+            ) {
+                visual?.let { FriseBarContent(it) }
+            }
             if (selected && dragEnabled) {
-                Handle(window.start, duration, laneWidthPx, Grip.START) { grip ->
+                Handle(view.fraction(window.start), laneWidthPx, Grip.START) { grip ->
                     Modifier.dragBar(track.id, grip, geometry, { currentStored }, { currentCandidates }, { live = it }, {
                         live = null
                         currentCommit(FriseBarDrag.stored(it, duration))
                     }, onSnap = { currentSnap() })
                 }
-                Handle(window.end, duration, laneWidthPx, Grip.END) { grip ->
+                Handle(view.fraction(window.end), laneWidthPx, Grip.END) { grip ->
                     Modifier.dragBar(track.id, grip, geometry, { currentStored }, { currentCandidates }, { live = it }, {
                         live = null
                         currentCommit(FriseBarDrag.stored(it, duration))
@@ -390,6 +542,44 @@ private fun FriseTrackRow(
         }
     }
 }
+
+/** Les vignettes d'une vidéo ou la forme d'onde d'un son, dans leur barre (#14220) ; jamais une cible de toucher. */
+@Composable
+private fun FriseBarContent(visual: FriseBarVisual) {
+    when (visual) {
+        is FriseBarVisual.Filmstrip -> {
+            val frames = rememberVideoFrames(visual.url, visual.sourceSeconds)
+            Row(Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)).graphicsLayer { alpha = 0.85f }) {
+                frames.forEach { frame ->
+                    Image(
+                        bitmap = frame,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
+                }
+            }
+        }
+        is FriseBarVisual.Waveform -> {
+            val bars = remember(visual.samples) { SoundTraceBars.heights(visual.samples, FRISE_WAVE_BARS) }
+            Canvas(Modifier.fillMaxSize().padding(horizontal = 3.dp)) {
+                val step = size.width / FRISE_WAVE_BARS
+                val barWidth = step * 0.55f
+                bars.forEachIndexed { i, fraction ->
+                    val h = size.height * fraction
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.8f),
+                        topLeft = Offset(i * step + (step - barWidth) / 2, (size.height - h) / 2),
+                        size = Size(barWidth, h),
+                        cornerRadius = CornerRadius(barWidth / 2),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private const val FRISE_WAVE_BARS = 48
 
 /**
  * Ce que TalkBack offre sur une piste réglable (#14222, iso iOS) : la déplacer, avancer ou reculer son entrée et sa
@@ -437,10 +627,10 @@ private fun withinSlide(
 private const val FRISE_ACCESSIBILITY_STEP = 0.5f
 
 @Composable
-private fun Handle(at: Float, duration: Float, laneWidthPx: Int, grip: Grip, drag: (Grip) -> Modifier) {
+private fun Handle(fraction: Float, laneWidthPx: Int, grip: Grip, drag: (Grip) -> Modifier) {
     Box(
         modifier = Modifier
-            .offset { IntOffset(((at / duration) * laneWidthPx).roundToInt() - HANDLE_HIT.roundToPx() / 2, 0) }
+            .offset { IntOffset((fraction * laneWidthPx).roundToInt() - HANDLE_HIT.roundToPx() / 2, 0) }
             .width(HANDLE_HIT)
             .fillMaxHeight()
             .then(drag(grip)),

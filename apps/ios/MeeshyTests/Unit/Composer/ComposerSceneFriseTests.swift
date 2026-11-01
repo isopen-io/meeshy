@@ -290,15 +290,119 @@ final class ComposerSceneFriseTests: XCTestCase {
         XCTAssertFalse(ComposerSceneFriseMetrics.canSplit(piste(.text, start: 1, end: 4), at: .nan))
     }
 
-    /// Une vidéo ou un son couperait sans décaler sa source (#14224) ; un
-    /// sticker ou un lieu ne se coupe pas : le jeton n'est pas servi.
-    func test_videoSonStickerEtLieu_neSontPasOffertsALaCoupe() {
-        for nature: SceneFriseTrack.Kind in [.video, .audio, .sticker, .place] {
+    /// Une vidéo ou un son se coupe aussi : sa seconde moitié reprend la
+    /// source au point de coupe (#14224).
+    func test_uneVideoEtUnSon_seCoupent() {
+        XCTAssertTrue(ComposerSceneFriseMetrics.canSplit(piste(.video, start: 1, end: 4), at: 2))
+        XCTAssertTrue(ComposerSceneFriseMetrics.canSplit(piste(.audio, start: 1, end: 4), at: 2))
+    }
+
+    /// Un sticker ou un lieu ne se coupe pas : le jeton n'est pas servi.
+    func test_stickerEtLieu_neSontPasOffertsALaCoupe() {
+        for nature: SceneFriseTrack.Kind in [.sticker, .place] {
             XCTAssertFalse(ComposerSceneFriseMetrics.canSplit(piste(nature, start: 1, end: 4), at: 2), "\(nature)")
         }
     }
 
     func test_couper_aUnLibelleTraduit() {
         XCTAssertNotEqual(ComposerSceneFriseCopy.split, "composer.object.editor.split")
+    }
+
+    // MARK: - Zoom et défilement (#14213)
+
+    private typealias Vue = ComposerSceneFriseViewport
+
+    func test_parDefaut_laFriseMontreToutLaSlide() {
+        XCTAssertEqual(Vue.whole(7200), Vue(start: 0, span: 7200))
+        XCTAssertEqual(Vue.whole(7200).fraction(3600), 0.5, accuracy: 0.0001)
+    }
+
+    func test_pincer_resserreAutourDeLaTete_quiGardeSaPlace() {
+        let vue = Vue.whole(7200).zoomed(by: 100, around: 3600, duration: 7200)
+
+        XCTAssertEqual(vue.span, 72, accuracy: 0.001)
+        XCTAssertEqual(vue.fraction(3600), 0.5, accuracy: 0.0001)
+    }
+
+    func test_uneSceneDeDeuxHeures_seRegleALaSeconde() {
+        let vue = Vue.whole(7200).zoomed(by: 10_000, around: 100, duration: 7200)
+        let largeur: Float = 280
+
+        XCTAssertEqual(vue.span, Vue.minimumSpan)
+        XCTAssertGreaterThan(largeur / vue.span, 44, "une seconde doit couvrir au moins une cible de doigt")
+    }
+
+    func test_ecarter_neMontreJamaisPlusQueLaSlide() {
+        let vue = Vue(start: 100, span: 60).zoomed(by: 0.001, around: 120, duration: 600)
+
+        XCTAssertEqual(vue, Vue.whole(600))
+    }
+
+    func test_defiler_resteDansLaSlide() {
+        let vue = Vue(start: 100, span: 60)
+
+        XCTAssertEqual(vue.panned(by: 0.5, duration: 600).start, 70, accuracy: 0.001)
+        XCTAssertEqual(vue.panned(by: 10, duration: 600).start, 0)
+        XCTAssertEqual(vue.panned(by: -100, duration: 600).start, 540, accuracy: 0.001)
+    }
+
+    func test_uneSlideRaccourcie_ramenelaFenetreDedans() {
+        XCTAssertEqual(Vue(start: 500, span: 60).clamped(to: 120), Vue(start: 60, span: 60))
+        XCTAssertEqual(Vue(start: 0, span: 60).clamped(to: 6), Vue.whole(6))
+    }
+
+    func test_leTempsDuDoigt_seLitDansLaFenetreVisible() {
+        let vue = Vue(start: 100, span: 60)
+
+        XCTAssertEqual(vue.time(atFraction: 0.5), 130, accuracy: 0.001)
+        XCTAssertEqual(vue.time(atFraction: 2), 160, accuracy: 0.001)
+    }
+
+    func test_laTeteSortieDeLaFenetre_tourneLaPage() {
+        let vue = Vue(start: 100, span: 60)
+
+        XCTAssertEqual(vue.showing(130, duration: 600), vue)
+        XCTAssertEqual(vue.showing(200, duration: 600), Vue(start: 140, span: 60))
+        XCTAssertEqual(vue.showing(20, duration: 600), Vue(start: 20, span: 60))
+    }
+
+    func test_laRegleZoomee_neGradueQueCeQuiEstVisible() {
+        let graduations = ComposerSceneFriseRuler.ticks(in: Vue(start: 3600, span: 60), width: 300)
+
+        XCTAssertFalse(graduations.isEmpty)
+        XCTAssertTrue(graduations.allSatisfy { $0.time >= 3600 && $0.time <= 3660 })
+        XCTAssertLessThanOrEqual(graduations.filter(\.isMajor).count, 12)
+        XCTAssertEqual(graduations.first { $0.isMajor }?.label, "1:00:00")
+    }
+
+    func test_laRegleEntiere_resteCelleDeLaDuree() {
+        XCTAssertEqual(ComposerSceneFriseRuler.ticks(in: Vue.whole(60), width: 300),
+                       ComposerSceneFriseRuler.ticks(duration: 60, width: 300))
+    }
+
+    // MARK: - Vignettes et forme d'onde (#14214)
+
+    func test_uneVideo_deroulesesVignettes_unSon_saFormeDOnde() {
+        XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: .video), .filmstrip)
+        XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: .audio), .waveform)
+    }
+
+    func test_texteStickerImageEtLieu_neMontrentQueLeurCouleur() {
+        for kind: SceneFriseTrack.Kind in [.text, .sticker, .image, .place] {
+            XCTAssertEqual(ComposerSceneFriseMetrics.barContent(kind: kind), .none)
+        }
+    }
+
+    // MARK: - Retirer depuis la frise (#14215)
+
+    func test_texteImageVideoEtSon_seRetirentDepuisLaFrise() {
+        for kind: SceneFriseTrack.Kind in [.text, .image, .video, .audio] {
+            XCTAssertTrue(ComposerSceneFriseMetrics.canRemove(piste(kind)))
+        }
+    }
+
+    func test_stickerEtLieu_seRetirentDepuisLaScene() {
+        XCTAssertFalse(ComposerSceneFriseMetrics.canRemove(piste(.sticker)))
+        XCTAssertFalse(ComposerSceneFriseMetrics.canRemove(piste(.place)))
     }
 }

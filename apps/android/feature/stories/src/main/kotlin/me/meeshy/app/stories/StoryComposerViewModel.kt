@@ -570,23 +570,18 @@ class StoryComposerViewModel @Inject constructor(
     fun onSetSlideBackgroundLoop(loop: Boolean) =
         reduce { StoryComposerBackgroundReducer.backgroundLoopSet(it, loop) }
 
-    /**
-     * Annule la dernière modification du deck (texte, sticker, fond, filtre, durée, médias, ordre
-     * d'empilement, dessin) — iOS `undo()` de l'historique global. Inerte pile vide.
-     */
-    fun onUndo() {
-        val (next, snapshot) = history.undone() ?: return
-        history = next
-        restore(snapshot)
-    }
+    /** Annule la dernière modification du deck — iOS `undo()` de l'historique global. Inerte pile vide. */
+    fun onUndo() = travel(history.undone())
 
     /** Le doigt quitte l'écran (#14209) : deux glissés du même réglage, séparés par un doigt levé, font deux pas. */
     fun onGestureLifted() {
         history = history.closed()
     }
 
-    fun onRedo() {
-        val (next, snapshot) = history.redone() ?: return
+    fun onRedo() = travel(history.redone())
+
+    private fun travel(step: Pair<ComposerHistory, ComposerSnapshot>?) {
+        val (next, snapshot) = step ?: return
         history = next
         restore(snapshot)
     }

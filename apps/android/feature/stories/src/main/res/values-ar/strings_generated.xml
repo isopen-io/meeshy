@@ -63,7 +63,9 @@
     <string name="composer_frise_later">لاحقًا</string>
     <string name="composer_frise_media">وسائط</string>
     <string name="composer_frise_panel">المخطط الزمني</string>
+    <string name="composer_frise_pause">إيقاف مؤقت</string>
     <string name="composer_frise_place">مكان</string>
+    <string name="composer_frise_play">تشغيل</string>
     <string name="composer_frise_ruler">تحريك رأس التشغيل</string>
     <string name="composer_frise_sound">صوت</string>
     <string name="composer_frise_video">فيديو</string>

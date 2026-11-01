@@ -6,14 +6,21 @@ import MeeshySDK
 /// Extraite de `AudioClipBar`, où elle était dessinée en ligne. La dupliquer
 /// dans `VideoClipBar` aurait laissé les deux tracés diverger au premier
 /// ajustement — un seul rendu pour les deux barres.
-struct WaveformStrip: View {
+public struct WaveformStrip: View {
 
     let samples: [Float]
     let tint: Color
     /// Ce que `samples` EST : la mesure (décibels) ou le champ publié (linéaire).
     var reading: WaveformReading = .measured
 
-    var body: some View {
+    /// Public pour la frise de la scène (#14214) : la même onde que l'atelier.
+    public init(samples: [Float], tint: Color, reading: WaveformReading = .measured) {
+        self.samples = samples
+        self.tint = tint
+        self.reading = reading
+    }
+
+    public var body: some View {
         GeometryReader { geo in
             // Aucun échantillon → on ne dessine rien. La version précédente
             // partait de `max(samples.count, 1)` puis déréférençait

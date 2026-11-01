@@ -552,7 +552,7 @@ type RepostShape = {
 };
 
 /** La racine d'une republication SIMPLE (jamais le parent intermédiaire d'une chaîne), `null` sinon. */
-function simpleRepostRootId(post: RepostShape): string | null {
+export function simpleRepostRootId(post: RepostShape): string | null {
   if (post.isQuote || !post.repostOfId) return null;
   const rootId = post.originalRepostOfId ?? post.repostOfId;
   return rootId === post.id ? null : rootId;

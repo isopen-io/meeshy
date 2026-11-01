@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import MeeshySDK
 
 // MARK: - StoryComposerViewModel + History (C9 — undo/redo global, capture)
@@ -11,7 +12,7 @@ extension StoryComposerViewModel {
     /// HORS périmètre pendant le dessin actif (UX undo dédiée — un snapshot
     /// unique à la sortie capture le résultat, cf. plan C9).
     public func pushHistorySnapshot() {
-        guard !drawingEditingMode.isActive else { return }
+        guard !drawingEditingMode.isActive, !historyCaptureHeld else { return }
         guard let data = Self.encodeHistorySnapshot(slides) else { return }
         _ = history.push(data)
         purgeUnreachableRetiredResources()
@@ -47,7 +48,47 @@ extension StoryComposerViewModel {
         retiredStickerAnimations = [:]
         retiredAudioURLs = [:]
         retiredSlideImages = [:]
+        observeHistorySources()
         pushHistorySnapshot()
+    }
+
+    /// **Ce qui fait un pas, et quand ↶ ↷ paraissent** (#14208).
+    ///
+    /// - Les boutons suivent le document AU MOMENT de l'action, pas 0,5 s plus
+    ///   tard : un document qui diffère de l'état capturé a un pas à annuler, et
+    ///   plus rien à rétablir — une nouvelle action efface la branche.
+    /// - Un geste du canvas suspend la capture jusqu'à sa fin : un glissé, même
+    ///   lent, même arrêté sous le doigt, compte UN pas.
+    private func observeHistorySources() {
+        guard historyObservers.isEmpty else { return }
+        $slides
+            .sink { [weak self] nouvelles in self?.noteDocumentChanged(nouvelles) }
+            .store(in: &historyObservers)
+        NotificationCenter.default
+            .publisher(for: .storyCanvasManipulationDidChange)
+            .sink { [weak self] note in
+                let actif = note.userInfo?[StoryCanvasManipulation.activeKey] as? Bool ?? false
+                MainActor.assumeIsolated { self?.holdHistoryCapture(actif) }
+            }
+            .store(in: &historyObservers)
+    }
+
+    func holdHistoryCapture(_ tenu: Bool) {
+        guard historyCaptureHeld != tenu else { return }
+        historyCaptureHeld = tenu
+        guard !tenu else { return }
+        noteDocumentChanged(slides)
+        historyNudge.send()
+    }
+
+    private func noteDocumentChanged(_ nouvelles: [StorySlide]) {
+        guard !isApplyingHistory, !historyCaptureHeld, !drawingEditingMode.isActive,
+              let courant = history.current else { return }
+        let modifie = Self.encodeHistorySnapshot(nouvelles) != courant
+        let undo = modifie || history.canUndo
+        let redo = !modifie && history.canRedo
+        if canUndoGlobal != undo { canUndoGlobal = undo }
+        if canRedoGlobal != redo { canRedoGlobal = redo }
     }
 
     /// Applique un cran d'annulation. `true` si un état a été appliqué —
@@ -55,12 +96,16 @@ extension StoryComposerViewModel {
     /// (restoreCanvas, rechargement timeline).
     @discardableResult
     public func undoGlobal() -> Bool {
+        // La dernière action, si sa capture débouncée n'est pas encore partie :
+        // annuler défait CETTE action, jamais la précédente.
+        pushHistorySnapshot()
         guard let data = history.undo() else { refreshHistoryFlags(); return false }
         return applyHistorySnapshot(data)
     }
 
     @discardableResult
     public func redoGlobal() -> Bool {
+        pushHistorySnapshot()
         guard let data = history.redo() else { refreshHistoryFlags(); return false }
         return applyHistorySnapshot(data)
     }
@@ -74,6 +119,8 @@ extension StoryComposerViewModel {
         // La slide éditée garde la main par son ID : l'index seul glissait
         // (supprimer A sous C, puis annuler, montrait B).
         let editedSlideId = slides.indices.contains(currentSlideIndex) ? slides[currentSlideIndex].id : nil
+        isApplyingHistory = true
+        defer { isApplyingHistory = false }
         slides = decoded
         if let editedSlideId, let restored = slides.firstIndex(where: { $0.id == editedSlideId }) {
             currentSlideIndex = restored
@@ -88,6 +135,10 @@ extension StoryComposerViewModel {
         // Le z-order VM se réhydrate depuis les champs persistés des objets
         // restaurés (mécanisme existant du changement de slide).
         rehydrateZIndexMapFromSlide()
+        // Les miroirs des transitions suivent la slide restaurée : le carrousel
+        // et l'atelier les relisent.
+        openingEffect = currentEffects.opening
+        closingEffect = currentEffects.closing
         refreshHistoryFlags()
         // NOTE dédup : l'état appliqué DEVIENT entries[index] — le prochain
         // cycle du historyTrigger encode le même JSON et la dédup l'absorbe.

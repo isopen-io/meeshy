@@ -154,6 +154,10 @@ fun NotificationSettingsScreen(
                         onToggleDay = viewModel::toggleDndDay,
                     )
                 }
+                CircleNotifySection(
+                    chosen = notifications.circleAudience,
+                    onChoose = viewModel::setCircleAudience,
+                )
                 NotificationTypesEditor(
                     notifications = notifications,
                     query = state.notificationTypeQuery,

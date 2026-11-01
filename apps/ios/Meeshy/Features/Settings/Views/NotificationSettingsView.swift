@@ -7,6 +7,7 @@ struct NotificationSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs: UserPreferencesManager
+    @StateObject private var circleNotify = CircleNotifySettingsViewModel()
     init(prefs: UserPreferencesManager = .shared) {
         self.prefs = prefs
     }
@@ -37,6 +38,7 @@ struct NotificationSettingsView: View {
             conversationsSection
             contactsSection
             feedSection
+            circleNotifySection
             displaySection
             dndSection
 
@@ -155,6 +157,15 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "trophy.fill", title: String(localized: "settings.notifications.game", defaultValue: "Jeu : duo, ligue, saison", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.gameEnabled)
         }
+    }
+
+    // MARK: - Qui est prévenu (#14062)
+
+    private var circleNotifySection: some View {
+        settingsSection(title: String(localized: "circleNotify.title", defaultValue: "Qui est prévenu", bundle: .main), icon: "person.3.fill", color: MeeshyColors.successHex) {
+            CircleNotifySettingsContent(viewModel: circleNotify, accentHex: accentColor)
+        }
+        .task { await circleNotify.load() }
     }
 
     // MARK: - Display

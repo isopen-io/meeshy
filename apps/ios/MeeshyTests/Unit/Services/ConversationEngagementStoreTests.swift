@@ -296,4 +296,18 @@ final class ConversationEngagementStoreTests: XCTestCase {
         XCTAssertNil(DailyGestureLimit.from(URLError(.notConnectedToInternet)))
         XCTAssertNotNil(DailyGestureLimit.from(DailyGestureLimit(gesture: .reaction, resetAt: nil, limit: nil)))
     }
+
+    // MARK: - Trop de personnes choisies sans lien (#14169)
+
+    @MainActor
+    func test_onlyUnlinkedRefusal_saysToRemoveThemOrComeBackTomorrow_neverTheGenericThrottle() {
+        let refus = MeeshyError.rejected(APIRejection(statusCode: 429, code: "ONLY_UNLINKED_RECIPIENTS_LIMIT",
+                                                      message: "Trop de requetes", limit: 50))
+        let texte = DailyGestureLimitNotice.refusalText(refus)
+        XCTAssertEqual(texte, DailyGestureLimitNotice.onlyUnlinkedRecipientsText)
+        XCTAssertNotEqual(texte, "Trop de requetes")
+        XCTAssertFalse(texte?.isEmpty ?? true)
+        XCTAssertNil(DailyGestureLimitNotice.refusalText(MeeshyError.server(statusCode: 429, message: "Trop de requetes")),
+                     "une cadence ordinaire n'emprunte pas ce message")
+    }
 }

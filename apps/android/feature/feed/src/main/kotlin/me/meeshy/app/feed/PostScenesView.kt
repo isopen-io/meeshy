@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -52,6 +53,7 @@ import me.meeshy.sdk.model.StoryItem
 import me.meeshy.ui.component.media.MosaicArrangement
 import me.meeshy.ui.component.media.MosaicLayout
 import me.meeshy.ui.component.media.MosaicTile
+import me.meeshy.ui.component.viewer.FullScreenDialogWindow
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -233,10 +235,10 @@ private fun SceneTile(scenes: FeedPostScenes, tile: MosaicTile, box: DpSize, mut
     }
 }
 
-/** La scène peinte par le moteur que l'application fournit, remplissant son cadre ; un aplat hors de l'application. */
+/** La scène peinte par le moteur que l'application fournit, remplissant son cadre, sur le sol de son auteur (#14223). */
 @Composable
 private fun SceneSurface(item: StoryItem, accentHex: String?, live: Boolean, muted: Boolean, modifier: Modifier) {
-    val renderer = LocalReelSceneRenderer.current
+    val renderer = LocalPostSceneCardRenderer.current
     Box(modifier) {
         renderer?.invoke(item, accentHex, live, muted, Modifier.fillMaxSize())
     }
@@ -277,7 +279,8 @@ private const val READER_CAPTION_LINES = 4
 /**
  * Le plein écran des scènes, ouvert sur celle qu'on a touchée : une page par scène, seule la page montrée joue, son compris. Son
  * menu « … » exporte le post entier en vidéo (#13896). La légende de la scène LUE se pose en bas, bornée en lignes, sous les
- * contrôles du haut qu'elle ne couvre jamais (#14200).
+ * contrôles du haut qu'elle ne couvre jamais (#14200). Sa fenêtre couvre l'écran entier, sous les barres système, sans rien
+ * laisser voir de l'écran du dessous ([FullScreenDialogWindow]) ; ses contrôles se posent sous la barre d'état.
  */
 @Composable
 private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, onDismiss: () -> Unit) {
@@ -285,6 +288,7 @@ private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSc
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        FullScreenDialogWindow()
         val pagerState = rememberPagerState(initialPage = start.coerceIn(0, scenes.items.lastIndex), pageCount = { scenes.items.size })
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             HorizontalPager(state = pagerState, key = { page -> scenes.items[page].id }, modifier = Modifier.fillMaxSize()) { page ->
@@ -298,10 +302,10 @@ private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSc
                 )
             }
             if (scenes.items.size > 1) {
-                PageCounter(position = pagerState.currentPage + 1, count = scenes.items.size, modifier = Modifier.align(Alignment.TopStart))
+                PageCounter(position = pagerState.currentPage + 1, count = scenes.items.size, modifier = Modifier.align(Alignment.TopStart).statusBarsPadding())
             }
             Row(
-                modifier = Modifier.align(Alignment.TopEnd).padding(MeeshySpacing.sm),
+                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(MeeshySpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 LocalPostSceneExportRenderer.current?.invoke(scenes.items, scenes.accentHex, Modifier)
