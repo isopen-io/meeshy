@@ -39,11 +39,21 @@ public protocol BlockServiceProviding: Sendable {
     func refreshCache() async
 }
 
-public final class BlockService: ObservableObject, BlockServiceProviding, @unchecked Sendable {
+public final class BlockService: ObservableObject, BlockServiceProviding, Sendable {
     public static let shared = BlockService()
     private let api: APIClientProviding
 
-    @Published public private(set) var blockedUserIds: Set<String> = []
+    private let blockedIds = Locked<Set<String>>([])
+    private let willChange = Locked(uncheckedState: ObservableObjectPublisher())
+
+    public var objectWillChange: ObservableObjectPublisher {
+        willChange.mutateUnchecked { $0 }
+    }
+
+    public var blockedUserIds: Set<String> {
+        blockedIds.read { $0 }
+    }
+
     /// #10503 — un blocage ABOUTI est un signal négatif (`block`) ; la file
     /// durable émet les siens à l'envoi.
     private let socialEvents: SocialEventsV2Hub
@@ -51,6 +61,12 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     init(api: APIClientProviding = APIClient.shared, socialEvents: SocialEventsV2Hub = .shared) {
         self.api = api
         self.socialEvents = socialEvents
+    }
+
+    @MainActor
+    private func publish(_ change: @Sendable (inout Set<String>) -> Void) {
+        objectWillChange.send()
+        blockedIds.mutate(change)
     }
 
     // MARK: - Block
@@ -69,7 +85,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
             body: try JSONEncoder().encode([String: String]()),
             queryItems: nil
         )
-        await MainActor.run { _ = blockedUserIds.insert(userId) }
+        await MainActor.run { publish { _ = $0.insert(userId) } }
         socialEvents.emit(SocialInteractionEvents.negative(.block, on: SocialTarget(kind: .profile, id: userId)))
     }
 
@@ -82,7 +98,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
             body: nil,
             queryItems: nil
         )
-        await MainActor.run { _ = blockedUserIds.remove(userId) }
+        await MainActor.run { publish { _ = $0.remove(userId) } }
     }
 
     // MARK: - List
@@ -99,14 +115,15 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
             DirectoryEndpoint.blocks
         )
         let users = response.data
-        await MainActor.run { blockedUserIds = Set(users.map(\.id)) }
+        let ids = Set(users.map(\.id))
+        await MainActor.run { publish { $0 = ids } }
         return users
     }
 
     // MARK: - Local Cache
 
     public func isBlocked(userId: String) -> Bool {
-        blockedUserIds.contains(userId)
+        blockedIds.read { $0.contains(userId) }
     }
 
     /// R6-4 — mutation PUREMENT LOCALE de la blocklist canonique, sans réseau.
@@ -119,9 +136,9 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     @MainActor
     public func setBlockedOptimistic(userId: String, blocked: Bool) {
         if blocked {
-            blockedUserIds.insert(userId)
+            publish { _ = $0.insert(userId) }
         } else {
-            blockedUserIds.remove(userId)
+            publish { _ = $0.remove(userId) }
         }
     }
 
@@ -135,7 +152,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     /// sur le même device) ne voie pas la blocklist du user précédent avant
     /// le prochain refresh réseau. Câblée depuis `AuthManager.logout()`.
     public func reset() async {
-        await MainActor.run { blockedUserIds.removeAll() }
+        await MainActor.run { publish { $0.removeAll() } }
     }
 }
 
