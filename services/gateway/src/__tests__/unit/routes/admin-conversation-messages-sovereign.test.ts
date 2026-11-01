@@ -481,6 +481,18 @@ describe('GET /admin/conversations/:id/messages — la forme SERVIE', () => {
   });
 
   /**
+   * `lensSlug` (#11327) est une PROVENANCE, comme `capturedInApp` : il nomme la
+   * lens qui a produit le média, en clair même en E2EE (décision #11251). Il
+   * ne restitue aucun contenu ; la vue souveraine le sert comme la vue produit.
+   */
+  it('sert `lensSlug` — la provenance « Lens par X » de la pièce, comme la vue conversation', async () => {
+    const ligne = await premiereLigne([
+      messageFixture({ attachments: [pieceFixture({ lensSlug: 'aurore' })], _count: { attachments: 1 } }),
+    ]);
+    expect((ligne.attachments as AnyRecord[])[0].lensSlug).toBe('aurore');
+  });
+
+  /**
    * L'EXCEPTION EST NOMMÉE, JAMAIS HÉRITÉE.
    *
    * Le doc-comment de `sovereignAttachmentSelect` AFFIRME qu'il reprend

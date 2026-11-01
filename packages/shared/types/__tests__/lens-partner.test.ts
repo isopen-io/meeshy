@@ -48,6 +48,17 @@ describe('parsePartnerProfileInput — ce qu’un partenaire déclare de lui', (
     );
   });
 
+  it('N5 — normalise le nom en NFKC : une variante de compatibilité ne se distingue pas de son original', () => {
+    expect(parsePartnerProfileInput({ displayName: 'Ｎｉｋｅ' })).toEqual({ ok: true, profile: { displayName: 'Nike', website: null } });
+    expect(parsePartnerProfileInput({ displayName: 'Studio ﬁlms' })).toEqual({ ok: true, profile: { displayName: 'Studio films', website: null } });
+  });
+
+  it('N5 — refuse tout caractère de contrôle, de format (invisibles, bidi) ou séparateur de ligne/paragraphe', () => {
+    ['Ni\u200Bke', 'Ni\u200Dke', 'Ni\uFEFFke', 'Ni\u2060ke', 'Ni\u00ADke', 'Ni\u2028ke', 'Ni\u2029ke', 'Ni\u061Cke', 'Ni\u{E0041}ke'].forEach((displayName) =>
+      expect(parsePartnerProfileInput({ displayName }).ok).toBe(false),
+    );
+  });
+
   it('refuse un site qui n’est pas https (javascript:, http:, texte libre)', () => {
     ['javascript:alert(1)', 'http://lumiere.example', 'lumiere', 'https://'].forEach((website) =>
       expect(parsePartnerProfileInput({ displayName: 'Studio', website }).ok).toBe(false),
@@ -57,13 +68,13 @@ describe('parsePartnerProfileInput — ce qu’un partenaire déclare de lui', (
 
 describe('lensCreditOf — « Lens par X »', () => {
   const lens = { slug: 'noel', name: 'Noël', status: 'approved' };
-  const verified = { userId: 'u1', displayName: 'Studio Lumière', verifiedAt: new Date('2026-10-01T00:00:00Z'), logoSrc: 'aaaaaaaaaaaaaaaa.png' };
+  const verified = { id: 'p1', userId: 'u1', displayName: 'Studio Lumière', verifiedAt: new Date('2026-10-01T00:00:00Z'), logoSrc: 'aaaaaaaaaaaaaaaa.png' };
 
   it('crédite le partenaire VÉRIFIÉ, avec l’adresse de son logo pour le filigrane', () => {
     expect(lensCreditOf(lens, verified)).toEqual({
       slug: 'noel',
       name: 'Noël',
-      partner: { id: 'u1', name: 'Studio Lumière', logo: 'aaaaaaaaaaaaaaaa.png' },
+      partner: { id: 'p1', name: 'Studio Lumière', logo: 'aaaaaaaaaaaaaaaa.png' },
       watermark: { meeshy: true, partnerLogo: 'aaaaaaaaaaaaaaaa.png' },
     });
   });
@@ -79,6 +90,10 @@ describe('lensCreditOf — « Lens par X »', () => {
 
   it('une lens qui n’est pas publiée n’a pas de crédit (refusée, en attente, retirée)', () => {
     ['pending', 'rejected', 'withdrawn'].forEach((status) => expect(lensCreditOf({ ...lens, status }, verified)).toBeNull());
+  });
+
+  it('N4 — le partenaire est nommé par l’identifiant de son PROFIL, jamais par son compte', () => {
+    expect(JSON.stringify(lensCreditOf(lens, verified))).not.toContain('u1');
   });
 
   it('le filigrane Meeshy est TOUJOURS là, logo partenaire ou non', () => {

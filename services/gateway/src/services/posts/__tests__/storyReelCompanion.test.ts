@@ -132,6 +132,29 @@ describe('prepareReelCompanion — le réel est jugé AVANT toute écriture', ()
     expect(copy?.mimeType).toBe('image/jpeg');
   });
 
+  it('N8 (#11327) — la copie garde le crédit de sa lens : `lensSlug` est relu ET recopié', async () => {
+    const world = fakeWorld({ media: [pendingMedia({ id: PHOTO, lensSlug: 'aurore' })], sounds: [publicSound] });
+
+    const copies = await prepareReelCompanion({
+      prisma: world.prisma, storage: world.storage, authorId: AUTHOR,
+      mediaIds: [PHOTO], storyEffects: borrowedSoundEffects,
+    });
+
+    expect(world.prisma.postMedia.findMany).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ lensSlug: true }) }));
+    expect(world.rows.find((r) => r.id === copies.idMap[PHOTO])?.lensSlug).toBe('aurore');
+  });
+
+  it('N8 (#11327) — un média sans lens donne une copie sans crédit (la colonne reste absente)', async () => {
+    const world = fakeWorld({ media: [pendingMedia({ id: PHOTO, lensSlug: null })], sounds: [publicSound] });
+
+    const copies = await prepareReelCompanion({
+      prisma: world.prisma, storage: world.storage, authorId: AUTHOR,
+      mediaIds: [PHOTO], storyEffects: borrowedSoundEffects,
+    });
+
+    expect(world.rows.find((r) => r.id === copies.idMap[PHOTO])).not.toHaveProperty('lensSlug');
+  });
+
   it('une photo SEULE, sans son, ne qualifie pas : refus nommé, rien d’écrit', async () => {
     const world = fakeWorld({ media: [pendingMedia({ id: PHOTO })] });
 
