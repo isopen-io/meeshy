@@ -6,7 +6,7 @@ import MeeshySDK
 /// unique (`VideoThumbnailGenerator`, #11844) : en lot, et en cache borné keyé
 /// URL + nombre + taille, pour que les rebuilds de lanes ne relancent jamais
 /// une extraction déjà faite.
-enum VideoFilmstrip {
+public enum VideoFilmstrip {
 
     static func request(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) -> VideoThumbnailRequest {
         // Tolérance large : le filmstrip est un repère visuel, pas un montage
@@ -21,7 +21,7 @@ enum VideoFilmstrip {
         CGSize(width: maxHeight * 4, height: maxHeight * scale)
     }
 
-    static func frames(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) async -> [UIImage] {
+    public static func frames(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) async -> [UIImage] {
         await VideoThumbnailGenerator.shared.images(for: request(url: url, count: count, maxHeight: maxHeight, scale: scale))
     }
 }
