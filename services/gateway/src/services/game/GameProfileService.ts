@@ -114,6 +114,8 @@ export function settingsOf(stored: StoredProfile | null | undefined): GameSettin
 export type GameReach = { readonly kind: ShowcaseViewer | 'blocked'; readonly sparksGlory: boolean };
 
 const PUBLIC_REACH: GameReach = { kind: 'other', sparksGlory: false };
+/** Un identifiant malformé se lit comme un compte inconnu : fermé, sans toucher la base. */
+const CLOSED_REACH: GameReach = { kind: 'blocked', sparksGlory: false };
 
 export type VisibilityPatch = Partial<Record<GameFacet, ShowcaseVisibility>>;
 
@@ -171,6 +173,7 @@ export class GameProfileService {
    * Soi et ADMIN/BIGBOSS voient tout ; le blocage ferme ; l'anonyme est le public.
    */
   async viewerReach(viewer: PresenceViewer, targetId: string): Promise<GameReach> {
+    if (!isValidObjectId(targetId)) return CLOSED_REACH;
     if (viewer === null) return PUBLIC_REACH;
     if (viewer.userId === targetId) return { kind: 'self', sparksGlory: true };
     if (isGlobalAdmin(viewer.role)) return { kind: 'admin', sparksGlory: true };
