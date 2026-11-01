@@ -316,8 +316,7 @@ struct RootSheetsLayer: ViewModifier {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             CallBackDialer.shared.dialFromProfile(request)
                         }
-                    },
-                    dependencies: .live
+                    }, dependencies: .live
                 )
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)

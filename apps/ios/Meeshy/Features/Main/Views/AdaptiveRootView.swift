@@ -486,8 +486,7 @@ struct DetachedWindowView: View {
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                dependencies: .live
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }, dependencies: .live
             )
             .modifier(MeeshyRouterInjection(router: router))
             .environmentObject(statusViewModel)
