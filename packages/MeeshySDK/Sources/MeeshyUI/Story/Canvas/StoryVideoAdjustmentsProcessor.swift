@@ -93,10 +93,16 @@ public nonisolated enum StoryVideoAdjustmentsProcessor {
     /// Une trame DÉCODÉE (export), réglée par la même chaîne ; la trame telle
     /// quelle si cette vidéo ne peint rien.
     public static func apply(_ media: StoryMediaObject, to image: CGImage) -> CGImage {
-        guard paints(media) else { return image }
+        apply(look: paintedLook(for: media), adjustments: paintedAdjustments(for: media), to: image)
+    }
+
+    /// La même chaîne sur un look et des réglages DÉJÀ résolus — ceux d'une
+    /// vidéo posée, ou ceux qu'un fond vidéo pose sur son player (#14180).
+    public static func apply(look: StoryMediaLook?, adjustments: ImageAdjustments?, to image: CGImage) -> CGImage {
+        guard look != nil || adjustments != nil else { return image }
         let source = CIImage(cgImage: image)
-        let regardee = StoryMediaLookPainterRegistry.painted(source, look: paintedLook(for: media), still: false)
-        let peinte = paintedAdjustments(for: media).map { frame(regardee, $0) } ?? regardee
+        let regardee = StoryMediaLookPainterRegistry.painted(source, look: look, still: false)
+        let peinte = adjustments.map { frame(regardee, $0) } ?? regardee
         return context.createCGImage(peinte, from: source.extent) ?? image
     }
 
