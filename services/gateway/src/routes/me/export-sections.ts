@@ -234,7 +234,7 @@ export async function exportVoiceProfile(prisma: PrismaClient, userId: string) {
 /**
  * Les packs du compte (#10151) : ses choix d'installation des domaines, sa
  * bibliothèque de stickers, les packs qu'il a proposés et ceux qu'il a achetés
- * en Meeshes (#10632). La lecture vit
+ * en Meeshes (#10632), et son profil partenaire de lens (#11327). La lecture vit
  * dans `services/packs/PackPrivacy.ts`, seul accès RGPD aux tables de packs ;
  * cette section n'y ajoute que le découpage en pages.
  */
@@ -247,6 +247,7 @@ export async function exportPacks(prisma: PrismaClient, userId: string, page: Ex
     ownerships: toSection(data.ownerships.items, data.ownerships.total, page),
     appearanceSubmissions: toSection(data.appearanceSubmissions.items, data.appearanceSubmissions.total, page),
     lensSubmissions: toSection(data.lensSubmissions.items, data.lensSubmissions.total, page),
+    partnerProfile: toSection(data.partnerProfile.items, data.partnerProfile.total, page),
   };
 }
 

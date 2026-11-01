@@ -25,7 +25,7 @@ import { signAttachmentsForReader } from '../../services/attachments/signServedA
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
-import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
+import { CARRIER_LIFECYCLE_SELECT, carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
 import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from '../../services/attachments/readerAttachmentLifecycle';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { RECIPIENT_LANG_SELECT, recipientLanguages } from '../../utils/recipient-language';
@@ -220,7 +220,7 @@ export async function registerMetadataRoutes(
     const message = await prisma.message.findUnique({
       where: { id: attachment.messageId },
       select: {
-        id: true, conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT,
+        id: true, conversationId: true, ...CARRIER_LIFECYCLE_SELECT, ...READER_LIFECYCLE_MESSAGE_SELECT,
         isBlurred: true, isEncrypted: true, encryptionMode: true,
       },
     });

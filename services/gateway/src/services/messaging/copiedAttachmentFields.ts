@@ -15,6 +15,8 @@
  * - PROTECTION (#9572) — `isViewOnce`, `isBlurred`, `effectFlags` de la PIÈCE,
  *   indépendants de ceux du message. Les laisser derrière faisait naître nette
  *   la copie d'une pièce floutée, et ordinaire celle d'une pièce à vue unique.
+ * - LENS (#11327) — `lensSlug` nomme la lens qui a produit ces octets : le
+ *   crédit « Lens par X » suit le média, transféré ou diffusé.
  * - `thumbHash` et `imageVariants` sont déjà dérivés de ces octets-là : les
  *   laisser condamnait la copie au téléchargement pleine taille.
  *
@@ -67,6 +69,7 @@ export interface SourceAttachment {
   readonly isBlurred?: boolean;
   readonly effectFlags?: number;
   readonly processingState?: string | null;
+  readonly lensSlug?: string | null;
 }
 
 /** Une colonne JSON garde le type de SA ligne : Prisma d'un côté, le double structurel de l'autre. */
@@ -121,5 +124,7 @@ export function copiedAttachmentFields<A extends SourceAttachment>(att: A) {
     // #11264 — une copie faite pendant le rendu différé reste `pending` : le
     // worker écrit toutes les lignes qui partagent ses octets (audit S9, défaut 4).
     processingState: att.processingState ?? undefined,
+    // #11327 — la lens qui a produit ces octets : son crédit voyage avec le média copié.
+    lensSlug: att.lensSlug ?? undefined,
   };
 }

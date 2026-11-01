@@ -48,7 +48,7 @@
  * pas une pièce jointe. Ce reste se ferme par la purge des orphelins, pas ici.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
+import { CARRIER_LIFECYCLE_SELECT, carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { attachmentIsReaderBound } from './signedAttachmentUrls';
 import { prefixRange } from '../../utils/prefix-range';
 
@@ -116,9 +116,7 @@ const OWNER_SELECT = { messageId: true, isViewOnce: true, isBlurred: true, effec
 
 const CARRIER_SELECT = {
   id: true,
-  deletedAt: true,
-  expiresAt: true,
-  viewOnceBurnAt: true,
+  ...CARRIER_LIFECYCLE_SELECT,
   isViewOnce: true,
   isBlurred: true,
   effectFlags: true,

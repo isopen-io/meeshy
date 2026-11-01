@@ -7,7 +7,7 @@ import { circleNotifyKey, type CircleNotifyKey } from '@meeshy/shared/utils/rela
 import { filterPostConsumers } from '../../posts/postAudience';
 import { truncateMessage } from '../notification-preview';
 import { resolvePostMedia } from '../post-media-thumbnail';
-import { resolveEntourage } from './entourage';
+import { resolveChosenAudience, resolveEntourage } from './entourage';
 import type { FanoutDependencies } from './dependencies';
 
 export type FriendContentFanoutParams = {
@@ -131,20 +131,31 @@ export async function createFriendContentNotificationsBatch(
   // action (défaut : Proche et au-dessus), lu par la loi des cercles ; puis
   // l'admission de la publication dit qui, parmi eux, a le droit de la VOIR
   // (PRIVATE, ONLY, EXCEPT, COMMUNITY, FRIENDS — la même table que le fil).
-  const entourage = await resolveEntourage(deps.prisma, {
-    ownerId: params.authorId,
-    key: publicationKey(params),
-    excludeUserIds: [...excludeSet],
+  // Les personnes CHOISIES d'un post `ONLY` sont toujours prévenues (#14080) — pas
+  // celles d'une REPUBLICATION, dont la liste vient de la source et que le
+  // republieur n'a pas choisies : elle suit son seul réglage « repost ».
+  const [entourage, chosen] = await Promise.all([
+    resolveEntourage(deps.prisma, {
+      ownerId: params.authorId,
+      key: publicationKey(params),
+      excludeUserIds: [...excludeSet],
+    }),
+    visibility === 'ONLY' && !params.isRepost
+      ? resolveChosenAudience(deps.prisma, {
+          ownerId: params.authorId,
+          chosenUserIds: visibilityUserIds,
+          excludeUserIds: [...excludeSet],
+        })
+      : Promise.resolve<string[]>([]),
+  ]);
+  const admitted = await filterPostConsumers({
+    prisma: deps.prisma,
+    authorId: params.authorId,
+    visibility,
+    visibilityUserIds,
+    candidateUserIds: entourage.ids,
   });
-  const uniqueRecipientIds = (
-    await filterPostConsumers({
-      prisma: deps.prisma,
-      authorId: params.authorId,
-      visibility,
-      visibilityUserIds,
-      candidateUserIds: entourage.ids,
-    })
-  ).filter((id) => id !== params.authorId);
+  const uniqueRecipientIds = [...new Set([...chosen, ...admitted])].filter((id) => id !== params.authorId);
   const langs = await deps.resolveRecipientLangs(uniqueRecipientIds);
 
   const actorInfo = {

@@ -2,10 +2,13 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryMediaRotation
 import me.meeshy.sdk.model.composer.scene.SceneEffectChoice
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.media.MediaTrimRule
+import me.meeshy.sdk.model.scene.StoryVolumeCarryingLaw
+import me.meeshy.sdk.model.scene.StoryVolumeState
 
 
 /**
@@ -48,6 +51,35 @@ internal object StoryComposerBackgroundReducer {
         val source = state.backgroundTrimSourceOf(id) ?: return state
         val kept = MediaTrimRule.resolved(bounds.start, bounds.end, source).persisted(source)
         val deck = state.deck.setSelectedBackgroundTrim(id, kept)
+        return if (deck === state.deck) state else state.withDeckTransform { deck }
+    }
+
+    /** Pivoter (#14083) : le fond tourne d'un quart, comme un média posé ; quatre touchers le rendent droit. */
+    fun rotated(state: StoryComposerUiState): StoryComposerUiState =
+        backgroundSetting(state) { it.copy(rotationDeg = StoryMediaRotation.turned(it.rotationDeg)) }
+
+    /** Le volume d'une vidéo de fond, 0…1 (#14083) ; 0 coupe en mémorisant le niveau quitté. Inerte pour une image. */
+    fun volumeSet(state: StoryComposerUiState, volume: Float): StoryComposerUiState =
+        backgroundSound(state) { setting ->
+            StoryVolumeCarryingLaw.setVolume(StoryVolumeState(setting.volume, setting.mutedVolumeMemento), volume.coerceIn(0f, 1f))
+                .let { setting.copy(volume = it.volume, mutedVolumeMemento = it.mutedVolumeMemento) }
+        }
+
+    /** Muet : coupe la vidéo de fond, ou lui rend le niveau qu'elle avait (#14083). Inerte pour une image. */
+    fun muteToggled(state: StoryComposerUiState): StoryComposerUiState =
+        backgroundSound(state) { setting ->
+            StoryVolumeCarryingLaw.toggleMute(StoryVolumeState(setting.volume, setting.mutedVolumeMemento))
+                .let { setting.copy(volume = it.volume, mutedVolumeMemento = it.mutedVolumeMemento) }
+        }
+
+    private fun backgroundSound(state: StoryComposerUiState, change: (StoryBackgroundSetting) -> StoryBackgroundSetting): StoryComposerUiState {
+        val id = state.selectedSlideBackdropMediaId ?: return state
+        return if (state.placedMediaIsVideo(id)) backgroundSetting(state, change) else state
+    }
+
+    private fun backgroundSetting(state: StoryComposerUiState, change: (StoryBackgroundSetting) -> StoryBackgroundSetting): StoryComposerUiState {
+        val id = state.selectedSlideBackdropMediaId ?: return state
+        val deck = state.deck.updateSelectedBackgroundSetting(id, change)
         return if (deck === state.deck) state else state.withDeckTransform { deck }
     }
 

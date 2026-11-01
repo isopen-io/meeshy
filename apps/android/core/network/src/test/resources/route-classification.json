@@ -156,6 +156,9 @@
     "GET /api/v1/admin/users/:userId/voice-profile",
     "GET /api/v1/packs/lens/pending",
     "GET /api/v1/packs/lens/submissions",
+    "GET /api/v1/lens/partners/me",
+    "GET /api/v1/lens/partners/pending",
+    "GET /api/v1/lens/usage/:slug",
     "PATCH /api/v1/admin/agent/delivery-queue/:id",
     "PATCH /api/v1/admin/agent/topics/:id",
     "PATCH /api/v1/admin/communities/:communityId",
@@ -213,6 +216,9 @@
     "POST /api/v1/packs/lens/:slug/withdraw",
     "POST /api/v1/packs/lens/:slug/restore",
     "POST /api/v1/packs/lens/submissions",
+    "POST /api/v1/lens/partners/:userId/verify",
+    "POST /api/v1/lens/partners/:userId/revoke",
+    "PUT /api/v1/lens/partners/me",
     "PUT /api/v1/admin/agent/configs/:conversationId",
     "PUT /api/v1/admin/agent/global-config",
     "PUT /api/v1/admin/agent/llm",
@@ -228,6 +234,7 @@
    "reason": "Fichier servi et consommé par son URL absolue (image, média), jamais appelé comme une route d'API typée.",
    "routes": [
     "GET /api/attachments/file/*",
+    "GET /api/v1/lens/partners/:partnerId/logo",
     "GET /api/v1/pack-assets/:file",
     "GET /api/v1/static/:filename"
    ]

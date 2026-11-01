@@ -224,8 +224,8 @@ export class MentionService {
   }
 
   /**
-   * Suggestions d'autocomplete sous un post : auteur, commentateurs, amis,
-   * puis l'annuaire.
+   * Suggestions d'autocomplete sous un post : connaissances, intervenants,
+   * contacts de tout cercle, puis l'annuaire (#14052, #14057).
    *
    * @throws Error('Post non trouvé ou accès refusé') si le post n'existe pas ou est supprimé
    */

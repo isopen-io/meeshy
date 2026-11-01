@@ -9,6 +9,7 @@ import {
   carrierMessageStillServesBytes,
   carrierMessageStillServesWhere,
   CARRIER_DEADLINE_COLUMNS,
+  CARRIER_LIFECYCLE_SELECT,
 } from '../carrierMessageLifecycle';
 
 const NOW = new Date('2026-08-12T12:00:00.000Z');
@@ -46,6 +47,20 @@ describe('carrierMessageStillServesBytes', () => {
     it('refuses even when the deadline is still ahead — withdrawal is not negotiable', () => {
       expect(
         carrierMessageStillServesBytes({ deletedAt: EARLIER, expiresAt: LATER }, NOW)
+      ).toBe(false);
+    });
+  });
+
+  /**
+   * #11269 — une vue unique PURGÉE ne rend plus d'octets, échéance ou pas.
+   * L'ancienne purge remettait l'échéance à `null` même quand une pièce
+   * résistait : la ligne survivante redevenait lisible par la seule loi des
+   * échéances. La purge est un FAIT, comme le retrait.
+   */
+  describe('when the view-once content was purged', () => {
+    it('refuses even without a deadline — the purge is a fact, not a deadline', () => {
+      expect(
+        carrierMessageStillServesBytes({ deletedAt: null, viewOnceBurnAt: null, viewOnceBurnedAt: EARLIER }, NOW)
       ).toBe(false);
     });
   });
@@ -131,12 +146,18 @@ describe('carrierMessageStillServesWhere — la forme requête', () => {
     }
   });
 
-  it('borne EXACTEMENT ces échéances — ni plus, ni moins', () => {
+  it('borne EXACTEMENT ces échéances et le fait de purge — ni plus, ni moins', () => {
     // Si une quatrième échéance entre dans la loi, ce témoin rougit jusqu'à ce
     // que la forme requête l'apprenne aussi.
     expect(carrierMessageStillServesWhere(NOW).AND).toHaveLength(
-      CARRIER_DEADLINE_COLUMNS.length
+      CARRIER_DEADLINE_COLUMNS.length + 1
     );
+  });
+
+  it('#11269 — exclut une vue unique déjà purgée, colonne absente comprise', () => {
+    expect(carrierMessageStillServesWhere(NOW).AND).toContainEqual({
+      OR: [{ viewOnceBurnedAt: null }, { viewOnceBurnedAt: { isSet: false } }],
+    });
   });
 
   it("lit l'instant qu'on lui passe, jamais une horloge capturée", () => {
@@ -168,8 +189,20 @@ describe('carrierMessageStillServesWhere — la forme requête', () => {
     const declared = [...body.matchAll(/readonly\s+(\w+)\?:/g)].map((m) => m[1]);
 
     expect(declared).toContain('deletedAt');
-    expect(declared.filter((c) => c !== 'deletedAt').sort()).toEqual(
+    expect(declared).toContain('viewOnceBurnedAt');
+    expect(declared.filter((c) => c !== 'deletedAt' && c !== 'viewOnceBurnedAt').sort()).toEqual(
       [...CARRIER_DEADLINE_COLUMNS].sort()
     );
+  });
+
+  it('#11269 — la sélection partagée charge CHAQUE colonne que la loi lit', () => {
+    const source = readFileSync(join(__dirname, '..', 'carrierMessageLifecycle.ts'), 'utf8');
+    const body = source.slice(
+      source.indexOf('interface CarrierMessageLifecycle'),
+      source.indexOf('function deadlinePassed')
+    );
+    const declared = [...body.matchAll(/readonly\s+(\w+)\?:/g)].map((m) => m[1]);
+
+    expect(Object.keys(CARRIER_LIFECYCLE_SELECT).sort()).toEqual([...declared].sort());
   });
 });

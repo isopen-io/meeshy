@@ -125,7 +125,7 @@ describe('AttachmentService.getConversationAttachments — le cycle de vie du po
     const message = messageWhereOf(findMany);
     expect(message).toMatchObject({ deletedAt: null });
     expect(Array.isArray(message.AND)).toBe(true);
-    expect(message.AND as unknown[]).toHaveLength(CARRIER_DEADLINE_COLUMNS.length);
+    expect(message.AND as unknown[]).toHaveLength(CARRIER_DEADLINE_COLUMNS.length + 1);
   });
 });
 

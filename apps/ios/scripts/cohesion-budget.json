@@ -366,7 +366,7 @@
     "Meeshy::ConversationViewModel": 3933,
     "Meeshy::FeedPostCard": 1763,
     "Meeshy::FeedViewModel": 1900,
-    "Meeshy::MeeshyComposerHost": 7821,
+    "Meeshy::MeeshyComposerHost": 7820,
     "Meeshy::MessageListViewController": 4295,
     "Meeshy::PostDetailView": 2948,
     "Meeshy::StoryCardView": 2038,
@@ -381,9 +381,9 @@
     "MeeshySDK::OfflineQueue": 2975,
     "MeeshyUI::AudioPlayerView": 1532,
     "MeeshyUI::StickerPickerView": 1615,
-    "MeeshyUI::StoryCanvasUIView": 6599,
+    "MeeshyUI::StoryCanvasUIView": 6598,
     "MeeshyUI::StoryComposerView": 4146,
-    "MeeshyUI::StoryComposerViewModel": 4479,
+    "MeeshyUI::StoryComposerViewModel": 4475,
     "MeeshyUI::TimelineViewModel": 1615,
     "MeeshyUI::UserProfileSheet": 1617
   }

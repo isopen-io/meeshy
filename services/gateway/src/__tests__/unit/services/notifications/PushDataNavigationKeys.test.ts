@@ -19,6 +19,7 @@
  */
 import { NotificationService } from '../../../../services/notifications/NotificationService';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+import { sharedFriendships } from '../../../helpers/shared-friendships';
 
 /** Entourage réglé à « Ami » (#13929) : ce cas porte sur les clés du push, pas sur le cran. */
 const ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
@@ -145,7 +146,7 @@ describe('Push data — clés de navigation commentId / friendRequestId', () => 
   it('test_createStoryCommentNotificationsBatch_allBuckets_dataCarriesTriggeringCommentId', async () => {
     prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_ID }]);
     prisma.userPreferences.findUnique.mockResolvedValue(ENTOURAGE_FRIEND);
-    prisma.friendRequest.findMany.mockResolvedValue([
+    sharedFriendships(prisma.friendRequest.findMany, RECIPIENT_ID, ACTOR_ID)([
       { senderId: RECIPIENT_ID, receiverId: FRIEND_ID },
     ]);
 

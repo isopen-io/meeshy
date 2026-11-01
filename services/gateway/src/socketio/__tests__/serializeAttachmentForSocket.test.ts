@@ -305,6 +305,13 @@ describe('serializeAttachmentForSocket', () => {
     expect(result.capturedInApp).toBe(false);
   });
 
+  it('sert la lens du média (#11327) — le crédit voyage avec lui, par le socket comme par REST', () => {
+    const base = { id: 'att-lens', messageId: 'msg-lens', mimeType: 'image/jpeg', fileSize: 10, fileUrl: 'https://cdn.meeshy.me/x.jpg', transcription: null, translations: null, createdAt: new Date() };
+
+    expect(serializeAttachmentForSocket({ ...base, lensSlug: 'aurore' } as Record<string, unknown>).lensSlug).toBe('aurore');
+    expect(serializeAttachmentForSocket(base as Record<string, unknown>).lensSlug).toBeNull();
+  });
+
   it('aggregates reactions into reactionSummary and currentUserReactions', () => {
     const attachment = {
       id: 'att-4',

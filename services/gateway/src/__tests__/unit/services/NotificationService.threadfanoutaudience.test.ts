@@ -88,6 +88,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+import { sharedFriendships } from '../../helpers/shared-friendships';
 
 /**
  * L'AUTEUR a réglé son entourage à « Ami » (#13929) : ces témoins éprouvent les
@@ -96,7 +97,7 @@ import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
  */
 const AUTHOR_ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
 const authorEntourageFriend = ({ where }: { where: { userId: string } }) =>
-  Promise.resolve(where.userId === AUTHOR_ID ? AUTHOR_ENTOURAGE_FRIEND : null);
+  Promise.resolve([AUTHOR_ID, COMMENTER_ID].includes(where.userId) ? AUTHOR_ENTOURAGE_FRIEND : null);
 
 const AUTHOR_ID = '507f1f77bcf86cd799439001';
 const COMMENTER_ID = '507f1f77bcf86cd799439002';
@@ -135,9 +136,7 @@ describe('NotificationService — le fan-out du fil suit l’audience ACTUELLE d
     prisma.postReaction.findMany.mockResolvedValue([]);
     prisma.communityMember.findMany.mockResolvedValue([]);
     prisma.participant.findMany.mockResolvedValue([]);
-    prisma.friendRequest.findMany.mockResolvedValue([
-      { senderId: AUTHOR_ID, receiverId: FRIEND_ID },
-    ]);
+    sharedFriendships(prisma.friendRequest.findMany, AUTHOR_ID, COMMENTER_ID)([{ senderId: AUTHOR_ID, receiverId: FRIEND_ID }]);
     // Un seul engagé antérieur, qui n'apparaît dans AUCUN lien d'amitié.
     prisma.postComment.findMany.mockResolvedValue([{ authorId: EX_ENGAGED_ID }]);
   });
