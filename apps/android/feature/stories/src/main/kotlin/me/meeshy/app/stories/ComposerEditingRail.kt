@@ -101,7 +101,12 @@ internal val StoryComposerUiState.selectionSubject: ComposerSelectionSubject
     }
 
 /** Le chrome visible pour cet état : la loi pure [ComposerEditingChrome], nourrie du viseur et du geste en cours. */
-internal fun StoryComposerUiState.editingChrome(viewfinderArmed: Boolean, gestureOpen: Boolean, sceneReduced: Boolean = false): ComposerEditingChrome =
+internal fun StoryComposerUiState.editingChrome(
+    viewfinderArmed: Boolean,
+    gestureOpen: Boolean,
+    sceneReduced: Boolean = false,
+    laneCleared: Boolean = false,
+): ComposerEditingChrome =
     ComposerEditingChrome.resolve(
         ComposerEditingChrome.Input(
             subject = selectionSubject,
@@ -109,6 +114,7 @@ internal fun StoryComposerUiState.editingChrome(viewfinderArmed: Boolean, gestur
             viewfinderArmed = viewfinderArmed,
             gestureOpen = gestureOpen,
             sceneReduced = sceneReduced,
+            laneCleared = laneCleared,
         ),
     )
 

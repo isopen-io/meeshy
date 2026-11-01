@@ -115,23 +115,31 @@ private fun StoryMentionSheet(
         hasEdits = kept != referenced,
         options = {
             AlreadyReferenced(kept, onChange = { kept = it })
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-            ) {
-                MENTION_MODES.forEach { candidate ->
-                    FilterChip(
-                        selected = mode == candidate,
-                        onClick = { mode = candidate },
-                        label = { Text(stringResource(candidate.modeLabelRes())) },
-                        modifier = Modifier.heightIn(min = 48.dp).semantics { role = Role.RadioButton },
-                    )
-                }
-            }
+            MentionModeChoice(mode, onMode = { mode = it })
         },
         onCancel = onCancel,
         onDone = { _, people -> onDone(kept, people.filterNot { person -> kept.any { it.username.equals(person.username, ignoreCase = true) } }, mode) },
     )
+}
+
+/** Les trois modes d'une mention, une puce chacun : une puce trop large pour la ligne passe à la suivante, entière (#14197). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun MentionModeChoice(mode: PostReferenceDisplay, onMode: (PostReferenceDisplay) -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        MENTION_MODES.forEach { candidate ->
+            FilterChip(
+                selected = mode == candidate,
+                onClick = { onMode(candidate) },
+                label = { Text(stringResource(candidate.modeLabelRes()), maxLines = 1, softWrap = false) },
+                modifier = Modifier.heightIn(min = 48.dp).semantics { role = Role.RadioButton },
+            )
+        }
+    }
 }
 
 /** « Déjà référencées » : une pastille par personne, son mode au toucher, une croix pour la retirer ; et ce que nommer ouvre. */
