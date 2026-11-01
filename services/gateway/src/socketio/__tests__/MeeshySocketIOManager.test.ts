@@ -4698,7 +4698,7 @@ describe('MeeshySocketIOManager', () => {
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
         users: [
           { userId: 'user-blocked', username: 'blocked-contact', isOnline: false, lastActiveAt: null },
-          { userId: 'user-normal', username: 'normal-contact', isOnline: false, lastActiveAt: seenAt },
+          { userId: 'user-normal', username: 'normal-contact', isOnline: false, lastActiveAt: null },
         ],
       });
     });
@@ -4708,9 +4708,9 @@ describe('MeeshySocketIOManager', () => {
     // privilège. Le lecteur ADMIN est la variante qui porte la preuve — il
     // reçoit FULL pour tout le reste, donc seule la désactivation peut masquer.
     it.each([
-      ['un ADMIN', { role: 'ADMIN', blockedUserIds: [] }],
-      ['un AMI', { role: 'USER', blockedUserIds: [] }],
-    ])('masque un contact DÉSACTIVÉ même à %s — encore connecté, il ressort hors ligne sans dernière connexion', async (_viewer, viewerRow) => {
+      ['un ADMIN', { role: 'ADMIN', blockedUserIds: [] }, true],
+      ['un AMI', { role: 'USER', blockedUserIds: [] }, false],
+    ])('masque un contact DÉSACTIVÉ même à %s — encore connecté, il ressort hors ligne sans dernière connexion', async (_viewer, viewerRow, seesLastSeen) => {
       const socket = makeSocket('sock-ps-deactivated');
       const seenAt = new Date('2026-08-20T00:00:00.000Z');
       (manager as any).presenceSnapshotCache.set('user-viewer', {
@@ -4753,7 +4753,7 @@ describe('MeeshySocketIOManager', () => {
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
         users: [
           { userId: 'user-deactivated', username: 'gone', isOnline: false, lastActiveAt: null },
-          { userId: 'user-live', username: 'live', isOnline: true, lastActiveAt: seenAt },
+          { userId: 'user-live', username: 'live', isOnline: true, lastActiveAt: seesLastSeen ? seenAt : null },
         ],
       });
     });
@@ -5542,12 +5542,28 @@ describe('MeeshySocketIOManager', () => {
       );
     });
 
-    it('rend en ligne, avec sa dernière connexion, un AMI accepté', async () => {
+    it('rend en ligne, SANS dernière connexion, un AMI accepté (#13928)', async () => {
       const socket = makeSocket('sock-vis-friend');
       warmSnapshot('user-viewer');
       prisma.user.findUnique.mockResolvedValue({ role: 'USER', blockedUserIds: [] });
       prisma.friendRequest.findMany.mockResolvedValue([
         { senderId: 'user-friend', receiverId: 'user-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
+
+      expect(emittedUsers(socket)).toContainEqual(
+        expect.objectContaining({ userId: 'user-friend', isOnline: true, lastActiveAt: null }),
+      );
+    });
+
+    it('rend en ligne, AVEC sa dernière connexion, un PROCHE (#13928)', async () => {
+      const socket = makeSocket('sock-vis-close');
+      warmSnapshot('user-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'USER', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.userRelation.findMany.mockResolvedValue([
+        { id: 'rel-close', userLowId: 'user-friend', userHighId: 'user-viewer', grantedByLow: 'CLOSE', grantedByHigh: 'CLOSE', transitions: [] },
       ]);
 
       await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
@@ -5588,7 +5604,7 @@ describe('MeeshySocketIOManager', () => {
 
       const users = emittedUsers(socket);
       expect(users).toContainEqual(
-        expect.objectContaining({ userId: 'user-friend', isOnline: true, lastActiveAt: SEEN_AT }),
+        expect.objectContaining({ userId: 'user-friend', isOnline: true, lastActiveAt: null }),
       );
       for (const id of ['user-stranger', 'part-guest']) {
         expect(users).toContainEqual(
