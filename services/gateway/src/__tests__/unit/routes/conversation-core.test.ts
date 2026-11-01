@@ -122,12 +122,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
-// sous une clé obtenue avant sa création.
-jest.mock('../../../services/EncryptionService', () => ({
-  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
-}));
-
+jest.mock('../../../services/EncryptionService', () => jest.requireActual<typeof import('../../helpers/server-key-stub')>('../../helpers/server-key-stub').serverKeyStub());
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
     getUnreadCountsForUser: jest.fn().mockResolvedValue(new Map()),

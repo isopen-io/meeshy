@@ -61,12 +61,6 @@ import {
   isEndToEndMode,
   messageRowSealedFromServer,
 } from './e2eePlaintextAdmission.js';
-import { isServerAtRestMode } from './serverAtRest.js';
-
-export const SERVER_AT_REST_EDIT_REFUSED = 'SERVER_AT_REST_EDIT_REFUSED';
-
-export const SERVER_AT_REST_EDIT_REFUSAL_MESSAGE =
-  'Ce message est chiffré sur le serveur : sa modification n’est pas encore disponible';
 
 /**
  * L'état du conteneur que l'édition lit : son état TERMINAL, et son TYPE — la
@@ -79,8 +73,10 @@ export type ConversationEditStateRow = ConversationTerminalStateRow & {
   readonly type: string | null | undefined;
   /**
    * #11216 — le régime de chiffrement, EXIGÉ pour la même raison que `type` :
-   * aucun transport d'édition ne porte de chiffré, donc une édition dans une
-   * conversation `e2ee` écrirait du clair à la place d'un message chiffré.
+   * aucun transport d'édition ne porte de chiffré de bout en bout, donc une
+   * édition dans une conversation `e2ee` écrirait du clair à la place d'un
+   * message chiffré. Au repos (`server`/`hybrid`), les transports rescellent le
+   * texte modifié (`atRestEdit`, décision porteur du 2026-11-01).
    */
   readonly encryptionMode: string | null | undefined;
 };
@@ -98,12 +94,6 @@ export type MessageEditRefusal =
   | 'minor-global'
   /** #11216 — la conversation est chiffrée de bout en bout : le serveur n'écrit aucun clair. */
   | 'end-to-end-encrypted'
-  /**
-   * #11381 — le message est chiffré AU REPOS (`server`/`hybrid`) : aucun transport
-   * d'édition ne rechiffre encore, et écrire le nouveau texte en clair
-   * l'exposerait en base pendant que les lecteurs reliraient l'ancien.
-   */
-  | 'server-encrypted-at-rest'
   /**
    * #12792 — le CONTENU du message refuse toute édition, quel que soit l'éditeur :
    * `view-once` · `encrypted-message` · `not-editable-kind` (avis système, résumé
@@ -346,7 +336,6 @@ export async function admitMessageEdit(
   if (isConversationClosed(params.message.conversation)) return REFUSE('conversation-closed');
   if (isEndToEndMode(params.message.conversation?.encryptionMode)) return REFUSE('end-to-end-encrypted');
   if (messageRowSealedFromServer(params.message)) return REFUSE('end-to-end-encrypted');
-  if (isServerAtRestMode(params.message.conversation?.encryptionMode)) return REFUSE('server-encrypted-at-rest');
   const contentRefusal = contentRefusalOf(params.message);
   if (contentRefusal) return REFUSE(contentRefusal);
   if (await editorIsMinorInGlobal(params)) return REFUSE('minor-global');
@@ -399,8 +388,6 @@ export function describeEditRefusalForSocket(reason: MessageEditRefusal): string
       return MINOR_GLOBAL_REFUSAL_MESSAGE;
     case 'end-to-end-encrypted':
       return E2EE_PLAINTEXT_REFUSAL_MESSAGE;
-    case 'server-encrypted-at-rest':
-      return SERVER_AT_REST_EDIT_REFUSAL_MESSAGE;
     case 'encrypted-message':
       return ENCRYPTED_MESSAGE_EDIT_REFUSAL_MESSAGE;
     case 'view-once':
@@ -429,8 +416,7 @@ export function editAttributionOf(admission: MessageEditAdmission, editorUserId:
 
 /** Le code STABLE d'un refus d'édition, quand il en a un — les transports le servent à côté de la phrase. */
 export function editRefusalCode(reason: MessageEditRefusal): string | undefined {
-  if (reason === 'end-to-end-encrypted' || reason === 'encrypted-message') return E2EE_PLAINTEXT_REFUSED;
-  return reason === 'server-encrypted-at-rest' ? SERVER_AT_REST_EDIT_REFUSED : undefined;
+  return reason === 'end-to-end-encrypted' || reason === 'encrypted-message' ? E2EE_PLAINTEXT_REFUSED : undefined;
 }
 
 async function decideMessageEdit(
