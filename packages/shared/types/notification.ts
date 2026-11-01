@@ -80,6 +80,8 @@ export enum NotificationTypeEnum {
   COMMENT_REACTION = 'comment_reaction',
   STORY_NEW_COMMENT = 'story_new_comment',
   FRIEND_STORY_COMMENT = 'friend_story_comment',
+  /** Réaction d'un tiers au contenu d'un proche, relayée à l'entourage commun (#14068). */
+  FRIEND_CONTENT_REACTION = 'friend_content_reaction',
   STORY_THREAD_REPLY = 'story_thread_reply',
 
   // ===== FRIEND CONTENT EVENTS (Phase 4F) =====

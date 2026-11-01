@@ -162,6 +162,35 @@ class SceneEditorUiTest {
     }
 
     @Test
+    fun `Couper n'apparait que pour un objet coupable dont la tete est dans la fenetre`() {
+        val state = stickerState()
+        val split = mutableListOf<String>()
+        var playhead by mutableStateOf(4f)
+        compose.setContent {
+            MeeshyTheme {
+                SceneFrise(
+                    tracks = state.sceneTracks,
+                    editableIds = state.sceneEditableTrackIds,
+                    selectedId = "s1",
+                    slideDurationSeconds = 10f,
+                    playheadSeconds = playhead,
+                    onSelectTrack = { _, _ -> },
+                    onScrub = {},
+                    onWindow = { _, _, _ -> },
+                    splittableIds = setOf("s1"),
+                    onSplit = { split += it },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Split").performClick()
+        assertThat(split).containsExactly("s1")
+        playhead = 9f
+        compose.waitForIdle()
+        compose.onNodeWithText("Split").assertDoesNotExist()
+    }
+
+    @Test
     fun `une frise sans objet invite a poser un texte ou un sticker`() {
         compose.setContent {
             MeeshyTheme {

@@ -580,6 +580,11 @@ class StoryComposerViewModel @Inject constructor(
         restore(snapshot)
     }
 
+    /** Le doigt quitte l'écran (#14209) : deux glissés du même réglage, séparés par un doigt levé, font deux pas. */
+    fun onGestureLifted() {
+        history = history.closed()
+    }
+
     fun onRedo() {
         val (next, snapshot) = history.redone() ?: return
         history = next

@@ -56,6 +56,14 @@ object FriseBarDrag {
         }
     }
 
+    /**
+     * Une piste se COUPE à la tête (#14221, iso iOS `ComposerSceneFriseMetrics.canSplit`) si la tête tombe à
+     * l'intérieur de sa fenêtre, à plus d'une durée plancher de chaque bord.
+     */
+    fun canSplit(window: ClipWindowResolver.Window, at: Float): Boolean =
+        at.isFinite() && at > window.start + ClipWindowResolver.MINIMUM_DURATION &&
+            at < window.end - ClipWindowResolver.MINIMUM_DURATION
+
     /** Une fenêtre telle qu'elle se range sur l'objet : `duration == 0` = permanent (jusqu'à la fin de la slide). */
     data class Stored(val startSeconds: Float, val durationSeconds: Float)
 

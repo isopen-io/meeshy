@@ -11,7 +11,7 @@ import { truncateMessage } from '../notification-preview';
 import { FANOUT_ROW_CAP } from './row-cap';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import type { FanoutDependencies } from './dependencies';
-import { mentionReceivers, resolveEntourage, type Entourage } from './entourage';
+import { mentionReceivers, resolveEntourage, thirdPartyEntourage, type Entourage } from './entourage';
 
 /** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
 export type FanoutBucket = 'previousComments' | 'entourage' | 'reactors';
@@ -161,18 +161,9 @@ async function commentEntourage(
   authorId: string,
   commenterId: string
 ): Promise<Entourage> {
-  const [ofAuthor, ofCommenter] = await Promise.all([
-    resolveEntourage(prisma, { ownerId: authorId, key: 'circleOnMyContentComment', excludeUserIds: [commenterId] }),
-    commenterId === authorId
-      ? Promise.resolve<Entourage>({ ids: [], truncated: false })
-      : resolveEntourage(prisma, { ownerId: commenterId, key: 'circleElsewhereComment', excludeUserIds: [authorId] }),
-  ]);
-  if (commenterId === authorId) return ofAuthor;
-  const commenterSide = new Set(ofCommenter.ids);
-  return {
-    ids: ofAuthor.ids.filter((id) => commenterSide.has(id)),
-    truncated: ofAuthor.truncated || ofCommenter.truncated,
-  };
+  return commenterId === authorId
+    ? resolveEntourage(prisma, { ownerId: authorId, key: 'circleOnMyContentComment', excludeUserIds: [commenterId] })
+    : thirdPartyEntourage(prisma, { authorId, actorId: commenterId, onMyContent: 'circleOnMyContentComment', elsewhere: 'circleElsewhereComment' });
 }
 
 export type StoryCommentFanoutParams = {

@@ -31,6 +31,7 @@ import { buildOwnerSubtitleWithDetail, targetPreviewBody } from '../notification
 import { resolvePostMedia } from '../post-media-thumbnail';
 import { loadServedPostExcerpt } from '../served-post-excerpt';
 import type { NotificationBuilderDependencies } from './dependencies';
+import { relayActivityToEntourage } from '../fanout/activity-relay';
 
 export async function createPostLikeNotification(
   deps: NotificationBuilderDependencies,
@@ -81,7 +82,16 @@ export async function createPostLikeNotification(
   // média) descend dans le corps, que la phrase d'action n'occupe plus.
   const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: subtitlePostType });
 
-  return deps.createNotification({
+  // L'entourage de l'auteur ET du réacteur apprend la réaction (#14068), sous le
+  // même débit que la notification de l'auteur ; ce relais ne lève jamais.
+  const relayed = relayActivityToEntourage(deps, {
+    activity: 'reaction',
+    postId: params.postId,
+    actorId: params.actorId,
+    emoji: params.emoji,
+  });
+
+  const notification = await deps.createNotification({
     userId: params.postAuthorId,
     type,
     priority: 'normal',
@@ -120,6 +130,8 @@ export async function createPostLikeNotification(
       ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
     },
   });
+  await relayed;
+  return notification;
 }
 
 // ==============================================

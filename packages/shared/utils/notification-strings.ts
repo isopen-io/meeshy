@@ -16,6 +16,8 @@ export const NOTIFICATION_STRING_KEYS = [
   'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.commentContext', 'reaction.post',
   'comment.your', 'comment.generic', 'comment.repliedIn', 'comment.reply', 'comment.replyWithParent',
   'comment.genericFrom', 'comment.repliedInFrom',
+  'activity.reaction',
+  'activity.reactionFrom',
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
@@ -539,6 +541,14 @@ export function buildNotificationDisplay(
         author
           ? notificationString(L, 'comment.genericFrom', { postType: kind ?? 'STORY', author })
           : ns('comment.generic', kind ?? 'STORY'),
+        nounCap,
+      );
+    // ── Réaction d'un tiers au contenu d'un proche, relayée (#14068) ──
+    case 'friend_content_reaction':
+      return framed(
+        author
+          ? notificationString(L, 'activity.reactionFrom', { ...(emoji ? { emoji } : {}), postType: kind ?? 'POST', author })
+          : ns('activity.reaction', kind ?? 'POST'),
         nounCap,
       );
     case 'story_thread_reply':

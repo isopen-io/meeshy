@@ -344,6 +344,17 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
     }
   });
 
+  it('le relais d’une réaction sans auteur lisible reste indéfini, jamais « votre » (#14068)', () => {
+    for (const authorName of [undefined, '', '   ']) {
+      expect(buildNotificationDisplay('fr', {
+        type: 'friend_content_reaction', actorName: 'E', postType: 'POST', emoji: '❤️', authorName,
+      }).action, String(authorName)).toBe('a réagi ❤️ à une publication');
+    }
+    expect(buildNotificationDisplay('en', {
+      type: 'friend_content_reaction', actorName: 'E', postType: 'STORY', emoji: '❤️',
+    }).action).toBe('reacted ❤️ to a story');
+  });
+
   it('n’injecte JAMAIS l’auteur dans une action déjà possessive', () => {
     // « a commenté votre réel de Windie Nh » n'aurait aucun sens : la cible
     // est le lecteur lui-même.

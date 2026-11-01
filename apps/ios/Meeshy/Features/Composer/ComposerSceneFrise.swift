@@ -25,7 +25,16 @@ struct ComposerSceneFrise: View {
     /// **La fenêtre qu'un doigt est en train de régler** — l'aperçu du geste,
     /// jamais le projet : le projet ne reçoit la fenêtre qu'au lâcher, en UNE
     /// entrée d'annulation (un réglage par image en empilerait soixante).
-    @State private var enCours: (id: String, fenetre: ComposerSceneFriseMetrics.Window)?
+    @State private var enCours: (id: String, fenetre: ComposerSceneFriseMetrics.Window, accroche: Bool)?
+
+    /// La tête qu'un doigt promène sur la règle : seek tolérant pendant le
+    /// geste, précis au lâcher (`beginScrub` / `endScrub`), sinon chaque image
+    /// demande un seek exact et la vidéo se fige.
+    @State private var regleTenue: Float?
+
+    /// La direction de l'INTERFACE, rendue aux noms de piste : l'axe du temps,
+    /// lui, reste de gauche à droite dans toutes les langues (#14212).
+    @Environment(\.layoutDirection) private var interfaceDirection
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -79,6 +88,22 @@ struct ComposerSceneFrise: View {
                     timeline.setClipExit(id: choisi.id, to: timeline.currentTime)
                     onWindowEdited()
                 }
+                couper(choisi)
+            }
+        }
+    }
+
+    /// **« Couper » à la tête** (#14215) : la piste devient deux objets qui se
+    /// suivent, en un pas d'annulation. Servi seulement quand la tête est DANS
+    /// la fenêtre et que la coupe garde l'objet entier (#14224 pour la vidéo et
+    /// le son) ; la tête se lit à chaque tick, seul ce jeton se réévalue.
+    private func couper(_ piste: SceneFriseTrack) -> some View {
+        PlayheadTimeReader(clock: timeline.playhead) { maintenant in
+            if ComposerSceneFriseMetrics.canSplit(piste, at: maintenant) {
+                jeton(ComposerSceneFriseCopy.split) {
+                    timeline.splitSelectedAtPlayhead()
+                    onWindowEdited()
+                }
             }
         }
     }
@@ -117,19 +142,30 @@ struct ComposerSceneFrise: View {
             }
         }
         .overlay(alignment: .topLeading) { tete }
+        .environment(\.layoutDirection, .leftToRight)
     }
 
+    /// **La règle se gradue** (#14211) : des graduations au pas lisible, leur
+    /// temps écrit au-dessus, dessinées en UN `Canvas` — une scène de deux
+    /// heures n'y monte pas plus de vues qu'une scène de six secondes.
     private var regle: some View {
         PlayheadTimeReader(clock: timeline.playhead) { maintenant in
             GeometryReader { geo in
-                Capsule()
-                    .fill(Color.white.opacity(0.12))
-                    .contentShape(Rectangle())
-                    .gesture(DragGesture(minimumDistance: 0).onChanged { valeur in
-                        timeline.scrub(to: temps(x: valeur.location.x, largeur: geo.size.width))
+                let graduations = ComposerSceneFriseRuler.ticks(duration: duree, width: geo.size.width)
+                Canvas { contexte, taille in
+                    dessiner(graduations, dans: contexte, taille: taille)
+                }
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { valeur in
+                        promener(vers: temps(x: valeur.location.x, largeur: geo.size.width), largeur: geo.size.width)
+                    }
+                    .onEnded { _ in
+                        regleTenue = nil
+                        timeline.endScrub()
                     })
             }
-            .frame(height: 14)
+            .frame(height: ComposerSceneFriseRuler.height)
             .padding(.leading, ComposerSceneFriseMetrics.labelLane)
             .accessibilityElement()
             .accessibilityLabel(Text(ComposerSceneFriseCopy.ruler))
@@ -139,6 +175,38 @@ struct ComposerSceneFrise: View {
                 timeline.scrub(to: max(0, min(duree, timeline.currentTime + pas)))
             }
         }
+    }
+
+    private func dessiner(_ graduations: [ComposerSceneFriseRuler.Tick],
+                          dans contexte: GraphicsContext, taille: CGSize) {
+        let couleur = Color.white
+        for graduation in graduations {
+            let x = CGFloat(ComposerSceneFriseMetrics.fraction(graduation.time, of: duree)) * taille.width
+            let hauteur: CGFloat = graduation.isMajor ? 7 : 4
+            let trait = CGRect(x: min(max(0, x - 0.5), taille.width - 1), y: taille.height - hauteur,
+                               width: 1, height: hauteur)
+            contexte.fill(Path(trait), with: .color(couleur.opacity(graduation.isMajor ? 0.55 : 0.25)))
+            guard let libelle = graduation.label else { continue }
+            var texte = contexte.resolve(Text(libelle)
+                .font(.system(size: 9, weight: .medium).monospacedDigit()))
+            texte.shading = .color(couleur.opacity(0.6))
+            let mesure = texte.measure(in: taille)
+            let centre = min(max(mesure.width / 2, x), taille.width - mesure.width / 2)
+            contexte.draw(texte, at: CGPoint(x: centre, y: mesure.height / 2), anchor: .center)
+        }
+    }
+
+    private func promener(vers secondes: Float, largeur: CGFloat) {
+        if let depart = regleTenue {
+            let pas = ComposerSceneFriseRuler.majorStep(duration: duree, width: largeur)
+            if ComposerSceneFriseRuler.crossesMajor(from: depart, to: secondes, step: pas) {
+                HapticFeedback.light()
+            }
+        } else {
+            timeline.beginScrub()
+        }
+        regleTenue = secondes
+        timeline.scrub(to: secondes)
     }
 
     /// **Une piste se règle à la main** (retour porteur 2026-09-28) : la
@@ -157,6 +225,7 @@ struct ComposerSceneFrise: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(width: ComposerSceneFriseMetrics.labelLane - 8, alignment: .leading)
+                .environment(\.layoutDirection, interfaceDirection)
             GeometryReader { geo in
                 let largeur = geo.size.width
                 let debut = CGFloat(ComposerSceneFriseMetrics.fraction(fenetre.start, of: duree)) * largeur
@@ -200,6 +269,20 @@ struct ComposerSceneFrise: View {
         .accessibilityAction(named: Text(ComposerSceneFriseCopy.earlier)) {
             deplacer(piste, de: -ComposerSceneFriseMetrics.accessibilityStep)
         }
+        // **L'entrée et la sortie se règlent aussi sans les poignées** (#14216) :
+        // une poignée ne se saisit pas au VoiceOver, ses quatre pas si.
+        .accessibilityAction(named: Text(ComposerSceneFriseCopy.entryEarlier)) {
+            deplacer(piste, prise: .start, de: -ComposerSceneFriseMetrics.accessibilityStep)
+        }
+        .accessibilityAction(named: Text(ComposerSceneFriseCopy.entryLater)) {
+            deplacer(piste, prise: .start, de: ComposerSceneFriseMetrics.accessibilityStep)
+        }
+        .accessibilityAction(named: Text(ComposerSceneFriseCopy.exitEarlier)) {
+            deplacer(piste, prise: .end, de: -ComposerSceneFriseMetrics.accessibilityStep)
+        }
+        .accessibilityAction(named: Text(ComposerSceneFriseCopy.exitLater)) {
+            deplacer(piste, prise: .end, de: ComposerSceneFriseMetrics.accessibilityStep)
+        }
     }
 
     /// La poignée : un trait blanc de 4 pt dans une cible de 24 × 30 — assez
@@ -216,6 +299,9 @@ struct ComposerSceneFrise: View {
             .accessibilityHidden(true)
     }
 
+    /// **Le bord qui bouge s'aimante** (#14210) sur la tête, les bords de la
+    /// slide et ceux des autres pistes ; le doigt sent l'accroche UNE fois, au
+    /// passage « libre → accroché », jamais à chaque image.
     private func glisser(_ piste: SceneFriseTrack,
                          prise: ComposerSceneFriseMetrics.Grip,
                          largeur: CGFloat) -> some Gesture {
@@ -226,9 +312,15 @@ struct ComposerSceneFrise: View {
                     timeline.selectClip(id: piste.id)
                 }
                 let delta = largeur > 0 ? Float(valeur.translation.width / largeur) * duree : 0
-                enCours = (piste.id, ComposerSceneFriseMetrics.dragged(
+                let geste = ComposerSceneFriseMetrics.dragged(
                     ComposerSceneFriseMetrics.Window(start: piste.start, end: piste.end),
-                    grip: prise, by: delta, duration: duree))
+                    grip: prise, by: delta, duration: duree,
+                    snapping: ComposerSceneFriseMetrics.snapCandidates(
+                        tracks: timeline.sceneFriseTracks, excluding: piste.id,
+                        playhead: timeline.currentTime, duration: duree),
+                    tolerance: ComposerSceneFriseMetrics.snapTolerance(duration: duree, width: largeur))
+                if geste.isSnapped, enCours?.accroche != true { HapticFeedback.light() }
+                enCours = (piste.id, geste.window, geste.isSnapped)
             }
             .onEnded { _ in
                 guard let fini = enCours, fini.id == piste.id else { return }
@@ -248,11 +340,17 @@ struct ComposerSceneFrise: View {
         onWindowEdited()
     }
 
-    private func deplacer(_ piste: SceneFriseTrack, de delta: Float) {
+    private func deplacer(_ piste: SceneFriseTrack,
+                          prise: ComposerSceneFriseMetrics.Grip = .move,
+                          de delta: Float) {
         let fenetre = ComposerSceneFriseMetrics.dragged(
             ComposerSceneFriseMetrics.Window(start: piste.start, end: piste.end),
-            grip: .move, by: delta, duration: duree)
-        appliquer(fenetre, a: piste, prise: .move)
+            grip: prise, by: delta, duration: duree)
+        appliquer(fenetre, a: piste, prise: prise)
+        UIAccessibility.post(notification: .announcement,
+                             argument: ComposerSceneFriseMetrics.windowLabel(
+                                SceneFriseTrack(id: piste.id, kind: piste.kind, label: piste.label,
+                                                start: fenetre.start, end: fenetre.end)))
     }
 
     private func choisir(_ piste: SceneFriseTrack, a secondes: Float) {
@@ -327,6 +425,69 @@ nonisolated enum ComposerSceneFriseMetrics {
         }
     }
 
+    /// Un glissé aimanté : la fenêtre, et si le bord qui bouge est accroché.
+    struct Drag: Equatable {
+        let window: Window
+        let isSnapped: Bool
+    }
+
+    /// **Le glissé AIMANTÉ** (#14210, miroir de `FriseBarDrag.resolve`
+    /// Android) : le bord qui bouge — début, fin, ou le plus proche des deux
+    /// pour la barre entière — s'accroche au candidat le plus proche dans la
+    /// tolérance, puis la fenêtre est bornée comme un glissé libre.
+    static func dragged(_ fenetre: Window, grip: Grip, by delta: Float, duration: Float,
+                        snapping candidats: [SnapCandidate], tolerance: Float) -> Drag {
+        let pas = delta.isFinite ? delta : 0
+        let aimant = SnapEngine(toleranceSeconds: tolerance)
+        let corrige: Float?
+        switch grip {
+        case .start:
+            corrige = ecart(aimant.snap(rawTime: fenetre.start + pas, candidates: candidats), depuis: fenetre.start + pas)
+        case .end:
+            corrige = ecart(aimant.snap(rawTime: fenetre.end + pas, candidates: candidats), depuis: fenetre.end + pas)
+        case .move:
+            let tete = ecart(aimant.snap(rawTime: fenetre.start + pas, candidates: candidats), depuis: fenetre.start + pas)
+            let queue = ecart(aimant.snap(rawTime: fenetre.end + pas, candidates: candidats), depuis: fenetre.end + pas)
+            corrige = [tete, queue].compactMap { $0 }.min { abs($0) < abs($1) }
+        }
+        return Drag(window: dragged(fenetre, grip: grip, by: pas + (corrige ?? 0), duration: duration),
+                    isSnapped: corrige != nil)
+    }
+
+    private static func ecart(_ resultat: SnapResult, depuis brut: Float) -> Float? {
+        resultat.matched == nil ? nil : resultat.snappedTime - brut
+    }
+
+    /// Les points d'accroche d'une piste : la tête, les bords de la slide, les
+    /// bords des AUTRES pistes — jamais les siens.
+    static func snapCandidates(tracks: [SceneFriseTrack], excluding id: String,
+                               playhead: Float, duration: Float) -> [SnapCandidate] {
+        let voisins = tracks.filter { $0.id != id }.flatMap {
+            [SnapCandidate(kind: .clipStart, time: $0.start), SnapCandidate(kind: .clipEnd, time: $0.end)]
+        }
+        return [SnapCandidate(kind: .slideStart, time: 0),
+                SnapCandidate(kind: .slideEnd, time: duration),
+                SnapCandidate(kind: .playhead, time: playhead)] + voisins
+    }
+
+    /// Huit points de doigt à l'échelle RENDUE, plafonnés à un quart de
+    /// seconde — la tolérance de l'atelier (`TimelineGeometry`) et d'Android.
+    static func snapTolerance(duration: Float, width: CGFloat) -> Float {
+        guard duration > 0, width > 0 else { return 0 }
+        let echelle = width / (TimelineGeometry.basePixelsPerSecond * CGFloat(duration))
+        return TimelineGeometry(zoomScale: echelle).dragSnapToleranceSeconds
+    }
+
+    /// **Une piste se coupe à la tête** si la tête tombe à l'intérieur, à
+    /// plus d'une durée plancher de chaque bord, et si la coupe garde l'objet
+    /// entier : un texte ou une image. Une vidéo ou un son couperait sans
+    /// décaler sa source (#14224), un sticker ou un lieu ne se coupe pas.
+    static func canSplit(_ piste: SceneFriseTrack, at secondes: Float) -> Bool {
+        guard [.text, .image].contains(piste.kind), secondes.isFinite else { return false }
+        let plancher = ClipWindowResolver.minimumDuration
+        return secondes > piste.start + plancher && secondes < piste.end - plancher
+    }
+
     /// La colonne des NOMS de piste — 72 pt de la maquette (64 de texte + 8
     /// d'écart) ; la règle et la tête s'alignent sur elle.
     static let labelLane: CGFloat = 72
@@ -373,6 +534,21 @@ nonisolated enum ComposerSceneFriseCopy {
     static var place: String { String(localized: "composer.frise.place", defaultValue: "Lieu", bundle: .main) }
     static var earlier: String { String(localized: "composer.frise.earlier", defaultValue: "Plus tôt", bundle: .main) }
     static var later: String { String(localized: "composer.frise.later", defaultValue: "Plus tard", bundle: .main) }
+    static var entryEarlier: String {
+        String(localized: "composer.frise.entryEarlier", defaultValue: "Entrer plus tôt", bundle: .main)
+    }
+    static var entryLater: String {
+        String(localized: "composer.frise.entryLater", defaultValue: "Entrer plus tard", bundle: .main)
+    }
+    static var exitEarlier: String {
+        String(localized: "composer.frise.exitEarlier", defaultValue: "Sortir plus tôt", bundle: .main)
+    }
+    static var exitLater: String {
+        String(localized: "composer.frise.exitLater", defaultValue: "Sortir plus tard", bundle: .main)
+    }
+    static var split: String {
+        String(localized: "composer.object.editor.split", defaultValue: "Couper", bundle: .main)
+    }
     static var timeButton: String { String(localized: "composer.frise.time", defaultValue: "Temps", bundle: .main) }
 
     static func label(for piste: SceneFriseTrack) -> String {
@@ -384,5 +560,70 @@ nonisolated enum ComposerSceneFriseCopy {
         case .audio: return sound
         case .place: return place
         }
+    }
+}
+
+/// **La règle graduée de la frise** (#14211) : un pas MAJEUR choisi sur une
+/// échelle lisible (1 s → 1 h) pour que deux libellés gardent au moins 44 pt
+/// entre eux et qu'il n'y en ait jamais plus de douze, et des graduations
+/// mineures tant qu'elles restent à six points l'une de l'autre.
+nonisolated enum ComposerSceneFriseRuler {
+    struct Tick: Equatable {
+        let time: Float
+        let isMajor: Bool
+        let label: String?
+    }
+
+    static let height: CGFloat = 22
+
+    private static let echelle: [(pas: Float, divisions: Int)] = [
+        (1, 5), (2, 4), (5, 5), (10, 5), (15, 3), (30, 3),
+        (60, 4), (120, 4), (300, 5), (600, 5), (900, 3), (1800, 3), (3600, 4),
+    ]
+    private static let ecartLibelles: CGFloat = 44
+    private static let libellesMax: Float = 12
+    private static let ecartMineures: CGFloat = 6
+
+    static func majorStep(duration: Float, width: CGFloat) -> Float {
+        echelleChoisie(duration: duration, width: width).pas
+    }
+
+    static func ticks(duration: Float, width: CGFloat) -> [Tick] {
+        guard duration > 0, duration.isFinite, width > 0 else { return [] }
+        let choix = echelleChoisie(duration: duration, width: width)
+        let mineur = choix.pas / Float(choix.divisions)
+        let avecMineures = CGFloat(mineur / duration) * width >= ecartMineures
+        let pas = avecMineures ? mineur : choix.pas
+        let parMajeure = avecMineures ? choix.divisions : 1
+        let nombre = Int((duration / pas + 0.0001).rounded(.down))
+        return (0...nombre).map { rang in
+            let temps = min(duration, Float(rang / parMajeure) * choix.pas + Float(rang % parMajeure) * mineur)
+            let majeure = rang % parMajeure == 0
+            return Tick(time: temps, isMajor: majeure, label: majeure ? label(temps) : nil)
+        }
+    }
+
+    /// « 45 s », « 1:30 », « 1:00:00 ».
+    static func label(_ secondes: Float) -> String {
+        let total = Int(secondes.rounded())
+        guard total >= 60 else { return "\(total) s" }
+        let heures = total / 3600
+        let minutes = (total % 3600) / 60
+        let reste = total % 60
+        return heures > 0
+            ? String(format: "%d:%02d:%02d", heures, minutes, reste)
+            : String(format: "%d:%02d", minutes, reste)
+    }
+
+    /// La tête a-t-elle franchi une graduation majeure entre deux images ?
+    static func crossesMajor(from depart: Float, to arrivee: Float, step pas: Float) -> Bool {
+        guard pas > 0, depart.isFinite, arrivee.isFinite else { return false }
+        return (depart / pas).rounded(.down) != (arrivee / pas).rounded(.down)
+    }
+
+    private static func echelleChoisie(duration: Float, width: CGFloat) -> (pas: Float, divisions: Int) {
+        guard duration > 0, width > 0 else { return echelle[0] }
+        return echelle.first { CGFloat($0.pas / duration) * width >= ecartLibelles && duration / $0.pas <= libellesMax }
+            ?? echelle[echelle.count - 1]
     }
 }
