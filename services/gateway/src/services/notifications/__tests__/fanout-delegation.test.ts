@@ -38,6 +38,7 @@
  */
 
 import { NotificationService } from '../NotificationService';
+import { aliveAndUnblocked, userRelationRows } from '../../../__tests__/helpers/linked-to-everyone';
 
 const AUTHOR_ID = 'author-1';
 const FRIEND_1 = 'friend-1';
@@ -51,7 +52,7 @@ type PrismaDouble = {
   userPreferences: { findUnique: jest.Mock };
   notification: { create: jest.Mock };
   conversation: { findUnique: jest.Mock };
-  participant: { count: jest.Mock };
+  participant: { count: jest.Mock; findMany: jest.Mock };
   userConversationPreferences: { findMany: jest.Mock };
 };
 
@@ -91,6 +92,7 @@ function makePrisma(): PrismaDouble {
     },
     participant: {
       count: jest.fn().mockResolvedValue(3),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     // Aucune ligne de sourdine par défaut : tout le monde écoute.
     userConversationPreferences: {
@@ -130,7 +132,10 @@ describe("les éventails passent par les méthodes de l'instance, résolues à l
     );
 
     // `PUBLIC` ⇒ `filterPostConsumers` rend ses candidats tels quels, sans
-    // requête : l'audience est donc ['u1', 'u2'], et seul l'anti-spam trie.
+    // requête ; u1 et u2 sont des liens du commentateur (#14168) : l'audience
+    // est donc ['u1', 'u2'], et seul l'anti-spam trie.
+    prisma.userRelation.findMany.mockImplementation(userRelationRows());
+    prisma.user.findMany.mockImplementation(aliveAndUnblocked());
     await service.createCommentMentionNotificationsBatch({
       commentId: 'comment-1',
       postId: POST_ID,

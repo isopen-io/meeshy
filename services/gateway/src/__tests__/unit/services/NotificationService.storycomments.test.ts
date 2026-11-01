@@ -107,6 +107,7 @@ import { NotificationService } from '../../../services/notifications/Notificatio
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
 import { sharedFriendships } from '../../helpers/shared-friendships';
+import { aliveAndUnblocked, userRelationRows } from '../../helpers/linked-to-everyone';
 
 /** Entourage de l'AUTEUR réglé à « Ami » (#13929) ; les défauts : `notifs-cercles-13929.test.ts`. */
 const AUTHOR_ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
@@ -836,6 +837,16 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         displayName: 'Commenter',
         avatar: null,
       });
+      // Tous liés (#14168) : ces cas portent sur la forme de la mention, la règle
+      // de lien est tenue par `mention-lien-14168.test.ts`.
+      prisma.userRelation.findMany.mockImplementation(userRelationRows());
+      prisma.user.findMany.mockImplementation(aliveAndUnblocked());
+      prisma.participant.findMany.mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+      prisma.userRelation.findMany.mockResolvedValue([]);
+      prisma.user.findMany.mockResolvedValue([]);
     });
 
     it('both @alice and @bob receive user_mentioned notification', async () => {
@@ -1296,6 +1307,16 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         displayName: 'Poster',
         avatar: null,
       });
+      // Tous liés (#14168) : ces cas portent sur la forme de la mention, la règle
+      // de lien est tenue par `mention-lien-14168.test.ts`.
+      prisma.userRelation.findMany.mockImplementation(userRelationRows());
+      prisma.user.findMany.mockImplementation(aliveAndUnblocked());
+      prisma.participant.findMany.mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+      prisma.userRelation.findMany.mockResolvedValue([]);
+      prisma.user.findMany.mockResolvedValue([]);
     });
 
     it('test_createPostMentionNotificationsBatch_aliceAndBob_bothReceiveUserMentioned', async () => {
