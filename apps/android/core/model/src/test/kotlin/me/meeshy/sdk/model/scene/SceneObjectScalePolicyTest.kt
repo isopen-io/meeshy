@@ -99,4 +99,29 @@ class SceneObjectScalePolicyTest {
         assertThat(SceneObjectScalePolicy.layered(0.05)).isEqualTo(LayeredScale(layout = 0.05, layer = 1.0))
         assertThat(SceneObjectScalePolicy.layered(Double.NaN)).isEqualTo(LayeredScale(layout = 1.0, layer = 1.0))
     }
+    @Test
+    fun `une saisie n a pas de plafond`() {
+        assertThat(SceneObjectScalePolicy.entered(250.0, current = 1.0, smallestSideDesignPx = 140.0)).isEqualTo(250.0)
+        assertThat(SceneObjectScalePolicy.entered(1e6, current = 30.0, smallestSideDesignPx = 72.0)).isEqualTo(1e6)
+    }
+
+    @Test
+    fun `une saisie sous le plancher s arrete quand le plus petit cote rendu vaut 5 pixels`() {
+        assertThat(SceneObjectScalePolicy.entered(0.0001, current = 1.0, smallestSideDesignPx = 140.0)).isWithin(1e-12).of(5.0 / 140.0)
+        assertThat(SceneObjectScalePolicy.entered(0.04, current = 1.0, smallestSideDesignPx = 140.0)).isWithin(1e-12).of(0.04)
+    }
+
+    @Test
+    fun `un zero tape ou un pas moins sous zero veut dire le plus petit possible`() {
+        assertThat(SceneObjectScalePolicy.entered(0.0, current = 1.0, smallestSideDesignPx = 140.0)).isWithin(1e-12).of(5.0 / 140.0)
+        assertThat(SceneObjectScalePolicy.entered(-0.02, current = 0.08, smallestSideDesignPx = 140.0)).isWithin(1e-12).of(5.0 / 140.0)
+    }
+
+    @Test
+    fun `une saisie non finie ne change rien, et sans cote mesurable elle ne reduit plus`() {
+        assertThat(SceneObjectScalePolicy.entered(Double.NaN, current = 2.0, smallestSideDesignPx = 140.0)).isEqualTo(2.0)
+        assertThat(SceneObjectScalePolicy.entered(Double.POSITIVE_INFINITY, current = 2.0, smallestSideDesignPx = 140.0)).isEqualTo(2.0)
+        assertThat(SceneObjectScalePolicy.entered(0.5, current = 1.0, smallestSideDesignPx = 0.0)).isEqualTo(1.0)
+        assertThat(SceneObjectScalePolicy.entered(3.0, current = 1.0, smallestSideDesignPx = Double.NaN)).isEqualTo(3.0)
+    }
 }

@@ -50,6 +50,20 @@ public nonisolated enum SceneObjectScalePolicy {
         return max(floor(unitSide: unitSide), voulu)
     }
 
+    /// L'échelle retenue pour une valeur SAISIE — champ « Taille » de la frise,
+    /// pas ±, curseur d'une image clé — depuis l'échelle `current`.
+    ///
+    /// La règle du geste, sans plafond et au même plancher. Une saisie nulle ou
+    /// négative (un « 0 » tapé, un pas « − » qui passe sous zéro) veut dire « le
+    /// plus petit possible » et s'arrête au plancher ; une saisie non finie ne
+    /// change rien. Sans côté mesurable, elle grandit encore et ne réduit plus.
+    public static func entered(_ requested: Double, current: Double, unitSide: Double) -> Double {
+        let depart = sanitized(current)
+        guard requested.isFinite else { return depart }
+        guard unitSide.isFinite, unitSide > 0 else { return max(depart, requested) }
+        return max(floor(unitSide: unitSide), requested)
+    }
+
     /// L'échelle retenue pour le pinch du média de FOND.
     public static func settledBackground(base: Double, gestureScale: Double) -> Double {
         let voulu = sanitized(base) * gestureScale
