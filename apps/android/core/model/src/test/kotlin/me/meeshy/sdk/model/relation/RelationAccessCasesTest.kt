@@ -22,6 +22,13 @@ import org.junit.Test
  */
 class RelationAccessCasesTest {
 
+    private companion object {
+        const val CASES_PATH = "packages/shared/fixtures/relation-access-cases.json"
+        const val LEVELS_PATH = "packages/shared/utils/relation-levels.ts"
+        const val SCALE_PATH = "packages/shared/types/relation.ts"
+        const val WORKFLOW_PATH = ".github/workflows/android.yml"
+    }
+
     private fun sharedText(path: String): String {
         var dir: File? = File(".").absoluteFile
         while (dir != null) {
@@ -35,7 +42,7 @@ class RelationAccessCasesTest {
     private class SharedCase(val id: String, val input: JsonObject, val expected: JsonObject)
 
     private val cases: List<SharedCase> =
-        Json.parseToJsonElement(sharedText("packages/shared/fixtures/relation-access-cases.json"))
+        Json.parseToJsonElement(sharedText(CASES_PATH))
             .jsonObject.getValue("cases").jsonArray.map {
                 val case = it.jsonObject
                 SharedCase(
@@ -120,7 +127,7 @@ class RelationAccessCasesTest {
 
     // ── La table du TypeScript, relue pour que le miroir ne dérive pas ──
 
-    private val levelsSource: String get() = sharedText("packages/shared/utils/relation-levels.ts")
+    private val levelsSource: String get() = sharedText(LEVELS_PATH)
 
     private fun blockAfter(marker: String, terminator: String, text: String): String {
         val start = text.indexOf(marker)
@@ -167,11 +174,30 @@ class RelationAccessCasesTest {
 
     @Test
     fun `the levels are ordered as in the TypeScript scale`() {
-        val source = sharedText("packages/shared/types/relation.ts")
+        val source = sharedText(SCALE_PATH)
         val scale = blockAfter("export const RELATION_LEVELS = [", "] as const", source)
         val declared = Regex("'([A-Z]+)'").findAll(scale).map { it.groupValues[1] }.toList()
         assertThat(RelationLevel.entries.sorted().map { it.wire }).containsExactlyElementsIn(declared).inOrder()
         assertThat(declared).hasSize(6)
+    }
+
+    // ── La CI Android tourne quand une source relue change ──
+
+    private fun triggerPaths(event: String, next: String, workflow: String): Set<String> =
+        Regex("- '([^']+)'").findAll(blockAfter("\n  $event:\n", "\n  $next:", workflow))
+            .map { it.groupValues[1] }.toSet()
+
+    @Test
+    fun `every shared source this mirror reads triggers the Android CI, on push and on pull request`() {
+        val workflow = sharedText(WORKFLOW_PATH)
+        val read = listOf(LEVELS_PATH, SCALE_PATH, CASES_PATH)
+        listOf("push" to "pull_request", "pull_request" to "workflow_dispatch").forEach { (event, next) ->
+            val paths = triggerPaths(event, next, workflow)
+            read.forEach { source ->
+                val covered = paths.any { it == source || (it.endsWith("/**") && source.startsWith(it.removeSuffix("**"))) }
+                assertWithMessage("$event ne surveille pas $source").that(covered).isTrue()
+            }
+        }
     }
 
     // ── Les lectures fermées par défaut ──
