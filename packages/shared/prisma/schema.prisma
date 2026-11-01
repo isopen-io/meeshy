@@ -6496,7 +6496,7 @@ model CommunityAppearancePack {
 /// Une lens proposée par un partenaire (#11271, MeeshyLens v1) : le document
 /// re-sérialisé par `parseLens`, ses fichiers ré-encodés, et la fenêtre et les
 /// communautés FIXÉES par la modération. Gratuite (prix 0) ; l'identité
-/// partenaire, le crédit et le comptage d'usage attendent #11251 (S26).
+/// partenaire (`PartnerProfile`), le crédit et l'usage (`LensUsageDaily`) : #11327.
 model LensPack {
   id             String    @id @default(auto()) @map("_id") @db.ObjectId
   slug           String    @unique

@@ -25,10 +25,10 @@
  *   publiée et sa fenêtre ouverte (`approvedFile`). Le document servi ne porte
  *   pas ses communautés : c'est la passerelle qui gouverne l'offre.
  *
- * Points « ATTEND » de #11251 laissés ABSENTS, jamais tranchés ici : ni
- * rémunération, ni crédit « Lens par X » en E2EE, ni géo-créneau — la revue
- * retire `window.geo` du document servi. L'identité partenaire et le comptage
- * d'usage sont S26.
+ * Le géo-créneau n'est pas servi : la revue retire `window.geo` du document.
+ * L'identité partenaire, le crédit « Lens par X » et le comptage d'usage
+ * vivent dans `LensPartners.ts` (#11327, verdicts #11251 du 2026-11-01 :
+ * gratuit des deux côtés, aucune rémunération).
  */
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
