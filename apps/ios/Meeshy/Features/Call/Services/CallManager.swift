@@ -663,6 +663,8 @@ final class CallManager: ObservableObject, Sendable {
     let systemPiP: CallSystemPiPControllerProviding
     /// La session audio de l'appel (`CallAudioSessionController`).
     let audio: CallAudioSessionControllerProviding
+    /// La vidéo sortante qui s'arrête ou se fige : attente, survie, chaleur (`CallVideoSuspension`).
+    let videoSuspension: CallVideoSuspensionProviding
     /// Le chrono affiché et le battement de cœur (`CallLiveClock`).
     let liveClock: CallLiveClockProviding
 
@@ -679,6 +681,7 @@ final class CallManager: ObservableObject, Sendable {
         ringTimeouts: CallRingTimeoutsProviding = CallRingTimeouts(),
         systemPiP: CallSystemPiPControllerProviding = CallSystemPiPController(),
         audio: CallAudioSessionControllerProviding = CallAudioSessionController(),
+        videoSuspension: CallVideoSuspensionProviding = CallVideoSuspension(),
         liveClock: CallLiveClockProviding = CallLiveClock()
     ) {
         self.signalingRouter = signalingRouter
@@ -693,6 +696,7 @@ final class CallManager: ObservableObject, Sendable {
         self.ringTimeouts = ringTimeouts
         self.systemPiP = systemPiP
         self.audio = audio
+        self.videoSuspension = videoSuspension
         self.audioSessionQueue = audio.audioSessionQueue
         self.liveClock = liveClock
         // Survival controller is created with no actuator yet; `attach(self)` wires
@@ -708,23 +712,9 @@ final class CallManager: ObservableObject, Sendable {
 
         // Wire the survival controller now that `self` exists. The controller holds
         // the actuator weakly, so no retain cycle (CallManager owns the controller).
-        self.videoSurvivalController.attach(actuator: self)
-        self.videoSurvivalController.$isVideoSuspended
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] suspended in
-                guard let self else { return }
-                self.isVideoSuspended = suspended
-                // Le gel a DEUX propriétaires : le contrôleur (politique) et
-                // WebRTCService (encodeur). `reset()` n'efface que le premier ;
-                // sans ce dégel branché sur le FRONT DESCENDANT, un reset
-                // pendant un gel (toggleVideo, unhold, thermique critique, fin
-                // d'appel) épingle l'encodeur au plancher pour tout le reste de
-                // l'appel, sans affordance ni chemin de reprise. `removeDuplicates()`
-                // en amont ne laisse donc passer que les vraies transitions.
-                if !suspended { self.builtWebRTCService?.unfreezeVideoAfterSurvival() }
-            }
-            .store(in: &cancellables)
+        self.videoSurvivalController.attach(actuator: videoSuspension)
+        videoSuspension.attach(to: self)
+        videoSuspension.bindSurvivalFreeze()
 
         sdpSignaler.isCurrentCall = { [weak self] callId in self?.currentCallId == callId }
         appStateObserver.attach(to: self)

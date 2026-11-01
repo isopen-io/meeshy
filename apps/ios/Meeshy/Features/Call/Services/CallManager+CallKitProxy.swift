@@ -171,7 +171,7 @@ class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sendable {
         action.fulfill()
         Task { @MainActor [weak self] in
             guard let manager = self?.manager, action.callUUID == manager.activeCallUUID else { return }
-            manager.handleHold(isOnHold)
+            manager.videoSuspension.handleHold(isOnHold)
         }
     }
 
@@ -198,7 +198,7 @@ class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sendable {
         action.fulfill()
         Task { @MainActor [weak self] in
             guard let manager = self?.manager, action.callUUID == manager.activeCallUUID else { return }
-            manager.sendDTMF(digits: digits)
+            manager.videoSuspension.sendDTMF(digits: digits)
         }
     }
 

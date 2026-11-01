@@ -45,7 +45,7 @@ final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
     func test_applySurvivalVideoSend_preflightGuard_blocksSuspendAndResumeDuringHoldOrInterruption() throws {
         let source = try callManagerSource()
         guard let reconnectingRange = source.range(
-            of: "if case .reconnecting = callState { return false }"
+            of: "if case .reconnecting = call.callState { return false }"
         ) else {
             XCTFail("Expected the .reconnecting pre-flight guard in applySurvivalVideoSend — file structure changed"); return
         }
@@ -71,7 +71,7 @@ final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
             "on unhold."
         )
         XCTAssertTrue(
-            block.contains("if isVideoSuspendedByHold || isVideoSuspendedByCaptureInterruption { return false }"),
+            block.contains("if call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption { return false }"),
             "The pre-flight guard must block BOTH suspend and resume — no `enabled &&` prefix — whenever " +
             "an OS-level suspension (CallKit hold or capture interruption) is active."
         )
@@ -86,7 +86,7 @@ final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
     func test_applySurvivalVideoSend_taskRevalidationGuard_blocksSuspendAndResumeDuringHoldOrInterruption() throws {
         let source = try callManagerSource()
         guard let revalidateRange = source.range(
-            of: "guard self.isVideoEnabled, self.currentCallId == callId else { return false }"
+            of: "guard call.isVideoEnabled, call.currentCallId == callId else { return false }"
         ) else {
             XCTFail("Expected the in-Task re-validation guard in applySurvivalVideoSend — file structure changed"); return
         }
@@ -105,7 +105,7 @@ final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
             "await, and must stay symmetric with it."
         )
         XCTAssertTrue(
-            block.contains("if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption { return false }"),
+            block.contains("if call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption { return false }"),
             "The in-Task re-validation guard must block BOTH suspend and resume — no `enabled &&` prefix."
         )
     }

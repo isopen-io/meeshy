@@ -1357,7 +1357,7 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
         // thawing through the `webRTCService` getter would build the whole
         // WebRTC stack on the controller's initial `false` emission.
         XCTAssertTrue(
-            body.contains("if !suspended { self.builtWebRTCService?.unfreezeVideoAfterSurvival() }"),
+            body.contains("if !suspended { call.builtWebRTCService?.unfreezeVideoAfterSurvival() }"),
             "The falling edge of isVideoSuspended must thaw the encoder — a controller reset " +
             "clears the policy flag but never the encoder floor"
         )
@@ -1641,9 +1641,9 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
     func test_thermalCritical_serializesWithOtherVideoActuationTasks() throws {
         let body = try thermalBody(try callManagerSource())
         XCTAssertTrue(
-            body.contains("let inFlight = self.videoTransitionsInFlight()") &&
-            body.contains("let inFlight = self.videoTransitionsInFlight()") &&
-            body.contains("let inFlight = self.videoTransitionsInFlight()"),
+            body.contains("let inFlight = call.videoTransitionsInFlight()") &&
+            body.contains("let inFlight = call.videoTransitionsInFlight()") &&
+            body.contains("let inFlight = call.videoTransitionsInFlight()"),
             "The thermal-critical downgrade must capture all three in-flight video-transition tasks " +
             "before actuating, mirroring toggleVideo/handleHold/applySurvivalVideoSend."
         )
@@ -1655,7 +1655,7 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
             "downgradeFromVideo() — upgradeToVideo/downgradeFromVideo never check cancellation " +
             "mid-flight, so two concurrent actuations would corrupt state."
         )
-        guard let assignRange = body.range(of: "self.videoToggleTask = Task"),
+        guard let assignRange = body.range(of: "call.videoToggleTask = Task"),
               let awaitRange = body.range(of: "await inFlight.settle()", range: assignRange.upperBound..<body.endIndex),
               let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
             XCTFail("Expected videoToggleTask = Task, await inFlight.settle(), then downgradeFromVideo() in that order"); return
@@ -2185,7 +2185,7 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
     func test_cxSetHeldCallAction_guardsOnActiveCallUUIDBeforeHandlingHold() throws {
         let body = try handlerBody(try callManagerSource(), marker: "perform action: CXSetHeldCallAction")
         let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
-        let holdOffset = body.range(of: "manager.handleHold(isOnHold)")?.lowerBound
+        let holdOffset = body.range(of: "manager.videoSuspension.handleHold(isOnHold)")?.lowerBound
         XCTAssertNotNil(guardOffset, "CXSetHeldCallAction must guard on action.callUUID == manager.activeCallUUID")
         XCTAssertNotNil(holdOffset, "CXSetHeldCallAction must call manager.handleHold(isOnHold)")
         if let g = guardOffset, let h = holdOffset {
@@ -2196,7 +2196,7 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
     func test_cxPlayDTMFCallAction_guardsOnActiveCallUUIDBeforeSendingDTMF() throws {
         let body = try handlerBody(try callManagerSource(), marker: "perform action: CXPlayDTMFCallAction")
         let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
-        let dtmfOffset = body.range(of: "manager.sendDTMF(digits: digits)")?.lowerBound
+        let dtmfOffset = body.range(of: "manager.videoSuspension.sendDTMF(digits: digits)")?.lowerBound
         XCTAssertNotNil(guardOffset, "CXPlayDTMFCallAction must guard on action.callUUID == manager.activeCallUUID")
         XCTAssertNotNil(dtmfOffset, "CXPlayDTMFCallAction must call manager.sendDTMF(digits:)")
         if let g = guardOffset, let d = dtmfOffset {
@@ -6710,7 +6710,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             to: "} else if state == .serious {",
             in: try callManagerSource()
         )
-        guard let downgradeRange = body.range(of: "let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") else {
+        guard let downgradeRange = body.range(of: "let needsRenegotiation = await call.webRTCService.downgradeFromVideo()") else {
             XCTFail("Expected downgradeFromVideo() call in thermal-critical handler")
             return
         }
@@ -7371,7 +7371,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_holdGuardRevertsOptimisticMirrorAndReturns() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+            of: "if call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption {"
         ) else {
             XCTFail("hold/capture-interruption guard block not found in switchCamera"); return
         }
@@ -7450,7 +7450,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_holdGuardRevertsOptimisticStateAndReturns() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+            of: "if call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption {"
         ) else {
             XCTFail("hold/capture-interruption guard block not found in selectCamera"); return
         }

@@ -3462,7 +3462,7 @@ final class CallManagerHoldTests: XCTestCase {
         }
         let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("!isVideoSuspendedByCaptureInterruption"),
+            body.contains("!call.isVideoSuspendedByCaptureInterruption"),
             "handleHold unhold path must guard on !isVideoSuspendedByCaptureInterruption — " +
             "restoring video while backgrounded would send a false 'camera active' " +
             "signal to the peer because iOS prevents actual camera capture anyway")
@@ -3603,12 +3603,12 @@ final class CallManagerHoldTests: XCTestCase {
         }
         let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") ||
+            body.contains("let needsRenegotiation = await call.webRTCService.downgradeFromVideo()") ||
             body.contains("let needsRenegotiation = await self?.webRTCService.downgradeFromVideo()"),
             "handleHold's hold path must capture downgradeFromVideo()'s needsRenegotiation " +
             "return value instead of discarding it with `_ =`")
         XCTAssertTrue(
-            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)"),
+            body.contains("call.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)"),
             "handleHold's hold path must follow a needed renegotiation with " +
             "createOffer()+emitCallOffer(isVideo: false) — mirroring toggleVideo/" +
             "applySurvivalVideoSend — so the peer's negotiated SDP direction " +
@@ -3646,7 +3646,7 @@ final class CallManagerHoldTests: XCTestCase {
             "failure must not be silently discarded, leaving isVideoEnabled stuck at true " +
             "with no video track and no user feedback.")
         XCTAssertTrue(
-            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)"),
+            body.contains("call.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)"),
             "handleHold's unhold path must follow a needed renegotiation with " +
             "createOffer()+emitCallOffer(isVideo: true) so outbound video is actually " +
             "restored at the negotiated-SDP level, not just the local track/direction")
@@ -4134,7 +4134,7 @@ final class CallManagerSurvivalControllerReconnectGuardTests: XCTestCase {
         // restart is in progress.
         XCTAssertTrue(
             fnBody.contains("case .reconnecting = callState"),
-            "applySurvivalVideoSend must guard 'if case .reconnecting = callState { return false }' " +
+            "applySurvivalVideoSend must guard 'if case .reconnecting = call.callState { return false }' " +
             "to prevent SDP glare when the survival controller fires during ICE restart"
         )
     }

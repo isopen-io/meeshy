@@ -234,7 +234,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // ont suivi leur code, la liste suit les hôtes (leçon 578).
         "apps/ios/Meeshy/Features/Call/Services/CallManager+Answer.swift",
         "apps/ios/Meeshy/Features/Call/Services/CallManager+Connection.swift",
-        "apps/ios/Meeshy/Features/Call/Services/CallManager+Hold.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallCollaborators/CallVideoSuspension.swift",
         "apps/ios/Meeshy/Features/Call/Services/CallManager+IncomingSignal.swift",
         "apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift",
         "apps/ios/Meeshy/Features/Call/Services/CallManager+Outgoing.swift",

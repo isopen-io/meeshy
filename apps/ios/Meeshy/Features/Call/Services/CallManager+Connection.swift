@@ -131,7 +131,7 @@ extension CallManager {
     }
 
     private func startThermalMonitoring() {
-        thermalMonitor.delegate = self
+        thermalMonitor.delegate = videoSuspension
         thermalMonitor.startMonitoring()
     }
 
