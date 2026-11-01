@@ -104,9 +104,9 @@ function world(options: { media?: readonly Row[]; posts?: readonly MongoDoc[]; q
     delete: jest.fn(async () => undefined),
   };
   const quota = {
-    reserve: jest.fn(async (_params: { userId: string; role: 'registered' | 'anonymous'; bytes: number }) => options.quota ?? ({ allowed: true } as Verdict)),
-    release: jest.fn(async (_params: { userId: string; bytes: number }) => undefined),
-    record: jest.fn(async (_params: { userId: string; bytes: number }) => undefined),
+    reserve: jest.fn(async (_params: { userId: string; role: 'registered' | 'anonymous'; bytes: number; now?: number }) => options.quota ?? ({ allowed: true } as Verdict)),
+    release: jest.fn(async (_params: { userId: string; bytes: number; now?: number }) => undefined),
+    record: jest.fn(async (_params: { userId: string; bytes: number; now?: number }) => undefined),
   };
   return { prisma, storage, quota, rows, posts };
 }
