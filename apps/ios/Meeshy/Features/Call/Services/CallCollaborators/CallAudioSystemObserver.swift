@@ -155,14 +155,14 @@ final class CallAudioSystemObserver: CallAudioSystemObserverProviding {
             // happened to reconcile it.
             let previousSpeaker = call.isSpeaker
             call.isSpeaker = false
-            if !call.applySpeakerRoute() {
+            if !call.audio.applySpeakerRoute() {
                 call.isSpeaker = previousSpeaker
             }
             Logger.calls.info("Audio route: new device available — isSpeaker = \(call.isSpeaker)")
         case .oldDeviceUnavailable:
             // Headset / Bluetooth disconnected — iOS routes back to built-in;
             // re-apply the current speaker preference so RTCAudioSession follows.
-            call.applySpeakerRoute()
+            call.audio.applySpeakerRoute()
             Logger.calls.info("Audio route: device removed — re-applying speaker route (isSpeaker=\(call.isSpeaker))")
         case .override:
             call.reconcileSpeakerWithCurrentOutput()
@@ -171,7 +171,7 @@ final class CallAudioSystemObserver: CallAudioSystemObserverProviding {
                 call.isSpeaker = false
                 break
             }
-            call.applySpeakerRoute()
+            call.audio.applySpeakerRoute()
         }
     }
 
@@ -195,7 +195,7 @@ final class CallAudioSystemObserver: CallAudioSystemObserverProviding {
         // options), then notify libwebrtc that the session cycled so it
         // restarts its audio I/O unit. Re-apply the speaker route last, once
         // the engine is live again.
-        call.configureAudioSession()
+        call.audio.configureAudioSession()
         call.audioSessionQueue.async { [weak call] in
             // Re-check INSIDE the queue, not just via the `callState.isActive`
             // guard above: a hangup can race this async dispatch from a
@@ -224,7 +224,7 @@ final class CallAudioSystemObserver: CallAudioSystemObserverProviding {
         }
         Task { @MainActor [weak call] in
             _ = await cancellableSleep(for: .seconds(QualityThresholds.mediaServicesResetSpeakerDelaySeconds))
-            call?.applySpeakerRoute()
+            call?.audio.applySpeakerRoute()
         }
     }
 

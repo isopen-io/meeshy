@@ -100,7 +100,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                 // journal déjà reçu reste dans le service et se réaffiche à
                 // la réouverture — seule resetForCallEnd le purge.
                 guard call.transcriptionService.isShowingOverlay else { return }
-                let segment = CallManager.makeTranscriptionSegment(from: event)
+                let segment = CallTranscriptionSegmentFactory.makeTranscriptionSegment(from: event)
                 call.transcriptionService.receiveTranslatedSegment(segment)
             }
             .store(in: &cancellables)
@@ -294,7 +294,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                     if !ackResult.joined {
                         Logger.calls.warning("Socket reconnect — call:join ACK timed out (callId=\(callId)), proceeding anyway")
                     }
-                    call.flushPendingIceCandidates()
+                    call.reconnector.flushPendingIceCandidates()
                     // Re-sync video state with the peer. The gateway resets the peer's
                     // call:media-toggled view when our socket disconnects; after reconnect
                     // the peer defaults to assuming our camera is on, which is wrong if we
@@ -367,7 +367,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                     // ViewController` exige `.videoChat` : sans cette ré-application
                     // la session reste en `.voiceChat` sur escalade unilatérale et
                     // le PiP peut refuser de démarrer.
-                    call.updateAudioSessionModeForCurrentVideoState()
+                    call.audio.updateAudioSessionModeForCurrentVideoState()
                     // Le capteur de proximité doit se désarmer/réarmer en miroir de
                     // `isVideoUIActive` — sans cette ligne il reste actif pendant tout
                     // un appel vidéo escaladé unilatéralement par le pair et bloque
@@ -433,7 +433,7 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
                 // relance, les allocations gardent des identifiants qui expirent.
                 switch TurnCredentialRefreshPolicy.iceAction(after: call.callState) {
                 case .inert: return
-                case .rearmReconnect: call.scheduleICERestart(attempt: call.reconnectAttempt, backoffSeconds: 0)
+                case .rearmReconnect: call.reconnector.scheduleICERestart(attempt: call.reconnectAttempt, backoffSeconds: 0)
                 case .restartIce: self?.restartIceOnLiveCall(for: call)
                 }
             }

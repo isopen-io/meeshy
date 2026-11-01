@@ -352,7 +352,7 @@ final class CallViewAccessibilityTests: XCTestCase {
         let source = try callViewSource()
         var searchStart = source.startIndex
         var sites = 0
-        while let range = source.range(of: "callManager.switchCamera()", range: searchStart..<source.endIndex) {
+        while let range = source.range(of: "callManager.cameraActuator.switchCamera()", range: searchStart..<source.endIndex) {
             sites += 1
             let start = source.index(range.lowerBound, offsetBy: -500, limitedBy: source.startIndex) ?? source.startIndex
             let vicinity = String(source[start..<range.upperBound])
@@ -427,7 +427,7 @@ final class CallViewAccessibilityTests: XCTestCase {
         // Regression guard: the camera's visual state is `.warning` when the
         // survival layer paused it — not the camera's real on/off state.
         let source = try callViewSource()
-        guard let range = source.range(of: "callManager.toggleVideo()") else {
+        guard let range = source.range(of: "callManager.cameraActuator.toggleVideo()") else {
             XCTFail("CallView must wire the video toggle action")
             return
         }

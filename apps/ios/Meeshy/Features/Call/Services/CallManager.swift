@@ -409,12 +409,6 @@ final class CallManager: ObservableObject, Sendable {
     /// Drives the graceful audio-only survival layer from quality samples.
     let videoSurvivalController: VideoSurvivalController
     let ringbackPlayer = RingbackTonePlayer()
-    // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
-    // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
-    // are cooperative, energy-efficient (no RunLoop wakeup overhead), and
-    // immediately stop their work loop on cancel.
-    var durationTask: Task<Void, Never>?
-    var heartbeatTask: Task<Void, Never>?
     /// Phase 2 fix — Bug 2 (caller stays ringing while callee shows Connecting).
     /// Tracks the startLocalMedia Task so that:
     ///   1. `emitCallJoin` can be sent IMMEDIATELY (decoupled from media init)
@@ -444,14 +438,6 @@ final class CallManager: ObservableObject, Sendable {
     /// From `CallKitDelegateProxy.provider(_:timedOutPerforming:)`.
     func discardTimedOutAnswerAction(_ action: CXAnswerCallAction) { answerActionHold.discardTimedOut(action) }
 
-    /// Caller-side ringing timeout — ends the call as `.missed` if the recipient
-    /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
-    /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
-    var outgoingRingTimeoutTask: Task<Void, Never>?
-    /// Callee-side twin: an incoming call still ringing well past the ring budget — its `call:ended` lost (socket
-    /// mounted after the caller hung up, `call_cancel` push missed) — ends locally as missed. Without it the state
-    /// stayed `.ringing` with no exit: every later incoming call answered « busy » and `startCall` refused.
-    var incomingRingTimeoutTask: Task<Void, Never>?
     /// Task de setup d'un appel sortant (force-leave + ACK + media + listen).
     /// Auparavant un Task non-tracké : si endCallInternal fire pendant le
     /// setup (ex: CallKit teardown), le Task continuait à tourner — gardant
@@ -569,18 +555,14 @@ final class CallManager: ObservableObject, Sendable {
     /// lit, streaming) while `isVideoEnabled == false` — a privacy regression, not
     /// just a UI desync.
     var cameraSwitchTask: Task<Void, Never>?
-    /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
-    /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
-    var audioActivationFallbackTask: Task<Void, Never>?
-    /// L'app a activé la session elle-même pendant cet appel (sonnerie in-app,
-    /// filet « micro muet ») : elle devra la rendre, CallKit ou pas.
-    var audioSessionSelfActivated = false
     var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
     // here and replayed after the socket reconnects + emitCallJoin fires.
     var pendingIceCandidates: [[String: Any]] = []
     var cancellables = Set<AnyCancellable>()
-    let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
+    /// La file sérielle de la session audio, créée par `CallAudioSessionController` :
+    /// `let` Sendable, que le proxy CallKit lit depuis sa propre file privée.
+    let audioSessionQueue: DispatchQueue
 
     /// C3 — `true` quand la session de capture caméra a été INTERROMPUE par le
     /// système, donc que le pair doit voir notre avatar plutôt qu'un dernier
@@ -611,11 +593,6 @@ final class CallManager: ObservableObject, Sendable {
     /// resumes automatically on unhold. Cleared on unhold or call teardown.
     var isVideoSuspendedByHold = false
 
-    // Network monitoring
-    let networkMonitor = NWPathMonitor()
-    let networkQueue = DispatchQueue(label: "me.meeshy.callmanager.network")
-    var lastNetworkPath: NWPath.Status = .satisfied
-    var lastNetworkInterfaceType: NWInterface.InterfaceType? = nil
     let thermalMonitor = ThermalStateMonitor()
 
     // CallKit
@@ -652,30 +629,8 @@ final class CallManager: ObservableObject, Sendable {
     static let maxEndReconciliationArmings = 4
     static let endReconciliationArmingCapacity = 64
 
-    #if canImport(WebRTC)
-    /// Paresseux (#7955) : `PiPCallController` monte une vue AVKit à sa naissance.
-    lazy var pip: PiPCallProviding = PiPCallController.shared
-    #else
-    let pip: PiPCallProviding = NoOpPiPController()
-    #endif
-    /// `true` entre un tap « agrandir » (restore) et la fermeture effective du
-    /// PiP, pour distinguer ce chemin de la croix système. Le reste de l'état et
-    /// les rappels vivent dans `CallManager+SystemPiP.swift` (#8435).
-    var pipRestoring = false
-    var pipStartOrigin: CallPiPStartOrigin = .automatic
     /// Remonte les `PiPSourceAnchor` à chaque fermeture de fenêtre (#8435).
     @Published var pipAnchorGeneration = 0
-    weak var pipConfiguredTrack: AnyObject?
-    weak var pipConfiguredSource: UIView?
-    /// Mode d'affichage en vigueur au démarrage de la fenêtre PiP, restauré à sa
-    /// fermeture. Poser `.pip` inconditionnellement dégradait en pilule un appel
-    /// qui était plein écran (retour dans l'app) ou en bulle (repli manuel).
-    ///
-    /// `nil` = aucune fenêtre n'a démarré. Indispensable :
-    /// `failedToStartPictureInPictureWithError` appelle `onStop` sans qu'`onStart`
-    /// ait tiré, et une valeur persistante y ferait restaurer le mode du PiP
-    /// PRÉCÉDENT.
-    var pipDisplayModeAtStart: CallDisplayMode?
 
     /// Dernière valeur de `call:transcription-active` annoncée aux pairs.
     /// Évite de ré-émettre à chaque réconciliation — et surtout de renvoyer
@@ -700,6 +655,22 @@ final class CallManager: ObservableObject, Sendable {
     let turnCredentials: CallTurnCredentialsProviding
     /// La surveillance des états transitoires (`CallReliabilityMonitor`).
     let reliabilityMonitor: CallReliabilityMonitorProviding
+    /// Le chemin réseau pendant l'appel (`CallNetworkPathObserver`).
+    let networkPathObserver: CallNetworkPathObserverProviding
+    /// Les délais de sonnerie de l'appelant et de l'appelé (`CallRingTimeouts`).
+    let ringTimeouts: CallRingTimeoutsProviding
+    /// Le PiP système (`CallSystemPiPController`).
+    let systemPiP: CallSystemPiPControllerProviding
+    /// La session audio de l'appel (`CallAudioSessionController`).
+    let audio: CallAudioSessionControllerProviding
+    /// La vidéo sortante qui s'arrête ou se fige : attente, survie, chaleur (`CallVideoSuspension`).
+    let videoSuspension: CallVideoSuspensionProviding
+    /// La caméra : coupure, bascule, choix de l'appareil (`CallCameraActuator`).
+    let cameraActuator: CallCameraActuatorProviding
+    /// La reconnexion : relance ICE et candidats en attente (`CallReconnector`).
+    let reconnector: CallReconnectorProviding
+    /// Le chrono affiché et le battement de cœur (`CallLiveClock`).
+    let liveClock: CallLiveClockProviding
 
     private init(
         signalingRouter: CallSignalingRouterProviding = CallSignalingRouter(),
@@ -709,7 +680,15 @@ final class CallManager: ObservableObject, Sendable {
         incomingRing: CallIncomingRingProviding = CallIncomingRing(),
         outgoingDial: CallOutgoingDialProviding = CallOutgoingDial(),
         turnCredentials: CallTurnCredentialsProviding = CallTurnCredentials(),
-        reliabilityMonitor: CallReliabilityMonitorProviding = CallReliabilityMonitor()
+        reliabilityMonitor: CallReliabilityMonitorProviding = CallReliabilityMonitor(),
+        networkPathObserver: CallNetworkPathObserverProviding = CallNetworkPathObserver(),
+        ringTimeouts: CallRingTimeoutsProviding = CallRingTimeouts(),
+        systemPiP: CallSystemPiPControllerProviding = CallSystemPiPController(),
+        audio: CallAudioSessionControllerProviding = CallAudioSessionController(),
+        videoSuspension: CallVideoSuspensionProviding = CallVideoSuspension(),
+        cameraActuator: CallCameraActuatorProviding = CallCameraActuator(),
+        reconnector: CallReconnectorProviding = CallReconnector(),
+        liveClock: CallLiveClockProviding = CallLiveClock()
     ) {
         self.signalingRouter = signalingRouter
         self.sdpSignaler = sdpSignaler
@@ -719,11 +698,20 @@ final class CallManager: ObservableObject, Sendable {
         self.outgoingDial = outgoingDial
         self.turnCredentials = turnCredentials
         self.reliabilityMonitor = reliabilityMonitor
+        self.networkPathObserver = networkPathObserver
+        self.ringTimeouts = ringTimeouts
+        self.systemPiP = systemPiP
+        self.audio = audio
+        self.videoSuspension = videoSuspension
+        self.cameraActuator = cameraActuator
+        self.reconnector = reconnector
+        self.audioSessionQueue = audio.audioSessionQueue
+        self.liveClock = liveClock
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
 
-        callProvider = CXProvider(configuration: Self.makeProviderConfiguration())
+        callProvider = CXProvider(configuration: CallKitProviderConfiguration.make())
 
         let delegateProxy = CallKitDelegateProxy()
         delegateProxy.manager = self
@@ -732,23 +720,11 @@ final class CallManager: ObservableObject, Sendable {
 
         // Wire the survival controller now that `self` exists. The controller holds
         // the actuator weakly, so no retain cycle (CallManager owns the controller).
-        self.videoSurvivalController.attach(actuator: self)
-        self.videoSurvivalController.$isVideoSuspended
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] suspended in
-                guard let self else { return }
-                self.isVideoSuspended = suspended
-                // Le gel a DEUX propriétaires : le contrôleur (politique) et
-                // WebRTCService (encodeur). `reset()` n'efface que le premier ;
-                // sans ce dégel branché sur le FRONT DESCENDANT, un reset
-                // pendant un gel (toggleVideo, unhold, thermique critique, fin
-                // d'appel) épingle l'encodeur au plancher pour tout le reste de
-                // l'appel, sans affordance ni chemin de reprise. `removeDuplicates()`
-                // en amont ne laisse donc passer que les vraies transitions.
-                if !suspended { self.builtWebRTCService?.unfreezeVideoAfterSurvival() }
-            }
-            .store(in: &cancellables)
+        self.videoSurvivalController.attach(actuator: videoSuspension)
+        videoSuspension.attach(to: self)
+        cameraActuator.attach(to: self)
+        reconnector.attach(to: self)
+        videoSuspension.bindSurvivalFreeze()
 
         sdpSignaler.isCurrentCall = { [weak self] callId in self?.currentCallId == callId }
         appStateObserver.attach(to: self)
@@ -756,53 +732,14 @@ final class CallManager: ObservableObject, Sendable {
         outgoingDial.attach(to: self)
         turnCredentials.attach(to: self)
         reliabilityMonitor.attach(to: self)
+        ringTimeouts.attach(to: self)
+        systemPiP.attach(to: self)
+        audio.attach(to: self)
+        liveClock.attach(to: self)
         signalingRouter.start(routingTo: self)
-        startNetworkMonitoring()
+        networkPathObserver.start(observing: self)
         audioSystemObserver.start(observing: self)
         Logger.calls.info("CallManager initialized")
-    }
-
-    /// What CallKit is told about Meeshy calls: video, groups, handle type,
-    /// Recents, brand icon and ringtone.
-    private static func makeProviderConfiguration() -> CXProviderConfiguration {
-        let config = CXProviderConfiguration()
-        config.supportsVideo = true
-        config.maximumCallsPerCallGroup = 1
-        // Restauré à 2 (rollback audit P2-iOS-5 qui l'avait baissé à 1) :
-        // entre commits 4dbb387e (état fonctionnel) et HEAD, lowering this
-        // value à 1 a coïncidé avec la régression "CallKit teardown autonome
-        // à ~3s sur appels sortants". Le couple maximumCallGroups=1 +
-        // supportsHolding=false était valide en théorie mais a confondu
-        // l'iOS runtime au point de tuer l'appel avant que
-        // provider:didActivate:audioSession ne se déclenche. 2 est la valeur
-        // par défaut (sans config) et celle utilisée par FaceTime/WhatsApp.
-        config.maximumCallGroups = 2
-        config.supportedHandleTypes = [.generic]
-        config.includesCallsInRecents = true
-        // Custom CallKit icon: a 40x40 pt template PNG named "CallKitIcon".
-        // `iconTemplateImageData` is a TEMPLATE — iOS discards the colour
-        // channels and reads the alpha channel only, so the asset carries an
-        // opaque glyph on a fully transparent background. An opaque PNG would
-        // render as a filled rectangle.
-        //
-        // Never silence a miss here: this branch was guarded by a bare `if let`
-        // against an asset that had never existed, so the call card shipped
-        // without brand identity from the very first build and nothing said so.
-        if let icon = UIImage(named: "CallKitIcon"), let data = icon.pngData() {
-            config.iconTemplateImageData = data
-        } else {
-            Logger.calls.error("[CALLKIT] CallKitIcon asset missing — call UI ships without brand identity")
-            assertionFailure("CallKitIcon asset missing from Assets.xcassets")
-        }
-        // Phase 1.5 fix — explicit ringtone for incoming calls.
-        // CallKit's default `ringtoneSound = nil` falls back to system ringtone,
-        // but iOS 17+ has been reporting unreliable behavior (UI shows but no
-        // audio) on real devices. Apple's SOTA pattern (FaceTime, WhatsApp) is
-        // to bundle a custom .caf and set it explicitly. The file must be in
-        // the main app bundle, ≤30s, CAF format.
-        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.3
-        config.ringtoneSound = "Ringtone.caf"
-        return config
     }
 
     // MARK: - System Picture-in-Picture
@@ -820,23 +757,11 @@ final class CallManager: ObservableObject, Sendable {
         )
     }
 
-    /// Le PiP vidéo système rend le flux DISTANT : il peut s'activer dès que le
-    /// track distant est présent et la caméra distante allumée, sur un appareil
-    /// compatible (≠ iOS-app-on-Mac) — même si la caméra locale est coupée
-    /// (escalade vidéo unilatérale d'un appel audio).
-    var canActivateSystemPiP: Bool {
-        hasRemoteVideoTrack && isRemoteVideoEnabled && pip.isPiPSupported
-    }
+    var canActivateSystemPiP: Bool { systemPiP.canActivateSystemPiP }
 
-    /// Framerate cible du PiP selon l'état thermique (vignette petite → throttle
-    /// agressif sous stress). Partagé par la config et le handler thermal.
-    func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int {
-        switch state {
-        case .critical: return QualityThresholds.pipFrameRateCritical
-        case .serious: return QualityThresholds.pipFrameRateSerious
-        default: return QualityThresholds.pipFrameRateDefault
-        }
-    }
+    var pip: PiPCallProviding { systemPiP.pip }
+
+    func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int { systemPiP.pipFrameRate(for: state) }
 
 }
 

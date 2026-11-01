@@ -37,9 +37,9 @@ final class CallAwaitingOfferPolicyTests: XCTestCase {
     // MARK: - Câblage
 
     func test_attemptReconnection_consultsTheAwaitedOffer() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+Reconnection.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallReconnector.swift")
         XCTAssertTrue(
-            source.contains("reconnectingAllowed(from: callState, awaitingRemoteOffer: isAwaitingRemoteOffer)"),
+            source.contains("reconnectingAllowed(from: call.callState, awaitingRemoteOffer: call.isAwaitingRemoteOffer)"),
             "attemptReconnection doit refuser l'ICE restart tant que l'offre de l'appelant n'est pas arrivée"
         )
     }

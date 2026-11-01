@@ -6,7 +6,7 @@ import MeeshySDK
 // d'écran (#8063). Statiques, sans état : elles se lisent et se testent sans
 // `CallManager`.
 
-extension CallManager {
+enum CallTranscriptionSegmentFactory {
     /// Maps a gateway-translated segment into the local `CallTranscriptionSegment` model.
     /// `text` ALWAYS carries the ORIGINAL (untranslated) text — never overwritten by
     /// `translatedText` — so the UI can offer an original/translated toggle

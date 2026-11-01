@@ -486,7 +486,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         // Force displayMode = .fullScreen (cf. startCall pour le rationale).
         call.displayMode = .fullScreen
         call.callState = .ringing(isOutgoing: false)
-        call.startIncomingRingTimeout()
+        call.ringTimeouts.startIncomingRingTimeout()
     }
 
     /// Ringing-time setup shared by both incoming paths once the peer connection
@@ -498,7 +498,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         call.turnCredentials.armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
         call.applyNegotiationRole()
         if source == .voipPush { Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin") }
-        call.configureAudioSession()
+        call.audio.configureAudioSession()
         call.reliabilityMonitor.startReliabilityMonitor()
         // Audit fix (calling-stack audit 2026-08-24) — arm the background
         // observer HERE, at ring time, not only from transitionToConnected().
