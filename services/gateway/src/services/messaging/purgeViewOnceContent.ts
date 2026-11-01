@@ -87,6 +87,37 @@ async function attachmentsGone(
   }
 }
 
+/**
+ * Ce qu'une pièce RESTANTE (octets en reprise, audit F2) dit encore de son
+ * contenu : transcription, traductions, légendes, nom d'origine, empreinte
+ * visuelle, métadonnées. La ligne ne garde que la CLÉ du fichier, pour la
+ * reprise. `originalName` est requis au schéma : vidé, jamais `null`.
+ * Best-effort : la passe suivante rejoue.
+ */
+const DERIVED_CONTENT_ERASURE = {
+  originalName: '',
+  transcription: null,
+  translations: null,
+  caption: null,
+  captionTranslations: null,
+  alt: null,
+  altTranslations: null,
+  thumbHash: null,
+  metadata: null,
+} as const;
+
+async function forgetDerivedContent(
+  prisma: Pick<PrismaClient, 'messageAttachment'>,
+  messageId: string,
+  onError: PurgeViewOnceOptions['onError'],
+): Promise<void> {
+  try {
+    await prisma.messageAttachment.updateMany({ where: { messageId }, data: DERIVED_CONTENT_ERASURE });
+  } catch (err) {
+    onError?.(messageId, err);
+  }
+}
+
 export async function purgeDueViewOnceContent(
   prisma: ViewOncePurgePrisma & Pick<PrismaClient, 'messageAttachment'> & SharedTranslationErasureClient,
   options: PurgeViewOnceOptions,
@@ -123,6 +154,7 @@ export async function purgeDueViewOnceContent(
       );
       const filesPending = message.attachments.length > 0 && !(await attachmentsGone(prisma, message.id));
       const firstPurge = !(message.viewOnceBurnedAt instanceof Date);
+      if (filesPending) await forgetDerivedContent(prisma, message.id, options.onError);
       try {
         await prisma.message.update({
           where: { id: message.id },
