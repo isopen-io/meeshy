@@ -82,10 +82,10 @@ describe('PresenceVisibilityService.resolveForTarget', () => {
     expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 
-  it('shows full presence to an accepted friend when preferences are on', async () => {
+  it('shows an accepted friend ONLINE only — never the last seen, even when the target allows it (#13928)', async () => {
     const { service } = makeMocks({ friend: true });
     const v = await service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
-    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: false });
   });
 
   it('hides presence for an affiliate relation without an accepted friendship', async () => {
@@ -202,7 +202,7 @@ describe('PresenceVisibilityService.resolveForTargets (batch)', () => {
       blockedTargetIds: ['blocked'],
     });
     const map = await service.resolveForTargets({ userId: VIEWER, role: 'USER' }, IDS);
-    expect(map.get('friend')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(map.get('friend')).toEqual({ showOnline: true, showLastSeenTimestamp: false });
     expect(map.get('stranger')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
     expect(map.get('blocked')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
     expect(map.get('mate')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
@@ -294,13 +294,13 @@ describe('PresenceVisibilityService.resolveForTarget — la loi d\'amitié attei
     expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 
-  it('une demande ACCEPTÉE, même en présence d\'une pending/rejected du même couple, révèle la présence', async () => {
+  it('une demande ACCEPTÉE, même en présence d\'une pending/rejected du même couple, révèle « en ligne » seulement', async () => {
     const service = servicePresentToFriendshipRows([
       { id: 'fr-old', senderId: VIEWER, receiverId: TARGET, status: 'rejected' },
       { id: 'fr-new', senderId: TARGET, receiverId: VIEWER, status: 'accepted' },
     ]);
     const v = await service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
-    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: false });
   });
 });
 
@@ -315,6 +315,7 @@ describe('PresenceVisibilityService — le niveau effectif atteint le verdict SE
   const LOW_ID = 'a'.repeat(24);
   const HIGH_ID = 'b'.repeat(24);
   const FULL = { showOnline: true, showLastSeenTimestamp: true };
+  const ONLINE_ONLY = { showOnline: true, showLastSeenTimestamp: false };
   const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
 
   const ACCEPTED_AT = new Date('2026-09-01T00:00:00.000Z');
@@ -342,12 +343,20 @@ describe('PresenceVisibilityService — le niveau effectif atteint le verdict SE
   const resolve = (service: PresenceVisibilityService) =>
     service.resolveForTarget({ userId: LOW_ID, role: 'USER' }, { id: HIGH_ID, deactivatedAt: null });
 
+  it('un lien accordé FRIEND / FRIEND ne sert que « en ligne » (#13928)', async () => {
+    await expect(resolve(serviceWithRelation({ grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND' }))).resolves.toEqual(ONLINE_ONLY);
+  });
+
   it.each([
-    ['FRIEND', 'FRIEND'],
+    ['CLOSE', 'CLOSE'],
     ['CLOSE', 'BLOOD'],
     ['BLOOD', 'BLOOD'],
-  ])('un lien accordé %s / %s sert la présence', async (low, high) => {
+  ])('un lien accordé %s / %s sert la présence détaillée', async (low, high) => {
     await expect(resolve(serviceWithRelation({ grantedByLow: low, grantedByHigh: high }))).resolves.toEqual(FULL);
+  });
+
+  it('le niveau effectif est le MINIMUM des deux accords : Proche d\'un côté, Ami de l\'autre ⇒ Ami', async () => {
+    await expect(resolve(serviceWithRelation({ grantedByLow: 'CLOSE', grantedByHigh: 'FRIEND' }))).resolves.toEqual(ONLINE_ONLY);
   });
 
   it.each([
@@ -356,6 +365,10 @@ describe('PresenceVisibilityService — le niveau effectif atteint le verdict SE
     ['PUBLIC', 'BLOOD'],
   ])('un lien accordé %s / %s ne sert rien (sous Ami, ou à sens unique)', async (low, high) => {
     await expect(resolve(serviceWithRelation({ grantedByLow: low, grantedByHigh: high }))).resolves.toEqual(HIDDEN);
+  });
+
+  it('un Ami qui monte à Proche reçoit la dernière connexion (la valeur servie suit le niveau)', async () => {
+    await expect(resolve(serviceWithRelation({ grantedByLow: 'CLOSE', grantedByHigh: 'CLOSE' }, true))).resolves.toEqual(FULL);
   });
 
   it('une baisse gravée après l\'acceptation l\'emporte sur la vieille demande acceptée', async () => {
@@ -368,10 +381,10 @@ describe('PresenceVisibilityService — le niveau effectif atteint le verdict SE
   it('une ligne née sous Ami SANS baisse ne cache pas la présence d\'un ami accepté avant le rattrapage', async () => {
     await expect(
       resolve(serviceWithRelation({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' }, true)),
-    ).resolves.toEqual(FULL);
+    ).resolves.toEqual(ONLINE_ONLY);
   });
 
   it('sans ligne, la demande acceptée se lit toujours Ami (aucune rétrogradation rétroactive)', async () => {
-    await expect(resolve(serviceWithRelation(null, true))).resolves.toEqual(FULL);
+    await expect(resolve(serviceWithRelation(null, true))).resolves.toEqual(ONLINE_ONLY);
   });
 });

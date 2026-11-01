@@ -135,7 +135,7 @@ const lawFaithfulTargetResolver =
       ? resolvePresenceVisibility({
           isSelf: viewer.userId === target.id,
           viewerRole: viewer.role,
-          relationLevel: friendsOfViewer.has(target.id) ? 'FRIEND' : 'PUBLIC',
+          relationLevel: friendsOfViewer.has(target.id) ? 'CLOSE' : 'PUBLIC',
           targetShowOnlineStatus: true,
           targetShowLastSeen: true,
           targetIsDeactivated: false,
@@ -902,7 +902,7 @@ describe('POST /conversations/:id/invite', () => {
     // Régime STRICT : l'invitation crée une co-participation, et une
     // co-participation n'est pas une relation — la présence de l'invité suit
     // l'autorisation PROPRE de l'inviteur.
-    it('invité ami accepté ⇒ présence servie', async () => {
+    it('invité Proche ⇒ présence détaillée servie', async () => {
       mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver(new Set([INVITEE_ID])));
 
       const payload = await invite(invitedRow());

@@ -76,8 +76,15 @@ describe('resolvePresenceVisibility — pair non privilégié : gating par relat
     expect(resolvePresenceVisibility(inputFor({ relationLevel: 'PUBLIC' }))).toEqual(HIDDEN);
   });
 
-  it('autorise via connexion (amitié acceptée)', () => {
-    expect(resolvePresenceVisibility(inputFor({ relationLevel: 'FRIEND' }))).toEqual(FULL);
+  it('un Ami voit « en ligne » seulement — jamais la dernière connexion (#13928)', () => {
+    expect(resolvePresenceVisibility(inputFor({ relationLevel: 'FRIEND' }))).toEqual({
+      showOnline: true,
+      showLastSeenTimestamp: false,
+    });
+  });
+
+  it('un Proche voit la présence détaillée (#13928)', () => {
+    expect(resolvePresenceVisibility(inputFor({ relationLevel: 'CLOSE' }))).toEqual(FULL);
   });
 
   it('un co-participant de conversation qui n\'est pas ami ne voit RIEN — partager une conversation n\'est pas une relation', () => {
@@ -98,13 +105,13 @@ describe('resolvePresenceVisibility — respect des préférences de la cible po
 
   it('online visible mais last seen masqué quand targetShowLastSeen=false', () => {
     expect(
-      resolvePresenceVisibility(inputFor({ relationLevel: 'FRIEND', targetShowOnlineStatus: true, targetShowLastSeen: false })),
+      resolvePresenceVisibility(inputFor({ relationLevel: 'CLOSE', targetShowOnlineStatus: true, targetShowLastSeen: false })),
     ).toEqual({ showOnline: true, showLastSeenTimestamp: false });
   });
 
-  it('online + last seen visibles quand les deux préférences sont actives', () => {
+  it('online + last seen visibles quand les deux préférences sont actives (Proche)', () => {
     expect(
-      resolvePresenceVisibility(inputFor({ relationLevel: 'FRIEND', targetShowOnlineStatus: true, targetShowLastSeen: true })),
+      resolvePresenceVisibility(inputFor({ relationLevel: 'CLOSE', targetShowOnlineStatus: true, targetShowLastSeen: true })),
     ).toEqual(FULL);
   });
 });
@@ -119,7 +126,7 @@ describe('applyPresenceVisibility — projection sans mutation', () => {
   });
 
   it('showOnline=true / lastSeen=false ⇒ isOnline conservé, lastActiveAt masqué', () => {
-    const out = applyPresenceVisibility(profile(), { showOnline: true, showLastSeenTimestamp: false });
+    const out = applyPresenceVisibility(profile(), { showOnline: true, showLastSeenTimestamp: false }, 0);
     expect(out.isOnline).toBe(true);
     expect(out.lastActiveAt).toBeNull();
   });
