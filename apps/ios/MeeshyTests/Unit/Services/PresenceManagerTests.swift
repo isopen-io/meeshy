@@ -103,6 +103,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
         "Settings/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/FeedComposerPlaceholder.swift": "soi — l'avatar du compte connecté",
         "Stories/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": "entité — groupe, communauté, conversation, message sans compte",
@@ -302,14 +303,30 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(entry.state(now: now.addingTimeInterval(400)), .offline)
     }
 
-    func test_noteActivity_userTheServerSaysOnline_keepsIsOnline() throws {
-        sut.presenceMap["typer-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+    func test_noteActivity_userTheServerSaysOnlineWithADate_keepsIsOnlineAndRefreshesTheDate() throws {
+        sut.presenceMap["typer-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date().addingTimeInterval(-240))
 
         sut.noteActivity(userId: "typer-1")
 
         let entry = try XCTUnwrap(sut.presenceMap["typer-1"])
         XCTAssertTrue(entry.isOnline)
-        XCTAssertNotNil(entry.lastActiveAt)
+        let lastActiveAt = try XCTUnwrap(entry.lastActiveAt)
+        XCTAssertLessThan(Date().timeIntervalSince(lastActiveAt), 5)
+    }
+
+    /// presence-ami-binaire (#13928) : un Ami servi « en ligne » n'a pas de
+    /// `lastActiveAt`, et le serveur le tient tant qu'il est connecté. La frappe
+    /// lui datait une activité, la garde anti-stale l'éteignait cinq minutes
+    /// plus tard alors que le serveur le servait toujours en ligne.
+    func test_noteActivity_friendServedOnlineWithoutLastActiveAt_staysGreenWhileServedOnline() throws {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        sut.noteActivity(userId: "friend-1")
+
+        let entry = try XCTUnwrap(sut.presenceMap["friend-1"])
+        XCTAssertTrue(entry.isOnline)
+        XCTAssertNil(entry.lastActiveAt)
+        XCTAssertEqual(entry.state(now: Date().addingTimeInterval(600)), .online)
     }
 
     func test_noteActivity_currentUser_neverWritesTheMap() {
@@ -397,6 +414,33 @@ final class PresenceManagerTests: XCTestCase {
         sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: true, lastActiveAt: nil)])
 
         XCTAssertEqual(sut.presenceState(for: "friend-1"), .online)
+    }
+
+    /// presence-ami-binaire (#13928) : un Ami n'a pas de `lastActiveAt` servi.
+    /// Une entrée `(online, date)` reçue quand il était Proche est REMPLACÉE par
+    /// le snapshot, jamais prolongée par la date locale.
+    func test_ingestSnapshot_friendWithoutLastActiveAt_replacesAProcheEntry() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: true, lastActiveAt: nil)])
+
+        XCTAssertNil(sut.presenceMap["friend-1"]?.lastActiveAt)
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .online)
+    }
+
+    func test_ingestSnapshot_friendOffline_replacesAProcheEntry_andRendersNothing() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.ingestSnapshot([UserStatusEvent(userId: "friend-1", username: "friend", isOnline: false, lastActiveAt: nil)])
+
+        XCTAssertNil(sut.presenceMap["friend-1"]?.lastActiveAt)
+        XCTAssertEqual(sut.presenceState(for: "friend-1"), .offline)
+    }
+
+    func test_resolvedState_friendServedOnlineWithoutLastActiveAt_isOnline() {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        XCTAssertEqual(sut.resolvedState(userId: "friend-1", isOnline: false, lastActiveAt: Date().addingTimeInterval(-120)), .online)
     }
 
     func test_disconnect_isWiredToNoteSocketDisconnected() throws {
