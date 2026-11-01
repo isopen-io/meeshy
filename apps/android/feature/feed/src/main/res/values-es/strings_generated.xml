@@ -66,7 +66,11 @@
     <string name="feed_retry">Reintentar</string>
     <string name="feed_scene_more">Escena %1$d, y %2$d más</string>
     <string name="feed_scene_next">Escena siguiente</string>
+    <string name="feed_scene_pause">Detiene la reproducción de la escena</string>
     <string name="feed_scene_previous">Escena anterior</string>
+    <string name="feed_scene_resume">Reanuda la reproducción de la escena</string>
+    <string name="feed_scene_sound_mute">Silenciar el sonido</string>
+    <string name="feed_scene_sound_unmute">Reactivar el sonido</string>
     <string name="feed_scene_tile">Escena %1$d</string>
     <string name="feed_secondary_translation_a11y">Traducción en %1$s: %2$s</string>
     <string name="feed_translated">Traducción disponible</string>

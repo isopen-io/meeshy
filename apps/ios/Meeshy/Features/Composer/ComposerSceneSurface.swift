@@ -404,7 +404,8 @@ struct ComposerSceneSurface: View {
                                  cameraIsArmed: cameraStage != .off,
                                  bottomPanelIsOpen: band != nil || timelinePanel != nil || sceneEffectIsOpen,
                                  timelineIsOpen: timelinePanel != nil,
-                                 objectIsSelected: selectionColumn != nil)
+                                 objectIsSelected: selectionColumn != nil,
+                                 propertiesAreOpen: propertiesSheet != nil)
     }
 
     /// La colonne droite ne sert plus le repos : ses effets de scène vivent
@@ -420,7 +421,11 @@ struct ComposerSceneSurface: View {
         return toolIsOpen || servesSomethingElse || !trailingActions.isEmpty
     }
 
-    private var historyIsOnTheScene: Bool { ComposerRestChrome.historyIsShown(restState) }
+    /// Le rail droit ne recueille ↶ ↷ que s'ils ne sont ni sur la scène, ni
+    /// retirés avec elle quand elle se réduit (#14191).
+    private var historyIsOnTheScene: Bool {
+        ComposerRestChrome.historyIsShown(restState) || ComposerRestChrome.historyIsWithdrawn(restState)
+    }
 
     private var railLaneLeading: CGFloat {
         ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: false).leading

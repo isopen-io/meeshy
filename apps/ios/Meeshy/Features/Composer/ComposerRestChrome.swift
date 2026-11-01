@@ -39,9 +39,14 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
 ///
 /// Au repos : ✕ en haut à gauche, ↶ ↷ avec un historique, la rangée des diapos
 /// dès deux diapos, la colonne des outils. Un outil ouvert, une frappe ou le
-/// viseur retirent tout ; un panneau du bas (fond, cadrage, effets, frise)
-/// retire la colonne et garde ✕. Un objet sélectionné retire ✕ et remplace la
+/// viseur retirent tout. Un objet sélectionné retire ✕ et remplace la
 /// colonne, au même endroit, par ses options d'édition (#13957, R6).
+///
+/// **La scène réduite est nue** (#14191, même loi qu'Android #14186) : un
+/// panneau du bas (fond, cadrage, effets, frise) ou les propriétés d'un objet
+/// réduisent la scène au-dessus d'eux, et ✕, ↶ ↷ et la rangée des diapos ne
+/// s'y posent plus. Au repos, seuls la scène et le panneau restent ; sous une
+/// sélection, ses options restent dans leur colonne.
 nonisolated enum ComposerRestChrome {
 
     /// La marge entre la colonne d'outils et le bord droit de la scène.
@@ -58,6 +63,9 @@ nonisolated enum ComposerRestChrome {
         /// Ses propriétés ouvertes en bas ne sont pas un outil : la colonne
         /// des options reste, pour passer de l'une à l'autre.
         var objectIsSelected: Bool = false
+        /// Les propriétés de l'objet sélectionné occupent le bas : la scène se
+        /// réduit au-dessus d'elles, comme sous un panneau.
+        var propertiesAreOpen: Bool = false
     }
 
     enum SoundAction: Equatable, Sendable {
@@ -78,17 +86,32 @@ nonisolated enum ComposerRestChrome {
 
     static func showsSlideRow(slideCount: Int) -> Bool { slideCount >= 2 }
 
+    static func sceneIsReduced(_ state: State) -> Bool {
+        state.bottomPanelIsOpen || state.propertiesAreOpen
+    }
+
+    static func slideRowIsShown(_ state: State, slideCount: Int) -> Bool {
+        topRowIsShown(state) && !sceneIsReduced(state) && showsSlideRow(slideCount: slideCount)
+    }
+
+    /// ↶ ↷ quittent la scène réduite sans passer au rail droit : le repos
+    /// réduit n'a qu'un geste, refermer ce qui occupe le bas. Un outil ouvert
+    /// garde son historique dans son propre rail.
+    static func historyIsWithdrawn(_ state: State) -> Bool {
+        topRowIsShown(state) && sceneIsReduced(state)
+    }
+
     static func topRowIsShown(_ state: State) -> Bool {
         !state.toolIsOpen && !state.writesText && !state.cameraIsArmed
     }
 
     /// Fermer cède à la sélection : on ne quitte pas le brouillon en éditant.
     static func closeIsShown(_ state: State) -> Bool {
-        topRowIsShown(state) && !state.objectIsSelected
+        topRowIsShown(state) && !state.objectIsSelected && !sceneIsReduced(state)
     }
 
     static func historyIsShown(_ state: State) -> Bool {
-        topRowIsShown(state) && !state.timelineIsOpen
+        topRowIsShown(state) && !state.timelineIsOpen && !sceneIsReduced(state)
     }
 
     static func toolColumnIsShown(_ state: State) -> Bool {

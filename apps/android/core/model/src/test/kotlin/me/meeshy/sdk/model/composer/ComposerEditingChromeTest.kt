@@ -16,7 +16,8 @@ class ComposerEditingChromeTest {
         armed: Boolean = false,
         gestureOpen: Boolean = false,
         reduced: Boolean = false,
-    ) = ComposerEditingChrome.resolve(ComposerEditingChrome.Input(subject, drawing, armed, gestureOpen, sceneReduced = reduced))
+        lane: Boolean = false,
+    ) = ComposerEditingChrome.resolve(ComposerEditingChrome.Input(subject, drawing, armed, gestureOpen, sceneReduced = reduced, laneCleared = lane))
 
     @Test
     fun `at rest the composer shows close, publication and the six tools`() {
@@ -100,6 +101,30 @@ class ComposerEditingChromeTest {
 
         assertThat(setting.rail).isEqualTo(ComposerRailContent.BACKGROUND_OPTIONS)
         assertThat(setting.sceneControls).isFalse()
+    }
+
+    @Test
+    fun `at rest undo and redo sit at the top of the scene`() {
+        assertThat(chrome(ComposerSelectionSubject.NONE).history).isEqualTo(ComposerHistoryPlace.TOP)
+        assertThat(chrome(ComposerSelectionSubject.OBJECT).history).isEqualTo(ComposerHistoryPlace.TOP)
+    }
+
+    @Test
+    fun `an object edited beside a scene that cleared its lane puts undo and redo in that lane, never over the scene`() {
+        val edited = chrome(ComposerSelectionSubject.OBJECT, lane = true)
+
+        assertThat(edited.history).isEqualTo(ComposerHistoryPlace.LANE)
+        assertThat(edited.sceneControls).isTrue()
+    }
+
+    @Test
+    fun `a reduced scene or a quiet chrome shows undo and redo nowhere, lane or not`() {
+        listOf(
+            chrome(ComposerSelectionSubject.OBJECT, reduced = true, lane = true),
+            chrome(ComposerSelectionSubject.BACKGROUND, reduced = true, lane = true),
+            chrome(ComposerSelectionSubject.NONE, gestureOpen = true, reduced = true),
+            chrome(ComposerSelectionSubject.OBJECT, armed = true, lane = true),
+        ).forEach { assertThat(it.history).isEqualTo(ComposerHistoryPlace.NONE) }
     }
 
     @Test
