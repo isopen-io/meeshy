@@ -120,12 +120,6 @@ internal fun SceneTopBar(
     }
 }
 
-/** ↶ ↷ rangés l'un sous l'autre au pied du couloir que la scène réduite cède aux options de l'objet en édition (#14197). */
-@Composable
-internal fun SceneLaneHistory(history: SceneHistory, onUndo: () -> Unit, onRedo: () -> Unit) {
-    SceneHistoryButtons(history, onUndo, onRedo)
-}
-
 /**
  * ↶ et ↷ (#14209, décision porteur du 2026-11-01) : un bouton sans pas à annuler ou à rétablir est MASQUÉ, jamais grisé,
  * et réapparaît dès qu'il a un pas à rejouer.

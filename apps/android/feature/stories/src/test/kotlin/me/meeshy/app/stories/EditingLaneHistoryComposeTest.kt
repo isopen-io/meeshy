@@ -50,9 +50,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * #14197 — recette S8 : un objet posé sélectionné, la scène se réduit pour céder un couloir à ses options, et ↶ ↷ restaient
- * en haut à droite, ↶ mordant sur le bord droit de la scène réduite. En édition, ↶ ↷ se rangent dans ce couloir, au pied
- * des options, qui gardent la place des outils : aucun contrôle ne recouvre plus la scène, et l'historique reste à portée.
+ * ↶ ↷ pendant l'édition d'un objet. Sélectionner un objet laisse la scène pleine (#14249 : on ne réduit que pour le clavier
+ * ou une feuille d'options) : ↶ ↷ restent en haut à droite de la scène, au-dessus des options qui prennent la place des
+ * outils, comme au repos — l'historique reste à portée et ne mord sur rien.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -119,7 +119,7 @@ class EditingLaneHistoryComposeTest {
     }
 
     @Test
-    fun `an edited object's undo and redo sit in the lane the reduced scene cleared, never over the scene`() {
+    fun `an edited object's undo and redo sit at the top of its full scene, above its options`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onAddSticker("🔥")
@@ -130,16 +130,16 @@ class EditingLaneHistoryComposeTest {
 
         val scene = compose.onNodeWithContentDescription(canvas).fetchSemanticsNode().boundsInRoot
         val rail = compose.onNodeWithTag(EDITING_RAIL_TAG).fetchSemanticsNode().boundsInRoot
-        assertThat(scene.width).isLessThan(360f * density())
+        assertThat(scene.width).isWithin(1f).of(360f * density())
         listOf("Undo", "Redo").forEach { label ->
             val button = compose.onNodeWithContentDescription(label).fetchSemanticsNode().boundsInRoot
-            assertThat(button.left).isAtLeast(scene.right)
-            assertThat(button.top).isAtLeast(rail.bottom)
+            assertThat(button.right).isAtMost(scene.right)
+            assertThat(button.bottom).isAtMost(rail.top)
         }
     }
 
     @Test
-    fun `undo in the lane still undoes`() {
+    fun `undo while an object is edited still undoes`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         show(vm)

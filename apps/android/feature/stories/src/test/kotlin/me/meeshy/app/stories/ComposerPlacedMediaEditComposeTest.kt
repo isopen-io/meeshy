@@ -266,17 +266,17 @@ class ComposerPlacedMediaEditComposeTest {
     }
 
     @Test
-    fun `the rail never masks the selected object, a media posed on the right edge stays clear of the lane of the rail`() {
+    fun `a media posed on the right edge, selected, keeps the scene full and its rail laid on it`() {
         vm = viewModel()
         withPlaced(vm)
         vm.onSceneReduce { s -> s.copy(deck = s.deck.copy(slides = s.deck.slides.map { slide -> slide.copy(placedMedia = slide.placedMedia.map { it.copy(x = 0.8f, scale = 0.3f) }) })) }
         show(vm)
         compose.waitForIdle()
 
-        val media = compose.onNodeWithTag("placed-media", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val scene = compose.onNodeWithContentDescription(canvas).fetchSemanticsNode().boundsInRoot
         val rail = compose.onNodeWithTag(EDITING_RAIL_TAG).fetchSemanticsNode().boundsInRoot
-        assertThat(media.width).isGreaterThan(0f)
-        assertThat(media.right).isAtMost(rail.left)
+        assertThat(scene.width).isWithin(1f).of(360f * compose.density.density)
+        assertThat(rail.right).isAtMost(scene.right)
     }
 
     @Test
