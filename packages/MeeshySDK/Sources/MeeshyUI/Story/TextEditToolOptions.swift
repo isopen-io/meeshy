@@ -709,6 +709,8 @@ public struct TextEditToolOptions: View {
     /// ou du gras, qui le faisaient lire « A … B ».
     nonisolated static let outlineWidthGlyphs = (thin: "circle", thick: "circle.circle")
 
+    nonisolated static let outlineWidthColumn: CGFloat = 56
+
     nonisolated static func outlineWidthLabel(_ width: Double, locale: Locale = .current) -> String {
         width.formatted(.number.precision(.fractionLength(0...1)).locale(locale)) + " pt"
     }
@@ -743,6 +745,7 @@ public struct TextEditToolOptions: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize()
+                .frame(width: Self.outlineWidthColumn, alignment: .trailing)
         }
     }
 

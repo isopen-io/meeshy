@@ -123,6 +123,13 @@ internal fun SceneTopBar(
     }
 }
 
+/** ↶ ↷ rangés l'un sous l'autre au pied du couloir que la scène réduite cède aux options de l'objet en édition (#14197). */
+@Composable
+internal fun SceneLaneHistory(history: SceneHistory, onUndo: () -> Unit, onRedo: () -> Unit) {
+    SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = history.canUndo)
+    SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = history.canRedo)
+}
+
 /**
  * La colonne des outils, posée à droite de la scène : chaque outil un bouton rond, le « ⋯ » rendu par [more], et l'appui
  * long de Média qui propose ses sources ([onMediaSource], #13845), la caméra de la scène en tête quand elle est servie ([cameraServed], #13849). Quand un panneau monte et lui laisse moins de place, elle
