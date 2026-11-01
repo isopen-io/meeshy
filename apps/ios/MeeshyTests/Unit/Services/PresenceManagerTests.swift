@@ -302,14 +302,30 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(entry.state(now: now.addingTimeInterval(400)), .offline)
     }
 
-    func test_noteActivity_userTheServerSaysOnline_keepsIsOnline() throws {
-        sut.presenceMap["typer-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+    func test_noteActivity_userTheServerSaysOnlineWithADate_keepsIsOnlineAndRefreshesTheDate() throws {
+        sut.presenceMap["typer-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date().addingTimeInterval(-240))
 
         sut.noteActivity(userId: "typer-1")
 
         let entry = try XCTUnwrap(sut.presenceMap["typer-1"])
         XCTAssertTrue(entry.isOnline)
-        XCTAssertNotNil(entry.lastActiveAt)
+        let lastActiveAt = try XCTUnwrap(entry.lastActiveAt)
+        XCTAssertLessThan(Date().timeIntervalSince(lastActiveAt), 5)
+    }
+
+    /// presence-ami-binaire (#13928) : un Ami servi « en ligne » n'a pas de
+    /// `lastActiveAt`, et le serveur le tient tant qu'il est connecté. La frappe
+    /// lui datait une activité, la garde anti-stale l'éteignait cinq minutes
+    /// plus tard alors que le serveur le servait toujours en ligne.
+    func test_noteActivity_friendServedOnlineWithoutLastActiveAt_staysGreenWhileServedOnline() throws {
+        sut.presenceMap["friend-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        sut.noteActivity(userId: "friend-1")
+
+        let entry = try XCTUnwrap(sut.presenceMap["friend-1"])
+        XCTAssertTrue(entry.isOnline)
+        XCTAssertNil(entry.lastActiveAt)
+        XCTAssertEqual(entry.state(now: Date().addingTimeInterval(600)), .online)
     }
 
     func test_noteActivity_currentUser_neverWritesTheMap() {

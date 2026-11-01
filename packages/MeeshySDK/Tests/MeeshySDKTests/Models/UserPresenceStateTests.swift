@@ -127,8 +127,6 @@ struct UserPresenceStateTests {
         #expect(decoded.lastActiveAt == original.lastActiveAt)
     }
 
-    // MARK: - Présence servie d'un résultat de recherche (#10944)
-
     // MARK: - Présence servie à un Ami (presence-ami-binaire, #13928)
 
     @Test("A served Friend online without lastActiveAt stays online at any instant")
@@ -151,6 +149,8 @@ struct UserPresenceStateTests {
             #expect(state != .away && state != .idle)
         }
     }
+
+    // MARK: - Présence servie d'un résultat de recherche (#10944)
 
     @Test("A search result renders only the presence the gateway served")
     func searchResult_servedPresence_isNilWhenTheGatewayServedNone() {
