@@ -37,18 +37,6 @@ export type UploadQuota = {
   record(params: { readonly userId: string; readonly bytes: number; readonly now?: number }): Promise<void>;
 };
 
-/**
- * Pour qui écrit les octets LUI-MÊME, sans attendre qu'un client les envoie
- * (copie de média sœur, #14305) : `check` puis `record` laisse toutes les
- * requêtes concurrentes lire le même compteur. `reserve` compte d'abord, d'un
- * seul `INCRBY`, et retire aussitôt ce qui dépasse ; `release` rend ce qu'une
- * écriture n'a finalement pas pris.
- */
-export type ReservingUploadQuota = UploadQuota & {
-  reserve(params: { readonly userId: string; readonly role: UploaderRole; readonly bytes: number; readonly now?: number }): Promise<UploadQuotaVerdict>;
-  release(params: { readonly userId: string; readonly bytes: number; readonly now?: number }): Promise<void>;
-};
-
 function utcDay(now: number): string {
   return new Date(now).toISOString().slice(0, 10);
 }
@@ -80,7 +68,7 @@ function warnFallback(operation: string, error: unknown): void {
   });
 }
 
-export function createUploadQuota(params: { readonly redis: UploadQuotaRedis | null; readonly quotas: DailyUploadQuotas }): ReservingUploadQuota {
+export function createUploadQuota(params: { readonly redis: UploadQuotaRedis | null; readonly quotas: DailyUploadQuotas }): UploadQuota {
   const { redis, quotas } = params;
   const memory = memoryCounters();
 
@@ -95,38 +83,7 @@ export function createUploadQuota(params: { readonly redis: UploadQuotaRedis | n
     }
   };
 
-  const add = async (key: string, bytes: number): Promise<number> => {
-    if (!redis) {
-      memory.add(key, bytes);
-      return memory.read(key);
-    }
-    try {
-      const total = await redis.incrby(key, bytes);
-      await redis.expire(key, COUNTER_TTL_SECONDS);
-      return total;
-    } catch (error) {
-      warnFallback('reserve', error);
-      memory.add(key, bytes);
-      return memory.read(key);
-    }
-  };
-
   return {
-    async reserve({ userId, role, bytes, now = Date.now() }) {
-      const amount = Math.max(0, bytes);
-      const quotaBytes = quotas[role];
-      const key = uploadQuotaKey(userId, now);
-      const total = await add(key, amount);
-      if (total <= quotaBytes) return { allowed: true };
-      await add(key, -amount);
-      return { allowed: false, usedBytes: total - amount, quotaBytes, retryAfterSeconds: secondsUntilNextUtcDay(now) };
-    },
-
-    async release({ userId, bytes, now = Date.now() }) {
-      if (!(bytes > 0)) return;
-      await add(uploadQuotaKey(userId, now), -bytes);
-    },
-
     async check({ userId, role, incomingBytes, now = Date.now() }) {
       const quotaBytes = quotas[role];
       const used = await usedBytes(uploadQuotaKey(userId, now));

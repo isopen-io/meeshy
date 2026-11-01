@@ -106,25 +106,25 @@ async function pushed(extra: Record<string, unknown>, prefs: Record<string, unkn
 }
 
 describe('push — les clés `data` et la catégorie de chaque contenu', () => {
-  it('une POSITION : coordonnées, nom, adresse, catégorie MEESHY_LOCATION, corps « 📍 Nom · adresse »', async () => {
+  it('une POSITION : coordonnées, nom, adresse, catégorie MEESHY_LOCATION, corps « Position partagée » sans nom ni adresse (#14309)', async () => {
     const p = await pushed({ contentDetail: LOCATION });
 
     expect(p.data).toMatchObject({
       locationLat: '48.8566', locationLon: '2.3522', locationName: 'Café de Flore', locationAddress: '172 bd Saint-Germain',
     });
     expect(p.category).toBe('MEESHY_LOCATION');
-    expect(p.body).toBe('📍 Café de Flore · 172 bd Saint-Germain');
+    expect(p.body).toBe('Position partagée');
     expect(p.persistedContext.contentDetail).toEqual(LOCATION);
   });
 
   it('une position SANS nom ni adresse se dit « Position partagée »', async () => {
     const p = await pushed({ contentDetail: { location: { latitude: 1, longitude: 2, name: null, address: null } } });
 
-    expect(p.body).toBe('📍 Position partagée');
+    expect(p.body).toBe('Position partagée');
     expect(p.data.locationName).toBeUndefined();
   });
 
-  it('un CONTACT : son nom, catégorie MEESHY_CONTACT', async () => {
+  it('un CONTACT : son nom sur le fil, « Carte de visite » au corps (#14309), catégorie MEESHY_CONTACT', async () => {
     const p = await pushed({
       contentDetail: CONTACT,
       attachments: [{ type: 'contact', filename: 'Awa Diallo.vcf', contactName: 'Awa Diallo' }],
@@ -132,26 +132,26 @@ describe('push — les clés `data` et la catégorie de chaque contenu', () => {
 
     expect(p.data.contactName).toBe('Awa Diallo');
     expect(p.category).toBe('MEESHY_CONTACT');
-    expect(p.body).toBe('👤 Awa Diallo');
+    expect(p.body).toBe('Carte de visite');
   });
 
-  it('une INVITATION : adresse, titre, effectif, catégorie MEESHY_INVITE — le corps remplace l’URL brute', async () => {
+  it('une INVITATION : adresse, titre, effectif, catégorie MEESHY_INVITE — le corps décrit l’invitation, sans URL ni titre (#14309)', async () => {
     const p = await pushed({ contentDetail: INVITE, messagePreview: 'Rejoins-nous https://meeshy.me/chat/mshy_Ab12Cd34' });
 
     expect(p.data).toMatchObject({
       inviteUrl: 'https://meeshy.me/chat/mshy_Ab12Cd34', inviteConversationTitle: 'Club lecture', inviteMemberCount: '12',
     });
     expect(p.category).toBe('MEESHY_INVITE');
-    expect(p.body).toBe('Rejoins-nous\n✉️ Invitation · Club lecture');
+    expect(p.body).toBe('Petit message texte · Invitation à une conversation');
   });
 
-  it('un LIEN web : adresse et domaine, corps « 🔗 domaine », catégorie de message', async () => {
+  it('un LIEN web : adresse et domaine, corps « Lien web » (#14309), catégorie de message', async () => {
     const p = await pushed({ contentDetail: LINK, messagePreview: 'https://www.lemonde.fr/a/42' });
 
     expect(p.data).toMatchObject({ linkUrl: 'https://www.lemonde.fr/a/42', linkDomain: 'lemonde.fr' });
     expect(p.data.linkTitle).toBeUndefined();
     expect(p.category).toBe('MEESHY_MESSAGE');
-    expect(p.body).toBe('🔗 lemonde.fr');
+    expect(p.body).toBe('Lien web');
   });
 
   it('une VIDÉO : sa vignette', async () => {
@@ -160,7 +160,7 @@ describe('push — les clés `data` et la catégorie de chaque contenu', () => {
     expect(p.data.thumbnailUrl).toBe('https://cdn.example/v_thumb.jpg');
   });
 
-  it('un STICKER : « emoji Sticker », jamais « Photo »', async () => {
+  it('un STICKER : « Autocollant », jamais « Image » (#14309)', async () => {
     const p = await pushed({
       contentDetail: { sticker: { emoji: '🥳' } },
       attachments: [{ type: 'image', filename: 'sticker.png' }],
@@ -168,7 +168,7 @@ describe('push — les clés `data` et la catégorie de chaque contenu', () => {
       firstAttachmentHeight: 512,
     });
 
-    expect(p.body).toBe('🥳 Sticker');
+    expect(p.body).toBe('Autocollant');
   });
 
   it('une RÉPONSE À UNE STORY : `storyReply = "1"` et le corps le dit, à l’auteur comme aux autres', async () => {
@@ -176,8 +176,8 @@ describe('push — les clés `data` et la catégorie de chaque contenu', () => {
     const theirs = await pushed({ contentDetail: { storyReply: { authorId: OTHER_ID } }, messagePreview: 'Trop beau !' });
 
     expect(mine.data.storyReply).toBe('1');
-    expect(mine.body).toBe('Réponse à votre story · Trop beau !');
-    expect(theirs.body).toBe('Réponse à une story · Trop beau !');
+    expect(mine.body).toBe('Réponse à votre story · Petit message texte');
+    expect(theirs.body).toBe('Réponse à une story · Petit message texte');
   });
 });
 

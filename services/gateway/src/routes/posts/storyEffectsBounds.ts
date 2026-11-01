@@ -8,9 +8,6 @@ import { z } from 'zod';
  * ou des keyframes à ±1e308. Ces schémas bornent les GRANDEURS NUMÉRIQUES (finies, dans les plages que les
  * composeurs écrivent) et le nombre de scènes (10, plafond des trois composeurs).
  *
- * L'échelle n'a pas de plafond (#14298) : un objet s'agrandit sans limite chez les trois composeurs, et la passerelle
- * n'en exige qu'un nombre fini, positif ou nul.
- *
  * Ils ne bornent NI le nombre d'objets par scène, NI la longueur des textes et de leurs traductions, NI le
  * nombre de keyframes : le composeur iOS en production n'en plafonne aucun (stickers, longueur de texte,
  * `AddKeyframeCommand`), et les traductions sont écrites par le serveur lui-même, puis renvoyées par le client
@@ -28,7 +25,7 @@ export const StoryKeyframeBoundsSchema = z.object({
   time: z.number().finite().min(0).max(STORY_SECONDS_MAX),
   x: z.number().finite().min(-10).max(10).nullish(),
   y: z.number().finite().min(-10).max(10).nullish(),
-  scale: z.number().finite().min(0).nullish(),
+  scale: z.number().finite().min(0).max(20).nullish(),
   opacity: z.number().finite().min(0).max(1).nullish(),
   volume: z.number().finite().min(0).max(2).nullish(),
 }).passthrough();

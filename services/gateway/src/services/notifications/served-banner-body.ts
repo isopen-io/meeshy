@@ -6,8 +6,14 @@
 
 import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 
-import { buildMessageNotificationBodyI18n, type NotificationBannerMedia } from './notification-preview';
-import { detailedBannerBody } from './content-detail';
+import { notificationString } from '@meeshy/shared/utils/notification-strings';
+
+import type {
+  NotificationAttachmentSummary,
+  NotificationBannerMedia,
+  PreviewPrismBasis,
+} from './notification-preview';
+import { contentSynthesis, type SynthesisAttachment } from './content-synthesis';
 
 /**
  * Le texte que la bannière AFFICHE — cycle 122.
@@ -40,24 +46,23 @@ export function servedPreview(params: {
 }
 
 /**
- * Le corps AFFICHÉ d'une bannière de message — cycle 125 bis.
+ * Le corps AFFICHÉ d'une bannière de message — #14309 (décision porteur du
+ * 2026-11-01) : sa SYNTHÈSE, jamais son contenu.
  *
- * Deux compositions en une, et c'est leur ORDRE qui compte : le texte servi
- * par le Prisme ({@link servedPreview}), puis le passage par
- * `buildMessageNotificationBodyI18n`, qui remplace un texte ABSENT par le
- * libellé de la première pièce jointe et suffixe les badges des suivantes.
+ * **Site UNIQUE pour les trois éventails** (cycle 125 bis : une règle écrite
+ * une fois par site finit par manquer à l'un d'eux). Le corps dit la longueur
+ * du texte et la nature des pièces jointes, dans la langue de CADRAGE du
+ * lecteur ; il ne porte ni le texte, ni sa traduction, ni un nom de fichier, de
+ * contact, de lieu ou de lien.
  *
- * **Site UNIQUE pour les trois éventails**, et la raison est mesurée :
- * `createMessageNotification` était le seul des trois à composer, si bien que
- * la bannière d'une RÉPONSE ou d'une MENTION portant un vocal ou une photo
- * sans légende arrivait avec un corps VIDE — le symptôme « deux textes pour
- * un même message » (cycles 121-124) dans sa forme extrême, le second étant
- * vide. C'est la leçon 271 : une règle écrite une fois par site finit par
- * manquer à l'un d'eux.
+ * Deux exceptions, et elles ne montrent rien non plus :
+ *  - un aperçu PROTÉGÉ (vue unique, éphémère, flouté, chiffré) garde son
+ *    placeholder d'icônes — il dit déjà la protection et le type ;
+ *  - un aperçu qui est la TRANSCRIPTION d'un vocal n'est pas un texte du
+ *    message : il ne compte pour aucun mot, la pièce jointe dit « Vocal ».
  *
- * Sans média (`media` absent ou vide), le résultat est exactement le texte
- * servi — les deux éventails qui n'en portaient pas gardent leur corps au
- * caractère près.
+ * `translation` reste reçu : il élit toujours la piste audio servie
+ * (`servedAttachmentMedia`), il ne compose plus le corps.
  */
 export function servedBannerBody(params: {
   lang: string;
@@ -67,18 +72,54 @@ export function servedBannerBody(params: {
   /** #8857 — position, contact, invitation, lien, sticker, réponse à une story : cf. `content-detail.ts`. */
   detail?: NotificationContentDetail;
   readerId: string;
+  /** Ce que `preview` EST — cf. `PreviewPrismBasis`. */
+  basis?: PreviewPrismBasis;
+  /** `notificationLocKey` posé : l'aperçu est un placeholder de protection. */
+  protectedByLocKey?: boolean;
 }): string {
-  return detailedBannerBody(params.lang, {
-    text: servedPreview({ preview: params.preview, translation: params.translation }),
+  if (params.protectedByLocKey || params.basis?.kind === 'protected-placeholder') return params.preview;
+  const isTranscript = params.basis?.kind === 'transcript';
+  const attachments = (params.media?.attachments ?? []).map(synthesisAttachmentOf);
+  const synthesis = contentSynthesis(params.lang, {
+    text: isTranscript ? '' : params.preview,
+    // Une transcription PROUVE une parole : sans inventaire de pièces jointes,
+    // c'est un vocal qui se décrit — jamais un corps vide.
+    attachments: isTranscript && attachments.length === 0 ? [SPOKEN_AUDIO] : attachments,
     detail: params.detail,
-    readerId: params.readerId,
-    compose: (text) => buildMessageNotificationBodyI18n(params.lang, {
-      messagePreview: text,
-      attachments: params.media?.attachments,
-      firstAttachmentFileSize: params.media?.firstAttachmentFileSize,
-      firstAttachmentDuration: params.media?.firstAttachmentDuration,
-      firstAttachmentWidth: params.media?.firstAttachmentWidth,
-      firstAttachmentHeight: params.media?.firstAttachmentHeight,
-    }),
   });
+  return storyReplyFramed(params.lang, synthesis, params.detail, params.readerId);
+}
+
+const SPOKEN_AUDIO: SynthesisAttachment = { mimeType: 'audio/*', fileName: 'voice.m4a' };
+
+const MIME_OF_TYPE: Readonly<Record<NotificationAttachmentSummary['type'], string>> = {
+  image: 'image/*',
+  video: 'video/*',
+  audio: 'audio/*',
+  document: 'application/octet-stream',
+  contact: 'text/vcard',
+};
+
+function synthesisAttachmentOf(summary: NotificationAttachmentSummary): SynthesisAttachment {
+  return {
+    mimeType: summary.type === 'contact' ? 'text/vcard' : summary.mimeType ?? MIME_OF_TYPE[summary.type],
+    fileName: summary.filename,
+    originalName: summary.originalName,
+    pageCount: summary.pageCount,
+    lineCount: summary.lineCount,
+  };
+}
+
+function storyReplyFramed(
+  lang: string,
+  body: string,
+  detail: NotificationContentDetail | undefined,
+  readerId: string,
+): string {
+  if (!detail?.storyReply) return body;
+  const prefix = notificationString(
+    lang,
+    detail.storyReply.authorId === readerId ? 'content.storyReply.yours' : 'content.storyReply.other',
+  );
+  return body ? `${prefix} · ${body}` : prefix;
 }

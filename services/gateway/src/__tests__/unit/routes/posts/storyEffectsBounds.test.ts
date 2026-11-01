@@ -103,7 +103,7 @@ describe('keyframes — nombres finis et bornés', () => {
   const withTiming = (keyframes: unknown[]) => canvas([sceneObject('media', 0, { timing: { start: 0, end: 5, keyframes } })]);
 
   it.each([
-    { time: 1e308 }, { x: 1e308 }, { y: -1e308 }, { scale: -1 }, { opacity: 5 }, { volume: 9 }, { time: -1 },
+    { time: 1e308 }, { x: 1e308 }, { y: -1e308 }, { scale: 1e308 }, { opacity: 5 }, { volume: 9 }, { time: -1 },
   ])('refuse la keyframe %j d\'un objet v3', (hostile) => {
     expect(accepted(withTiming([frame(hostile)]))).toBe(false);
   });
@@ -115,19 +115,6 @@ describe('keyframes — nombres finis et bornés', () => {
   it('accepte 80 keyframes sur un clip : AddKeyframeCommand (iOS) ne plafonne pas leur nombre', () => {
     expect(accepted(withTiming(Array.from({ length: 80 }, (_, i) => frame({ time: i * 0.1 }))))).toBe(true);
     expect(accepted({ stickerObjects: [{ id: 'o1', keyframes: Array.from({ length: 80 }, (_, i) => frame({ time: i * 0.1 })) }] })).toBe(true);
-  });
-
-  it('accepte une échelle sans plafond, finie, d\'une keyframe v3 et v1 (#14298)', () => {
-    expect(accepted(withTiming([frame({ scale: 300 })]))).toBe(true);
-    expect(accepted(withTiming([frame({ scale: 1e6 })]))).toBe(true);
-    expect(accepted(withTiming([frame({ scale: 5 / 140 })]))).toBe(true);
-    expect(accepted({ stickerObjects: [{ id: 'o1', keyframes: [frame({ scale: 300 })] }] })).toBe(true);
-  });
-
-  it('accepte un sticker, un texte et un média posés au-delà de l\'ancien plafond de 20, refuse une échelle négative (#14298)', () => {
-    expect(accepted({ stickerObjects: [{ id: 's', scale: 300 }], textObjects: [{ id: 't', scale: 1e6 }], mediaObjects: [{ id: 'm', scale: 50 }] })).toBe(true);
-    expect(accepted({ stickerObjects: [{ id: 's', scale: 5 / 140 }] })).toBe(true);
-    expect(accepted({ stickerObjects: [{ id: 's', scale: -1 }] })).toBe(false);
   });
 
   it('accepte les nulls explicites d\'un encodeur et la volumétrie iOS (gain 2, échelle 4)', () => {

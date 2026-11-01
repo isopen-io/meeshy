@@ -250,7 +250,7 @@ describe('createMessageNotification — ce que la descente ne doit PAS relâcher
     });
 
     expect(data?.translatedContent).toBe('Bonjour');
-    expect(push?.body).toBe('📷 Foto');
+    expect(push?.body).toBe('Bild in hoher Auflösung');
   });
 
   it('tronque la traduction poussée à 200 caractères, quel que soit son rang', async () => {
@@ -279,15 +279,23 @@ describe('createMessageNotification — ce que la descente ne doit PAS relâcher
  * traduite — survivait donc intact, une couche plus bas. Un correctif dont la
  * valeur ne parvient à aucun lecteur n'a corrigé personne.
  */
-describe('createMessageNotification — le CORPS servi descend le Prisme', () => {
-  it('compose la bannière avec la traduction du rang atteint, pas avec l\'original', async () => {
+/**
+ * #14309 — depuis la décision porteur du 2026-11-01, le CORPS ne porte plus le
+ * texte, ni original ni traduit : il en dit la SYNTHÈSE, dans la langue de
+ * CADRAGE. Les témoins ci-dessous gardent la descente là où elle sert encore
+ * (champs de service, piste audio élue) et assertent que le corps ne cite
+ * aucun des deux textes.
+ */
+describe('createMessageNotification — le CORPS servi est la SYNTHÈSE, jamais le texte du Prisme', () => {
+  it('ne compose la bannière ni avec la traduction ni avec l\'original — sa synthèse seule', async () => {
     const { push, data } = await runFanOut({
       recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
       translations: { es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Hola');
+    expect(push?.body).toBe('Ein Wort');
+    expect(push?.body).not.toContain('Hola');
     expect(data?.translatedContent).toBe('Hola');
   });
 
@@ -300,28 +308,28 @@ describe('createMessageNotification — le CORPS servi descend le Prisme', () =>
       originalLanguage: 'en',
     });
 
-    expect((notification as any)?.content).toBe('Hola');
-    expect(push?.body).toBe('Hola');
+    expect((notification as any)?.content).toBe('Ein Wort');
+    expect(push?.body).toBe('Ein Wort');
   });
 
-  it('sert l\'ORIGINAL quand le Prisme n\'élit rien (règle #1)', async () => {
+  it('ne sert pas l\'original quand le Prisme n\'élit rien — la synthèse', async () => {
     const { push } = await runFanOut({
       recipient: { systemLanguage: 'de' },
       translations: { it: { text: 'Ciao' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Hello');
+    expect(push?.body).toBe('Ein Wort');
   });
 
-  it('sert l\'original quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+  it('ne sert pas l\'original quand la langue d\'origine gagne à son rang — la synthèse', async () => {
     const { push } = await runFanOut({
       recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour' } },
       originalLanguage: 'en',
     });
 
-    expect(push?.body).toBe('Hello');
+    expect(push?.body).toBe('Ein Wort');
   });
 
   it('ne substitue JAMAIS dans un aperçu PROTÉGÉ — la traduction relâcherait le texte masqué', async () => {
@@ -342,7 +350,7 @@ describe('createMessageNotification — le CORPS servi descend le Prisme', () =>
     expect(push?.body).toBe('⏱️ 💬 24h');
   });
 
-  it('ne substitue pas la transcription d\'un vocal — un AUTRE texte que Message.content', async () => {
+  it('ne montre pas la transcription d\'un vocal — il se dit « vocal »', async () => {
     // Les traductions d'une transcription vivent sur
     // `MessageAttachment.translations` ; une entrée de `Message.translations`
     // substituée ici afficherait un contenu sans rapport avec l'audio.
@@ -356,7 +364,7 @@ describe('createMessageNotification — le CORPS servi descend le Prisme', () =>
       },
     });
 
-    expect(push?.body).toBe('Salut, je te rappelle ce soir');
+    expect(push?.body).toBe('Sprachnachricht in hoher Auflösung');
   });
 });
 
@@ -428,13 +436,13 @@ describe('createMessageNotification — le fil ne transporte QUE ce que la banni
  * un vocal espagnol lisait donc sa bannière en espagnol pendant que la ligne de
  * liste de la même application servait la transcription traduite.
  */
-describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
+describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION ne compose plus le corps (#14309)', () => {
   const transcript = (translations: Record<string, string>, originalLanguage: string | null) => ({
     kind: 'transcript' as const,
     source: { translations, originalLanguage },
   });
 
-  it('sert la transcription TRADUITE au rang atteint, corps et fil ensemble', async () => {
+  it('la transcription TRADUITE reste sur le fil, le corps dit « vocal »', async () => {
     const { push, data } = await runFanOut({
       recipient: { systemLanguage: 'de', regionalLanguage: 'fr' },
       translations: null,
@@ -445,12 +453,12 @@ describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
       },
     });
 
-    expect(push?.body).toBe('Salut, je t\'appelle ce soir');
+    expect(push?.body).toBe('Sprachnachricht in hoher Auflösung');
     expect(data?.translatedContent).toBe('Salut, je t\'appelle ce soir');
     expect(data?.translatedLanguage).toBe('fr');
   });
 
-  it('sert la transcription ORIGINALE quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+  it('la transcription ORIGINALE ne compose pas le corps (règle #3)', async () => {
     const { push } = await runFanOut({
       recipient: { systemLanguage: 'de', regionalLanguage: 'es', customDestinationLanguage: 'fr' },
       translations: null,
@@ -461,10 +469,10 @@ describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
       },
     });
 
-    expect(push?.body).toBe('Hola, te llamo esta noche');
+    expect(push?.body).toBe('Sprachnachricht in hoher Auflösung');
   });
 
-  it('sert la transcription ORIGINALE quand aucune langue du lecteur n\'est servie (règle #1)', async () => {
+  it('la transcription ORIGINALE ne compose pas le corps (règle #1)', async () => {
     const { push } = await runFanOut({
       recipient: { systemLanguage: 'de' },
       translations: null,
@@ -475,7 +483,7 @@ describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
       },
     });
 
-    expect(push?.body).toBe('Hola, te llamo esta noche');
+    expect(push?.body).toBe('Sprachnachricht in hoher Auflösung');
   });
 
   it('n\'autorise PAS l\'enregistrement local d\'une transcription comme contenu du message', async () => {
@@ -496,7 +504,7 @@ describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
     expect(data).not.toHaveProperty('originalLanguage');
   });
 
-  it('descend la carte de l\'ATTACHMENT, jamais celle du message', async () => {
+  it('ne sert la carte d\'aucun des deux — ni attachment, ni message', async () => {
     // Le mode d'échec du CORRECTIF : les deux cartes coexistent sur le même
     // envoi (un vocal peut porter une légende). Servir `Message.translations`
     // ici afficherait un texte sans rapport avec l'audio.
@@ -510,6 +518,6 @@ describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
       },
     });
 
-    expect(push?.body).toBe('Salut, je t\'appelle ce soir');
+    expect(push?.body).toBe('Vocal haute définition');
   });
 });

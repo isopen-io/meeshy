@@ -37,7 +37,6 @@ import { claimableMediaWhere, unclaimedMediaWhere } from './mediaOwnership';
 import { withCanvasMedia } from './canvasMediaClaims';
 import { extractCaptureTracks } from './captureTracks';
 import { remapStoryEffectsMediaIds } from './storyEffectsMediaRemap';
-import { copyPostMedia, POST_MEDIA_COPY_SELECT, type PostMediaCopies, type PostMediaCopySource } from './postMediaCopy';
 
 export const REEL_NOT_QUALIFIED = 'REEL_NOT_QUALIFIED';
 export const ALSO_AS_REEL_REQUIRES_STORY = 'ALSO_AS_REEL_REQUIRES_STORY';
@@ -93,8 +92,46 @@ export async function qualifiesAsReelWithBorrowedSounds(
   return qualifiesAsReel([...media, ...borrowed]);
 }
 
+const SOURCE_SELECT = {
+  id: true,
+  fileName: true,
+  originalName: true,
+  mimeType: true,
+  fileSize: true,
+  filePath: true,
+  fileUrl: true,
+  width: true,
+  height: true,
+  thumbnailUrl: true,
+  thumbHash: true,
+  duration: true,
+  codec: true,
+  lensSlug: true,
+} as const;
+
+type SourceMedia = {
+  id: string;
+  fileName: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  filePath: string;
+  fileUrl: string;
+  width: number | null;
+  height: number | null;
+  thumbnailUrl: string | null;
+  thumbHash: string | null;
+  duration: number | null;
+  codec: string | null;
+  lensSlug: string | null;
+};
+
 /** Les copies écrites : la carte source → copie, et ce qu'il faut défaire. */
-export type ReelCompanionCopies = PostMediaCopies;
+export type ReelCompanionCopies = {
+  readonly idMap: Readonly<Record<string, string>>;
+  readonly rowIds: readonly string[];
+  readonly fileUrls: readonly string[];
+};
 
 /**
  * Juge le réel puis COPIE les médias que la story réclamera. Rien n'est écrit
@@ -115,17 +152,53 @@ export async function prepareReelCompanion(params: {
     ? []
     : (await prisma.postMedia.findMany({
         where: { id: { in: requested }, ...claimableMediaWhere(authorId) },
-        select: POST_MEDIA_COPY_SELECT,
-      })) as PostMediaCopySource[];
+        select: SOURCE_SELECT,
+      })) as SourceMedia[];
   const sources = requested
     .map((id) => found.find((m) => m.id === id))
-    .filter((m): m is PostMediaCopySource => m !== undefined);
+    .filter((m): m is SourceMedia => m !== undefined);
 
   if (!(await qualifiesAsReelWithBorrowedSounds(prisma, sources, storyEffects, authorId))) {
     throw new ReelCompanionNotQualifiedError();
   }
 
-  return copyPostMedia({ prisma, storage, authorId, sources });
+  const written: { rowIds: string[]; fileUrls: string[]; idMap: Record<string, string> } = {
+    rowIds: [], fileUrls: [], idMap: {},
+  };
+  try {
+    for (const source of sources) {
+      const copy = await storage.duplicate(source.fileUrl);
+      written.fileUrls.push(copy.fileUrl);
+      const thumb = source.thumbnailUrl ? await storage.duplicate(source.thumbnailUrl) : undefined;
+      if (thumb) written.fileUrls.push(thumb.fileUrl);
+      const row = await prisma.postMedia.create({
+        data: {
+          fileName: copy.fileName,
+          originalName: source.originalName,
+          mimeType: source.mimeType,
+          fileSize: copy.fileSize,
+          filePath: copy.filePath,
+          fileUrl: copy.fileUrl,
+          width: source.width ?? undefined,
+          height: source.height ?? undefined,
+          thumbnailUrl: thumb?.fileUrl,
+          thumbnailPath: thumb?.filePath,
+          thumbHash: source.thumbHash ?? undefined,
+          duration: source.duration ?? undefined,
+          codec: source.codec ?? undefined,
+          ...(source.lensSlug ? { lensSlug: source.lensSlug } : {}),
+          uploaderId: authorId,
+        },
+        select: { id: true },
+      });
+      written.rowIds.push(row.id);
+      written.idMap[source.id] = row.id;
+    }
+  } catch (error) {
+    await discardReelCompanion({ prisma, storage, copies: written });
+    throw error;
+  }
+  return written;
 }
 
 /** Défait les copies d'un geste qui n'a pas abouti — au mieux ; le balayage reste le filet. */
@@ -168,14 +241,12 @@ function rekeyed(
 export function reelCompanionInput<T extends ReelCompanionSource>(
   story: T,
   idMap: Readonly<Record<string, string>>,
-  urlMap: Readonly<Record<string, string>> = {},
 ): T & { type: 'REEL' } {
   const requested = withCanvasMedia(story.mediaIds, story.storyEffects) ?? [];
   const mediaIds = requested.flatMap((id) => (idMap[id] ? [idMap[id]] : []));
   const remapped = remapStoryEffectsMediaIds(
     story.storyEffects as Parameters<typeof remapStoryEffectsMediaIds>[0],
     { ...idMap },
-    { ...urlMap },
   );
   return {
     ...story,
@@ -220,7 +291,7 @@ export async function publishStoryAlsoAsReel<TInput extends ReelCompanionSource 
   }
 
   try {
-    const reel = await createPost(reelCompanionInput(input, copies.idMap, copies.urlMap) as TInput, authorId);
+    const reel = await createPost(reelCompanionInput(input, copies.idMap) as TInput, authorId);
     if (reel.type !== 'REEL') {
       await retractPost(reel.id, authorId);
       throw new ReelCompanionNotQualifiedError();

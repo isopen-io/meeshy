@@ -287,26 +287,6 @@ describe('publishStoryAlsoAsReel — deux publications, ou aucune', () => {
     expect(h.retracted).toEqual([]);
   });
 
-  it('la scène du réel ADRESSE sa copie : l’expiration de la story ne lui retire pas son fond (#14305)', async () => {
-    const world = fakeWorld({ media: [pendingMedia({ id: PHOTO })], sounds: [publicSound] });
-    const sourceUrl = world.rows[0].fileUrl as string;
-    const scene = { ...borrowedSoundEffects, mediaObjects: [{ id: 'm1', postMediaId: PHOTO, kind: 'image', mediaURL: sourceUrl }] };
-    const createPost = jest.fn(async (input: { type: string; storyEffects?: Record<string, unknown> }) => ({ id: `p-${input.type}`, type: input.type, storyEffects: input.storyEffects }));
-
-    const { reel } = await publishStoryAlsoAsReel(
-      { prisma: world.prisma, storage: world.storage, createPost, retractPost: jest.fn(async () => undefined) },
-      storyInput({ storyEffects: scene }),
-      AUTHOR,
-    );
-
-    const background = (reel.storyEffects as { mediaObjects: Array<{ postMediaId: string; mediaURL: string }> }).mediaObjects[0];
-    const copy = world.rows.find((r) => r.id === background.postMediaId);
-    expect(copy).toBeDefined();
-    expect(background.postMediaId).not.toBe(PHOTO);
-    expect(background.mediaURL).toBe(copy?.fileUrl);
-    expect(background.mediaURL).not.toBe(sourceUrl);
-  });
-
   it('un réel non qualifiant refuse le geste entier : ni story ni réel', async () => {
     const world = fakeWorld({ media: [pendingMedia({ id: PHOTO })] });
     const h = harness(world);
