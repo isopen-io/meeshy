@@ -53,6 +53,7 @@ async function main(): Promise<void> {
       apply: APPLY,
       onFinding: (finding) =>
         console.log(`  ${finding.kind}  message=${finding.messageId}  conversation=${finding.conversationId}  pièces=${finding.attachments}`),
+      onRearmed: (finding) => console.log(`  RÉARMÉ  ${finding.kind}  message=${finding.messageId}  pièces=${finding.attachments}`),
     });
     console.log('');
     console.log(`  vues uniques examinées              : ${report.scanned}`);

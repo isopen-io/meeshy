@@ -49,6 +49,12 @@ export interface ViewOnceMediaCatchUpOptions {
   readonly apply?: boolean;
   readonly batchSize?: number;
   readonly onFinding?: (finding: ViewOnceMediaFinding) => void;
+  /**
+   * Appelé après CHAQUE réarmement écrit (#11269, F4) : les écritures se font
+   * une à une, et une erreur interrompt la suite — ce journal dit alors
+   * exactement ce qui a pris, donc ce que le balayage va effacer.
+   */
+  readonly onRearmed?: (finding: ViewOnceMediaFinding) => void;
 }
 
 export interface ViewOnceMediaCatchUpReport {
@@ -114,6 +120,13 @@ async function readBatch(
   })) as ViewOnceRow[];
 }
 
+const findingOf = (row: ViewOnceRow, kind: ViewOnceMediaFindingKind): ViewOnceMediaFinding => ({
+  messageId: row.id,
+  conversationId: row.conversationId,
+  kind,
+  attachments: row.attachments.length,
+});
+
 type Tally = Omit<ViewOnceMediaCatchUpReport, 'apply'>;
 
 async function handleBatch(
@@ -131,11 +144,9 @@ async function handleBatch(
     ...consumed.map((row) => ({ row, kind: 'consumed-unscheduled' as const })),
     ...burned.map((row) => ({ row, kind: 'burned-with-media' as const })),
   ];
-  findings.forEach(({ row, kind }) =>
-    options.onFinding?.({ messageId: row.id, conversationId: row.conversationId, kind, attachments: row.attachments.length }),
-  );
+  findings.forEach(({ row, kind }) => options.onFinding?.(findingOf(row, kind)));
 
-  const rearmed = options.apply === true ? await rearm(prisma, consumed, burned, now) : 0;
+  const rearmed = options.apply === true ? await rearm(prisma, findings, now, options.onRearmed) : 0;
 
   return {
     scanned: rows.length,
@@ -146,17 +157,31 @@ async function handleBatch(
   };
 }
 
+/** Rend `true` quand la ligne a vraiment été réarmée. */
+async function writeRearm(prisma: ViewOnceMediaCatchUpPrisma, row: ViewOnceRow, kind: ViewOnceMediaFindingKind, now: Date): Promise<boolean> {
+  if (kind === 'consumed-unscheduled') return (await scheduleViewOnceBurn(prisma, { messageId: row.id, at: now })).scheduled;
+  await prisma.message.update({ where: { id: row.id }, data: { viewOnceBurnAt: now } });
+  return true;
+}
+
+/**
+ * Une écriture à la fois, dans l'ordre des trouvailles (#11269, F4) : une
+ * erreur arrête la suite et remonte, et `onRearmed` a déjà nommé chaque ligne
+ * réarmée avant elle.
+ */
 async function rearm(
   prisma: ViewOnceMediaCatchUpPrisma,
-  consumed: readonly ViewOnceRow[],
-  burned: readonly ViewOnceRow[],
+  findings: ReadonlyArray<{ row: ViewOnceRow; kind: ViewOnceMediaFindingKind }>,
   now: Date,
+  onRearmed: ViewOnceMediaCatchUpOptions['onRearmed'],
 ): Promise<number> {
-  const scheduled = await Promise.all(
-    consumed.map(async (row) => (await scheduleViewOnceBurn(prisma, { messageId: row.id, at: now })).scheduled),
-  );
-  await Promise.all(burned.map((row) => prisma.message.update({ where: { id: row.id }, data: { viewOnceBurnAt: now } })));
-  return scheduled.filter(Boolean).length + burned.length;
+  let rearmed = 0;
+  for (const { row, kind } of findings) {
+    if (!(await writeRearm(prisma, row, kind, now))) continue;
+    rearmed += 1;
+    onRearmed?.(findingOf(row, kind));
+  }
+  return rearmed;
 }
 
 const EMPTY_TALLY: Tally = { scanned: 0, consumedUnscheduled: 0, burnedWithMedia: 0, attachments: 0, rearmed: 0 };
