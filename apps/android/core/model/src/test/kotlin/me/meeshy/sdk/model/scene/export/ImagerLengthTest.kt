@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.scene.export
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import org.junit.Test
 
 class ImagerLengthTest {
@@ -35,5 +36,26 @@ class ImagerLengthTest {
         assertThat(StoryExportMode.SHARE.lengthChoices(240_000)).isEmpty()
         assertThat(StoryExportMode.IMAGER.lengthChoices(240_000)).hasSize(4)
         assertThat(StoryExportMode.IMAGER.lengthChoices(30_000)).isEmpty()
+    }
+
+    @Test fun `imager seul ouvre la vue imager, enregistrer et partager rendent sans elle`() {
+        assertThat(StoryExportMode.IMAGER.opensImagerView).isTrue()
+        assertThat(StoryExportMode.SAVE.opensImagerView).isFalse()
+        assertThat(StoryExportMode.SHARE.opensImagerView).isFalse()
+    }
+
+    @Test fun `la vue imager d une composition courte ne propose aucun quart et rend tout`() {
+        val offer = ImagerOffer.of(30_000)
+        assertThat(offer.totalMillis).isEqualTo(30_000)
+        assertThat(offer.choices).isEmpty()
+        assertThat(offer.preselected).isNull()
+        assertThat(offer.renderedMillis(ImagerDecision(SceneExportDestination.GALLERY))).isEqualTo(30_000)
+    }
+
+    @Test fun `au dela d une minute la vue imager propose les quatre quarts, le tout preselectionne`() {
+        val offer = ImagerOffer.of(240_000)
+        assertThat(offer.choices.map { it.quarter }).containsExactlyElementsIn(ImagerQuarter.entries).inOrder()
+        assertThat(offer.preselected).isEqualTo(ImagerQuarter.FOUR)
+        assertThat(offer.renderedMillis(ImagerDecision(SceneExportDestination.SHARE, ImagerQuarter.ONE))).isEqualTo(60_000)
     }
 }
