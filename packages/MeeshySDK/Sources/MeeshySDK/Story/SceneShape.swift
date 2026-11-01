@@ -475,7 +475,8 @@ public enum SceneShape {
         case .band(let edge):
             centre = CGPoint(x: 0.5, y: edge == .top ? bandTopY : bandBottomY)
         }
-        let facteur = min(max(CGFloat(object.transform.scale), 0.5), 3)
+        let echelle = CGFloat(object.transform.scale)
+        let facteur = echelle.isFinite ? max(echelle, 0.5) : 1
         let marge = objectPadding * facteur
 
         // **La rotation se calcule en POINTS, jamais en fractions** (#7127).

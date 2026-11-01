@@ -268,12 +268,14 @@ public enum StickerTemplateRenderer {
                               slots: [String: String],
                               metrics: StickerTemplateMetrics,
                               screenScale: CGFloat) -> (UIImage?, CGSize)? {
+        let densité = SceneRasterBudget.scale(for: dessinateur.measure(slots, metrics),
+                                              preferred: screenScale)
         let clé = renderCacheKey(drawerID: dessinateur.id, slots: slots,
-                                 metrics: metrics, screenScale: screenScale) as NSString
+                                 metrics: metrics, screenScale: densité) as NSString
         if let mémoïsé = renderCache.object(forKey: clé) {
             return (mémoïsé.image, mémoïsé.size)
         }
-        let rendu = dessinateur.draw(slots, metrics, screenScale)
+        let rendu = dessinateur.draw(slots, metrics, densité)
         guard let image = rendu.0 else { return rendu }
         renderCache.setObject(StickerTemplateRender(image: image, size: rendu.1),
                               forKey: clé, cost: bitmapCost(of: image))

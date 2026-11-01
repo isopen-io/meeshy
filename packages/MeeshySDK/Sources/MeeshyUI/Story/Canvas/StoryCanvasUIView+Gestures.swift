@@ -265,15 +265,12 @@ extension StoryCanvasUIView {
             }
         case .changed:
             guard let id = manipulatedItemId else { return }
-            // **La borne a un nom depuis le #4722.** Elle était écrite en
-            // littéral ici, et la puce audio en ajoute un SECOND geste de
-            // taille — en SwiftUI, pour la puce que rien ne recouvre (celle
-            // qui est recouverte passe par ce recognizer, #13864). Deux littéraux
-            // identiques divergent au premier ajustement de l'un, et aucun
-            // témoin ne peut l'attraper : chacun reste juste vis-à-vis de
-            // lui-même.
-            let newScale = SceneObjectScalePolicy.settled(
-                base: baseScale, gestureScale: Double(recognizer.scale))
+            let geste = Double(recognizer.scale)
+            let newScale = id == backgroundMediaObjectId
+                ? SceneObjectScalePolicy.settledBackground(base: baseScale, gestureScale: geste)
+                : SceneObjectScalePolicy.settled(base: baseScale, gestureScale: geste,
+                                                 unitSide: slide.sceneObject(id: id)
+                                                    .map(SceneObjectUnitSide.designSide(of:)) ?? 0)
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
