@@ -20,10 +20,8 @@ import { z } from 'zod';
 import { LENS_LIMITS, LENS_PATTERNS } from '@meeshy/shared/types/lens-format';
 import { LENS_USAGE_SURFACES, PARTNER_PROFILE_LIMITS, parsePartnerProfileInput } from '@meeshy/shared/types/lens-partner';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { UserRoleEnum } from '@meeshy/shared/types';
 
-import type { UnifiedAuthRequest } from '../middleware/auth';
-import { requireAdminRank } from '../middleware/authorize';
+import { hasAdminRank, requireAdminRank } from '../middleware/authorize';
 import { getCacheStore } from '../services/CacheStore';
 import { LensPartners } from '../services/packs/LensPartners';
 import { lensUsageDedupFrom } from '../services/packs/lensUsageDedup';
@@ -127,10 +125,6 @@ export type LensPartnerRoutesOptions = { readonly partners?: LensPartners };
 type UserIdRequest = { Params: { userId: string } };
 type PartnerIdRequest = { Params: { partnerId: string } };
 
-const isAdminRank = (request: unknown): boolean => {
-  const role = (request as UnifiedAuthRequest).authContext?.registeredUser?.role;
-  return role === UserRoleEnum.BIGBOSS || role === UserRoleEnum.ADMIN;
-};
 
 export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensPartnerRoutesOptions = {}) {
   const partners = options.partners ?? new LensPartners({ prisma: fastify.prisma, dedup: lensUsageDedupFrom(getCacheStore()) });
@@ -277,7 +271,7 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
     },
     guard('[GET /lens/partners/:partnerId/logo]', async (request, reply, viewer) => {
       const { partnerId } = request.params as PartnerIdRequest['Params'];
-      const logo = await partners.logo({ userId: viewer.userId, isAdminRank: isAdminRank(request) }, partnerId);
+      const logo = await partners.logo({ userId: viewer.userId, isAdminRank: hasAdminRank(request) }, partnerId);
       if (logo === null) return notFound(reply);
       if (!logo.verified) return reply.header('Content-Type', logo.contentType).header('Cache-Control', 'no-store').send(logo.bytes);
       const etag = `"${logo.sha256.slice(0, 32)}"`;

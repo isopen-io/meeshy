@@ -182,6 +182,17 @@ export function requireAdminRank() {
 }
 
 /**
+ * Le PRÉDICAT du rang d'administration — BIGBOSS ou ADMIN — pour une route qui
+ * ne REFUSE pas mais SERT DAVANTAGE à ce rang (le logo d'un partenaire non
+ * encore vérifié, #11327 : qui le vérifie doit le voir). Même seuil que
+ * `requireAdminRank`, lu au même endroit : un site ne réécrit pas la liste.
+ */
+export function hasAdminRank(request: FastifyRequest): boolean {
+  const moi = acteur(request);
+  return moi !== null && (moi.role === UserRoleEnum.BIGBOSS || moi.role === UserRoleEnum.ADMIN);
+}
+
+/**
  * Écrit la trace d'un geste d'administration — APRÈS qu'il a réussi.
  *
  * Ce n'est pas une garde : elle n'admet ni ne refuse. Elle vit dans ce fichier
