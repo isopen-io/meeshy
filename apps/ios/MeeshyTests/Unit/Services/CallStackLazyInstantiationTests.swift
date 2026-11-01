@@ -180,7 +180,8 @@ final class CallStackLazyInstantiationTests: XCTestCase {
 
     func test_heavyCallPieces_areBuiltOnFirstUse_notWithTheirOwner() throws {
         let manager = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift"))
-        XCTAssertTrue(manager.contains("lazy var pip: PiPCallProviding = PiPCallController.shared"))
+        XCTAssertTrue(manager.contains("lazy var pip: PiPCallProviding = makePip()"))
+        XCTAssertTrue(manager.contains("return PiPCallController.shared"))
         XCTAssertFalse(manager.contains("private let webRTCService: WebRTCService"))
         guard let initRange = manager.range(of: "private init("),
               let end = manager.range(of: "Logger.calls.info(\"CallManager initialized\")", range: initRange.upperBound..<manager.endIndex)

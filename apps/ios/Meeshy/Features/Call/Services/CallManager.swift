@@ -633,30 +633,8 @@ final class CallManager: ObservableObject, Sendable {
     static let maxEndReconciliationArmings = 4
     static let endReconciliationArmingCapacity = 64
 
-    #if canImport(WebRTC)
-    /// Paresseux (#7955) : `PiPCallController` monte une vue AVKit à sa naissance.
-    lazy var pip: PiPCallProviding = PiPCallController.shared
-    #else
-    let pip: PiPCallProviding = NoOpPiPController()
-    #endif
-    /// `true` entre un tap « agrandir » (restore) et la fermeture effective du
-    /// PiP, pour distinguer ce chemin de la croix système. Le reste de l'état et
-    /// les rappels vivent dans `CallManager+SystemPiP.swift` (#8435).
-    var pipRestoring = false
-    var pipStartOrigin: CallPiPStartOrigin = .automatic
     /// Remonte les `PiPSourceAnchor` à chaque fermeture de fenêtre (#8435).
     @Published var pipAnchorGeneration = 0
-    weak var pipConfiguredTrack: AnyObject?
-    weak var pipConfiguredSource: UIView?
-    /// Mode d'affichage en vigueur au démarrage de la fenêtre PiP, restauré à sa
-    /// fermeture. Poser `.pip` inconditionnellement dégradait en pilule un appel
-    /// qui était plein écran (retour dans l'app) ou en bulle (repli manuel).
-    ///
-    /// `nil` = aucune fenêtre n'a démarré. Indispensable :
-    /// `failedToStartPictureInPictureWithError` appelle `onStop` sans qu'`onStart`
-    /// ait tiré, et une valeur persistante y ferait restaurer le mode du PiP
-    /// PRÉCÉDENT.
-    var pipDisplayModeAtStart: CallDisplayMode?
 
     /// Dernière valeur de `call:transcription-active` annoncée aux pairs.
     /// Évite de ré-émettre à chaque réconciliation — et surtout de renvoyer
@@ -685,6 +663,8 @@ final class CallManager: ObservableObject, Sendable {
     let networkPathObserver: CallNetworkPathObserverProviding
     /// Les délais de sonnerie de l'appelant et de l'appelé (`CallRingTimeouts`).
     let ringTimeouts: CallRingTimeoutsProviding
+    /// Le PiP système (`CallSystemPiPController`).
+    let systemPiP: CallSystemPiPControllerProviding
     /// Le chrono affiché et le battement de cœur (`CallLiveClock`).
     let liveClock: CallLiveClockProviding
 
@@ -699,6 +679,7 @@ final class CallManager: ObservableObject, Sendable {
         reliabilityMonitor: CallReliabilityMonitorProviding = CallReliabilityMonitor(),
         networkPathObserver: CallNetworkPathObserverProviding = CallNetworkPathObserver(),
         ringTimeouts: CallRingTimeoutsProviding = CallRingTimeouts(),
+        systemPiP: CallSystemPiPControllerProviding = CallSystemPiPController(),
         liveClock: CallLiveClockProviding = CallLiveClock()
     ) {
         self.signalingRouter = signalingRouter
@@ -711,6 +692,7 @@ final class CallManager: ObservableObject, Sendable {
         self.reliabilityMonitor = reliabilityMonitor
         self.networkPathObserver = networkPathObserver
         self.ringTimeouts = ringTimeouts
+        self.systemPiP = systemPiP
         self.liveClock = liveClock
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
@@ -750,6 +732,7 @@ final class CallManager: ObservableObject, Sendable {
         turnCredentials.attach(to: self)
         reliabilityMonitor.attach(to: self)
         ringTimeouts.attach(to: self)
+        systemPiP.attach(to: self)
         liveClock.attach(to: self)
         signalingRouter.start(routingTo: self)
         networkPathObserver.start(observing: self)
@@ -772,23 +755,11 @@ final class CallManager: ObservableObject, Sendable {
         )
     }
 
-    /// Le PiP vidéo système rend le flux DISTANT : il peut s'activer dès que le
-    /// track distant est présent et la caméra distante allumée, sur un appareil
-    /// compatible (≠ iOS-app-on-Mac) — même si la caméra locale est coupée
-    /// (escalade vidéo unilatérale d'un appel audio).
-    var canActivateSystemPiP: Bool {
-        hasRemoteVideoTrack && isRemoteVideoEnabled && pip.isPiPSupported
-    }
+    var canActivateSystemPiP: Bool { systemPiP.canActivateSystemPiP }
 
-    /// Framerate cible du PiP selon l'état thermique (vignette petite → throttle
-    /// agressif sous stress). Partagé par la config et le handler thermal.
-    func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int {
-        switch state {
-        case .critical: return QualityThresholds.pipFrameRateCritical
-        case .serious: return QualityThresholds.pipFrameRateSerious
-        default: return QualityThresholds.pipFrameRateDefault
-        }
-    }
+    var pip: PiPCallProviding { systemPiP.pip }
+
+    func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int { systemPiP.pipFrameRate(for: state) }
 
 }
 

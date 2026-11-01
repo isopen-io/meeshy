@@ -152,7 +152,7 @@ extension CallManager: WebRTCServiceDelegate {
             // le param non-Sendable `track` à travers la frontière d'isolation.
             if let current = self.remoteVideoTrack {
                 self.pip.updateRemoteTrack(current as AnyObject)
-                if self.pipConfiguredTrack != nil { self.pipConfiguredTrack = current as AnyObject }
+                self.systemPiP.refreshConfiguredTrack(to: current as AnyObject)
             }
             Logger.calls.info("Remote video track received in CallManager")
         }
