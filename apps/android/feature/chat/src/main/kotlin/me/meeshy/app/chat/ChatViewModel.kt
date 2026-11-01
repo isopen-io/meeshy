@@ -38,11 +38,13 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
+import me.meeshy.sdk.mention.MentionContacts
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
@@ -115,6 +117,7 @@ class ChatViewModel @Inject constructor(
     private val blockCache: BlockCache = BlockCache(),
     ownReactionWithdrawals: OwnReactionWithdrawals,
     outOfThreadSendGate: OutOfThreadSendGate,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -204,6 +207,7 @@ class ChatViewModel @Inject constructor(
         composerText = composerTextHolder,
         recentEmojis = recentEmojiStore,
         languageIdentifier = languageIdentifier,
+        mentionContacts = mentionContacts,
     )
 
     private val reactions = ChatReactionController(
@@ -295,7 +299,10 @@ class ChatViewModel @Inject constructor(
                     participants = conversation.participants,
                     excludeUserId = currentUserId,
                 )
-                composer.updateMentionRoster(roster)
+                composer.updateMentionRoster(
+                    roster = roster,
+                    context = MentionContext.conversation(conversation.id, conversation.type),
+                )
                 avatarByUserId = conversation.participants
                     .associate { (it.userId ?: it.id) to it.avatar }
                 recipientCount.value = conversation.participants

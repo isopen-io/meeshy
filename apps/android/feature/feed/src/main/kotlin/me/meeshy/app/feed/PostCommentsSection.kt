@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -29,7 +27,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,7 +46,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -68,6 +64,7 @@ import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.RichMessageText
@@ -538,63 +535,11 @@ private fun CommentComposer(
         sendEnabled = canSubmit,
         contentPadding = PaddingValues(vertical = MeeshySpacing.sm),
         topSlot = {
-            CommentMentionStrip(mention = mention, onSelect = onMentionSelected)
+            MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
             if (replyTarget != null) ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
         },
         leadingAction = { CommentAttachButton(enabled = canAttach && !isSubmitting, onPicked = onAttach) },
     )
-}
-
-/**
- * Autocomplete panel above the comment composer while an `@mention` is in progress — the feed
- * mirror of the chat composer's `MentionSuggestionStrip`. Neutral input-assistance chrome (the
- * accent tint stays on message-content surfaces); rows are capped and scroll, and a tap inserts
- * the handle via [onSelect]. Hidden when no mention is active or nothing matches.
- */
-@Composable
-private fun CommentMentionStrip(
-    mention: MentionAutocompleteState,
-    onSelect: (MentionCandidate) -> Unit,
-) {
-    if (!mention.isActive || mention.suggestions.isEmpty()) return
-    Surface(
-        color = MeeshyTheme.tokens.backgroundSecondary,
-        shape = RoundedCornerShape(MeeshyRadius.md),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
-            items(mention.suggestions, key = { it.id }) { candidate ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(candidate) }
-                        .semantics { role = Role.Button }
-                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-                ) {
-                    MeeshyAvatar(name = candidate.displayName, size = 32.dp, imageUrl = candidate.avatarURL, presence = rememberPresence(candidate.id))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = candidate.displayName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MeeshyTheme.tokens.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "@${candidate.username}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MeeshyTheme.tokens.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        }
-    }
 }
 
 /**
