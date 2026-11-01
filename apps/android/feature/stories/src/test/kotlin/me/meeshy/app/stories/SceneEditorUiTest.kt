@@ -20,6 +20,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
@@ -188,6 +189,65 @@ class SceneEditorUiTest {
         playhead = 9f
         compose.waitForIdle()
         compose.onNodeWithText("Split").assertDoesNotExist()
+    }
+
+    @Test
+    fun `Lire fait avancer la tete au rythme de la scene, Pause l'arrete`() {
+        val state = stickerState()
+        var playhead by mutableStateOf(1f)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            MeeshyTheme {
+                SceneFrise(
+                    tracks = state.sceneTracks,
+                    editableIds = state.sceneEditableTrackIds,
+                    selectedId = null,
+                    slideDurationSeconds = 10f,
+                    playheadSeconds = playhead,
+                    onSelectTrack = { _, _ -> },
+                    onScrub = { playhead = it },
+                    onWindow = { _, _, _ -> },
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Play").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        assertThat(playhead).isWithin(0.1f).of(2f)
+        compose.onNodeWithContentDescription("Pause").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        val stopped = playhead
+        compose.mainClock.advanceTimeBy(1_000)
+        assertThat(playhead).isEqualTo(stopped)
+        compose.onNodeWithContentDescription("Play").assertExists()
+    }
+
+    @Test
+    fun `Dupliquer et Retirer servent l'objet choisi depuis la frise`() {
+        val state = stickerState()
+        val duplicated = mutableListOf<String>()
+        val removed = mutableListOf<String>()
+        compose.setContent {
+            MeeshyTheme {
+                SceneFrise(
+                    tracks = state.sceneTracks,
+                    editableIds = state.sceneEditableTrackIds,
+                    selectedId = "s1",
+                    slideDurationSeconds = 10f,
+                    playheadSeconds = 4f,
+                    onSelectTrack = { _, _ -> },
+                    onScrub = {},
+                    onWindow = { _, _, _ -> },
+                    onDuplicate = { duplicated += it },
+                    onRemove = { removed += it },
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Duplicate").performClick()
+        compose.onNodeWithContentDescription("Remove").performClick()
+        assertThat(duplicated).containsExactly("s1")
+        assertThat(removed).containsExactly("s1")
     }
 
     @Test

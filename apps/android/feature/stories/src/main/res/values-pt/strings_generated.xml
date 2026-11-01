@@ -63,7 +63,9 @@
     <string name="composer_frise_later">Mais tarde</string>
     <string name="composer_frise_media">Mídia</string>
     <string name="composer_frise_panel">Linha do tempo</string>
+    <string name="composer_frise_pause">Pausar</string>
     <string name="composer_frise_place">Local</string>
+    <string name="composer_frise_play">Reproduzir</string>
     <string name="composer_frise_ruler">Mover o cursor</string>
     <string name="composer_frise_sound">Som</string>
     <string name="composer_frise_video">Vídeo</string>

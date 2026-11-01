@@ -63,7 +63,9 @@
     <string name="composer_frise_later">Später</string>
     <string name="composer_frise_media">Medium</string>
     <string name="composer_frise_panel">Zeitplan</string>
+    <string name="composer_frise_pause">Pause</string>
     <string name="composer_frise_place">Ort</string>
+    <string name="composer_frise_play">Abspielen</string>
     <string name="composer_frise_ruler">Abspielkopf verschieben</string>
     <string name="composer_frise_sound">Ton</string>
     <string name="composer_frise_video">Video</string>
