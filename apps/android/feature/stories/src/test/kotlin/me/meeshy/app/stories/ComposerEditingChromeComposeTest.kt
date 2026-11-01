@@ -15,7 +15,6 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -57,6 +56,7 @@ import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.After
 import org.junit.Before
+import androidx.compose.ui.semantics.getOrNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -94,7 +94,6 @@ class ComposerEditingChromeComposeTest {
     }
 
     private val canvas = "Story canvas — pinch to zoom, drag to pan"
-    private val options = listOf("Edit", "Duplicate", "Timing", "Remove")
     private val tools = listOf("Text", "Media", "Sticker", "More options")
 
     private fun viewModel(): StoryComposerViewModel {
@@ -156,7 +155,7 @@ class ComposerEditingChromeComposeTest {
     }
 
     @Test
-    fun `a selected placed media hides audience, publish and close, and the rail carries its four options`() {
+    fun `a selected placed media hides audience, publish and close, and the rail carries its tools then its three options`() {
         val vm = viewModel()
         withPlacedPhoto(vm)
         show(vm)
@@ -169,11 +168,12 @@ class ComposerEditingChromeComposeTest {
         compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
         compose.onNodeWithContentDescription("Close").assertDoesNotExist()
         tools.forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
-        val rail = compose.onNodeWithTag(EDITING_RAIL_TAG)
-        rail.onChildren().assertCountEquals(options.size)
-        options.forEach { compose.onNodeWithText(it).assertExists() }
+        val shown = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()
+            .mapNotNull { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text } }
+        assertThat(shown.takeLast(3)).containsExactly("Duplicate", "Timing", "Remove").inOrder()
+        assertThat(shown).doesNotContain("Edit")
         compose.onNodeWithText("Order").assertDoesNotExist()
-        val edit = compose.onNodeWithText("Edit").getUnclippedBoundsInRoot()
+        val edit = compose.onNodeWithText(shown.first()).getUnclippedBoundsInRoot()
         assertThat(edit.right).isAtLeast(textTool.left)
         assertThat(edit.top).isAtLeast(textTool.top - 8.dp)
         assertThat(edit.top).isAtMost(textTool.bottom)

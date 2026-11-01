@@ -76,6 +76,7 @@ struct ComposerSceneSelectionRelay {
             keyframes: edition?.purpose == .time
                 && ComposerObjectTimeSheetRule.offersKeyframes(animated: host.sceneIsAnimated),
             backgroundEntries: backgroundEntries(id: selection.id, family: selection.family),
+            sound: soundEntries(family: selection.family),
             adjustments: backgroundAdjustments(niveau))
         guard !entrees.isEmpty else { return nil }
         return ComposerSelectionColumn(level: niveau, items: entrees, openSection: edition?.openSection,
@@ -167,9 +168,17 @@ struct ComposerSceneSelectionRelay {
         case .volume:
             performBackgroundVolume(on: id)
         case .mute:
-            host.viewModel.toggleMediaMute(id: id)
+            toggleRailMute(id)
             HapticFeedback.light()
         }
+    }
+
+    /// Muet, dans le rail : il coupe le son posé, ou le son de la vidéo.
+    private func toggleRailMute(_ id: String) {
+        guard host.viewModel.currentEffects.audioPlayerObjects?.contains(where: { $0.id == id }) == true else {
+            return host.viewModel.toggleMediaMute(id: id)
+        }
+        host.viewModel.toggleAudioMute(id: id)
     }
 
     /// **Retirer termine l'édition** : l'objet parti, le rail des outils,

@@ -3,14 +3,16 @@ import XCTest
 
 /// **Les deux rails libellés du grand écran** (#13839, L6, maquette du 2026-10-30).
 ///
-/// À gauche, ce qu'on AJOUTE : Fermer · Texte · Média · Sticker · Son · Dessin · Fond, puis les entrées de ⋯ qui
+/// À gauche, ce qu'on AJOUTE : Fermer · Texte · Média · Sticker · Son · Dessin · Fond · Mention · Lieu (#14050),
+/// puis les entrées de ⋯ qui
 /// tiennent dans la hauteur, puis « ⋯ Plus » pour le reste. Aucune entrée n'est perdue : ce que le rail ne pose pas,
 /// Plus le sert. À droite, « SÉLECTION » : les actions de la barre de L5, vide sans sélection.
 final class ComposerLabeledRailTests: XCTestCase {
 
-    private let outils: [ComposerRestTool] = [.text, .media, .sticker, .sound, .drawing, .more]
-    private let menu: [ComposerMoreMenuEntry] = [.addSlide, .background, .animation, .slideDuration, .legend,
-                                                 .mention, .hashtags, .place, .preview, .saveToPhotos, .clearAll]
+    private let outils: [ComposerRestTool] = [.text, .media, .sticker, .sound, .drawing, .background, .mention,
+                                              .place, .more]
+    private let menu: [ComposerMoreMenuEntry] = [.addSlide, .animation, .slideDuration, .legend, .hashtags, .preview,
+                                                 .saveToPhotos, .clearAll]
 
     private func layout(height: CGFloat, entries: [ComposerMoreMenuEntry]? = nil,
                         tools: [ComposerRestTool]? = nil) -> ComposerLabeledRailLayout.Layout {
@@ -22,14 +24,14 @@ final class ComposerLabeledRailTests: XCTestCase {
 
     // MARK: - L'ordre de la maquette
 
-    func test_resolve_short_rail_servesCloseTheFiveToolsBackgroundThenPlus() {
-        let rail = layout(height: rowHeight(8))
+    func test_resolve_short_rail_servesCloseTheFiveToolsBackgroundMentionPlaceThenPlus() {
+        let rail = layout(height: rowHeight(10))
         XCTAssertEqual(rail.rows, [.close, .tool(.text), .tool(.media), .tool(.sticker), .tool(.sound),
-                                   .tool(.drawing), .more(.background), .plus])
+                                   .tool(.drawing), .tool(.background), .tool(.mention), .tool(.place), .plus])
     }
 
     func test_resolve_tallRail_promotesTheMoreEntriesThatFit_inTheirMenuOrder() {
-        let rail = layout(height: rowHeight(11))
+        let rail = layout(height: rowHeight(13))
         XCTAssertEqual(Array(rail.rows.suffix(4)), [.more(.addSlide), .more(.slideDuration), .more(.legend), .plus])
     }
 
@@ -52,9 +54,9 @@ final class ComposerLabeledRailTests: XCTestCase {
         }
     }
 
-    func test_resolve_withABackgroundMedia_servesNoFondRow_andItsEffectsMayFit() {
-        let rail = layout(height: rowHeight(10), entries: [.transitions, .visualEffect, .backgroundFraming, .clearAll])
-        XCTAssertFalse(rail.rows.contains(.more(.background)))
+    func test_resolve_withABackgroundMedia_keepsFond_andItsEffectsMayFit() {
+        let rail = layout(height: rowHeight(13), entries: [.transitions, .visualEffect, .backgroundFraming, .clearAll])
+        XCTAssertTrue(rail.rows.contains(.tool(.background)), "Fond sélectionne alors le fond posé")
         XCTAssertEqual(Array(rail.rows.suffix(4)), [.more(.transitions), .more(.visualEffect),
                                                     .more(.backgroundFraming), .plus])
     }
@@ -77,7 +79,13 @@ final class ComposerLabeledRailTests: XCTestCase {
         XCTAssertEqual(ComposerLabeledRailLayout.openEntry(drawing: false, typing: false, portal: .soundLibrary,
                                                            band: nil, effect: nil), .tool(.sound))
         XCTAssertEqual(ComposerLabeledRailLayout.openEntry(drawing: false, typing: false, portal: .background,
-                                                           band: nil, effect: nil), .more(.background))
+                                                           band: nil, effect: nil), .tool(.background))
+        XCTAssertEqual(ComposerLabeledRailLayout.openEntry(drawing: false, typing: false, portal: .reference,
+                                                           band: nil, effect: nil), .tool(.mention))
+        XCTAssertEqual(ComposerLabeledRailLayout.openEntry(drawing: false, typing: false, portal: .location,
+                                                           band: nil, effect: nil), .tool(.place))
+        XCTAssertEqual(ComposerLabeledRailLayout.openEntry(drawing: false, typing: false, portal: nil,
+                                                           band: .palette, effect: nil), .tool(.background))
         XCTAssertEqual(ComposerLabeledRailLayout.openEntry(drawing: false, typing: false, portal: .slideDuration,
                                                            band: nil, effect: nil), .more(.slideDuration))
         XCTAssertEqual(ComposerLabeledRailLayout.openEntry(drawing: false, typing: false, portal: nil,
@@ -130,7 +138,7 @@ final class ComposerLabeledRailTests: XCTestCase {
         XCTAssertNotEqual(ComposerLabeledRailCopy.title(.tool(.media)), ComposerLabeledRailCopy.label(.tool(.media)),
                           "« Ajouter du contenu » ne tient pas dans 112 pt : le rail dit « Média »")
         for entree in [ComposerLabeledRailEntry.tool(.text), .tool(.media), .tool(.sticker), .tool(.sound),
-                       .tool(.drawing), .more(.mention), .more(.hashtags), .more(.place),
+                       .tool(.drawing), .tool(.background), .tool(.mention), .more(.hashtags), .tool(.place),
                        .more(.addSlide), .more(.saveToPhotos), .more(.share)] {
             XCTAssertLessThanOrEqual(ComposerLabeledRailCopy.title(entree).count, 12, "\(entree)")
         }
@@ -141,7 +149,8 @@ final class ComposerLabeledRailTests: XCTestCase {
     func test_title_everyRowTheRailMayServe_hasAShortWordInEveryLanguage() throws {
         let promouvables = ComposerMoreMenuEntry.allCases.filter { $0 != .animation && $0 != .clearAll }
         let cles = promouvables.map { "composer.rail.title.\($0.rawValue)" }
-            + ["text", "media", "sticker", "sound", "drawing"].map { "composer.rail.title.\($0)" }
+            + ["text", "media", "sticker", "sound", "drawing", "background", "mention", "place"]
+                .map { "composer.rail.title.\($0)" }
         let catalogue = try Self.catalogue()
         for cle in cles {
             let valeurs = try XCTUnwrap(catalogue[cle], "\(cle) manque au catalogue")

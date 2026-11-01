@@ -18,6 +18,12 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageIdentifying
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.mention.MentionAutocomplete
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionContacts
+import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionContext
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.mood.MoodSpotlightRules
@@ -68,6 +74,8 @@ class MoodSpotlightViewModel internal constructor(
     private val outOfThread: OutOfThreadSendGate,
     private val now: () -> Long,
     savedStateHandle: SavedStateHandle,
+    mentionSearch: MentionSearch = MentionSearch.None,
+    mentionContacts: MentionContacts = MentionContacts.None,
 ) : ViewModel() {
 
     @Inject
@@ -80,9 +88,12 @@ class MoodSpotlightViewModel internal constructor(
         workManager: WorkManager,
         outOfThread: OutOfThreadSendGate,
         savedStateHandle: SavedStateHandle,
+        mentionSearch: MentionSearch,
+        mentionContacts: MentionContacts,
     ) : this(
         postRepository, userRepository, conversationRepository, messageRepository,
         sessionRepository, workManager, outOfThread, System::currentTimeMillis, savedStateHandle,
+        mentionSearch, mentionContacts,
     )
 
     private val statusId: String = savedStateHandle[STATUS_ID_ARG] ?: ""
@@ -90,11 +101,30 @@ class MoodSpotlightViewModel internal constructor(
     val state: StateFlow<MoodSpotlightUiState> = _state.asStateFlow()
     private var viewRecorded = false
 
+    /** The « @ » list of the reply (#14053): cached contacts at once, the mood's suggestions (`contextType=post`) by the law. */
+    private val mentions = MentionAutocomplete(
+        scope = viewModelScope,
+        search = mentionSearch,
+        contacts = mentionContacts,
+        selfId = { sessionRepository.currentUser.value?.id },
+    )
+    val mention: StateFlow<MentionAutocompleteState> = mentions.state
+
     init {
+        mentions.bind(MentionContext.post(statusId))
         viewModelScope.launch { load() }
     }
 
-    fun onReplyChange(text: String) = _state.update { it.copy(replyText = text) }
+    fun onReplyChange(text: String) {
+        _state.update { it.copy(replyText = text) }
+        mentions.onTextChange(text)
+    }
+
+    /** Puts the picked person's handle in place of the `@fragment` being typed, and closes the list. */
+    fun onMentionSelected(candidate: MentionCandidate) {
+        val text = mentions.select(candidate, _state.value.replyText)
+        _state.update { it.copy(replyText = text) }
+    }
 
     fun consumeReplyOutcome() = _state.update { it.copy(replyState = MoodReplyState.IDLE) }
 
@@ -141,6 +171,7 @@ class MoodSpotlightViewModel internal constructor(
         if (!current.canSend) return
         val text = current.replyText.trim()
         _state.update { it.copy(replyText = "", replyState = MoodReplyState.SENDING) }
+        mentions.reset()
         viewModelScope.launch {
             try {
                 val conversationId = when (val direct = conversationRepository.directConversationWith(entry.userId)) {

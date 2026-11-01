@@ -165,7 +165,8 @@ class ComposerSceneStackComposeTest {
 
         assertThat(vm.state.value.selectedSoundId).isEqualTo("voice")
         compose.onNodeWithText("Order").assertDoesNotExist()
-        listOf("Edit", "Duplicate", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        listOf("Duplicate", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("Edit").assertDoesNotExist()
     }
 
     @Test

@@ -232,6 +232,9 @@ internal fun ComposerSceneTool.glyph(): ImageVector = when (this) {
     ComposerSceneTool.STICKER -> MeeshyIcons.EmojiFilled
     ComposerSceneTool.SOUND -> MeeshyIcons.MusicNote
     ComposerSceneTool.DRAWING -> MeeshyIcons.Scribble
+    ComposerSceneTool.BACKGROUND -> MeeshyIcons.Palette
+    ComposerSceneTool.MENTION -> MeeshyIcons.Mention
+    ComposerSceneTool.PLACE -> MeeshyIcons.Location
     ComposerSceneTool.MORE -> MeeshyIcons.MoreHorizontal
 }
 
@@ -241,5 +244,8 @@ internal fun ComposerSceneTool.labelRes(): Int = when (this) {
     ComposerSceneTool.STICKER -> R.string.stories_composer_add_sticker
     ComposerSceneTool.SOUND -> R.string.story_tool_audio
     ComposerSceneTool.DRAWING -> R.string.story_tool_drawing
+    ComposerSceneTool.BACKGROUND -> R.string.story_tool_texture
+    ComposerSceneTool.MENTION -> R.string.composer_more_mention
+    ComposerSceneTool.PLACE -> R.string.story_place_title
     ComposerSceneTool.MORE -> R.string.stories_scene_overflow_menu
 }

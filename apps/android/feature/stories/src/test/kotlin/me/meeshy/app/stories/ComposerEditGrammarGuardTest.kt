@@ -47,4 +47,28 @@ class ComposerEditGrammarGuardTest {
         val framed = sources.filter { (_, text) -> text.contains("ComposerFramePanel(") }.keys
         assertWithMessage("le panneau Cadre n'a qu'un hôte, la bande du Cadrage").that(framed).containsExactly("ComposerSceneFrameUi.kt", "ComposerBackgroundEditRail.kt")
     }
+
+    @Test
+    fun `the Edit of a placed image or video lays rails, never the sheet of chips, its crop miniature or Plan`() {
+        val controllers = sources.getValue("StoryObjectControllers.kt")
+        assertWithMessage("Modifier d'un média posé ouvre encore la feuille à pastilles")
+            .that(controllers.contains("else -> openSheet(StoryComposerSheet.OBJECT_EDIT)")).isFalse()
+        sources.forEach { (name, text) ->
+            listOf("PlacedCropSection", "placed-crop-stage", "RetouchCropBrackets", "MediaSectionContent", "PlanSection").forEach { word ->
+                assertWithMessage("$name cite $word").that(text.contains(word)).isFalse()
+            }
+        }
+        assertWithMessage("la feuille du Modifier sert encore un média").that(sources.getValue("StorySelectionSheets.kt").contains("selectedMedia")).isFalse()
+    }
+
+    @Test
+    fun `no media has a level Edit any more, its tools lie flat in the rail and none opens the sheet of chips`() {
+        val forbidden = listOf(
+            "StoryEditingLevel.BackgroundEdit", "StoryEditingLevel.ObjectEdit", "OBJECT_EDIT", "ObjectEditSheet",
+            "ComposerBackgroundAction.EDIT",
+        )
+        sources.forEach { (name, text) ->
+            forbidden.forEach { word -> assertWithMessage("$name cite $word").that(text.contains(word)).isFalse() }
+        }
+    }
 }

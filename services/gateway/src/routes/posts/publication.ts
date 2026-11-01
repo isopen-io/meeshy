@@ -532,6 +532,7 @@ export async function runPublicationEffects(
       postCreatedAt: (post.createdAt ?? undefined) as Date | undefined,
       postExpiresAt: (post.expiresAt ?? undefined) as Date | undefined,
       excludeUserIds: [...createdMentions.mentionedUserIds, ...(repostedAuthorId ? [repostedAuthorId] : [])],
+      isRepost: asOptionalString(post.repostOfId) !== undefined,
       visibility,
       visibilityUserIds,
     }).catch((err: unknown) => {

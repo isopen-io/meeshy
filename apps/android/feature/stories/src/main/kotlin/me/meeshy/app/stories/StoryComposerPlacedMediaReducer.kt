@@ -5,6 +5,10 @@ import me.meeshy.sdk.model.AdjustmentKind
 import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryMediaCrop
+import me.meeshy.sdk.model.StoryMediaReframe
+import me.meeshy.sdk.model.StoryMediaRotation
+import me.meeshy.sdk.model.scene.StoryVolumeCarryingLaw
+import me.meeshy.sdk.model.scene.StoryVolumeState
 import me.meeshy.sdk.model.composer.look.ComposerCropPreset
 import me.meeshy.sdk.model.media.MediaTrimBounds
 import me.meeshy.sdk.model.media.MediaTrimRule
@@ -106,6 +110,38 @@ internal object StoryComposerPlacedMediaReducer {
         val (width, height) = state.placedSourceSizeOf(mediaId) ?: return state
         val framed = ComposerCropPreset.centeredCrop(preset.aspect(width, height), width, height)
         return cropped(state, mediaId, StoryMediaCrop.ofNormalized(framed))
+    }
+
+    /**
+     * Recadre l'image posée [mediaId] par le geste sur la scène (#13973, A-E4) : [panX] / [panY] en fractions du cadre,
+     * [zoom] le pincement ; la forme du cadre ne change pas. Inerte pour une vidéo ou un média qui n'est pas posé.
+     */
+    fun reframed(state: StoryComposerUiState, mediaId: String, panX: Double, panY: Double, zoom: Double): StoryComposerUiState {
+        val current = state.deck.slides.firstNotNullOfOrNull { s -> s.placedMedia.firstOrNull { it.id == mediaId } } ?: return state
+        if (state.placedMediaIsVideo(mediaId)) return state
+        return cropped(state, mediaId, StoryMediaReframe.reframed(current.crop, panX, panY, zoom))
+    }
+
+    /** Pivoter : un quart de tour antihoraire, comme iOS (`StoryMediaRotation.turned`). */
+    fun rotated(state: StoryComposerUiState, mediaId: String): StoryComposerUiState =
+        rewritten(state, mediaId) { it.copy(rotationDeg = StoryMediaRotation.turned(it.rotationDeg)) }
+
+    /** Le volume d'une vidéo posée, 0…1 ; 0 coupe en mémorisant le niveau quitté. Inerte pour une image. */
+    fun volumeSet(state: StoryComposerUiState, mediaId: String, volume: Float): StoryComposerUiState {
+        if (!state.placedMediaIsVideo(mediaId)) return state
+        return rewritten(state, mediaId) { media ->
+            StoryVolumeCarryingLaw.setVolume(StoryVolumeState(media.volume, media.mutedVolumeMemento), volume.coerceAtMost(1f))
+                .let { media.copy(volume = it.volume, mutedVolumeMemento = it.mutedVolumeMemento) }
+        }
+    }
+
+    /** Muet : coupe la vidéo posée, ou lui rend le niveau qu'elle avait. Inerte pour une image. */
+    fun muteToggled(state: StoryComposerUiState, mediaId: String): StoryComposerUiState {
+        if (!state.placedMediaIsVideo(mediaId)) return state
+        return rewritten(state, mediaId) { media ->
+            StoryVolumeCarryingLaw.toggleMute(StoryVolumeState(media.volume, media.mutedVolumeMemento))
+                .let { media.copy(volume = it.volume, mutedVolumeMemento = it.mutedVolumeMemento) }
+        }
     }
 
     private fun adjustments(state: StoryComposerUiState, mediaId: String, change: (ImageAdjustments) -> ImageAdjustments): StoryComposerUiState {

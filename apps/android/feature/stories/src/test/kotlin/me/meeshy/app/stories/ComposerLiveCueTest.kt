@@ -111,6 +111,18 @@ class ComposerLiveCueTest {
     }
 
     @Test
+    fun `a placed video plays at its own volume, silent when muted, the background staying at full volume`() {
+        val half = StoryPlacedMedia(id = "p1", mediaId = "clip", volume = 0.3f)
+        val muted = StoryPlacedMedia(id = "p2", mediaId = "clip", volume = 0f, mutedVolumeMemento = 0.6f)
+
+        val cues = state(placed = listOf(half, muted)).cues()
+
+        assertThat(cues.single { it.subject.id == "p1" }.volume).isEqualTo(0.3f)
+        assertThat(cues.single { it.subject.id == "p2" }.volume).isEqualTo(0f)
+        assertThat(cues.single { it.subject.id == "bg" }.volume).isEqualTo(1f)
+    }
+
+    @Test
     fun `a recorded sound plays from its media`() {
         val recorded = StoryAudioPlayerObject(id = "a4", postMediaId = "clip", volume = 1f)
 

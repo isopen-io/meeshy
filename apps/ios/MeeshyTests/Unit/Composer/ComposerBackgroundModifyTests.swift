@@ -96,10 +96,12 @@ final class ComposerBackgroundModifyTests: XCTestCase {
                                                backgroundActions: [.modify, .replace, .putOnScene, .remove],
                                                sections: [], extras: [], keyframes: false, backgroundEntries: outils)
         XCTAssertEqual(rail, [.backgroundEntry(.framing), .backgroundEntry(.trim), .backgroundEntry(.filters),
-                              .backgroundEntry(.frames), .backgroundEntry(.adjust), .volume, .mute,
+                              .backgroundEntry(.frames), .backgroundEntry(.adjust), .backgroundEntry(.sound),
                               .backgroundEntry(.rotate), .backgroundEntry(.description),
                               .background(.replace), .background(.putOnScene), .background(.remove)])
         XCTAssertFalse(rail.contains(.background(.modify)), "plus de niveau « Modifier »")
+        XCTAssertEqual(ComposerBackgroundModify.opening(.sound), .level(.backgroundSound),
+                       "Son pose son niveau, Volume · Muet, par-dessus")
     }
 
     func test_railItems_ofEachLevel_openWithBack() {

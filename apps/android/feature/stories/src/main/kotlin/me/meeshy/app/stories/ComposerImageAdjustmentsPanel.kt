@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -59,6 +60,8 @@ import me.meeshy.sdk.model.ImageAdjustments
 import me.meeshy.sdk.model.composer.look.ComposerAdjustReading
 import me.meeshy.ui.icons.MeeshyIcons
 
+private val HEAD_HEIGHT = 48.dp
+
 /**
  * Le panneau du sous-outil RÉGLER / EFFETS du média sélectionné — UN réglage à la fois, comme iOS
  * (`ComposerMediaAdjustPanel`, #9495) : au-dessus, quand le média porte un rendu, « Comparer » (appui maintenu) et
@@ -69,6 +72,8 @@ import me.meeshy.ui.icons.MeeshyIcons
  * que ses curseurs, et « Réinitialiser » ne remet que lui au neutre. Une vidéo ne montre que les réglages qu'elle peint
  * ([AdjustmentKind.isServedForVideo]). L'accent est un PARAMÈTRE (couleur de contexte). Toucher deux fois la valeur remet le
  * réglage choisi au neutre. [onCompare] `null` : la surface ne sait pas montrer l'original, le contrôle ne se peint pas.
+ * La rangée de « Comparer » et « Réinitialiser » garde sa hauteur dès l'ouverture, vide tant qu'ils n'ont rien à faire : le
+ * premier geste ne fait plus grandir le panneau, et le curseur ni les pastilles ne bougent sous le doigt (#13973).
  */
 @Composable
 internal fun ComposerImageAdjustmentsPanel(
@@ -87,8 +92,12 @@ internal fun ComposerImageAdjustmentsPanel(
     val shown = ComposerAdjustReading.shown(AdjustmentKind.entries.firstOrNull { it.wireName == chosenName }, kinds)
     val canReset = adjustments.activeCount(family) > 0
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (carriesLook && (onCompare != null || canReset)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.heightIn(min = HEAD_HEIGHT).testTag("adjust-head"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (carriesLook) {
                 if (onCompare != null) CompareControl(isVideo, accent, onCompare)
                 if (canReset) {
                     ActionCapsule(

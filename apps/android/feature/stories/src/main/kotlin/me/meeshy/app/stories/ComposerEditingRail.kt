@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -145,17 +146,26 @@ internal fun SceneRail(
 }
 
 /**
- * Les options de l'objet sélectionné, dans la colonne des outils (#13956) : Modifier, Dupliquer, Temps, Retirer — la liste
- * de [me.meeshy.sdk.model.composer.ComposerSelectionActions], aucun Ordre (#13917). Chacune un disque et son mot, une cible
- * de toute sa largeur ; Retirer en couleur d'alerte. Trop courte, la colonne défile au lieu d'écraser ses cibles.
+ * Un outil posé À PLAT dans le rail d'un objet sélectionné (#14047) : son disque, son mot et ce qu'il fait — poser sa bande,
+ * agir aussitôt ou ouvrir sa feuille.
+ */
+internal class RailTool(val icon: ImageVector, @StringRes val label: Int, val onClick: () -> Unit)
+
+/**
+ * Les options de l'objet sélectionné, dans la colonne des outils (#13956) : ses outils À PLAT ([tools], ceux d'une image,
+ * d'une vidéo ou d'un son posés, #14047), puis Dupliquer, Temps, Retirer — la liste de
+ * [me.meeshy.sdk.model.composer.ComposerSelectionActions], aucun Ordre (#13917) ; Modifier n'y est plus que pour l'objet
+ * qui s'écrit ou s'échange (texte, sticker, lieu). Chacune un disque et son mot, une cible de toute sa largeur ; Retirer en
+ * couleur d'alerte. Trop courte, la colonne défile au lieu d'écraser ses cibles.
  */
 @Composable
-internal fun SceneOptionColumn(bar: SceneSelectionBar, onAction: (ComposerSelectionAction) -> Unit) {
+internal fun SceneOptionColumn(bar: SceneSelectionBar, tools: List<RailTool>, onAction: (ComposerSelectionAction) -> Unit) {
     Column(
         modifier = Modifier.testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        tools.forEach { tool -> SceneOptionButton(tool.icon, stringResource(tool.label), Color.White, tool.onClick) }
         bar.actions.forEach { action -> SceneOptionItem(action) { onAction(action) } }
     }
 }
@@ -196,15 +206,17 @@ internal fun SceneOptionButton(icon: ImageVector, label: String, tint: Color, on
 }
 
 /**
- * Les niveaux de la colonne en édition (#13956) : le premier porte les options de l'objet, ou le niveau « Fond » du fond
- * média sélectionné (#13973) ; « Modifier » du fond pose ses réglages par-dessus ([BackgroundEdit]), et un réglage sa bande
- * au bas de la scène ([BackgroundBand], lot A-E2). Les lots suivants y ajoutent les leurs.
+ * Les niveaux de la colonne en édition (#13956) : le premier porte les options de l'objet, ou le rail « Fond » du fond
+ * média sélectionné (#13973) — leurs outils À PLAT, plus de « Modifier » (#14047) ; un réglage pose sa bande au bas de la
+ * scène et son titre par-dessus : celui du fond ([BackgroundBand]), d'une image ou d'une vidéo posée ([ObjectBand]), d'un
+ * son posé ([SoundBand]). Retour descend d'un niveau.
  */
 internal sealed interface StoryEditingLevel {
     data object ObjectOptions : StoryEditingLevel
     data object Background : StoryEditingLevel
-    data object BackgroundEdit : StoryEditingLevel
     data class BackgroundBand(val tool: me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool) : StoryEditingLevel
+    data class ObjectBand(val tool: me.meeshy.sdk.model.composer.edit.ComposerPlacedMediaTool) : StoryEditingLevel
+    data class SoundBand(val section: me.meeshy.sdk.model.composer.ComposerObjectEditorSection) : StoryEditingLevel
 }
 
 /** La pile des niveaux de la colonne ([ComposerRailStack]) et ses deux gestes : poser un niveau plus fin, descendre d'un niveau. */

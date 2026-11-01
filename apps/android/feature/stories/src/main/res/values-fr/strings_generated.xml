@@ -47,7 +47,10 @@
     <string name="composer_edit_background_framing">Cadrage</string>
     <string name="composer_edit_frames">Cadres</string>
     <string name="composer_edit_loop">Boucle</string>
+    <string name="composer_edit_mute">Muet</string>
+    <string name="composer_edit_rotate">Pivoter</string>
     <string name="composer_edit_trim">Couper</string>
+    <string name="composer_edit_volume">Volume</string>
     <string name="composer_family_text">Texte</string>
     <string name="composer_frise_earlier">Plus tôt</string>
     <string name="composer_frise_empty">Posez un texte ou un sticker : chaque objet devient une piste.</string>

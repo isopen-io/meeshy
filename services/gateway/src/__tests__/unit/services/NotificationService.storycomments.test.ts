@@ -60,6 +60,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     postReaction: {
       findMany: jest.fn(),
     },
+    userRelation: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
     friendRequest: {
       findMany: jest.fn(),
     },
@@ -104,6 +105,12 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+
+/** Entourage de l'AUTEUR réglé à « Ami » (#13929) ; les défauts : `notifs-cercles-13929.test.ts`. */
+const AUTHOR_ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
+const authorEntourageFriend = ({ where }: { where: { userId: string } }) =>
+  Promise.resolve(where.userId === AUTHOR_ID ? AUTHOR_ENTOURAGE_FRIEND : null);
 
 // -------------------------------------------------------
 // Test helpers
@@ -142,7 +149,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
     service.setSocketIO(mockIO as any, new Map());
 
     // By default user preferences allow all notifications
-    prisma.userPreferences.findUnique.mockResolvedValue(null);
+    prisma.userPreferences.findUnique.mockImplementation(authorEntourageFriend);
     // By default no reactors (override in individual tests)
     prisma.postReaction.findMany.mockResolvedValue([]);
   });
@@ -709,16 +716,17 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
     });
 
-    it('COMMUNITY: fans out to community co-members, not the author-friend graph', async () => {
+    it('COMMUNITY: relays to the entourage members who are co-members — never a co-member outside the entourage', async () => {
       const CO_MEMBER = '507f1f77bcf86cd799439009';
       // getCommunityCoMemberIds resolves memberships then co-members.
       prisma.communityMember.findMany
         .mockResolvedValueOnce([{ communityId: 'comm-1' }]) // author's memberships
-        .mockResolvedValueOnce([{ userId: CO_MEMBER }]);    // co-members of comm-1
+        .mockResolvedValueOnce([{ userId: CO_MEMBER }, { userId: FRIEND_2 }]); // co-members of comm-1
       prisma.postComment.findMany.mockResolvedValue([]);
-      // FRIEND_1 is a friend but NOT a community co-member → must be dropped.
+      // FRIEND_1: friend, not co-member (cannot see). FRIEND_2: both. CO_MEMBER: no link (#13929).
       prisma.friendRequest.findMany.mockResolvedValue([
         { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+        { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
       ]);
       prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
         Promise.resolve(makeNotif(data.type)),
@@ -731,7 +739,8 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       });
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
-      expect(calls.find((c) => c[0].data.userId === CO_MEMBER)?.[0].data.type).toBe('friend_story_comment');
+      expect(calls.find((c) => c[0].data.userId === FRIEND_2)?.[0].data.type).toBe('friend_story_comment');
+      expect(calls.find((c) => c[0].data.userId === CO_MEMBER)).toBeUndefined();
       expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeUndefined();
     });
 
@@ -1180,7 +1189,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       const result = await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
-      expect(result.truncatedBuckets).toContain('friendRequests');
+      expect(result.truncatedBuckets).toContain('entourage');
       expect(result.friendIds).toHaveLength(500);
       expect(result.friendIds).not.toContain(otherUser(500));
     });

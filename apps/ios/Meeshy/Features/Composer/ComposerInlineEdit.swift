@@ -58,12 +58,11 @@ nonisolated enum ComposerInlineFamily: Equatable, Sendable {
         return false
     }
 
-    /// **« Modifier » se règle en rails superposés** (#13974) — N1, N2, N3 et
-    /// la feuille basse : le fond (I-E2), l'image posée (I-E3) et la vidéo
-    /// posée (I-E4). Les autres familles gardent leurs sections jusqu'à leur
-    /// lot.
+    /// **Les outils se posent à plat dans le rail, leurs réglages en niveaux
+    /// superposés** (#13974, #14048) — le fond, l'image, la vidéo et le son
+    /// posés. Les autres familles gardent leurs sections jusqu'à leur lot.
     var modifiesInLevels: Bool {
-        isBackground || self == .image || self == .video
+        isBackground || self == .image || self == .video || self == .audio
     }
 }
 
@@ -177,16 +176,14 @@ nonisolated enum ComposerInlineEditing {
     }
 
     /// **Les puces LIBELLÉES d'une feuille** (#13839, L5) : Modifier sert les
-    /// réglages de l'objet ; Temps sa fenêtre, son plan et, pour un son, ses
-    /// bornes — un son se modifie dans sa propre feuille, son rognage ne doit
-    /// pas s'y perdre.
+    /// réglages de l'objet ; Temps sa fenêtre et son plan. Le rognage d'un son
+    /// est un outil de son rail (Couper, #14048), jamais une puce de Temps.
     static func chips(_ purpose: ComposerInlineEditPurpose,
                       family: ComposerInlineFamily,
                       served: [ComposerObjectEditorSection]) -> [ComposerObjectEditorSection] {
         switch purpose {
         case .time:
-            let temps: [ComposerObjectEditorSection] = [.timing, .plan] + (family == .audio ? [.media(.trim)] : [])
-            return temps.filter(served.contains)
+            return [ComposerObjectEditorSection.timing, .plan].filter(served.contains)
         case .modify:
             guard family != .audio else { return [] }
             return served.filter { $0 != .timing && $0 != .plan }
