@@ -49,6 +49,17 @@ const SCANNED_ROOTS: readonly string[] = [
 const FORBIDDEN = /\bresolvePrefsOnly\b/;
 
 /**
+ * TROISIÈME CLAUSE (#13928) — la présence se lit sur le NIVEAU effectif, jamais sur un
+ * booléen d'amitié. `areConnected` était l'entrée booléenne de la loi : « ami » ou
+ * « pas ami ». Elle ne sait pas dire qu'un Ami ne voit que « en ligne » alors qu'un
+ * Proche voit le détail, et la laisser revenir réouvre la porte par laquelle
+ * `lastActiveAt` partait vers tout ami. Un Ami ne reçoit JAMAIS `lastActiveAt` : c'est
+ * la loi (`resolvePresenceVisibility`), seule à le décider, que les témoins de
+ * comportement rejouent sur chaque porte.
+ */
+const FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT = /\bareConnected\b/;
+
+/**
  * Une clé de tri liée DIRECTEMENT à un champ homonyme de la requête —
  * `sortBy: query.sortBy`, `sortOrder: q.sortOrder ?? 'desc'`. Le défaut ne vit pas
  * dans l'opérateur de repli (`||`, `??`) mais dans l'absence de RÉSOLVEUR : la
@@ -122,5 +133,28 @@ describe('garde — un ORDRE demandé par le client passe par une liste close', 
       .map((file) => relative(REPO_ROOT, file));
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('garde — la présence se lit sur le niveau, jamais sur un booléen d\'amitié (#13928)', () => {
+  it('interdit bien l\'identifiant, défini comme passé', () => {
+    expect(FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT.test('areConnected: boolean;')).toBe(true);
+    expect(FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT.test('areConnected,')).toBe(true);
+    expect(FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT.test('relationLevel,')).toBe(false);
+  });
+
+  it('aucun `areConnected` ne subsiste hors tests — ni dans le gateway, ni dans la loi partagée', () => {
+    const offenders = scannedFiles()
+      .filter((file) => FORBIDDEN_BOOLEAN_FRIENDSHIP_INPUT.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(REPO_ROOT, file));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('la loi décide la dernière connexion d\'un Ami : un seul site la pose à `true` pour un lecteur ordinaire', () => {
+    const law = readFileSync(join(SHARED_ROOT, 'utils/presence-visibility.ts'), 'utf8');
+
+    expect(law).toContain("'presence.detailed'");
+    expect(law).toContain("'presence.online'");
   });
 });

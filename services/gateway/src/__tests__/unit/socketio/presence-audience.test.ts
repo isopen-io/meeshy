@@ -18,6 +18,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import {
   presenceStatusAudience,
   presenceStatusEmissions,
@@ -25,18 +26,21 @@ import {
 
 const SEEN_AT = new Date('2026-08-25T10:00:00.000Z');
 
+const levels = (entries: Record<string, RelationLevel>): ReadonlyMap<string, RelationLevel> =>
+  new Map(Object.entries(entries));
+
 describe('presenceStatusAudience', () => {
   it('adresse les AMIS, les ADMIN+ et SOI — et aucune room de conversation', () => {
     const audience = presenceStatusAudience({
       subjectId: 'u_self',
       isAnonymous: false,
-      friendIds: ['u_friend'],
+      friendLevels: levels({ u_friend: 'FRIEND' }),
       adminIds: ['u_admin'],
     });
 
     expect(audience.privilegedRooms).toEqual([ROOMS.user('u_admin'), ROOMS.user('u_self')]);
     expect(audience.friendRooms).toEqual([ROOMS.user('u_friend')]);
-    const all = [...audience.privilegedRooms, ...audience.friendRooms];
+    const all = [...audience.privilegedRooms, ...audience.friendRooms, ...audience.closeRooms];
     expect(all.some((room) => room.startsWith('conversation:'))).toBe(false);
   });
 
@@ -44,11 +48,11 @@ describe('presenceStatusAudience', () => {
     const audience = presenceStatusAudience({
       subjectId: 'u_self',
       isAnonymous: false,
-      friendIds: [],
+      friendLevels: levels({}),
       adminIds: [],
     });
 
-    const all = [...audience.privilegedRooms, ...audience.friendRooms];
+    const all = [...audience.privilegedRooms, ...audience.friendRooms, ...audience.closeRooms];
     expect(all).toEqual([ROOMS.user('u_self')]);
     expect(all).not.toContain(ROOMS.user('u_stranger'));
   });
@@ -57,19 +61,20 @@ describe('presenceStatusAudience', () => {
     const audience = presenceStatusAudience({
       subjectId: 'part_guest',
       isAnonymous: true,
-      friendIds: ['u_friend'],
+      friendLevels: levels({ u_friend: 'FRIEND' }),
       adminIds: ['u_admin'],
     });
 
     expect(audience.privilegedRooms).toEqual([ROOMS.user('u_admin')]);
     expect(audience.friendRooms).toEqual([]);
+    expect(audience.closeRooms).toEqual([]);
   });
 
   it('un ami QUI EST aussi administrateur ne compte qu\'une fois, du côté privilégié', () => {
     const audience = presenceStatusAudience({
       subjectId: 'u_self',
       isAnonymous: false,
-      friendIds: ['u_admin', 'u_friend'],
+      friendLevels: levels({ u_admin: 'FRIEND', u_friend: 'FRIEND' }),
       adminIds: ['u_admin'],
     });
 
@@ -81,7 +86,7 @@ describe('presenceStatusAudience', () => {
     const audience = presenceStatusAudience({
       subjectId: 'u_admin_self',
       isAnonymous: false,
-      friendIds: ['u_admin_self'],
+      friendLevels: levels({ u_admin_self: 'FRIEND' }),
       adminIds: ['u_admin_self'],
     });
 
@@ -94,7 +99,7 @@ describe('presenceStatusEmissions', () => {
   const base = {
     subjectId: 'u_self',
     isAnonymous: false,
-    friendIds: ['u_friend'],
+    friendLevels: levels({ u_friend: 'FRIEND', u_close: 'CLOSE', u_blood: 'BLOOD' }),
     adminIds: ['u_admin'],
     lastActiveAt: SEEN_AT,
   };
@@ -108,8 +113,18 @@ describe('presenceStatusEmissions', () => {
 
     expect(emissions).toEqual([
       { rooms: [ROOMS.user('u_admin'), ROOMS.user('u_self')], lastActiveAt: SEEN_AT },
-      { rooms: [ROOMS.user('u_friend')], lastActiveAt: SEEN_AT },
+      { rooms: [ROOMS.user('u_close'), ROOMS.user('u_blood')], lastActiveAt: SEEN_AT },
+      { rooms: [ROOMS.user('u_friend')], lastActiveAt: null },
     ]);
+  });
+
+  it("un AMI ne reçoit JAMAIS lastActiveAt : sa charge porte null même quand la cible l'autorise (#13928)", () => {
+    const emissions = presenceStatusEmissions({ ...base, showOnlineStatus: true, showLastSeen: true });
+
+    const friend = emissions.find((e) => e.rooms.includes(ROOMS.user('u_friend')));
+    expect(friend?.lastActiveAt).toBeNull();
+    const detailed = emissions.filter((e) => e.lastActiveAt !== null).flatMap((e) => e.rooms);
+    expect(detailed).not.toContain(ROOMS.user('u_friend'));
   });
 
   it('showOnlineStatus=false coupe les AMIS — jamais les ADMIN+ ni les autres appareils', () => {
@@ -124,7 +139,7 @@ describe('presenceStatusEmissions', () => {
     ]);
   });
 
-  it('showLastSeen=false efface la dernière connexion pour les AMIS et la garde pour les privilégiés', () => {
+  it('showLastSeen=false efface la dernière connexion pour les AMIS, PROCHES et SANG (une seule charge nulle) et la garde pour les privilégiés', () => {
     const emissions = presenceStatusEmissions({
       ...base,
       showOnlineStatus: true,
@@ -133,7 +148,7 @@ describe('presenceStatusEmissions', () => {
 
     expect(emissions).toEqual([
       { rooms: [ROOMS.user('u_admin'), ROOMS.user('u_self')], lastActiveAt: SEEN_AT },
-      { rooms: [ROOMS.user('u_friend')], lastActiveAt: null },
+      { rooms: [ROOMS.user('u_close'), ROOMS.user('u_blood'), ROOMS.user('u_friend')], lastActiveAt: null },
     ]);
   });
 
@@ -142,7 +157,7 @@ describe('presenceStatusEmissions', () => {
       presenceStatusEmissions({
         subjectId: 'part_guest',
         isAnonymous: true,
-        friendIds: ['u_friend'],
+        friendLevels: levels({ u_friend: 'FRIEND' }),
         adminIds: [],
         lastActiveAt: SEEN_AT,
         showOnlineStatus: true,
@@ -155,7 +170,7 @@ describe('presenceStatusEmissions', () => {
     const emissions = presenceStatusEmissions({
       subjectId: 'u_self',
       isAnonymous: false,
-      friendIds: [],
+      friendLevels: levels({}),
       adminIds: [],
       lastActiveAt: null,
       showOnlineStatus: true,
