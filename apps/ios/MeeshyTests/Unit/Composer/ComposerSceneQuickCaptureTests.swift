@@ -143,10 +143,8 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
     }
 
     @MainActor
-    func test_hintCopy_estServiDansLesSeptLangues() {
-        let lignes = ComposerSceneQuickCapture.gestureLines(.photoOrVideo).map(ComposerSceneCameraCopy.gestureLine)
-        XCTAssertFalse(lignes.contains(where: \.isEmpty))
-        XCTAssertEqual(Set(lignes).count, lignes.count, "chaque temps a ses propres mots")
+    func test_hintCopy_estServi() {
+        XCTAssertFalse(ComposerSceneCameraCopy.emptySceneLine.isEmpty)
     }
 
     // MARK: - Le flash

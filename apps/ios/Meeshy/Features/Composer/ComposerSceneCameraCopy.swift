@@ -119,44 +119,17 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Revenir à la scène", bundle: .main)
     }
 
-    /// **Les gestes d'une scène vide, une ligne chacun** (#8653, #8671,
-    /// #8711, #9464) : le viseur au premier toucher, la photo au double toucher,
-    /// la vidéo au maintien — le format décide lesquels paraissent
-    /// (`ComposerSceneQuickCapture.gestureLines`).
-    static func gestureLine(_ line: ComposerSceneQuickCapture.GestureLine) -> String {
-        switch line {
-        case .tapArm:
-            return String(localized: "composer.camera.gesture.tapArm",
-                          defaultValue: "Toucher : ouvrir le viseur", bundle: .main)
-        case .tapAgainPhoto:
-            return String(localized: "composer.camera.gesture.tapAgainPhoto",
-                          defaultValue: "Puis toucher deux fois : photo", bundle: .main)
-        case .holdFilm:
-            return String(localized: "composer.camera.gesture.holdFilm",
-                          defaultValue: "Maintenir : filmer", bundle: .main)
-        }
+    /// **La scène vide dit UNE ligne** (#13899, inventaire B13 du composer
+    /// « scène d'abord ») : le geste qui commence, rien d'autre. Elle s'efface
+    /// dès le premier objet posé.
+    static var emptySceneLine: String {
+        String(localized: "composer.scene.empty.line",
+               defaultValue: "Touchez la scène pour la caméra", bundle: .main)
     }
 
-    /// **La scène vide se VEND avant de s'expliquer** (#8671, directive porteur
-    /// 2026-09-29 : « être plus commercial : ceci est votre scène, ajouter
-    /// texte, dessin, image, vidéo. Puis le petit détail en plus grand »).
-    static var emptySceneTitle: String {
-        String(localized: "composer.scene.empty.title",
-               defaultValue: "Ceci est votre scène", bundle: .main)
-    }
-
-    static var emptySceneInvite: String {
-        String(localized: "composer.scene.empty.invite",
-               defaultValue: "Ajoutez-y un texte, un dessin, une image ou une vidéo — et faites-la vôtre.",
-               bundle: .main)
-    }
-
-    /// Ce que VoiceOver lit de la scène vide : les trois lignes, dans l'ordre
-    /// où l'œil les parcourt.
+    /// Ce que VoiceOver lit de la scène vide : la même ligne.
     static func emptySceneSpoken(_ hint: ComposerSceneQuickCapture.Hint) -> String {
-        ([emptySceneTitle, emptySceneInvite]
-            + ComposerSceneQuickCapture.gestureLines(hint).map(gestureLine))
-            .joined(separator: ". ")
+        emptySceneLine
     }
 
     /// **Le cadenas** (#8671) — dit ce que le glissé FAIT.
