@@ -8,6 +8,7 @@
  * personne n'est bloqué, tout candidat est vivant, toute autre lecture (langues)
  * passe à l'implémentation d'origine.
  */
+import { afterEach, beforeEach } from '@jest/globals';
 import { relationPairKey, type RelationLevel } from '@meeshy/shared/types/relation';
 
 type InClause = { readonly in?: readonly string[] };
@@ -44,3 +45,28 @@ export const aliveAndUnblocked =
     if (args.where.deletedAt === null && args.where.isActive === true) return (args.where.id?.in ?? []).map((id) => ({ id }));
     return origin(args);
   };
+
+type LinkablePrisma = {
+  readonly userRelation: { readonly findMany: { mockImplementation(fn: unknown): unknown; mockResolvedValue(value: unknown): unknown } };
+  readonly user: { readonly findMany: { mockImplementation(fn: unknown): unknown; mockResolvedValue(value: unknown): unknown } };
+  readonly participant: { readonly findMany: { mockResolvedValue(value: unknown): unknown } };
+};
+
+/**
+ * Dans le `describe` qui l'appelle : tout le monde est lié avant chaque cas, et
+ * le double partagé est remis à vide après — pour les suites dont le Prisma est
+ * un singleton de module.
+ */
+export function everyoneLinkedInThisBlock(prismaOf: () => LinkablePrisma): void {
+  beforeEach(() => {
+    const prisma = prismaOf();
+    prisma.userRelation.findMany.mockImplementation(userRelationRows());
+    prisma.user.findMany.mockImplementation(aliveAndUnblocked());
+    prisma.participant.findMany.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    const prisma = prismaOf();
+    prisma.userRelation.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockResolvedValue([]);
+  });
+}

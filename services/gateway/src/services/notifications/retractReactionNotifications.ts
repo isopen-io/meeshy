@@ -45,13 +45,12 @@ import {
  *     POST emporterait les réactions aux COMMENTAIRES du même post par le même
  *     acteur avec le même emoji.
  *
- * **Aucun drainage, contrairement au post et au commentaire.** Ce qui les
- * oblige à boucler est l'AUDIENCE : un post notifie tout un voisinage. Une
- * réaction notifie une personne — l'auteur du contenu — donc au plus une ligne,
- * et le throttle par paire (`shouldCreateReactionNotification`) fait qu'en
- * régime normal il n'y en a même aucune. Le lot unique est très au-dessus du
- * réel ; il absorbe les doublons qu'un cycle ajout/retrait/ajout aurait pu
- * laisser sans jamais avoir à reboucler.
+ * **Un drainage, borné.** Une réaction notifie l'auteur du contenu (au plus
+ * une ligne), mais celle d'une PUBLICATION est aussi relayée à l'entourage
+ * (`friend_content_reaction`, #14068) — jusqu'à `FANOUT_ROW_CAP` lignes. Le
+ * retrait boucle donc par lots tant qu'un lot revient plein, jusqu'à
+ * `REACTION_NOTIFICATION_RETRACTION_MAX_ROUNDS`. La clé « relayé une fois »
+ * du relais reste posée : réagir de nouveau ne relaie pas une seconde fois.
  */
 
 /** Le contenu auquel la réaction retirée s'appliquait. */
@@ -81,7 +80,7 @@ export interface RemovedReaction {
  */
 const REACTION_NOTIFICATION_TYPES: Readonly<Record<ReactionSubject['kind'], readonly string[]>> = {
   message: ['message_reaction'],
-  post: ['post_like', 'story_reaction', 'status_reaction'],
+  post: ['post_like', 'story_reaction', 'status_reaction', 'friend_content_reaction'],
   comment: ['comment_reaction', 'comment_like'],
 };
 
@@ -101,11 +100,11 @@ const SUBJECT_PATHS: Readonly<Record<ReactionSubject['kind'], readonly string[]>
 /** Les deux clés sous lesquelles les producteurs écrivent l'emoji. */
 const EMOJI_PATHS = ['metadata.reactionEmoji', 'metadata.emoji'] as const;
 
-/**
- * Plafond du lot unique. Une réaction produit au plus UNE ligne ; la marge
- * couvre les doublons historiques sans jamais servir de pagination.
- */
+/** Taille d'un lot du drainage. */
 export const REACTION_NOTIFICATION_RETRACTION_BATCH_SIZE = 50;
+
+/** Borne du drainage : 20 lots couvrent l'audience maximale d'un relais (500) avec sa marge. */
+export const REACTION_NOTIFICATION_RETRACTION_MAX_ROUNDS = 20;
 
 type RawObjectId = string | { $oid?: string };
 
@@ -160,6 +159,20 @@ export async function retractReactionNotifications(
   // refuse symétriquement de notifier pour lui.
   if (!removed.actorId || !removed.subject.id || !removed.emoji) return 0;
 
+  let total = 0;
+  for (let round = 0; round < REACTION_NOTIFICATION_RETRACTION_MAX_ROUNDS; round += 1) {
+    const { retracted, full } = await retractOneBatch(prisma, removed, announcer);
+    total += retracted;
+    if (!full) break;
+  }
+  return total;
+}
+
+async function retractOneBatch(
+  prisma: ReactionNotificationRetractionPrisma,
+  removed: RemovedReaction,
+  announcer: RetractedNotificationAnnouncer | undefined
+): Promise<{ readonly retracted: number; readonly full: boolean }> {
   const raw = (await prisma.$runCommandRaw({
     find: 'Notification',
     filter: {
@@ -186,7 +199,7 @@ export async function retractReactionNotifications(
 
   const rows = raw?.cursor?.firstBatch ?? [];
   const ids = rows.map((row) => objectId(row._id)).filter((id): id is string => id !== undefined);
-  if (ids.length === 0) return 0;
+  if (ids.length === 0) return { retracted: 0, full: false };
 
   await prisma.notification.deleteMany({ where: { id: { in: ids } } });
 
@@ -204,5 +217,5 @@ export async function retractReactionNotifications(
     await announcer?.announceNotificationsRetracted(retracted);
   }
 
-  return ids.length;
+  return { retracted: ids.length, full: rows.length >= REACTION_NOTIFICATION_RETRACTION_BATCH_SIZE };
 }

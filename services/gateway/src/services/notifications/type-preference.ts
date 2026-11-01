@@ -53,7 +53,8 @@ export function isNotificationTypeEnabledByPreference(
     case 'story_thread_reply': return prefs.postCommentEnabled ?? true;
     case 'friend_new_post':
     case 'friend_new_story':
-    case 'friend_new_mood':   return prefs.friendContentEnabled ?? true;
+    case 'friend_new_mood':
+    case 'friend_content_reaction': return prefs.friendContentEnabled ?? true;
     case 'new_conversation_direct':
     case 'new_conversation_group':
     case 'new_conversation':

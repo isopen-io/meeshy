@@ -358,11 +358,11 @@ internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryCompose
         },
         onScrub = viewModel::onPlayheadMoved,
         onWindow = viewModel::onSceneObjectWindow,
-        splittableIds = state.deck.selectedSlide.elements.map { it.id }.toSet(),
-        // « Couper » à la tête (#14221) : une réduction, donc un seul pas d'annulation.
+        splittableIds = StoryComposerSplitReducer.splittableIds(state),
+        // « Couper » à la tête (#14221, #14224) : une réduction, donc un seul pas d'annulation.
         onSplit = { id ->
-            val newId = newTextElementId()
-            viewModel.onSceneReduce { s -> StoryComposerSceneReducer.textSplit(s, id, newId) }
+            val newId = java.util.UUID.randomUUID().toString()
+            viewModel.onSceneReduce { s -> StoryComposerSplitReducer.split(s, id, newId) }
         },
     )
 }

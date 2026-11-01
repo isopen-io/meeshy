@@ -61,9 +61,22 @@ export type World = {
   readonly directsDown?: boolean;
   readonly silent?: readonly string[];
   readonly previousCommenters?: readonly string[];
+  readonly post?: Readonly<Record<string, unknown>>;
 };
 
 export const COMMUNAUTE_PAR_DEFAUT = { 'c-1': [AUTEUR, CO_MEMBRE] };
+
+/**
+ * La règle de Prisma sur MongoDB (leçon 318) : un optionnel jamais écrit n'a PAS
+ * de clé, `{ deletedAt: null }` ne l'apparie pas, `{ isSet: false }` si.
+ */
+const deletedAtMatches = (doc: Record<string, unknown>, filter: unknown): boolean => {
+  const present = Object.prototype.hasOwnProperty.call(doc, 'deletedAt');
+  if (filter === undefined) return true;
+  if (filter === null) return present && doc.deletedAt === null;
+  if (typeof filter === 'object' && filter !== null && 'isSet' in filter) return (filter as { isSet: boolean }).isSet === present;
+  return false;
+};
 
 export function monde(world: World = {}) {
   const store = relationStore({
@@ -119,15 +132,29 @@ export function monde(world: World = {}) {
         args.where.senderId.in.filter((id) => !(world.silent ?? []).some((who) => id.endsWith(`-${who}`))).map((senderId) => ({ senderId })),
     },
     postMedia: { findFirst: async () => null },
-    post: { findUnique: async () => null, findFirst: async () => null },
+    post: {
+      findUnique: async () => world.post ?? null,
+      findFirst: async (args?: { where?: { deletedAt?: unknown } }) =>
+        world.post && deletedAtMatches(world.post, args?.where?.deletedAt) ? world.post : null,
+    },
     postComment: { findMany: async () => (world.previousCommenters ?? []).map((authorId) => ({ authorId })) },
     postReaction: { findMany: async () => [] },
   };
 
   const createNotification = jest.fn(async (_params: { userId: string; type: string }) => null);
+  const claimed = new Set<string>();
+  const relayThrottle = {
+    get: async (key: string) => (claimed.has(key) ? '1' : null),
+    setnx: async (key: string) => {
+      if (claimed.has(key)) return false;
+      claimed.add(key);
+      return true;
+    },
+  };
   const deps = {
     prisma: prisma as unknown as PrismaClient,
     createNotification,
+    relayThrottle,
     resolveRecipientLangs: async () => new Map<string, string>(),
     shouldCreateMentionNotification: () => true,
     isConversationMutedFor: async () => false,

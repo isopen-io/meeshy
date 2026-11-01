@@ -199,3 +199,16 @@ async function readEntourage(prisma: EntourageDb, params: EntourageParams): Prom
   );
   return { ids, truncated };
 }
+
+/** L'intersection B ∩ C, dans l'ordre de l'entourage de l'auteur ; « Personne » chez l'un ⇒ personne. */
+export async function thirdPartyEntourage(
+  prisma: PrismaClient,
+  params: { readonly authorId: string; readonly actorId: string; readonly onMyContent: CircleNotifyKey; readonly elsewhere: CircleNotifyKey }
+): Promise<Entourage> {
+  const [ofAuthor, ofActor] = await Promise.all([
+    resolveEntourage(prisma, { ownerId: params.authorId, key: params.onMyContent, excludeUserIds: [params.actorId] }),
+    resolveEntourage(prisma, { ownerId: params.actorId, key: params.elsewhere, excludeUserIds: [params.authorId] }),
+  ]);
+  const actorSide = new Set(ofActor.ids);
+  return { ids: ofAuthor.ids.filter((id) => actorSide.has(id)), truncated: ofAuthor.truncated || ofActor.truncated };
+}

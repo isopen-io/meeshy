@@ -3,6 +3,8 @@ package me.meeshy.sdk.net
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import me.meeshy.sdk.model.auth.JwtExpiry
 import me.meeshy.sdk.model.auth.OwnershipVerdict
 import me.meeshy.sdk.model.auth.RequestOwnership
@@ -17,8 +19,14 @@ public sealed interface Renewal {
     /** La requête n'appartient plus à la session active : ni renouvellement ni rejeu. */
     public data object Abandoned : Renewal
 
-    /** Le renouvellement a échoué : la session du seul compte actif est démontée. */
+    /** La passerelle a REFUSÉ le renouvellement : la session du seul compte actif est démontée. */
     public data object Failed : Renewal
+
+    /**
+     * La passerelle n'a pas tranché (hors ligne, panne, délai, limite) : la session et sa sauvegarde restent, rien n'est
+     * rejoué, et le prochain besoin d'un jeton la renouvellera (#14078).
+     */
+    public data object Deferred : Renewal
 }
 
 /**
@@ -28,7 +36,13 @@ public sealed interface Renewal {
  * simultanés = un seul renouvellement. Le jeton présenté fixe l'identité renouvelée (jamais
  * « le compte du moment »).
  *
- * @param refreshCall l'appel `auth/refresh` pour un jeton de session ; `null` = refusé.
+ * Seul un REFUS démonte la session : une réponse qui dit non (`null`), un 401 ou un 403 `AGE_BELOW_MINIMUM`
+ * ([isRefusal]). Une panne de transport, un 5xx, un proxy, un portail, un délai ou une limite rendent
+ * [Renewal.Deferred] : hors ligne, l'appareil reste connecté et sa sauvegarde Block Store (#14058) demeure, comme le
+ * Keychain d'iOS (#14078).
+ *
+ * @param refreshCall l'appel `auth/refresh` pour un jeton de session ; `null` = refusé, une exception = non joint
+ *   (sauf un refus HTTP, voir [isRefusal]).
  */
 public class SessionRefresher(
     private val tokenStore: TokenStore,
@@ -45,6 +59,10 @@ public class SessionRefresher(
 
     @Volatile
     private var tornDown: TornDown? = null
+
+    /** Le jeton dont le renouvellement n'a pas abouti : son 401 dit « pas joint », jamais « session expirée ». */
+    @Volatile
+    private var unreached: TornDown? = null
 
     private fun currentOwner() = SessionOwner(tokenStore.userId, transition.generation)
 
@@ -82,8 +100,13 @@ public class SessionRefresher(
     public fun signalsExpiry(request: okhttp3.Request): Boolean {
         val presented = RequestCredential.carriedBy(request)?.token
             ?: return !transition.isTransitioning && holdsASessionToLose()
+        if (wentUnreached(presented)) return false
         return owns(presented, request.sentCredential()?.generation)
     }
+
+    private fun wentUnreached(presented: String): Boolean =
+        tokenStore.jwt == presented &&
+            unreached?.let { it.token == presented && it.generation == transition.generation } == true
 
     private fun holdsASessionToLose(): Boolean =
         tokenStore.jwt != null || tokenStore.sessionToken != null || tornDown?.generation == transition.generation
@@ -111,21 +134,55 @@ public class SessionRefresher(
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
+            if (!isRefusal(failure)) return deferred(active, startOwner)
             null
         }
         if (currentOwner() != startOwner || tokenStore.jwt != active) return Renewal.Abandoned
         if (newJwt.isNullOrBlank()) return tearDown(active, startOwner)
+        unreached = null
         retired = retired.retire(active, startOwner)
         tokenStore.jwt = newJwt
         return Renewal.Renewed(newJwt)
     }
 
+    private fun deferred(active: String, startOwner: SessionOwner): Renewal {
+        if (currentOwner() != startOwner || tokenStore.jwt != active) return Renewal.Abandoned
+        unreached = TornDown(active, startOwner.generation)
+        return Renewal.Deferred
+    }
+
     private fun tearDown(active: String, startOwner: SessionOwner): Renewal {
         if (currentOwner() == startOwner && tokenStore.jwt == active) {
             tornDown = TornDown(active, startOwner.generation)
+            unreached = null
             tokenStore.clear()
         }
         return Renewal.Failed
+    }
+
+    public companion object {
+        private const val AGE_BELOW_MINIMUM = "AGE_BELOW_MINIMUM"
+
+        /**
+         * La passerelle a-t-elle REFUSÉ ? Elle ne refuse un renouvellement que par un 401 (jeton invalide, session
+         * révoquée, compte supprimé) ou un 403 `AGE_BELOW_MINIMUM` (#9927), comme iOS (`AuthManager`, `.auth`). Tout le
+         * reste — 404 d'un proxy pendant un redéploiement, 403 ou 407 d'un portail captif, délai, limite, 5xx — n'a pas
+         * été tranché par elle.
+         */
+        public fun isRefusal(failure: Throwable): Boolean {
+            if (failure !is retrofit2.HttpException) return false
+            return when (failure.code()) {
+                401 -> true
+                403 -> codeOf(failure) == AGE_BELOW_MINIMUM
+                else -> false
+            }
+        }
+
+        private fun codeOf(failure: retrofit2.HttpException): String? {
+            val body = runCatching { failure.response()?.errorBody()?.string() }.getOrNull() ?: return null
+            val envelope = runCatching { MeeshyApi.json.parseToJsonElement(body) }.getOrNull() as? JsonObject
+            return (envelope?.get("code") as? JsonPrimitive)?.takeIf { it.isString }?.content
+        }
     }
 
     private fun verdictLocked(
