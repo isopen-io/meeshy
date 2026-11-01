@@ -2,6 +2,8 @@ package me.meeshy.sdk.composer
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.media.MediaMetadataRetriever
 import java.io.File
 import javax.inject.Inject
@@ -53,8 +55,34 @@ class AttachmentThumbnailer @Inject constructor(
         BitmapFactory.decodeFile(file.path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
         val decode = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight) }
-        val bitmap = BitmapFactory.decodeFile(file.path, decode) ?: return null
-        return saved(bitmap, outputDir, id)?.copy(width = bounds.outWidth, height = bounds.outHeight)
+        val decoded = BitmapFactory.decodeFile(file.path, decode) ?: return null
+        val orientation = exifOrientation(file)
+        val upright = upright(decoded, orientation)
+        val swaps = orientation in SWAPPING_ORIENTATIONS
+        val width = if (swaps) bounds.outHeight else bounds.outWidth
+        val height = if (swaps) bounds.outWidth else bounds.outHeight
+        return saved(upright, outputDir, id)?.copy(width = width, height = height)
+    }
+
+    /** `BitmapFactory` ignore l'EXIF : une prise de l'objectif arriverait couchée, et ses dimensions inversées. */
+    private fun exifOrientation(file: File): Int = runCatching {
+        ExifInterface(file.path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+
+    private fun upright(bitmap: Bitmap, orientation: Int): Bitmap {
+        val matrix = Matrix().apply {
+            when (orientation) {
+                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
+                ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
+                ExifInterface.ORIENTATION_TRANSPOSE -> { postRotate(90f); postScale(-1f, 1f) }
+                ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
+                ExifInterface.ORIENTATION_TRANSVERSE -> { postRotate(270f); postScale(-1f, 1f) }
+                ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
+            }
+        }
+        if (matrix.isIdentity) return bitmap
+        return runCatching { Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true) }.getOrDefault(bitmap)
     }
 
     private fun videoThumbnail(file: File, outputDir: File, id: String): AttachmentThumbnail? {
@@ -106,5 +134,11 @@ class AttachmentThumbnailer @Inject constructor(
     private companion object {
         const val MAX_EDGE_PX = 512
         const val JPEG_QUALITY = 80
+        val SWAPPING_ORIENTATIONS = setOf(
+            ExifInterface.ORIENTATION_TRANSPOSE,
+            ExifInterface.ORIENTATION_ROTATE_90,
+            ExifInterface.ORIENTATION_TRANSVERSE,
+            ExifInterface.ORIENTATION_ROTATE_270,
+        )
     }
 }

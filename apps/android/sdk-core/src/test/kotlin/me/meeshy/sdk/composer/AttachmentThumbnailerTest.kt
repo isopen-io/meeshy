@@ -1,7 +1,9 @@
 package me.meeshy.sdk.composer
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.media.ExifInterface
 import com.google.common.truth.Truth.assertThat
 import java.io.File
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -34,6 +36,26 @@ class AttachmentThumbnailerTest {
         assertThat(result!!.width).isEqualTo(40)
         assertThat(result.height).isEqualTo(20)
         assertThat(File(result.thumbnailPath!!).exists()).isTrue()
+    }
+
+    @Test
+    fun `a camera photo tagged rotate 90 gets an upright thumbnail and swapped dimensions`() = runTest {
+        val file = File.createTempFile("shot", ".jpg")
+        val bitmap = Bitmap.createBitmap(40, 20, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) }
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        ExifInterface(file.path).apply {
+            setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_ROTATE_90.toString())
+            saveAttributes()
+        }
+
+        val result = thumbnailer().thumbnail(file, PendingAttachmentType.IMAGE, tempDir(), "t6")
+
+        assertThat(result!!.width).isEqualTo(20)
+        assertThat(result.height).isEqualTo(40)
+        val thumb = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(result.thumbnailPath, thumb)
+        assertThat(thumb.outWidth).isEqualTo(20)
+        assertThat(thumb.outHeight).isEqualTo(40)
     }
 
     @Test
