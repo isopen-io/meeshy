@@ -16,7 +16,8 @@ enum class ComposerEditingAnnouncement { EDITING, TOOLS_BACK }
  * Le chrome visible selon la sélection (#13956, décision porteur du 2026-10-31, spec R6). [close] : Annuler / Fermer ;
  * [publication] : l'audience, Publier, le texte du post et les références ; [sceneControls] : ↶↷, la rangée des diapos et
  * les messages de l'éditeur ; [rail] : ce que porte la colonne ; [editing] : un objet ou le fond est en édition — le fond
- * suit la même grammaire (#13973) : plus de barre à part au-dessus de Publier.
+ * suit la même grammaire (#13973) : plus de barre à part au-dessus de Publier. Une scène RÉDUITE par ce qui monte au bas
+ * ne porte plus rien que les options de ce qu'on édite (#14186).
  */
 data class ComposerEditingChrome(
     val close: Boolean,
@@ -25,12 +26,17 @@ data class ComposerEditingChrome(
     val rail: ComposerRailContent,
     val editing: Boolean,
 ) {
-    /** [gestureOpen] : un panneau est monté ou un texte s'écrit — la colonne se tait, l'édition continue. */
+    /**
+     * [gestureOpen] : un panneau est monté ou un texte s'écrit — la colonne se tait, l'édition continue. [sceneReduced] : un
+     * panneau ou la bande d'un réglage occupe le bas et la scène se réduit au-dessus — rien de ce qu'elle portait en plein
+     * écran ne s'y pose plus, seules les options de l'objet ou du fond en édition restent, dans le couloir qu'elle leur cède.
+     */
     data class Input(
         val subject: ComposerSelectionSubject,
         val drawing: Boolean = false,
         val viewfinderArmed: Boolean = false,
         val gestureOpen: Boolean = false,
+        val sceneReduced: Boolean = false,
     )
 
     companion object {
@@ -44,15 +50,17 @@ data class ComposerEditingChrome(
 
         fun resolve(input: Input): ComposerEditingChrome = when {
             input.drawing || input.viewfinderArmed -> QUIET
-            input.subject == ComposerSelectionSubject.OBJECT -> editingWith(ComposerRailContent.OBJECT_OPTIONS, input.gestureOpen)
-            input.subject == ComposerSelectionSubject.BACKGROUND -> editingWith(ComposerRailContent.BACKGROUND_OPTIONS, input.gestureOpen)
+            input.subject == ComposerSelectionSubject.OBJECT -> editingWith(ComposerRailContent.OBJECT_OPTIONS, input)
+            input.subject == ComposerSelectionSubject.BACKGROUND -> editingWith(ComposerRailContent.BACKGROUND_OPTIONS, input)
+            input.sceneReduced -> QUIET
             else -> REST
         }
 
-        private fun editingWith(options: ComposerRailContent, gestureOpen: Boolean) = REST.copy(
+        private fun editingWith(options: ComposerRailContent, input: Input) = REST.copy(
             close = false,
             publication = false,
-            rail = if (gestureOpen) ComposerRailContent.NONE else options,
+            sceneControls = !input.sceneReduced,
+            rail = if (input.gestureOpen) ComposerRailContent.NONE else options,
             editing = true,
         )
 

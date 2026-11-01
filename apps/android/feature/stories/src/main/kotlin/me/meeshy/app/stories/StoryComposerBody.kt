@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerEditingChrome
+import me.meeshy.sdk.model.composer.ComposerRailContent
 import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerMoreEntry
 import me.meeshy.sdk.model.composer.ComposerSceneReferences
@@ -93,14 +94,16 @@ private fun SceneFirstFrame(
     val armed = capture?.armed == true
     val panel = state.scenePanel(morePanel)?.takeIf { !armed }
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
-    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null)
-    val chrome = editing.sceneControls
+    val besideScene = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null)
     val subject = state.selectionSubject
     val selection = state.selectionBar?.takeIf { subject == ComposerSelectionSubject.OBJECT && panel == null && typing == null && !armed }
     val openedFor = remember(sheet.open) { subject }
     val openSheet = sheet.open?.takeIf(state::serves)?.takeIf { !it.servesSelection || openedFor == subject }
-    val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), editing.editing && openSheet == null, selection,
+    val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), besideScene.editing && openSheet == null, selection,
         quiet = panel != null || typing != null || armed)
+    val reduced = (panel != null || edition.anyBand) && typing == null
+    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, sceneReduced = reduced)
+    val chrome = editing.sceneControls
     val levels = edition.levels
     val edited = edition.edited
     val placed = edited.placed
@@ -108,11 +111,11 @@ private fun SceneFirstFrame(
     StaleSheetReleased(stale = sheet.open != null && openSheet == null, onRelease = sheet.onDismiss)
     val dialogs = rememberStoryOverflowDialogs(state, viewModel)
     val more = StoryMoreHost(sceneExport, doors, dialogs, onMorePanel, sheet.onOpen, capture)
-    val rails = storySceneRails(state, viewModel, more, edited, morePanel, formatChevron, editing to levels)
+    val rails = storySceneRails(state, viewModel, more, edited, morePanel, formatChevron, besideScene to levels)
     Box(Modifier.fillMaxSize()) {
         StorySceneFirstLayout(
             onDismiss = doors.onClose,
-            reduced = (panel != null || edition.anyBand) && typing == null,
+            reduced = reduced,
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
                     StoryComposerScene(state, viewModel, comparison, modifier, capture, captureOffered)
@@ -151,7 +154,7 @@ private fun SceneFirstFrame(
             typing = typing,
             rails = rails,
             incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
-            clearsTrailingLane = selection != null && openSheet == null,
+            clearsTrailingLane = (selection != null || (reduced && editing.rail == ComposerRailContent.BACKGROUND_OPTIONS)) && openSheet == null,
         )
         EditingAnnouncer(editing = editedWord(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
