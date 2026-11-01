@@ -43,7 +43,7 @@ func withSendTimeout<T: Sendable>(
 ) async throws -> T {
     let operationTask = Task { try await operation() }
     let watchdog = Task {
-        try? await Task.sleep(for: .seconds(max(0, seconds)))
+        guard await cancellableSleep(for: .seconds(max(0, seconds))) else { return }
         operationTask.cancel()
     }
     defer { watchdog.cancel() }
