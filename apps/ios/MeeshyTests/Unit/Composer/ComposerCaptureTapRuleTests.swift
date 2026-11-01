@@ -58,8 +58,11 @@ final class ComposerCaptureTapRuleTests: XCTestCase {
         XCTAssertFalse(chrome.contains("SpatialTapGesture(count: 2"),
                        "un double à la SwiftUI ferait attendre le toucher simple")
         XCTAssertFalse(chrome.contains("TapGesture().onEnded"))
+        // La scène vide ne porte plus ses trois lignes de geste (#13899,
+        // `gestureLine(.tapAgainPhoto)` retiré) : la phrase vit désormais dans
+        // `hint(mode:stage:)`, cas "composer.camera.hint.photo" (#14239).
         let copie = try Self.code("Meeshy/Features/Composer/ComposerSceneCameraCopy.swift")
-        XCTAssertTrue(copie.contains("defaultValue: \"Puis toucher deux fois : photo\""))
+        XCTAssertTrue(copie.contains("defaultValue: \"toucher deux fois pour une photo · maintenir pour filmer\""))
     }
 
     private static func code(_ relative: String) throws -> String {
