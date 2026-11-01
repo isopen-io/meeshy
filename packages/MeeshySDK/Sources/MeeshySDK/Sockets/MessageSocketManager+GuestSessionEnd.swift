@@ -12,20 +12,13 @@ import os
 
 extension MessageSocketManager {
 
-    /// Lit un événement socket `error`. Une fin de session d'invité arrête
-    /// le transport — reconnexions comprises — et la signale ; toute autre
-    /// erreur n'est que journalisée, Socket.IO la retente.
+    /// Lit un événement socket `error`. Un client sous le plancher de version (#13954), une fin de session
+    /// d'invité ou un compte supprimé (#10482) arrêtent le transport — reconnexions comprises — et le
+    /// signalent ; toute autre erreur n'est que journalisée, Socket.IO la retente.
     @discardableResult
     func handleSocketError(_ data: [Any], center: NotificationCenter = .default) -> GuestSessionEnd? {
-        // #13954 — sous le plancher de version : le transport s'arrête, la porte « Mettre à jour » se pose.
-        if let requirement = UpgradeRequirement.fromSocketErrorPayload(data) {
-            Logger.socket.warning("MessageSocket: client below the version floor — reconnection stopped")
-            disconnect()
-            requirement.post(via: center)
-            return nil
-        }
+        if let floor = UpgradeRequirement.belowFloor(socketError: data) { disconnect(); floor.post(via: center); return nil }
         guard let end = GuestSessionEnd.from(socketErrorPayload: data) else {
-            // #10482 — un compte supprimé arrête aussi le transport.
             if handleAccountDeletedError(data, center: center) == nil { Logger.socket.error("MessageSocket error: \(data)") }
             return nil
         }
@@ -33,5 +26,15 @@ extension MessageSocketManager {
         disconnect()
         end.signal(center: center)
         return end
+    }
+}
+
+extension UpgradeRequirement {
+    /// Sous le plancher de version, la passerelle refuse le handshake : le
+    /// transport s'arrête et la porte « Mettre à jour » se pose (#13954).
+    static func belowFloor(socketError data: [Any]) -> UpgradeRequirement? {
+        guard let requirement = fromSocketErrorPayload(data) else { return nil }
+        Logger.socket.warning("MessageSocket: client below the version floor — reconnection stopped")
+        return requirement
     }
 }
