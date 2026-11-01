@@ -986,3 +986,44 @@ describe('GET /attachments/:id/metadata — le contenu a disparu pour CE lecteur
     expect(res.statusCode).toBe(200);
   });
 });
+
+// ─── #11269 — une vue unique PURGÉE ne rend plus son détail ─────────────────
+describe('GET /attachments/:id/metadata — vue unique déjà purgée (#11269)', () => {
+  const CARRIER_ID = '507f1f77bcf86cd7994390c2';
+  const purged = {
+    id: CARRIER_ID,
+    conversationId: 'conv-vue-unique',
+    deletedAt: null,
+    viewOnceBurnAt: null,
+    viewOnceBurnedAt: new Date(Date.now() - 3_600_000),
+    expiresAt: null,
+    senderId: 'participant-auteur',
+    createdAt: new Date(Date.now() - 8 * 24 * 3_600_000),
+    isViewOnce: true,
+    effectFlags: 0,
+    ephemeralDuration: null,
+  };
+
+  it("rend 404 au destinataire qui ne l'a jamais ouverte, quand une pièce a survécu à une purge ancienne", async () => {
+    mockGetAttachmentWithMetadata.mockResolvedValue({ ...MOCK_ATTACHMENT, messageId: CARRIER_ID, isViewOnce: true });
+    const project = ({ select }: { select?: Record<string, boolean> }) =>
+      select ? Object.fromEntries(Object.entries(purged).filter(([key]) => select[key])) : purged;
+    const app = await buildApp({
+      prismaOverrides: {
+        message: {
+          findUnique: jest.fn<any>().mockImplementation(async (args: { select?: Record<string, boolean> }) => project(args)),
+          findFirst: jest.fn<any>().mockResolvedValue({ id: CARRIER_ID }),
+        },
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID, conversationId: purged.conversationId }),
+        },
+        messageStatusEntry: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/metadata` });
+    await app.close();
+
+    expect(res.statusCode).toBe(404);
+  });
+});

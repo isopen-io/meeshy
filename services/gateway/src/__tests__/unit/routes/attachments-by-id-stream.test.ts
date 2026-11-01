@@ -80,9 +80,9 @@ function makePrisma(rows: Row[], carriers: Carrier[]) {
       }),
     },
     message: {
-      findUnique: jest.fn<any>().mockImplementation(async ({ where }: Query) => {
+      findUnique: jest.fn<any>().mockImplementation(async ({ where, select }: Query) => {
         const carrier = carriers.find((c) => c.id === where.id);
-        return carrier ? { conversationId: 'conv-1', ...carrier } : null;
+        return carrier ? project({ conversationId: 'conv-1', ...carrier }, select) : null;
       }),
       findMany: jest.fn<any>().mockImplementation(async ({ where, select }: Query) =>
         carriers.filter((c) => inIds(where).includes(c.id)).map((c) => project(c, select))
@@ -349,6 +349,14 @@ describe.each(ROUTES)('#11269 — %s d une vue unique purgée', (_label, url) =>
 
   it('les fichiers sont en reprise sous une échéance passée : 404, jamais les octets', async () => {
     const carrier = { id: 'm1', isViewOnce: true, viewOnceBurnAt: PAST, viewOnceBurnedAt: PAST } as Carrier;
+    const app = await buildApp(makePrisma([{ id: ID, filePath: KEY, messageId: 'm1', isViewOnce: true }], [carrier]));
+    const res = await app.inject({ method: 'GET', url });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("une pièce survivante d'une purge ANCIENNE (estampille posée, échéance remise à null) : 404, jamais les octets", async () => {
+    const carrier = { id: 'm1', isViewOnce: true, viewOnceBurnAt: null, viewOnceBurnedAt: PAST } as unknown as Carrier;
     const app = await buildApp(makePrisma([{ id: ID, filePath: KEY, messageId: 'm1', isViewOnce: true }], [carrier]));
     const res = await app.inject({ method: 'GET', url });
     expect(res.statusCode).toBe(404);
