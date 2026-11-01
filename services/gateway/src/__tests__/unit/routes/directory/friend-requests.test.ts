@@ -89,6 +89,9 @@ function prismaDouble(opts: Options = {}) {
     user: {
       // #13298 — « qui a bloqué l'acteur ? », lu par la clause des listes.
       findMany: jest.fn<any>(async () => []),
+      // #13933 — « l'un a-t-il bloqué l'autre ? », relu avant d'accepter (`isBlockedBetween`).
+      findFirst: jest.fn<any>(async () => null),
+
       findUnique: jest.fn<any>(async (args: any) => {
         if (args?.where?.id === MOI) return { blockedUserIds: opts.emetteurBloque ?? [], displayName: 'Moi', username: 'moi' };
         if (opts.receveur === null) return null;
@@ -109,6 +112,17 @@ function prismaDouble(opts: Options = {}) {
       deleteMany: jest.fn<any>(async () => ({ count: 1 })),
       findMany: jest.fn<any>(async () => []),
     },
+    // Depuis les crans (#13933), un envoi est jugé sur le lien de la paire : par
+    // défaut, les deux sont déjà Connaissances, le cran qui précède Ami.
+    userRelation: {
+      findUnique: jest.fn<any>(async () => ({
+        id: 'aa0000000000000000000099', userLowId: MOI, userHighId: AUTRE,
+        grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE', transitions: [],
+      })),
+      findMany: jest.fn<any>(async () => []),
+      updateMany: jest.fn<any>(async () => ({ count: 1 })),
+    },
+    pairInteractionDay: { findMany: jest.fn<any>(async () => []) },
     conversation: {
       findFirst: jest.fn<any>(async () => opts.conversationExistante ?? null),
       create: jest.fn<any>(async () => ({ id: 'convid00000000000000001', identifier: 'abc', type: 'direct' })),
@@ -261,14 +275,26 @@ describe("Un geste, un verbe — et l'acteur autorisé", () => {
     await app.close();
   });
 
-  it('`dismiss` appartient aux DEUX parties, et SUPPRIME la ligne', async () => {
-    const { app, prisma } = await monter();
+  it('`dismiss` appartient aux DEUX parties : l\'émetteur SUPPRIME la ligne', async () => {
+    const { app, prisma } = await monter({ demande: { id: FR_ID, senderId: MOI, receiverId: AUTRE, status: 'pending' } });
 
     const res = await agir(app, 'dismiss');
 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.deleted).toBe(true);
     expect(prisma.friendRequest.deleteMany).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('`dismiss` du RECEVEUR sur une demande en attente est une ignorance : un refus silencieux, la ligne reste', async () => {
+    const { app, prisma } = await monter();
+
+    const res = await agir(app, 'dismiss');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.deleted).toBe(true);
+    expect(prisma.friendRequest.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'rejected' }) }));
+    expect(prisma.friendRequest.deleteMany).not.toHaveBeenCalled();
     await app.close();
   });
 

@@ -13,10 +13,18 @@ import Foundation
 
 public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
     case byUserId(userId: String)
+    case byUserIdLevel(userId: String)
+    case byUserIdRitual(userId: String)
+    case config
+    case root
 
     public var path: String {
         switch self {
         case .byUserId(let userId): return "/api/v1/relations/\(userId)"
+        case .byUserIdLevel(let userId): return "/api/v1/relations/\(userId)/level"
+        case .byUserIdRitual(let userId): return "/api/v1/relations/\(userId)/ritual"
+        case .config: return "/api/v1/relations/config"
+        case .root: return "/api/v1/relations"
         }
     }
 }

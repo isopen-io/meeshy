@@ -2100,6 +2100,32 @@ model PairInteractionDay {
   @@index([day])
 }
 
+/// Les CONSENTEMENTS d'une personne envers UNE AUTRE, écrits au rituel du Sang
+/// (#13933, cercles de proximité, RG-09). Une ligne par couple ORIENTÉ (`ownerId`
+/// règle, `otherId` en bénéficie) : la loi d'accès dit le PLAFOND de ce que le niveau
+/// ouvre, cette ligne dit si la personne l'ACTIVE — les deux sont requis, jamais
+/// l'un sans l'autre. Tout est FAUX par défaut (fail-closed) ; un refus du rituel
+/// est un `false` explicite, il ne bloque pas le Sang.
+///
+/// Les partages que le rituel présente : titre d'écoute, position en direct,
+/// historique de position, alerte de proximité. Les réglages des autres lots du
+/// chantier (talkie, blocage du Bring, fantôme) s'y ajouteront avec leur lot.
+/// Index unique posé par `migrations/2026-10-31-relation-feature-setting-indexes.mongodb.js`.
+model RelationFeatureSetting {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId               String   @db.ObjectId
+  otherId               String   @db.ObjectId
+  listeningTitleShared  Boolean  @default(false)
+  locationShared        Boolean  @default(false)
+  locationHistoryShared Boolean  @default(false)
+  proximityShared       Boolean  @default(false)
+  consentedAt           DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([ownerId, otherId])
+}
+
 /// RÉSERVÉ — le lien parent/tuteur vérifié du niveau ATOME (hors MVP, #13926).
 /// Aucune route ne l'écrit ni ne le lit au MVP : le modèle est prêt, rien de plus.
 model AtomLink {

@@ -13,6 +13,7 @@ import type {
   AttachmentType
 } from '@meeshy/shared/types/attachment';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
+import type { UploaderRole } from '@meeshy/shared/types/upload-limits';
 import {
   AttachmentEncryptionService,
   getAttachmentEncryptionService,
@@ -53,8 +54,8 @@ export class AttachmentService {
 
   // ==================== DÉLÉGATION UPLOAD ====================
 
-  validateFile(file: FileToUpload): AttachmentValidationVerdict {
-    return this.uploadProcessor.validateFile(file);
+  validateFile(file: FileToUpload, role: UploaderRole = 'registered'): AttachmentValidationVerdict {
+    return this.uploadProcessor.validateFile(file, role);
   }
 
   async uploadFile(

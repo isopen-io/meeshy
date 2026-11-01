@@ -13,6 +13,7 @@ import {
   sendInternalError,
   sendPayloadTooLarge,
   sendUnsupportedMediaType,
+  sendError,
 } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentUploadRoutes' });
@@ -40,6 +41,8 @@ import {
 } from '../../services/messaging/e2eePlaintextAdmission';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { discardFilePart, isFileSizeOverflow, judgeUploadDestination, UPLOAD_DESTINATION_FIELD, type UploadDestinationVerdict } from './uploadDestination';
+import { createUploadQuota, type UploadQuota, type UploadQuotaRedis } from '../../services/attachments/upload-quota';
+import { dailyQuotaRefusal, uploaderRole, uploadLimitPolicyFromEnv } from '../../services/attachments/upload-admission';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -73,12 +76,22 @@ function sendGuestAttachmentRefusal(reply: FastifyReply, verdict: Extract<Anonym
   return sendForbidden(reply, verdict.reason, verdict.code ? { code: verdict.code } : undefined);
 }
 
+/** #11266 — le quota journalier ; absent : celui de la passerelle, sur `fastify.redis`. */
+export type UploadRoutesOptions = {
+  readonly uploadQuota?: UploadQuota;
+};
+
 export async function registerUploadRoutes(
   fastify: FastifyInstance,
   authOptional: any,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  options: UploadRoutesOptions = {}
 ) {
   const attachmentService = new AttachmentService(prisma);
+  const uploadQuota = options.uploadQuota ?? createUploadQuota({
+    redis: ((fastify as { redis?: UploadQuotaRedis | null }).redis ?? null),
+    quotas: uploadLimitPolicyFromEnv().quotas,
+  });
 
   /**
    * POST /attachments/upload
@@ -139,6 +152,12 @@ export async function registerUploadRoutes(
           },
           415: {
             description: 'A file\'s declared media type does not match its content, or is not admitted',
+            ...errorResponseSchema
+          },
+          // #11266 — le quota journalier d'envoi de l'appelant est atteint
+          // (`UPLOAD_DAILY_QUOTA_EXCEEDED`) ; `Retry-After` dit quand il repart.
+          429: {
+            description: 'The caller\'s daily upload quota is exhausted',
             ...errorResponseSchema
           },
           500: {
@@ -283,14 +302,24 @@ export async function registerUploadRoutes(
         // lot : un seul fichier refusé refuse l'ENSEMBLE de la requête,
         // plutôt que de publier une réponse 200 partielle qui ne dit pas ce
         // qui manque (#6603).
+        // #11266 — la limite de taille est celle du RÔLE de l'appelant.
+        const role = uploaderRole(isAnonymous);
         for (const file of files) {
-          const validation = attachmentService.validateFile(file);
+          const validation = attachmentService.validateFile(file, role);
           if (!validation.valid) {
             if (validation.code === 'FILE_TOO_LARGE') {
               return sendPayloadTooLarge(reply, validation.error);
             }
             return sendUnsupportedMediaType(reply, validation.error);
           }
+        }
+
+        // #11266 — le quota du jour, avant tout octet écrit ; compté après succès.
+        const incomingBytes = files.reduce((total, file) => total + file.size, 0);
+        const quotaRefusal = dailyQuotaRefusal(await uploadQuota.check({ userId, role, incomingBytes }));
+        if (quotaRefusal) {
+          reply.header('Retry-After', String(quotaRefusal.retryAfterSeconds));
+          return sendError(reply, quotaRefusal.status, quotaRefusal.message, { code: quotaRefusal.code });
         }
 
         const results = await attachmentService.uploadMultiple(
@@ -300,6 +329,7 @@ export async function registerUploadRoutes(
           undefined,
           metadataMap.size > 0 ? metadataMap : undefined
         );
+        await uploadQuota.record({ userId, bytes: incomingBytes });
 
         return sendSuccess(reply, { attachments: results });
       } catch (error: any) {

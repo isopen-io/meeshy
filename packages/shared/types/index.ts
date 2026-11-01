@@ -72,6 +72,7 @@ export * from './message-star.js';
 
 // Export des types unifiés Phase 5 - Attachments
 export * from './attachment.js';
+export * from './upload-limits.js';
 // V2: Remplacé par attachment-audio.js qui utilise JSON intégré dans MessageAttachment
 // export * from './attachment-transcription.js';
 

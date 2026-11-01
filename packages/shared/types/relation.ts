@@ -53,6 +53,45 @@ export const relationLevelIfAtLeast = (value: unknown, min: RelationLevel): Rela
   return compareRelationLevel(level, min) >= 0 ? level : null;
 };
 
+/**
+ * Les crans qui se DEMANDENT (#13933) : Connaissance, Ami, Proche, Sang. Public et
+ * Communauté ne se demandent pas (le premier est l'absence de lien, le second est
+ * calculé), Atome est réservé. Toute autre valeur est illisible, jamais un cran.
+ */
+export const RELATION_REQUEST_LEVELS = ['ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD'] as const;
+
+export type RelationRequestLevel = (typeof RELATION_REQUEST_LEVELS)[number];
+
+export const parseRequestLevel = (value: unknown): RelationRequestLevel | null =>
+  (RELATION_REQUEST_LEVELS as readonly unknown[]).includes(value) ? (value as RelationRequestLevel) : null;
+
+/**
+ * Le seul cran qu'une demande peut viser depuis `level` : on monte cran par cran,
+ * on ne saute jamais une phase (RG-03). `null` au sommet.
+ */
+export const relationRungAfter = (level: RelationLevel): RelationRequestLevel | null => {
+  if (level === 'PUBLIC' || level === 'COMMUNITY') return 'ACQUAINTANCE';
+  if (level === 'ACQUAINTANCE') return 'FRIEND';
+  if (level === 'FRIEND') return 'CLOSE';
+  if (level === 'CLOSE') return 'BLOOD';
+  return null;
+};
+
+/**
+ * Le niveau qu'une demande ACCEPTÉE puis défaite laisse derrière elle (#13933) :
+ * Proche et Sang retombent d'un cran, Ami et Connaissance quittent le cercle (le
+ * sens historique de « retirer l'ami »).
+ */
+export const relationLevelBelow = (level: RelationRequestLevel): RelationLevel => {
+  if (level === 'BLOOD') return 'CLOSE';
+  if (level === 'CLOSE') return 'FRIEND';
+  return 'PUBLIC';
+};
+
+/** `candidate` retient-il un lien que `removed` fondait ? Vrai quand il vise le même cran ou un cran au-dessus. */
+export const requestLevelSustains = (candidate: RelationRequestLevel, removed: RelationRequestLevel): boolean =>
+  RANK[candidate] >= RANK[removed];
+
 export type RelationPairKey = { readonly userLowId: string; readonly userHighId: string };
 
 /**
@@ -111,4 +150,40 @@ export const visibleRelationTransitions = (transitions: ReadonlyArray<RelationTr
     ceilings.set(t.actorId, t.to);
     return [{ ...t, from: ceiling }];
   });
+};
+
+/**
+ * Depuis quand la paire est-elle au niveau `level` au moins — lu dans les seules
+ * MONTÉES visibles (#13933). `levelSince` bouge aussi à une baisse : il ne se sert
+ * jamais brut (une baisse est silencieuse, RG-07). Chaque acteur compte à son
+ * premier passage visible vers `level` ou au-dessus ; le niveau effectif n'est
+ * atteint que quand les DEUX y sont, d'où le plus tardif. `null` quand rien de
+ * lisible ne le dit.
+ */
+export const relationEntryDate = (transitions: ReadonlyArray<RelationTransition>, level: RelationLevel): Date | null => {
+  const reaching = visibleRelationTransitions(transitions).filter((t) => RANK[t.to] >= RANK[level]);
+  const firstByActor = new Map<string, Date>();
+  reaching.forEach((t) => {
+    if (!firstByActor.has(t.actorId)) firstByActor.set(t.actorId, t.at);
+  });
+  const dates = [...firstByActor.values()].map((d) => d.getTime());
+  return dates.length === 0 ? null : new Date(Math.max(...dates));
+};
+
+/**
+ * Un lien tel que `GET /relations`, `GET /relations/:userId` et
+ * `POST /relations/:userId/level` le servent (#13933). `userId` est l'AUTRE personne ;
+ * jamais un nom, une présence ni un cool-down.
+ */
+export type RelationLinkView = {
+  readonly userId: string;
+  readonly effectiveLevel: RelationLevel;
+  readonly grantedByMe: RelationLevel;
+  readonly since: string | null;
+  readonly progress: {
+    readonly activeWeeks: number;
+    readonly needed: number | null;
+    readonly missing: readonly string[];
+  };
+  readonly eligibleFor: 'CLOSE' | 'BLOOD' | null;
 };

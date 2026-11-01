@@ -10,6 +10,7 @@ import { isBlockedBetween } from '../../utils/blocking';
 import { niveauEffectifUniforme } from '../../services/friendship';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger.js';
+import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import type { AuthenticatedRequest } from '../users/types';
 
 /** Le lecteur INSCRIT, ou `null` : un invité de lien n'a pas de compte, donc pas de lien. */
@@ -81,7 +82,7 @@ export async function relationsLevelRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { userId: string } }>('/:userId', {
     onRequest: [fastify.authenticate],
-    preHandler: [parAppelant.middleware()],
+    preHandler: [appVersionFloorPreHandler, parAppelant.middleware()],
     schema: {
       description:
         'Effective relation level between the caller and a person (minimum of both grants). PUBLIC when blocked in either direction, unknown, or unlinked.',
