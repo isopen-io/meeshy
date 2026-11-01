@@ -32,6 +32,7 @@ import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { resolveServerTargetLanguages } from './serverTargetLanguages';
 import { attachmentAudioRichView, type AttachmentAudioRichView } from '../audio/attachmentAudioRichView';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 import { diffTranslationTargets } from '../../utils/translation-targets';
@@ -452,37 +453,12 @@ export class MessageTranslationService extends EventEmitter {
 
   // ==========================================================
 
-  /**
-   * Résout les langues cibles effectives d'un message : chaque code est ramené à
-   * sa forme canonique via le SSOT `normalizeLanguageForDedup` (le chemin client
-   * passe le code brut — `'EN'`, `'en-US'`), puis la langue source est retirée
-   * pour éviter une auto-traduction NLLB (`fr → fr`) qui altère le texte et stocke
-   * une fausse traduction du message de l'utilisateur.
-   *
-   * La comparaison se fait sur les formes normalisées : `originalLanguage` est
-   * persisté verbatim (les clients envoient `Locale.current`, ex. `'fr-FR'`, `'FR'`)
-   * tandis que les cibles issues de `_extractConversationLanguages` sont déjà
-   * normalisées lowercase — un `===` brut manquait `fr-FR`/`FR` vs `fr`. La SSOT
-   * `normalizeLanguageForDedup` strippe la région des DEUX côtés, même hors
-   * catalogue (`'fil-PH'`/`'fil'` → `'fil'`), sans quoi un tel target échappait au
-   * filtre et un `fil → fil` était demandé. `'auto'` n'est jamais filtré.
-   */
+  /** Cibles effectives d'un message — voir {@link resolveServerTargetLanguages}. */
   private _resolveTargetLanguages(
     originalLanguage: string | null | undefined,
     targetLanguages: readonly string[]
   ): string[] {
-    const source =
-      originalLanguage && originalLanguage !== 'auto'
-        ? normalizeLanguageForDedup(originalLanguage)
-        : undefined;
-
-    const result: string[] = [];
-    for (const raw of targetLanguages) {
-      const code = normalizeLanguageForDedup(raw);
-      if (code === source) continue;
-      result.push(code);
-    }
-    return result;
+    return resolveServerTargetLanguages(originalLanguage, targetLanguages);
   }
 
   /**

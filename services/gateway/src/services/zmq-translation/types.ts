@@ -51,12 +51,20 @@ export interface TranslationCompletedEvent {
   metadata?: any;
 }
 
+/**
+ * Code d'un refus TERMINAL du translator : la paire n'a pas de code NLLB-200
+ * (#3659). Il vise UNE langue (`targetLanguage`) et ne se relance jamais.
+ */
+export const UNSUPPORTED_LANGUAGE_ERROR_CODE = 'UNSUPPORTED_LANGUAGE';
+
 export interface TranslationErrorEvent {
   type: 'translation_error';
   taskId: string;
   messageId: string;
   error: string;
   conversationId: string;
+  errorCode?: string;
+  targetLanguage?: string;
   metadata?: any;
 }
 
