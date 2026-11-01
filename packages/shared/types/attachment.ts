@@ -12,11 +12,11 @@ import type {
   AttachmentTranslations,
   SocketIOTranslatedAudio,
 } from './attachment-audio.js';
+import { UPLOAD_SIZE_CEILINGS, uploadSizeLimit, type UploaderRole } from './upload-limits.js';
 
-/**
- * Types d'attachements supportés
- */
-export type AttachmentType = 'image' | 'document' | 'audio' | 'video' | 'text' | 'code';
+import type { AttachmentType } from './attachment-type.js';
+
+export type { AttachmentType };
 
 /**
  * Statuts de progression d'upload
@@ -276,6 +276,14 @@ export interface Attachment {
    */
   readonly capturedInApp: boolean;
 
+  /**
+   * La lens qui a produit ce média (#11327), retenue par la passerelle si elle
+   * est publiée et installée par l'expéditeur. EN CLAIR, E2EE compris (#11251).
+   * Optionnel : absente d'une ligne héritée ; le crédit se lit par `GET /lens/credits`.
+   * @see packages/shared/types/lens-partner.ts
+   */
+  readonly lensSlug?: string | null;
+
   // ===== VIEW-ONCE & BLUR =====
   readonly isViewOnce: boolean;
   readonly maxViewOnceCount?: number;
@@ -483,15 +491,18 @@ export interface UploadMultipleResponse {
 }
 
 /**
- * Limites de taille d'upload par type de fichier (en octets)
+ * Limites de taille d'upload par type de fichier (en octets), pour un compte
+ * inscrit — PROJECTION de `UPLOAD_SIZE_CEILINGS` (`upload-limits.ts`, #11266),
+ * gardée pour les consommateurs existants. La limite d'un anonyme se lit par
+ * `getSizeLimit(type, 'anonymous')` ou `uploadSizeLimit`.
  */
 export const UPLOAD_LIMITS = {
-  IMAGE: 4294967296, // 4GB
-  DOCUMENT: 4294967296, // 4GB
-  AUDIO: 4294967296, // 4GB
-  VIDEO: 4294967296, // 4GB
-  TEXT: 2147483648, // 2GB
-  CODE: 2147483648, // 2GB
+  IMAGE: UPLOAD_SIZE_CEILINGS.image,
+  DOCUMENT: UPLOAD_SIZE_CEILINGS.document,
+  AUDIO: UPLOAD_SIZE_CEILINGS.audio,
+  VIDEO: UPLOAD_SIZE_CEILINGS.video,
+  TEXT: UPLOAD_SIZE_CEILINGS.document,
+  CODE: UPLOAD_SIZE_CEILINGS.document,
 } as const;
 
 /**
@@ -838,30 +849,11 @@ export function getAttachmentType(mimeType: string, filename?: string): Attachme
 }
 
 /**
- * Obtient la limite de taille pour un type d'attachement
+ * Obtient la limite de taille pour un type d'attachement et le rôle de
+ * l'appelant (inscrit par défaut) — #11266.
  */
-export function getSizeLimit(type: AttachmentType): number {
-  switch (type) {
-    case 'image':
-      return UPLOAD_LIMITS.IMAGE;
-    case 'audio':
-      return UPLOAD_LIMITS.AUDIO;
-    case 'video':
-      return UPLOAD_LIMITS.VIDEO;
-    case 'text':
-      return UPLOAD_LIMITS.TEXT;
-    case 'code':
-      return UPLOAD_LIMITS.CODE;
-    case 'document':
-      return UPLOAD_LIMITS.DOCUMENT;
-    default: {
-      // Exhaustive check - assure que tous les cas sont couverts
-      const _exhaustiveCheck: never = type;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      void _exhaustiveCheck;
-      return UPLOAD_LIMITS.DOCUMENT;
-    }
-  }
+export function getSizeLimit(type: AttachmentType, role: UploaderRole = 'registered'): number {
+  return uploadSizeLimit({ type, role });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

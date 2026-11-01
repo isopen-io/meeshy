@@ -184,7 +184,7 @@ class ComposerBackgroundEditComposeTest {
 
         modify()
 
-        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Describe", *actions)
+        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Rotate", "Describe", *actions)
         compose.onNodeWithText("Edit").assertDoesNotExist()
         compose.onNodeWithText("Back").assertDoesNotExist()
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
@@ -221,7 +221,7 @@ class ComposerBackgroundEditComposeTest {
         compose.onNodeWithText("Back").performClick()
 
         compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
-        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Describe", *actions)
+        railShows("Framing", "Filters", "Frames", "Adjust", "Effects", "Rotate", "Describe", *actions)
         compose.onNodeWithText("Back").assertDoesNotExist()
         assertThat(vm.state.value.deck).isEqualTo(framed)
         assertThat(vm.state.value.selectedSlideBackdropMediaId).isEqualTo("bg")
@@ -266,13 +266,13 @@ class ComposerBackgroundEditComposeTest {
     }
 
     @Test
-    fun `a background video offers Trim and Loop, Loop switched in the rail itself`() {
+    fun `a background video offers Trim, Sound, Loop and Rotate, Loop switched in the rail itself`() {
         val vm = viewModel()
         withBackgroundVideo(vm)
         show(vm)
         modify()
 
-        railShows("Framing", "Trim", "Filters", "Adjust", "Loop", "Describe", *actions)
+        railShows("Framing", "Trim", "Filters", "Adjust", "Sound", "Loop", "Rotate", "Describe", *actions)
         compose.onNodeWithTag(BACKGROUND_LOOP_TAG).assertIsOn()
         compose.onNodeWithTag(BACKGROUND_LOOP_TAG).performClick()
 
@@ -293,6 +293,39 @@ class ComposerBackgroundEditComposeTest {
         vm.onSceneGesture("trim-bg") { StoryComposerBackgroundReducer.trimmed(it, me.meeshy.sdk.model.media.MediaTrimBounds(2.0, 5.0)) }
 
         assertThat(vm.state.value.deck.selectedSlide.backgroundTrim).isEqualTo(me.meeshy.sdk.model.media.MediaTrimBounds(2.0, 5.0))
+    }
+
+    @Test
+    fun `Sound of a background video lays its volume under the scene, from 0 to 100 percent shown beside it, and Mute silences it`() {
+        val vm = viewModel()
+        withBackgroundVideo(vm)
+        show(vm)
+        modify()
+
+        tapRail("Sound")
+        compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertExists()
+        compose.onNodeWithTag(COMPOSER_VOLUME_TAG).performSemanticsAction(SemanticsActions.SetProgress) { it(0.4f) }
+
+        assertThat(vm.state.value.deck.selectedSlide.backgroundSetting.volume).isWithin(1e-4f).of(0.4f)
+        compose.onNodeWithText("40 %").assertExists()
+        compose.onNodeWithText("Mute").performClick()
+        assertThat(vm.state.value.deck.selectedSlide.backgroundSetting.volume).isEqualTo(0f)
+        compose.onNodeWithText("Mute").performClick()
+        assertThat(vm.state.value.deck.selectedSlide.backgroundSetting.volume).isWithin(1e-4f).of(0.4f)
+    }
+
+    @Test
+    fun `Rotate turns the background a quarter at once, staying on its level`() {
+        val vm = viewModel()
+        withBackgroundVideo(vm)
+        show(vm)
+        modify()
+
+        tapRail("Rotate")
+
+        assertThat(vm.state.value.deck.selectedSlide.backgroundSetting.rotationDeg).isEqualTo(me.meeshy.sdk.model.StoryMediaRotation.turned(0f))
+        compose.onNodeWithTag(BACKGROUND_BAND_TAG).assertDoesNotExist()
+        compose.onNodeWithText("Rotate").assertExists()
     }
 
     @Test

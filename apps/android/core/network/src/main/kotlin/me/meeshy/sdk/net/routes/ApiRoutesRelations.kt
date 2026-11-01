@@ -13,4 +13,8 @@ package me.meeshy.sdk.net.routes
 
 public object ApiRoutesRelations {
     public const val BY_USER_ID: String = "relations/{userId}"
+    public const val BY_USER_ID_LEVEL: String = "relations/{userId}/level"
+    public const val BY_USER_ID_RITUAL: String = "relations/{userId}/ritual"
+    public const val CONFIG: String = "relations/config"
+    public const val ROOT: String = "relations"
 }

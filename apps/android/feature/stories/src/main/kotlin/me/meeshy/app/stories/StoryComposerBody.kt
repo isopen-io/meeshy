@@ -149,6 +149,7 @@ private fun SceneFirstFrame(
             typing = typing,
             rails = rails,
             incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
+            clearsTrailingLane = selection != null && openSheet == null,
         )
         EditingAnnouncer(editing = editedWord(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
@@ -164,7 +165,7 @@ private class SceneEdition(
     val edited: SceneEdited,
     val band: me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool?,
     val placedBand: me.meeshy.sdk.model.composer.edit.ComposerPlacedMediaTool?,
-    val soundBand: me.meeshy.sdk.model.composer.ComposerObjectEditorSection?,
+    val soundBand: PlacedSoundTool?,
 ) {
     val anyBand: Boolean get() = band != null || placedBand != null || soundBand != null
 }
@@ -198,7 +199,7 @@ private fun rememberSceneEdition(
         sheet.onOpen(StoryComposerSheet.BACKGROUND_DESCRIPTION)
     }
     val placedBand = levels.placedBand(placed)
-    val objectTools = placed?.railTools() ?: selection?.let { state.soundRailTools(viewModel) { section -> levels.onPush(StoryEditingLevel.SoundBand(section)) } }
+    val objectTools = placed?.railTools() ?: selection?.let { state.soundRailTools(viewModel) { tool -> levels.onPush(StoryEditingLevel.SoundBand(tool)) } }
     val onSelectionAction = { bar: SceneSelectionBar, action: ComposerSelectionAction -> viewModel.onSelectionAction(bar.ref, action, sheet.onOpen) }
     val edited = SceneEdited(selection, background, onSelectionAction, tools, placed, objectTools.orEmpty())
     return SceneEdition(levels, edited, band, placedBand, levels.soundBand(state).takeIf { selection != null })
@@ -230,7 +231,7 @@ private fun SceneEditingBand(edition: SceneEdition, state: StoryComposerUiState,
     when {
         band != null -> ScenePanelSurface { BackgroundBand(band, state, viewModel, comparison) }
         placedBand != null && placed != null -> ScenePanelSurface { PlacedMediaBand(placedBand, placed.mediaId, state, viewModel, comparison) }
-        edition.soundBand != null -> ScenePanelSurface { SoundBand(state, viewModel) }
+        edition.soundBand != null -> ScenePanelSurface { SoundBand(edition.soundBand, state, viewModel) }
     }
 }
 

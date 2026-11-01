@@ -106,6 +106,7 @@ const SOURCE_SELECT = {
   thumbHash: true,
   duration: true,
   codec: true,
+  lensSlug: true,
 } as const;
 
 type SourceMedia = {
@@ -122,6 +123,7 @@ type SourceMedia = {
   thumbHash: string | null;
   duration: number | null;
   codec: string | null;
+  lensSlug: string | null;
 };
 
 /** Les copies écrites : la carte source → copie, et ce qu'il faut défaire. */
@@ -184,6 +186,7 @@ export async function prepareReelCompanion(params: {
           thumbHash: source.thumbHash ?? undefined,
           duration: source.duration ?? undefined,
           codec: source.codec ?? undefined,
+          ...(source.lensSlug ? { lensSlug: source.lensSlug } : {}),
           uploaderId: authorId,
         },
         select: { id: true },

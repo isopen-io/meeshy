@@ -1332,6 +1332,14 @@ model MessageAttachment {
   /// @see packages/shared/utils/forward-to-publication.ts
   capturedInApp             Boolean @default(false)
 
+  /// L'identifiant de la lens qui a produit ce média (#11327, S26), DÉCLARÉ par
+  /// le client à l'envoi et retenu seulement s'il nomme une lens PUBLIÉE que
+  /// l'expéditeur a installée (`LensAttribution`). EN CLAIR, conversations E2EE
+  /// comprises — métadonnée assumée par le porteur (#11251, 2026-11-01) — pour
+  /// que le média reçu affiche « Lens par X » (`GET /lens/credits`). `null` :
+  /// aucune lens, ou une déclaration non retenue.
+  lensSlug                  String?
+
   // =====================================================
   // ORDRE DANS LE MESSAGE (#9776)
   // =====================================================
@@ -2090,6 +2098,32 @@ model PairInteractionDay {
 
   @@unique([userLowId, userHighId, day])
   @@index([day])
+}
+
+/// Les CONSENTEMENTS d'une personne envers UNE AUTRE, écrits au rituel du Sang
+/// (#13933, cercles de proximité, RG-09). Une ligne par couple ORIENTÉ (`ownerId`
+/// règle, `otherId` en bénéficie) : la loi d'accès dit le PLAFOND de ce que le niveau
+/// ouvre, cette ligne dit si la personne l'ACTIVE — les deux sont requis, jamais
+/// l'un sans l'autre. Tout est FAUX par défaut (fail-closed) ; un refus du rituel
+/// est un `false` explicite, il ne bloque pas le Sang.
+///
+/// Les partages que le rituel présente : titre d'écoute, position en direct,
+/// historique de position, alerte de proximité. Les réglages des autres lots du
+/// chantier (talkie, blocage du Bring, fantôme) s'y ajouteront avec leur lot.
+/// Index unique posé par `migrations/2026-10-31-relation-feature-setting-indexes.mongodb.js`.
+model RelationFeatureSetting {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId               String   @db.ObjectId
+  otherId               String   @db.ObjectId
+  listeningTitleShared  Boolean  @default(false)
+  locationShared        Boolean  @default(false)
+  locationHistoryShared Boolean  @default(false)
+  proximityShared       Boolean  @default(false)
+  consentedAt           DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([ownerId, otherId])
 }
 
 /// RÉSERVÉ — le lien parent/tuteur vérifié du niveau ATOME (hors MVP, #13926).
@@ -4607,6 +4641,11 @@ model PostMedia {
   /// la propriété au lieu de la conserver.
   uploaderId   String?  @db.ObjectId
 
+  /// L'identifiant de la lens qui a produit ce média (#11327) — jumeau exact de
+  /// `MessageAttachment.lensSlug` : déclaré à l'envoi, retenu seulement s'il
+  /// nomme une lens publiée installée par l'uploadeur, servi en clair.
+  lensSlug     String?
+
   /// Nombre de fois que CE média précis a été téléchargé : +1 par média
   /// effectivement enregistré. Voir la note sur `Post.downloadCount` — la somme
   /// des `downloadCount` des médias d'un poste ne vaut PAS celui du poste.
@@ -6483,7 +6522,7 @@ model CommunityAppearancePack {
 /// Une lens proposée par un partenaire (#11271, MeeshyLens v1) : le document
 /// re-sérialisé par `parseLens`, ses fichiers ré-encodés, et la fenêtre et les
 /// communautés FIXÉES par la modération. Gratuite (prix 0) ; l'identité
-/// partenaire, le crédit et le comptage d'usage attendent #11251 (S26).
+/// partenaire (`PartnerProfile`), le crédit et l'usage (`LensUsageDaily`) : #11327.
 model LensPack {
   id             String    @id @default(auto()) @map("_id") @db.ObjectId
   slug           String    @unique
@@ -6518,6 +6557,53 @@ model LensPack {
   @@index([status, createdAt])
   @@index([submitterId, status])
   @@index([documentSrc])
+}
+
+/// L'IDENTITÉ d'un partenaire qui propose des lens (#11327, S26) : un nom
+/// affichable, un site et un logo, VÉRIFIÉS par BIGBOSS ou ADMIN (décision
+/// #11251). Optionnel : une lens sans profil vérifié se publie, mais ne crédite
+/// personne. Changer son nom ou son logo RETIRE la vérification — une identité
+/// vérifiée ne se remplace pas après coup. Gratuit des deux côtés : aucun
+/// champ de prix ni de paiement.
+model PartnerProfile {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  /// Le compte qui propose les lens (`LensPack.submitterId`).
+  userId      String    @unique @db.ObjectId
+  displayName String
+  /// https seulement (`parsePartnerProfileInput`).
+  website     String?
+  /// `<sha16>.webp|png` — le logo ré-encodé, composé dans le filigrane À CÔTÉ de celui de Meeshy.
+  logoSrc     String?
+  logoSha256  String?
+  logoMime    String?
+  logoBytes   Bytes?
+  logoSize    Int?
+  /// `null` = non vérifié. Posé par BIGBOSS/ADMIN, journalisé avant d'agir.
+  verifiedAt  DateTime?
+  verifiedBy  String?   @db.ObjectId
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([verifiedAt])
+}
+
+/// L'USAGE d'une lens, AGRÉGÉ par lens × jour (UTC) × surface (#11327) : des
+/// compteurs, aucune identité. `devices` compte les comptes distincts du jour
+/// par une empreinte à sel QUOTIDIEN tenu en cache et jamais persisté — passé
+/// le jour, personne, serveur compris, ne relie plus un usage à un compte.
+/// Aucune ligne ne se sert sous `LENS_USAGE_K_ANONYMITY` (20) appareils.
+model LensUsageDaily {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  lensId    String   @db.ObjectId
+  /// `AAAA-MM-JJ`, UTC.
+  day       String
+  /// camera · story · message · call (`LENS_USAGE_SURFACES`).
+  surface   String
+  devices   Int      @default(0)
+  uses      Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([lensId, day, surface])
 }
 
 /// Un fichier d'une lens (#11271) : ré-encodé à la proposition, adressé par son

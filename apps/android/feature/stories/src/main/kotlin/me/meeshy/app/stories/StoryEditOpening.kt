@@ -99,6 +99,7 @@ internal data class StoryEditOpening(
                 backgroundLoop = explicitBackground?.loop ?: true,
                 backgroundAdjustments = explicitBackground?.adjustments,
                 backgroundTrim = StoryBackgroundTrimWire.read(explicitBackground?.sourceStart, explicitBackground?.sourceEnd),
+                backgroundSetting = explicitBackground?.let { StoryBackgroundSettingWire.read(it.rotation, it.volume, it.mutedVolumeMemento) } ?: StoryBackgroundSetting(),
                 audio = effects.audioPlayerObjects.orEmpty(),
                 frame = SceneFrame(
                     fitMode = effects.backgroundTransform?.videoFitMode,

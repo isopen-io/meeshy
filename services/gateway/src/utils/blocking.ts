@@ -19,7 +19,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  * short-circuits at the database. Equal ids return false without a query.
  */
 export async function isBlockedBetween(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   userIdA: string,
   userIdB: string
 ): Promise<boolean> {

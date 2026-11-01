@@ -371,7 +371,7 @@ final class MentionComposerControllerTests: XCTestCase {
         ])
         let (sut, _) = makeSUT(localCandidates: [localAlice], service: mockService)
 
-        sut.handleQuery(in: "@al")
+        sut.handleQuery(in: "@ali")
         await waitUntil({ sut.suggestions.count >= 2 }, "la fusion des résultats API n'est jamais arrivée")
 
         // Should have alice (local) + alicia (from API), not two alices
@@ -487,8 +487,9 @@ final class MentionComposerControllerTests: XCTestCase {
                        "…mais elle filtre, tout de suite, ce que le cache a servi")
     }
 
-    /// **Régime 3 — deux lettres : l'annuaire entre en jeu.**
-    func test_régime3_deuxLettres_interrogentLAnnuaire() async {
+    /// **Régime 3 — deux lettres que personne ne porte en local : l'annuaire
+    /// entre en jeu dès la deuxième lettre** (#14053).
+    func test_régime3_deuxLettres_sansCorrespondanceLocale_interrogentLAnnuaire() async {
         let (sut, annuaire) = makeSUTWithDirectory()
         annuaire.result = .success([
             UserSearchResult(id: "u9", username: "meeshy", displayName: "Meeshy")
@@ -501,16 +502,55 @@ final class MentionComposerControllerTests: XCTestCase {
         XCTAssertEqual(annuaire.lastQuery, "me")
     }
 
-    /// **Le seuil est celui de la LOI, pas un nombre écrit ici.** Si la
-    /// directive change, ce témoin suit sans qu'on ait à le réécrire — et il
-    /// tombe si une des deux familles de résolveurs se remet à porter le sien.
+    /// **Régime 3 bis — deux lettres qu'un ami porte déjà : zéro réseau**
+    /// (#14053). Le cache local a quelqu'un à proposer ; la recherche attend
+    /// la troisième lettre.
+    func test_régime3bis_deuxLettres_avecUnAmiCorrespondant_restentLocales() async {
+        let alice = makeCandidate(id: "1", username: "alice", displayName: "Alice")
+        let (sut, annuaire) = makeSUTWithDirectory(localCandidates: [alice])
+        annuaire.result = .success([
+            UserSearchResult(id: "u9", username: "alicia", displayName: "Alicia")
+        ])
+
+        sut.handleQuery(in: "Salut @al")
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        XCTAssertEqual(annuaire.callCount, 0,
+                       "deux lettres qu'un ami porte déjà ne justifient pas un aller-retour")
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice"])
+    }
+
+    /// **Régime 4 — trois lettres : le réseau part toujours**, pour faire
+    /// remonter les autres personnes du contexte derrière les amis.
+    func test_régime4_troisLettres_interrogentLAnnuaire_mêmeAvecUnAmiCorrespondant() async {
+        let alice = makeCandidate(id: "1", username: "alice", displayName: "Alice")
+        let (sut, annuaire) = makeSUTWithDirectory(localCandidates: [alice])
+        annuaire.result = .success([
+            UserSearchResult(id: "u9", username: "alicia", displayName: "Alicia")
+        ])
+
+        sut.handleQuery(in: "Salut @ali")
+        await waitUntil({ sut.suggestions.count == 2 },
+                        "au troisième caractère, la recherche distante part")
+
+        XCTAssertEqual(annuaire.callCount, 1)
+        XCTAssertEqual(annuaire.lastQuery, "ali")
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice", "alicia"])
+    }
+
+    /// **Les seuils sont ceux de la LOI, pas des nombres écrits ici.** Ce
+    /// témoin tombe si une des deux familles de résolveurs se remet à porter
+    /// les siens.
     func test_leSeuil_estCeluiDeLaLoiPartagée() {
-        XCTAssertEqual(MentionLookupRule.minimumRemoteQueryLength, 2)
-        XCTAssertFalse(MentionLookupRule.queriesRemote(""))
-        XCTAssertFalse(MentionLookupRule.queriesRemote("a"))
-        XCTAssertFalse(MentionLookupRule.queriesRemote(" a "),
+        XCTAssertEqual(MentionLookupRule.remoteMinimumLength, 3)
+        XCTAssertEqual(MentionLookupRule.remoteEarlyLength, 2)
+        XCTAssertEqual(MentionLookupRule.stage(for: "", localMatchCount: 0), .local)
+        XCTAssertEqual(MentionLookupRule.stage(for: "a", localMatchCount: 0), .local)
+        XCTAssertEqual(MentionLookupRule.stage(for: " a ", localMatchCount: 0), .local,
                        "les blancs ne comptent pas : `@ ` n'ouvre pas un handle")
-        XCTAssertTrue(MentionLookupRule.queriesRemote("ab"))
+        XCTAssertEqual(MentionLookupRule.stage(for: "ab", localMatchCount: 1), .local)
+        XCTAssertEqual(MentionLookupRule.stage(for: "ab", localMatchCount: 0), .remote)
+        XCTAssertEqual(MentionLookupRule.stage(for: "abc", localMatchCount: 3), .remote)
     }
 
     /// **Le régime vaut AUSSI pour un contexte serveur.** Le contrôleur porte
@@ -535,7 +575,11 @@ final class MentionComposerControllerTests: XCTestCase {
         XCTAssertEqual(mock.suggestionsCallCount, 0, "une lettre : filtre local")
 
         sut.handleQuery(in: "@al")
-        await waitUntil({ mock.suggestionsCallCount == 1 }, "deux lettres : l'API répond")
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertEqual(mock.suggestionsCallCount, 0, "deux lettres qu'un participant porte : filtre local")
+
+        sut.handleQuery(in: "@ali")
+        await waitUntil({ mock.suggestionsCallCount == 1 }, "trois lettres : l'API répond")
     }
 
     // MARK: - showsSuggestions : les DEUX vides ne se valent pas

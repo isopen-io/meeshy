@@ -69,6 +69,7 @@ import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../servi
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { logError, logWarn } from '../../utils/logger.js';
+import { OnlyUnlinkedBudgetRefused, refuseOnlyUnlinkedBudget, releaseOnlyUnlinkedBudget, spendOnlyUnlinkedBudget } from './onlyUnlinkedBudget';
 
 /**
  * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
@@ -179,6 +180,35 @@ function rejectUnclaimedCanvasMedia(
  * absente. L'absence se cherche ; la présence rassure.
  */
 
+/**
+ * #14105 — à l'édition, seuls les choisis AJOUTÉS à un post ONLY original comptent
+ * au plafond des choisis sans lien ; une liste EXCEPT qui devient ONLY n'était
+ * pas une liste de choisis. Une republication aussi : à l'édition, sa liste est
+ * celle que l'auteur écrit, plus celle de sa source.
+ */
+async function spendOnlyUnlinkedBudgetOnEdit(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  params: { postId: string; authorId: string; update: { visibility?: string; visibilityUserIds?: string[] } }
+) {
+  const allowed = { allowed: true, retryAfter: 0, unlinked: 0 };
+  if (params.update.visibility === undefined && params.update.visibilityUserIds === undefined) return allowed;
+  const stored = await prisma.post.findFirst({
+    where: { id: params.postId, authorId: params.authorId },
+    select: { visibility: true, visibilityUserIds: true },
+  });
+  const visibility = params.update.visibility ?? stored?.visibility;
+  if (!stored || visibility !== 'ONLY') return allowed;
+  const storedChosen = stored.visibility === 'ONLY' ? stored.visibilityUserIds ?? [] : [];
+  return spendOnlyUnlinkedBudget({
+    fastify,
+    prisma,
+    authorId: params.authorId,
+    chosenIds: params.update.visibilityUserIds ?? storedChosen,
+    previouslyChosen: storedChosen,
+  });
+}
+
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -261,6 +291,8 @@ export function registerCoreRoutes(
         select: {
           id: true, messageId: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
           originalName: true, width: true, height: true, duration: true, codec: true, thumbHash: true,
+          // Le crédit de la lens (#11327) suit la copie vers le post.
+          lensSlug: true,
           // Protection au niveau PIÈCE JOINTE (lue par `maskedAttachment`).
           isViewOnce: true, isBlurred: true, effectFlags: true,
           // Protection au niveau MESSAGE PARENT (lue par `protectedPreview`) —
@@ -440,6 +472,10 @@ export function registerCoreRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const authorId = authContext.registeredUser.id;
+      // #14105 — un post ONLY original : ses choisis sans lien comptent au plafond
+      // quotidien, débités DANS l'opération journalisée (une création rejouée ne
+      // recompte rien) et rendus si l'écriture échoue.
+      const countsOnlyUnlinked = creation.visibility === 'ONLY' && !creation.repostOfId?.trim();
       type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
       let companionReel: (CreatedPost & { id: string }) | undefined;
       // #9603 — le verdict du journal dit si la publication vient d'être
@@ -455,32 +491,14 @@ export function registerCoreRoutes(
         // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
         // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
         replayCost: 'diverges',
-        op: () => {
-          // `detectedLanguage` (#5349) EST désormais une entrée de
-          // `PostService.createPost`, persistée sur `Post` (#5422) : sans elle,
-          // une traduction demandée après coup (`translateOnDemand`) retombait
-          // sur la détection regex du serveur au lieu de la mesure on-device
-          // déjà faite à la création. Elle traverse donc par le spread comme le
-          // reste de `parsed.data`, au même titre qu'`originalLanguage`.
-          const input = {
-            ...creation,
-            content: creation.content !== undefined ? SecuritySanitizer.sanitizeText(creation.content) : undefined,
-            type: creation.type ?? 'POST',
-            visibility: creation.visibility ?? (creation.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
-          };
-          if (alsoAsReel !== true) {
-            return postService.createPost(input, authorId) as Promise<CreatedPost & { id: string }>;
-          }
-          // Les DEUX publications, ou aucune. Le journal de mutation retient la
-          // STORY (l'id rendu) ; le réel voyage à côté, dans `reel`.
-          return publishStoryAlsoAsReel({
-            prisma,
-            storage: companionStorage,
-            createPost: (post, author) => postService.createPost(post, author) as Promise<CreatedPost & { id: string }>,
-            retractPost: (postId, author) => postService.deletePost(postId, author, { actorRole: 'USER', reason: 'also-as-reel-rollback' }),
-          }, input, authorId).then(({ story, reel }) => {
-            companionReel = reel;
-            return story;
+        op: async () => {
+          const spent = countsOnlyUnlinked
+            ? await spendOnlyUnlinkedBudget({ fastify, prisma, authorId, chosenIds: creation.visibilityUserIds ?? [] })
+            : null;
+          if (spent && !spent.allowed) throw new OnlyUnlinkedBudgetRefused(spent);
+          return publish().catch(async (error: unknown) => {
+            if (spent) await releaseOnlyUnlinkedBudget({ fastify, authorId, unlinked: spent.unlinked });
+            throw error;
           });
         },
         onDuplicate: async (resultId) => {
@@ -488,6 +506,34 @@ export function registerCoreRoutes(
           return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
         },
       });
+      function publish(): Promise<CreatedPost & { id: string }> {
+        // `detectedLanguage` (#5349) EST désormais une entrée de
+        // `PostService.createPost`, persistée sur `Post` (#5422) : sans elle,
+        // une traduction demandée après coup (`translateOnDemand`) retombait
+        // sur la détection regex du serveur au lieu de la mesure on-device
+        // déjà faite à la création. Elle traverse donc par le spread comme le
+        // reste de `parsed.data`, au même titre qu'`originalLanguage`.
+        const input = {
+          ...creation,
+          content: creation.content !== undefined ? SecuritySanitizer.sanitizeText(creation.content) : undefined,
+          type: creation.type ?? 'POST',
+          visibility: creation.visibility ?? (creation.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
+        };
+        if (alsoAsReel !== true) {
+          return postService.createPost(input, authorId) as Promise<CreatedPost & { id: string }>;
+        }
+        // Les DEUX publications, ou aucune. Le journal de mutation retient la
+        // STORY (l'id rendu) ; le réel voyage à côté, dans `reel`.
+        return publishStoryAlsoAsReel({
+          prisma,
+          storage: companionStorage,
+          createPost: (post, author) => postService.createPost(post, author) as Promise<CreatedPost & { id: string }>,
+          retractPost: (postId, author) => postService.deletePost(postId, author, { actorRole: 'USER', reason: 'also-as-reel-rollback' }),
+        }, input, authorId).then(({ story, reel }) => {
+          companionReel = reel;
+          return story;
+        });
+      }
 
       if (replayed) {
         return sendSuccess(reply, servePublishedPost({
@@ -579,6 +625,7 @@ export function registerCoreRoutes(
       if (error instanceof ReelCompanionNotQualifiedError) {
         return sendError(reply, 422, 'The composition does not qualify as a reel', { code: REEL_NOT_QUALIFIED });
       }
+      if (error instanceof OnlyUnlinkedBudgetRefused) return refuseOnlyUnlinkedBudget(reply, error.verdict);
       // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
       // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
       // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
@@ -701,16 +748,23 @@ export function registerCoreRoutes(
         }
       }
 
+      // #14105 — débité APRÈS les refus de saisie : un 400 ne coûte rien.
+      const onlyBudget = await spendOnlyUnlinkedBudgetOnEdit(fastify, prisma, { postId, authorId: authContext.registeredUser.id, update: parsed.data });
+      if (!onlyBudget.allowed) return refuseOnlyUnlinkedBudget(reply, onlyBudget);
+
       const baseUpdateData = parsed.data.content !== undefined
         ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
         : parsed.data;
       const sanitizedUpdateData = { ...baseUpdateData, location: locationUpdate };
       // L'écriture porte la condition « pas hors ligne » (`updatePost`) : un retrait posé
       // pendant la requête la fait échouer (P2025), et ce refus se dit comme le verdict.
-      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData).catch((error: unknown) => {
+      const releaseOnlyBudget = () => releaseOnlyUnlinkedBudget({ fastify, authorId: authContext.registeredUser.id, unlinked: onlyBudget.unlinked });
+      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData).catch(async (error: unknown) => {
         if (parsed.data.visibility !== undefined && parsed.data.visibility !== 'PRIVATE' && (error as { code?: unknown } | null)?.code === 'P2025') return 'held' as const;
+        await releaseOnlyBudget();
         throw error;
       });
+      if (post === 'held' || !post) await releaseOnlyBudget();
       if (post === 'held') return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });

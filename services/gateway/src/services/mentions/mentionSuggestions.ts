@@ -7,7 +7,14 @@
  * conversation), puis les CONTACTS de tout cercle (lien sous la connaissance,
  * carnet d'adresses apparié), puis l'annuaire. Une conversation FERMÉE ne
  * propose que ses membres, connaissances en tête. Chaque suggestion dit son
- * `group` ; `badge`, `inConversation` et `isFriend` gardent leur sens d'avant.
+ * `group` ; `badge`, `inConversation` et `isFriend` gardent leur sens d'avant
+ * (une personne du contexte, connaissance comprise, est badgée `conversation`).
+ *
+ * Ce que la liste ne doit JAMAIS devenir (#14057, audit de #14055) : un oracle.
+ * Qui a RÉAGI ne sort que pour le lecteur à qui `viewerListAccess` ouvre cette
+ * liste en tant qu'auteur (décision porteur 2026-10-09) ; un lien inférieur à
+ * l'amitié et le carnet d'adresses passent par la découvrabilité (#8104) ; la
+ * garde de lecture est celle du FIL (`resolveConsumptionTarget`).
  *
  * La PORTÉE vient de `mentionableScope` (partagée avec la validation à
  * l'envoi) : la recherche ne propose jamais quelqu'un que l'envoi refuserait,
@@ -30,7 +37,9 @@ import { mentionableScope, scopeRequiresMembership, type MentionableScope } from
 import { keepDiscoverable } from '../profile-discoverability';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { comptesLies, niveauxParmi, plusProchesDabord, type CompteLie } from '../friendship';
-import { canUserConsumePost, loadPostAcl } from '../posts/postVisibility';
+import { resolveConsumptionTarget } from '../posts/postVisibility';
+import { commentThreadOf } from '../posts/commentHome';
+import { viewerListAccess } from '../posts/viewerListAccess';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
 import type { PersonProfileDecor } from '@meeshy/shared/types/profile-decor';
 import { AVATAR_RING_COLUMN, authorProfileDecor } from '../appearance/authorProfileDecor';
@@ -57,13 +66,14 @@ export interface MentionSuggestion {
 export const MAX_SUGGESTIONS = 10;
 
 /**
- * Court et versionné : la clé `v2` n'est pas relue par l'ancienne forme (dont
- * les entrées vides de l'annuaire cassé), et un changement de membres que
+ * Court et versionné : une clé d'une version antérieure n'est jamais relue par la
+ * forme courante (ni les entrées vides de l'annuaire cassé, ni les connaissances
+ * servies avant la loi de découvrabilité), et un changement de membres que
  * personne n'invalide ne survit pas plus d'une minute.
  */
 const CACHE_TTL_SECONDS = 60;
 const NO_BLOCKS: ReadonlySet<string> = new Set();
-const CACHE_PREFIX = 'mentions:suggestions:v3';
+const CACHE_PREFIX = 'mentions:suggestions:v4';
 
 export const ACCESS_DENIED = 'Conversation non trouvée ou accès refusé';
 export const POST_ACCESS_DENIED = 'Post non trouvé ou accès refusé';
@@ -71,6 +81,8 @@ export const POST_ACCESS_DENIED = 'Post non trouvé ou accès refusé';
 const KNOWN_FLOOR: RelationLevel = 'ACQUAINTANCE';
 const FRIEND_FLOOR: RelationLevel = 'FRIEND';
 const ADDRESS_BOOK_CAP = 500;
+/** Les intervenants lus par post : assez pour dix suggestions filtrées, jamais tout un post viral. */
+const THREAD_READ_CAP = 200;
 
 const isKnownLevel = (level: RelationLevel | undefined): boolean =>
   level !== undefined && relationLevelIfAtLeast(level, KNOWN_FLOOR) !== null;
@@ -197,6 +209,11 @@ type Ties = {
   readonly levelOf: ReadonlyMap<string, RelationLevel>;
 };
 
+/** Une connaissance qui est AUSSI du contexte en porte le drapeau et le badge. */
+function inContextIf(suggested: MentionSuggestion, contextIds: ReadonlySet<string>): MentionSuggestion {
+  return contextIds.has(suggested.id) ? { ...suggested, inConversation: true, badge: 'conversation' } : suggested;
+}
+
 function splitTies(ties: readonly CompteLie[]): Ties {
   return {
     known: ties.filter(t => isKnownLevel(t.niveau)),
@@ -311,8 +328,16 @@ export class MentionSuggestionFinder {
     );
   }
 
-  private async knownSuggestions(ties: Ties, matches: (user: SuggestedUser) => boolean): Promise<MentionSuggestion[]> {
-    const users = await this.usersInOrder(ties.known.map(t => t.id));
+  /**
+   * Les connaissances, du plus proche au plus lointain. Sous l'amitié, un compte
+   * caché (#8104) ne sort pas : `keepDiscoverable` n'exempte que soi et les amis.
+   */
+  private async knownSuggestions(
+    ties: Ties,
+    currentUserId: string,
+    matches: (user: SuggestedUser) => boolean
+  ): Promise<MentionSuggestion[]> {
+    const users = await keepDiscoverable(this.prisma, currentUserId, await this.usersInOrder(ties.known.map(t => t.id)));
     return users
       .filter(matches)
       .map(user => suggestion(user, { group: 'known', level: ties.levelOf.get(user.id), inContext: false }));
@@ -320,8 +345,7 @@ export class MentionSuggestionFinder {
 
   /**
    * Les contacts de TOUT cercle : liens sous la connaissance, puis carnet d'adresses
-   * apparié. Un contact du carnet sans lien est une RÉSOLUTION d'identifiant : il
-   * passe par la découvrabilité (#8104), comme l'annuaire.
+   * apparié. Aucun n'est un ami : tous passent par la découvrabilité (#8104).
    */
   private async contactSuggestions(
     ties: Ties,
@@ -330,12 +354,9 @@ export class MentionSuggestionFinder {
   ): Promise<MentionSuggestion[]> {
     const linked = ties.below.map(t => t.id);
     const addressBook = (await this.addressBookOf(currentUserId)).filter(userId => !ties.levelOf.has(userId));
-    const [linkedUsers, bookUsers] = await Promise.all([
-      this.usersInOrder(linked),
-      this.usersInOrder([...new Set(addressBook)])
-    ]);
-    const discoverableBook = await keepDiscoverable(this.prisma, currentUserId, bookUsers);
-    return [...linkedUsers, ...discoverableBook]
+    const users = await this.usersInOrder([...new Set([...linked, ...addressBook])]);
+    const discoverable = await keepDiscoverable(this.prisma, currentUserId, users);
+    return discoverable
       .filter(matches)
       .map(user => suggestion(user, { group: 'contact', level: ties.levelOf.get(user.id), inContext: false }));
   }
@@ -420,7 +441,7 @@ export class MentionSuggestionFinder {
       this.tiesOf(currentUserId)
     ]);
     const memberIds = new Set(members.map(m => m.id));
-    const known = (await this.knownSuggestions(ties, matches)).map(s => ({ ...s, inConversation: memberIds.has(s.id) }));
+    const known = (await this.knownSuggestions(ties, currentUserId, matches)).map(s => inContextIf(s, memberIds));
     const withKnown = appendUnique([], known);
     const withMembers = appendUnique(
       withKnown,
@@ -428,6 +449,7 @@ export class MentionSuggestionFinder {
         .filter(matches)
         .map(user => suggestion(user, { group: 'context', level: ties.levelOf.get(user.id), inContext: true }))
     );
+    if (withMembers.length >= MAX_SUGGESTIONS) return withMembers;
     const withContacts = appendUnique(withMembers, await this.contactSuggestions(ties, currentUserId, matches));
     return this.appendDirectory(withContacts, query, currentUserId, blocked);
   }
@@ -452,49 +474,73 @@ export class MentionSuggestionFinder {
     return suggestions;
   }
 
-  /** Les intervenants d'un post : son auteur, puis ses commentateurs, puis ses réacteurs. */
-  private async postParticipants(postId: string, authorId: string, currentUserId: string): Promise<SuggestedUser[]> {
-    const [author, comments, reactions] = await Promise.all([
-      authorId === currentUserId ? Promise.resolve([]) : this.usersInOrder([authorId]),
+  /**
+   * Les intervenants d'un fil : ses auteurs (la republication, puis l'original),
+   * ses commentateurs, puis — seulement quand `withReactors` — ceux qui ont réagi.
+   * Tous passent par `usersInOrder` : un compte désactivé ou supprimé ne sort pas.
+   */
+  private async threadParticipants(
+    threadId: string,
+    authorIds: readonly string[],
+    currentUserId: string,
+    withReactors: boolean
+  ): Promise<SuggestedUser[]> {
+    const [comments, reactions] = await Promise.all([
       this.prisma.postComment.findMany({
-        where: { postId, authorId: { not: currentUserId }, ...unsetOrNull('deletedAt') },
-        select: { authorId: true, author: { select: USER_SELECT } },
-        orderBy: { createdAt: 'asc' }
+        where: { postId: threadId, authorId: { not: currentUserId }, ...unsetOrNull('deletedAt') },
+        select: { authorId: true },
+        orderBy: { createdAt: 'asc' },
+        take: THREAD_READ_CAP
       }),
-      this.prisma.postReaction.findMany({
-        where: { postId, userId: { not: currentUserId } },
-        select: { userId: true, user: { select: USER_SELECT } },
-        orderBy: { createdAt: 'asc' }
-      })
+      withReactors
+        ? this.prisma.postReaction.findMany({
+            where: { postId: threadId, userId: { not: currentUserId } },
+            select: { userId: true },
+            orderBy: { createdAt: 'asc' },
+            take: THREAD_READ_CAP
+          })
+        : Promise.resolve([] as Array<{ userId: string }>)
     ]);
-    return [
-      ...author,
-      ...comments.flatMap(comment => (comment.author ? [comment.author] : [])),
-      ...reactions.flatMap(reaction => (reaction.user ? [reaction.user] : []))
-    ];
+    const ordered = [
+      ...authorIds,
+      ...comments.map(comment => comment.authorId),
+      ...reactions.map(reaction => reaction.userId)
+    ].filter(userId => userId && userId !== currentUserId);
+    return this.usersInOrder([...new Set(ordered)]);
   }
 
   /**
    * Contexte post (story, réel et mood compris — tous des `Post`) : connaissances,
-   * puis intervenants, puis contacts de tout cercle, puis l'annuaire. Un post que
-   * l'appelant ne peut pas CONSOMMER ne livre personne : sans cette garde, tout
-   * compte authentifié listait l'auteur et le fil de n'importe quel post nommé.
+   * puis intervenants, puis contacts de tout cercle, puis l'annuaire. La garde est
+   * celle du FIL (`resolveConsumptionTarget`) : un post — ou l'original d'une
+   * republication simple — que l'appelant ne peut pas lire ne livre personne, et un
+   * id malformé est un refus. Les réacteurs ne sortent que pour qui en lit la liste
+   * en tant qu'auteur (`viewerListAccess`, décision porteur 2026-10-09) — jamais
+   * pour un ADMIN par ce chemin, qui n'écrit aucune trace d'audit : le rôle n'y
+   * entre donc pas.
    */
-  async forPost(postId: string, currentUserId: string, query: string): Promise<MentionSuggestion[]> {
-    const acl = await loadPostAcl(this.prisma, postId);
-    if (!acl || !(await canUserConsumePost(this.prisma, acl, currentUserId))) {
-      throw new Error(POST_ACCESS_DENIED);
-    }
+  async forPost(
+    postId: string,
+    currentUserId: string,
+    query: string
+  ): Promise<MentionSuggestion[]> {
+    const target = await resolveConsumptionTarget(this.prisma, postId, currentUserId);
+    if (!target) throw new Error(POST_ACCESS_DENIED);
+
+    const thread = target.redirectedFrom ?? target;
+    const withReactors =
+      viewerListAccess({ authorId: thread.authorId, type: thread.type }, { id: currentUserId, role: null }) ===
+      'author';
 
     const blocked = await getBlockRelatedUserIds(this.prisma, currentUserId);
     const matches = (user: SuggestedUser): boolean => !blocked.has(user.id) && queryMatcher(query)(user);
     const [ties, participants] = await Promise.all([
       this.tiesOf(currentUserId),
-      this.postParticipants(postId, acl.authorId, currentUserId)
+      this.threadParticipants(commentThreadOf(target), [thread.authorId, target.authorId], currentUserId, withReactors)
     ]);
 
     const participantIds = new Set(participants.map(user => user.id));
-    const known = (await this.knownSuggestions(ties, matches)).map(s => ({ ...s, inConversation: participantIds.has(s.id) }));
+    const known = (await this.knownSuggestions(ties, currentUserId, matches)).map(s => inContextIf(s, participantIds));
     const withKnown = appendUnique([], known);
     const withContext = appendUnique(
       withKnown,

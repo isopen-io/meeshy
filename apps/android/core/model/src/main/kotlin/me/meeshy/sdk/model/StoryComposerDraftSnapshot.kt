@@ -212,6 +212,10 @@ data class StoryDraftSlideSnapshot(
     /** La fenêtre gardée de la vidéo de FOND dans sa source (#13973) ; un blob d'avant se lit « entière ». */
     val backgroundSourceStart: Double? = null,
     val backgroundSourceEnd: Double? = null,
+    /** Le quart de tour du média de FOND et le volume d'une vidéo de fond (#14083) ; un blob d'avant se lit « droit, à plein volume ». */
+    val backgroundRotation: Float = 0f,
+    val backgroundVolume: Float = 1f,
+    val backgroundMutedVolumeMemento: Float? = null,
     /** Les pastilles de lieu posées sur la scène (#13846) ; un blob d'avant se lit « aucune ». */
     val places: List<StoryLocationObject> = emptyList(),
     /** La transcription de chaque piste (#13848) ; un blob d'avant se lit « aucune ». */

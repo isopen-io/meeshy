@@ -276,6 +276,10 @@ export function buildMessageListSelect(options: {
 
         // ===== VIEW-ONCE / BLUR / EXPIRATION =====
         ...MESSAGE_PROTECTION_SELECT,
+        // #11269 — lue pour la projection par lecteur (une vue unique purgée ne
+        // sert plus rien à personne), jamais servie : `messageSchema` ne la
+        // déclare pas.
+        viewOnceBurnedAt: true,
 
         // ===== ÉPINGLAGE =====
         pinnedAt: true,

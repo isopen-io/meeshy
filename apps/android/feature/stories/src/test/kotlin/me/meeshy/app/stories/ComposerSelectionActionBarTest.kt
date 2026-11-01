@@ -267,14 +267,12 @@ class ComposerSelectionActionBarTest {
     }
 
     @Test
-    fun `a selected sound lays Trim flat in the rail before Duplicate, Timing and Remove, its band under the scene, without Edit nor sheet`() {
+    fun `a selected sound lays Trim, Volume and Mute flat in the rail before Duplicate, Timing and Remove, its band under the scene, without Edit nor sheet`() {
         val vm = viewModel()
         withVoice(vm, sourceSeconds = 12f)
         show(vm)
 
-        val rail = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()
-            .mapNotNull { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text } }
-        assertThat(rail).containsExactly("Trim", "Duplicate", "Timing", "Remove").inOrder()
+        assertThat(soundRail()).containsExactly("Trim", "Volume", "Mute", "Duplicate", "Timing", "Remove").inOrder()
         compose.onNodeWithText("Edit").assertDoesNotExist()
 
         compose.onNodeWithText("Trim").performClick()
@@ -284,6 +282,67 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithText("Back").performClick()
         compose.onNodeWithTag(SOUND_BAND_TAG).assertDoesNotExist()
         compose.onNodeWithText("Duplicate").assertExists()
+    }
+
+    private fun soundRail(): List<String> = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()
+        .mapNotNull { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text } }
+
+    private fun voice(vm: StoryComposerViewModel) = vm.state.value.deck.selectedSlide.audio.single()
+
+    @Test
+    @Config(qualifiers = "fr-w360dp-h740dp")
+    fun `the Trim of a placed sound says the word of the placed video, Couper, never Rogner`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        assertThat(soundRail().first()).isEqualTo("Couper")
+        compose.onNodeWithText("Rogner").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a sound whose source is unknown serves Volume and Mute but no Trim in its rail, as on iOS`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = null)
+        show(vm)
+
+        assertThat(soundRail()).containsExactly("Volume", "Mute", "Duplicate", "Timing", "Remove").inOrder()
+    }
+
+    @Test
+    fun `Volume of a placed sound opens a band whose slider runs from 0 to 100 percent and shows the value, and Back closes it`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        show(vm)
+
+        compose.onNodeWithText("Volume").performClick()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertExists()
+        compose.onNodeWithTag(COMPOSER_VOLUME_TAG).performSemanticsAction(SemanticsActions.SetProgress) { it(1.6f) }
+        assertThat(voice(vm).volume).isWithin(1e-4f).of(1f)
+        compose.onNodeWithText("100 %").assertExists()
+        compose.onNodeWithTag(COMPOSER_VOLUME_TAG).performSemanticsAction(SemanticsActions.SetProgress) { it(0.4f) }
+        assertThat(voice(vm).volume).isWithin(1e-4f).of(0.4f)
+        compose.onNodeWithText("40 %").assertExists()
+
+        compose.onNodeWithText("Back").performClick()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertDoesNotExist()
+        assertThat(soundRail()).contains("Volume")
+    }
+
+    @Test
+    fun `Mute of a placed sound silences it at once, lights its pastille, and gives the level back on a second touch`() {
+        val vm = viewModel()
+        withVoice(vm, sourceSeconds = 12f)
+        vm.onSceneReduce { s -> s.withDeckTransform { it.withSelectedSoundVolume("a1", 0.6f) } }
+        show(vm)
+
+        compose.onNodeWithText("Mute").performClick()
+        assertThat(voice(vm).volume).isEqualTo(0f)
+        compose.onNode(hasText("Mute") and isSelected()).assertExists()
+        compose.onNodeWithTag(SOUND_BAND_TAG).assertDoesNotExist()
+
+        compose.onNodeWithText("Mute").performClick()
+        assertThat(voice(vm).volume).isWithin(1e-4f).of(0.6f)
     }
 
     @Test

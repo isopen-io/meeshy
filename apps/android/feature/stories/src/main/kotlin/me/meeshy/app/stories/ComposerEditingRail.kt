@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -65,6 +66,7 @@ import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import me.meeshy.sdk.model.composer.ComposerSelectionSubject
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.ComposerPlateauInk
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -149,7 +151,8 @@ internal fun SceneRail(
  * Un outil posé À PLAT dans le rail d'un objet sélectionné (#14047) : son disque, son mot et ce qu'il fait — poser sa bande,
  * agir aussitôt ou ouvrir sa feuille.
  */
-internal class RailTool(val icon: ImageVector, @StringRes val label: Int, val onClick: () -> Unit)
+/** Une entrée à plat du rail ; [active] : un réglage allumé (Muet d'un son coupé), sa pastille s'allume et TalkBack le dit sélectionné. */
+internal class RailTool(val icon: ImageVector, @StringRes val label: Int, val active: Boolean = false, val onClick: () -> Unit)
 
 /**
  * Les options de l'objet sélectionné, dans la colonne des outils (#13956) : ses outils À PLAT ([tools], ceux d'une image,
@@ -165,7 +168,7 @@ internal fun SceneOptionColumn(bar: SceneSelectionBar, tools: List<RailTool>, on
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        tools.forEach { tool -> SceneOptionButton(tool.icon, stringResource(tool.label), Color.White, tool.onClick) }
+        tools.forEach { tool -> SceneOptionButton(tool.icon, stringResource(tool.label), Color.White, active = tool.active, onClick = tool.onClick) }
         bar.actions.forEach { action -> SceneOptionItem(action) { onAction(action) } }
     }
 }
@@ -182,15 +185,16 @@ private fun SceneOptionItem(action: ComposerSelectionAction, onClick: () -> Unit
 
 /** Une option de la colonne : un disque et son mot (sur deux lignes au besoin, jamais tronqué en un), une seule cible de toute sa largeur. */
 @Composable
-internal fun SceneOptionButton(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
+internal fun SceneOptionButton(icon: ImageVector, label: String, tint: Color, active: Boolean = false, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .width(OPTION_WIDTH)
             .clip(RoundedCornerShape(MeeshyRadius.md))
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick)
+            .then(if (active) Modifier.semantics { selected = true } else Modifier),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(OPTION_DISC).background(OPTION_VEIL, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(OPTION_DISC).background(if (active) ComposerPlateauInk.accent else OPTION_VEIL, CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         }
         Text(
@@ -216,7 +220,7 @@ internal sealed interface StoryEditingLevel {
     data object Background : StoryEditingLevel
     data class BackgroundBand(val tool: me.meeshy.sdk.model.composer.edit.ComposerBackgroundTool) : StoryEditingLevel
     data class ObjectBand(val tool: me.meeshy.sdk.model.composer.edit.ComposerPlacedMediaTool) : StoryEditingLevel
-    data class SoundBand(val section: me.meeshy.sdk.model.composer.ComposerObjectEditorSection) : StoryEditingLevel
+    data class SoundBand(val tool: PlacedSoundTool) : StoryEditingLevel
 }
 
 /** La pile des niveaux de la colonne ([ComposerRailStack]) et ses deux gestes : poser un niveau plus fin, descendre d'un niveau. */
@@ -272,7 +276,7 @@ internal fun <L> EditingRailLevels(
 /** Retour, en tête d'un niveau posé par-dessus : il descend d'un niveau. */
 @Composable
 internal fun SceneLevelBack(onBack: () -> Unit) {
-    SceneOptionButton(MeeshyIcons.Back, stringResource(R.string.composer_editing_back), Color.White, onBack)
+    SceneOptionButton(MeeshyIcons.Back, stringResource(R.string.composer_editing_back), Color.White, onClick = onBack)
 }
 
 /** Ce qui se retire pendant l'édition (Fermer, l'audience, Publier) : fondu et repli, immédiat sous « réduire les animations ». */

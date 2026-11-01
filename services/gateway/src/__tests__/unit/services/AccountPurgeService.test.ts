@@ -91,8 +91,8 @@ function shareLinkTable(initial: ShareLinkRow[]) {
 }
 
 function packTables(db: ReturnType<typeof fakePackDb>) {
-  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset } = db;
-  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset };
+  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset, partnerProfile, lensUsageDaily } = db;
+  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset, partnerProfile, lensUsageDaily };
 }
 
 const NO_FILES = { packFiles: fakeFileStore([]).store };
@@ -388,7 +388,7 @@ describe('purgeAccountIsolatedData — les packs du compte (#10151)', () => {
     expect(db.tables.userSticker.rows).toEqual([]);
     expect([...files.files]).toEqual([`stickers/${VOISIN}/b.webp`]);
     expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
-    expect(summary.packs).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 1, ownershipsDeleted: 1 });
+    expect(summary.packs).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 1, ownershipsDeleted: 1, partnerProfilesDeleted: 0 });
   });
 });
 

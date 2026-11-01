@@ -8,17 +8,18 @@ import os
 /// Manages mention autocomplete for any text composer (conversation, comments,
 /// story comments, composer draft…).
 ///
-/// **La règle du porteur (#7847, 2026-09-24)**, appliquée à la lettre :
+/// **La règle du porteur (#7847, #14053)**, appliquée
+/// à la lettre :
 ///
 /// | frappe | ce qui répond | réseau |
 /// |---|---|---|
 /// | `@` | contacts (cache) puis participants du contexte | aucun — le cache des contacts se réchauffe s'il est vide ou périmé |
 /// | `@a` | les mêmes, filtrés localement | aucun |
-/// | `@al` | les mêmes filtrés, puis les AUTRES trouvés au réseau | une recherche |
-/// | `@ali…` | affinage local instantané, puis recherche relancée (débounce) | les autres déjà connus restent affichés |
+/// | `@al` | les mêmes filtrés ; s'il n'y en a AUCUN, le serveur | une recherche seulement sans correspondance locale |
+/// | `@ali…` | les mêmes filtrés, puis le SERVEUR dans son ordre | une recherche (débounce) ; les autres déjà connus restent affichés |
 ///
-/// L'ÉTAPE est `MentionLookupRule.stage(for:)` et l'ORDRE (contacts →
-/// participants → autres, sans doublon, jamais soi) est `MentionSuggestionRule`
+/// L'ÉTAPE est `MentionLookupRule.stage(for:localMatchCount:)` et l'ORDRE
+/// (locaux → serveur dans son ordre, sans doublon, jamais soi) est `MentionSuggestionRule`
 /// — deux règles pures du SDK, partagées avec `MentionSuggestionsModel`.
 /// L'orchestration du cache des contacts est `MentionContactsStore` (app).
 @MainActor
@@ -87,6 +88,9 @@ public final class MentionComposerController: ObservableObject {
     /// affichés, refiltrés par la requête courante, pendant que la suivante
     /// est en vol — c'est ce qui affine sans clignoter.
     private var others: [MentionCandidate] = []
+    /// La requête à laquelle `others` RÉPOND : servis tels quels pour elle,
+    /// refiltrés pour une frappe plus récente (cf. `MentionSuggestionRule`).
+    private var othersQuery: String?
     private var debounceTask: Task<Void, Never>?
     private var warmTask: Task<Void, Never>?
 
@@ -163,8 +167,8 @@ public final class MentionComposerController: ObservableObject {
         activeQuery = query
         debounceTask?.cancel()
 
-        let stage = MentionLookupRule.stage(for: query)
-        if stage != .remote { others = [] }
+        let stage = MentionLookupRule.stage(for: query, localMatchCount: localMatchCount(for: query))
+        if stage != .remote { dropOthers() }
         recompute()
         if opening { warmContacts() }
 
@@ -181,7 +185,7 @@ public final class MentionComposerController: ObservableObject {
         debounceTask = nil
         warmTask?.cancel()
         warmTask = nil
-        others = []
+        dropOthers()
         activeQuery = nil
         suggestions = []
         isResolving = false
@@ -236,6 +240,7 @@ public final class MentionComposerController: ObservableObject {
                 let found = try await self.remoteCandidates(for: query)
                 guard !Task.isCancelled else { return }
                 self.others = found
+                self.othersQuery = query
                 self.recompute()
                 self.isResolving = false
             } catch is CancellationError {
@@ -266,12 +271,27 @@ public final class MentionComposerController: ObservableObject {
         }
     }
 
+    private func dropOthers() {
+        others = []
+        othersQuery = nil
+    }
+
+    private func localMatchCount(for query: String) -> Int {
+        MentionSuggestionRule.localMatches(
+            contacts: contacts.snapshot,
+            participants: participants(),
+            query: query,
+            excludingUserId: currentUserId
+        ).count
+    }
+
     private func recompute() {
         guard let query = activeQuery else { return }
         suggestions = MentionSuggestionRule.ordered(
             contacts: contacts.snapshot,
             participants: participants(),
             others: others,
+            othersQuery: othersQuery,
             query: query,
             excludingUserId: currentUserId
         )
