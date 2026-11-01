@@ -52,6 +52,8 @@ const PARTIE = {
 function prismaDouble() {
   return {
     user: {
+      // #13933 — « l'un a-t-il bloqué l'autre ? », relu avant d'accepter (`isBlockedBetween`).
+      findFirst: jest.fn<any>(async () => null),
       // Rend ce que le `select` DEMANDE (#9711) — sinon une requête qui ne
       // ramène pas les colonnes du Prisme passerait au vert.
       findUnique: jest.fn<any>(async (args: any) => {
@@ -75,6 +77,17 @@ function prismaDouble() {
       findMany: jest.fn<any>(async () => []),
       create: jest.fn<any>(async () => ({ id: FR_ID })),
     },
+    // Depuis les crans (#13933), accepter rejuge la demande sur le lien de la paire, même
+    // sans niveau visé : les deux sont déjà Connaissances, le cran qui précède Ami.
+    userRelation: {
+      findUnique: jest.fn<any>(async () => ({
+        id: 'aa0000000000000000000099', userLowId: MOI, userHighId: AUTRE,
+        grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE', transitions: [],
+      })),
+      findMany: jest.fn<any>(async () => []),
+      updateMany: jest.fn<any>(async () => ({ count: 1 })),
+    },
+    pairInteractionDay: { findMany: jest.fn<any>(async () => []) },
     conversation: {
       // Aucune conversation directe préexistante : l'acceptation en CRÉE une,
       // et c'est cette création qui porte la table de droits.
