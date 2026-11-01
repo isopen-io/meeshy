@@ -575,6 +575,12 @@ const PENDING_CLIENT_ENTRIES = {
   'LensEndpoint.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — file de vérification, console web seulement' },
   'LensEndpoint.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — console web seulement' },
   'LensEndpoint.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — console web seulement' },
+  // Les cercles (`/api/v1/relations`, #13933, servis depuis la PR #14082) : l'écran iOS « Mes cercles » les appellera
+  // (#13938). Dev a relevé la référence TS de 277 à 281 pour ces quatre entrées, jamais la Swift.
+  'RelationsEndpoint.root': { issue: 13938, reason: 'GET /relations — la lecture des cercles, écran iOS « Mes cercles »' },
+  'RelationsEndpoint.config': { issue: 13938, reason: 'GET /relations/config — la table des cercles, écran iOS « Mes cercles »' },
+  'RelationsEndpoint.byUserIdLevel': { issue: 13938, reason: 'POST /relations/:userId/level — la baisse silencieuse d’un lien' },
+  'RelationsEndpoint.byUserIdRitual': { issue: 13938, reason: 'POST /relations/:userId/ritual — le rituel du Sang' },
 };
 
 const BASELINE_DEAD_ENTRIES = 329;
