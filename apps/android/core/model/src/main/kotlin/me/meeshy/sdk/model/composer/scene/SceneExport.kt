@@ -9,16 +9,27 @@ public enum class SceneExportDestination { GALLERY, SHARE }
  */
 public sealed interface SceneExportState {
     public data object Idle : SceneExportState
-    public data class Running(val fraction: Float, val destination: SceneExportDestination) : SceneExportState
+    /** [phase] : le rendu, puis la relecture du fichier rendu (#14088) — barre pleine, l'écran dit qu'il vérifie. */
+    public data class Running(
+        val fraction: Float,
+        val destination: SceneExportDestination,
+        val phase: SceneExportPhase = SceneExportPhase.RENDERING,
+    ) : SceneExportState
     public data class Ready(val path: String, val destination: SceneExportDestination) : SceneExportState
     public data object Saved : SceneExportState
     public data object Failed : SceneExportState
 
     public val isExporting: Boolean get() = this is Running
 
+    /** Le rendu est fini et se relit avant la remise (#14088). */
+    public val isVerifying: Boolean get() = (this as? Running)?.phase == SceneExportPhase.VERIFYING
+
     /** `null` ⇒ aucun voile ; sinon la fraction bakée. */
     public val veilFraction: Float? get() = (this as? Running)?.fraction
 }
+
+/** Les deux temps d'un export qui tourne : le rendu, puis la relecture qui prouve que le fichier montre sa scène (#13986, #14088). */
+public enum class SceneExportPhase { RENDERING, VERIFYING }
 
 public object SceneExportReducer {
 
@@ -31,6 +42,10 @@ public object SceneExportReducer {
         if (state !is SceneExportState.Running || !fraction.isFinite()) return state
         return state.copy(fraction = maxOf(state.fraction, fraction.coerceIn(0f, 1f)))
     }
+
+    /** Le rendu est fini : la barre est pleine et l'écran dit qu'il vérifie le fichier (#14088). */
+    public fun verifying(state: SceneExportState): SceneExportState =
+        (state as? SceneExportState.Running)?.copy(fraction = 1f, phase = SceneExportPhase.VERIFYING) ?: state
 
     public fun completed(state: SceneExportState, path: String): SceneExportState =
         (state as? SceneExportState.Running)?.let { SceneExportState.Ready(path, it.destination) } ?: state

@@ -73,6 +73,9 @@ internal const val SCENE_EXPORT_BAND_TAG = "scene-export-band"
  * gestes : l'écran reste utilisable, le retour système lui appartient. [painting], la scène qu'on peint, voyage avec la
  * bande, à taille nulle.
  *
+ * Une fois le rendu fini ([verifying]), la bande dit « Vérification… » sur une barre qui défile : la relecture du fichier
+ * dure, et une barre pleine immobile laissait croire l'export bloqué (#14088).
+ *
  * #13951 : la fenêtre du bandeau ne reçoit pas les encarts de l'écran — un `navigationBarsPadding()` posé dedans valait zéro
  * et la bande passait SOUS la barre de navigation. Les encarts se lisent donc chez l'HÔTE, puis se portent dans la fenêtre.
  */
@@ -80,6 +83,7 @@ internal const val SCENE_EXPORT_BAND_TAG = "scene-export-band"
 internal fun SceneExportBand(
     fraction: Float?,
     onCancel: () -> Unit,
+    verifying: Boolean = false,
     outcome: SceneExportOutcome? = null,
     onRetry: () -> Unit = {},
     onOutcomeShown: () -> Unit = {},
@@ -97,7 +101,7 @@ internal fun SceneExportBand(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (fraction != null) {
-                SceneExportProgressBand(fraction = fraction, onCancel = onCancel)
+                SceneExportProgressBand(fraction = fraction, verifying = verifying, onCancel = onCancel)
                 if (painting != null) Box(Modifier.size(0.dp)) { painting() }
             } else if (outcome != null) {
                 SceneExportOutcomeBand(outcome = outcome, onRetry = onRetry)
@@ -123,8 +127,8 @@ private fun OutcomeTimeout(outcome: SceneExportOutcome, onOutcomeShown: () -> Un
 }
 
 @Composable
-private fun SceneExportProgressBand(fraction: Float, onCancel: () -> Unit) {
-    val label = stringResource(R.string.stories_scene_export_in_progress)
+private fun SceneExportProgressBand(fraction: Float, verifying: Boolean, onCancel: () -> Unit) {
+    val label = stringResource(if (verifying) R.string.stories_scene_export_verifying else R.string.stories_scene_export_in_progress)
     BandSurface {
         Column(
             modifier = Modifier
@@ -133,12 +137,16 @@ private fun SceneExportProgressBand(fraction: Float, onCancel: () -> Unit) {
                 .semantics(mergeDescendants = true) {
                     contentDescription = label
                     liveRegion = LiveRegionMode.Polite
-                    progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
+                    progressBarRangeInfo = if (verifying) ProgressBarRangeInfo.Indeterminate else ProgressBarRangeInfo(fraction, 0f..1f)
                 },
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         ) {
             Text(label, style = MaterialTheme.typography.titleSmall)
-            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+            if (verifying) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+            }
         }
         TextButton(onClick = onCancel) { Text(stringResource(R.string.stories_composer_cancel)) }
     }

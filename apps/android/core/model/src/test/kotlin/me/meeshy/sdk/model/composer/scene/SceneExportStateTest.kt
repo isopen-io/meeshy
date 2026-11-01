@@ -34,6 +34,22 @@ class SceneExportStateTest {
     }
 
     @Test
+    fun `apres le rendu l export dit qu il verifie, barre pleine, et l echec reste annonce`() {
+        val rendered = SceneExportReducer.progress(SceneExportReducer.start(SceneExportState.Idle, SceneExportDestination.GALLERY), 0.97f)
+
+        val checking = SceneExportReducer.verifying(rendered)
+
+        assertThat(checking.isVerifying).isTrue()
+        assertThat(checking.isExporting).isTrue()
+        assertThat(checking.veilFraction).isEqualTo(1f)
+        assertThat(rendered.isVerifying).isFalse()
+        assertThat(SceneExportReducer.progress(checking, 0.2f).isVerifying).isTrue()
+        assertThat(SceneExportReducer.failed(checking)).isEqualTo(SceneExportState.Failed)
+        assertThat(SceneExportReducer.saved(checking)).isEqualTo(SceneExportState.Saved)
+        assertThat(SceneExportReducer.verifying(SceneExportState.Idle)).isEqualTo(SceneExportState.Idle)
+    }
+
+    @Test
     fun `une progression tardive ne ressuscite pas un export repose`() {
         assertThat(SceneExportReducer.progress(SceneExportState.Idle, 0.9f)).isEqualTo(SceneExportState.Idle)
     }

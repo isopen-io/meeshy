@@ -25,4 +25,8 @@
     <string name="composer_publish_menu_title">النشر بصفة</string>
     <string name="push_action_comment">تعليق</string>
     <string name="push_action_comment_hint">تعليق…</string>
+    <string name="upgrade_required_action">تحديث</string>
+    <string name="upgrade_required_message">لم يعد بإمكان هذا الإصدار من Meeshy الاتصال بالخادم. ثبّت أحدث إصدار للمتابعة.</string>
+    <string name="upgrade_required_min_version">الحد الأدنى للإصدار: %1$s</string>
+    <string name="upgrade_required_title">التحديث مطلوب</string>
 </resources>

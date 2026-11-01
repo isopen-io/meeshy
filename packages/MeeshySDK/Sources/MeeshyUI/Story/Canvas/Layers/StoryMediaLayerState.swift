@@ -14,6 +14,9 @@ nonisolated struct StoryMediaLayerState {
     var currentVideoLoadTask: Task<Void, Never>?
     var videoLoadGeneration: UInt64 = 0
     var placeholderLayer: CALayer?
+    var posterTask: Task<Void, Never>?
+    var posterImage: CGImage?
+    var readyForDisplayObservation: NSKeyValueObservation?
     var attachedURL: URL?
     var playerProvider: (any StoryCarrierPlayerProviding)?
     var playsAProvidedPlayer: Bool = false
