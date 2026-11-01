@@ -194,6 +194,39 @@ class SceneEditorUiTest {
     }
 
     @Test
+    fun `la frise tend sa lecture au transport de l'hote, que la scene vivante suit`() {
+        val state = stickerState()
+        val transport = FriseTransport()
+        var shown by mutableStateOf(true)
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalFriseTransport provides transport) {
+                    if (shown) {
+                        SceneFrise(
+                            tracks = state.sceneTracks,
+                            editableIds = state.sceneEditableTrackIds,
+                            selectedId = null,
+                            slideDurationSeconds = 10f,
+                            playheadSeconds = 1f,
+                            onSelectTrack = { _, _ -> },
+                            onScrub = {},
+                            onWindow = { _, _, _ -> },
+                        )
+                    }
+                }
+            }
+        }
+
+        assertThat(transport.isOpen).isTrue()
+        compose.onNodeWithContentDescription("Play").performClick()
+        assertThat(transport.playing).isTrue()
+        shown = false
+        compose.waitForIdle()
+        assertThat(transport.isOpen).isFalse()
+        assertThat(transport.playing).isFalse()
+    }
+
+    @Test
     fun `Lire fait avancer la tete au rythme de la scene, Pause l'arrete`() {
         val state = stickerState()
         var playhead by mutableStateOf(1f)

@@ -845,28 +845,27 @@ struct MeeshyComposerHost: View {
     /// une sélection posée par un tap sur le fond n'aurait aucune sortie, la
     /// zone contextuelle restant montée pour toujours.
     func handleSceneBackgroundTap() {
-        // **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5) ; il
-        // n'arme le viseur que si la scène est vide ET que rien n'était
-        // sélectionné. La règle se lit AVANT d'effacer, sinon elle verrait
-        // toujours « rien ».
+        // **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5) et referme la bande ; la règle
+        // se lit AVANT d'effacer, sinon elle verrait toujours « rien ».
         let issue = ComposerSceneEmptyTap.outcome(
             hadSelection: sceneSelectionRelay.hasLiveSelection,
             effectIsOpen: openSceneEffect != nil,
             quickCaptureOffered: sceneQuickCaptureIsOffered,
-            backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil)
+            backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil,
+            bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil)
+        if ComposerSceneEmptyTap.closesBand(issue) { requestedSceneBand = nil }
         if issue == .armViewfinder, handleSceneQuickTap() { return }
         // Le document sélectionne son fond par KIND (#4035).
         selectedSceneItemKind = ComposerSceneBackgroundTapPolicy.selection(
             currentSelection: selectedSceneItemKind,
             backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia
         )
-        // Le toucher referme aussi le carrousel d'effets, qui rend l'audience
-        // et Publier.
+        // Le toucher referme aussi le carrousel d'effets, qui rend l'audience et Publier.
         openSceneEffect = nil
         switch issue {
         case .deselect:                   sceneSelectionRelay.deselectSceneItem()
         case .selectBackground(let fond): sceneSelectionRelay.selectSceneItem(fond)
-        case .closeEffect, .armViewfinder, .nothing:
+        case .closeEffect, .closeBand, .armViewfinder, .nothing:
             selectedSceneItemId = nil
             inlineEdit = nil
         }

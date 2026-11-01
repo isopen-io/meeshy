@@ -21,7 +21,7 @@ extension MeeshyComposerHost {
         return AnyView(
             ComposerSceneFrise(timeline: viewModel.timelineViewModel,
                                plateauTint: tint.color,
-                               onWindowEdited: { commitSceneFriseWindow() })
+                               onWindowEdited: { commitSceneFriseWindow() }, onDuplicate: { sceneSelectionRelay.duplicateFromSceneFrise($0) })
                 .padding(.horizontal, ComposerRailGeometry.outerMargin)
                 .padding(.bottom, MeeshySpacing.xs)
         )

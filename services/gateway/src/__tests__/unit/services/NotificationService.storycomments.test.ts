@@ -281,7 +281,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 501 })
+        expect.objectContaining({ take: 1001 })
       );
     });
 
@@ -1109,7 +1109,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         expect.objectContaining({ take: 501 })
       );
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 501 })
+        expect.objectContaining({ take: 1001 })
       );
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ take: 501 })

@@ -54,6 +54,12 @@ public nonisolated struct HistoryStore<S: Equatable & Sendable>: Sendable {
         return entries.removeFirst()
     }
 
+    /// Réécrit chaque état SANS bouger le curseur : un fait qui n'est pas un
+    /// geste de l'auteur vaut pour toute la trajectoire et n'y ajoute rien.
+    public mutating func amendAll(_ transform: (S) -> S) {
+        entries = entries.map(transform)
+    }
+
     /// Recule d'un cran et rend l'état précédent (`nil` au plancher).
     public mutating func undo() -> S? {
         guard canUndo else { return nil }

@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 import MeeshyUI
 
 /// **La frise de la scène animée suit la maquette** (#8370, lot 6 —
@@ -404,5 +405,62 @@ final class ComposerSceneFriseTests: XCTestCase {
     func test_stickerEtLieu_seRetirentDepuisLaScene() {
         XCTAssertFalse(ComposerSceneFriseMetrics.canRemove(piste(.sticker)))
         XCTAssertFalse(ComposerSceneFriseMetrics.canRemove(piste(.place)))
+    }
+
+    // MARK: - La section Temps lit la diapo (#14257, iso Android #14255)
+
+    func test_laSectionTemps_dOnObjetPermanent_pleineDiapo() {
+        let barre = ComposerObjectTimingStrip.bar(.timing(start: 0, duration: nil), slideDuration: 6)
+        XCTAssertEqual(barre, ComposerObjectTimingStrip.Bar(start: 0, end: 1))
+    }
+
+    func test_laSectionTemps_dUneFenetre_seLitSurLaDiapo() {
+        let barre = ComposerObjectTimingStrip.bar(.timing(start: 1.5, duration: 3), slideDuration: 6)
+        XCTAssertEqual(barre.start, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(barre.end, 0.75, accuracy: 0.0001)
+    }
+
+    func test_laSectionTemps_bornesALaDiapo() {
+        let barre = ComposerObjectTimingStrip.bar(.timing(start: 5, duration: 10), slideDuration: 6)
+        XCTAssertEqual(barre.end, 1)
+        XCTAssertLessThanOrEqual(barre.start, barre.end)
+    }
+
+    func test_laSectionTemps_ditLaDureeDeLaDiapo() {
+        XCTAssertEqual(ComposerObjectTimingStrip.durationLabel(6, locale: Locale(identifier: "fr_FR")),
+                       ComposerObjectChips.timecode(6, locale: Locale(identifier: "fr_FR")))
+        XCTAssertFalse(ComposerObjectTimingStrip.ruler(slideDuration: 6, width: 320).isEmpty)
+        XCTAssertEqual(ComposerObjectTimingStrip.ruler(slideDuration: 6, width: 320).last?.time, 6)
+    }
+
+    // MARK: - Dupliquer depuis la frise (#14215)
+
+    func test_dupliquer_estServiATousSaufAuLieu() {
+        for kind in [SceneFriseTrack.Kind.text, .sticker, .image, .video, .audio] {
+            XCTAssertTrue(ComposerSceneFriseMetrics.canDuplicate(piste(kind)), "\(kind)")
+        }
+        XCTAssertFalse(ComposerSceneFriseMetrics.canDuplicate(piste(.place)))
+    }
+
+    // MARK: - Une barre coupée ne montre que sa fenêtre (#14268)
+
+    func test_laFenetreDeSource_partDuDebutDeCoupeEtDureCeQueLaSceneJoue() {
+        XCTAssertEqual(SceneFriseSourceWindow.range(sourceStart: nil, sourceEnd: nil, playedSeconds: 6), 0...6)
+        XCTAssertEqual(SceneFriseSourceWindow.range(sourceStart: 2, sourceEnd: nil, playedSeconds: 3), 2...5)
+        XCTAssertEqual(SceneFriseSourceWindow.range(sourceStart: 2, sourceEnd: 4, playedSeconds: 3), 2...4)
+        XCTAssertNil(SceneFriseSourceWindow.range(sourceStart: 2, sourceEnd: nil, playedSeconds: 0))
+    }
+
+    func test_lesVignettes_neSePrennentQueDansLaFenetre() {
+        XCTAssertEqual(VideoThumbnailInstants.seconds(for: .window(start: 2, end: 6, count: 2), duration: nil), [3, 5])
+        XCTAssertEqual(VideoThumbnailInstants.seconds(for: .window(start: 2, end: 6, count: 2), duration: 4), [2.5, 3.5])
+        XCTAssertFalse(VideoThumbnailInstants.needsDuration(.window(start: 0, end: 1, count: 1)))
+    }
+
+    func test_lOnde_neMontreQueLaFenetre() {
+        let onde: [Float] = [1, 2, 3, 4, 5, 6, 7, 8]
+        XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: 2...6, sourceDuration: 8), [3, 4, 5, 6])
+        XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: nil, sourceDuration: 8), onde)
+        XCTAssertEqual(ComposerSceneFriseMetrics.samples(onde, window: 2...6, sourceDuration: nil), onde)
     }
 }

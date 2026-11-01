@@ -188,7 +188,7 @@ extension MeeshyComposerHost {
             initialAudio: editedSoundTrack,
             // **Supprimer n'est offert qu'en ÉDITION** — voir
             // `deleteEditedSoundAction`, dont le `nil` retire le bouton.
-            onDelete: deleteEditedSoundAction
+            onDelete: deleteEditedSoundAction, appearance: .dark
         )
         // **Une ouverture, une feuille NEUVE**. Voir
         // `soundSheetSession` : sans identité renouvelée, SwiftUI réutilise la

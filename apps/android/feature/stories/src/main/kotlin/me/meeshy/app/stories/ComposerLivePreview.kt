@@ -14,10 +14,12 @@ import androidx.lifecycle.compose.currentStateAsState
 import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StorySourceWindow
+import me.meeshy.sdk.model.composer.live.ComposerLiveFollow
 import me.meeshy.sdk.model.composer.live.ComposerLiveKind
 import me.meeshy.sdk.model.composer.live.ComposerLivePlayback
 import me.meeshy.sdk.model.composer.live.ComposerLiveSubject
 import me.meeshy.sdk.model.composer.live.ComposerLiveWindow
+import me.meeshy.sdk.model.composer.timeline.TrackBar
 import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.component.media.ComposerLivePlayerState
@@ -105,9 +107,15 @@ private fun StoryComposerUiState.playableFileUrl(file: String, mediaBaseUrl: Str
  * ([LocalComposerLive]). Changer de diapo change de lecteurs ; Couper, régler le volume ou sélectionner n'en recrée aucun.
  */
 @Composable
-internal fun rememberComposerLive(state: StoryComposerUiState, viewModel: StoryComposerViewModel, shelfOpen: Boolean): ComposerLiveStage {
+internal fun rememberComposerLive(
+    state: StoryComposerUiState,
+    viewModel: StoryComposerViewModel,
+    shelfOpen: Boolean,
+    transport: FriseTransport? = null,
+): ComposerLiveStage {
     val screen by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val plays = ComposerLivePlayback.plays(screen.isAtLeast(Lifecycle.State.RESUMED), shelfOpen)
+    val windows = state.sceneWindows()
     val slots = state.liveCues(viewModel.mediaBaseUrl, viewModel::playableSoundUrl).map { cue ->
         key(cue.subject.id, cue.url) {
             val video = cue.subject.kind == ComposerLiveKind.VIDEO
@@ -117,11 +125,24 @@ internal fun rememberComposerLive(state: StoryComposerUiState, viewModel: StoryC
                 volume = cue.volume,
                 playing = plays,
                 category = if (video) MediaCacheCategory.VIDEO else MediaCacheCategory.AUDIO,
+                follow = transport?.takeIf { it.isOpen }?.let { frise ->
+                    val (start, end) = windows[cue.subject.id] ?: (0f to null)
+                    ComposerLiveFollow(ComposerLivePlayback.followed(cue.window, start, end, state.playheadSeconds), frise.playing)
+                },
             )
             remember(cue.subject, player) { ComposerLiveSlot(cue.subject, player) }.takeIf { video }
         }
     }
     return ComposerLiveStage(slots.filterNotNull().associateBy { it.subject.id })
 }
+
+/** La fenêtre de SCÈNE de chaque objet (entrée, sortie ; `null` : jusqu'à la fin) — le fond n'en a pas, il couvre tout. */
+private fun StoryComposerUiState.sceneWindows(): Map<String, Pair<Float, Float?>> =
+    sceneTracks.associate { track ->
+        track.id to when (val bar = track.bar) {
+            is TrackBar.Timed -> bar.start.toFloat() to bar.end.toFloat()
+            else -> 0f to null
+        }
+    }
 
 private const val FULL_VOLUME = 1f
