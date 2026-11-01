@@ -29,7 +29,7 @@ class ComposerSceneExportTest {
         val state = twoSlides()
         assertThat(state.deck.selectedSlide.id).isEqualTo("s2")
 
-        val scenes = ComposerSceneExport.scenes(state, "fr") { item -> slideView(item.id) }
+        val scenes = ComposerSceneExport.scenes(state, "fr", null) { item -> slideView(item.id) }
 
         assertThat(scenes.map { it.second.id }).containsExactly("composer-preview-0", "composer-preview-1").inOrder()
         assertThat(scenes.map { it.first.id }).containsExactly("composer-preview-0", "composer-preview-1").inOrder()
@@ -47,7 +47,7 @@ class ComposerSceneExportTest {
     fun `nothing to publish, nothing to export`() {
         assertThat(ComposerSceneExport.entries(base)).isEmpty()
         assertThat(ComposerSceneExport.entries(StoryComposerTextReducer.added(base, "t"))).isEmpty()
-        assertThat(ComposerSceneExport.scenes(base, "fr") { slideView(it.id) }).isEmpty()
+        assertThat(ComposerSceneExport.scenes(base, "fr", null) { slideView(it.id) }).isEmpty()
     }
 
     @Test

@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.composer.ComposerSceneReferences
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.outbox.OutboxIds
@@ -13,7 +14,8 @@ internal data class PublishPlan(val request: CreateStoryRequest, val dependsOn: 
  * media now belongs to the slide it was added to, not the whole story — and
  * `dependsOn` only the offline uploads staged on that same slide (a draft restored or reopened
  * names its still-queued uploads by their `cmid` alone, #13500), so the drainer
- * gates each story on exactly its own prerequisites and grafts the real ids in.
+ * gates each story on exactly its own prerequisites and grafts the real ids in. [floor] is the background the scene shows
+ * when its author chose none — written into every slide that poses something, so what the composer showed is what is read.
  */
 /** Les pastilles de mention de la slide : chacune y déclare sa personne ÉPINGLÉE (#13846). */
 internal val StorySlide.badges: List<ComposerSceneReferences.Badge>
@@ -25,6 +27,7 @@ internal fun publishPlans(
     current: StoryComposerUiState,
     language: String,
     slides: List<StorySlide> = current.deck.publishableSlides,
+    floor: StoryBackgroundValue? = null,
 ): List<PublishPlan> {
     val pendingCmids = current.pendingUploads.mapTo(mutableSetOf(), PendingMediaUpload::cmid)
     return slides.map { slide ->
@@ -39,6 +42,7 @@ internal fun publishPlans(
             filterIntensity = slide.filterIntensity,
             durationSecondsPin = slide.durationSecondsPin,
             background = slide.background,
+            floor = floor,
             backgroundMedia = StoryPublishBackground.resolve(slide, current),
             placedMedia = StoryPublishPlacedMedia.resolve(slide, current),
             repostOfId = current.draft.repostOfId,
