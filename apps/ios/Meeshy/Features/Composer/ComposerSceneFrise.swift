@@ -21,6 +21,10 @@ struct ComposerSceneFrise: View {
     /// ici » ne changeait rien à la scène avant la fermeture de la frise — le
     /// texte restait visible à une seconde où il n'existe pas encore.
     var onWindowEdited: () -> Void = {}
+    /// **Dupliquer depuis la frise** (#14215) : l'hôte passe par la duplication
+    /// de la SCÈNE — un pas d'annulation, la copie sélectionnée —, puis
+    /// recharge les pistes. `nil` ⇒ le jeton n'est pas servi.
+    var onDuplicate: ((String) -> Void)?
 
     /// **La fenêtre qu'un doigt est en train de régler** — l'aperçu du geste,
     /// jamais le projet : le projet ne reçoit la fenêtre qu'au lâcher, en UNE
@@ -99,6 +103,12 @@ struct ComposerSceneFrise: View {
                     onWindowEdited()
                 }
                 couper(choisi)
+                if let onDuplicate, ComposerSceneFriseMetrics.canDuplicate(choisi) {
+                    glyphe("plus.square.on.square", libelle: ComposerSelectionCopy.label(.duplicate)) {
+                        HapticFeedback.light()
+                        onDuplicate(choisi.id)
+                    }
+                }
                 if ComposerSceneFriseMetrics.canRemove(choisi) { retirer(choisi) }
             }
         }
@@ -121,12 +131,16 @@ struct ComposerSceneFrise: View {
     /// **Retirer depuis la frise** (#14215) : l'objet quitte la scène en un
     /// pas d'annulation, sans quitter la frise.
     private func retirer(_ piste: SceneFriseTrack) -> some View {
-        Button {
+        glyphe("trash", libelle: ComposerSelectionCopy.label(.remove)) {
             HapticFeedback.medium()
             timeline.deleteClip(id: piste.id)
             onWindowEdited()
-        } label: {
-            Image(systemName: "trash")
+        }
+    }
+
+    private func glyphe(_ symbole: String, libelle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbole)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: 32, height: 32)
@@ -135,7 +149,7 @@ struct ComposerSceneFrise: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(ComposerSelectionCopy.label(.remove)))
+        .accessibilityLabel(Text(libelle))
     }
 
     private func jeton(_ titre: String, action: @escaping () -> Void) -> some View {
@@ -242,20 +256,7 @@ struct ComposerSceneFrise: View {
     private func dessiner(_ graduations: [ComposerSceneFriseRuler.Tick],
                           dans contexte: GraphicsContext, taille: CGSize) {
         let couleur = Color.white
-        for graduation in graduations {
-            let x = CGFloat(visible.fraction(graduation.time)) * taille.width
-            let hauteur: CGFloat = graduation.isMajor ? 7 : 4
-            let trait = CGRect(x: min(max(0, x - 0.5), taille.width - 1), y: taille.height - hauteur,
-                               width: 1, height: hauteur)
-            contexte.fill(Path(trait), with: .color(couleur.opacity(graduation.isMajor ? 0.55 : 0.25)))
-            guard let libelle = graduation.label else { continue }
-            var texte = contexte.resolve(Text(libelle)
-                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium).monospacedDigit()))
-            texte.shading = .color(couleur.opacity(0.6))
-            let mesure = texte.measure(in: taille)
-            let centre = min(max(mesure.width / 2, x), taille.width - mesure.width / 2)
-            contexte.draw(texte, at: CGPoint(x: centre, y: mesure.height / 2), anchor: .center)
-        }
+        ComposerSceneFriseRuler.draw(graduations, in: visible, context: contexte, size: taille)
         guard vue != nil, duree > 0 else { return }
         let ascenseur = CGRect(x: CGFloat(visible.start / duree) * taille.width, y: taille.height - 1.5,
                                width: max(6, CGFloat(visible.span / duree) * taille.width), height: 1.5)
@@ -593,6 +594,12 @@ nonisolated enum ComposerSceneFriseMetrics {
     /// **Retirer depuis la frise** : un texte, une image, une vidéo ou un son
     /// (la commande de la timeline) ; un sticker ou un lieu se retirent depuis
     /// la scène (#4840).
+    /// **Dupliquer depuis la frise** : tout objet que la scène duplique — un
+    /// lieu reste unique (#14215).
+    static func canDuplicate(_ piste: SceneFriseTrack) -> Bool {
+        piste.kind != .place
+    }
+
     static func canRemove(_ piste: SceneFriseTrack) -> Bool {
         [.text, .image, .video, .audio].contains(piste.kind)
     }
@@ -695,6 +702,28 @@ nonisolated enum ComposerSceneFriseRuler {
 
     static func majorStep(duration: Float, width: CGFloat) -> Float {
         echelleChoisie(duration: duration, width: width).pas
+    }
+
+    /// Les traits et les libellés de la règle — la frise et la section Temps
+    /// (#14257) en dessinent UNE, la même.
+    @MainActor
+    static func draw(_ graduations: [Tick], in vue: ComposerSceneFriseViewport,
+                     context contexte: GraphicsContext, size taille: CGSize) {
+        let couleur = Color.white
+        for graduation in graduations {
+            let x = CGFloat(vue.fraction(graduation.time)) * taille.width
+            let hauteur: CGFloat = graduation.isMajor ? 7 : 4
+            let trait = CGRect(x: min(max(0, x - 0.5), taille.width - 1), y: taille.height - hauteur,
+                               width: 1, height: hauteur)
+            contexte.fill(Path(trait), with: .color(couleur.opacity(graduation.isMajor ? 0.55 : 0.25)))
+            guard let libelle = graduation.label else { continue }
+            var texte = contexte.resolve(Text(libelle)
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium).monospacedDigit()))
+            texte.shading = .color(couleur.opacity(0.6))
+            let mesure = texte.measure(in: taille)
+            let centre = min(max(mesure.width / 2, x), taille.width - mesure.width / 2)
+            contexte.draw(texte, at: CGPoint(x: centre, y: mesure.height / 2), anchor: .center)
+        }
     }
 
     static func ticks(duration: Float, width: CGFloat) -> [Tick] {

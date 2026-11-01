@@ -405,4 +405,39 @@ final class ComposerSceneFriseTests: XCTestCase {
         XCTAssertFalse(ComposerSceneFriseMetrics.canRemove(piste(.sticker)))
         XCTAssertFalse(ComposerSceneFriseMetrics.canRemove(piste(.place)))
     }
+
+    // MARK: - La section Temps lit la diapo (#14257, iso Android #14255)
+
+    func test_laSectionTemps_dOnObjetPermanent_pleineDiapo() {
+        let barre = ComposerObjectTimingStrip.bar(.timing(start: 0, duration: nil), slideDuration: 6)
+        XCTAssertEqual(barre, ComposerObjectTimingStrip.Bar(start: 0, end: 1))
+    }
+
+    func test_laSectionTemps_dUneFenetre_seLitSurLaDiapo() {
+        let barre = ComposerObjectTimingStrip.bar(.timing(start: 1.5, duration: 3), slideDuration: 6)
+        XCTAssertEqual(barre.start, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(barre.end, 0.75, accuracy: 0.0001)
+    }
+
+    func test_laSectionTemps_bornesALaDiapo() {
+        let barre = ComposerObjectTimingStrip.bar(.timing(start: 5, duration: 10), slideDuration: 6)
+        XCTAssertEqual(barre.end, 1)
+        XCTAssertLessThanOrEqual(barre.start, barre.end)
+    }
+
+    func test_laSectionTemps_ditLaDureeDeLaDiapo() {
+        XCTAssertEqual(ComposerObjectTimingStrip.durationLabel(6, locale: Locale(identifier: "fr_FR")),
+                       ComposerObjectChips.timecode(6, locale: Locale(identifier: "fr_FR")))
+        XCTAssertFalse(ComposerObjectTimingStrip.ruler(slideDuration: 6, width: 320).isEmpty)
+        XCTAssertEqual(ComposerObjectTimingStrip.ruler(slideDuration: 6, width: 320).last?.time, 6)
+    }
+
+    // MARK: - Dupliquer depuis la frise (#14215)
+
+    func test_dupliquer_estServiATousSaufAuLieu() {
+        for kind in [SceneFriseTrack.Kind.text, .sticker, .image, .video, .audio] {
+            XCTAssertTrue(ComposerSceneFriseMetrics.canDuplicate(piste(kind)), "\(kind)")
+        }
+        XCTAssertFalse(ComposerSceneFriseMetrics.canDuplicate(piste(.place)))
+    }
 }

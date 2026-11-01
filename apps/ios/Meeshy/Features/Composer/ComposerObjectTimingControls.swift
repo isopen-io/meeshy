@@ -21,6 +21,10 @@ struct ComposerObjectTimingControls: View {
         let timing = ComposerObjectTimingStore.timing(viewModel: viewModel, objectId: objectId)
         let slideDuration = ComposerObjectTimingStore.slideDuration(viewModel)
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            // La diapo D'ABORD (#14257, iso Android #14255) : sa durée, sa règle
+            // et la barre de l'objet — une scène sans média se lit quand même.
+            ComposerObjectTimingStripView(timing: timing, slideDuration: slideDuration)
+
             Text(ComposerObjectEditorCopy.window(timing, slideDuration: slideDuration))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundStyle(.white.opacity(0.75))
@@ -192,5 +196,76 @@ enum ComposerObjectTimingStore {
         viewModel.setSceneObjectTiming(id: objectId,
                                        startTime: nouveau.storedStartTime,
                                        duration: nouveau.storedDuration)
+    }
+}
+
+/// **La diapo, lue d'un coup d'œil** (#14257) : sa durée, la règle graduée de
+/// la frise et la barre de l'objet, de son entrée à sa sortie. Les glissières
+/// dessous la règlent ; elle se redessine depuis le même `ComposerObjectTiming`.
+nonisolated enum ComposerObjectTimingStrip {
+    /// La barre en fractions de la diapo, 0 au début et 1 à la fin.
+    struct Bar: Equatable {
+        let start: Double
+        let end: Double
+    }
+
+    static func bar(_ timing: ComposerObjectTiming, slideDuration: Double) -> Bar {
+        guard slideDuration > 0, slideDuration.isFinite else { return Bar(start: 0, end: 1) }
+        let debut = min(max(timing.start / slideDuration, 0), 1)
+        let fin = min(max((timing.end ?? slideDuration) / slideDuration, debut), 1)
+        return Bar(start: debut, end: fin)
+    }
+
+    static func durationLabel(_ slideDuration: Double, locale: Locale = .current) -> String {
+        ComposerObjectChips.timecode(slideDuration, locale: locale)
+    }
+
+    static func ruler(slideDuration: Double, width: CGFloat) -> [ComposerSceneFriseRuler.Tick] {
+        ComposerSceneFriseRuler.ticks(duration: Float(slideDuration), width: width)
+    }
+}
+
+struct ComposerObjectTimingStripView: View {
+    let timing: ComposerObjectTiming
+    let slideDuration: Double
+
+    var body: some View {
+        let barre = ComposerObjectTimingStrip.bar(timing, slideDuration: slideDuration)
+        let duree = ComposerObjectTimingStrip.durationLabel(slideDuration)
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            HStack {
+                Text(ComposerAnchoredSheetCopy.duration)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.55))
+                Spacer()
+                Text(duree)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            GeometryReader { geo in
+                let graduations = ComposerObjectTimingStrip.ruler(slideDuration: slideDuration, width: geo.size.width)
+                Canvas { contexte, taille in
+                    ComposerSceneFriseRuler.draw(graduations, in: .whole(Float(slideDuration)),
+                                                 context: contexte, size: taille)
+                }
+            }
+            .frame(height: ComposerSceneFriseRuler.height)
+            GeometryReader { geo in
+                let largeur = geo.size.width
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(Color.white.opacity(0.08))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(MeeshyColors.brandPrimary)
+                        .frame(width: max(4, CGFloat(barre.end - barre.start) * largeur))
+                        .offset(x: CGFloat(barre.start) * largeur)
+                }
+            }
+            .frame(height: 24)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(ComposerAnchoredSheetCopy.duration)
+        .accessibilityValue(duree)
+        .accessibilityIdentifier("composer.timing.strip")
     }
 }
