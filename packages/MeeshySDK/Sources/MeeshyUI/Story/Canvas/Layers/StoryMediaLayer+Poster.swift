@@ -15,11 +15,24 @@ nonisolated enum StoryVideoPoster {
 
     @concurrent
     static func frame(of media: StoryMediaObject, at url: URL, maximumSize: CGSize) async -> CGImage? {
+        await frame(at: url, maximumSize: maximumSize,
+                    look: StoryVideoAdjustmentsProcessor.paintedLook(for: media),
+                    adjustments: StoryVideoAdjustmentsProcessor.paintedAdjustments(for: media),
+                    startingAt: { media.trimBounds(sourceDuration: $0).start })
+    }
+
+    /// L'image de `url` là où sa lecture commence — `startingAt` reçoit la
+    /// durée du fichier et rend la seconde de départ —, peinte du look et des
+    /// réglages que ses trames reçoivent. Le fond vidéo (#14180) et la vidéo
+    /// posée passent par elle.
+    @concurrent
+    static func frame(at url: URL, maximumSize: CGSize, look: StoryMediaLook?, adjustments: ImageAdjustments?,
+                      startingAt start: @Sendable (Double) -> Double) async -> CGImage? {
         let asset = AVURLAsset(url: url)
         guard let duree = try? await asset.load(.duration) else { return nil }
         let secondes = CMTimeGetSeconds(duree)
         guard secondes.isFinite, secondes > 0 else { return nil }
-        let debut = media.trimBounds(sourceDuration: secondes).start
+        let debut = start(secondes)
         let generateur = AVAssetImageGenerator(asset: asset)
         generateur.appliesPreferredTrackTransform = true
         generateur.maximumSize = maximumSize
@@ -27,7 +40,19 @@ nonisolated enum StoryVideoPoster {
         generateur.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
         guard let image = try? await generateur.image(at: CMTime(seconds: debut, preferredTimescale: 600)).image
         else { return nil }
-        return StoryVideoAdjustmentsProcessor.apply(media, to: image)
+        return StoryVideoAdjustmentsProcessor.apply(look: look, adjustments: adjustments, to: image)
+    }
+
+    /// **Le player a peint sa première image** : `action` part une fois, sur le
+    /// fil principal, dès que `playerLayer` a quelque chose à montrer — le
+    /// signal qui retire le voile d'attente d'une vidéo posée comme d'un fond.
+    @MainActor
+    static func onFirstImage(of playerLayer: AVPlayerLayer,
+                             _ action: @escaping @MainActor @Sendable () -> Void) -> NSKeyValueObservation {
+        playerLayer.observe(\.isReadyForDisplay, options: [.new, .initial]) { observed, _ in
+            guard observed.isReadyForDisplay else { return }
+            Task { @MainActor in action() }
+        }
     }
 }
 
@@ -58,16 +83,13 @@ extension StoryMediaLayer {
         readyForDisplayObservation = nil
         guard let playerLayer = avPlayerLayer else { return }
         let couche = StoryMediaLayerWeakBox(self)
-        readyForDisplayObservation = playerLayer.observe(\.isReadyForDisplay, options: [.new, .initial]) { observed, _ in
-            guard observed.isReadyForDisplay else { return }
-            let lecteur = ObjectIdentifier(observed)
-            Task { @MainActor in
-                guard let couche = couche.value,
-                      couche.avPlayerLayer.map(ObjectIdentifier.init) == lecteur else { return }
-                couche.readyForDisplayObservation?.invalidate()
-                couche.readyForDisplayObservation = nil
-                couche.fadeOutPlaceholder(duration: 0.2)
-            }
+        let lecteur = ObjectIdentifier(playerLayer)
+        readyForDisplayObservation = StoryVideoPoster.onFirstImage(of: playerLayer) {
+            guard let couche = couche.value,
+                  couche.avPlayerLayer.map(ObjectIdentifier.init) == lecteur else { return }
+            couche.readyForDisplayObservation?.invalidate()
+            couche.readyForDisplayObservation = nil
+            couche.fadeOutPlaceholder(duration: 0.2)
         }
     }
 

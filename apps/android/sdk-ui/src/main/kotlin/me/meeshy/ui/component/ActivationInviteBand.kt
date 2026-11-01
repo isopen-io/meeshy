@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import me.meeshy.sdk.model.ActivationInvite
+import me.meeshy.ui.component.chrome.StatusBarIconsOver
+import me.meeshy.ui.component.chrome.StatusBarLayer
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -22,7 +25,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * (`CallPresentationLayer`) et la pastille d'appel reduit d'ici : la bande pleine prend la barre d'etat et sa propre
  * hauteur, et [content] commence DESSOUS — l'encart de la barre d'etat consomme, pour qu'un ecran qui la reserve deja
  * (le ✕ du compositeur) ne la reserve pas deux fois. Aucun controle n'est recouvert. Sans [invite], ou apres
- * « Plus tard », la bande disparait et [content] reprend toute la hauteur.
+ * « Plus tard », la bande disparait et [content] reprend toute la hauteur. Tant qu'elle prend la barre d'etat, les icones
+ * se lisent sur ELLE, meme au-dessus d'un ecran sombre qui les veut claires (#14170) ; a son depart, l'ecran les reprend.
  */
 @Composable
 public fun ActivationInviteBand(
@@ -37,11 +41,13 @@ public fun ActivationInviteBand(
 ) {
     Column(modifier = modifier) {
         if (invite != null) {
+            val bandColor = MeeshyTheme.tokens.backgroundPrimary
+            StatusBarIconsOver(darkBehind = bandColor.luminance() < DARK_LUMINANCE, layer = StatusBarLayer.BAND)
             Box(
                 modifier = Modifier
                     .testTag(ActivationInviteBannerDefaults.BAND_TAG)
                     .fillMaxWidth()
-                    .background(MeeshyTheme.tokens.backgroundPrimary)
+                    .background(bandColor)
                     .statusBarsPadding()
                     .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
             ) {
@@ -65,3 +71,5 @@ public fun ActivationInviteBand(
         }
     }
 }
+
+private const val DARK_LUMINANCE = 0.5f
