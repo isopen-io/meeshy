@@ -55,7 +55,11 @@
     <string name="composer_frise_earlier">Earlier</string>
     <string name="composer_frise_empty">Add a text or a sticker: each object becomes a track.</string>
     <string name="composer_frise_entry">Enters here</string>
+    <string name="composer_frise_entryEarlier">Enter earlier</string>
+    <string name="composer_frise_entryLater">Enter later</string>
     <string name="composer_frise_exit">Exits here</string>
+    <string name="composer_frise_exitEarlier">Exit earlier</string>
+    <string name="composer_frise_exitLater">Exit later</string>
     <string name="composer_frise_later">Later</string>
     <string name="composer_frise_media">Media</string>
     <string name="composer_frise_panel">Timeline</string>

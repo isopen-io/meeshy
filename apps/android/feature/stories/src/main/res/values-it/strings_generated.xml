@@ -55,7 +55,11 @@
     <string name="composer_frise_earlier">Prima</string>
     <string name="composer_frise_empty">Aggiungi un testo o uno sticker: ogni oggetto diventa una traccia.</string>
     <string name="composer_frise_entry">Entra qui</string>
+    <string name="composer_frise_entryEarlier">Entra prima</string>
+    <string name="composer_frise_entryLater">Entra più tardi</string>
     <string name="composer_frise_exit">Esce qui</string>
+    <string name="composer_frise_exitEarlier">Esci prima</string>
+    <string name="composer_frise_exitLater">Esci più tardi</string>
     <string name="composer_frise_later">Più tardi</string>
     <string name="composer_frise_media">Media</string>
     <string name="composer_frise_panel">Timeline</string>

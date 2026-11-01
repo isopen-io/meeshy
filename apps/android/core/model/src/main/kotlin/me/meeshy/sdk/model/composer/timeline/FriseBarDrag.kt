@@ -20,26 +20,38 @@ object FriseBarDrag {
         geometry: TimelineGeometry,
         candidates: List<SnapCandidate>,
         snapDisabled: Boolean = false,
-    ): ClipWindowResolver.Window {
+    ): ClipWindowResolver.Window = resolveSnapped(handle, from, translationPx, geometry, candidates, snapDisabled).window
+
+    /** Le glissé et si son bord mobile est ACCROCHÉ — ce qui fait sentir l'aimant au doigt (#14217, iso iOS). */
+    data class Drag(val window: ClipWindowResolver.Window, val snapped: Boolean)
+
+    fun resolveSnapped(
+        handle: Handle,
+        from: ClipWindowResolver.Window,
+        translationPx: Float,
+        geometry: TimelineGeometry,
+        candidates: List<SnapCandidate>,
+        snapDisabled: Boolean = false,
+    ): Drag {
         val delta = geometry.time(translationPx)
         val engine = SnapEngine(geometry.dragSnapToleranceSeconds)
-        fun snapped(raw: Float) = engine.snap(raw, candidates, snapDisabled)
+        fun shift(raw: Float): Float? = engine.snap(raw, candidates, snapDisabled)
+            .takeIf { it.matched != null }?.let { it.snappedTime - raw }
         return when (handle) {
-            Handle.START -> ClipWindowResolver.resolve(
-                ClipWindowResolver.Edit.SetStart(snapped(from.start + delta).snappedTime), from,
-            )
-            Handle.END -> ClipWindowResolver.resolve(
-                ClipWindowResolver.Edit.SetEnd(snapped(from.end + delta).snappedTime), from,
-            )
+            Handle.START -> {
+                val raw = from.start + delta
+                val s = shift(raw)
+                Drag(ClipWindowResolver.resolve(ClipWindowResolver.Edit.SetStart(raw + (s ?: 0f)), from), s != null)
+            }
+            Handle.END -> {
+                val raw = from.end + delta
+                val s = shift(raw)
+                Drag(ClipWindowResolver.resolve(ClipWindowResolver.Edit.SetEnd(raw + (s ?: 0f)), from), s != null)
+            }
             Handle.BODY -> {
                 val rawStart = from.start + delta
-                val head = snapped(rawStart)
-                val tail = snapped(rawStart + from.duration)
-                val shift = listOf(
-                    head.takeIf { it.matched != null }?.let { it.snappedTime - rawStart },
-                    tail.takeIf { it.matched != null }?.let { it.snappedTime - (rawStart + from.duration) },
-                ).filterNotNull().minByOrNull { abs(it) } ?: 0f
-                ClipWindowResolver.resolve(ClipWindowResolver.Edit.Move(rawStart + shift), from)
+                val s = listOfNotNull(shift(rawStart), shift(rawStart + from.duration)).minByOrNull { abs(it) }
+                Drag(ClipWindowResolver.resolve(ClipWindowResolver.Edit.Move(rawStart + (s ?: 0f)), from), s != null)
             }
         }
     }
