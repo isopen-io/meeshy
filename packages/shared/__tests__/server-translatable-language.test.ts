@@ -36,6 +36,17 @@ describe('isServerTranslatableLanguage', () => {
     expect(divergent).toEqual([]);
   });
 
+  it('accepte CHAQUE langue de LANGUAGE_MAPPINGS, même hors catalogue (égalité dans les deux sens)', () => {
+    const refused = [...nllbMappedCodes()].filter((code) => !isServerTranslatableLanguage(code));
+    expect(refused).toEqual([]);
+  });
+
+  it("sert un lecteur tswana dont l'appareil dit tn-ZA, comme avant le filtre", () => {
+    for (const code of ['ts', 'bem', 'tn', 'st', 'nso']) {
+      expect(isServerTranslatableLanguage(code)).toBe(true);
+    }
+  });
+
   it('refuse les sept langues camerounaises offertes sans code NLLB-200 (#3659)', () => {
     for (const code of ['bas', 'byv', 'dua', 'ewo', 'fan', 'ksf', 'nnh']) {
       expect(isServerTranslatableLanguage(code)).toBe(false);

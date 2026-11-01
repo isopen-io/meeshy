@@ -52,6 +52,14 @@ describe('ZmqRequestSender ne pousse que des langues traduisibles côté serveur
     expect(sent[0].targetLanguages).toEqual(['en', 'de']);
   });
 
+  it("garde une langue que NLLB-200 sert hors catalogue (lecteur tn-ZA)", async () => {
+    const { sender, sent } = buildSender();
+
+    await sender.sendTranslationRequest(request({ targetLanguages: ['tn-ZA', 'nso', 'byv'] }));
+
+    expect(sent[0].targetLanguages).toEqual(['tn', 'nso']);
+  });
+
   it('ne pousse rien et le dit quand aucune cible ne reste', async () => {
     const { sender, sent } = buildSender();
 
