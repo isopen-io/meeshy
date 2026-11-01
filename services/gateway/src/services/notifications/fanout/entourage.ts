@@ -35,6 +35,7 @@ import { notificationLogger } from '../../../utils/logger-enhanced';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import { comptesAuMoins, niveauxParmi } from '../../friendship';
 import { getCommunityCoMemberIdsBounded } from '../../posts/communityVisibility';
+import { linkedAmong, type ChosenLinkDb } from '../../posts/chosenRecipientLinks';
 import { FANOUT_ROW_CAP } from './row-cap';
 
 export type EntourageDb = Pick<PrismaClient, 'friendRequest' | 'userRelation' | 'communityMember' | 'user' | 'userPreferences'>;
@@ -67,25 +68,30 @@ export async function readCircleSetting(
 }
 
 /**
- * Les personnes CHOISIES pour une publication (`ONLY`) : toujours prévenues,
- * quel que soit le cran du propriétaire (#14080), sauf blocage dans un sens ou
- * dans l'autre, compte supprimé ou inactif et exclusions de l'appelant (mentions). Bornées
- * à `FANOUT_ROW_CAP` ; une lecture qui échoue n'envoie rien.
+ * Les personnes CHOISIES pour une publication (`ONLY`) et LIÉES à son auteur
+ * (Connaissance et plus, ou conversation directe en commun — `linkedAmong`,
+ * #14105) : toujours prévenues, quel que soit le cran du propriétaire (#14080),
+ * sauf blocage dans un sens ou dans l'autre, compte supprimé ou inactif et
+ * exclusions de l'appelant (mentions). Un choisi sans lien voit le post mais
+ * n'en est pas prévenu. Bornées à `FANOUT_ROW_CAP` ; une lecture qui échoue
+ * n'envoie rien.
  */
 export async function resolveChosenAudience(
-  prisma: Pick<PrismaClient, 'user'>,
+  prisma: Pick<PrismaClient, 'user'> & ChosenLinkDb,
   params: { readonly ownerId: string; readonly chosenUserIds: readonly string[]; readonly excludeUserIds?: readonly string[] }
 ): Promise<string[]> {
   const excluded = new Set([params.ownerId, ...(params.excludeUserIds ?? [])]);
   const chosen = [...new Set(params.chosenUserIds)].filter((id) => !excluded.has(id)).slice(0, FANOUT_ROW_CAP);
   if (chosen.length === 0) return [];
   try {
-    const [blocked, living] = await Promise.all([
+    const [blocked, living, linked] = await Promise.all([
       getBlockedUserIdsAmong(prisma, params.ownerId, chosen),
       prisma.user.findMany({ where: { id: { in: chosen }, deletedAt: null, isActive: true }, select: { id: true } }),
+      linkedAmong(prisma, params.ownerId, chosen),
     ]);
+    if (linked === null) return [];
     const alive = new Set(living.map((row) => row.id));
-    return chosen.filter((id) => alive.has(id) && !blocked.has(id));
+    return chosen.filter((id) => alive.has(id) && linked.has(id) && !blocked.has(id));
   } catch (error) {
     notificationLogger.error('Destinataires choisis abandonnés : lecture illisible', { ownerId: params.ownerId, error });
     return [];

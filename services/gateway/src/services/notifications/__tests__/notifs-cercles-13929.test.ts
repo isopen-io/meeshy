@@ -77,6 +77,9 @@ type World = {
   readonly blocks?: Readonly<Record<string, readonly string[]>>;
   readonly communities?: Readonly<Record<string, readonly string[]>>;
   readonly deleted?: readonly string[];
+  readonly directs?: ReadonlyArray<readonly [string, string]>;
+  readonly directsDown?: boolean;
+  readonly silent?: readonly string[];
 };
 
 const COMMUNAUTE_PAR_DEFAUT = { 'c-1': [AUTEUR, CO_MEMBRE] };
@@ -123,7 +126,17 @@ function monde(world: World = {}) {
         return rows.slice(0, args.take);
       },
     },
-    participant: { findMany: async () => [] },
+    participant: { findMany: async (args: { where: { userId: string | { in: string[] }; conversationId?: { in: string[] } } }) => {
+      if (world.directsDown) throw new Error('mongo down');
+      const rows = (world.directs ?? []).flatMap(([a, b], i) => [a, b].map((userId) => ({ id: `p-${i}-${userId}`, userId, conversationId: `dm-${i}` })));
+      const { userId, conversationId } = args.where;
+      if (typeof userId === 'string') return rows.filter((row) => row.userId === userId);
+      return rows.filter((row) => userId.in.includes(row.userId) && (conversationId?.in ?? []).includes(row.conversationId));
+    } },
+    message: {
+      findMany: async (args: { where: { senderId: { in: string[] } } }) =>
+        args.where.senderId.in.filter((id) => !(world.silent ?? []).some((who) => id.endsWith(`-${who}`))).map((senderId) => ({ senderId })),
+    },
     postMedia: { findFirst: async () => null },
     post: { findUnique: async () => null, findFirst: async () => null },
     postComment: { findMany: async () => [] },
@@ -347,34 +360,55 @@ describe('B ∩ C — le relais d’un commentaire passe les DEUX seuils (friend
   });
 });
 
-describe('ONLY — les personnes choisies sont toujours prévenues de la publication (#14080)', () => {
+const CORRESPONDANT = '6000000000000000000000e1';
+
+describe('ONLY — les personnes choisies LIÉES à l’auteur sont toujours prévenues (#14080, #14105)', () => {
   const choisis = (ids: string[]) => ({ visibility: 'ONLY', visibilityUserIds: ids });
+  const conversationDirecte: World = { directs: [[AUTEUR, CORRESPONDANT]] };
 
-  it('un destinataire choisi est prévenu même si l’auteur a réglé « Personne »', async () => {
-    expect(await publier(reglage('circlePublicationPost', 'NOBODY'), choisis([INCONNU]))).toEqual([INCONNU]);
+  it('un choisi lié (Connaissance et plus) est prévenu même si l’auteur a réglé « Personne »', async () => {
+    expect(await publier(reglage('circlePublicationPost', 'NOBODY'), choisis([CONNAISSANCE]))).toEqual([CONNAISSANCE]);
   });
 
-  it('un destinataire choisi sans aucun lien est prévenu au réglage par défaut, et seuls les choisis le sont', async () => {
-    expect((await publier({}, choisis([INCONNU, PROCHE]))).sort()).toEqual([INCONNU, PROCHE].sort());
+  it('un choisi qui partage une conversation directe avec l’auteur est prévenu', async () => {
+    expect(await publier({ ...conversationDirecte, ...reglage('circlePublicationPost', 'NOBODY') }, choisis([CORRESPONDANT]))).toEqual([CORRESPONDANT]);
   });
 
-  it('un destinataire choisi mais bloqué, dans un sens ou dans l’autre, ne l’est jamais', async () => {
-    const world: World = { blocks: { [AUTEUR]: [SANG_BLOQUE], [INCONNU]: [AUTEUR] } };
-    expect(await publier(world, choisis([SANG_BLOQUE, INCONNU, AMI]))).toEqual([AMI]);
+  it('une conversation directe où le choisi n’a JAMAIS écrit n’est pas un lien', async () => {
+    const world = { ...conversationDirecte, silent: [CORRESPONDANT], ...reglage('circlePublicationPost', 'NOBODY') };
+    expect(await publier(world, choisis([CORRESPONDANT]))).toEqual([]);
   });
 
-  it('un compte supprimé ou inactif, même choisi, n’est jamais prévenu', async () => {
-    expect(await publier({ deleted: [INCONNU] }, choisis([INCONNU, AMI]))).toEqual([AMI]);
+  it('un choisi sans AUCUN lien n’est pas prévenu (il voit le post, rien ne le lui pousse)', async () => {
+    expect(await publier(reglage('circlePublicationPost', 'NOBODY'), choisis([INCONNU]))).toEqual([]);
+    expect((await publier({}, choisis([INCONNU, PROCHE, CONNAISSANCE]))).sort()).toEqual([CONNAISSANCE, PROCHE].sort());
+  });
+
+  it('un membre de la seule communauté n’est pas un lien', async () => {
+    expect(await publier(reglage('circlePublicationPost', 'NOBODY'), choisis([CO_MEMBRE]))).toEqual([]);
+  });
+
+  it('un choisi lié mais bloqué, dans un sens ou dans l’autre, ne l’est jamais', async () => {
+    const world: World = { blocks: { [AUTEUR]: [SANG_BLOQUE], [CONNAISSANCE]: [AUTEUR] } };
+    expect(await publier(world, choisis([SANG_BLOQUE, CONNAISSANCE, AMI]))).toEqual([AMI]);
+  });
+
+  it('un compte supprimé ou inactif, même choisi et lié, n’est jamais prévenu', async () => {
+    expect(await publier({ deleted: [CONNAISSANCE] }, choisis([CONNAISSANCE, AMI]))).toEqual([AMI]);
+  });
+
+  it('une lecture de lien en panne ne prévient aucun choisi', async () => {
+    expect(await publier({ ...reglage('circlePublicationPost', 'NOBODY'), directsDown: true }, choisis([CONNAISSANCE]))).toEqual([]);
   });
 
   it('une republication ONLY n’hérite pas des choisis de la source : elle suit le réglage du republieur', async () => {
-    const repost = { ...choisis([INCONNU, PROCHE]), isRepost: true };
+    const repost = { ...choisis([CONNAISSANCE, PROCHE]), isRepost: true };
     expect(await publier(reglage('circlePublicationRepost', 'NOBODY'), repost)).toEqual([]);
     expect(await publier({}, repost)).toEqual([PROCHE]);
   });
 
-  it('un destinataire choisi et mentionné ne reçoit que la mention', async () => {
-    expect(await publier({}, { ...choisis([INCONNU]), excludeUserIds: [INCONNU] })).toEqual([]);
+  it('un choisi et mentionné ne reçoit que la mention', async () => {
+    expect(await publier({}, { ...choisis([CONNAISSANCE]), excludeUserIds: [CONNAISSANCE] })).toEqual([]);
   });
 
   it('les membres d’une communauté (post COMMUNITY) suivent le réglage de l’auteur', async () => {
