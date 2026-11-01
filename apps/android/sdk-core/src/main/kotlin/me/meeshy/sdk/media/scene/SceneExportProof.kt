@@ -110,9 +110,12 @@ internal class RenderedContentProof(private val luma: SceneContentLuma = Android
 
 /**
  * Les mesures sur l'appareil, à une image réduite (quelques dizaines de pixels de côté) : la même réduction des deux côtés.
- * Une image de vidéo ne se décode qu'une fois par relecture, quel que soit le nombre de mesures qu'on y prend (#14088).
+ * Une image de vidéo ne se décode qu'une fois par relecture, quel que soit le nombre de mesures qu'on y prend (#14088), et
+ * chaque vidéo se lit en un passage, ses images relues converties à [REGION_SIDE] (#14187).
  */
-internal class AndroidSceneContentLuma(source: SceneVideoFrameSource = RetrieverVideoFrames()) : SceneContentLuma {
+internal class AndroidSceneContentLuma(
+    source: SceneVideoFrameSource = SequentialSceneVideoFrames.onDevice(REGION_SIDE),
+) : SceneContentLuma {
 
     private val frames = SceneVideoFrameReadings(source, measure = ::bitmap, reduce = ::reduceForRegions)
 

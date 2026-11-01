@@ -43,7 +43,10 @@ internal class SceneVideoFrameReadings(
     }
 }
 
-/** Les images d'une vidéo par `MediaMetadataRetriever`, un lecteur ouvert par fichier le temps de la relecture. */
+/**
+ * Les images d'une vidéo par `MediaMetadataRetriever`, un lecteur ouvert par fichier le temps de la relecture : le repli de
+ * [SequentialSceneVideoFrames] quand le décodeur ne lit pas un fichier, chaque instant repartant de l'image clé précédente.
+ */
 internal class RetrieverVideoFrames : SceneVideoFrameSource {
     private val retrievers = HashMap<String, MediaMetadataRetriever>()
 
