@@ -125,7 +125,10 @@ describe('NotificationService — une troncature de fan-out est nommée et consi
     prisma.userRelation.findMany.mockResolvedValue([]);
     prisma.userRelation.findUnique.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ username: 'a', displayName: 'A', avatar: null });
-    prisma.user.findMany.mockResolvedValue([]);
+    // Tous les comptes vivants (#14252 : la borne ne compte que des vivants) ; aucun blocage.
+    prisma.user.findMany.mockImplementation(async (args: { where?: { isActive?: boolean; id?: { in?: string[] } } }) =>
+      args?.where?.isActive === true ? (args.where.id?.in ?? []).map((id) => ({ id })) : []
+    );
     prisma.postComment.findMany.mockResolvedValue([]);
     prisma.postReaction.findMany.mockResolvedValue([]);
     prisma.friendRequest.findMany.mockResolvedValue([]);

@@ -476,7 +476,7 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       });
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 501 })
+        expect.objectContaining({ take: 1001 })
       );
     });
 
