@@ -16,6 +16,7 @@ import type { CreateLinkInput } from '../types';
 import { EngagementService } from '../../../services/engagement/EngagementService';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../../utils/recipient-language';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
+import { implicitConversationRegime } from '../../../services/conversations/creationRegime';
 
 const engagementLogger = enhancedLogger.child({ module: 'ShareLinkMint' });
 
@@ -277,6 +278,7 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
     const conversationIdentifier = generateConversationIdentifier(input.newConversation.title);
     const conversation = await prisma.conversation.create({
       data: {
+        ...(await implicitConversationRegime(prisma, { enabledBy: userId })),
         identifier: conversationIdentifier,
         type: 'public',
         title: input.newConversation.title,
@@ -304,6 +306,7 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
     });
     const conversation = await prisma.conversation.create({
       data: {
+        ...(await implicitConversationRegime(prisma, { enabledBy: userId })),
         identifier: conversationIdentifier,
         type: 'public',
         title: input.name ? SecuritySanitizer.sanitizeText(input.name) : 'Conversation partagée',

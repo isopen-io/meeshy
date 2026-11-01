@@ -38,6 +38,12 @@ jest.mock('../../../services/ZmqSingleton', () => ({
   }
 }));
 
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
+
 // Mock fs promises for audio file operations
 jest.mock('fs', () => ({
   promises: {

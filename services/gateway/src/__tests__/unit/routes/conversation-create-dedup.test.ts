@@ -76,6 +76,8 @@ function createMockPrisma(opts: PrismaOpts) {
     conversation: {
       findFirst: conversationFindFirst,
       create: conversationCreate,
+      // Rouvrir un tête-à-tête sans mode le chiffre au repos (2026-11-01).
+      updateMany: jest.fn(async () => ({ count: 1 })),
     },
     user: {
       findMany: jest.fn(async () => [

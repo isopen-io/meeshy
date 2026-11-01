@@ -2491,7 +2491,9 @@ describe('registerCoreRoutes', () => {
 
       await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
 
-      expect(prisma.conversation.updateMany).not.toHaveBeenCalled();
+      const flips = (prisma.conversation.updateMany.mock.calls as Array<[{ data: Record<string, unknown> }]>)
+        .filter(([args]) => 'firstMessageSentAt' in args.data);
+      expect(flips).toEqual([]);
     });
 
     it('happy path: creates conversation and broadcasts CONVERSATION_NEW', async () => {

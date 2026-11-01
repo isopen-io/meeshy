@@ -42,7 +42,7 @@ import {
   E2EE_ERROR_CODES,
   E2EE_IRREVERSIBLE_MESSAGE,
 } from '@meeshy/shared/types/e2ee-directory';
-import { otherEndToEndDirectOf, pairOfMembers } from '../services/conversations/directPair';
+import { otherEndToEndDirectOf, pairOfMembers, serverReadsMode } from '../services/conversations/directPair';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/types/socketio-events';
 import {
@@ -193,7 +193,10 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
   /** Le tête-à-tête chiffré que la paire a déjà, à côté de ce tête-à-tête lisible, ou `null`. */
   const pairEndToEndOf = async (conversation: RegimeConversation): Promise<string | null> => {
-    if (conversation.type !== 'direct' || regimeIsActive(conversation)) return null;
+    // Un tête-à-tête que le serveur lit — clair, `server` ou `hybrid` — peut
+    // désormais monter en `e2ee` (2026-11-01) : la règle de la paire (#12966)
+    // le juge comme un tête-à-tête en clair. Seul un chiffré n'a pas d'autre chiffré à chercher.
+    if (conversation.type !== 'direct' || !serverReadsMode(conversation.encryptionMode) || (regimeIsActive(conversation) && !conversation.encryptionMode)) return null;
     const pair = pairOfMembers(conversation.participants.map((participant) => participant.userId));
     return pair ? otherEndToEndDirectOf(fastify.prisma, { conversationId: conversation.id, pair }) : null;
   };

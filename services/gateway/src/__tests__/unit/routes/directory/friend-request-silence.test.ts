@@ -9,6 +9,12 @@ import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
 }));
+
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 jest.mock('../../../../utils/rate-limiter.js', () => ({
   createCustomRateLimiter: () => ({ middleware: () => async () => undefined }),

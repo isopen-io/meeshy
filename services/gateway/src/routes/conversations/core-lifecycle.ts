@@ -51,6 +51,7 @@ import {
   directReopeningFor,
   nascentRegime,
   nascentRegimeDeps,
+  sealReopenedDirect,
   type CreationRegimeRefusal,
 } from '../../services/conversations/creationRegime';
 import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest';
@@ -112,7 +113,7 @@ export function registerCreateConversationRoute(
 
       // Directive porteur du 2026-11-01 — le mode se choisit à la création, et
       // une conversation ne naît jamais sans mode (`creationRegime.ts`).
-      const regimeRequest = { requestedMode, plaintext: plaintext === true, platformRole: authContext.registeredUser.role };
+      const regimeRequest = { requestedMode, plaintext: plaintext === true, platformRole: authContext.registeredUser.role, conversationType: type };
       const regime = decideCreationRegime(regimeRequest);
       if (regime.kind === 'refused') {
         return refuseCreationRegime(reply, regime.refusal);
@@ -265,8 +266,11 @@ export function registerCreateConversationRoute(
             }
           }
 
+          const sealed = await sealReopenedDirect(prisma, nascentRegimeDeps(prisma), { conversation: existingDirect, enabledBy: userId });
+
           return sendSuccess(reply, {
             ...existingDirect,
+            ...(sealed ?? {}),
             title: existingDirect.title || null
           }, { statusCode: 200 });
         }
@@ -492,6 +496,11 @@ export function registerCreateConversationRoute(
 }
 
 function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusal) {
+  if (refusal === 'end-to-end-direct-only') {
+    return sendError(reply, 400, 'End-to-end encryption can only be chosen at creation for a direct conversation for now', {
+      code: 'ENCRYPTION_MODE_UNSUPPORTED',
+    });
+  }
   if (refusal === 'plaintext-with-end-to-end') {
     return sendError(reply, 400, 'A conversation cannot be both readable by the server and end-to-end encrypted', {
       code: 'ENCRYPTION_MODE_CONFLICT',

@@ -67,13 +67,19 @@ function world(docs: DirectDoc[]) {
     createdAt: new Date(),
     participants: [],
   }));
+  const conversationUpdateMany = jest.fn(async (args: { where: { id?: string }; data: Record<string, unknown> }) => {
+    const doc = docs.find((candidate) => candidate.id === args.where.id);
+    if (!doc) return { count: 0 };
+    Object.assign(doc, args.data);
+    return { count: 1 };
+  });
   const prisma = {
     conversation: {
       findFirst: jest.fn(async (args: any) => (args?.where?.identifier !== undefined ? null : directs.findFirst(args))),
       findMany: jest.fn(async (args: any) => directs.findMany(args)),
       findUnique: jest.fn(async (args: any) => directs.findFirst({ where: { id: args?.where?.id } })),
       create: conversationCreate,
-      updateMany: jest.fn(async () => ({ count: 0 })),
+      updateMany: conversationUpdateMany,
     },
     user: {
       findMany: jest.fn(async () => [
@@ -87,7 +93,7 @@ function world(docs: DirectDoc[]) {
     userBlock: { findFirst: jest.fn(async () => null) },
     notification: { create: jest.fn(async () => ({})) },
   } as unknown as PrismaClient;
-  return { prisma, conversationCreate };
+  return { prisma, conversationCreate, conversationUpdateMany };
 }
 
 async function buildApp(prisma: PrismaClient, role: string): Promise<FastifyInstance> {
@@ -109,7 +115,7 @@ async function buildApp(prisma: PrismaClient, role: string): Promise<FastifyInst
 }
 
 async function create(options: { role?: string; docs?: DirectDoc[]; payload: Record<string, unknown> }) {
-  const { prisma, conversationCreate } = world(options.docs ?? []);
+  const { prisma, conversationCreate, conversationUpdateMany } = world(options.docs ?? []);
   const app = await buildApp(prisma, options.role ?? 'USER');
   const res = await app.inject({
     method: 'POST',
@@ -119,7 +125,7 @@ async function create(options: { role?: string; docs?: DirectDoc[]; payload: Rec
   });
   await app.close();
   const written = (conversationCreate.mock.calls[0] as [{ data: Record<string, unknown> }] | undefined)?.[0].data;
-  return { status: res.statusCode, body: res.json(), written, conversationCreate };
+  return { status: res.statusCode, body: res.json(), written, conversationCreate, conversationUpdateMany };
 }
 
 const directTo = (peer: string, extra: Record<string, unknown> = {}) => ({ type: 'direct', participantIds: [peer], ...extra });
@@ -240,5 +246,49 @@ describe('un mode lisible choisi rouvre le tête-à-tête lisible de la paire', 
     });
     expect(created.status).toBe(200);
     expect(created.body.data.id).toBe(SEALED_DM);
+  });
+});
+
+describe('un tête-à-tête ancien, sans mode, se chiffre au repos quand on le rouvre', () => {
+  it.each([
+    ['un mode lisible demandé', { encryptionMode: 'server' }],
+    ['un ancien client sans mode', {}],
+  ])('%s : le tête-à-tête rouvert passe en `server`, sous sa clé, sans second tête-à-tête', async (_label, extra) => {
+    const created = await create({
+      docs: [direct(READABLE_DM, { encryptionMode: null })],
+      payload: directTo(PEER, extra),
+    });
+    expect(created.status).toBe(200);
+    expect(created.body.data.id).toBe(READABLE_DM);
+    expect(created.body.data.encryptionMode).toBe('server');
+    expect(created.conversationCreate).not.toHaveBeenCalled();
+    expect(activationKeyId).toHaveBeenCalledWith(READABLE_DM, null);
+    const write = (created.conversationUpdateMany.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>)
+      .map(([args]) => args.data)
+      .find((data) => data.encryptionMode !== undefined);
+    expect(write).toMatchObject({ encryptionMode: 'server', serverEncryptionKeyId: SERVER_KEY, encryptionEpoch: 1 });
+  });
+
+  it('sans clé maîtresse, le tête-à-tête n’est pas rouvert en clair : 503', async () => {
+    activationKeyId.mockImplementation(async () => {
+      throw new ServerAtRestUnavailableError('missing');
+    });
+    const created = await create({ docs: [direct(READABLE_DM, { encryptionMode: null })], payload: directTo(PEER, { encryptionMode: 'server' }) });
+    expect(created.status).toBe(503);
+  });
+
+  it('un tête-à-tête déjà `server` rouvert ne change pas', async () => {
+    const created = await create({ docs: [direct(READABLE_DM, { encryptionMode: 'server' })], payload: directTo(PEER, { encryptionMode: 'hybrid' }) });
+    expect(created.status).toBe(200);
+    expect(activationKeyId).not.toHaveBeenCalled();
+  });
+});
+
+describe('le bout en bout ne se choisit à la création que pour un tête-à-tête', () => {
+  it('un groupe `e2ee` est refusé : 400 ENCRYPTION_MODE_UNSUPPORTED, rien n’est créé', async () => {
+    const created = await create({ role: 'ADMIN', payload: group({ encryptionMode: 'e2ee' }) });
+    expect(created.status).toBe(400);
+    expect(created.body.code).toBe('ENCRYPTION_MODE_UNSUPPORTED');
+    expect(created.conversationCreate).not.toHaveBeenCalled();
   });
 });
