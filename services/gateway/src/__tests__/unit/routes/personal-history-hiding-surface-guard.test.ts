@@ -533,6 +533,15 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       'Global pour proposer des personnes à suivre, jamais un contenu servi. ' +
       "Le masquage personnel porte sur l'historique affiché, pas sur qui parle.",
   },
+  'posts/directContactVisibility.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Lien d'un choisi d'un post ONLY (#14105) : ne lit que les `senderId` des messages qu'il a " +
+      "lui-même écrits dans une conversation directe avec l'auteur, pour décider s'il est prévenu, " +
+      "jamais un contenu servi. Effacer son historique cache ce qu'on a reçu, sans défaire " +
+      "qu'on se soit parlé.",
+  },
   'messaging/consumeAfterReadMessages.ts': {
     kind: 'exempt',
     reads: 1,
