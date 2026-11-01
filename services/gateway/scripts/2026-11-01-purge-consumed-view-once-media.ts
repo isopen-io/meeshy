@@ -15,24 +15,38 @@
  * `APPLY=1` est le SEUL moyen d'écrire. Idempotent : rejoué après le balayage,
  * il ne retrouve plus rien.
  *
- * ⚠ En autonomie sur staging. En production SEULEMENT après feu vert du
- * porteur ET sauvegarde VÉRIFIÉE de la base et du stockage des médias (#9223) :
- * ce qui est effacé ne revient pas.
+ * ⚠ En autonomie sur staging (`OPS_ENVIRONMENT=staging`). Partout ailleurs —
+ * environnement non déclaré compris —, `APPLY=1` est REFUSÉ sans
+ * `BACKUP_VERIFIED=<identifiant>` : la sauvegarde VÉRIFIÉE de la base et du
+ * stockage des médias (#9223), dont l'identifiant est journalisé. En
+ * production, SEULEMENT après feu vert du porteur : ce qui est effacé ne
+ * revient pas.
  *
  * Usage (dans le conteneur de la passerelle, DATABASE_URL de l'environnement) :
  *   cd services/gateway
- *   bunx tsx scripts/2026-11-01-purge-consumed-view-once-media.ts            # à sec
- *   APPLY=1 bunx tsx scripts/2026-11-01-purge-consumed-view-once-media.ts    # écrit
+ *   bunx tsx scripts/2026-11-01-purge-consumed-view-once-media.ts                                  # à sec
+ *   APPLY=1 bunx tsx scripts/2026-11-01-purge-consumed-view-once-media.ts                          # écrit (staging)
+ *   APPLY=1 BACKUP_VERIFIED=<id> bunx tsx scripts/2026-11-01-purge-consumed-view-once-media.ts     # écrit (production)
  */
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { catchUpConsumedViewOnceMedia } from '../src/services/messaging/viewOnceMediaCatchUp';
+import { viewOnceCatchUpWriteAdmission } from '../src/services/messaging/viewOnceMediaCatchUpAdmission';
 
-const APPLY = process.env.APPLY === '1';
+const admission = viewOnceCatchUpWriteAdmission(process.env);
+const APPLY = admission.kind === 'apply';
 
 async function main(): Promise<void> {
-  const prisma = new PrismaClient();
   console.log('Rattrapage des médias à vue unique lus par tous (#11269)');
+  if (admission.kind === 'refused') {
+    console.error(`  REFUSÉ (environnement : ${admission.environment}) : ${admission.reason}`);
+    process.exit(2);
+  }
   console.log(`  mode : ${APPLY ? 'ÉCRITURE (APPLY=1)' : 'À SEC'}`);
+  if (admission.kind === 'apply') {
+    console.log(`  environnement : ${admission.environment}`);
+    console.log(`  sauvegarde vérifiée : ${admission.backupVerified ?? 'non exigée (staging)'}`);
+  }
+  const prisma = new PrismaClient();
   try {
     const report = await catchUpConsumedViewOnceMedia(prisma, {
       now: new Date(),
