@@ -125,6 +125,9 @@ internal fun SceneFrise(
     visuals: Map<String, FriseBarVisual> = emptyMap(),
     onDuplicate: (id: String) -> Unit = {},
     onRemove: (id: String) -> Unit = {},
+    keyframableIds: Set<String> = emptySet(),
+    keyframeHeld: Boolean = false,
+    onKeyframe: (id: String) -> Unit = {},
 ) {
     val duration = maxOf(slideDurationSeconds, ClipWindowResolver.MINIMUM_DURATION)
     var laneWidthPx by remember { mutableStateOf(0) }
@@ -177,6 +180,8 @@ internal fun SceneFrise(
             onSplit = { selectedId?.let(onSplit) },
             onDuplicate = { selectedId?.let(onDuplicate) },
             onRemove = { selectedId?.let(onRemove) },
+            keyframe = keyframeChip(selectedId, keyframableIds, tracks, playheadSeconds, duration, keyframeHeld),
+            onKeyframe = { selectedId?.let(onKeyframe) },
         )
         // L'axe du temps se lit de gauche à droite dans toutes les langues (#14219) : en RTL, `offset` est miroité mais
         // la position du doigt ne l'est pas — la tête et les barres fuyaient le doigt. Les noms gardent l'interface.
@@ -243,6 +248,8 @@ private fun FriseTransport(
     onSplit: () -> Unit,
     onDuplicate: () -> Unit,
     onRemove: () -> Unit,
+    keyframe: KeyframeChip?,
+    onKeyframe: () -> Unit,
 ) {
     // Les réglages passent à la ligne quand la place manque (#14255) : sur 360 dp, l'horloge en `weight(1f)` n'avait plus
     // que quelques points, se brisait caractère par caractère et creusait la frise au-dessus et au-dessous d'elle.
@@ -265,6 +272,12 @@ private fun FriseTransport(
             TextChip(stringResource(R.string.composer_frise_entry), onEntry)
             TextChip(stringResource(R.string.composer_frise_exit), onExit)
             if (canSplit) TextChip(stringResource(R.string.composer_object_editor_split), onSplit)
+            // L'image clé à la tête (#14271, iOS « Animer au playhead ») : losange plein quand la tête en tient une.
+            when (keyframe) {
+                KeyframeChip.ADD -> GlyphChip(MeeshyIcons.Diamond, stringResource(R.string.composer_frise_keyframe_add), onKeyframe)
+                KeyframeChip.REMOVE -> GlyphChip(MeeshyIcons.DiamondFilled, stringResource(R.string.composer_frise_keyframe_remove), onKeyframe)
+                null -> Unit
+            }
             // Dupliquer et Retirer l'objet choisi sans quitter la frise (#14221) : un pas d'annulation chacun.
             GlyphChip(MeeshyIcons.Copy, stringResource(R.string.story_canvas_action_duplicate), onDuplicate)
             GlyphChip(MeeshyIcons.Delete, stringResource(R.string.composer_selection_remove), onRemove)
@@ -544,6 +557,7 @@ private fun FriseTrackRow(
             ) {
                 visual?.let { FriseBarContent(it) }
             }
+            if (track.keyframes.isNotEmpty()) KeyframeMarkers(track.keyframeTimes, view)
             if (selected && dragEnabled) {
                 Handle(view.fraction(window.start), laneWidthPx, Grip.START) { grip ->
                     Modifier.dragBar(track.id, grip, geometry, { currentStored }, { currentCandidates }, { live = it }, {
@@ -728,6 +742,43 @@ private fun onExitAt(
     val (start, end) = barOf(tracks, id, duration)
     val window = ClipWindowResolver.resolve(ClipWindowResolver.Edit.SetEnd(at), ClipWindowResolver.Window(start, end - start))
     FriseBarDrag.stored(window, duration).let { onWindow(id, it.startSeconds, it.durationSeconds) }
+}
+
+/** Ce que le transport offre pour l'image clé : rien hors d'un texte ou d'un média posé, ou la tête hors de sa barre. */
+private enum class KeyframeChip { ADD, REMOVE }
+
+private fun keyframeChip(
+    selectedId: String?,
+    keyframableIds: Set<String>,
+    tracks: List<Plan2DTrack>,
+    playheadSeconds: Float,
+    duration: Float,
+    held: Boolean,
+): KeyframeChip? {
+    if (selectedId == null || selectedId !in keyframableIds) return null
+    val (start, end) = barOf(tracks, selectedId, duration)
+    if (playheadSeconds !in start..end) return null
+    return if (held) KeyframeChip.REMOVE else KeyframeChip.ADD
+}
+
+/** Les losanges des images clés sur la piste (#14271, iOS `LaneKeyframeOverlays`) : lus, jamais une cible de toucher. */
+@Composable
+private fun BoxScope.KeyframeMarkers(times: List<Double>, view: FriseViewport) {
+    Canvas(Modifier.matchParentSize()) {
+        val half = size.height * 0.18f
+        times.forEach { time ->
+            val x = view.fraction(time.toFloat()) * size.width
+            val diamond = androidx.compose.ui.graphics.Path().apply {
+                moveTo(x, center.y - half)
+                lineTo(x + half, center.y)
+                lineTo(x, center.y + half)
+                lineTo(x - half, center.y)
+                close()
+            }
+            drawPath(diamond, Color.White)
+            drawPath(diamond, Color.Black.copy(alpha = 0.55f), style = Stroke(width = 1.dp.toPx()))
+        }
+    }
 }
 
 private fun barOf(tracks: List<Plan2DTrack>, id: String, duration: Float): Pair<Float, Float> =

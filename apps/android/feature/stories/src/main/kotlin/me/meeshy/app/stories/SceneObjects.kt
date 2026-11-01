@@ -108,6 +108,7 @@ private fun StoryPlacedMedia.toFriseObject(video: Boolean) = StoryMediaObject(
     zIndex = zIndex,
     startTime = timing.startSeconds.toDouble().takeIf { timing.isActive },
     duration = timing.durationSeconds.toDouble().takeIf { timing.isTimed },
+    keyframes = keyframes.takeIf { it.isNotEmpty() },
 )
 
 /**

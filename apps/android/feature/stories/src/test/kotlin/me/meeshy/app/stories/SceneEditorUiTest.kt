@@ -286,6 +286,39 @@ class SceneEditorUiTest {
     }
 
     @Test
+    fun `le losange du transport pose ou retire l'image cle de l'objet choisi, et seulement d'un objet qui s'anime`() {
+        val state = stickerState()
+        val toggled = mutableListOf<String>()
+        var held by mutableStateOf(false)
+        var animatable by mutableStateOf(setOf("s1"))
+        compose.setContent {
+            MeeshyTheme {
+                SceneFrise(
+                    tracks = state.sceneTracks,
+                    editableIds = state.sceneEditableTrackIds,
+                    selectedId = "s1",
+                    slideDurationSeconds = 10f,
+                    playheadSeconds = 4f,
+                    onSelectTrack = { _, _ -> },
+                    onScrub = {},
+                    onWindow = { _, _, _ -> },
+                    keyframableIds = animatable,
+                    keyframeHeld = held,
+                    onKeyframe = { toggled += it },
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Add a keyframe").performClick()
+        assertThat(toggled).containsExactly("s1")
+        held = true
+        compose.onNodeWithContentDescription("Remove the keyframe").assertExists()
+        animatable = emptySet()
+        compose.onNodeWithContentDescription("Remove the keyframe").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add a keyframe").assertDoesNotExist()
+    }
+
+    @Test
     fun `une frise sans objet invite a poser un texte ou un sticker`() {
         compose.setContent {
             MeeshyTheme {
