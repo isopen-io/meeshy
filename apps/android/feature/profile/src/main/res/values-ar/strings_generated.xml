@@ -66,6 +66,14 @@
     <string name="profile_progression_hint">يفتح تقدّمك</string>
     <string name="profile_progression_subtitle">الشارات والمستوى والسلسلة</string>
     <string name="profile_progression_title">التقدّم</string>
+    <string name="profile_report_quick_reason_fake_profile">ملف شخصي مزيّف</string>
+    <string name="profile_report_quick_reason_harassment">تحرّش</string>
+    <string name="profile_report_quick_reason_hate_speech">خطاب كراهية</string>
+    <string name="profile_report_quick_reason_impersonation">انتحال هوية</string>
+    <string name="profile_report_quick_reason_inappropriate">محتوى غير لائق</string>
+    <string name="profile_report_quick_reason_other">أخرى</string>
+    <string name="profile_report_quick_reason_spam">رسائل مزعجة</string>
+    <string name="profile_report_quick_reason_violence">عنف</string>
     <string name="profile_save">حفظ</string>
     <string name="profile_save_error">خطأ أثناء الحفظ</string>
     <string name="profile_section_about">نبذة</string>
@@ -98,6 +106,8 @@
     <string name="profile_tab_posts">المنشورات</string>
     <string name="profile_title">الملف الشخصي</string>
     <string name="profile_toast_block_failed">تعذّر الحظر</string>
+    <string name="profile_toast_report_failed">تعذّر إرسال البلاغ</string>
+    <string name="profile_toast_report_sent">تم إرسال البلاغ</string>
     <string name="profile_toast_unblock_failed">تعذّر إلغاء الحظر</string>
     <string name="profile_toast_user_blocked">تم حظر المستخدم</string>
     <string name="profile_toast_user_unblocked">تم إلغاء حظر المستخدم</string>
