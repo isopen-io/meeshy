@@ -203,13 +203,25 @@ describe('acceptMessageRequest — accepter fait passer l\'expéditeur au moins 
     await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ kind: 'not-pending' });
   });
 
-  it('un blocage entre les deux lève la demande sans relever de lien ni rouvrir de média (audit 3, M-a)', async () => {
+  it('un blocage entre les deux sort la demande de la boîte sans relever aucun lien (audit 3, M-a ; ce que deviennent les médias après un déblocage : #14530)', async () => {
     const world = monde({ participants: demandeEnAttente(), users: [] });
     world.users.rows.find((u) => u.id === ALICE)!.blockedUserIds = [BOB];
     await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ kind: 'accepted', requesterId: null, requesterParticipantId: null, levelRaised: false });
-    expect(world.participant.rows.find((p) => p.id === P_BOB)).toMatchObject({ messageRequestAt: null, messageRequestFromId: null });
-    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
     expect(world.relations.relations()).toHaveLength(1);
+  });
+
+  it('une panne en rouvrant les médias laisse la demande en attente : le rejeu termine (audit 4, F-e)', async () => {
+    const world = monde({ participants: demandeEnAttente() });
+    const base = db(world) as unknown as { participant: { updateMany: (args: { data?: { permissions?: unknown } }) => Promise<{ count: number }> } };
+    let pannes = 0;
+    const prisma = { ...base, participant: { ...base.participant, updateMany: async (args: { data?: { permissions?: unknown } }) => {
+      if (args?.data?.permissions && ++pannes === 1) throw new Error('mongo: connection reset');
+      return base.participant.updateMany(args as never);
+    } } } as unknown as PrismaClient;
+    await expect(acceptMessageRequest(prisma, { conversationId: DM, userId: BOB, now: NOW })).rejects.toThrow('connection reset');
+    await expect(acceptMessageRequest(prisma, { conversationId: DM, userId: BOB, now: NOW })).resolves.toMatchObject({ kind: 'accepted', requesterId: ALICE });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
   });
 
   it.each([['un majeur', BOB], ['un mineur', MINEUR]])('après une réponse de %s, « Accepter » reste possible et lui seul rouvre les médias (audit 3, H1)', async (_label, recipient) => {

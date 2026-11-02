@@ -25,6 +25,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -87,7 +88,6 @@ internal const val EDITING_RAIL_TAG = "composer-editing-rail"
 internal const val EDITING_ANNOUNCER_TAG = "composer-editing-announcer"
 
 private val OPTION_WIDTH = 68.dp
-private val OPTION_DISC = 40.dp
 private val OPTION_VEIL = Color.Black.copy(alpha = 0.38f)
 
 /**
@@ -170,7 +170,7 @@ internal class RailTool(val icon: ImageVector, @StringRes val label: Int, val ac
 internal fun SceneOptionColumn(bar: SceneSelectionBar, tools: List<RailTool>, onAction: (ComposerSelectionAction) -> Unit) {
     Column(
         modifier = Modifier.testTag(EDITING_RAIL_TAG).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        verticalArrangement = Arrangement.spacedBy(LocalComposerRailSize.current.gap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         tools.forEach { tool -> SceneOptionButton(tool.icon, stringResource(tool.label), Color.White, active = tool.active, onClick = tool.onClick) }
@@ -194,12 +194,13 @@ internal fun SceneOptionButton(icon: ImageVector, label: String, tint: Color, ac
     Column(
         modifier = Modifier
             .width(OPTION_WIDTH)
+            .heightIn(min = SCENE_TARGET)
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .clickable(role = Role.Button, onClick = onClick)
             .then(if (active) Modifier.semantics { selected = true } else Modifier),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(OPTION_DISC).background(if (active) ComposerPlateauInk.accent else OPTION_VEIL, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(LocalComposerRailSize.current.optionDiscDp.dp).background(if (active) ComposerPlateauInk.accent else OPTION_VEIL, CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         }
         Text(
@@ -271,7 +272,7 @@ internal fun <L> EditingRailLevels(
         contentAlignment = Alignment.TopEnd,
         label = "editingLevels",
     ) { stack ->
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(LocalComposerRailSize.current.gap)) {
             if (stack.canGoBack) back(levels.onBack)
             content(stack.top)
         }

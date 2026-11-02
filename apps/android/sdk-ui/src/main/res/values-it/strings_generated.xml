@@ -187,10 +187,12 @@
     <string name="slide_rail_delete_confirm_title">Eliminare questa scena?</string>
     <string name="sticker_sheet_close">Chiudi</string>
     <string name="sticker_sheet_favorites_empty">Tieni premuta una decorazione per fissarla qui.</string>
+    <string name="sticker_sheet_instants_hint">Ciò che scrivi appare sullo sticker</string>
     <string name="sticker_sheet_instants_lieu">Luoghi</string>
     <string name="sticker_sheet_instants_message">Messaggi</string>
     <string name="sticker_sheet_instants_meteo">Meteo</string>
     <string name="sticker_sheet_instants_moment">Momenti</string>
+    <string name="sticker_sheet_instants_title">Istanti</string>
     <string name="sticker_sheet_intent_amour_hint">Per una parola dolce, un bacio, un abbraccio o una dichiarazione</string>
     <string name="sticker_sheet_intent_amour_title">Dire ti amo</string>
     <string name="sticker_sheet_intent_bonjour_hint">Per salutare, ringraziare, dire di sì, scusarsi o augurare la buonanotte</string>

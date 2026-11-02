@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.BlurRevealLifecycle
+import me.meeshy.sdk.model.BubbleStickerSpec
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.profile.ProfileSheetUser
@@ -151,6 +152,12 @@ public data class BubbleContent(
      * encrypted with no mode or an unknown one — `EndToEndRegimeMemory.messageHoldsSend`.
      */
     val holdsEndToEndSend: Boolean = false,
+    /**
+     * Le sticker que la bulle REDESSINE (#14345, iOS `BubbleSticker`) : film de Mee, Instant, gabarit, emoji, ou le PNG
+     * joint en repli. Non nul, la bulle se rend sans fond, comme un emoji libre ; la pièce reste dans [images] pour les
+     * autres lecteurs (réponse, galerie, export). Nul pour tout autre message, supprimé ou scellé.
+     */
+    val sticker: BubbleStickerSpec? = null,
 )
 
 /**

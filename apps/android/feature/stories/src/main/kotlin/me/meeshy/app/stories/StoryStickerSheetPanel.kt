@@ -109,10 +109,15 @@ internal fun StoryStickerSheetPanel(viewModel: StoryComposerViewModel, onDismiss
 /**
  * TOUTES les capacités de la feuille (#13847) : Smileys et Recherche, Mee, Meo, Mee & Meo, les packs installés,
  * Personnalisés (Mes stickers, cadres à mots, heure) et la Boutique. La scène d'une story et le composeur des
- * conversations (#14334) montrent la même feuille ; seule la destination diffère.
+ * conversations (#14334) montrent la même feuille ; seule la destination diffère — et [instants], les Instants de Mee
+ * (#14345), que seule la conversation sait envoyer (iOS `meeInstantsProvided`).
  */
 @Composable
-internal fun rememberStoryStickerCapabilities(kit: StoryStickerKit, imageModel: (String) -> Any?): StickerCapabilities {
+internal fun rememberStoryStickerCapabilities(
+    kit: StoryStickerKit,
+    imageModel: (String) -> Any?,
+    instants: Boolean = false,
+): StickerCapabilities {
     val packStore = kit.entryPoint.stickerPackStore()
     val library = kit.entryPoint.stickerLibraryStore()
     val packs by packStore.packs.collectAsStateWithLifecycle()
@@ -147,7 +152,7 @@ internal fun rememberStoryStickerCapabilities(kit: StoryStickerKit, imageModel: 
         installedPacks = packs,
         hasMee = true,
         packContent = { slug -> StickerPackContent(slug, packs, imageModel) },
-        custom = { StickerCustomPage(library = shelf, openedAt = openedAt) },
+        custom = { StickerCustomPage(library = shelf, openedAt = openedAt, instants = instants) },
         shop = {
             StickerPackShopPage(catalogue, packState, onToggle = { slug ->
                 scope.launch { packStore.setInstalled(slug, !packStore.state.value.isInstalled(slug)) }
@@ -191,6 +196,7 @@ internal fun StoryComposerViewModel.onStickerRoute(route: StickerChoiceRoute?, i
         is StickerChoiceRoute.MeeImage -> viewModelScope.launch { images.meePose(route.stickerId, route.emoji)?.let(::onAddImageSticker) }
         is StickerChoiceRoute.PackImage -> (imageModel(route.fileUrl) as? String)?.let { onAddImageSticker(images.packPose(it, route.emoji)) }
         is StickerChoiceRoute.LibraryImage -> images.libraryPose(route.itemId)?.let(::onAddImageSticker)
+        is StickerChoiceRoute.InstantImage -> Unit
     }
 }
 

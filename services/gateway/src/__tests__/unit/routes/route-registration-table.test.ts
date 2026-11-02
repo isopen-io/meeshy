@@ -271,7 +271,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // l'usage k-anonyme sous `/api/v1/lens` (distinct de `/packs/lens`, dont les
     // chemins statiques masqueraient des slugs). Aucun alias, aucune route
     // retirée ni renommée ; le manifeste gagne exactement ses neuf routes.
-    expect(ROUTE_TABLE.length).toBe(97);
+    // 98 : #13936 ajoute `bring` — le Bring (`/api/v1/bring` : disponibilité, envoi,
+    // arrêt). Aucun alias, aucune route retirée ni renommée ; le manifeste gagne ses trois
+    // routes, et le montage `relations` les deux du réglage par personne (`/:userId/settings`).
+    expect(ROUTE_TABLE.length).toBe(98);
   });
 });
 
