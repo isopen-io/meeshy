@@ -49,7 +49,7 @@ class FeedMergeLawsTest {
     @Test
     fun `tete temps reel et pages chargees se combinent sans doublon`() {
         val fetched = listOf(post("e", 50), post("d", 40))
-        val existing = listOf(post("rt", 60), post("e", 50), post("d", 40), post("c", 30))
+        val existing = listOf(post("rt", 59), post("e", 50), post("d", 40), post("c", 30))
 
         assertThat(ids(FeedMergeLaws.mergePreservingLoadedPages(fetched, existing)))
             .containsExactly("rt", "e", "d", "c").inOrder()
