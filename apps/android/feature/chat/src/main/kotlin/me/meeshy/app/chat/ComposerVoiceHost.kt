@@ -27,6 +27,7 @@ import me.meeshy.sdk.audio.ComposerVoiceCapture
 import me.meeshy.sdk.audio.MediaRecorderEngine
 import me.meeshy.sdk.audio.VoiceTake
 import me.meeshy.sdk.model.ongoing.VoiceRecordingBackgroundLaw
+import me.meeshy.sdk.model.waveform.VoiceEncodingProfile
 import me.meeshy.ui.component.recording.LocalVoiceRecordingHost
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
@@ -56,7 +57,12 @@ internal fun rememberComposerVoice(
     val haptics = rememberMeeshyHaptics()
     val recordingHost = LocalVoiceRecordingHost.current
     val publishedTake = remember { AtomicBoolean(false) }
-    val capture = remember { ComposerVoiceCapture(File(context.cacheDir, "voice"), { MediaRecorderEngine(context) }) }
+    val capture = remember {
+        ComposerVoiceCapture(
+            File(context.cacheDir, "voice"),
+            { MediaRecorderEngine(context, VoiceEncodingProfile.of(VoiceEncodingProfile.Kind.VOICE_MESSAGE)) },
+        )
+    }
     var recording by remember { mutableStateOf(capture.session) }
 
     fun deliver(take: VoiceTake?) {
@@ -67,19 +73,21 @@ internal fun rememberComposerVoice(
     }
 
     fun start() {
-        if (capture.start()) {
-            haptics.medium()
-            publishedTake.set(true)
-            recordingHost.publish(System.currentTimeMillis())
+        capture.start { live ->
+            recording = capture.session
+            if (live) {
+                haptics.medium()
+                publishedTake.set(true)
+                recordingHost.publish(System.currentTimeMillis())
+            }
         }
         recording = capture.session
     }
 
     fun finishTake() {
-        val take = capture.finish()
+        capture.finish(::deliver)
         recording = capture.session
         haptics.light()
-        deliver(take)
     }
 
     fun cancelTake() {
@@ -94,7 +102,7 @@ internal fun rememberComposerVoice(
     val latestDeliver by rememberUpdatedState(::deliver)
     DisposableEffect(capture) {
         onDispose {
-            latestDeliver(capture.abandon())
+            capture.abandon { latestDeliver(it) }
             if (publishedTake.getAndSet(false)) recordingHost.retire()
         }
     }
@@ -110,7 +118,7 @@ internal fun rememberComposerVoice(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         val leaving = VoiceRecordingBackgroundLaw.Input(capture.session.isRecording, recordingHost.keepsRecordingInBackground)
         if (VoiceRecordingBackgroundLaw.onAppLeft(leaving) == VoiceRecordingBackgroundLaw.Decision.AbandonToTray) {
-            deliver(capture.abandon())
+            capture.abandon(::deliver)
             recording = capture.session
         }
     }

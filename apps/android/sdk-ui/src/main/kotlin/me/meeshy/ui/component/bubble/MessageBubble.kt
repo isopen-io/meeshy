@@ -72,7 +72,7 @@ public fun MessageBubble(
         when {
             // A conversation notice (join/leave/legacy summary) renders as a centered,
             // avatar-less notice — never a signed bubble (iOS `BubbleSystemNoticeView`).
-            renderKind.isSystem -> BubbleSystemNoticeView(text = content.text)
+            renderKind.isSystem -> SystemNoticeLine(content = content, callbacks = callbacks)
             // A consumed view-once message shows the persistent "Seen and deleted"
             // tombstone (iOS `BubbleBurnedView`) in place of its content, aligned to
             // the sender side like the deleted tombstone.

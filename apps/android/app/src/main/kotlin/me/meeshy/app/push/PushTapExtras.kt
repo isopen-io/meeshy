@@ -12,7 +12,7 @@ import me.meeshy.sdk.model.push.PushPayload
 object PushTapExtras {
     private val KEYS = listOf(
         "type", "conversationId", "messageId", "postId", "postType",
-        "commentId", "parentCommentId", "senderId", "route",
+        "commentId", "parentCommentId", "senderId", "route", "notificationId", "recipientUserId",
     )
 
     fun put(intent: Intent, data: Map<String, String>) {

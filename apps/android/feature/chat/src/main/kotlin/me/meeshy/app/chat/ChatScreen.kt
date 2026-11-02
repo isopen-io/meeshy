@@ -130,6 +130,7 @@ fun ChatScreen(
         selection = selection,
         engagement = engagement,
         downloadedFileIds = downloadedFileIds,
+        takeLandingMessageId = viewModel::takeLandingMessageId,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
@@ -161,12 +162,13 @@ fun ChatScreen(
         // défilent sous le verre.
         var composerHeightPx by remember { mutableIntStateOf(0) }
         val composerHeight = with(LocalDensity.current) { composerHeightPx.toDp() }
+        val listBottomInset = rememberKeyboardFollowingInset(composerHeight + MeeshySpacing.sm, rememberComposerKeyboardState())
         Scaffold(containerColor = Color.Transparent) { _ ->
             Box(Modifier.fillMaxSize()) {
                 ChatListHost(
                     host,
                     topInset = headerHeight,
-                    bottomInset = composerHeight + MeeshySpacing.sm,
+                    bottomInset = listBottomInset,
                 )
                 // Rangée plate (Script) : pendant un défilement du doigt, l'en-tête ET le composeur
                 // s'effacent par opacité — aucun inset ne bouge — et reviennent à l'arrêt ; sauf

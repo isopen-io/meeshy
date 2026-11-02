@@ -39,6 +39,9 @@ import me.meeshy.ui.component.composer.ComposerStickerSheet
 import me.meeshy.ui.component.composer.LocalComposerStickerSheet
 import me.meeshy.app.stories.ConversationStickerSheet
 import me.meeshy.ui.component.composer.UniversalComposer
+import me.meeshy.ui.component.export.ExportAnnouncer
+import me.meeshy.ui.component.export.ExportAnnouncerHost
+import me.meeshy.ui.component.export.LocalExportAnnouncer
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.ShareLauncher
 
@@ -78,6 +81,8 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
     // Sa porte sticker ouvre la feuille de la scène des stories, que la conversation ne connaît pas (#14320).
     val composerStickerSheet: ComposerStickerSheet = remember { { onPick, onDismiss -> ConversationStickerSheet(onPick, onDismiss) } }
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
+    // La fin d'un export (compositeur, « Imager ») s'annonce ici, une fois pour l'application : elle survit à l'écran qui l'a dite (#14557).
+    val exportAnnouncer = remember { ExportAnnouncer() }
     val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigate(Routes.story(authorId, storyId)) } }
     CompositionLocalProvider(
         LocalShareLauncher provides launcher,
@@ -92,7 +97,9 @@ fun ShareLaunchHost(navController: NavHostController, content: @Composable () ->
         LocalStoryOpener provides openStory,
         LocalUniversalComposer provides universalComposer,
         LocalComposerStickerSheet provides composerStickerSheet,
+        LocalExportAnnouncer provides exportAnnouncer,
     ) { content() }
+    ExportAnnouncerHost(exportAnnouncer)
     pending?.let { share ->
         AppShareSheetHost(
             subject = share.subject,

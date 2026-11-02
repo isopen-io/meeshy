@@ -66,6 +66,14 @@
     <string name="profile_progression_hint">Apre i tuoi progressi</string>
     <string name="profile_progression_subtitle">Badge, livello e serie</string>
     <string name="profile_progression_title">Progressi</string>
+    <string name="profile_report_quick_reason_fake_profile">Profilo falso</string>
+    <string name="profile_report_quick_reason_harassment">Molestie</string>
+    <string name="profile_report_quick_reason_hate_speech">Incitamento all\'odio</string>
+    <string name="profile_report_quick_reason_impersonation">Furto d\'identità</string>
+    <string name="profile_report_quick_reason_inappropriate">Contenuto inappropriato</string>
+    <string name="profile_report_quick_reason_other">Altro</string>
+    <string name="profile_report_quick_reason_spam">Spam</string>
+    <string name="profile_report_quick_reason_violence">Violenza</string>
     <string name="profile_save">Salva</string>
     <string name="profile_save_error">Errore durante il salvataggio</string>
     <string name="profile_section_about">Informazioni</string>
@@ -98,6 +106,8 @@
     <string name="profile_tab_posts">Post</string>
     <string name="profile_title">Profilo</string>
     <string name="profile_toast_block_failed">Impossibile bloccare</string>
+    <string name="profile_toast_report_failed">Impossibile inviare la segnalazione</string>
+    <string name="profile_toast_report_sent">Segnalazione inviata</string>
     <string name="profile_toast_unblock_failed">Impossibile sbloccare</string>
     <string name="profile_toast_user_blocked">Utente bloccato</string>
     <string name="profile_toast_user_unblocked">Utente sbloccato</string>

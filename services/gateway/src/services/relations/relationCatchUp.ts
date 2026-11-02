@@ -83,7 +83,7 @@ type RelationRowSeen = {
   readonly grantedByLow: string | null;
   readonly grantedByHigh: string | null;
   readonly origin: string | null;
-  readonly transitions: ReadonlyArray<{ readonly from: string; readonly to: string; readonly at?: Date | null }> | null;
+  readonly transitions: ReadonlyArray<{ readonly actorId?: string; readonly from: string; readonly to: string; readonly at?: Date | null; readonly cause?: string | null }> | null;
 };
 
 const isSettled = (row: RelationRowSeen): boolean => !isOwnAcquaintance(row) && acquaintancePlan(row) === 'keep';

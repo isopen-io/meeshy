@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.MessageConsumedEvent
 import me.meeshy.sdk.model.MessageCountdownStartedEvent
 import me.meeshy.sdk.model.MessageHiddenForMeEvent
 import me.meeshy.sdk.model.MessagePinChanged
+import me.meeshy.sdk.model.PendingTombstone
 import me.meeshy.sdk.model.MessageRemoved
 import me.meeshy.sdk.model.MessageViewOncePurgedEvent
 import me.meeshy.sdk.model.SharedTranslationDeltas
@@ -44,6 +45,8 @@ class MessageDeltaApplier internal constructor(
     private val database: MeeshyDatabase,
     private val updater: CachedMessageUpdater,
     private val clock: CacheClock,
+    /** Les événements arrivés avant leur message (suppression, expiration) : gardés ici, rejoués par l'ingestion. */
+    private val events: MessageEventBuffer? = null,
 ) {
     @Inject
     constructor(
@@ -51,7 +54,10 @@ class MessageDeltaApplier internal constructor(
         messageDao: MessageDao,
         clock: CacheClock,
         fence: me.meeshy.sdk.session.AccountFence?,
-    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock)
+        events: MessageEventBuffer,
+    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, events)
+
+    private val tombstones = MessageTombstoneWriter(updater, null, events)
 
     /**
      * Applique [event] s'il est un delta local et rend `true` ; rend `false` pour un événement qui
@@ -124,11 +130,23 @@ class MessageDeltaApplier internal constructor(
     /** Une suppression pour tous laisse une pierre tombale ; une expiration retire la ligne. */
     private suspend fun remove(event: MessageRemoved) {
         database.editRevisionDao().deleteForMessage(event.messageId)
+        val deletedAt = event.deletedAt ?: nowIso()
+        // Une vue unique ouverte garde son enveloppe (« déjà ouverte ») : le serveur la détruit quand tous
+        // l'ont ouverte, ce n'est pas une suppression pour qui la voit passer. Un message encore inconnu
+        // garde sa pierre tombale, rejouée à l'arrivée de sa ligne ; une expiration retire la ligne.
         if (event.expired) {
-            purge(listOf(event.messageId))
+            if (!purgeKnown(event.messageId)) {
+                events?.rememberTombstone(event.messageId, PendingTombstone(deletedAt, sparingOpenedViewOnce = true, expired = true))
+            }
         } else {
-            transform(event.messageId) { ConversationEventDeltas.deleted(it, event.deletedAt ?: nowIso()) }
+            tombstones.markDeleted(event.messageId, deletedAt, sparingOpenedViewOnce = true)
         }
+    }
+
+    private suspend fun purgeKnown(messageId: String): Boolean {
+        val known = updater.find(messageId) != null
+        if (known) purge(listOf(messageId))
+        return known
     }
 
     private fun pin(message: ApiMessage, event: MessagePinChanged): ApiMessage =

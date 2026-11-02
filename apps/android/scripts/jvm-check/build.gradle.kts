@@ -18,13 +18,20 @@ kotlin { jvmToolchain(21) }
 
 apply(from = rootDir.resolve("../../gradle/call-frames-catalogue.gradle.kts"))
 
+// StreamingSeal porte encore sa fabrique Android Keystore (android.content.Context, tink.integration.android) :
+// il se compile et se teste par la CI (:core:crypto:testDebugUnitTest) tant que #13686 ne l'a pas scindé.
+val androidBoundCrypto = "**/core/crypto/primitives/StreamingSeal.kt"
+val androidBoundCryptoTest = "**/core/crypto/primitives/StreamingSealTest.kt"
+
 sourceSets {
     main {
         kotlin.srcDirs(module.resolve("src/main/kotlin"), crypto.resolve("src/main/kotlin"), e2ee.resolve("src/main/kotlin"))
+        kotlin.exclude(androidBoundCrypto)
         kotlin.srcDir(tasks.named("generateCallFrameCatalogue").flatMap { it.property("outputDir") as org.gradle.api.file.DirectoryProperty })
     }
     test {
         kotlin.srcDirs(module.resolve("src/test/kotlin"), crypto.resolve("src/test/kotlin"), e2ee.resolve("src/test/kotlin"))
+        kotlin.exclude(androidBoundCryptoTest)
         resources.srcDir(crypto.resolve("src/test/resources"))
         resources.srcDir(module.resolve("src/test/resources"))
     }

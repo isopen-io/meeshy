@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.lang.LanguageIdentifying
@@ -416,12 +415,12 @@ class PostCommentsViewModel @Inject constructor(
         val tray = attachments.value
         if ((content.isEmpty() && !tray.hasMedia) || tray.isUploading || postId.isBlank() || status.value.isSubmitting) return
         val attachmentIds = tray.attachmentIds.takeIf { it.isNotEmpty() }
-        val declaredLanguage = composerDraft.value.language.manualOverride
+        val pill = composerDraft.value.language
         attachments.value = CommentAttachmentTray()
         tray.pieces.forEach { MediaIntake.release(it.item) }
         composer.value?.let { target ->
             clearDraft()
-            sendReply(target.parentId, content, attachmentIds, declaredLanguage)
+            sendReply(target.parentId, content, attachmentIds, pill)
             return
         }
         val tempId = "pending-${pendingSeq++}"
@@ -430,7 +429,7 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val language = declaredLanguage ?: ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
+                val language = languageAtSend(pill, content)
                 when (val result = postRepository.addComment(postId, content, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
@@ -592,7 +591,7 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
-    private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?, declaredLanguage: String?) {
+    private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?, pill: ComposerLanguageState) {
         val tempId = "pending-${pendingSeq++}"
         val row = optimisticRow(tempId, content).copy(parentId = parentId)
         replies.update { it.optimisticReply(parentId, row) }
@@ -601,7 +600,7 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val language = declaredLanguage ?: ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
+                val language = languageAtSend(pill, content)
                 when (val result = postRepository.addComment(postId, content, parentId, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }
@@ -622,6 +621,13 @@ class PostCommentsViewModel @Inject constructor(
             }
         }
     }
+
+    /** #14502 — la langue part toujours : la pastille, sinon la détection, sinon ce que la pastille affiche. */
+    private suspend fun languageAtSend(pill: ComposerLanguageState, content: String): String =
+        pill.atSend(content, fallback = readerLanguage(sessionRepository.currentUser.value), identifier = languageIdentifier)
+
+    private fun readerLanguage(user: MeeshyUser?): String =
+        user?.let(LanguageResolver::resolveUserLanguage) ?: ComposerLanguage.DEFAULT
 
     /**
      * A send the server refused: the localized notice, and the text goes back to the composer
@@ -859,7 +865,7 @@ class PostCommentsViewModel @Inject constructor(
             loadFailed = st.error != null && !st.isLoading && !thread.hasLoaded && thread.comments.isEmpty(),
             notice = st.notice,
             translatingLanguages = translatingLanguages,
-            composerLanguageCode = draft.language.display(inputs.user?.let(LanguageResolver::resolveUserLanguage) ?: ComposerLanguage.DEFAULT),
+            composerLanguageCode = draft.language.display(readerLanguage(inputs.user)),
         )
     }
 

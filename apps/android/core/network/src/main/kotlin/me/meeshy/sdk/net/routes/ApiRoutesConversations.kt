@@ -33,6 +33,7 @@ public object ApiRoutesConversations {
     public const val BY_ID_LEAVE: String = "conversations/{id}/leave"
     public const val BY_ID_MARK_READ: String = "conversations/{id}/mark-read"
     public const val BY_ID_MARK_UNREAD: String = "conversations/{id}/mark-unread"
+    public const val BY_ID_MESSAGE_REQUEST_ACCEPT: String = "conversations/{id}/message-request/accept"
     public const val BY_ID_MESSAGES: String = "conversations/{id}/messages"
     public const val BY_ID_MESSAGES_AFTER_READ_CONSUME: String = "conversations/{id}/messages/after-read/consume"
     public const val BY_ID_MESSAGES_BY_MESSAGE_ID: String = "conversations/{id}/messages/{messageId}"

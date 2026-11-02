@@ -85,6 +85,7 @@ object SocketEventNames {
     const val COMMENT_ADDED = "comment:added"
     const val COMMENT_DELETED = "comment:deleted"
     const val COMMENT_LIKED = "comment:liked"
+    const val COMMENT_MEDIA_UPDATED = "comment:media-updated"
     const val COMMENT_REACTION_ADDED = "comment:reaction-added"
     const val COMMENT_REACTION_REMOVED = "comment:reaction-removed"
     const val COMMENT_TRANSLATION_UPDATED = "comment:translation-updated"
@@ -147,6 +148,8 @@ object SocketEventNames {
     const val POST_JOIN = "post:join"
     const val POST_LEAVE = "post:leave"
     const val POST_LIKED = "post:liked"
+    const val POST_REACTION_ADDED = "post:reaction-added"
+    const val POST_REACTION_REMOVED = "post:reaction-removed"
     const val POST_REPOSTED = "post:reposted"
     const val POST_TRANSLATION_UPDATED = "post:translation-updated"
     const val POST_UNLIKED = "post:unliked"
@@ -302,6 +305,7 @@ object SocketEventNames {
         COMMENT_ADDED,
         COMMENT_DELETED,
         COMMENT_LIKED,
+        COMMENT_MEDIA_UPDATED,
         COMMENT_REACTION_ADDED,
         COMMENT_REACTION_REMOVED,
         COMMENT_TRANSLATION_UPDATED,
@@ -350,6 +354,8 @@ object SocketEventNames {
         POST_JOIN,
         POST_LEAVE,
         POST_LIKED,
+        POST_REACTION_ADDED,
+        POST_REACTION_REMOVED,
         POST_REPOSTED,
         POST_TRANSLATION_UPDATED,
         POST_UNLIKED,

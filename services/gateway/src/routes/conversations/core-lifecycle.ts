@@ -22,6 +22,13 @@ import {
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
 import { isBlockedBetween } from '../../utils/blocking';
+import {
+  decideOpenings,
+  withoutRequestColumns,
+  requestRecipientFields,
+  requesterPermissionsFor,
+  type DirectOpening
+} from '../../services/messaging/messageRequests';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { reconcileCommunityMembership } from '../../services/conversations/communityMembershipSync';
@@ -81,6 +88,9 @@ export function registerCreateConversationRoute(
       body: createConversationRequestSchema,
       response: {
         200: conversationResponseSchema,
+        // #14107 (audit B1) — déclarée : `fast-json-stringify` retire du fil toute
+        // colonne de ligne `Participant` que le schéma ne nomme pas.
+        201: conversationResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -270,11 +280,22 @@ export function registerCreateConversationRoute(
 
           return sendSuccess(reply, {
             ...existingDirect,
+            participants: withoutRequestColumns(existingDirect.participants),
             ...(sealed ?? {}),
             title: existingDirect.title || null
           }, { statusCode: 200 });
         }
       }
+
+      // #14107 — chaque membre nommé : direct dès Connaissance, sinon une DEMANDE
+      // dans sa boîte, dans un tête-à-tête comme dans un groupe (RG-22). Aucune
+      // issue de refus : la porte répond pareil vers un mineur (audit B2).
+      const openedAt = new Date();
+      const openings = await decideOpenings(prisma, { senderId: userId, recipientIds: uniqueParticipantIds, now: openedAt });
+      const openingOf = (participantId: string): DirectOpening => openings.get(participantId) ?? { kind: 'direct' };
+      const creatorOpening: DirectOpening = type === 'direct' && uniqueParticipantIds.length === 1
+        ? openingOf(uniqueParticipantIds[0])
+        : { kind: 'direct' };
 
       const allUserIds = [userId, ...uniqueParticipantIds];
       const allUsers = await prisma.user.findMany({
@@ -321,7 +342,7 @@ export function registerCreateConversationRoute(
                 displayName: creatorUser?.displayName || creatorUser?.username || 'User',
                 role: 'creator',
                 language: languageByUserId.get(userId) ?? 'fr',
-                permissions: defaultPermissions
+                permissions: requesterPermissionsFor(creatorOpening, defaultPermissions)
               },
               ...uniqueParticipantIds.map((participantId: string) => {
                 const pUser = userMap.get(participantId);
@@ -331,7 +352,8 @@ export function registerCreateConversationRoute(
                   displayName: pUser?.displayName || pUser?.username || 'User',
                   role: 'member',
                   language: languageByUserId.get(participantId) ?? 'fr',
-                  permissions: defaultPermissions
+                  permissions: defaultPermissions,
+                  ...requestRecipientFields(openingOf(participantId), openedAt, userId)
                 };
               })
             ]
@@ -459,8 +481,9 @@ export function registerCreateConversationRoute(
 
           if (creator) {
             // Notifications d'invitation indépendantes : fan-out parallèle (O(1) latence).
+            // #14107 (M1) — une demande ne s'annonce pas : elle attend dans la boîte.
             await Promise.all(
-              uniqueParticipantIds.map(async (participantId) => {
+              uniqueParticipantIds.filter((participantId) => openingOf(participantId).kind === 'direct').map(async (participantId) => {
                 await notificationService.createConversationInviteNotification({
                   invitedUserId: participantId,
                   inviterId: userId,
@@ -482,6 +505,7 @@ export function registerCreateConversationRoute(
 
       return sendSuccess(reply, {
         ...conversation,
+        participants: withoutRequestColumns(conversation.participants),
         title: displayTitle
       }, { statusCode: 201 });
 

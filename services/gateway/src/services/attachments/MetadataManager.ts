@@ -16,6 +16,7 @@ import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedTimeout } from '../../utils/guarded-timer';
 import { mediaKindOf, mediaKindOfPath, timeMediaStage } from '../metrics/mediaStageMetrics';
+import { videoDisplaySize } from './video-display-size';
 
 // Logger dédié pour MetadataManager
 const logger = enhancedLogger.child({ module: 'MetadataManager' });
@@ -706,8 +707,7 @@ export class MetadataManager {
 
         resolve({
           duration: Math.round((metadata.format?.duration || 0) * 1000), // Convertir secondes -> millisecondes
-          width: videoStream.width || 0,
-          height: videoStream.height || 0,
+          ...videoDisplaySize(videoStream),
           fps: Math.round(fps * 100) / 100,
           videoCodec: videoStream.codec_name || 'unknown',
           bitrate: parseInt(String(metadata.format?.bit_rate || 0), 10),

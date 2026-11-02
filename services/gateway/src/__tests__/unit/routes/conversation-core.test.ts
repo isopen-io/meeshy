@@ -1,7 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 // ─── Top-level mock variables (hoisted before jest.mock calls) ────────────────
-
 const mockResolveConversationId = jest.fn<any>();
 const mockCanAccessConversation = jest.fn<any>();
 const mockIsBlockedBetween = jest.fn<any>();
@@ -46,6 +45,7 @@ const mockSendErrorResponse = jest.fn<any>();
 
 // ─── jest.mock calls (hoisted) ────────────────────────────────────────────────
 
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })), decideOpenings: jest.fn(async () => new Map()) })); // #14107 : direct ici
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

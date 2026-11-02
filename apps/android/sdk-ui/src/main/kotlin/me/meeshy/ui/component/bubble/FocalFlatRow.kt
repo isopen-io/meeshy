@@ -120,7 +120,7 @@ public fun FocalFlatRow(
                 .alpha(if (content.isPending) 0.7f else 1f),
         ) {
             when {
-                renderKind.isSystem -> FlatSystemNotice(content)
+                renderKind.isSystem -> SystemNoticeLine(content = content, callbacks = callbacks)
                 content.isDeleted -> FlatMutedLine(stringResource(R.string.bubble_message_deleted), callbacks.onLongPress)
                 renderKind.isBurned -> FlatMutedLine(stringResource(R.string.bubble_burned), callbacks.onLongPress)
                 else -> FlatStandardBody(
@@ -598,26 +598,6 @@ private fun FlatMetaColumn(content: BubbleContent, metaAlpha: () -> Float) {
                 )
             }
         }
-    }
-}
-
-/** Avis de conversation : l'heure en petit au-dessus, le texte centré, atténué (iOS `FocalSystemNoticeRow`). */
-@Composable
-private fun FlatSystemNotice(content: BubbleContent) {
-    if (content.text.isBlank()) return
-    val muted = MeeshyTheme.tokens.textMuted
-    val clock = remember(content.createdAtIso) { bubbleClockLabel(content.createdAtIso) }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) { contentDescription = content.text },
-    ) {
-        if (clock != null) {
-            Text(text = clock, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = muted.copy(alpha = muted.alpha * 0.7f))
-        }
-        Text(text = content.text, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = muted, textAlign = TextAlign.Center)
     }
 }
 

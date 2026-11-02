@@ -92,7 +92,7 @@ import { buildMessageEditedCore } from '../messageEditedPayload';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
+import { resolveMentionedUsers, resolveUsernamesToIds, withoutPendingMessageRequests } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
 import { mergeTrackingLinksIntoMetadata, type LinkReconciler } from '../../services/messaging/messageLinks';
 import { editedLinksFor, editSealsAtRest } from '../../services/messaging/atRestEdit';
@@ -910,7 +910,7 @@ export class MessageHandler {
       // `User.id` sont déjà résolus — inutile de repasser par les usernames.
       emitMentionCreated({
         io: this.io,
-        newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
+        newlyMentionedUserIds: await withoutPendingMessageRequests(this.prisma, message.conversationId, editedMentions.newlyMentionedUserIds),
         messageId: message.id,
         conversationId: message.conversationId,
         editorUserId: userId,
@@ -1437,7 +1437,7 @@ export class MessageHandler {
       // mention miss never blocks the message broadcast.
       const mentionUsernames = (message.validatedMentions as string[] | undefined) ?? [];
       if (mentionUsernames.length > 0) {
-        const mentionedUserIds = await this._resolveMentionUserIds(mentionUsernames);
+        const mentionedUserIds = await withoutPendingMessageRequests(this.prisma, normalizedId, await this._resolveMentionUserIds(mentionUsernames));
         for (const targetUserId of mentionedUserIds) {
           if (targetUserId && targetUserId !== senderUserId) {
             this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
