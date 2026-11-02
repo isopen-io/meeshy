@@ -95,7 +95,7 @@ describe('#14401 — chaque partage consenti au rituel se retire en un geste, sa
     const res = await regler(app, { listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
     await app.close();
 
-    expect(res.body.data).toEqual({ userId: AUTRE, bringBlocked: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
+    expect(res.body.data).toEqual({ userId: AUTRE, bringBlocked: false, talkieBlocked: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
   });
 
   it('un partage ne s’accorde jamais hors du rituel : 400, et rien ne change', async () => {
@@ -118,7 +118,7 @@ describe('#14401 — chaque partage consenti au rituel se retire en un geste, sa
     expect(retrait.status).toBe(200);
     expect(tombe.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ proximityShared: false });
     expect(rien.status).toBe(200);
-    expect(rien.body.data).toEqual({ userId: TIERS, bringBlocked: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
+    expect(rien.body.data).toEqual({ userId: TIERS, bringBlocked: false, talkieBlocked: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
     expect(inconnu.reglages.size).toBe(0);
   });
 

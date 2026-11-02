@@ -164,7 +164,7 @@ export const PREFERENCE_REGISTRY: Readonly<Record<PreferenceCategory, Preference
   notification: {
     schema: NotificationPreferenceSchema,
     defaults: NOTIFICATION_PREFERENCE_DEFAULTS,
-    keptWhenUnnamed: ['bringEnabled'],
+    keptWhenUnnamed: ['bringEnabled', 'talkieEnabled'],
   },
   video: { schema: VideoPreferenceSchema, defaults: VIDEO_PREFERENCE_DEFAULTS },
   document: { schema: DocumentPreferenceSchema, defaults: DOCUMENT_PREFERENCE_DEFAULTS },

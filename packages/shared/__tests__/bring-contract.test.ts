@@ -96,7 +96,7 @@ describe('le contrat du Bring', () => {
 
   it('le réglage par personne refuse un réglage qu’il ne sait pas tenir', () => {
     expect(relationPersonSettingsUpdateSchema.safeParse({ bringBlocked: true }).success).toBe(true);
-    expect(relationPersonSettingsUpdateSchema.safeParse({ bringBlocked: true, talkieDirect: false }).success).toBe(false);
+    expect(relationPersonSettingsUpdateSchema.safeParse({ bringBlocked: true, ghost: false }).success).toBe(false);
     expect(relationPersonSettingsUpdateSchema.safeParse({}).success).toBe(false);
   });
 
