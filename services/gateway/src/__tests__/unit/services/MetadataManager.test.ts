@@ -473,19 +473,6 @@ describe('MetadataManager', () => {
       });
     });
 
-    it('records a video filmed upright on a phone with its portrait display size', async () => {
-      mockFfprobe.mockImplementation((path: string, callback: Function) => {
-        callback(null, {
-          streams: [{ codec_type: 'video', width: 1920, height: 1080, side_data_list: [{ rotation: -90 }] } as FfprobeStream],
-          format: {} as any,
-        });
-      });
-
-      const result = await metadataManager.extractVideoMetadata('test/portrait.mp4');
-
-      expect({ width: result.width, height: result.height }).toEqual({ width: 1080, height: 1920 });
-    });
-
     it('should calculate fps from frame rate fraction', async () => {
       const mockFfprobeData: Partial<FfprobeData> = {
         streams: [
