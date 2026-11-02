@@ -30,12 +30,26 @@ export type RoutableToken = {
 export type PushTypeRoutingFloors = ReadonlyMap<string, Readonly<Record<PushRoutingClient, string | null>>>;
 
 /**
+ * `bring` (#13936) n'a PAS de plancher, et c'est voulu : la sonnerie est une ALERTE dont le titre et le corps disent
+ * tout (« X fait sonner votre téléphone ») — un ancien iOS la rend avec la sonnerie d'appel, un ancien Android natif
+ * en fait une bannière ordinaire. Pour une urgence, une bannière vaut mieux que rien.
+ *
+ * `bring_stopped` est un push SILENCIEUX sans titre : un iOS l'ignore s'il ne le connaît pas (aucun plancher utile,
+ * toute version lisible), mais un ancien Android natif rendrait une bannière VIDE. Il ne part donc vers Android
+ * qu'à partir de la version qui l'arrête (sous-lot `proche-bring@android`, qui pose ici son plancher).
+ */
+const BRING_STOPPED_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
+  ios: '0.0.0', 'android-native': null, 'android-shell': null, web: null,
+};
+
+/**
  * `game_photo_moment` : la coque et le navigateur le routent (vers `/me/progression/carnet`) depuis la première
  * version de `@meeshy/web` construite après l'arrivée de `GAME_PHOTO_TYPES` dans `target.ts` et `sw-push.js`
  * (2026-10-25, 52e409b9d), soit la 2.23.0 : la 2.22.0 a été coupée avant. iOS et l'Android natif ne le routent pas encore.
  */
 export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['game_photo_moment', { ios: null, 'android-native': null, 'android-shell': '2.23.0', web: '2.23.0' }],
+  ['bring_stopped', BRING_STOPPED_FLOORS],
 ]);
 
 const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.(app|android)(\.|$)/;

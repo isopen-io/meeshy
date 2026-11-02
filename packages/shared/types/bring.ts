@@ -13,7 +13,7 @@
  *   l'expéditeur (annulation) ; propagé à TOUS les appareils des deux.
  * - Socket, room `user:<id>` : `bring:ring` ({@link BringRingEventData}) chez le
  *   destinataire, `bring:stopped` ({@link BringStoppedEventData}) chez les DEUX.
- * - Push : {@link BRING_PUSH_TYPES} dans `data.type` — voir `BringPushData`.
+ * - Push : {@link BRING_PUSH_TYPES} dans `data.type`, charge {@link BringPushData}.
  * - Réglage par personne : `GET|PUT /api/v1/relations/:userId/settings`
  *   ({@link RelationPersonSettings}) — `bringBlocked: true` coupe le Bring de cette
  *   personne vers moi.
@@ -49,8 +49,13 @@ export const BRING_ERROR_CODES = {
 } as const;
 export type BringErrorCode = (typeof BRING_ERROR_CODES)[keyof typeof BRING_ERROR_CODES];
 
-/** Qui a arrêté : le destinataire, l'expéditeur, l'horloge, ou un blocage (utilisateur ou Bring). */
-export const BRING_STOP_REASONS = ['recipient', 'sender', 'expired', 'blocked'] as const;
+/**
+ * Qui a arrêté : le destinataire (un geste, ou un blocage qu'il pose) ou
+ * l'expéditeur (une annulation, ou un blocage qu'il pose). Aucune raison ne dit
+ * « bloqué » : un blocage n'est jamais annoncé au bloqué, il n'en reçoit RIEN. Le
+ * serveur n'émet rien à l'expiration : chaque client cesse de sonner à `expiresAt`.
+ */
+export const BRING_STOP_REASONS = ['recipient', 'sender'] as const;
 export type BringStopReason = (typeof BRING_STOP_REASONS)[number];
 
 /** Les types de push (`data.type`) : la sonnerie, et son arrêt silencieux. */
@@ -107,3 +112,35 @@ export type RelationPersonSettings = z.infer<typeof relationPersonSettingsSchema
 
 export const relationPersonSettingsUpdateSchema = z.object({ bringBlocked: z.boolean() }).strict();
 export type RelationPersonSettingsUpdate = z.infer<typeof relationPersonSettingsUpdateSchema>;
+
+/**
+ * Le `data` des pushes du Bring (APNs et FCM : `Record<string, string>`).
+ *
+ * - `bring` — iOS : alerte `interruption-level: time-sensitive` (ou `critical` quand
+ *   l'entitlement est accordé), son {@link BRING_IOS_SOUND}, catégorie `BRING`, expirée
+ *   à `expiresAt`. Android : DATA-ONLY haute priorité, TTL = la fenêtre — le client
+ *   lève son service au premier plan sur le flux `USAGE_ALARM` ; `title`, `body` et
+ *   `stopLabel` voyagent dans `data`, localisés à la langue du destinataire.
+ * - `bring_stopped` — silencieux (background iOS, data-only FCM) : chaque appareil du
+ *   destinataire cesse de sonner et retire la bannière `bringId`.
+ */
+export const bringPushDataSchema = z.object({
+  type: z.literal(BRING_PUSH_TYPES.RING),
+  bringId: z.string(),
+  fromUserId: z.string(),
+  fromName: z.string(),
+  fromAvatar: z.string(),
+  sentAt: z.string(),
+  expiresAt: z.string(),
+  title: z.string(),
+  body: z.string(),
+  stopLabel: z.string(),
+});
+export type BringPushData = z.infer<typeof bringPushDataSchema>;
+
+export const bringStoppedPushDataSchema = z.object({
+  type: z.literal(BRING_PUSH_TYPES.STOPPED),
+  bringId: z.string(),
+  reason: z.enum(BRING_STOP_REASONS),
+});
+export type BringStoppedPushData = z.infer<typeof bringStoppedPushDataSchema>;
