@@ -343,8 +343,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
     noteEphemeralDelivery(payload, now());
     /* LA GALERIE DE LA COQUE ANDROID (#8308) — à la RÉCEPTION, une seule fois,
-       jamais un média protégé ni le mien ; sans effet hors de la coque. */
-    noteGalleryReception(payload, deps.viewerId());
+       jamais un média protégé ni le mien, seulement si « Sauvegarder média »
+       est ouvert (#14641) ; sans effet hors de la coque. */
+    noteGalleryReception(payload, deps.viewerId(), deps.queryClient);
 
     const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
     for (const userId of candidates) {
