@@ -69,6 +69,12 @@ export const PrivacyPreferenceSchema = z.object({
   // (défaut `true`, décision porteur 2026-09-27). Coupé, ou `showOnlineStatus`
   // coupé, rien ne part. Lue par `services/gateway/…/contact-recently-active.ts`.
   notifyContactsOnReturn: z.boolean().default(true),
+  // « Laisser Meeshy créer des Connaissances automatiquement » (#14406, RGPD
+  // art. 21). SANS défaut : il dépend de l'âge déclaré (activé pour un majeur
+  // ou un âge inconnu, désactivé pour un mineur déclaré) et se résout à la
+  // lecture par `autoAcquaintanceEnabled` (`utils/auto-acquaintance-preference.ts`).
+  // Un client ne l'envoie que si l'utilisateur l'a réglé.
+  autoAcquaintance: z.boolean().optional(),
 
   // Encryption et sécurité
   encryptionPreference: z.enum(['disabled', 'optional', 'always']).default('optional'),

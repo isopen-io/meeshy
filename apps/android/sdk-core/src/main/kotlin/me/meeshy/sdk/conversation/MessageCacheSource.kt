@@ -47,6 +47,8 @@ internal class MessageCacheSource(
     private val fence: AccountFence? = null,
     /** #13792 — chaque page servie nourrit le registre des régimes. */
     private val regime: EndToEndRegimeKeeper? = null,
+    /** Les événements arrivés avant leur message, rejoués à l'ingestion. */
+    private val events: MessageEventBuffer? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
@@ -56,7 +58,7 @@ internal class MessageCacheSource(
      * regresses, pending outbox mutations protected, unchanged rows left unwritten — and the
      * echoed `cid_` bridged to its server id, the optimistic bubble replaced in place.
      */
-    private val ingestion = MessageIngestPipeline(database, regime = regime)
+    private val ingestion = MessageIngestPipeline(database, regime = regime, events = events)
 
     /**
      * #5189 — bounded to [historyWindow] rather than the conversation's whole

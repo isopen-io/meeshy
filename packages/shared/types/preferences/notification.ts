@@ -70,6 +70,9 @@ export const NotificationPreferenceSchema = z.object({
   // réception du Bring, en plus du blocage par personne. Coupé : personne ne peut me faire
   // sonner, et chacun lit seulement « Bring indisponible ». Absent d'un document existant ⇒ reçu.
   bringEnabled: z.boolean().default(true),
+  // « Recevoir le talkie » (#13935, #14407) — l'interrupteur GLOBAL de la réception directe
+  // du talkie. Coupé : la voix d'un Proche arrive en message vocal. Absent ⇒ reçu.
+  talkieEnabled: z.boolean().default(true),
 
   ...circleAudienceShape,
 
@@ -147,6 +150,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   gameEnabled: true,
   gamePhotoEnabled: true,
   bringEnabled: true,
+  talkieEnabled: true,
   ...CIRCLE_NOTIFY_DEFAULTS,
   dndEnabled: false,
   dndStartTime: '22:00',

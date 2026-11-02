@@ -124,6 +124,8 @@ internal class ChatHostContext(
     val engagement: ChatEngagementBinding = ChatEngagementBinding.None,
     /** Les pièces-fichiers reçues pendant la session : la rangée dit « prêt » (#13492). */
     val downloadedFileIds: Set<String> = emptySet(),
+    /** Le message sur lequel la conversation s'ouvre (argument `messageId` de la route), rendu UNE fois puis effacé. */
+    val takeLandingMessageId: () -> String? = { null },
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -170,13 +172,14 @@ internal fun rememberChatHostContext(
     selection: MessageSelection = MessageSelection.Inactive,
     engagement: ChatEngagementBinding = ChatEngagementBinding.None,
     downloadedFileIds: Set<String> = emptySet(),
+    takeLandingMessageId: () -> String? = { null },
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */

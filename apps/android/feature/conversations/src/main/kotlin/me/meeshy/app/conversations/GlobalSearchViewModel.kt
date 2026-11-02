@@ -4,13 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.search.SearchLoadState
 import me.meeshy.sdk.model.search.SearchLoadStates
 import me.meeshy.sdk.model.search.SearchPaneKind
@@ -21,7 +25,14 @@ import me.meeshy.sdk.search.GlobalSearchSnapshot
 import me.meeshy.sdk.search.RecentSearchesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import java.util.Locale
 import javax.inject.Inject
+
+/** Effets ponctuels de l'ecran : retour haptique leger (parite iOS `HapticFeedback.light`) et fiche profil. */
+sealed interface GlobalSearchEffect {
+    data object Haptic : GlobalSearchEffect
+    data class OpenUserProfile(val userId: String) : GlobalSearchEffect
+}
 
 /** Les trois volets de la recherche globale — parite iOS `SearchTab`, meme ordre. */
 enum class GlobalSearchTab { MESSAGES, CONVERSATIONS, USERS }
@@ -52,6 +63,8 @@ data class GlobalSearchUiState(
      * retomberait sur le nom generique.
      */
     val currentUserId: String? = null,
+    /** Le prisme du lecteur (descente stricte, sans repli) : sert l'apercu traduit des lignes de conversation. */
+    val readerPrism: List<String> = emptyList(),
 ) {
     val isSearching: Boolean get() = loadState == SearchLoadState.LOADING
 
@@ -109,6 +122,9 @@ class GlobalSearchViewModel @Inject constructor(
     private val _state = MutableStateFlow(GlobalSearchUiState())
     val state: StateFlow<GlobalSearchUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<GlobalSearchEffect>(Channel.BUFFERED)
+    val effects: Flow<GlobalSearchEffect> = _effects.receiveAsFlow()
+
     private var searchJob: Job? = null
     private var lastQuery: String = ""
     private var queryCache = SearchQueryCache.empty<GlobalSearchResults>()
@@ -116,7 +132,12 @@ class GlobalSearchViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(currentUserId = user?.id) }
+                _state.update {
+                    it.copy(
+                        currentUserId = user?.id,
+                        readerPrism = user?.let { reader -> ReaderPrism.resolve(reader, Locale.getDefault()) }.orEmpty(),
+                    )
+                }
             }
         }
         viewModelScope.launch {
@@ -165,6 +186,7 @@ class GlobalSearchViewModel @Inject constructor(
     fun retryLastSearch() {
         val query = lastQuery
         if (query.length < MIN_QUERY_LENGTH) return
+        _effects.trySend(GlobalSearchEffect.Haptic)
         searchJob?.cancel()
         searchJob = viewModelScope.launch { performSearch(query) }
     }
@@ -227,7 +249,24 @@ class GlobalSearchViewModel @Inject constructor(
     }
 
     fun selectTab(tab: GlobalSearchTab) {
+        _effects.trySend(GlobalSearchEffect.Haptic)
         _state.update { it.copy(selectedTab = tab) }
+    }
+
+    /** Toucher une recherche recente la relance sur-le-champ (parite iOS). */
+    fun relaunchRecentSearch(query: String) {
+        _effects.trySend(GlobalSearchEffect.Haptic)
+        setQuery(query)
+    }
+
+    fun onResultTapped() {
+        _effects.trySend(GlobalSearchEffect.Haptic)
+    }
+
+    /** Toucher un utilisateur ouvre sa fiche en feuille ; l'hote decide du rendu. */
+    fun onUserTapped(userId: String) {
+        _effects.trySend(GlobalSearchEffect.Haptic)
+        _effects.trySend(GlobalSearchEffect.OpenUserProfile(userId))
     }
 
     /**
@@ -245,10 +284,12 @@ class GlobalSearchViewModel @Inject constructor(
     }
 
     fun removeRecentSearch(query: String) {
+        _effects.trySend(GlobalSearchEffect.Haptic)
         recentSearchesStore.remove(query)
     }
 
     fun clearRecentSearches() {
+        _effects.trySend(GlobalSearchEffect.Haptic)
         recentSearchesStore.clear()
     }
 }

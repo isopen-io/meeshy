@@ -6,7 +6,11 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.MediaSource
+import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.ui.component.media.MeeshyMediaCache
 
 /**
  * The platform player under [ChatAudioPlayer] and the message menu's [OverlayAudioPreview], reduced
@@ -18,6 +22,13 @@ internal interface VoiceNoteEngine {
 
     fun listen(onPrepared: () -> Unit, onCompleted: () -> Unit, onError: () -> Unit)
     fun load(url: String)
+
+    /**
+     * A protected voice note (ephemeral, view-once, blurred, sealed) is read straight from its source: never
+     * written to the disk cache, so nothing of it survives the screen. An engine with no disk cache keeps [load].
+     */
+    fun loadUncached(url: String) = load(url)
+
     fun start()
     fun pause()
     fun seekTo(positionMs: Long)
@@ -26,12 +37,44 @@ internal interface VoiceNoteEngine {
     fun release()
 }
 
+/** The Media3 source of one voice note, and the lease that keeps its bytes in the disk cache while it is loaded. */
+@OptIn(UnstableApi::class)
+internal class VoiceNoteSource(val source: MediaSource, val release: () -> Unit)
+
+/** Where the engine gets the Media3 source of a voice note: the AUDIO disk cache in the app, a fake in a test. */
+internal fun interface VoiceNoteSources {
+    fun open(url: String): VoiceNoteSource
+
+    companion object {
+        /**
+         * Reads through the AUDIO disk cache (cache-first, #14568): a voice note already heard plays again with
+         * no network, in airplane mode too, and while it is loaded its bytes are leased against eviction. A
+         * local file is read directly, the cache never duplicates it. The end-of-session wipe (ADR-027) is
+         * the cache's own, unchanged.
+         */
+        @OptIn(UnstableApi::class)
+        fun cached(context: Context): VoiceNoteSources {
+            val cache = MeeshyMediaCache.get(context)
+            return VoiceNoteSources { url ->
+                VoiceNoteSource(
+                    source = cache.mediaSourceFactory(MediaCacheCategory.AUDIO, url).createMediaSource(MediaItem.fromUri(url)),
+                    release = cache.lease(url),
+                )
+            }
+        }
+    }
+}
+
 /**
  * Media3 rather than `MediaPlayer` (#13674): translated voice notes are Ogg Opus, and the platform
  * player only opens the Ogg container from Android 10 — below it, the note played in silence.
  * ExoPlayer ships its own Ogg extractor.
  */
-internal class ExoVoiceNoteEngine(context: Context) : VoiceNoteEngine {
+@OptIn(UnstableApi::class)
+internal class ExoVoiceNoteEngine(
+    context: Context,
+    private val sources: VoiceNoteSources = VoiceNoteSources.cached(context),
+) : VoiceNoteEngine {
 
     private val player = ExoPlayer.Builder(context).build().apply {
         setAudioAttributes(
@@ -44,6 +87,7 @@ internal class ExoVoiceNoteEngine(context: Context) : VoiceNoteEngine {
         setWakeMode(C.WAKE_MODE_NETWORK)
     }
     private var awaitingReady = false
+    private var releaseLease: () -> Unit = {}
 
     override val positionMs: Long get() = player.currentPosition.coerceAtLeast(0L)
     override val durationMs: Long get() = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0L) ?: 0L
@@ -69,10 +113,28 @@ internal class ExoVoiceNoteEngine(context: Context) : VoiceNoteEngine {
     }
 
     override fun load(url: String) {
+        loadWith {
+            val opened = sources.open(url)
+            releaseLease = opened.release
+            player.setMediaSource(opened.source)
+        }
+    }
+
+    override fun loadUncached(url: String) {
+        loadWith { player.setMediaItem(MediaItem.fromUri(url)) }
+    }
+
+    private fun loadWith(setSource: () -> Unit) {
         awaitingReady = true
         player.playWhenReady = false
-        player.setMediaItem(MediaItem.fromUri(url))
+        giveLeaseBack()
+        setSource()
         player.prepare()
+    }
+
+    private fun giveLeaseBack() {
+        releaseLease()
+        releaseLease = {}
     }
 
     override fun start() {
@@ -96,9 +158,11 @@ internal class ExoVoiceNoteEngine(context: Context) : VoiceNoteEngine {
         awaitingReady = false
         player.stop()
         player.clearMediaItems()
+        giveLeaseBack()
     }
 
     override fun release() {
+        giveLeaseBack()
         player.release()
     }
 }

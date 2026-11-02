@@ -115,6 +115,8 @@ class CallViewModel @Inject constructor(
     private var socketWasConnected: Boolean? = null
     private var rejoinJob: Job? = null
 
+    private val errors = CallErrorController(signalManager, turnCredentials) { rejoinJob?.isActive == true }
+
     /** What the collaborators may read of this session, and the one door back into it. */
     private val host = object : CallSessionHost {
         override val scope: CoroutineScope get() = viewModelScope
@@ -163,6 +165,7 @@ class CallViewModel @Inject constructor(
         watchdogs.attach(host)
         analytics.attach(host)
         turnCredentials.attach(host)
+        errors.attach(host)
         ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute, onAnswer = ::accept, onDecline = ::decline)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)

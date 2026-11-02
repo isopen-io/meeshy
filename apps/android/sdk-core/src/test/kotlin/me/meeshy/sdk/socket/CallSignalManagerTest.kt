@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallEndedSignal
+import me.meeshy.sdk.model.call.CallErrorSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
@@ -177,12 +178,16 @@ class CallSignalManagerTest {
     }
 
     @Test
-    fun `call error maps to ConnectionFailed carrying the message`() = runTest {
+    fun `call error is decoded with its call id and no longer ends the call by itself`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.events.test {
-            deliver(handlers, "call:error", """{"code":"BUSY","message":"Line busy"}""")
-            assertThat(awaitItem()).isEqualTo(CallEvent.ConnectionFailed("Line busy"))
+        managerAndSocket.first.callErrors.test {
+            deliver(handlers, "call:error", """{"code":"BUSY","message":"Line busy","callId":"c1"}""")
+            assertThat(awaitItem()).isEqualTo(CallErrorSignal("BUSY", "c1", "Line busy"))
             cancelAndIgnoreRemainingEvents()
+        }
+        managerAndSocket.first.events.test {
+            deliver(handlers, "call:error", """{"code":"NOT_A_PARTICIPANT"}""")
+            expectNoEvents()
         }
     }
 
