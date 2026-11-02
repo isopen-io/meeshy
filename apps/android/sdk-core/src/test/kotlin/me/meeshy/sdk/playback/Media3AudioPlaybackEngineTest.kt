@@ -151,10 +151,10 @@ class Media3AudioPlaybackEngineTest {
     @Test fun `un redemarrage du lecteur pendant un appel est recoupe`() = runTest {
         val rig = rig(this)
         rig.playing("a")
-        rig.playWhenReady(false)
+        rig.port.playWhenReady(false)
         rig.call = true
 
-        rig.playWhenReady(true)
+        rig.port.playWhenReady(true)
 
         assertThat(rig.engine.state.value.isPlaying).isFalse()
         assertThat(rig.port.playing).isFalse()
@@ -164,9 +164,9 @@ class Media3AudioPlaybackEngineTest {
         val rig = rig(this)
         rig.playing("a")
 
-        rig.playWhenReady(false)
+        rig.port.playWhenReady(false)
         assertThat(rig.engine.state.value.isPlaying).isFalse()
-        rig.playWhenReady(true)
+        rig.port.playWhenReady(true)
 
         assertThat(rig.engine.state.value.isPlaying).isTrue()
     }
