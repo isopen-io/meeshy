@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { assessReportPriority } from '../../services/reports/reportPriority';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendInternalError, sendBadRequest, sendNotFound } from '../../utils/response';
 import { getReportService } from '../../services/admin/report.service';
@@ -141,6 +142,11 @@ export async function signaler(
       });
     }
 
+    const priorite = await assessReportPriority(fastify.prisma, {
+      reportedType: corps.reportedType,
+      reportedEntityId: corps.reportedEntityId,
+      reporterId: moi.id ?? null,
+    });
     const rapport = await getReportService(fastify.prisma).createReport({
       reportedType: corps.reportedType,
       reportedEntityId: corps.reportedEntityId,
@@ -148,9 +154,14 @@ export async function signaler(
       reporterId: moi.id,
       reporterName: moi.nom,
       reason: corps.reason,
+      ...priorite,
     });
 
-    return sendSuccess(reply, rapport, { statusCode: 201, message: 'Signalement cree avec succes' });
+    // #14110 (SEC-06, MIN-04) — le signalant ne reçoit que l'accusé : jamais la
+    // priorité ni ses raisons (« mineur » dirait l'âge du signalé), y compris par
+    // l'alias historique `/admin/reports`, qui ne déclare aucun schéma.
+    const { id, reportedType, reportedEntityId, reportType, status, createdAt } = rapport;
+    return sendSuccess(reply, { id, reportedType, reportedEntityId, reportType, status, createdAt }, { statusCode: 201, message: 'Signalement cree avec succes' });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return sendBadRequest(reply, 'Donnees invalides');

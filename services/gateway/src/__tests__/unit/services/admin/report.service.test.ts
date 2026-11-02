@@ -74,6 +74,17 @@ describe('ReportService.createReport', () => {
     expect(result.id).toBe(report.id);
   });
 
+  it('écrit la priorité calculée par la passerelle, ordinaire à défaut (#14110)', async () => {
+    const create = jest.fn().mockResolvedValue(makeReport());
+    const svc = makeService(makePrisma({ create }));
+
+    await svc.createReport({ reportedType: 'user', reportedEntityId: 'e', reportType: 'harassment', priority: 1, priorityReasons: ['minor'] });
+    await svc.createReport({ reportedType: 'user', reportedEntityId: 'e', reportType: 'harassment' });
+
+    expect(create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({ priority: 1, priorityReasons: ['minor'] }) });
+    expect(create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ priority: 0, priorityReasons: [] }) });
+  });
+
   it('sets optional reporter fields to null when omitted', async () => {
     const report = makeReport({ reporterId: null, reporterName: null });
     const create = jest.fn().mockResolvedValue(report);
@@ -115,7 +126,7 @@ describe('ReportService.getReportById', () => {
 // ─── listReports ──────────────────────────────────────────────────────────────
 
 describe('ReportService.listReports', () => {
-  it('queries with no filters and default pagination', async () => {
+  it('queries with no filters and default pagination — the priority first (#14110, MIN-04)', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const count = jest.fn().mockResolvedValue(0);
     const svc = makeService(makePrisma({ findMany, count }));
@@ -126,7 +137,7 @@ describe('ReportService.listReports', () => {
       where: {},
       skip: 0,
       take: 20,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     }));
     expect(result).toEqual({ reports: [], total: 0 });
   });

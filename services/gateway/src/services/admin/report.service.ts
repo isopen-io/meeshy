@@ -25,7 +25,10 @@ export class ReportService {
         reporterName: data.reporterName || null,
         reportType: data.reportType,
         reason: data.reason || null,
-        status: 'pending'
+        status: 'pending',
+        // #14110 (MIN-04) — calculée par la passerelle, jamais lue du corps.
+        priority: data.priority ?? 0,
+        priorityReasons: data.priorityReasons ?? []
       }
     });
 
@@ -92,10 +95,12 @@ export class ReportService {
     }
 
     // Déterminer l'ordre de tri
-    const orderBy: any = {};
     const sortBy = filters.sortBy || 'createdAt';
     const sortOrder = filters.sortOrder || 'desc';
-    orderBy[sortBy] = sortOrder;
+    // #14110 (MIN-04) — sans tri demandé, la file met en tête ce qui touche un
+    // mineur, une position ou un lien Sang ; un document antérieur (sans
+    // priorité) se range parmi les ordinaires.
+    const orderBy = filters.sortBy ? { [sortBy]: sortOrder } : [{ priority: 'desc' as const }, { [sortBy]: sortOrder }];
 
     // Récupérer les données
     const [reports, totalCount] = await Promise.all([
