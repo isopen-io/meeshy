@@ -7,6 +7,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.preferences.PreferenceSnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.feedback.FeedbackToastCenter
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.ConversationLockStore
@@ -53,6 +54,7 @@ public class DefaultSessionTeardown(
     private val perAccountCaches: Set<PerAccountCache> = emptySet(),
     private val guestSessions: AnonymousSessionStore? = null,
     private val fence: AccountFence? = null,
+    private val feedbackToasts: FeedbackToastCenter? = null,
 ) : SessionTeardown {
 
     /**
@@ -65,6 +67,7 @@ public class DefaultSessionTeardown(
     }
 
     private suspend fun clearAll() {
+        feedbackToasts?.clear()
         // Room's clearAllTables() is a blocking call — never on the caller's dispatcher.
         withContext(Dispatchers.IO) { database.clearAllTables() }
         categorySnapshotStore.clearAll()
