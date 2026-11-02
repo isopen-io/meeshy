@@ -157,7 +157,7 @@
     <string name="status_composer_publish">Publier</string>
     <string name="status_composer_title">Statut</string>
     <string name="status_composer_visibility_community">Communautés</string>
-    <string name="status_composer_visibility_friends">Contacts</string>
+    <string name="status_composer_visibility_friends">Amis</string>
     <string name="status_composer_visibility_private">Privé</string>
     <string name="status_composer_visibility_public">Public</string>
     <string name="status_react_error">Impossible de réagir au statut</string>
