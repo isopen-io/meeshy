@@ -23,7 +23,8 @@ import timber.log.Timber
  * - **la flamme-œil** vue puis quittée disparaît d'abord ICI (le même effet local qu'un
  *   `message:expired` servi), puis le serveur l'applique à ses autres appareils par l'outbox, qui la
  *   rejoue hors ligne ;
- * - **la vue unique** lue et refermée consomme son compteur serveur, par l'outbox aussi.
+ * - **la vue unique** lue et refermée consomme son compteur serveur, par l'outbox aussi ; son clair E2EE quitte le
+ *   coffre aussitôt (#14633).
  *
  * La sortie d'un écran est synchrone et son scope meurt avec lui : le travail part donc sur un scope
  * de l'application, jamais sur celui du fil.
@@ -32,6 +33,7 @@ import timber.log.Timber
 class MessageConsumption internal constructor(
     private val outbox: OutboxRepository,
     private val expireLocally: suspend (List<String>) -> Unit,
+    private val erasePlaintexts: suspend (List<String>) -> Unit,
     private val flush: OutboxFlushScheduler,
     private val scope: CoroutineScope,
 ) {
@@ -40,7 +42,7 @@ class MessageConsumption internal constructor(
         outbox: OutboxRepository,
         deltas: MessageDeltaApplier,
         flush: OutboxFlushScheduler,
-    ) : this(outbox, deltas::expireLocally, flush, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+    ) : this(outbox, deltas::expireLocally, deltas::erasePlaintexts, flush, CoroutineScope(SupervisorJob() + Dispatchers.IO))
 
     /** La flamme-œil : [messageIds] lues dans [conversationId] quittent le cache, puis le serveur. */
     fun consumeAfterRead(conversationId: String, messageIds: List<String>) {
@@ -76,6 +78,7 @@ class MessageConsumption internal constructor(
 
     internal suspend fun consumeViewOnceNow(conversationId: String, messageId: String) {
         runCatching {
+            erasePlaintexts(listOf(messageId))
             outbox.enqueue(
                 OutboxMutation(
                     kind = OutboxKind.CONSUME_VIEW_ONCE,

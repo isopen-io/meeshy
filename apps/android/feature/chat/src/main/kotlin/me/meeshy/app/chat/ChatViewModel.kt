@@ -50,8 +50,6 @@ import me.meeshy.sdk.model.mention.MentionLookupLaw
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
-import me.meeshy.sdk.model.StarredAttachmentKind
-import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.app.chat.piece.PieceCapabilities
@@ -369,6 +367,7 @@ class ChatViewModel @Inject constructor(
                             ?: it.composerLanguageSeed,
                     )
                 }
+                if (_state.value.isEndToEnd) composer.forgetEndToEndDraftOnDisk()
             }
         }
 
@@ -382,6 +381,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             combine(
                 endToEnd.overlay(
+                    conversationId,
                     messageRepository.messagesStream(
                         conversationId,
                         onSyncError = { error ->
@@ -1059,25 +1059,18 @@ class ChatViewModel @Inject constructor(
         val bubble = _state.value.messages.firstOrNull { it.messageId == messageId }
         _state.update { it.copy(actionMessageId = null) }
         if (bubble == null || bubble.isDeleted) return
-        starredStore.toggle(bubble.toStarSnapshot())
+        starredStore.toggle(
+            ChatStarSnapshot.of(
+                bubble = bubble,
+                conversationId = conversationId,
+                conversationName = _state.value.conversationTitle,
+                accentColorHex = _state.value.accentColorHex,
+                senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
+                conversationIsEndToEnd = _state.value.isEndToEnd,
+                nowMillis = clock.nowMillis(),
+            ),
+        )
     }
-
-    private fun BubbleContent.toStarSnapshot(): StarredMessage = StarredMessage(
-        messageId = messageId,
-        conversationId = conversationId,
-        conversationName = _state.value.conversationTitle,
-        conversationAccentColor = _state.value.accentColorHex,
-        senderName = senderName,
-        senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
-        contentPreview = text,
-        attachmentKind = when {
-            images.isNotEmpty() -> StarredAttachmentKind.IMAGE
-            files.isNotEmpty() -> StarredAttachmentKind.FILE
-            else -> null
-        },
-        starredAtMillis = clock.nowMillis(),
-        sentAtIso = createdAtIso,
-    )
 
     fun retryMessage(messageId: String) {
         viewModelScope.launch {
