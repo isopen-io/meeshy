@@ -97,8 +97,10 @@ class RouteManifestRatchetTest {
          * 204 : plus les cinq routes du Bring et du réglage par personne (`GET|POST /bring/:userId`,
          * `DELETE /bring/:bringId`, `GET|PUT /relations/:userId/settings`, #13936), servies par la passerelle et
          * que le sous-lot `proche-bring@android` portera.
+         * 205 : plus `POST /conversations/:id/message-request/accept` (#14107 : « Accepter » une demande de message),
+         * servie par la passerelle avant le tour client ; Android la portera avec sa boîte de demandes.
          */
-        const val TO_PORT_CEILING = 204
+        const val TO_PORT_CEILING = 205
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
