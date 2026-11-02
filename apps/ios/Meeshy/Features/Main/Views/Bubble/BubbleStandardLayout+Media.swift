@@ -679,7 +679,8 @@ fileprivate struct BubbleGridImageView: View {
                 fullUrl: selectedFull,
                 targetSize: CGSize(width: cellPointWidth, height: cellPointWidth),
                 onFullImageLoaded: onFullImageLoaded,
-                reloadToken: originalLanded
+                reloadToken: originalLanded,
+                byteSize: attachment.fileSize
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }

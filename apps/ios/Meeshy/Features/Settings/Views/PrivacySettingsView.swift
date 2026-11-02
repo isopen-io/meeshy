@@ -337,8 +337,7 @@ struct PrivacySettingsView: View {
 
     /// Bascules de confidentialité pas encore appliquées — ni côté iOS, ni
     /// côté gateway (`blockScreenshots` n'a pas d'API publique iOS pour
-    /// réellement bloquer une capture ; `saveMediaToGallery`
-    /// supposerait un pipeline d'auto-save à la réception, inexistant ;
+    /// réellement bloquer une capture ;
     /// `shareUsageData` n'a pas de mécanisme distinct de `allowAnalytics` ;
     /// `allowContactRequests`/`allowGroupInvites` exigeraient un check côté
     /// gateway avant la création d'une demande de contact
@@ -357,7 +356,6 @@ struct PrivacySettingsView: View {
 
     nonisolated(unsafe) private static let comingSoonPrivacyKeyPaths: Set<AnyKeyPath> = [
         \PrivacyPreferences.blockScreenshots,
-        \PrivacyPreferences.saveMediaToGallery,
         \PrivacyPreferences.shareUsageData,
         \PrivacyPreferences.allowContactRequests,
         \PrivacyPreferences.allowGroupInvites,
