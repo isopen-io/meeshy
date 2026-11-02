@@ -527,7 +527,7 @@ const PENDING_CLIENT_ENTRIES = {
   'lens.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — retirer une vérification' },
 };
 
-const BASELINE_DEAD_ENTRIES = 281;
+const BASELINE_DEAD_ENTRIES = 279;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

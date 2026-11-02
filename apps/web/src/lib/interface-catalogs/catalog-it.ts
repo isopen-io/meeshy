@@ -595,6 +595,7 @@ const it = {
   'discover.tab.discover': 'Scopri',
   'discover.tab.requests': 'Richieste',
   'discover.tab.blocked': 'Bloccati',
+  'discover.tab.circles': 'Cerchie',
   'discover.tab.requests.count.one': 'Richieste, {count} ricevuta',
   'discover.tab.requests.count.other': 'Richieste, {count} ricevute',
   'discover.invite.title': 'Invita via email',
