@@ -89,6 +89,10 @@ internal class ExoVoiceNoteEngine(
     private var awaitingReady = false
     private var releaseLease: () -> Unit = {}
 
+    /** La dernière erreur du lecteur : « le vocal a échoué » ne dit pas POURQUOI, et un témoin doit pouvoir le dire. */
+    internal var lastError: PlaybackException? = null
+        private set
+
     override val positionMs: Long get() = player.currentPosition.coerceAtLeast(0L)
     override val durationMs: Long get() = player.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0L) ?: 0L
     val speed: Float get() = player.playbackParameters.speed
@@ -107,6 +111,7 @@ internal class ExoVoiceNoteEngine(
 
             override fun onPlayerError(error: PlaybackException) {
                 awaitingReady = false
+                lastError = error
                 onError()
             }
         })
