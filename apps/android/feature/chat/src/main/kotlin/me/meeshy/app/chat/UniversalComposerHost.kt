@@ -34,7 +34,7 @@ public fun UniversalComposerHost(spec: UniversalComposerSpec, modifier: Modifier
                 revision.typed(text)
                 spec.onDraftChange(text)
             },
-            onPickLanguage = {},
+            onPickLanguage = spec.onPickLanguage ?: {},
             onSend = spec.onSend,
             onCancelEdit = {},
             onCancelReply = {},
@@ -47,6 +47,8 @@ public fun UniversalComposerHost(spec: UniversalComposerSpec, modifier: Modifier
             focusTrigger = spec.focusTrigger,
             configuration = spec.effectiveConfiguration,
             placeholder = spec.placeholder,
+            onQuickEmoji = spec.onQuickEmoji,
+            foldable = spec.foldable,
         )
     }
 }

@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.onRoot
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.composer.ComposerConfiguration
@@ -96,8 +98,8 @@ class UniversalComposerHostTest {
         compose.onNodeWithContentDescription(string(R.string.chat_record_voice)).assertIsDisplayed()
     }
 
-    @Test fun `en commentaire, ni éphémère, ni flou, ni vue unique, ni effets, ni langue`() {
-        show(spec(ComposerConfiguration.COMMENT))
+    @Test fun `en commentaire, ni éphémère, ni flou, ni vue unique, ni effets`() {
+        show(spec(ComposerConfiguration.COMMENT).served())
         compose.onNodeWithContentDescription(string(R.string.chat_ephemeral_activate)).assertDoesNotExist()
         compose.onNodeWithContentDescription(string(R.string.chat_effect_blurred)).assertDoesNotExist()
         compose.onNodeWithContentDescription(string(R.string.chat_effect_view_once)).assertDoesNotExist()
@@ -120,6 +122,43 @@ class UniversalComposerHostTest {
         compose.onNodeWithContentDescription(string(R.string.chat_effects_open)).assertIsDisplayed()
     }
 
+    private fun UniversalComposerSpec.served(picked: MutableList<String> = mutableListOf(), quick: MutableList<String> = mutableListOf()) =
+        copy(onPickLanguage = { picked += it }, onQuickEmoji = { quick += it }, foldable = true, languageCode = "es")
+
+    @Test fun `#14384 en commentaire servi, la pastille de langue, les emojis rapides et le chevron sont là, comme pour un message`() {
+        show(spec(ComposerConfiguration.COMMENT).served())
+        compose.onNodeWithContentDescription(string(R.string.chat_composer_language)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(string(R.string.composer_fold)).assertIsDisplayed()
+        compose.onNodeWithText("❤️").assertIsDisplayed()
+    }
+
+    @Test fun `#14384 sans choix de langue ni envoi d'emoji servis, ni pastille ni emojis rapides`() {
+        show(spec(ComposerConfiguration.COMMENT))
+        compose.onNodeWithContentDescription(string(R.string.chat_composer_language)).assertDoesNotExist()
+        compose.onNodeWithText("❤️").assertDoesNotExist()
+        compose.onNodeWithContentDescription(string(R.string.composer_fold)).assertDoesNotExist()
+    }
+
+    @Test fun `#14384 un emoji rapide touché part par l'hôte`() {
+        val quick = mutableListOf<String>()
+        show(spec(ComposerConfiguration.COMMENT).served(quick = quick))
+        compose.waitForIdle()
+        Thread.sleep(QUICK_EMOJI_ARRIVAL_WAIT_MS)
+        compose.onNodeWithText("❤️").performClick()
+        assertThat(quick).containsExactly("❤️")
+    }
+
+    @Test fun `#14384 photothèque, caméra et chevron tiennent l'angle droit de la rangée d'outils, comme la barre de message`() {
+        show(spec(ComposerConfiguration.COMMENT).served())
+        val root = compose.onRoot().getBoundsInRoot()
+        val camera = compose.onNodeWithContentDescription(string(R.string.composer_attach_camera)).getBoundsInRoot()
+        val fold = compose.onNodeWithContentDescription(string(R.string.composer_fold)).getBoundsInRoot()
+        val pill = compose.onNodeWithContentDescription(string(R.string.chat_composer_language)).getBoundsInRoot()
+        assertThat(fold.right.value).isGreaterThan(root.right.value - 64f)
+        assertThat(camera.right.value).isAtMost(fold.left.value)
+        assertThat(pill.right.value).isLessThan(camera.left.value)
+    }
+
     @Test fun `un commentaire écrit part par l'envoi`() {
         var sent = 0
         show(spec(ComposerConfiguration.COMMENT, draft = "Bravo", onSend = { sent += 1 }))
@@ -127,3 +166,6 @@ class UniversalComposerHostTest {
         assertThat(sent).isEqualTo(1)
     }
 }
+
+/** La bande d'emojis rapides ignore un toucher dans la demi-seconde qui suit son arrivée (horloge réelle). */
+private const val QUICK_EMOJI_ARRIVAL_WAIT_MS = 600L
