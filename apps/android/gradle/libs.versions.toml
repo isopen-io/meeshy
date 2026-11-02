@@ -21,7 +21,8 @@ datastore = "1.1.1"
 coil = "2.7.0"
 browser = "1.8.0"
 zxing = "3.5.3"
-media3 = "1.4.1"
+# Media3 1.10.1 (#14567) : compilé en Kotlin 2.0.x, lisible par le compilateur 2.0.21 du dépôt (1.11 passe à Kotlin 2.2).
+media3 = "1.10.1"
 streamWebrtc = "1.3.10"
 glance = "1.1.1"
 securityCrypto = "1.1.0-alpha06"
@@ -147,6 +148,9 @@ work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 
 # lot: composer-socle-decoupage-et-dependances
 androidx-media3-muxer = { module = "androidx.media3:media3-muxer", version.ref = "media3" }
+# lot: socle-media3-1-10 (#14567) — médias en HTTP/2 par OkHttp, extraction d'images pour les vignettes.
+androidx-media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3" }
+androidx-media3-inspector-frame = { module = "androidx.media3:media3-inspector-frame", version.ref = "media3" }
 
 # lot: pieces-jointes-compression-image-et-video
 
