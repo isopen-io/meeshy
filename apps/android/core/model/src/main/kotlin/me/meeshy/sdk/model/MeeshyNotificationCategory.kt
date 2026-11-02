@@ -9,7 +9,7 @@ package me.meeshy.sdk.model
  * [SYSTEM] n'existe pas côté iOS : c'est la famille « compte et sécurité » que le pipeline Android
  * rendait déjà sur son propre canal.
  */
-public enum class NotificationCategory(public val wire: String?) {
+public enum class MeeshyNotificationCategory(public val wire: String?) {
     MESSAGE("MEESHY_MESSAGE"),
     MENTION("MEESHY_MENTION"),
     FRIEND_REQUEST("MEESHY_FRIEND_REQUEST"),
@@ -27,7 +27,7 @@ public enum class NotificationCategory(public val wire: String?) {
     ;
 
     public companion object {
-        private val BY_WIRE: Map<String, NotificationCategory> =
+        private val BY_WIRE: Map<String, MeeshyNotificationCategory> =
             entries.mapNotNull { category -> category.wire?.let { it to category } }.toMap() +
                 ("MEESHY_CALL" to CALL_INCOMING) +
                 ("MEESHY_LOCKED_CONVERSATION" to MESSAGE)
@@ -60,7 +60,7 @@ public enum class NotificationCategory(public val wire: String?) {
         )
 
         /** La catégorie qu'un identifiant `MEESHY_*` nomme ; `null` pour toute autre chaîne. */
-        public fun fromWire(raw: String?): NotificationCategory? = raw?.let { BY_WIRE[it] }
+        public fun fromWire(raw: String?): MeeshyNotificationCategory? = raw?.let { BY_WIRE[it] }
 
         /**
          * La catégorie d'un push : l'identifiant `MEESHY_*` s'il est connu, sinon dérivée du `type`
@@ -72,7 +72,7 @@ public enum class NotificationCategory(public val wire: String?) {
             type: String? = null,
             ephemeral: Boolean = false,
             audio: Boolean = false,
-        ): NotificationCategory {
+        ): MeeshyNotificationCategory {
             fromWire(rawCategory)?.let { return it }
             val raw = type.orEmpty()
             return when {

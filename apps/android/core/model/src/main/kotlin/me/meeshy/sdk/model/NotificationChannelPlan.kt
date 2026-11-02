@@ -28,7 +28,7 @@ public data class NotificationChannelSpec(
 )
 
 /**
- * Le plan pur des canaux : chaque [NotificationCategory] a UN canal, rangé dans un groupe. Les
+ * Le plan pur des canaux : chaque [MeeshyNotificationCategory] a UN canal, rangé dans un groupe. Les
  * identifiants `meeshy_messages_v2`, `meeshy_social_v2`, `meeshy_system_v2` et `meeshy_calls_v2`
  * sont ceux que l'app crée déjà ; `meeshy_notifications` (le canal v1 que la passerelle nomme
  * encore) n'est PAS dans le plan : il est supprimé à l'installation.
@@ -73,26 +73,26 @@ public object NotificationChannelPlan {
     private val byId: Map<String, NotificationChannelSpec> = channels.associateBy { it.id }
 
     /** Le canal d'une catégorie ; la catégorie générique (et donc toute inconnue) rend le canal des messages. */
-    public fun channelIdFor(category: NotificationCategory): String = when (category) {
-        NotificationCategory.MESSAGE,
-        NotificationCategory.LOCATION,
-        NotificationCategory.AUDIO,
-        NotificationCategory.GENERIC,
+    public fun channelIdFor(category: MeeshyNotificationCategory): String = when (category) {
+        MeeshyNotificationCategory.MESSAGE,
+        MeeshyNotificationCategory.LOCATION,
+        MeeshyNotificationCategory.AUDIO,
+        MeeshyNotificationCategory.GENERIC,
         -> MESSAGES
-        NotificationCategory.MENTION -> MENTIONS
-        NotificationCategory.EPHEMERAL -> EPHEMERAL
-        NotificationCategory.FRIEND_REQUEST,
-        NotificationCategory.CONTACT,
+        MeeshyNotificationCategory.MENTION -> MENTIONS
+        MeeshyNotificationCategory.EPHEMERAL -> EPHEMERAL
+        MeeshyNotificationCategory.FRIEND_REQUEST,
+        MeeshyNotificationCategory.CONTACT,
         -> FRIENDS
-        NotificationCategory.SOCIAL,
-        NotificationCategory.SOCIAL_COMMENTABLE,
+        MeeshyNotificationCategory.SOCIAL,
+        MeeshyNotificationCategory.SOCIAL_COMMENTABLE,
         -> SOCIAL
-        NotificationCategory.CALL_INCOMING -> CALLS
-        NotificationCategory.CALL_MISSED -> CALLS_MISSED
-        NotificationCategory.INVITATION -> INVITATIONS
-        NotificationCategory.SYSTEM -> SYSTEM
+        MeeshyNotificationCategory.CALL_INCOMING -> CALLS
+        MeeshyNotificationCategory.CALL_MISSED -> CALLS_MISSED
+        MeeshyNotificationCategory.INVITATION -> INVITATIONS
+        MeeshyNotificationCategory.SYSTEM -> SYSTEM
     }
 
-    public fun channelFor(category: NotificationCategory): NotificationChannelSpec =
+    public fun channelFor(category: MeeshyNotificationCategory): NotificationChannelSpec =
         byId.getValue(channelIdFor(category))
 }
