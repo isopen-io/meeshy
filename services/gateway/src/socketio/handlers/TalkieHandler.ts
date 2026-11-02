@@ -12,7 +12,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { judgeTalkie } from '../../services/talkie/talkieGate';
 import { TalkieRelay } from '../../services/talkie/talkieRelay';
 import { readTalkieCut, registerProcessTalkieRelay } from '../../services/talkie/talkieCut';
-import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
+import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { ServerEmitIOWithRooms } from '../serverEmit';
 
@@ -91,9 +91,13 @@ export function talkieHandlerDeps(params: {
 }
 
 function createRelay(params: { readonly prisma: PrismaClient; readonly io: ServerEmitIOWithRooms }): TalkieRelay {
-  const cache = getCacheStore();
-  // Le limiteur Redis partagé (jamais `socket-rate-limiter`, en mémoire par processus) ; sans Redis, son magasin mémoire.
-  const limiter = createCustomRateLimiter({ ...TALKIE_START_RATE }, cache.getNativeClient() ?? undefined);
+  // Le cache et le limiteur Redis partagé (jamais `socket-rate-limiter`, en mémoire par processus) se
+  // résolvent à la PREMIÈRE prise de parole : la connexion d'une socket n'ouvre rien.
+  let limiter: RateLimiter | null = null;
+  const startLimiter = (): RateLimiter => {
+    limiter ??= createCustomRateLimiter({ ...TALKIE_START_RATE }, getCacheStore().getNativeClient() ?? undefined);
+    return limiter;
+  };
   return new TalkieRelay({
     io: params.io,
     judge: (fromUserId, toUserId) =>
@@ -107,10 +111,10 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
         toUserId,
       ),
     withinStartRate: async (userId) => {
-      const info = await limiter.consume(userId, 1);
+      const info = await startLimiter().consume(userId, 1);
       return info === null ? null : info.retryAfter === undefined;
     },
-    cutAt: (fromUserId, toUserId) => readTalkieCut(cache, fromUserId, toUserId),
+    cutAt: (fromUserId, toUserId) => readTalkieCut(getCacheStore(), fromUserId, toUserId),
     now: () => Date.now(),
     report: (message, error) => logger.warn(message, { error }),
   });

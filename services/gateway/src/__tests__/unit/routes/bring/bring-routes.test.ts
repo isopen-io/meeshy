@@ -65,8 +65,8 @@ const reglerPour = (app: BringTestApp, other: string, body: unknown, as = AUTRE)
 const avance = (ms: number) => jest.setSystemTime(new Date(Date.now() + ms));
 const nouvellesPushes = () => pushes.splice(0);
 
-beforeEach(() => { cache.clear(); pushes.length = 0; freezeClock(NOW); });
-afterEach(() => thawClock());
+beforeEach(() => { cache.clear(); pushes.length = 0; freezeClock(NOW); process.env.BRING_ENABLED = 'true'; });
+afterEach(() => { thawClock(); delete process.env.BRING_ENABLED; });
 
 describe('#13936 — qui peut faire sonner qui', () => {
   it.each(['FRIEND', 'CLOSE', 'BLOOD'])('un lien %s ouvre le Bring : 201, et le destinataire reçoit bring:ring', async (level) => {
@@ -303,12 +303,35 @@ describe('#13936 — le blocage du Bring, par personne', () => {
   });
 
   it('le blocage est PAR PERSONNE : bloquer le Bring de A ne ferme pas celui de B', async () => {
-    const app = await appli({ liens: [lien('FRIEND', 'FRIEND')] });
-    await reglerPour(app, TIERS, { bringBlocked: true });
+    const app = await appli({ liens: [lien('FRIEND', 'FRIEND')], demandes: [{ id: 'fr0000000000000000000002', senderId: AUTRE, receiverId: TIERS, status: 'accepted', updatedAt: NOW, respondedAt: NOW }] });
+    const pose = await reglerPour(app, TIERS, { bringBlocked: true });
     const res = await sonner(app);
     await app.close();
 
+    expect(pose.status).toBe(200);
     expect(res.status).toBe(201);
+  });
+
+  it('un réglage ne s’écrit que pour une personne liée qui existe : sinon 404, et aucune ligne', async () => {
+    const app = await appli(niveau('FRIEND'));
+    const sansLien = await reglerPour(app, TIERS, { bringBlocked: true });
+    const inconnu = await reglerPour(app, 'c'.repeat(24), { bringBlocked: true });
+    await app.close();
+
+    expect(sansLien.status).toBe(404);
+    expect(inconnu).toEqual(sansLien);
+    expect(app.reglages.size).toBe(0);
+  });
+
+  it('son propre identifiant, en MAJUSCULES : 400, aucune ligne soi → soi', async () => {
+    const app = await appli(niveau('FRIEND'));
+    const res = await reglerPour(app, AUTRE.toUpperCase(), { bringBlocked: true });
+    const bring = await sonner(app, MOI.toUpperCase());
+    await app.close();
+
+    expect(res.status).toBe(400);
+    expect(bring.status).toBe(400);
+    expect(app.reglages.size).toBe(0);
   });
 
   it('débloquer rouvre le Bring', async () => {
@@ -464,6 +487,84 @@ describe('#13935 — un blocage utilisateur coupe aussi le talkie, dans les deux
 
     expect(cache.get(`talkie:cut:${MOI}:${AUTRE}`)?.value).toBe(String(NOW.getTime()));
     expect(cache.get(`talkie:cut:${AUTRE}:${MOI}`)?.value).toBe(String(NOW.getTime()));
+  });
+});
+
+describe('#14441 (B2) — l’interrupteur du service, éteint par défaut', () => {
+  it('éteint : POST 403 BRING_DISABLED, rien ne sonne ; GET rend le bouton absent ; la config le dit', async () => {
+    delete process.env.BRING_ENABLED;
+    const app = await appli(niveau('BLOOD'));
+    const res = await sonner(app);
+    const lecture = await dispo(app);
+    const config = await app.call('GET', '/api/v1/relations/config');
+    await app.close();
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('BRING_DISABLED');
+    expect(lecture.body.data).toMatchObject({ available: false, remainingToday: 0 });
+    expect(config.body.data.services).toEqual({ bring: false });
+    expect(app.emissions).toEqual([]);
+    expect(pushes).toEqual([]);
+  });
+
+  it('allumé (staging) : la config le dit', async () => {
+    const app = await appli(niveau('BLOOD'));
+    const config = await app.call('GET', '/api/v1/relations/config');
+    await app.close();
+
+    expect(config.body.data.services).toEqual({ bring: true });
+  });
+
+  it('éteint, un Bring déjà en vol s’arrête toujours', async () => {
+    const app = await appli(niveau('CLOSE'));
+    const envoi = await sonner(app);
+    delete process.env.BRING_ENABLED;
+    const res = await arreter(app, envoi.body.data.bringId);
+    await app.close();
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('#14441 (M1) — un double appui rend le même Bring, jamais 503', () => {
+  it('deux POST simultanés : 201 et 200, le même bringId, une seule sonnerie', async () => {
+    const app = await appli(niveau('CLOSE'));
+    const [a, b] = await Promise.all([sonner(app), sonner(app)]);
+    await app.close();
+
+    expect([a.status, b.status].sort()).toEqual([200, 201]);
+    expect(a.body.data.bringId).toBe(b.body.data.bringId);
+    expect(app.emissions.filter((e) => e.event === 'bring:ring')).toHaveLength(1);
+  });
+});
+
+describe('#14441 (M3) — « Masquer le nom de l’expéditeur » vaut aussi pour le Bring', () => {
+  it('showSenderName:false : titre neutre, ni nom ni avatar dans la charge', async () => {
+    const app = await appli({ ...niveau('CLOSE'), personnes: { [AUTRE]: { notification: { showSenderName: false } } } });
+    await sonner(app);
+    await app.close();
+
+    for (const push of pushes) {
+      expect(push.payload.title).toBe("Quelqu'un fait sonner votre téléphone");
+      expect(push.payload.data).toMatchObject({ fromName: '', fromAvatar: '', fromUserId: MOI });
+    }
+    expect(pushes).toHaveLength(2);
+  });
+});
+
+describe('#14441 (M6) — l’arrêt retire la bannière même app tuée', () => {
+  it('iOS : une alerte PASSIVE de même collapse-id remplace la bannière ; Android : data-only', async () => {
+    const app = await appli(niveau('CLOSE'));
+    const envoi = await sonner(app);
+    pushes.length = 0;
+    await arreter(app, envoi.body.data.bringId);
+    await app.close();
+
+    const ios = pushes.find((p) => p.types?.includes('apns'))!;
+    expect(ios.payload).toMatchObject({ title: 'Bring arrêté', interruptionLevel: 'passive', collapseId: `bring-${envoi.body.data.bringId}` });
+    expect(ios.payload.silent).toBeUndefined();
+    const android = pushes.find((p) => p.types?.includes('fcm'))!;
+    expect(android.payload).toMatchObject({ silent: true, data: { type: 'bring_stopped' } });
   });
 });
 

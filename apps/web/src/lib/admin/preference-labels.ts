@@ -184,6 +184,8 @@ const NOTIFICATION: Kinds<NotificationPreference> = {
   contactActivityEnabled: 'flag',
   gameEnabled: 'flag',
   gamePhotoEnabled: 'flag',
+  bringEnabled: 'flag',
+  talkieEnabled: 'flag',
   circlePublicationPost: CIRCLE_AUDIENCE,
   circlePublicationReel: CIRCLE_AUDIENCE,
   circlePublicationStory: CIRCLE_AUDIENCE,

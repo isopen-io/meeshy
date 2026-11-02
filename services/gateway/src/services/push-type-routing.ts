@@ -27,6 +27,9 @@ export type RoutableToken = {
   readonly bundleId: string | null;
 };
 
+/** Un plancher qui n'exige AUCUNE version lisible : tout jeton du client reçoit le type (`bring_stopped` iOS). */
+export const ANY_VERSION = '*';
+
 export type PushTypeRoutingFloors = ReadonlyMap<string, Readonly<Record<PushRoutingClient, string | null>>>;
 
 /**
@@ -34,12 +37,13 @@ export type PushTypeRoutingFloors = ReadonlyMap<string, Readonly<Record<PushRout
  * tout (« X fait sonner votre téléphone ») — un ancien iOS la rend avec la sonnerie d'appel, un ancien Android natif
  * en fait une bannière ordinaire. Pour une urgence, une bannière vaut mieux que rien.
  *
- * `bring_stopped` est un push SILENCIEUX sans titre : un iOS l'ignore s'il ne le connaît pas (aucun plancher utile,
- * toute version lisible), mais un ancien Android natif rendrait une bannière VIDE. Il ne part donc vers Android
+ * `bring_stopped` remplace sur iOS la bannière de la sonnerie (alerte passive, même `collapse-id`) : TOUT jeton iOS
+ * la reçoit, version lisible ou non (`ANY_VERSION`). Sur Android c'est un data-only sans titre, qu'un ancien
+ * Android natif rendrait en bannière VIDE. Il ne part donc vers Android
  * qu'à partir de la version qui l'arrête (sous-lot `proche-bring@android`, qui pose ici son plancher).
  */
 const BRING_STOPPED_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
-  ios: '0.0.0', 'android-native': null, 'android-shell': null, web: null,
+  ios: ANY_VERSION, 'android-native': null, 'android-shell': null, web: null,
 };
 
 /**
@@ -77,6 +81,7 @@ export function tokenRoutesPushType(
   if (byClient === undefined) return true;
   const client = pushRoutingClientOf(token);
   const floor = client === null ? null : byClient[client];
+  if (floor === ANY_VERSION) return true;
   const version = readableVersion(token.appVersion);
   if (floor === null || version === null) return false;
   return compareAppVersions(version, floor) >= 0;

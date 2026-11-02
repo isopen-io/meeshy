@@ -151,6 +151,8 @@ const f = {
   'admin.people.pref.notification.contactActivityEnabled': 'A contact coming back on Meeshy',
   'admin.people.pref.notification.gameEnabled': 'Meeshy game notification',
   'admin.people.pref.notification.gamePhotoEnabled': 'Moments to capture (game push)',
+  'admin.people.pref.notification.bringEnabled': 'Receive Brings (forced sound)',
+  'admin.people.pref.notification.talkieEnabled': 'Receive the walkie-talkie live',
   'admin.people.pref.notification.circlePublicationPost': 'Notify my circle — my posts',
   'admin.people.pref.notification.circlePublicationReel': 'Notify my circle — my reels',
   'admin.people.pref.notification.circlePublicationStory': 'Notify my circle — my stories',

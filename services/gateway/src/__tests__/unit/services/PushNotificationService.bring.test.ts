@@ -185,16 +185,27 @@ describe('PushNotificationService — le Bring (#13936)', () => {
     expect(message.data).toMatchObject({ type: 'bring', title: 'Awa fait sonner votre téléphone', stopLabel: 'Arrêter' });
   });
 
-  it('l’arrêt part en silencieux vers iOS, même sous les préférences qui coupent tout', async () => {
+  it('l’arrêt REMPLACE la bannière sur iOS — alerte passive, même collapse-id — même sous les préférences qui coupent tout', async () => {
     const svc = await service();
     mockPrisma.pushToken.findMany.mockResolvedValue([IOS]);
 
-    await svc.sendToUser(buildBringStoppedPushes({ bringId: 'b'.repeat(24), toUserId: 'u-to', reason: 'recipient' })[0]);
+    await svc.sendToUser(buildBringStoppedPushes({ bringId: 'b'.repeat(24), toUserId: 'u-to', reason: 'recipient', language: 'fr' })[0]);
 
     const note = mockApnsSend.mock.calls[0][0] as Record<string, any>;
-    expect(note.pushType).toBe('background');
-    expect(note.sound).toBeUndefined();
+    expect(note.pushType).not.toBe('background');
+    expect(note.aps['interruption-level']).toBe('passive');
+    expect(note.collapseId).toBe(`bring-${'b'.repeat(24)}`);
+    expect(note.alert).toMatchObject({ title: 'Bring arrêté' });
     expect(note.payload).toEqual({ type: 'bring_stopped', bringId: 'b'.repeat(24), reason: 'recipient' });
+  });
+
+  it('un jeton iOS SANS version déclarée reçoit aussi l’arrêt', async () => {
+    const svc = await service();
+    mockPrisma.pushToken.findMany.mockResolvedValue([{ ...IOS, appVersion: null }]);
+
+    const results = await svc.sendToUser(buildBringStoppedPushes({ bringId: 'b'.repeat(24), toUserId: 'u-to', reason: 'sender' })[0]);
+
+    expect(results).toEqual([expect.objectContaining({ success: true })]);
   });
 
   it('l’arrêt ne part PAS vers un Android natif qui ne sait pas le router : il y rendrait une bannière vide', async () => {

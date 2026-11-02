@@ -75,7 +75,7 @@ describe('le contrat du Bring', () => {
 
   it('les codes de refus sont ceux de D-3 et du quota', () => {
     expect(Object.values(BRING_ERROR_CODES).sort()).toEqual(
-      ['BRING_BLOCKED', 'BRING_NOT_ALLOWED', 'BRING_NOT_FOUND', 'BRING_QUOTA_EXCEEDED', 'BRING_UNAVAILABLE'],
+      ['BRING_BLOCKED', 'BRING_DISABLED', 'BRING_NOT_ALLOWED', 'BRING_NOT_FOUND', 'BRING_QUOTA_EXCEEDED', 'BRING_UNAVAILABLE'],
     );
     expect(BRING_PUSH_TYPES).toEqual({ RING: 'bring', STOPPED: 'bring_stopped' });
   });

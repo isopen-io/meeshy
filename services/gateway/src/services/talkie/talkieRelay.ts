@@ -121,7 +121,7 @@ export class TalkieRelay {
     this.sessions.set(session.talkieId, session);
     this.bySocket.set(socketId, session.talkieId);
 
-    this.emit(toUserId, SERVER_EVENTS.TALKIE_INCOMING, {
+    this.sendTo(toUserId, SERVER_EVENTS.TALKIE_INCOMING, {
       talkieId: session.talkieId,
       fromUserId,
       codec: session.codec,
@@ -163,7 +163,7 @@ export class TalkieRelay {
     session.bytes += size;
     session.lastSeq = parsed.data.seq;
     const data = parsed.data.data instanceof ArrayBuffer ? new Uint8Array(parsed.data.data) : parsed.data.data;
-    this.emit(session.toUserId, SERVER_EVENTS.TALKIE_CHUNK, {
+    this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_CHUNK, {
       talkieId: session.talkieId,
       fromUserId: session.fromUserId,
       seq: parsed.data.seq,
@@ -212,11 +212,11 @@ export class TalkieRelay {
       reason,
       endedAt: new Date(this.deps.now()).toISOString(),
     };
-    this.emit(session.toUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
-    if (audience === 'both') this.emit(session.fromUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
+    this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
+    if (audience === 'both') this.sendTo(session.fromUserId, SERVER_EVENTS.TALKIE_ENDED, ended);
   }
 
-  private emit(userId: string, ...args: ServerEmitArgs): void {
+  private sendTo(userId: string, ...args: ServerEmitArgs): void {
     try {
       this.deps.io?.to(ROOMS.user(userId)).emit(...args);
     } catch (error) {
