@@ -78,6 +78,7 @@ fun MeeshyApp(
     onCallLinkHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    val navigator = rememberAppNavigator(navController)
     SheetReturnEffect(navController)
     val authViewModel: AuthViewModel = hiltViewModel()
     val incomingCallViewModel: IncomingCallViewModel = hiltViewModel()
@@ -272,7 +273,7 @@ fun MeeshyApp(
             NotificationBannerHost(
                 activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
                 activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
-                onOpenConversation = { navController.navigate(Routes.chat(it)) },
+                onOpenConversation = { navigator.openConversation(it) },
                 onOpenPost = { navController.navigate(Routes.postDetail(it)) },
                 onOpenGame = { navController.navigate(GameRoutes.route(it)) },
             )

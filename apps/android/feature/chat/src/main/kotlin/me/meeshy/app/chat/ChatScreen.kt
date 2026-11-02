@@ -130,6 +130,7 @@ fun ChatScreen(
         selection = selection,
         engagement = engagement,
         downloadedFileIds = downloadedFileIds,
+        takeLandingMessageId = viewModel::takeLandingMessageId,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
