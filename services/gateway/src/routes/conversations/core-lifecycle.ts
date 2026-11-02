@@ -23,8 +23,8 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { isBlockedBetween } from '../../utils/blocking';
 import {
-  decideDirectOpening,
-  shieldedRecipients,
+  decideOpenings,
+  withoutRequestColumns,
   requestRecipientFields,
   requesterPermissionsFor,
   type DirectOpening
@@ -88,6 +88,9 @@ export function registerCreateConversationRoute(
       body: createConversationRequestSchema,
       response: {
         200: conversationResponseSchema,
+        // #14107 (audit B1) — déclarée : `fast-json-stringify` retire du fil toute
+        // colonne de ligne `Participant` que le schéma ne nomme pas.
+        201: conversationResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -277,23 +280,22 @@ export function registerCreateConversationRoute(
 
           return sendSuccess(reply, {
             ...existingDirect,
+            participants: withoutRequestColumns(existingDirect.participants),
             ...(sealed ?? {}),
             title: existingDirect.title || null
           }, { statusCode: 200 });
         }
       }
 
-      // #14107 — un tête-à-tête NEUF : direct dès Connaissance, sinon une demande
-      // dans la boîte du destinataire ; le Public n'écrit pas à un mineur (RG-21).
+      // #14107 — chaque membre nommé : direct dès Connaissance, sinon une DEMANDE
+      // dans sa boîte, dans un tête-à-tête comme dans un groupe (RG-22). Aucune
+      // issue de refus : la porte répond pareil vers un mineur (audit B2).
       const openedAt = new Date();
-      const opening: DirectOpening = type === 'direct' && uniqueParticipantIds.length === 1
-        ? await decideDirectOpening(prisma, { senderId: userId, recipientId: uniqueParticipantIds[0], now: openedAt })
+      const openings = await decideOpenings(prisma, { senderId: userId, recipientIds: uniqueParticipantIds, now: openedAt });
+      const openingOf = (participantId: string): DirectOpening => openings.get(participantId) ?? { kind: 'direct' };
+      const creatorOpening: DirectOpening = type === 'direct' && uniqueParticipantIds.length === 1
+        ? openingOf(uniqueParticipantIds[0])
         : { kind: 'direct' };
-      // Le bouclier rend la cible INTROUVABLE (404), jamais « mineure ».
-      const shielded = type === 'direct' ? new Set<string>() : await shieldedRecipients(prisma, userId, uniqueParticipantIds);
-      if (opening.kind === 'refused' || shielded.size > 0) {
-        throw createError(ErrorCode.USER_NOT_FOUND);
-      }
 
       const allUserIds = [userId, ...uniqueParticipantIds];
       const allUsers = await prisma.user.findMany({
@@ -340,7 +342,7 @@ export function registerCreateConversationRoute(
                 displayName: creatorUser?.displayName || creatorUser?.username || 'User',
                 role: 'creator',
                 language: languageByUserId.get(userId) ?? 'fr',
-                permissions: requesterPermissionsFor(opening, defaultPermissions)
+                permissions: requesterPermissionsFor(creatorOpening, defaultPermissions)
               },
               ...uniqueParticipantIds.map((participantId: string) => {
                 const pUser = userMap.get(participantId);
@@ -351,7 +353,7 @@ export function registerCreateConversationRoute(
                   role: 'member',
                   language: languageByUserId.get(participantId) ?? 'fr',
                   permissions: defaultPermissions,
-                  ...requestRecipientFields(opening, openedAt)
+                  ...requestRecipientFields(openingOf(participantId), openedAt)
                 };
               })
             ]
@@ -479,8 +481,9 @@ export function registerCreateConversationRoute(
 
           if (creator) {
             // Notifications d'invitation indépendantes : fan-out parallèle (O(1) latence).
+            // #14107 (M1) — une demande ne s'annonce pas : elle attend dans la boîte.
             await Promise.all(
-              uniqueParticipantIds.map(async (participantId) => {
+              uniqueParticipantIds.filter((participantId) => openingOf(participantId).kind === 'direct').map(async (participantId) => {
                 await notificationService.createConversationInviteNotification({
                   invitedUserId: participantId,
                   inviterId: userId,
@@ -502,6 +505,7 @@ export function registerCreateConversationRoute(
 
       return sendSuccess(reply, {
         ...conversation,
+        participants: withoutRequestColumns(conversation.participants),
         title: displayTitle
       }, { statusCode: 201 });
 

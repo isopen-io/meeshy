@@ -8,6 +8,13 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) : ici, tout membre entre directement.
+jest.mock('../../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<object>('../../../../services/messaging/messageRequests'),
+  decideOpenings: jest.fn(async () => new Map()),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: jest.fn<any>().mockResolvedValue('507f1f77bcf86cd799439011'),
 }));

@@ -11,19 +11,20 @@
  *
  * ## Les règles
  *
- * - **Direct dès Connaissance** (`dm.direct`), demande en dessous (`dm.request`).
- *   Le Public ne peut pas écrire à un mineur déclaré (bouclier de la loi, RG-21) :
- *   le refus ne dit pas pourquoi.
+ * - **Direct dès Connaissance** (`dm.direct`), demande en dessous — dans un
+ *   tête-à-tête comme dans un groupe, à la création, à l'ajout, à l'invitation et
+ *   par un lien (RG-22 : un groupe ne débloque rien).
+ * - **Aucune issue ne distingue un mineur** (audit B1, B2) : la porte répond
+ *   pareil ; le score ne part jamais sur le fil (`withoutRequestColumns`). Vers un
+ *   mineur hors Connaissance, la demande est CONTENUE en aval (RG-21) : score
+ *   plafond (rangée filtrée), aucune notification ni mention, aucun appel, et
+ *   l'expéditeur naît sans média (transferts compris).
  * - **Score de risque** (MIN-03) : âge du compte expéditeur, rafale de
  *   conversations ouvertes en 24 h, absence de communauté commune, renforcé quand
- *   le destinataire est mineur. Au-delà du seuil, la demande est FILTRÉE (rangée à
- *   part) ; elle n'est jamais supprimée.
- * - **Médias** : floutés chez le destinataire (`mediaBlurred`, servi) ; vers un
- *   mineur, FERMÉS côté serveur — l'expéditeur naît sans droit d'envoyer fichier,
- *   image, vidéo ni audio (`attachmentSendRightForMimeType` les refuse), et les
- *   retrouve à l'acceptation.
- * - **Accepter** (ou répondre) fait passer l'expéditeur au moins en Connaissance,
- *   des deux côtés (`recordLevel`), jamais plus bas qu'un lien existant.
+ *   le destinataire est mineur. Au-delà du seuil, la demande est FILTRÉE.
+ * - **Accepter** (le geste explicite) relève l'expéditeur au moins en
+ *   Connaissance des deux côtés et lui rend ses médias. **Répondre** efface la
+ *   demande sans consentement implicite (`answerMessageRequest`, audit M3).
  * - **Ignorer** = masquer pour soi (`delete-for-me`), silencieux.
  */
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
@@ -31,8 +32,8 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { isBlockedBetween } from '../../utils/blocking';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
-import { pairAccess, pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
-import { recordLevel, type UserRelationDb } from '../relations/userRelationWriter';
+import { pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
+import { recordAcquaintance, recordLevel, type UserRelationDb } from '../relations/userRelationWriter';
 
 export type MessageRequestDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'conversation'>;
 
@@ -77,76 +78,75 @@ export function messageRequestRiskScore(signals: MessageRequestRiskSignals): num
 
 export type DirectOpening =
   | { readonly kind: 'direct' }
-  | { readonly kind: 'request'; readonly risk: number; readonly recipientMinor: boolean }
-  | { readonly kind: 'refused' };
+  | { readonly kind: 'request'; readonly risk: number; readonly recipientMinor: boolean };
 
-async function riskSignals(
-  prisma: MessageRequestDb,
-  params: { readonly senderId: string; readonly recipientId: string; readonly sharesCommunity: boolean; readonly now: Date },
-): Promise<MessageRequestRiskSignals> {
-  const [people, burst] = await Promise.all([
-    prisma.user.findMany({
-      where: { id: { in: [params.senderId, params.recipientId] } },
-      select: { id: true, createdAt: true, birthDate: true },
-    }),
-    prisma.participant.count({
-      where: { userId: params.senderId, role: 'creator', joinedAt: { gte: new Date(params.now.getTime() - DAY_MS) } },
-    }),
+const DIRECT: DirectOpening = { kind: 'direct' };
+
+type SenderSignals = { readonly accountAgeHours: number | null; readonly requestsLast24h: number };
+
+async function senderSignals(prisma: MessageRequestDb, senderId: string, now: Date): Promise<SenderSignals> {
+  const [sender, burst] = await Promise.all([
+    prisma.user.findUnique({ where: { id: senderId }, select: { createdAt: true } }),
+    prisma.participant.count({ where: { userId: senderId, role: 'creator', joinedAt: { gte: new Date(now.getTime() - DAY_MS) } } }),
   ]);
-  const sender = people.find((p) => p.id === params.senderId);
-  const recipient = people.find((p) => p.id === params.recipientId);
   const createdAt = sender?.createdAt instanceof Date ? sender.createdAt : null;
-  return {
-    senderAccountAgeHours: createdAt ? (params.now.getTime() - createdAt.getTime()) / 3_600_000 : null,
-    senderRequestsLast24h: burst,
-    sharesCommunity: params.sharesCommunity,
-    recipientMinor: declaredAgeClass(recipient?.birthDate ?? null, params.now) === 'minor',
-  };
+  return { accountAgeHours: createdAt ? (now.getTime() - createdAt.getTime()) / 3_600_000 : null, requestsLast24h: burst };
 }
 
-/** À l'ouverture d'un tête-à-tête : direct, demande, ou refus (MSG-01, RG-21). */
+/**
+ * À l'entrée dans une conversation ouverte par `senderId` — un tête-à-tête, un
+ * groupe, l'ajout d'un membre (MSG-01, MSG-03, RG-22) : pour chaque destinataire,
+ * DIRECT dès Connaissance, sinon une DEMANDE dans sa boîte. Un groupe ne débloque
+ * rien : y faire entrer un inconnu pose une demande sur sa ligne.
+ *
+ * **Aucune issue de refus** (audit #14107, B2) : vers un mineur hors Connaissance,
+ * la porte se comporte exactement comme vers un majeur — mêmes lectures, même
+ * réponse. La protection s'applique EN AVAL : la demande contenue par le bouclier
+ * (`dm.request`, RG-21) a le score plafond (rangée filtrée), elle ne sonne pas,
+ * n'appelle pas, et l'expéditeur naît sans média. Le blocage reste l'affaire de
+ * l'appelant (le tête-à-tête le refuse avant d'arriver ici).
+ */
+export async function decideOpenings(
+  prisma: MessageRequestDb,
+  params: { readonly senderId: string; readonly recipientIds: readonly string[]; readonly now?: Date },
+): Promise<ReadonlyMap<string, DirectOpening>> {
+  const now = params.now ?? new Date();
+  const ids = [...new Set(params.recipientIds)].filter((id) => id && id !== params.senderId);
+  if (ids.length === 0) return new Map();
+  const among = { subjectId: params.senderId, otherIds: ids, subjectIs: 'viewer' as const, now };
+  const [direct, request, sender, recipients] = await Promise.all([
+    pairAccessAmong(prisma, { ...among, feature: 'dm.direct' }),
+    pairAccessAmong(prisma, { ...among, feature: 'dm.request' }),
+    senderSignals(prisma, params.senderId, now),
+    prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, birthDate: true } }),
+  ]);
+  const minors = new Set(recipients.filter((r) => declaredAgeClass(r.birthDate ?? null, now) === 'minor').map((r) => r.id));
+
+  return new Map(
+    ids.map((id): [string, DirectOpening] => {
+      if (direct.get(id)?.allowed === true) return [id, DIRECT];
+      const verdict = request.get(id);
+      const contained = verdict?.allowed !== true;
+      const risk = contained
+        ? RISK_CEILING
+        : messageRequestRiskScore({
+            senderAccountAgeHours: sender.accountAgeHours,
+            senderRequestsLast24h: sender.requestsLast24h,
+            sharesCommunity: verdict?.effectiveLevel === 'COMMUNITY',
+            recipientMinor: minors.has(id),
+          });
+      return [id, { kind: 'request', risk, recipientMinor: minors.has(id) }];
+    }),
+  );
+}
+
+/** {@link decideOpenings} pour UN tête-à-tête. */
 export async function decideDirectOpening(
   prisma: MessageRequestDb,
   params: { readonly senderId: string; readonly recipientId: string; readonly now?: Date },
 ): Promise<DirectOpening> {
-  const now = params.now ?? new Date();
-  const pair = { viewerId: params.senderId, targetId: params.recipientId, now };
-  const [direct, request] = await Promise.all([
-    pairAccess(prisma, { ...pair, feature: 'dm.direct' }),
-    pairAccess(prisma, { ...pair, feature: 'dm.request' }),
-  ]);
-  if (direct.allowed) return { kind: 'direct' };
-  if (!request.allowed) return { kind: 'refused' };
-
-  const signals = await riskSignals(prisma, {
-    senderId: params.senderId,
-    recipientId: params.recipientId,
-    sharesCommunity: request.effectiveLevel === 'COMMUNITY',
-    now,
-  });
-  return { kind: 'request', risk: messageRequestRiskScore(signals), recipientMinor: signals.recipientMinor };
-}
-
-/**
- * Les mineurs DÉCLARÉS que `senderId` ne peut pas atteindre (bouclier RG-21) :
- * le Public ne fait pas entrer un mineur dans un groupe, pas plus qu'il ne lui
- * écrit — un groupe ne débloque rien (RG-22). Le blocage n'en fait pas partie :
- * il garde sa propre règle, qui ne vise que le tête-à-tête. Les portes rendent
- * ces comptes comme INTROUVABLES : l'âge de la cible ne se révèle jamais.
- */
-export async function shieldedRecipients(
-  prisma: PairAccessDb,
-  senderId: string,
-  recipientIds: readonly string[],
-  now: Date = new Date(),
-): Promise<ReadonlySet<string>> {
-  const ids = [...new Set(recipientIds)].filter((id) => id && id !== senderId);
-  if (ids.length === 0) return new Set();
-  const declared = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, birthDate: true } });
-  const minors = declared.filter((u) => declaredAgeClass(u.birthDate ?? null, now) === 'minor').map((u) => u.id);
-  if (minors.length === 0) return new Set();
-  const verdicts = await pairAccessAmong(prisma, { feature: 'dm.request', subjectId: senderId, otherIds: minors, subjectIs: 'viewer', now });
-  return new Set([...verdicts].filter(([, verdict]) => !verdict.allowed && verdict.reason === 'level').map(([id]) => id));
+  const openings = await decideOpenings(prisma, { senderId: params.senderId, recipientIds: [params.recipientId], now: params.now });
+  return openings.get(params.recipientId) ?? DIRECT;
 }
 
 /** Les colonnes que la ligne `Participant` du DESTINATAIRE reçoit à l'ouverture. */
@@ -161,6 +161,18 @@ export const requesterPermissionsFor = (opening: DirectOpening, base: Readonly<P
   opening.kind === 'request' && opening.recipientMinor
     ? { ...base, canSendFiles: false, canSendImages: false, canSendVideos: false, canSendAudios: false }
     : { ...base };
+
+/**
+ * Les lignes `Participant` sans leurs colonnes de demande (audit #14107, B1) :
+ * la demande ne se sert qu'à son destinataire, par `servedMessageRequest` — une
+ * ligne remise telle quelle à quelqu'un d'autre (réponse de création, socket)
+ * porterait la date et le score, et le score dit l'âge.
+ */
+export const withoutRequestColumns = <T extends object>(rows: readonly T[]): Array<Omit<T, 'messageRequestAt' | 'messageRequestRisk'>> =>
+  rows.map((row) => {
+    const { messageRequestAt: _at, messageRequestRisk: _risk, ...rest } = row as T & { messageRequestAt?: unknown; messageRequestRisk?: unknown };
+    return rest;
+  });
 
 export type ServedMessageRequest = {
   readonly since: string;
@@ -257,4 +269,44 @@ export async function acceptMessageRequest(
     requesterParticipantId: requester.id,
     levelRaised: outcome === 'created' || outcome === 'raised',
   };
+}
+
+/**
+ * Le destinataire RÉPOND à une demande sans l'accepter d'un geste (audit #14107,
+ * M3) : un ancien client, qui ne connaît pas la boîte, reste fonctionnel — la
+ * demande s'efface (la conversation retrouve son son). Mais une réponse n'est
+ * pas un consentement :
+ * - le lien ne monte à Connaissance que si aucune baisse volontaire n'est gravée
+ *   (RG-07, `recordAcquaintance` la respecte sans condition de date) ;
+ * - un MINEUR qui répond ne fait monter aucun lien et ne rouvre aucun média :
+ *   seul le geste explicite « Accepter » le fait.
+ * L'expéditeur qui relance n'efface rien (sa ligne ne porte pas de demande).
+ */
+export async function answerMessageRequest(
+  prisma: MessageRequestDb,
+  params: { readonly conversationId: string; readonly userId: string; readonly now?: Date },
+): Promise<{ readonly answered: boolean }> {
+  const now = params.now ?? new Date();
+  const own = await prisma.participant.findFirst({
+    where: { conversationId: params.conversationId, userId: params.userId, isActive: true, messageRequestAt: { not: null } },
+    select: { id: true },
+  });
+  if (!own) return { answered: false };
+  const requester = await prisma.participant.findFirst({
+    where: { conversationId: params.conversationId, isActive: true, userId: { not: params.userId } },
+    select: { userId: true },
+  });
+  if (!requester?.userId || (await isBlockedBetween(prisma, params.userId, requester.userId))) return { answered: false };
+
+  const replier = await prisma.user.findUnique({ where: { id: params.userId }, select: { birthDate: true } });
+  if (declaredAgeClass(replier?.birthDate ?? null, now) !== 'minor') {
+    await recordAcquaintance(prisma as unknown as UserRelationDb, { userA: params.userId, userB: requester.userId, at: now });
+  }
+  const cleared = await prisma.participant.updateMany({
+    where: { id: own.id, messageRequestAt: { not: null } },
+    data: { messageRequestAt: null, messageRequestRisk: null },
+  });
+  if (cleared.count === 0) return { answered: false };
+  await prisma.conversation.updateMany({ where: { id: params.conversationId }, data: { updatedAt: now } });
+  return { answered: true };
 }

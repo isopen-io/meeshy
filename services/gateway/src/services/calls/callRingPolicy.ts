@@ -58,9 +58,14 @@ export async function assertDirectCalleeReachable(
 ): Promise<void> {
   const members = await prisma.participant.findMany({
     where: { conversationId: input.conversationId, isActive: true, userId: { not: null } },
-    select: { userId: true },
+    select: { userId: true, messageRequestAt: true },
   });
   const calleeUserIds = members.flatMap((m) => (m.userId ? [m.userId] : []));
+  // #14107 (audit M2) — l'expéditeur d'une demande en attente ne fait pas sonner son
+  // destinataire, quel que soit `acceptCallsFromNonContacts` : même refus qu'un non-contact.
+  if (members.some((m) => m.userId !== input.callerUserId && m.messageRequestAt instanceof Date)) {
+    throw new Error(`${CALL_ERROR_CODES.CALLEE_REFUSES_NON_CONTACTS}: This person only accepts calls from their contacts`);
+  }
   const { refused } = await partitionRingableCallees(prisma, {
     callerUserId: input.callerUserId,
     calleeUserIds,

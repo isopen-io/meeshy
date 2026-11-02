@@ -1647,7 +1647,7 @@
       }
     },
     {
-      "id": "dm-request-community-adult-to-minor-allowed",
+      "id": "dm-request-community-adult-to-minor-still-shielded",
       "matrix": "Bouclier des mineurs",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1662,7 +1662,7 @@
         "feature": "dm.request"
       },
       "expected": {
-        "allowed": true,
+        "allowed": false,
         "effectiveLevel": "COMMUNITY",
         "reason": "level",
         "requiresConsent": false
@@ -1862,6 +1862,28 @@
       "expected": {
         "allowed": false,
         "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "dm-request-acquaintance-adult-to-minor-allowed",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "dm.request"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "ACQUAINTANCE",
         "reason": "level",
         "requiresConsent": false
       }

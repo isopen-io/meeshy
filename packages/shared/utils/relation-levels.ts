@@ -134,14 +134,18 @@ export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<
  * minimum de la matrice, ne l'abaisse jamais. Un âge inconnu n'est pas un
  * mineur ici : sans date de naissance, personne ne serait joignable.
  *
- * - `dm.request` : un message privé du Public vers un mineur est BLOQUÉ (MSG-01,
- *   RG-21) — dès la Communauté, il passe par la boîte de demandes.
+ * - `dm.request` : une demande de message d'un inconnu vers un mineur est
+ *   CONTENUE (MSG-01, RG-21) tant qu'ils ne sont pas Connaissance — la porte
+ *   répond comme pour un majeur (aucune issue ne distingue un mineur), et la
+ *   demande est rangée filtrée, sans média, sans son, sans appel. Une
+ *   communauté commune n'y suffit pas : n'importe quel membre peut en fabriquer
+ *   une (audit #14107, B3).
  *
  * Le refus rend `reason: 'level'`, jamais `'minor'` : le dire apprendrait à un
  * inconnu l'âge de la personne qu'il cherche à joindre.
  */
 export const RELATION_MINOR_TARGET_MIN_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
-  'dm.request': 'COMMUNITY',
+  'dm.request': 'ACQUAINTANCE',
 };
 
 /** Les seules features qu'un ADMIN/BIGBOSS lit sans lien (loi du 2026-08-25). */

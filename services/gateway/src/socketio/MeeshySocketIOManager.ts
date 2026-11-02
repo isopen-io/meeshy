@@ -103,7 +103,7 @@ import { socketIoCorsOrigin } from '../config/cors-origins';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { handleAgentResponse, type AgentResponsePayload } from './agent-response-bridge';
-import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
+import { MentionService, resolveUsernamesToIds, withoutPendingMessageRequests } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
@@ -3076,7 +3076,7 @@ export class MeeshySocketIOManager {
       const mentionUsernames = (message.validatedMentions ?? []) as unknown as string[];
       if (mentionUsernames.length > 0) {
         try {
-          const mentionedUserIds = await resolveUsernamesToIds(this.prisma, mentionUsernames);
+          const mentionedUserIds = await withoutPendingMessageRequests(this.prisma, normalizedId, await resolveUsernamesToIds(this.prisma, mentionUsernames));
           for (const targetUserId of mentionedUserIds) {
             if (targetUserId && targetUserId !== resolvedSenderId) {
               this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {

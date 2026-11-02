@@ -1,4 +1,4 @@
-import { shieldedRecipients } from '../../services/messaging/messageRequests';
+import { decideDirectOpening, requestRecipientFields } from '../../services/messaging/messageRequests';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -253,8 +253,9 @@ export function registerParticipantWriteRoutes(
 
     const userToAdd = await prisma.user.findFirst({ where: { id: userId } });
     if (!userToAdd) return { userId, outcome: 'not-found' };
-    // #14107 (RG-21, RG-22) — le Public ne fait pas entrer un mineur dans un groupe : introuvable.
-    if (currentUserId && (await shieldedRecipients(prisma, currentUserId, [userId])).has(userId)) return { userId, outcome: 'not-found' };
+    // #14107 (MSG-03, RG-22) — un groupe ne débloque rien : un membre ajouté par
+    // quelqu'un qui n'est pas au moins sa Connaissance entre par sa boîte de demandes.
+    const opening = currentUserId ? await decideDirectOpening(prisma, { senderId: currentUserId, recipientId: userId }) : { kind: 'direct' as const };
 
     // Le `findFirst({ isActive: true })` qui précédait ne pouvait PAS voir la
     // ligne d'un banni (bannir écrit `isActive: false`) : le `create` lui
@@ -289,7 +290,8 @@ export function registerParticipantWriteRoutes(
       // trancher « quelle langue pour un compte sans AUCUNE préférence ? » est
       // un arbitrage produit, pas un correctif de Prisme.
       language: recipientLanguage(userToAdd, 'en'),
-      permissions: { ...NEW_MEMBER_PERMISSIONS }
+      permissions: { ...NEW_MEMBER_PERMISSIONS },
+      ...requestRecipientFields(opening, new Date())
     };
 
     // Partagé par l'écriture et l'emit, comme `leftAt` sur le chemin du

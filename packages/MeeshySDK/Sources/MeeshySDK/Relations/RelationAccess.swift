@@ -111,7 +111,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// `nil` = la feature n'est pas bouclée.
     public var minorTargetMinimum: RelationLevel? {
         switch self {
-        case .dmRequest: return .community
+        case .dmRequest: return .acquaintance
         default: return nil
         }
     }
