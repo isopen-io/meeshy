@@ -18,6 +18,8 @@ import { accountReaderKeyOf } from '../../../services/posts/readerKey';
 import { sharedTranslationRow, sharedTranslationTable } from '../../helpers/shared-translation-table';
 import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
 import { matchesMongoWhere } from '../../helpers/mongo-where';
+import { relationStore } from '../../helpers/user-relation-store';
+import { niveauEffectifUniforme } from '../../../services/friendship';
 
 jest.mock('../../../utils/password-hash', () => ({
   hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
@@ -32,6 +34,7 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     relationFeatureSetting: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    friendRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
     ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
@@ -302,6 +305,68 @@ describe('purgeAccountIsolatedData — liens de proximité', () => {
 
     expect(relationFeatureSetting.rows.map((row) => row.id)).toEqual(['s3']);
     expect(summary.relationConsentsDeleted).toBe(2);
+  });
+
+  it("audit #14448 M1 — sa demande ACCEPTÉE ne refait pas de lui un Ami, et ses demandes en attente quittent la boîte de l'autre", async () => {
+    const at = new Date('2026-10-01T00:00:00.000Z');
+    const request = (id: string, senderId: string, receiverId: string, status: string) => ({
+      id, senderId, receiverId, status, targetLevel: 'BLOOD', message: 'coucou', createdAt: at, updatedAt: at, respondedAt: status === 'accepted' ? at : null,
+    });
+    const store = relationStore({
+      friendRequests: [
+        request('f1', USER_ID, OTHER, 'accepted'),
+        request('f2', THIRD, USER_ID, 'pending'),
+        request('f3', THIRD, OTHER, 'accepted'),
+      ],
+      relations: [{ id: 'r1', userLowId: USER_ID, userHighId: OTHER, grantedByLow: 'BLOOD', grantedByHigh: 'BLOOD', origin: 'request', transitions: [] }],
+    });
+    expect(await niveauEffectifUniforme(store.prisma as never, OTHER, USER_ID)).toBe('BLOOD');
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ ...store.prisma }), USER_ID, NO_FILES);
+
+    expect(await niveauEffectifUniforme(store.prisma as never, OTHER, USER_ID)).toBe('PUBLIC');
+    expect(store.friendRequests().map((row) => row.id)).toEqual(['f3']);
+    expect(summary.friendRequestsDeleted).toBe(2);
+  });
+});
+
+/**
+ * Audit #14448 M2 — un identifiant vide ou indéfini ne doit RIEN effacer. Pour
+ * Prisma, un champ `undefined` dans un `where` est IGNORÉ : `deleteMany({ where:
+ * { userId: undefined } })` vise toute la collection. Le double applique cette
+ * règle (`matchesMongoWhere`) : sans la garde, chaque table ci-dessous serait
+ * vidée, et le témoin le verrait.
+ */
+describe('purgeAccountIsolatedData — un identifiant illisible est refusé avant toute suppression', () => {
+  const OTHER = '507f1f77bcf86cd7994390ff';
+
+  function tableOf(rows: Array<Record<string, unknown>>) {
+    const table = {
+      rows: [...rows],
+      deleteMany: jest.fn<any>(async ({ where }: { where: Record<string, unknown> }) => {
+        const before = table.rows.length;
+        table.rows = table.rows.filter((row) => !matchesMongoWhere(row, where));
+        return { count: before - table.rows.length };
+      }),
+    };
+    return table;
+  }
+
+  it.each([undefined, null, '', '   ', 'pas-un-objectid', `${OTHER}0`])('%p : rejeté, et aucune ligne ne part', async (userId) => {
+    const userSession = tableOf([{ id: 'u1', userId: OTHER }]);
+    const userRelation = tableOf([{ id: 'r1', userLowId: OTHER, userHighId: USER_ID }]);
+    const prisma = fakePrisma({ userSession, userRelation });
+
+    await expect(purgeAccountIsolatedData(prisma, userId as never, NO_FILES)).rejects.toThrow('INVALID_USER_ID');
+
+    expect(userSession.rows).toHaveLength(1);
+    expect(userRelation.rows).toHaveLength(1);
+    expect(userSession.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.notification.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('le double lit `undefined` comme Prisma : le champ est ignoré, la clause vise toutes les lignes', () => {
+    expect(matchesMongoWhere({ userId: OTHER }, { userId: undefined })).toBe(true);
   });
 });
 
