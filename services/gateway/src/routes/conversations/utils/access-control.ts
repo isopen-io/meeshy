@@ -95,7 +95,7 @@ export async function resolveCallerParticipant(
   if (participantId) {
     return prisma.participant.findFirst({
       where: { id: participantId, conversationId, ...PARTICIPATION_VIVANTE },
-      select: { id: true, role: true, joinedAt: true, messageRequestAt: true, messageRequestRisk: true }
+      select: { id: true, role: true, joinedAt: true, messageRequestAt: true, messageRequestRisk: true, messageRequestFromId: true }
     });
   }
 
@@ -104,7 +104,7 @@ export async function resolveCallerParticipant(
 
   return prisma.participant.findFirst({
     where: { conversationId, userId, ...PARTICIPATION_VIVANTE },
-    select: { id: true, role: true, joinedAt: true, messageRequestAt: true, messageRequestRisk: true }
+    select: { id: true, role: true, joinedAt: true, messageRequestAt: true, messageRequestRisk: true, messageRequestFromId: true }
   });
 }
 

@@ -36,8 +36,10 @@ function rowsMatching(rows: any[], where: any) {
   });
 }
 
-async function monter() {
-  const rows: any[] = [{ id: 'p-actor', conversationId: CONV_ID, userId: ACTOR, role: 'admin', isActive: true, bannedAt: null, type: 'user', displayName: 'Demo', joinedAt: new Date('2026-01-01') }];
+const CAROL = '507f1f77bcf86cd799439044';
+
+async function monter(extra: any[] = []) {
+  const rows: any[] = [{ id: 'p-actor', conversationId: CONV_ID, userId: ACTOR, role: 'admin', isActive: true, bannedAt: null, type: 'user', displayName: 'Demo', joinedAt: new Date('2026-01-01') }, ...extra];
   const emits: Array<{ room: string; event: string; payload: unknown }> = [];
   const prisma: any = {
     conversation: {
@@ -49,7 +51,7 @@ async function monter() {
       findMany: jest.fn(async (a: any) => rowsMatching(rows, a?.where)),
       count: jest.fn(async () => 0),
       create: jest.fn(async (a: any) => { const row = { isActive: true, bannedAt: null, type: 'user', ...a?.data, id: 'p-bob' }; rows.push(row); return row; }),
-      update: jest.fn(async (a: any) => ({ id: a?.where?.id, ...a?.data })),
+      update: jest.fn(async (a: any) => ({ id: a?.where?.id, conversationId: CONV_ID, userId: BOB, ...a?.data })),
     },
     user: {
       findMany: jest.fn(async () => [{ id: BOB, birthDate: new Date('1990-01-01') }]),
@@ -97,5 +99,22 @@ describe('contre-audit #14107 — ajout d\'un inconnu dans un groupe (route)', (
     await app.close();
     const wire = JSON.stringify({ body: res.json(), emits });
     expect(wire).not.toContain('messageRequest');
+  });
+
+  it('annonce toujours l\'arrivée aux membres déjà présents : seule la personne en demande n\'est pas prévenue (audit 3, F-b)', async () => {
+    const { app, notificationService } = await monter([{ id: 'p-carol', conversationId: CONV_ID, userId: CAROL, role: 'member', isActive: true, bannedAt: null, type: 'user' }]);
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/participants`, payload: { userId: BOB } });
+    await app.close();
+    expect(notificationService.createMemberJoinedNotificationsBatch).toHaveBeenCalledWith([CAROL], expect.objectContaining({ newMemberUserId: BOB }));
+    expect(notificationService.createAddedToConversationNotification).not.toHaveBeenCalled();
+  });
+
+  it('un retour (rejoin) garde la demande que l\'ajout vient de poser : l\'état de retour ne l\'écrase pas (audit 3, M-b)', async () => {
+    const { app, prisma } = await monter([{ id: 'p-bob-old', conversationId: CONV_ID, userId: BOB, role: 'member', isActive: false, bannedAt: null, type: 'user', joinedAt: new Date('2026-01-01') }]);
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/participants`, payload: { userId: BOB } });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    const data = prisma.participant.update.mock.calls[0][0].data;
+    expect({ active: data.isActive, at: data.messageRequestAt instanceof Date, from: data.messageRequestFromId }).toEqual({ active: true, at: true, from: ACTOR });
   });
 });

@@ -61,8 +61,8 @@ export function registerMessageRequestRoutes(fastify: FastifyInstance, prisma: P
       const acceptance = await acceptMessageRequest(prisma, { conversationId, userId, now });
       if (acceptance.kind !== 'accepted') return sendSuccess(reply, { conversationId, accepted: false });
 
-      invalidateParticipantLookup(acceptance.requesterParticipantId, conversationId);
-      if (acceptance.levelRaised) {
+      if (acceptance.requesterParticipantId) invalidateParticipantLookup(acceptance.requesterParticipantId, conversationId);
+      if (acceptance.levelRaised && acceptance.requesterId) {
         emitRelationLevelRaised(relationIoOf(fastify), { userA: userId, userB: acceptance.requesterId, level: 'ACQUAINTANCE', at: now });
       }
       return sendSuccess(reply, { conversationId, accepted: true });

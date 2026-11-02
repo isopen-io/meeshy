@@ -24,6 +24,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 const USER_ID = '507f1f77bcf86cd799439001';
 const CONV_ID = '507f1f77bcf86cd799439101';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439201';
+const OTHER_ID = '507f1f77bcf86cd799439002';
 
 jest.mock('../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -141,9 +142,32 @@ describe('GET /conversations — la boîte de demandes (#14107)', () => {
     const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
     expect(res.statusCode).toBe(200);
     const row = res.json().data[0];
-    expect(row.messageRequest).toEqual({ since: REQUEST_SINCE.toISOString(), filtered: true, mediaBlurred: true });
+    expect(row.messageRequest).toEqual({ since: REQUEST_SINCE.toISOString(), filtered: true, mediaBlurred: true, answered: false });
     expect(JSON.stringify(row.participants ?? row.members ?? [])).not.toContain('messageRequest');
     await app.close();
+  });
+
+  it('une demande à laquelle le lecteur a répondu reste à accepter : hors de la boîte, « answered » (audit 3, H1)', async () => {
+    const base = makeConversation({ type: 'direct', title: null });
+    const viewerRow = { ...base.participants[0], messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: OTHER_ID };
+    const app = await buildApp(makePrisma([{ ...base, participants: [viewerRow] }]));
+    const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
+    expect(res.json().data[0].messageRequest).toEqual({ since: null, filtered: false, mediaBlurred: true, answered: true });
+    await app.close();
+  });
+
+  it('l\'ETag ne dépend pas de la demande d\'un AUTRE membre : son score ne s\'y lit pas (audit 3, F-a)', async () => {
+    const etagWhenOtherRisk = async (risk: number) => {
+      const base = makeConversation();
+      const other = { ...base.participants[0], id: '507f1f77bcf86cd799439055', userId: OTHER_ID, role: 'member', messageRequestAt: REQUEST_SINCE, messageRequestRisk: risk, messageRequestFromId: USER_ID };
+      const app = await buildApp(makePrisma([{ ...base, participants: [base.participants[0], other] }]));
+      const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
+      await app.close();
+      return res.headers.etag;
+    };
+    const [contained, ordinary] = [await etagWhenOtherRisk(100), await etagWhenOtherRisk(10)];
+    expect(contained).toBeDefined();
+    expect(contained).toBe(ordinary);
   });
 
   it('une conversation ordinaire porte messageRequest: null', async () => {
