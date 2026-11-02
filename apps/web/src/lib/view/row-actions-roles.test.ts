@@ -114,4 +114,21 @@ describe('rowMenuItems — les actions que le rôle permet', () => {
     const ids = rowMenuItems({ flags: { isPinned: false, isMuted: false, isArchived: false }, unread: false, language: 'fr', canDelete: true }).map((item) => item.id);
     expect(ids).toEqual(['pin', 'mute', 'read', 'archive', 'delete']);
   });
+
+  test('RENDRE OBSOLÈTE (#14645) : un administrateur de la conversation, en dernier, en rouge ; jamais un membre ordinaire', () => {
+    const items = rowMenuItems({
+      flags: { isPinned: false, isMuted: false, isArchived: false },
+      unread: false,
+      language: 'fr',
+      canDelete: true,
+      actions: rowConversationActions({ conversation: conversationOf({ currentUserRole: 'admin' }), viewer: viewerOf() }),
+    });
+    const last = items[items.length - 1];
+    expect(last?.id).toBe('obsolete');
+    expect(last?.label).toBe('Rendre obsolète');
+    expect(last?.destructive).toBe(true);
+    expect(idsFor(conversationOf({ currentUserRole: 'creator' }), viewerOf()).includes('obsolete')).toBe(true);
+    expect(idsFor(conversationOf({ currentUserRole: 'member' }), viewerOf()).includes('obsolete')).toBe(false);
+    expect(idsFor(conversationOf({ currentUserRole: 'admin' }), viewerOf({ hasAccount: false, isAnonymous: true, platformRole: null })).includes('obsolete')).toBe(false);
+  });
 });

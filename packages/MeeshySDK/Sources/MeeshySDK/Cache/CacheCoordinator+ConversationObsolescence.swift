@@ -10,11 +10,10 @@ extension CacheCoordinator {
     /// médias partent avec elle — rien de ce contenu ne survit sur l'appareil.
     /// Le store en mémoire est vidé par `ConversationStoreSocketBridge`.
     func subscribeToConversationObsolescence() {
+        let lane = OrderedEventLane()
+        lane.store(in: &cancellables)
         messageSocket.conversationObsoleted
-            .sink { [weak self] event in
-                guard let self else { return }
-                Task { await self.forgetObsoletedConversation(event.conversationId) }
-            }
+            .relay(through: lane) { [weak self] in await self?.forgetObsoletedConversation($0.conversationId) }
             .store(in: &cancellables)
     }
 

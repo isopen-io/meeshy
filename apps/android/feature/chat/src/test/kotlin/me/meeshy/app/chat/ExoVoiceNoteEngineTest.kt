@@ -12,6 +12,7 @@ import com.google.common.truth.Truth.assertThat
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.URI
+import java.nio.ByteBuffer
 import java.time.Duration
 import java.util.UUID
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
@@ -81,8 +82,19 @@ class ExoVoiceNoteEngineTest {
         )
         ShadowMediaCodec.addDecoder(
             name,
-            ShadowMediaCodec.CodecConfig(CODEC_BUFFER_BYTES, CODEC_BUFFER_BYTES) { input, output -> output.put(input) },
+            ShadowMediaCodec.CodecConfig(CODEC_BUFFER_BYTES, CODEC_BUFFER_BYTES, ::decodeWholeFrames),
         )
+    }
+
+    /**
+     * Le décodeur factice rend des trames PCM ENTIÈRES, comme un vrai décodeur : depuis Media3 1.10, la rampe de volume
+     * de la reprise lit la sortie échantillon par échantillon, et une trame tronquée y lève un BufferUnderflowException.
+     */
+    private fun decodeWholeFrames(input: ByteBuffer, output: ByteBuffer) {
+        val whole = input.remaining() / PCM_FRAME_BYTES * PCM_FRAME_BYTES
+        val frames = input.duplicate().apply { limit(position() + whole) }
+        output.put(frames)
+        input.position(input.position() + whole)
     }
 
     private fun leased(log: LeaseLog) = VoiceNoteSources { url ->
@@ -242,5 +254,8 @@ class ExoVoiceNoteEngineTest {
 
     private companion object {
         const val CODEC_BUFFER_BYTES = 64 * 1024
+
+        /** Le plus grand échantillon multicanal que le moteur puisse sortir ici : deux canaux en flottant 32 bits. */
+        const val PCM_FRAME_BYTES = 8
     }
 }

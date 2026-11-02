@@ -83,7 +83,7 @@ class ConversationEncryptionRepositoryTest {
 
     @Test
     fun `this phone is an encrypted device and asks the gateway for end to end`() = runTest {
-        val api = FakeApi()
+        val api = FakeApi(enable = { served("e2ee") })
 
         repository(api).enable("c1", ConversationEncryptionModeChoice.E2EE)
 

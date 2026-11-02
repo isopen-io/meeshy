@@ -278,6 +278,29 @@ describe('ConversationDetailsSheet — quitter et supprimer (#7837, #7285)', () 
     expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete']);
   });
 
+  test('RENDRE OBSOLÈTE (#14645) : offert à l’administrateur de la conversation, en bas, après la suppression ; il DEMANDE le geste', async () => {
+    const asked: DepartureKind[] = [];
+    await monteFeuille({
+      conversation: conversation({ currentUserRole: 'admin' }),
+      replies: { [MEMBERS]: 'pending' },
+      onRequestDeparture: (kind) => asked.push(kind),
+    });
+    await settle();
+    expect(departures().map((b) => [b.dataset.conversationDeparture, b.textContent])).toEqual([
+      ['leave', 'Quitter'],
+      ['delete', 'Supprimer pour moi'],
+      ['obsolete', 'Rendre obsolète'],
+    ]);
+    act(() => departures()[2]?.click());
+    expect(asked).toEqual(['obsolete']);
+  });
+
+  test('un modérateur ne rend pas obsolète', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' }, onRequestDeparture: () => {} });
+    await settle();
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['leave', 'delete']);
+  });
+
   test('sans hôte qui sache partir (visiteur sans compte), aucun geste n’est rendu', async () => {
     await monteFeuille({ replies: { [MEMBERS]: 'pending' } });
     expect(departures()).toEqual([]);

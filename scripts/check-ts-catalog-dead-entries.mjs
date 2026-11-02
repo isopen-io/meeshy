@@ -527,8 +527,6 @@ const PENDING_CLIENT_ENTRIES = {
   'lens.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — la file de vérification de la console' },
   'lens.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — vérifier l’état vu' },
   'lens.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — retirer une vérification' },
-  // #14643 — rendre une conversation obsolète : la passerelle sert la route, le geste web et iOS suivent.
-  'conversations.byIdObsolete': { issue: 14643, reason: 'DELETE /conversations/:id/obsolete — le geste « rendre obsolète » des clients' },
   // Le Bring et les réglages par personne (#13936, servis par la PR #14441) : le sous-lot web
   // `proche-bring@web` les appellera (bouton, compteur, blocage par personne).
   'bring.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot web' },

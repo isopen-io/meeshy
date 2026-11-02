@@ -135,7 +135,7 @@ struct NewConversationView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(theme.textPrimary.opacity(MeeshyOpacity.faint)))
                     .frame(minWidth: 44, minHeight: 44)
@@ -148,7 +148,7 @@ struct NewConversationView: View {
 
             Text(String(localized: "conversation.new.title", defaultValue: "Nouvelle conversation"))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
@@ -167,7 +167,7 @@ struct NewConversationView: View {
                     } else {
                         Text(String(localized: "common.create", defaultValue: "Créer"))
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
-                            .foregroundColor(MeeshyColors.indigo400)
+                            .foregroundStyle(MeeshyColors.indigo400)
                     }
                 }
                 .disabled(viewModel.isCreating || !canCreate)
@@ -186,12 +186,12 @@ struct NewConversationView: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "person.3.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo600)
+                .foregroundStyle(MeeshyColors.indigo600)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "conversation.new.group-name.required", defaultValue: "Nom du groupe (obligatoire)", bundle: .main), text: $groupTitle)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityIdentifier("new-conversation-group-title")
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -221,25 +221,25 @@ struct NewConversationView: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "person.3.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(MeeshyColors.indigo400.opacity(0.12)))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(String(localized: "conversation.new.group.toggle", defaultValue: "Nouveau groupe", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     if groupRequested && selectedUsers.isEmpty {
                         Text(String(localized: "conversation.new.group.solo-hint", defaultValue: "Vous pouvez le créer seul, pour un audit ou pour recueillir des avis, et inviter plus tard.", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: MeeshySpacing.sm)
                 Image(systemName: isGroupMode ? "checkmark.circle.fill" : "circle")
                     .font(MeeshyFont.relative(MeeshyIconSize.xl))
-                    .foregroundColor(isGroupMode ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                    .foregroundStyle(isGroupMode ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
                     .accessibilityHidden(true)
             }
             .frame(minHeight: 44)
@@ -289,7 +289,7 @@ struct NewConversationView: View {
 
             Text(user.displayName ?? user.username)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(1)
 
             Button {
@@ -300,7 +300,7 @@ struct NewConversationView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "accessibility.remove_selected_user", bundle: .main))
         }
@@ -323,12 +323,12 @@ struct NewConversationView: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "conversation.new.search-placeholder", defaultValue: "Rechercher un utilisateur…"), text: $searchQuery)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 
@@ -342,7 +342,7 @@ struct NewConversationView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "accessibility.clear_search", bundle: .main))
             }
@@ -402,19 +402,19 @@ struct NewConversationView: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "lock.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityHidden(true)
                 Text(String(localized: "conversation.encryption.create.header", defaultValue: "Chiffrement", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer(minLength: MeeshySpacing.sm)
                 Text(selectedMode.label)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .rotationEffect(.degrees(showsEncryptionOptions ? 180 : 0))
                     .accessibilityHidden(true)
             }
@@ -457,12 +457,12 @@ struct NewConversationView: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "person.slash")
                 .font(MeeshyFont.relative(36))
-                .foregroundColor(theme.textMuted.opacity(0.5))
+                .foregroundStyle(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
 
             Text(String(localized: "conversation.new.no-user-found", defaultValue: "Aucun utilisateur trouvé"))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
@@ -491,7 +491,7 @@ struct NewConversationView: View {
         HStack {
             Text(String(localized: "new_conversation.contacts.section", defaultValue: "Vos contacts", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .textCase(.uppercase)
             Spacer()
         }
@@ -536,16 +536,16 @@ struct NewConversationView: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "person.2")
                 .font(MeeshyFont.relative(36))
-                .foregroundColor(theme.textMuted.opacity(0.5))
+                .foregroundStyle(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
 
             Text(String(localized: "new_conversation.contacts.empty.title", defaultValue: "Aucun contact", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text(String(localized: "new_conversation.contacts.empty.subtitle", defaultValue: "Recherchez un utilisateur pour démarrer une conversation.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -590,11 +590,11 @@ struct NewConversationView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(user.displayName ?? user.username)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Text("@\(user.username)")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
@@ -602,17 +602,17 @@ struct NewConversationView: View {
                 if isBlocked {
                     Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.error.opacity(0.8))
+                        .foregroundStyle(MeeshyColors.error.opacity(0.8))
                     Image(systemName: "hand.raised.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.md))
-                        .foregroundColor(MeeshyColors.error.opacity(0.7))
+                        .foregroundStyle(MeeshyColors.error.opacity(0.7))
                         .accessibilityHidden(true)
                 } else {
                     // Selection state is conveyed to VoiceOver by the row's
                     // `.isSelected` trait below; the glyph itself is decorative.
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(MeeshyFont.relative(MeeshyIconSize.xl))
-                        .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                        .foregroundStyle(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
                         .accessibilityHidden(true)
                 }
             }
