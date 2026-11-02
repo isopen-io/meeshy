@@ -100,6 +100,10 @@
     <string name="notification_date_minutes">%1$d Min.</string>
     <string name="notification_date_now">gerade eben</string>
     <string name="notification_date_yesterdayAt">gestern %1$s</string>
+    <string name="post_daily_limit_comment">Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Funken: Ab %1$s kannst du wieder kommentieren.</string>
+    <string name="post_daily_limit_comment_untimed">Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Funken.</string>
+    <string name="post_daily_limit_reaction">Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Funken: Ab %1$s kannst du wieder reagieren.</string>
+    <string name="post_daily_limit_reaction_untimed">Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Funken.</string>
     <string name="presence_away">Abwesend</string>
     <string name="presence_here">Im Gespräch</string>
     <string name="presence_idle">Inaktiv</string>
