@@ -3,6 +3,7 @@ package me.meeshy.app.reels
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
@@ -43,6 +44,10 @@ data class ReelPresentation(
     val isLiked: Boolean,
     val commentCount: Int,
     val repostCount: Int,
+    /** Le lecteur a republié ce réel — servi par la passerelle, ou posé au geste en attendant sa réponse (#14456). */
+    val isReposted: Boolean = false,
+    /** Le réel que celui-ci republie : « Republier » vise l'original (iOS `originalRepostOfId ?? repostOfId ?? id`). */
+    val repostOf: ApiRepostOf? = null,
     val isBookmarked: Boolean,
     val bookmarkCount: Int,
     /** Les envois du réel (iOS `reel.shareCount`), compte d'« Envoyer » au rail. */
@@ -109,6 +114,8 @@ object ReelBuilder {
                     isLiked = post.isLikedByMe == true,
                     commentCount = post.commentCount ?: 0,
                     repostCount = post.repostCount ?: 0,
+                    isReposted = post.isRepostedByMe == true,
+                    repostOf = post.repostOf,
                     isBookmarked = post.isBookmarkedByMe == true,
                     bookmarkCount = post.bookmarkCount ?: 0,
                     shareCount = post.shareCount ?: 0,
