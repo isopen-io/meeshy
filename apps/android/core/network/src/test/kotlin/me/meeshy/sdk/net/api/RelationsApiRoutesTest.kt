@@ -2,6 +2,10 @@ package me.meeshy.sdk.net.api
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.relation.RelationLevel
+import me.meeshy.sdk.model.relation.RelationRitualBody
+import me.meeshy.sdk.model.relation.RelationRitualConsents
+import me.meeshy.sdk.model.relation.RelationRitualPhase
 import org.junit.Test
 
 /** L'appel du niveau de lien, tel qu'il part — requête capturée derrière le vrai Retrofit. */
@@ -28,5 +32,63 @@ class RelationsApiRoutesTest {
         )
 
         assertThat(http.serve(RelationsApi::class.java).byUserId("u").data!!.effectiveLevel).isEqualTo("FRIEND")
+    }
+
+    @Test
+    fun `mes cercles appellent relations et lisent chaque lien`() = runTest {
+        val http = RecordingHttp(
+            responseBody = """{"success":true,"data":[{"userId":"u","effectiveLevel":"FRIEND","grantedByMe":"FRIEND",
+                "since":null,"progress":{"activeWeeks":2,"needed":4,"missing":[]},"eligibleFor":null}]}""",
+        )
+
+        val served = http.serve(RelationsApi::class.java).links().data!!.single().toLink()
+
+        assertThat(http.only.method).isEqualTo("GET")
+        assertThat(http.only.path).isEqualTo("/api/v1/relations")
+        assertThat(served.effectiveLevel).isEqualTo(RelationLevel.FRIEND)
+        assertThat(served.progress.needed).isEqualTo(4)
+    }
+
+    @Test
+    fun `la table des cercles appelle relations config`() = runTest {
+        val http = RecordingHttp(
+            responseBody = """{"success":true,"data":{"levels":[{"level":"CLOSE","labelKey":"relation.level.close","icon":"🔥",
+                "labels":{"fr":"Proche","en":"Close","pt-BR":"Próximo"}}],"thresholds":{"close.activeWeeks":4},"features":{}}}""",
+        )
+
+        val config = http.serve(RelationsApi::class.java).config().data!!
+
+        assertThat(http.only.path).isEqualTo("/api/v1/relations/config")
+        assertThat(config.label(RelationLevel.CLOSE, "fr")).isEqualTo("Proche")
+        assertThat(config.icon(RelationLevel.CLOSE)).isEqualTo("🔥")
+        assertThat(config.label(RelationLevel.CLOSE, "pt")).isEqualTo("Próximo")
+        assertThat(config.label(RelationLevel.BLOOD, "fr")).isNull()
+    }
+
+    @Test
+    fun `ouvrir le rituel n'envoie ni jeton ni consentement`() = runTest {
+        val http = RecordingHttp(responseBody = """{"success":true,"data":{"token":"t","holdWindowMs":15000}}""")
+
+        val step = http.serve(RelationsApi::class.java)
+            .ritual("u", RelationRitualBody(phase = RelationRitualPhase.START.wire)).data!!
+
+        assertThat(http.only.method).isEqualTo("POST")
+        assertThat(http.only.path).isEqualTo("/api/v1/relations/u/ritual")
+        assertThat(http.only.body).isEqualTo("""{"phase":"start"}""")
+        assertThat(step.token).isEqualTo("t")
+        assertThat(step.holdWindowMs).isEqualTo(15000L)
+    }
+
+    @Test
+    fun `sceller envoie le jeton et les quatre consentements explicites`() = runTest {
+        val http = RecordingHttp(responseBody = """{"success":true,"data":{"completed":true,"level":"BLOOD"}}""")
+        val consents = RelationRitualConsents.ALL_REFUSED.copy(listeningTitle = true)
+
+        http.serve(RelationsApi::class.java)
+            .ritual("u", RelationRitualBody(phase = RelationRitualPhase.CONFIRM.wire, token = "t", consents = consents))
+
+        assertThat(http.only.body).isEqualTo(
+            """{"phase":"confirm","token":"t","consents":{"listeningTitle":true,"locationLive":false,"locationHistory":false,"locationProximity":false}}""",
+        )
     }
 }

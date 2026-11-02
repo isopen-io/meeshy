@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-0tzqfi` |
+| Branche de travail de la session courante | `claude/practical-fermat-js1tyc` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -42,7 +42,17 @@ normal.
 | **75w** | 2026-10-24 | `claude/practical-fermat-o9iiqc` | [#12599](https://github.com/isopen-io/meeshy/pull/12599) → `dev` | ✅ mergé |
 | **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | [#12925](https://github.com/isopen-io/meeshy/pull/12925) → `dev` | ✅ mergé |
 | **77w** | 2026-10-31 | `claude/practical-fermat-95xnj5` | → `dev` | ✅ mergé |
-| **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | → `dev` | ⏳ ouverte |
+| **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | [#14198](https://github.com/isopen-io/meeshy/pull/14198) → `dev` | ✅ mergé |
+| **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ⏳ ouverte |
+
+**79w** — i18n / Prisme UI : la pastille d'état « En pause » de la visionneuse vidéo
+(`components/viewer-video-page.tsx`) était écrite EN DUR en français — un texte VISIBLE
+À L'ÉCRAN dans toutes les langues sauf le français, alors que le bouton central voisin
+du même composant servait déjà `translate(language, 'media.video.pause')`. Site unique
+désormais : la clé `media.video.paused` ×7 langues (voisine de `media.video.pause`) +
+`translate` + marqueur `data-viewer-paused-badge` ; témoin `viewer-video-paused-i18n.test.tsx`
+(RED→GREEN). Housekeeping : 78w confirmée mergée (#14198) ; appariement analyses↔plans
+1:1 revérifié (45w→78w). Analyse : `docs/analyses/uiux/2026-11-02-iteration-79w.md`.
 
 **78w** — a11y / i18n : les noms accessibles des pastilles de palier (`TierDots`,
 `routes/progression-parts.tsx`) étaient écrits EN DUR en français — un lecteur d'écran
@@ -88,6 +98,6 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **79w**
-Revue fraîche `apps/web` — voir les pistes 79w+ en pied de
-`docs/analyses/uiux/2026-11-01-iteration-78w.md`.
+## Prochaine itération : **80w**
+Revue fraîche `apps/web` — voir les pistes 80w+ en pied de
+`docs/analyses/uiux/2026-11-02-iteration-79w.md`.
