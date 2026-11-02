@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.SceneMotion
 import me.meeshy.sdk.model.SceneShape
 import me.meeshy.sdk.model.card.PostCommentCardPost
+import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.resolvedLayout
@@ -122,6 +123,8 @@ data class FeedPostPresentation(
     val reelAspect: Float = ReelCoverResolver.cardAspect(null, null),
     /** Les scènes d'un post composé sur la scène, peintes à la place de [images] ; `null` pour tout autre post. */
     val scenes: FeedPostScenes? = null,
+    /** Ce qu'« Imager » rend (#14329) : les scènes d'un post à scène, la scène d'un réel composé ; `null` : aucune entrée. */
+    val imagerScenes: PostImagerScenes? = null,
     /** Le post tel qu'« Imager » un de ses commentaires le met en tête (#13922) : son texte servi, son audience, ses médias. */
     val commentCardSupport: PostCommentCardPost? = null,
     /** Les premiers commentaires que la carte montre sous ses actions (#14314) ; `null` : aucun à montrer. */
@@ -193,6 +196,21 @@ object FeedPostBuilder {
         val activeCode = resolveActiveCode(post, preferences, activeLanguageCode)
         val activeIsOriginal = activeCode == null || activeCode == originalCode
         val content = resolveContent(post, preferences, activeCode, activeIsOriginal)
+        val scenes = if (isReel) null else post.sceneItems()?.let { read ->
+            val documents = PostSceneFrames.documents(post.storyEffects, read.items)
+            FeedPostScenes(
+                items = read.items,
+                layout = read.layout,
+                accentHex = post.author.storyAccentHex(),
+                captions = PostSceneCaptions.of(read.items, media),
+                offersSound = PostSceneSound.offers(read.items),
+                frames = PostSceneFrames.of(documents),
+                carrierText = content.trim().takeIf(String::isNotEmpty),
+                moving = documents.map(SceneMotion::isCinematic),
+                soundCredit = PostSceneSound.credit(read.items, post.storyEffects?.canvas?.sound),
+            )
+        }
+        val composedReel = if (isReel) post.toStoryItem().takeIf { it.storyEffects.composesScene() } else null
         return FeedPostPresentation(
             id = post.id,
             authorId = post.author?.id,
@@ -234,20 +252,8 @@ object FeedPostBuilder {
             languageExplorer = PostLanguageExplorerBuilder.build(post, preferences, activeCode),
             reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia, post.authorAccentHex()) { post.toStoryItem() } else null,
             reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
-            scenes = if (isReel) null else post.sceneItems()?.let { read ->
-                val documents = PostSceneFrames.documents(post.storyEffects, read.items)
-                FeedPostScenes(
-                    items = read.items,
-                    layout = read.layout,
-                    accentHex = post.author.storyAccentHex(),
-                    captions = PostSceneCaptions.of(read.items, media),
-                    offersSound = PostSceneSound.offers(read.items),
-                    frames = PostSceneFrames.of(documents),
-                    carrierText = content.trim().takeIf(String::isNotEmpty),
-                    moving = documents.map(SceneMotion::isCinematic),
-                    soundCredit = PostSceneSound.credit(read.items, post.storyEffects?.canvas?.sound),
-                )
-            },
+            scenes = scenes,
+            imagerScenes = PostImaging.of(scenes, composedReel, post.authorAccentHex()),
             commentCardSupport = CommentCardReading.support(post, content),
             commentsPreview = FeedCommentsPreviewBuilder.build(post.comments, post.commentCount ?: 0, preferences, mediaBaseUrl),
         )

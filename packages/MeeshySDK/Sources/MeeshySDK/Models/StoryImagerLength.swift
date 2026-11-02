@@ -1,5 +1,4 @@
 import Foundation
-import MeeshySDK
 
 /// Une part de la composition qu'« Imager » rend, depuis le DÉBUT : 1/4 est le
 /// premier quart, 4/4 le tout.

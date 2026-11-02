@@ -168,6 +168,7 @@ internal fun ReelPostCard(
                 onReport = onReport,
                 onDelete = onDelete,
                 tint = MeeshyPalette.White,
+                onImager = rememberPostImager(post),
             )
         }
     }

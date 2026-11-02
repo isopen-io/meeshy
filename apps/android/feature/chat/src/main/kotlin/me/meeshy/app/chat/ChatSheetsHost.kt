@@ -25,7 +25,9 @@ import androidx.compose.ui.res.stringResource
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.app.chat.appearance.ConversationAppearanceSheet
+import me.meeshy.app.chat.export.CardDiscussion
 import me.meeshy.app.chat.export.CardExportSheet
+import me.meeshy.app.chat.export.DiscussionCardExportSheet
 import me.meeshy.app.chat.fileviewer.FileViewerHost
 import me.meeshy.app.chat.fileviewer.FileViewerRequest
 import me.meeshy.app.chat.mediahub.ConversationMediaHubContent
@@ -72,6 +74,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     val gallery = state.imageViewer
     val localRoute = rememberLocalDetailRoute()
     var exportMessageId by rememberSaveable { mutableStateOf<String?>(null) }
+    var discussionEndingAt by rememberSaveable { mutableStateOf<String?>(null) }
     if (gallery != null) {
         val relativeStrings = rememberRelativeTimeStrings()
         val galleryNow = remember(gallery) { System.currentTimeMillis() }
@@ -203,6 +206,9 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         } else {
             CardExportSheet(bubble = target, conversationTitle = state.conversationTitle, onDismiss = { exportMessageId = null })
         }
+    }
+    discussionEndingAt?.let { id ->
+        DiscussionCardExportSheet(state.messages, endingAt = id, conversationTitle = state.conversationTitle, onDismiss = { discussionEndingAt = null })
     }
 
     var fileViewer by remember { mutableStateOf<FileViewerRequest?>(null) }
@@ -539,6 +545,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 
     val forward = state.forward
     if (forward != null) {
+        val discussionEnd = remember(forward, state.messages) { CardDiscussion.offeredEnd(forward, state.messages, System.currentTimeMillis()) }
         ModalBottomSheet(
             onDismissRequest = actions.closeForward,
             containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -553,6 +560,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     onDurationChange = actions.onForwardDurationChange,
                     onSend = actions.sendForward,
                     onDismiss = actions.closeForward,
+                    onImageDiscussion = discussionEnd?.let { id -> { actions.closeForward(); discussionEndingAt = id } },
                 ),
                 modifier = Modifier.navigationBarsPadding(),
             )

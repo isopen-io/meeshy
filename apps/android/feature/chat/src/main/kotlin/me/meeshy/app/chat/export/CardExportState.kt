@@ -46,13 +46,16 @@ internal class CardExportState(
     var usage by mutableStateOf(CardUsage.read(store))
     private var renderedKey by mutableStateOf<String?>(null)
 
+    /** L'image de chaque média de la carte, chargée une fois à l'ouverture ([CardPictureLoader]) ; vide tant qu'elle charge. */
+    var pictures by mutableStateOf<Map<String, android.graphics.Bitmap>>(emptyMap())
+
     val title: String? = CardText.nonBlank(conversationTitle)
     val languages: List<CardLanguage> = source.languages
     val tabs: List<CardTab> = CardTab.offered(languages.size + 1)
 
     val subject: CardSubject? get() = source.subject(exportLanguage)
 
-    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}"
+    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}|${pictures.keys.sorted().joinToString(",")}"
     val ready: Boolean get() = rendered != null && renderedKey == renderKey
     val isDefault: Boolean get() = savedDefault == format
 
@@ -65,8 +68,9 @@ internal class CardExportState(
     suspend fun renderPreview() {
         val key = renderKey
         val input = inputFor(format)
+        val shown = pictures
         failed = false
-        val card = runCatching { withContext(Dispatchers.Default) { CardRenderer.render(input, PREVIEW_WIDTH) } }.getOrNull()
+        val card = runCatching { withContext(Dispatchers.Default) { CardRenderer.render(input, PREVIEW_WIDTH, shown) } }.getOrNull()
         if (key != renderKey) return
         if (card == null) failed = true else {
             rendered = card
@@ -106,10 +110,12 @@ internal class CardExportState(
     /** La vitrine : l'état de la carte (sans son template) nomme la clé d'une vignette. */
     fun thumbSource(store: CardThumbnailStore, subject: CardSubject): CardThumbSource {
         val neutral = format.copy(template = CardTemplates.defaultId).serialized
+        val shown = pictures
         return CardThumbSource(
             store = store,
-            keyOf = { id -> "${id.rawValue}|$neutral|${exportLanguage.orEmpty()}" },
+            keyOf = { id -> "${id.rawValue}|$neutral|${exportLanguage.orEmpty()}|${shown.keys.sorted().joinToString(",")}" },
             inputOf = { id -> inputFor(format.copy(template = id), subject) },
+            pictures = shown,
         )
     }
 

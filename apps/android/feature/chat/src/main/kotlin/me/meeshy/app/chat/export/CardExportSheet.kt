@@ -112,6 +112,31 @@ fun CommentCardExportSheet(
     CardExportSheet(source, viewModel.viewer, conversationTitle = null, onDismiss = onDismiss)
 }
 
+/**
+ * « Imager la discussion » (#14331, iOS `MessageCardDiscussion.request`) : la discussion chargée jusqu'au message choisi,
+ * dans les mots que le lecteur lit, passe par le MÊME atelier qu'un message. Rien à peindre : l'atelier se ferme.
+ */
+@Composable
+internal fun DiscussionCardExportSheet(
+    messages: List<BubbleContent>,
+    endingAt: String,
+    conversationTitle: String?,
+    onDismiss: () -> Unit,
+    viewModel: CardExportViewModel = hiltViewModel(),
+) {
+    val defaultTitle = stringResource(R.string.export_discussion_title)
+    val viewer = viewModel.viewer
+    val source = remember(endingAt) {
+        val window = CardDiscussion.window(messages, endingAt, System.currentTimeMillis())
+        CardDiscussion.subject(window, viewer, conversationTitle, defaultTitle)?.let { ComposedCardSource("discussion:$endingAt", it) }
+    }
+    if (source == null) {
+        LaunchedEffect(Unit) { onDismiss() }
+        return
+    }
+    CardExportSheet(source, viewer, conversationTitle, onDismiss)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CardExportSheet(
@@ -130,10 +155,12 @@ private fun CardExportSheet(
     }
     state.anonymousLabel = stringResource(R.string.export_card_anonymous)
     LaunchedEffect(state.renderKey) { state.renderPreview() }
+    val context = LocalContext.current
+    LaunchedEffect(source.key) { state.pictures = CardPictureLoader.load(context, subject.media) }
     val thumbnails = remember { CardThumbnailStore() }
     DisposableEffect(thumbnails) { onDispose { thumbnails.clear() } }
     val permissions = rememberPermissionFlow()
-    val thumbs = remember(state.format.copy(template = CardTemplates.defaultId), state.exportLanguage, subject) {
+    val thumbs = remember(state.format.copy(template = CardTemplates.defaultId), state.exportLanguage, subject, state.pictures) {
         state.thumbSource(thumbnails, subject)
     }
     val haptic = LocalHapticFeedback.current
@@ -269,7 +296,7 @@ private fun ActionRow(
                 state.busy = true
                 scope.launch {
                     if (permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = false)) {
-                        run({ CardOutput.saveToGallery(context, it) }, CardOutcome.GALLERY)
+                        run({ CardOutput.saveToGallery(context, it, state.pictures) }, CardOutcome.GALLERY)
                     } else {
                         finish(CardOutcome.DENIED)
                     }
@@ -282,7 +309,7 @@ private fun ActionRow(
             Text(stringResource(R.string.export_card_save), modifier = Modifier.padding(start = MeeshySpacing.sm), fontWeight = FontWeight.SemiBold)
         }
         FilledTonalButton(
-            onClick = { run({ CardOutput.share(context, it, shareTitle) }, CardOutcome.SHARED) },
+            onClick = { run({ CardOutput.share(context, it, shareTitle, state.pictures) }, CardOutcome.SHARED) },
             enabled = enabled, modifier = Modifier.weight(1f).height(50.dp), shape = CircleShape,
         ) {
             Icon(MeeshyIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp))

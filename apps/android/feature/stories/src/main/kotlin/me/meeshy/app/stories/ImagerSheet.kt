@@ -2,13 +2,16 @@ package me.meeshy.app.stories
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,6 +45,7 @@ import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import me.meeshy.sdk.model.scene.export.ImagerDecision
 import me.meeshy.sdk.model.scene.export.ImagerOffer
 import me.meeshy.sdk.model.scene.export.ImagerQuarter
+import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -139,10 +145,24 @@ private fun ImagerLengthSection(offer: ImagerOffer?, quarter: ImagerQuarter?, on
     }
 }
 
-/** La composition telle qu'elle partira : sa première scène, au repos, muette. */
+/**
+ * La composition telle qu'elle partira : sa première scène, au repos, muette, et sa légende gravée comme l'export la grave
+ * (#14346) — posée à la taille de la vidéo puis réduite à celle de l'aperçu, pour que ce qu'on voit soit ce qu'on enregistre.
+ */
 @Composable
-private fun ImagerScenePreview(scene: StorySlideView) {
-    StoryScenePlayer(slide = scene, playing = false, muted = true, loads = true, rewindWhenIdle = true, resting = true)
+internal fun ImagerScenePreview(scene: StorySlideView) {
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        StoryScenePlayer(slide = scene, playing = false, muted = true, loads = true, rewindWhenIdle = true, resting = true)
+        if (scene.text.isNotBlank()) {
+            val density = LocalDensity.current
+            val format = remember { StoryExportVideoFormat.of() }
+            val exportWidth = with(density) { format.width.toDp() }
+            val exportHeight = with(density) { format.height.toDp() }
+            Box(Modifier.requiredSize(exportWidth, exportHeight).scale(maxWidth / exportWidth)) {
+                StoryExportCaption(scene.text, Modifier.align(Alignment.BottomStart))
+            }
+        }
+    }
 }
 
 private const val PREVIEW_WIDTH_FRACTION = 0.55f

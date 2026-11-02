@@ -23,6 +23,11 @@ sealed interface CardOp {
 
     data class Dot(val x: Double, val y: Double, val radius: Double, val color: CardColor) : CardOp
 
+    /** Un média peint dans sa tuile arrondie, rogné au centre ; [overflow] > 0 y pose « +n ». */
+    data class Picture(
+        val media: CardMedia, val x: Double, val y: Double, val width: Double, val height: Double, val radius: Double, val overflow: Int = 0,
+    ) : CardOp
+
     /** Des opérations peintes ensemble, tournées de [rotation] radians autour de (cx, cy). */
     data class Group(val rotation: Double, val cx: Double, val cy: Double, val ops: List<CardOp>) : CardOp
 }
@@ -46,6 +51,7 @@ data class CardInput(
     val tilt: CardTilt = CardTilt.NONE,
     val quotedTime: String? = null,
     val replyTime: String? = null,
+    val media: List<CardMedia> = emptyList(),
 ) {
     companion object {
         /**
@@ -81,6 +87,7 @@ data class CardInput(
                 tilt = format.tilt,
                 quotedTime = if (format.showTimes) subject.quotedAtMillis?.let(formatTime) else null,
                 replyTime = if (format.showTimes) formatTime(subject.sentAtMillis) else null,
+                media = subject.media,
             )
         }
     }
