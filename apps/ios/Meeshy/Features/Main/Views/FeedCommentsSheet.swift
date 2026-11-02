@@ -587,7 +587,7 @@ struct CommentsSheetView: View {
         .commentRecentMediaScene(image: $commentRecentImageToEdit, video: $commentRecentVideoToEdit,
                                  onDone: { pick in ingestCommentRecentMedia(pick) })
         .commentSceneRetouch(attachments: $commentAttachments)
-        .commentCamera(attachments: $commentAttachments)
+        .commentMediaDoors(attachments: $commentAttachments, accentColor: accentColor)
         .adaptiveOnChange(of: commentAttachments.isEmpty) { _, isEmpty in if !isEmpty { growSheetForComposer() } }
     }
 

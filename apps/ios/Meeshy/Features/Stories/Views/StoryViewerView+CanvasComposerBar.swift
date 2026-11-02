@@ -303,10 +303,10 @@ struct StoryComposerBarView: View {
         // « Éditer » une pièce jointe : la scène du composeur (#9127). Le
         // minuteur reste en pause — la pièce en attente compte comme contenu.
         .commentSceneRetouch(attachments: $commentAttachments)
-        // La caméra (#9736) : le viseur RECOUVRE le lecteur, qui ne le sait
+        // La caméra (#9736) et le sticker (#14335) RECOUVRENT le lecteur, qui ne le sait
         // pas — le composeur s'engage d'abord, ce qui tient le minuteur.
-        .commentCamera(attachments: $commentAttachments, limit: Self.mediaLimit,
-                       onOpen: { isComposerEngaged = true })
+        .commentMediaDoors(attachments: $commentAttachments, limit: Self.mediaLimit,
+                           accentColor: composerAccent, onOpen: { isComposerEngaged = true })
         // #9743, M1 — un commentaire refusé par la file revient avec sa pièce.
         .adaptiveOnChange(of: storyDrafts[storyId ?? ""]?.refusedAt) { _, refused in
             guard refused != nil, let id = storyId, let draft = storyDrafts[id], commentAttachments.isEmpty else { return }
