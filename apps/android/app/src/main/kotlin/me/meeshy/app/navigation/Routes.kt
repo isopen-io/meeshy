@@ -199,10 +199,6 @@ object Routes {
 
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
 
-    /** Opens the story composer as a repost of [storyId] — the source id rides as an optional arg. */
-    fun storyComposerRepost(storyId: String): String =
-        "story_composer?$STORY_COMPOSER_REPOST_ARG=${Uri.encode(storyId)}"
-
     /** Rouvre la story publiée [storyId] dans le composeur : l'enregistrement la met à jour. */
     fun storyComposerEdit(storyId: String): String =
         "story_composer?$STORY_COMPOSER_EDIT_ARG=${Uri.encode(storyId)}"
