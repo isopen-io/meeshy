@@ -135,13 +135,13 @@ class ChatViewModel @Inject constructor(
      * draft restore normally.
      */
     private val initialDraft: String? = savedStateHandle.get<String>(DRAFT_ARG)
+        ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+        ?.takeIf { it.isNotBlank() }
 
     private var landingMessageId: String? = savedStateHandle.get<String>(LANDING_MESSAGE_ID_ARG)?.takeIf { it.isNotBlank() }
 
     /** The message this conversation was opened ON (route arg `messageId`), handed out ONCE: a later open or recomposition never replays the jump. */
     fun takeLandingMessageId(): String? = landingMessageId.also { landingMessageId = null }
-        ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
-        ?.takeIf { it.isNotBlank() }
 
     private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
