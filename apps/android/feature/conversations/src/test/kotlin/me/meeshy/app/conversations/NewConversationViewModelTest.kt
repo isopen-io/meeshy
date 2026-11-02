@@ -351,7 +351,7 @@ class NewConversationViewModelTest {
     }
 
     @Test
-    fun an_analyst_sees_end_to_end_soon_on_this_phone_and_server_stays_checked() = runTest(dispatcher) {
+    fun an_analyst_is_offered_end_to_end_for_a_direct_conversation_and_it_is_checked() = runTest(dispatcher) {
         val vm = viewModel(users = pickerWith("u1"), session = session(role = "ANALYST"))
         vm.onQueryChange("bob")
         advanceUntilIdle()
@@ -359,9 +359,9 @@ class NewConversationViewModelTest {
 
         val e2ee = vm.state.value.encryptionOffer.choices.last()
         assertThat(e2ee.mode).isEqualTo(CreationEncryptionMode.E2EE)
-        assertThat(e2ee.available).isFalse()
-        assertThat(e2ee.unavailability).isEqualTo(CreationEncryptionUnavailability.CLIENT_NOT_YET)
-        assertThat(vm.state.value.encryptionMode).isEqualTo(CreationEncryptionMode.SERVER)
+        assertThat(e2ee.available).isTrue()
+        assertThat(e2ee.unavailability).isNull()
+        assertThat(vm.state.value.encryptionMode).isEqualTo(CreationEncryptionMode.E2EE)
     }
 
     @Test
