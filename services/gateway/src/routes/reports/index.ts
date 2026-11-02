@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { assessReportPriority } from '../../services/reports/reportPriority';
 import { logError } from '../../utils/logger';
@@ -34,6 +35,13 @@ import { verifierCible, type TypeSignale } from './target';
  * cible : dix comptes complices tiennent chacun leur quota. `3/h
  * target:<entityId>` borne la CIBLE, et c'est le seul seuil qui protège la
  * personne signalée.
+ *
+ * Le seuil par cible se compte APRÈS la vérification de la cible, sur un
+ * signalement qui s'écrirait (#14110, audit M1), et il ne rend JAMAIS 429 : un
+ * refus distinct dirait au signalé, qui sonde son propre identifiant, qu'on l'a
+ * signalé — et trois auto-signalements refusés, comptés avant la vérification,
+ * rendaient la cible insignalable. Au-delà du seuil, le signalant reçoit le même
+ * accusé qu'un signalement accepté, et l'excédent n'est pas écrit.
  *
  * ## L'identité du signalant ne vient jamais du corps
  *
@@ -116,11 +124,17 @@ function signalant(request: FastifyRequest): { id?: string; participantId?: stri
  * elle ne le recopie pas. Une copie porterait sa propre loi, et c'est
  * exactement ce que ce lot supprime.
  */
+type Accuse = { id: string; reportedType: string; reportedEntityId: string; reportType: string; status: string; createdAt: Date };
+
+const accuse = (reply: FastifyReply, accuseDeReception: Accuse) =>
+  sendSuccess(reply, accuseDeReception, { statusCode: 201, message: 'Signalement cree avec succes' });
+
 export async function signaler(
   fastify: FastifyInstance,
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<unknown> {
+  const cible = limiteurDeCible(fastify);
   try {
     const corps = creerSchema.parse(request.body);
     const moi = signalant(request);
@@ -142,6 +156,13 @@ export async function signaler(
       });
     }
 
+    // #14110 (audit M1) — au-delà du seuil par cible, l'accusé est le même et
+    // rien ne s'écrit : l'excédent est dédoublonné en silence.
+    const surCible = await cible.consume(`target:${corps.reportedEntityId}`, 1);
+    if (surCible?.retryAfter !== undefined) {
+      return accuse(reply, { id: new ObjectId().toHexString(), reportedType: corps.reportedType, reportedEntityId: corps.reportedEntityId, reportType: corps.reportType, status: 'pending', createdAt: new Date() });
+    }
+
     const priorite = await assessReportPriority(fastify.prisma, {
       reportedType: corps.reportedType,
       reportedEntityId: corps.reportedEntityId,
@@ -161,7 +182,7 @@ export async function signaler(
     // priorité ni ses raisons (« mineur » dirait l'âge du signalé), y compris par
     // l'alias historique `/admin/reports`, qui ne déclare aucun schéma.
     const { id, reportedType, reportedEntityId, reportType, status, createdAt } = rapport;
-    return sendSuccess(reply, { id, reportedType, reportedEntityId, reportType, status, createdAt }, { statusCode: 201, message: 'Signalement cree avec succes' });
+    return accuse(reply, { id, reportedType, reportedEntityId, reportType, status, createdAt });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return sendBadRequest(reply, 'Donnees invalides');
@@ -210,22 +231,22 @@ export function limiteursDeSignalement(fastify: FastifyInstance) {
     redis
   );
 
-  const parCible = createCustomRateLimiter(
-    {
-      max: 3,
-      windowMs: UNE_HEURE,
-      keyPrefix: 'reports:target',
-      message: 'Ce contenu a deja ete signale plusieurs fois. Nos equipes l’examinent.',
-      keyGenerator: (request) => {
-        const corps = request.body as { reportedEntityId?: unknown } | null | undefined;
-        const cible = typeof corps?.reportedEntityId === 'string' ? corps.reportedEntityId : 'sans-cible';
-        return `target:${cible}`;
-      },
-    },
-    redis
-  );
+  return [parCompte.middleware(), parAdresse.middleware()];
+}
 
-  return [parCompte.middleware(), parAdresse.middleware(), parCible.middleware()];
+const limiteursDeCible = new WeakMap<FastifyInstance, ReturnType<typeof createCustomRateLimiter>>();
+
+/**
+ * Le seuil par CIBLE — compté DANS le geste, après la vérification de la cible
+ * (audit M1). Un seul par instance, partagé par les deux adresses : sans Redis,
+ * l'alias et l'adresse neuve comptent ainsi dans le même seau.
+ */
+function limiteurDeCible(fastify: FastifyInstance) {
+  const existant = limiteursDeCible.get(fastify);
+  if (existant) return existant;
+  const neuf = createCustomRateLimiter({ max: 3, windowMs: UNE_HEURE, keyPrefix: 'reports:target', message: '' }, fastify.redis ?? undefined);
+  limiteursDeCible.set(fastify, neuf);
+  return neuf;
 }
 
 export async function reportCreationRoutes(fastify: FastifyInstance) {

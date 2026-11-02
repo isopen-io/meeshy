@@ -18,7 +18,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logError: jest.fn(), logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 const createReport = jest.fn<any>();
 
@@ -397,7 +397,7 @@ describe('POST /reports — le seuil par CIBLE', () => {
     createReport.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
   });
 
-  it('laisse passer trois signalements de la même cible, refuse le quatrième', async () => {
+  it('écrit trois signalements de la même cible ; le quatrième reçoit le même accusé et n\'est pas écrit (#14110, audit M1)', async () => {
     // Aucune clé par APPELANT ne peut faire ça : dix comptes complices tiennent
     // chacun leur quota. C'est le seul seuil qui protège la personne signalée.
     const app = await buildApp();
@@ -408,8 +408,7 @@ describe('POST /reports — le seuil par CIBLE', () => {
       statuts.push(res.statusCode);
     }
 
-    expect(statuts.slice(0, 3)).toEqual([201, 201, 201]);
-    expect(statuts[3]).toBe(429);
+    expect(statuts).toEqual([201, 201, 201, 201]);
     expect(createReport).toHaveBeenCalledTimes(3);
 
     await app.close();

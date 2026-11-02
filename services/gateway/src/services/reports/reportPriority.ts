@@ -2,23 +2,31 @@
  * LA PRIORITÉ D'UN SIGNALEMENT (#14110, MIN-04) — ce qui touche un mineur, une
  * position ou un lien Sang passe en TÊTE de la file de modération.
  *
- * - **mineur** : le signalant ou la personne signalée (l'auteur du contenu, le
- *   compte visé) est un mineur DÉCLARÉ ;
+ * - **mineur** : le signalant, la personne signalée (l'auteur du contenu, le
+ *   compte visé) ou un DESTINATAIRE du contenu (les membres actifs de la
+ *   conversation d'un message ou de la conversation signalée, au plus
+ *   `AUDIENCE_SCAN_CAP`) est un mineur DÉCLARÉ (audit M2) ;
  * - **position** : le contenu signalé est un message de position ;
- * - **Sang** : signalant et signalé sont liés au niveau Sang (la loi, feature
- *   `audience.blood` dont le plancher est le Sang — aucune comparaison de niveaux
- *   n'est écrite ici).
+ * - **Sang** : signalant et signalé sont liés au Sang sur la ligne ENREGISTRÉE,
+ *   ou l'étaient il y a moins de `BLOOD_MEMORY_DAYS` jours — un blocage ou une
+ *   baisse posée avant de signaler ne l'efface pas (audit M3).
  *
  * Calculée UNE fois à la création, sur ce que la passerelle lit, jamais sur le
- * corps de la requête. Une lecture qui échoue laisse la priorité ordinaire : la
- * priorité ordonne la file, elle ne garde rien, et un signalement ne se perd pas
- * pour elle. Rien de ceci n'est servi au signalé (SEC-06).
+ * corps de la requête. Une lecture qui échoue laisse la priorité ordinaire, et
+ * le journal le dit (le seul type signalé, rien d'identifiant) : la priorité
+ * ordonne la file, elle ne garde rien, et un signalement ne se perd pas pour
+ * elle. Rien de ceci n'est servi au signalé (SEC-06).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ReportPriorityReason } from '@meeshy/shared/types/report';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
-import { pairAccess } from '../relations/pairAccess';
+import { logger } from '../../utils/logger';
+import { lienSangDepuis } from '../friendship';
 import { reportedContentAuthorId } from './reportedContentAuthor';
+
+export const AUDIENCE_SCAN_CAP = 50;
+export const BLOOD_MEMORY_DAYS = 30;
+const DAY_MS = 86_400_000;
 
 export type ReportPriority = { readonly priority: 0 | 1; readonly priorityReasons: ReportPriorityReason[] };
 
@@ -36,10 +44,29 @@ async function isLocation(prisma: PrismaClient, reportedType: string, reportedEn
   return message?.messageType === 'location';
 }
 
-async function isBloodLink(prisma: PrismaClient, reporterId: string | null, subjectId: string | null): Promise<boolean> {
+async function isBloodLink(prisma: PrismaClient, reporterId: string | null, subjectId: string | null, now: Date): Promise<boolean> {
   if (!reporterId || !subjectId || reporterId === subjectId) return false;
-  const verdict = await pairAccess(prisma, { feature: 'audience.blood', viewerId: reporterId, targetId: subjectId });
-  return verdict.allowed;
+  return lienSangDepuis(prisma, reporterId, subjectId, new Date(now.getTime() - BLOOD_MEMORY_DAYS * DAY_MS));
+}
+
+/** La conversation que le contenu signalé a pour audience : celle du message, ou la conversation elle-même. */
+async function audienceConversationId(prisma: PrismaClient, reportedType: string, reportedEntityId: string): Promise<string | null> {
+  if (reportedType === 'conversation') return reportedEntityId;
+  if (reportedType !== 'message') return null;
+  const message = await prisma.message.findUnique({ where: { id: reportedEntityId }, select: { conversationId: true } });
+  return message?.conversationId ?? null;
+}
+
+/** Les destinataires du contenu : les membres ACTIFS inscrits de sa conversation, bornés. */
+async function audienceOf(prisma: PrismaClient, reportedType: string, reportedEntityId: string): Promise<string[]> {
+  const conversationId = await audienceConversationId(prisma, reportedType, reportedEntityId);
+  if (!conversationId) return [];
+  const members = await prisma.participant.findMany({
+    where: { conversationId, isActive: true, userId: { not: null } },
+    select: { userId: true },
+    take: AUDIENCE_SCAN_CAP,
+  });
+  return members.flatMap((member) => (member.userId ? [member.userId] : []));
 }
 
 export async function assessReportPriority(
@@ -48,18 +75,22 @@ export async function assessReportPriority(
 ): Promise<ReportPriority> {
   const now = report.now ?? new Date();
   try {
-    const subjectId = await reportedContentAuthorId(prisma, report);
-    const people = [report.reporterId, subjectId].filter((id): id is string => Boolean(id));
+    const [subjectId, audience] = await Promise.all([
+      reportedContentAuthorId(prisma, report),
+      audienceOf(prisma, report.reportedType, report.reportedEntityId),
+    ]);
+    const people = [...new Set([report.reporterId, subjectId, ...audience].filter((id): id is string => Boolean(id)))];
     const [minor, location, blood] = await Promise.all([
       involvesMinor(prisma, people, now),
       isLocation(prisma, report.reportedType, report.reportedEntityId),
-      isBloodLink(prisma, report.reporterId, subjectId),
+      isBloodLink(prisma, report.reporterId, subjectId, now),
     ]);
     const reasons = ([['minor', minor], ['location', location], ['blood', blood]] as const)
       .filter(([, holds]) => holds)
       .map(([reason]) => reason);
     return reasons.length > 0 ? { priority: 1, priorityReasons: [...reasons] } : ORDINARY;
   } catch {
+    logger.warn('[reportPriority] priorité non calculée — signalement rangé parmi les ordinaires', { reportedType: report.reportedType });
     return ORDINARY;
   }
 }

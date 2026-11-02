@@ -18,7 +18,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logError: jest.fn(), logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 const createReport = jest.fn<any>();
 
@@ -42,6 +42,14 @@ const notifyCreate = jest.fn<any>();
 import { reportCreationRoutes } from '../../../routes/reports';
 import { reportRoutes } from '../../../routes/admin/reports';
 import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
+import { setSharedNotificationService } from '../../../services/notifications/notification-service-registry';
+
+/** Tout appel, sur n'importe quelle méthode, est consigné : un canal qui n'existe pas ne peut pas passer pour muet. */
+const calls: string[] = [];
+const recorder = (name: string): any => new Proxy(() => undefined, {
+  get: (_t, key) => (key === 'then' ? undefined : recorder(`${name}.${String(key)}`)),
+  apply: () => { calls.push(name); return recorder(`${name}()`); },
+});
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const MESSAGE_ID = '507f1f77bcf86cd799439012';
@@ -63,13 +71,15 @@ const base = {
   // Lignes `FriendRequest` pour la porte de signalement d'un post (#4866) —
   // le double HONORE le `where` réel d'`amitieAcceptee`, jamais un booléen.
   demandesAmitie: [] as ReadonlyArray<Record<string, unknown>>,
+  naissances: [] as ReadonlyArray<{ id: string; birthDate: Date | null }>,
+  membres: [] as ReadonlyArray<{ userId: string }>,
 };
 
 function prismaDouble() {
   return {
     message: { findUnique: async () => base.message },
-    participant: { findFirst: async () => (base.participe ? { id: 'p1' } : null) },
-    user: { findUnique: async () => base.utilisateur },
+    participant: { findFirst: async () => (base.participe ? { id: 'p1' } : null), findMany: async () => base.membres, findUnique: async () => ({ userId: '507f1f77bcf86cd799439099' }) },
+    user: { findUnique: async () => base.utilisateur, findMany: async (a: any) => base.naissances.filter((u) => a?.where?.id?.in?.includes(u.id)) },
     post: { findUnique: async () => base.post },
     postComment: { findUnique: async () => base.commentaire },
     friendRequest: { findFirst: (args?: unknown) => findFirstHonouringWhere(base.demandesAmitie)(args) },
@@ -89,6 +99,7 @@ async function buildApp(options: { role?: string; username?: string } = {}): Pro
     };
   });
   app.decorate('prisma', prismaDouble());
+  app.decorate('socketIOHandler', recorder('io'));
   await app.register(reportCreationRoutes, { prefix: '/reports' });
   await app.register(reportRoutes, { prefix: '/admin/reports' });
   await app.ready();
@@ -101,16 +112,38 @@ describe('POST /reports — signaler reste invisible, et ce qui touche un mineur
     base.message = { conversationId: CONVERSATION_ID };
     base.participe = true;
     base.utilisateur = null;
+    base.naissances = [];
+    base.membres = [];
+    calls.length = 0;
+    setSharedNotificationService(recorder('notifications'));
     createReport.mockImplementation(async (data: Record<string, unknown>) => ({
       id: 'rpt-1', status: 'pending', createdAt: new Date('2026-11-02T00:00:00Z'), ...data,
     }));
   });
 
-  it('SEC-06 : signaler n\'écrit aucune notification, pour personne', async () => {
+  it('SEC-06 : signaler n\'écrit aucune notification et n\'émet rien, pour personne — registre, socket et table observés', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS });
     expect(res.statusCode).toBe(201);
     expect(notifyCreate).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+    await app.close();
+  });
+
+  it('le registre observé SAIT rougir : un appel au service partagé est vu', async () => {
+    const { getSharedNotificationService } = await import('../../../services/notifications/notification-service-registry');
+    (getSharedNotificationService() as any).createNotification({});
+    expect(calls).toEqual(['notifications.createNotification']);
+  });
+
+  it('un message de la conversation d\'un mineur passe en tête, à travers la route (audit m2)', async () => {
+    base.message = { conversationId: CONVERSATION_ID, senderId: 'p-auteur' };
+    base.naissances = [{ id: '507f1f77bcf86cd799439088', birthDate: new Date('2012-01-01T00:00:00Z') }];
+    base.membres = [{ userId: '507f1f77bcf86cd799439099' }, { userId: '507f1f77bcf86cd799439088' }];
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS });
+    expect(res.statusCode).toBe(201);
+    expect(createReport).toHaveBeenCalledWith(expect.objectContaining({ priority: 1, priorityReasons: ['minor'] }));
     await app.close();
   });
 

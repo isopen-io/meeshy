@@ -126,20 +126,16 @@ describe('ReportService.getReportById', () => {
 // ─── listReports ──────────────────────────────────────────────────────────────
 
 describe('ReportService.listReports', () => {
-  it('queries with no filters and default pagination — the priority first (#14110, MIN-04)', async () => {
+  it('queries with no filters and default pagination — the priority tier first, oldest first (#14110, MIN-04)', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.priority ? 2 : 5));
     const svc = makeService(makePrisma({ findMany, count }));
 
     const result = await svc.listReports();
 
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: {},
-      skip: 0,
-      take: 20,
-      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
-    }));
-    expect(result).toEqual({ reports: [], total: 0 });
+    expect(findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { priority: { gte: 1 } }, orderBy: { createdAt: 'asc' }, skip: 0, take: 20 }));
+    expect(findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { NOT: { priority: { gte: 1 } } }, orderBy: { createdAt: 'desc' }, skip: 0, take: 20 }));
+    expect(result).toEqual({ reports: [], total: 5 });
   });
 
   it('applies all filter types to where clause', async () => {
@@ -195,7 +191,7 @@ describe('ReportService.listReports', () => {
 
   it('applies pagination offset and limit', async () => {
     const findMany = jest.fn().mockResolvedValue([makeReport()]);
-    const count = jest.fn().mockResolvedValue(100);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.priority ? 0 : 100));
     const svc = makeService(makePrisma({ findMany, count }));
 
     const result = await svc.listReports({}, { offset: 20, limit: 10 });
@@ -381,7 +377,7 @@ describe('ReportService.getReportsForEntity', () => {
     await svc.getReportsForEntity('message', 'entity-id');
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { reportedType: 'message', reportedEntityId: 'entity-id' },
+      where: expect.objectContaining({ reportedType: 'message', reportedEntityId: 'entity-id' }),
     }));
   });
 
@@ -390,7 +386,7 @@ describe('ReportService.getReportsForEntity', () => {
   // tranchait en memoire : c'est exactement le cout qu'on cherche a supprimer.
   it('borne la lecture dans la requete, jamais apres coup', async () => {
     const findMany = jest.fn().mockResolvedValue([makeReport()]);
-    const count = jest.fn().mockResolvedValue(4_200);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.priority ? 0 : 4_200));
     const svc = makeService(makePrisma({ findMany, count }));
 
     const result = await svc.getReportsForEntity('message', 'entity-id', 40, 20);

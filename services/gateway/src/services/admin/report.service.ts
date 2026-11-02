@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { priorityFirst } from '../reports/priorityQueue';
 import type {
   Report,
   CreateReportDTO,
@@ -94,24 +95,16 @@ export class ReportService {
       }
     }
 
-    // Déterminer l'ordre de tri
+    // #14110 (MIN-04, audit B1 et m4) — la priorité est la PREMIÈRE clé quel que
+    // soit le tri demandé ; le tri demandé ordonne les ordinaires.
     const sortBy = filters.sortBy || 'createdAt';
     const sortOrder = filters.sortOrder || 'desc';
-    // #14110 (MIN-04) — sans tri demandé, la file met en tête ce qui touche un
-    // mineur, une position ou un lien Sang ; un document antérieur (sans
-    // priorité) se range parmi les ordinaires.
-    const orderBy = filters.sortBy ? { [sortBy]: sortOrder } : [{ priority: 'desc' as const }, { [sortBy]: sortOrder }];
-
-    // Récupérer les données
-    const [reports, totalCount] = await Promise.all([
-      this.prisma.report.findMany({
-        where,
-        orderBy,
-        skip: offset,
-        take: limit
-      }),
-      this.prisma.report.count({ where })
-    ]);
+    const { rows: reports, total: totalCount } = await priorityFirst<Report>(this.prisma.report, {
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      skip: offset,
+      take: limit
+    });
 
     return {
       reports: reports as Report[],
@@ -277,17 +270,14 @@ export class ReportService {
       reportedEntityId: entityId
     };
 
-    const [reports, total] = await Promise.all([
-      this.prisma.report.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: limit
-      }),
-      this.prisma.report.count({ where })
-    ]);
+    const { rows: reports, total } = await priorityFirst<Report>(this.prisma.report, {
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit
+    });
 
-    return { reports: reports as Report[], total };
+    return { reports, total };
   }
 
   /**
@@ -329,15 +319,13 @@ export class ReportService {
   async getRecentReports(limit: number = 10): Promise<Report[]> {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const reports = await this.prisma.report.findMany({
-      where: {
-        createdAt: { gte: twentyFourHoursAgo }
-      },
+    const { rows } = await priorityFirst<Report>(this.prisma.report, {
+      where: { createdAt: { gte: twentyFourHoursAgo } },
       orderBy: { createdAt: 'desc' },
       take: limit
     });
 
-    return reports as Report[];
+    return rows;
   }
 
   /**
@@ -363,15 +351,12 @@ export class ReportService {
    * Obtenir les signalements assignés à un modérateur
    */
   async getModeratorReports(moderatorId: string): Promise<Report[]> {
-    const reports = await this.prisma.report.findMany({
-      where: {
-        moderatorId,
-        status: { in: ['under_review', 'pending'] }
-      },
+    const { rows } = await priorityFirst<Report>(this.prisma.report, {
+      where: { moderatorId, status: { in: ['under_review', 'pending'] } },
       orderBy: { createdAt: 'desc' }
     });
 
-    return reports as Report[];
+    return rows;
   }
 }
 
