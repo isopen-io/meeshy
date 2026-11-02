@@ -251,9 +251,24 @@ class ConversationRowMenuCapabilitiesTest {
     }
 
     @Test
-    fun `Global, a direct and an ended conversation are never made obsolete`() {
+    fun `Global and an ended conversation are never made obsolete`() {
         assertThat(caps(conversation(type = "global", currentUserRole = "creator"), user(role = "ADMIN")).obsolete).isFalse()
-        assertThat(caps(conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer"), user()).obsolete).isFalse()
         assertThat(caps(conversation(currentUserRole = "creator", isActive = false), user()).obsolete).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer", isActive = false), user()).obsolete).isFalse()
+    }
+
+    // ── #14653 : dans un tête-à-tête, l'un OU l'autre des deux membres le rend obsolète ──
+
+    @Test
+    fun `either member of an open direct may make it obsolete, creator or not`() {
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user()).obsolete).isTrue()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer"), user()).obsolete).isTrue()
+    }
+
+    @Test
+    fun `an anonymous or unloaded reader never makes a direct obsolete, and a group member still may not`() {
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user(isAnonymous = true)).obsolete).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), null).obsolete).isFalse()
+        assertThat(caps(conversation(type = "group", currentUserRole = "member"), user()).obsolete).isFalse()
     }
 }

@@ -117,4 +117,10 @@ class ConversationOptionsPlanTest {
         assertThat(plan(conversation(type = "group", currentUserRole = "member")).obsolete).isFalse()
         assertThat(plan(conversation(type = "group", currentUserRole = "creator"), user = null).obsolete).isFalse()
     }
+
+    @Test
+    fun `in a direct, either member is offered to make it obsolete (#14653)`() {
+        assertThat(plan(conversation(type = "direct", currentUserRole = "member")).obsolete).isTrue()
+        assertThat(plan(conversation(type = "direct", currentUserRole = "member"), user = null).obsolete).isFalse()
+    }
 }
