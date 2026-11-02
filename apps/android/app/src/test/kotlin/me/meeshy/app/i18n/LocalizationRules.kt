@@ -86,10 +86,14 @@ internal class ParsedModule private constructor(
 
 internal object LocalizationRules {
 
-    fun check(resources: ModuleResources, shippedLocales: List<String>): List<Finding> {
+    fun check(
+        resources: ModuleResources,
+        shippedLocales: List<String>,
+        legalExemptLocales: Set<String> = emptySet(),
+    ): List<Finding> {
         val module = ParsedModule.of(resources)
         return shippedLocaleFolders(module, shippedLocales) +
-            missingKeys(module) +
+            missingKeys(module, legalExemptLocales) +
             missingQuantities(module) +
             specifierMismatches(module) +
             nonPositionalSpecifiers(module) +
@@ -134,11 +138,17 @@ internal object LocalizationRules {
             }
         }
 
-    fun missingKeys(module: ParsedModule): List<Finding> {
+    // Legal texts wait for a validated legal translation: the locales listed in
+    // legal-locale-exemptions.txt fall back to English for the keys defined in values/legal.xml,
+    // and for those keys only.
+    fun missingKeys(module: ParsedModule, legalExemptLocales: Set<String> = emptySet()): List<Finding> {
         val required = module.baseEntries().values.filter { it.translatable }
+        val legalIds = module.files(LocaleFolders.BASE_FOLDER)
+            .filter { it.fileName == LEGAL_FILE }.flatMap { it.entries }.map { it.id }.toSet()
         return module.localeTags().flatMap { tag ->
             val present = module.effectiveEntries(tag).keys
-            required.filter { it.id !in present }.map { entry ->
+            val exempt = if (tag in legalExemptLocales) legalIds else emptySet()
+            required.filter { it.id !in present && it.id !in exempt }.map { entry ->
                 Finding(
                     rule = Rule.MISSING_KEY,
                     module = module.module,
@@ -280,6 +290,16 @@ internal object LocalizationRules {
     private fun localeOf(folder: String): String = LocaleFolders.parse(folder)?.tag ?: folder
 
     const val GENERATED_FILE: String = "strings_generated.xml"
+    const val LEGAL_FILE: String = "legal.xml"
+
+    fun parseLegalExemptions(lines: List<String>): Set<String> =
+        lines.map { line ->
+            val tokens = line.split(Regex("\\s+"))
+            require(tokens.size == 2 && tokens[1] == LEGAL_FILE) {
+                "exemption invalide « $line » : attendu « locale $LEGAL_FILE » (aucun autre fichier n'est exemptable)"
+            }
+            LocaleFolders.normalizeTag(tokens[0])
+        }.toSet()
 }
 
 internal data class RatchetVerdict<T>(val unexpected: List<T>, val stale: List<String>)

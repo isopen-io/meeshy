@@ -257,7 +257,7 @@ enum VitrineJeuScenarios {
         GameBlock.Mission(
             id: id, templateKey: modele, difficulty: difficulte, signal: MissionSignal("axis:content.text_message"),
             prism: false, target: cible, progress: fait, reward: gain, glory: 0,
-            completedAt: fait >= cible ? ISO8601DateFormatter().string(from: Date().addingTimeInterval(-3_600)) : nil
+            completedAt: fait >= cible ? WireDate.string(from: Date().addingTimeInterval(-3_600)) : nil
         )
     }
 

@@ -140,4 +140,11 @@ class MimeTypeResolverTest {
         assertThat(MimeTypeResolver.resolve(declaredType = null, fileName = "mystery"))
             .isEqualTo("application/octet-stream")
     }
+
+    @Test
+    fun a_wildcard_declared_type_is_no_type_and_defers_to_the_filename() {
+        assertThat(MimeTypeResolver.resolve(declaredType = "*/*", fileName = "contrat.pdf")).isEqualTo("application/pdf")
+        assertThat(MimeTypeResolver.resolve(declaredType = "image/*", fileName = "clip.mp4")).isEqualTo("video/mp4")
+        assertThat(MimeTypeResolver.resolve(declaredType = "*/*", fileName = "mystery")).isEqualTo("application/octet-stream")
+    }
 }

@@ -42,7 +42,8 @@ function makeDeps(
     enqueue,
     deps: {
       io: { to: (room: string) => makeOperator([room]) } as any,
-      prisma: { participant: { findMany } } as any,
+      // #12822 — le régime du message décide du sceau de la file : une conversation en clair ici.
+      prisma: { participant: { findMany }, message: { findUnique: async () => ({ encryptionMode: null, conversation: { encryptionMode: null } }) } } as any,
       deliveryQueue: { enqueue } as any,
       connectedUsers: new Map(online.map((u) => [u, {}])) as any,
     },
@@ -77,6 +78,16 @@ describe('emitAttachmentUpdated — the live audience', () => {
     expect(payload.messageId).toBe('msg-1');
     expect(payload.attachment.transcription).toEqual({ text: 'Hi' });
     expect(payload.attachment.translations).toEqual({ en: { url: 'https://cdn/en.mp3' } });
+  });
+
+  it('carries `attachmentId` at the top level — the native Android decoder requires it (#11264)', async () => {
+    const { emitted, deps } = makeDeps();
+
+    await emitAttachmentUpdated({ ...deps, conversationId: 'conv-1', messageId: 'msg-1', attachment: ATTACHMENT });
+
+    const payload = emitted[0].payload as { attachmentId?: string; attachment: { id: string } };
+    expect(payload.attachmentId).toBe(payload.attachment.id);
+    expect(typeof payload.attachmentId).toBe('string');
   });
 
   it('reaches the personal room of every participant, not only the conversation room', async () => {

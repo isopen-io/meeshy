@@ -23,7 +23,7 @@ sealed interface PasteDetection {
  */
 object LargePasteDetector {
     /** The composer text must exceed this length for a paste to be captured. */
-    const val MIN_TOTAL_LENGTH = 2_000
+    const val MIN_TOTAL_LENGTH = me.meeshy.sdk.model.net.MessageLimits.MAX_MESSAGE_LENGTH
 
     /** A single edit must add more than this many characters to count as a paste. */
     const val MIN_GROWTH = 250

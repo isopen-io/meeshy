@@ -19,6 +19,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { arrivalLanguage, arrivalLanguageKey as languageKey } from './shareLinkArrivals';
 import {
   SHARE_LINK_RECENT_ARRIVALS_CAP,
@@ -53,7 +54,7 @@ function toArrival(row: RecentArrivalRow): ShareLinkArrival {
   return {
     participantId: row.id,
     displayName: row.displayName,
-    avatar: row.avatar ?? row.user?.avatar ?? null,
+    avatar: resolveParticipantAvatar(row),
     isAnonymous: row.type === 'anonymous',
     country: row.joinCountry,
     language: arrivalLanguage(row),

@@ -541,6 +541,19 @@ describe('decodeAdminSovereignMedia — les pièces, voilées chez le client aus
     expect(JSON.stringify(item?.attachment)).not.toContain('FUITE');
   });
 
+  test('une pièce VOILÉE perd aussi ses variantes AVIF et ses rendus (#11262, #11261) : rien de ce qui en dérive ne passe', () => {
+    const fuite = { width: 640, height: 640, url: 'data:image/avif;base64,FUITE-AVIF', size: 9, format: 'avif' };
+    const rendu = { codec: 'h264', url: 'data:video/mp4;base64,FUITE-RENDU', width: 1920, height: 1080, size: 9 };
+    const page = decodeAdminSovereignMedia(
+      servie(charge([piece('a-flou', { isBlurred: true, isProtected: true, avifVariants: [fuite], renditions: [rendu] })])),
+    );
+    expect(page.items).toHaveLength(1);
+    const [item] = page.items;
+    expect(item?.attachment.avifVariants).toBeUndefined();
+    expect(item?.attachment.renditions).toBeUndefined();
+    expect(JSON.stringify(item?.attachment)).not.toContain('FUITE');
+  });
+
   test('une pièce RETENUE par son MESSAGE (chiffré, vue unique, expiré) n’entre pas : le fil en dit le constat', () => {
     const page = decodeAdminSovereignMedia(
       servie(charge([piece('a-chiffre', { isProtected: true, fileUrl: 'data:image/png;base64,FUITE', message: porteur('m1', { isProtected: true }) })])),

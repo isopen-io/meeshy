@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import me.meeshy.sdk.model.call.IncomingCallAnswer
+import me.meeshy.sdk.model.call.IncomingCallPermissionPolicy
 
 /**
  * Runs a media action only once the runtime permissions a call needs are in
@@ -26,6 +28,7 @@ class CallPermissionGate internal constructor(
     private val isMicGranted: () -> Boolean,
     private val request: () -> Unit,
     private val pending: PendingAction,
+    private val isCameraGranted: () -> Boolean = { true },
 ) {
     /** Runs [action] now when the mic is granted, otherwise asks and runs it on the grant. */
     fun withMediaPermissions(action: () -> Unit) {
@@ -37,9 +40,38 @@ class CallPermissionGate internal constructor(
         }
     }
 
+    /**
+     * Accepter un appel entrant : les permissions sont tranchées AVANT de répondre
+     * ([IncomingCallPermissionPolicy]) — micro refusé ⇒ on raccroche, caméra refusée ⇒ on répond
+     * en audio. [onDecision] est appelé une fois, qu'on ait demandé ou non.
+     */
+    fun answerIncoming(isVideo: Boolean, onDecision: (IncomingCallAnswer) -> Unit) {
+        val decide = {
+            onDecision(IncomingCallPermissionPolicy.decide(isMicGranted(), isCameraGranted(), isVideo))
+        }
+        if (isMicGranted() && (!isVideo || isCameraGranted())) {
+            decide()
+        } else {
+            pending.setDecision(decide)
+            request()
+        }
+    }
+
     /** The one action waiting for the permission prompt's answer. */
     internal class PendingAction {
         private var action: (() -> Unit)? = null
+        private var decision: (() -> Unit)? = null
+
+        fun setDecision(next: () -> Unit) {
+            decision = next
+        }
+
+        /** Runs the waiting decision whatever the answer was, and forgets it. */
+        fun settle() {
+            val waiting = decision
+            decision = null
+            waiting?.invoke()
+        }
 
         fun set(next: () -> Unit) {
             action = next
@@ -66,12 +98,14 @@ fun rememberCallPermissionGate(isVideo: Boolean): CallPermissionGate {
         val micGranted = grants[Manifest.permission.RECORD_AUDIO]
             ?: hasSelfPermission(context, Manifest.permission.RECORD_AUDIO)
         pending.resolve(micGranted)
+        pending.settle()
     }
     return remember(context, required, pending, launcher) {
         CallPermissionGate(
             isMicGranted = { hasSelfPermission(context, Manifest.permission.RECORD_AUDIO) },
             request = { launcher.launch(required) },
             pending = pending,
+            isCameraGranted = { hasSelfPermission(context, Manifest.permission.CAMERA) },
         )
     }
 }

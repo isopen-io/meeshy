@@ -121,7 +121,7 @@ final class CallBackRequestTests: XCTestCase {
     /// Le lecteur ci-dessus n'a de sens que si l'écrivain continue de graver
     /// l'identifiant de l'utilisateur dans le `CXHandle`, sur les DEUX sens.
     func test_callManager_writesTheUserIdInTheCallKitHandle_onBothDirections() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
         XCTAssertTrue(
             source.contains("let handle = CXHandle(type: .generic, value: userId)"),

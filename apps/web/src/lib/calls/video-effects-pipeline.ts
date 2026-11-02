@@ -1,3 +1,5 @@
+import type { LensFiles } from '@/lib/meeshy-lens/lens-files';
+
 import type { FrameSettings } from './video-effects';
 import type { LocalFrameEnv } from './video-effects-browser';
 import { createFrameEngine, frameTransform, type FrameEngine, type Timings } from './video-effects-frames';
@@ -91,10 +93,25 @@ function firstWord(worker: WorkerPort, env: PipelineEnv): Promise<Ready> {
   });
 }
 
-function workerPipeline(output: MediaStreamTrack, worker: WorkerPort, unwatch: () => void): EffectsPipeline {
+/**
+ * Les fichiers d'une lens (#11994 : un cube jusqu'à 1 Mo, des images) ne
+ * repartent pas à chaque réglage — un zoom en pince en envoie des dizaines :
+ * l'étage du worker garde les derniers remis (`lens-stage.ts`).
+ */
+const withoutRepeatedFiles = (settings: FrameSettings, sent: LensFiles | undefined): FrameSettings => {
+  const lens = settings.lens;
+  if (lens === undefined || lens.files === undefined || lens.files !== sent) return settings;
+  return { ...settings, lens: { lens: lens.lens, languages: lens.languages, level: lens.level } };
+};
+
+function workerPipeline(output: MediaStreamTrack, worker: WorkerPort, unwatch: () => void, initial: FrameSettings): EffectsPipeline {
+  let sent = initial.lens?.files;
   return {
     output,
-    update: (settings) => worker.post({ kind: 'update', settings }, []),
+    update: (settings) => {
+      worker.post({ kind: 'update', settings: withoutRepeatedFiles(settings, sent) }, []);
+      sent = settings.lens?.files ?? sent;
+    },
     stop: () => {
       unwatch();
       worker.post({ kind: 'stop' }, []);
@@ -104,7 +121,7 @@ function workerPipeline(output: MediaStreamTrack, worker: WorkerPort, unwatch: (
   };
 }
 
-type Handoff = { readonly start: (worker: WorkerPort, reducedMotion: boolean) => MediaStreamTrack | null; readonly abandon: () => void };
+type Handoff = { readonly settings: FrameSettings; readonly start: (worker: WorkerPort, reducedMotion: boolean) => MediaStreamTrack | null; readonly abandon: () => void };
 
 async function inWorker(handoff: Handoff, env: PipelineEnv & { readonly worker: () => WorkerPort }): Promise<EffectsPipeline | null> {
   const worker = env.worker();
@@ -125,12 +142,13 @@ async function inWorker(handoff: Handoff, env: PipelineEnv & { readonly worker: 
     return null;
   }
   const unwatch = env.motion?.watch((reduced) => worker.post({ kind: 'motion', reduced }, [])) ?? (() => undefined);
-  return workerPipeline(output, worker, unwatch);
+  return workerPipeline(output, worker, unwatch, handoff.settings);
 }
 
 function streamsHandoff(camera: MediaStreamTrack, settings: FrameSettings, frames: FramesEnv): Handoff {
   const generated = frames.generator();
   return {
+    settings,
     start: (worker, reducedMotion) => {
       const { readable } = frames.processor(camera);
       worker.post({ kind: 'start', settings, reducedMotion, readable, writable: generated.writable }, [readable, generated.writable]);
@@ -143,6 +161,7 @@ function streamsHandoff(camera: MediaStreamTrack, settings: FrameSettings, frame
 function trackHandoff(camera: MediaStreamTrack, settings: FrameSettings): Handoff {
   const copy = camera.clone();
   return {
+    settings,
     start: (worker, reducedMotion) => {
       worker.post({ kind: 'start', settings, reducedMotion, track: copy }, [copy]);
       return null;

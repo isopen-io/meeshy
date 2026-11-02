@@ -399,25 +399,6 @@ struct GlowEffect: ViewModifier {
     }
 }
 
-struct PulseEffect: ViewModifier {
-    let active: Bool
-    @State private var pulsing = false
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(active ? (pulsing ? 1.02 : 1.0) : 1.0)
-            .onAppear {
-                guard active else { return }
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    pulsing = true
-                }
-            }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) { pulsing = false }
-            }
-    }
-}
-
 /// **Aurore** — le successeur du cadre arc-en-ciel (directive 2026-08-24 :
 /// « quelque chose de visuellement plus esthétique »).
 ///
@@ -683,7 +664,8 @@ struct MessageEffectsModifier: ViewModifier {
                 .modifier(GlowEffect(active: plan.persistent.contains(.glow),
                                      intensity: effects.glowIntensity ?? 0.5,
                                      animated: plan.animatesPersistent))
-                .modifier(PulseEffect(active: plan.persistent.contains(.pulse)))
+                .modifier(PulseEffect(intensity: plan.persistent.contains(.pulse) ? MessagePulse.intensity : 0,
+                                      period: MessagePulse.period))
                 .modifier(RainbowEffect(active: plan.persistent.contains(.rainbow),
                                         animated: plan.animatesPersistent,
                                         colors: effects.rainbowColors))
@@ -706,4 +688,11 @@ extension View {
     func messageEffects(_ effects: MessageEffects) -> some View {
         modifier(MessageEffectsModifier(effects: effects))
     }
+}
+
+/// L'effet `pulse` d'un message : une respiration de 2 % en une seconde, portée
+/// par l'unique `PulseEffect` du SDK (#9891).
+enum MessagePulse {
+    static let intensity: CGFloat = 0.02
+    static let period: Double = 1.0
 }

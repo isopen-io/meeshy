@@ -1,5 +1,7 @@
 import { useId } from 'react';
 
+import { BLOOM_RADIUS_FRACTION } from '@/lib/canvas/media-adjustments';
+
 /**
  * **LE BLOOM D'UNE IMAGE, PEINT EN HALO** (#9498, D-176) — `CIBloom` floute
  * l'image et l'ajoute sur elle-même ; le web le rend par un filtre SVG que le
@@ -10,8 +12,6 @@ import { useId } from 'react';
  * FRACTION de la boîte du média (`primitiveUnits="objectBoundingBox"`), sur une
  * source supposée large de 1080 px — sur chaque axe, pour rester circulaire.
  */
-const BLOOM_RADIUS_FRACTION = 10 / 1080;
-
 const round4 = (value: number): number => Math.round(value * 10000) / 10000;
 
 /** Un identifiant de filtre par instance — deux images au bloom, deux halos. */

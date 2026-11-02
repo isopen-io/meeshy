@@ -42,9 +42,12 @@ class AuthEmailSignInVocabularyTest {
 
     private fun strings(locale: String?): Map<String, String> {
         val dir = if (locale == null) "values" else "values-$locale"
-        val file = File(resDir(), "$dir/strings.xml")
-        check(file.isFile) { "missing strings file: ${file.path}" }
-        return stringPattern.findAll(file.readText())
+        // Écrites à la main (strings.xml) OU adoptées depuis le catalogue iOS (strings_generated.xml) :
+        // le vocabulaire se juge sur ce que le module livre, pas sur le fichier qui le porte.
+        val files = File(resDir(), dir).listFiles { file -> file.name.startsWith("strings") && file.extension == "xml" }
+            .orEmpty()
+        check(files.isNotEmpty()) { "missing strings files in: $dir" }
+        return files.flatMap { stringPattern.findAll(it.readText()).toList() }
             .associate { it.groupValues[1] to it.groupValues[2].replace("\\'", "'") }
     }
 

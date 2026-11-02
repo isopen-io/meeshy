@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="twofactor_regenerate_warning">Neue Backup-Codes ersetzen die alten: Die bisherigen Codes funktionieren nicht mehr.</string>
+</resources>

@@ -16,8 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +39,8 @@ import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * Legal document screen (feature-parity §L) — the Android port of the iOS `TermsOfServiceView` and
@@ -68,8 +68,8 @@ fun LegalDocumentScreen(kind: LegalDocumentKind, onBack: () -> Unit) {
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.settings_back)),
                             )
                         }
                     },
@@ -85,7 +85,7 @@ fun LegalDocumentScreen(kind: LegalDocumentKind, onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 Text(
-                    text = stringResource(kind.lastUpdatedRes()),
+                    text = stringResource(R.string.legal_last_updated),
                     style = MaterialTheme.typography.bodySmall,
                     color = MeeshyTheme.tokens.textMuted,
                     modifier = Modifier.fillMaxWidth(),
@@ -154,11 +154,6 @@ private fun LegalSectionCard(number: Int, title: String, body: String) {
 private fun LegalDocumentKind.titleRes(): Int = when (this) {
     LegalDocumentKind.TERMS_OF_SERVICE -> R.string.legal_terms_title
     LegalDocumentKind.PRIVACY_POLICY -> R.string.legal_privacy_title
-}
-
-private fun LegalDocumentKind.lastUpdatedRes(): Int = when (this) {
-    LegalDocumentKind.TERMS_OF_SERVICE -> R.string.legal_terms_last_updated
-    LegalDocumentKind.PRIVACY_POLICY -> R.string.legal_privacy_last_updated
 }
 
 private fun LegalSectionKey.titleRes(): Int = when (this) {

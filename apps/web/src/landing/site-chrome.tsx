@@ -24,9 +24,11 @@ import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingDirection, landingPath, ty
  * visent la landing de la langue de la page. Aucune porte « Entrer sans
  * compte » : l'entrée anonyme dans World Wide ne passe plus que par le QR de la
  * landing, flashé vers `/world` (#10784).
- * « Mes conversations » n'existe que sur la landing : c'est son script qui
- * reconnaît un compte avant la première peinture, et les pages statiques n'en
- * portent aucun — un compte y voit « Se connecter », que `/login` résout.
+ * Un seul bouton, le même pour tous et sur chaque page : « Mes conversations »,
+ * vers `/chats` (#12500, demande porteur du 2026-10-23). L'en-tête ne demande
+ * pas qui est là — il n'y a donc rien à basculer avant la première peinture :
+ * c'est la garde de route (`lib/session-guard.ts`) qui envoie vers `/login` un
+ * visiteur sans compte, et la connexion le ramène sur `/chats`.
  */
 export const GlobeIcon = ({ size }: { readonly size: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
@@ -40,32 +42,29 @@ export type SiteHeaderProps = {
   readonly copy: LandingCopy;
   readonly onLanding: boolean;
   readonly languageControl: ReactNode;
+  /** L'adresse d'une page du site : le chemin sur le web, l'origine publique dans la coque (#12930), comme `SiteFooter.pageHref`. */
+  readonly siteHref?: (path: string) => string;
 };
 
-export function SiteHeader({ language, copy, onLanding, languageControl }: SiteHeaderProps) {
-  const anchor = (id: string): string => (onLanding ? `#${id}` : `${landingPath(language)}#${id}`);
+export function SiteHeader({ language, copy, onLanding, languageControl, siteHref = (path) => path }: SiteHeaderProps) {
+  const anchor = (id: string): string => (onLanding ? `#${id}` : siteHref(`${landingPath(language)}#${id}`));
   return (
     <header className="ld-header">
       <div className="ld-wrap ld-bar">
-        <a href={landingPath(language)} className="ld-brand">
+        <a href={siteHref(landingPath(language))} className="ld-brand">
           <img src={BRAND_LOGO_PATH} alt="" width={36} height={36} />
           <span className="ld-wordmark">Meeshy</span>
         </a>
         <nav className="ld-nav" aria-label={copy.navLabel}>
           <a href={anchor('comment')}>{copy.navHow}</a>
           <a href={anchor('world')}>{copy.navWorld}</a>
-          <a href="/faq">{copy.navFaq}</a>
+          <a href={siteHref('/faq')}>{copy.navFaq}</a>
         </nav>
         <span className="ld-spacer" />
         {languageControl}
-        <a href="/login" className="ld-btn ld-btn--ghost" data-session-visitor>
-          {copy.signIn}
+        <a href="/chats" className="ld-btn ld-btn--primary" data-my-conversations>
+          {copy.myConversations}
         </a>
-        {onLanding ? (
-          <a href="/chats" className="ld-btn ld-btn--primary" data-session-member data-my-conversations>
-            {copy.myConversations}
-          </a>
-        ) : null}
       </div>
     </header>
   );
@@ -168,7 +167,7 @@ export function LanguageMenu({ language, copy }: { readonly language: LandingLan
   );
 }
 
-const FOOTER_PAGES = ['about', 'help', 'faq', 'contact', 'partners', 'privacy', 'terms', 'download'] as const;
+const FOOTER_PAGES = ['about', 'help', 'faq', 'contact', 'partners', 'privacy', 'terms', 'child-safety', 'download'] as const;
 
 export type SitePage = (typeof FOOTER_PAGES)[number];
 

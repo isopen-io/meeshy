@@ -303,6 +303,43 @@ describe('l’en-tête « ‹ Comptes » et son action', () => {
     expect(hote.querySelector('main [data-titre-contenu]')).not.toBeNull();
   });
 
+  /**
+   * L'EMPLACEMENT NE SE DIT QU'UNE FOIS (#12670). Quand l'écran pose son titre et son fil
+   * d'Ariane dans le contenu, la barre du haut n'a plus rien à dire dès `md` : le menu
+   * latéral et le fil couvrent le retour. Elle reste sur téléphone, où elle nomme le parent.
+   * happy-dom ne fait pas de mise en page : on garde le CONTRAT de classes, que la recette
+   * au navigateur (`check-admin-souverain`) mesure en vrai.
+   */
+  test('titre dans le contenu, sans action : la barre ne vit que sur téléphone (#12670)', async () => {
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, { role: 'ADMIN', permissions: MATRICE });
+    const hote = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminScreenFrame language="fr" title="Comptes" back="admin" heading="content" backLabel="Tableau de bord">
+          <h1>Comptes</h1>
+        </AdminScreenFrame>
+      </QueryClientProvider>,
+    );
+    const entete = hote.querySelector('[data-admin-header]');
+    expect(entete?.className).toContain('md:hidden');
+    expect(entete?.querySelector('[data-admin-back-label]')?.textContent).toBe('Tableau de bord');
+  });
+
+  test('titre dans le contenu, avec une action : dès `md`, le retour s’efface et l’action reste', async () => {
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, { role: 'ADMIN', permissions: MATRICE });
+    const hote = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminScreenFrame language="fr" title="Comptes" back="admin" heading="content" backLabel="Tableau de bord" actions={<button type="button">Créer</button>}>
+          <h1>Comptes</h1>
+        </AdminScreenFrame>
+      </QueryClientProvider>,
+    );
+    const entete = hote.querySelector('[data-admin-header]');
+    expect(entete?.className).not.toContain('md:hidden');
+    expect(entete?.querySelector('[data-admin-back]')?.className).toContain('md:hidden');
+    expect(entete?.querySelector('[data-admin-back-label]')?.className).toContain('md:hidden');
+    expect(entete?.querySelector('[data-admin-header-actions]')?.className).toContain('md:ml-auto');
+  });
+
   test('par défaut, l’en-tête garde son titre — les autres écrans ne bougent pas', async () => {
     const hote = await cadre('ADMIN');
     expect(hote.querySelector('header h1')?.textContent).toBe('Comptes');
@@ -311,7 +348,7 @@ describe('l’en-tête « ‹ Comptes » et son action', () => {
 });
 
 /**
- * **LE MENU EST GROUPÉ** (#8876) — sept groupes titrés, dans l'ordre où ils se
+ * **LE MENU EST GROUPÉ** (#8876) — huit groupes titrés, dans l'ordre où ils se
  * lisent, et un groupe sans section visible n'est pas rendu. Replié en rail, le
  * titre cède la place à un séparateur : les groupes restent lisibles sans mot.
  */
@@ -381,5 +418,113 @@ describe('le retour et le menu restent dans l’espace courant (D-76)', () => {
     expect(liens.length).toBeGreaterThan(0);
     expect(liens.filter((href) => !(href === '/adm' || href.startsWith('/adm/')))).toEqual([]);
     resetAdminRouter(mounter);
+  });
+});
+
+/**
+ * **LE CLAVIER VA DROIT AU BUT** (#12670) — `Ctrl/⌘ K` et `/` mènent à « Aller à… »
+ * depuis n'importe quel écran (le rail replié se déplie, le tiroir s'ouvre sur un
+ * téléphone), sans voler la frappe d'un champ ; ↑ ↓ Début Fin parcourent le menu.
+ */
+describe('le clavier mène au menu sans détour (#12670)', () => {
+  const presser = (init: KeyboardEventInit, cible: EventTarget = window) =>
+    act(() => {
+      cible.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+    });
+  const champ = (racine: ParentNode, ou: string) => racine.querySelector<HTMLInputElement>(`${ou} [data-admin-nav-filter]`);
+  const deplie = () => {
+    try {
+      localStorage.removeItem('meeshy.admin.sidebar.folded');
+    } catch {
+      /* stockage refusé : le menu se déplie par défaut */
+    }
+  };
+  const ecran = (largeur: 'bureau' | 'telephone') => {
+    const natif = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: largeur === 'bureau', media: query })) as unknown as typeof window.matchMedia;
+    return () => {
+      window.matchMedia = natif;
+    };
+  };
+
+  test('Ctrl+K met le focus dans « Aller à… » du menu latéral', async () => {
+    deplie();
+    const restaure = ecran('bureau');
+    const hote = await cadre('BIGBOSS');
+    await presser({ key: 'k', ctrlKey: true });
+    expect(document.activeElement).toBe(champ(hote, '[data-admin-sidebar]'));
+    restaure();
+  });
+
+  test('⌘K aussi, et `/` hors d’un champ', async () => {
+    deplie();
+    const restaure = ecran('bureau');
+    const hote = await cadre('BIGBOSS');
+    await presser({ key: 'k', metaKey: true });
+    expect(document.activeElement).toBe(champ(hote, '[data-admin-sidebar]'));
+    (document.activeElement as HTMLElement | null)?.blur();
+    await presser({ key: '/' });
+    expect(document.activeElement).toBe(champ(hote, '[data-admin-sidebar]'));
+    restaure();
+  });
+
+  test('`/` tapé DANS un champ reste un caractère', async () => {
+    deplie();
+    const restaure = ecran('bureau');
+    const hote = await cadre('BIGBOSS');
+    const saisie = document.createElement('input');
+    hote.querySelector('[data-contenu]')?.append(saisie);
+    saisie.focus();
+    await presser({ key: '/' }, saisie);
+    expect(document.activeElement).toBe(saisie);
+    restaure();
+  });
+
+  test('rail replié : le raccourci le déplie, puis met le focus dans le champ', async () => {
+    deplie();
+    const restaure = ecran('bureau');
+    const hote = await cadre('BIGBOSS');
+    act(() => hote.querySelector<HTMLButtonElement>('[data-admin-sidebar-toggle]')?.click());
+    expect(champ(hote, '[data-admin-sidebar]')).toBeNull();
+    await presser({ key: 'k', ctrlKey: true });
+    expect(hote.querySelector('[data-admin-sidebar]')?.getAttribute('data-folded')).toBe('false');
+    expect(document.activeElement).toBe(champ(hote, '[data-admin-sidebar]'));
+    restaure();
+  });
+
+  test('sur téléphone, le raccourci ouvre le tiroir sur son champ', async () => {
+    deplie();
+    const restaure = ecran('telephone');
+    const hote = await cadre('BIGBOSS');
+    await presser({ key: 'k', ctrlKey: true });
+    expect(hote.querySelector('[data-admin-drawer]')).not.toBeNull();
+    expect(document.activeElement).toBe(champ(hote, '[data-admin-drawer]'));
+    restaure();
+  });
+
+  test('↓ depuis le champ va à la première entrée ; ↓ ↑ Début Fin parcourent le menu', async () => {
+    deplie();
+    const hote = await cadre('BIGBOSS');
+    const liens = [...hote.querySelectorAll<HTMLAnchorElement>('[data-admin-sidebar] a[data-admin-nav]')];
+    const saisie = champ(hote, '[data-admin-sidebar]');
+    saisie?.focus();
+    await presser({ key: 'ArrowDown' }, saisie ?? window);
+    expect(document.activeElement).toBe(liens[0]);
+    await presser({ key: 'ArrowDown' }, liens[0]);
+    expect(document.activeElement).toBe(liens[1]);
+    await presser({ key: 'ArrowUp' }, liens[1]);
+    expect(document.activeElement).toBe(liens[0]);
+    await presser({ key: 'End' }, liens[0]);
+    expect(document.activeElement).toBe(liens.at(-1));
+    await presser({ key: 'Home' }, liens.at(-1));
+    expect(document.activeElement).toBe(liens[0]);
+    await presser({ key: 'ArrowUp' }, liens[0]);
+    expect(document.activeElement).toBe(saisie);
+  });
+
+  test('le champ annonce ses raccourcis', async () => {
+    deplie();
+    const hote = await cadre('BIGBOSS');
+    expect(champ(hote, '[data-admin-sidebar]')?.getAttribute('aria-keyshortcuts')).toBe('Control+K Meta+K /');
   });
 });

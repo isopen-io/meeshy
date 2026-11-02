@@ -57,7 +57,6 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
@@ -106,17 +105,12 @@ class ConversationListViewModelEmptyTest {
             every { this@mockk.conversationRestored } returns conversationRestored
             every { this@mockk.conversationClosed } returns conversationClosed
             every { this@mockk.participantLeft } returns participantLeft
+            every { this@mockk.participantJoined } returns MutableSharedFlow()
+            every { this@mockk.participantUnbanned } returns MutableSharedFlow()
             every { this@mockk.userStatus } returns userStatus
             every { this@mockk.presenceSnapshot } returns presenceSnapshot
             every { this@mockk.typingStarted } returns typingStarted
             every { this@mockk.typingStopped } returns typingStopped
-        }
-
-    private fun typingPresenceRelay(
-        forcedOnline: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
-    ): TypingPresenceRelay =
-        mockk<TypingPresenceRelay> {
-            every { this@mockk.forcedOnline } returns forcedOnline
         }
 
     private fun connectionSocket(
@@ -180,7 +174,6 @@ class ConversationListViewModelEmptyTest {
         connection: SocketManager = connectionSocket(),
         draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
         socket: MessageSocketManager = socketManager(),
-        relay: TypingPresenceRelay = typingPresenceRelay(),
         starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
         categoryRepository: CategoryRepository = categoryRepo(),
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
@@ -191,9 +184,12 @@ class ConversationListViewModelEmptyTest {
         storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
         statusBarCache: StatusBarCache = statusBarCache(),
     ) = ConversationListViewModel(
-        repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
+        repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
-        storyRepository, statusBarCache,
+        storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
+        me.meeshy.sdk.network.InMemoryNetworkMonitor(),
+        io.mockk.mockk(relaxed = true),
+        idleRowSignalsSource(),
     )
 
     @Test

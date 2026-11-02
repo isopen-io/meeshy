@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { PAGE_PRIVACY } from './privacy';
 import { PAGE_TERMS } from './terms';
-import type { Block, ContentPage } from './type';
+import { pageText } from './text';
 
 /**
  * LES TEXTES LÉGAUX DISENT LA RÈGLE DE L'ÂGE (#9928, décision #9926) : 13 ans
@@ -10,26 +10,6 @@ import type { Block, ContentPage } from './type';
  * facultative. Une règle appliquée par le produit et tue par ses conditions
  * promettrait moins qu'elle ne fait.
  */
-const blockText = (block: Block): string => {
-  switch (block.kind) {
-    case 'paragraphes':
-      return block.body.join(' ');
-    case 'list':
-      return block.items.join(' ');
-    case 'accent':
-      return block.body;
-    case 'encadre':
-      return block.rows.map((row) => row.text).join(' ');
-    case 'cartes':
-      return block.cards.map((card) => [card.title, card.body ?? '', ...(card.items ?? [])].join(' ')).join(' ');
-    case 'mee':
-      return block.views.map((view) => view.caption).join(' ');
-  }
-};
-
-const pageText = (page: ContentPage): string =>
-  page.sections.map((section) => [section.title, ...section.blocks.map(blockText)].join(' ')).join(' ');
-
 describe.each([
   ['Conditions d’utilisation', PAGE_TERMS],
   ['Politique de confidentialité', PAGE_PRIVACY],
@@ -49,6 +29,6 @@ describe.each([
   });
 
   test('la date de mise à jour suit le changement', () => {
-    expect(page.mention).toBe('Dernière mise à jour : 10 octobre 2026');
+    expect(page.mention).toBe('Dernière mise à jour : 22 octobre 2026');
   });
 });

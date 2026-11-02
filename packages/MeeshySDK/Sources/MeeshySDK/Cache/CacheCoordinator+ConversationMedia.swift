@@ -26,4 +26,20 @@ extension CacheCoordinator {
             }
         }
     }
+
+    /// Retire UNE pièce de l'index des genres portés par une pièce jointe (`attachment:deleted`). L'union qui
+    /// n'écrase jamais la garderait dans l'écran Médias : le porteur ne part que s'il n'a plus aucune pièce DE CE GENRE, et les
+    /// genres lus dans le texte (lien, conversation, lieu) ne sont pas touchés.
+    public func dropAttachmentFromConversationMedia(conversationId: String, messageId: String, attachmentId: String) async {
+        for kind in ConversationMediaKind.allCases where kind.isAttachmentKind {
+            await conversationMedia.update(for: kind.indexKey(conversationId: conversationId)) { carriers in
+                carriers.compactMap { carrier in
+                    guard carrier.id == messageId, carrier.attachments.contains(where: { $0.id == attachmentId }) else { return carrier }
+                    var kept = carrier
+                    kept.attachments.removeAll { $0.id == attachmentId }
+                    return kept.attachments.contains { ConversationMediaKind.ofAttachment(mimeType: $0.mimeType) == kind } ? kept : nil
+                }
+            }
+        }
+    }
 }

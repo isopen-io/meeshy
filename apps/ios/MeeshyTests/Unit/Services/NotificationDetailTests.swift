@@ -113,6 +113,13 @@ final class NotificationDetailTests: XCTestCase {
         XCTAssertEqual(NotificationDetailPolicy.thumbnailMimeType(for: URL(string: "https://cdn/thumb")!), "image/jpeg")
     }
 
+    /// #11328 — une vignette AVIF se déclare AVIF, pas JPEG : sinon la loi de
+    /// la NSE (`NSEAttachmentPolicy.mayAttach`) la laisserait passer comme une
+    /// image décodable alors qu'elle ne l'est pas.
+    func test_thumbnailMimeType_avif_isDeclaredAsAvif() {
+        XCTAssertEqual(NotificationDetailPolicy.thumbnailMimeType(for: URL(string: "https://cdn/t.avif")!), "image/avif")
+    }
+
     // MARK: - Politique : corps détaillé
 
     func test_detailedBody_emptyBody_isComposed() {

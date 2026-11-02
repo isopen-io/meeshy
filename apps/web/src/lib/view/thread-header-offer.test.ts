@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { conversationAvatarDoor, threadCallOffer, threadHeaderSubtitle } from './thread-header-offer';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { conversationAvatarDoor, THREAD_ENCRYPTION_LABEL_KEY, threadCallOffer, threadHeaderSubtitle } from './thread-header-offer';
 
 /**
  * CE QUE L'EN-TÊTE DU FIL OFFRE À SON LECTEUR (#10205, #10207, #10114) — un
@@ -11,11 +12,11 @@ import { conversationAvatarDoor, threadCallOffer, threadHeaderSubtitle } from '.
 
 describe('threadHeaderSubtitle', () => {
   test('un membre d’un groupe lit l’effectif, sans cadenas quand la conversation n’est pas chiffrée', () => {
-    expect(threadHeaderSubtitle({ group: true, guest: false, memberCount: 42, encryptionMode: undefined })).toEqual({ locked: false, label: '42 participants' });
+    expect(threadHeaderSubtitle({ group: true, guest: false, memberCount: 42, encryptionMode: undefined })).toEqual({ locked: false, encryption: null, label: '42 participants' });
   });
 
   test('un groupe chiffré de bout en bout porte son cadenas', () => {
-    expect(threadHeaderSubtitle({ group: true, guest: false, memberCount: 3, encryptionMode: 'e2ee' })).toEqual({ locked: true, label: '3 participants' });
+    expect(threadHeaderSubtitle({ group: true, guest: false, memberCount: 3, encryptionMode: 'e2ee' })).toEqual({ locked: true, encryption: 'end-to-end', label: '3 participants' });
   });
 
   test('un chiffrement côté serveur n’est pas un chiffrement de bout en bout : aucun cadenas', () => {
@@ -23,8 +24,8 @@ describe('threadHeaderSubtitle', () => {
   });
 
   test('un visiteur sans compte ne lit jamais l’effectif — ni sans le champ, ni avec', () => {
-    expect(threadHeaderSubtitle({ group: true, guest: true, memberCount: 42, encryptionMode: null })).toEqual({ locked: false, label: null });
-    expect(threadHeaderSubtitle({ group: true, guest: true, memberCount: undefined, encryptionMode: undefined })).toEqual({ locked: false, label: null });
+    expect(threadHeaderSubtitle({ group: true, guest: true, memberCount: 42, encryptionMode: null })).toEqual({ locked: false, encryption: null, label: null });
+    expect(threadHeaderSubtitle({ group: true, guest: true, memberCount: undefined, encryptionMode: undefined })).toEqual({ locked: false, encryption: null, label: null });
   });
 
   test('un effectif absent ou illisible ne se peint pas', () => {
@@ -33,8 +34,20 @@ describe('threadHeaderSubtitle', () => {
   });
 
   test('une conversation directe ne se dit chiffrée que si elle l’est', () => {
-    expect(threadHeaderSubtitle({ group: false, guest: false, memberCount: 2, encryptionMode: 'e2ee' })).toEqual({ locked: true, label: 'Chiffré de bout en bout' });
-    expect(threadHeaderSubtitle({ group: false, guest: false, memberCount: 2, encryptionMode: null })).toEqual({ locked: false, label: null });
+    expect(threadHeaderSubtitle({ group: false, guest: false, memberCount: 2, encryptionMode: 'e2ee' })).toEqual({ locked: true, encryption: 'end-to-end', label: null });
+    expect(threadHeaderSubtitle({ group: false, guest: false, memberCount: 2, encryptionMode: null })).toEqual({ locked: false, encryption: null, label: null });
+  });
+
+  test('#11374 — hybrid est chiffré SUR LE SERVEUR, jamais de bout en bout, comme server', () => {
+    expect(threadHeaderSubtitle({ group: false, guest: false, memberCount: 2, encryptionMode: 'hybrid' })).toEqual({ locked: false, encryption: 'server', label: null });
+    expect(threadHeaderSubtitle({ group: false, guest: false, memberCount: 2, encryptionMode: 'server' })).toEqual({ locked: false, encryption: 'server', label: null });
+  });
+
+  test('le libellé de chaque régime vient du catalogue, dans la langue de l’interface', async () => {
+    await loadInterfaceCatalog('en');
+    expect(translate('fr', THREAD_ENCRYPTION_LABEL_KEY['end-to-end'])).toBe('Chiffré de bout en bout');
+    expect(translate('fr', THREAD_ENCRYPTION_LABEL_KEY.server)).toBe('Chiffré sur le serveur');
+    expect(translate('en', THREAD_ENCRYPTION_LABEL_KEY.server)).toBe('Encrypted on the server');
   });
 });
 

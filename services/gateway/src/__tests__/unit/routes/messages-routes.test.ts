@@ -633,7 +633,7 @@ describe('GET /conversations/:id/messages', () => {
     mockResolveConversationId.mockResolvedValue(null);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
   });
 
   it('returns the same 404 when canAccessConversation returns false (#8099)', async () => {
@@ -641,7 +641,7 @@ describe('GET /conversations/:id/messages', () => {
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
     expect(mockSendForbidden).not.toHaveBeenCalled();
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
   });
 
   it('returns empty messages list for authenticated user (happy path)', async () => {
@@ -1719,7 +1719,7 @@ describe('GET /conversations/:id/pinned-messages', () => {
     mockCanAccessConversation.mockResolvedValue(false);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
@@ -2000,7 +2000,7 @@ describe('GET /conversations/:id/messages/search', () => {
     mockResolveConversationId.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeSearchReq(), reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
   });
 
   it('404 when no access — indistinguishable from a missing conversation (#8099)', async () => {
@@ -2008,7 +2008,7 @@ describe('GET /conversations/:id/messages/search', () => {
     const reply = makeReply();
     await getHandler_()(makeSearchReq(), reply);
     expect(mockSendForbidden).not.toHaveBeenCalled();
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
   });
 
   it('returns content matches with transformed sender', async () => {

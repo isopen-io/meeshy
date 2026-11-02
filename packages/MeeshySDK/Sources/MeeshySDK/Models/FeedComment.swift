@@ -64,6 +64,19 @@ public struct FeedComment: Identifiable, Sendable {
         return copy
     }
 
+    /// La langue de la traduction que la descente SERT (#11875) — celle que la
+    /// puce de langue doit nommer. `nil` quand l'original est servi, ou quand
+    /// le commentaire n'a pas sa carte (cache gravé avant elle) : on ne sait
+    /// alors pas quel rang il affiche.
+    public func servedLanguage(preferredLanguages: [String]) -> String? {
+        guard let dict = translations, !dict.isEmpty else { return nil }
+        return PrismTranslationResolver.resolve(
+            originalLanguage: originalLanguage,
+            candidates: dict.map { PrismCandidate(language: $0.key, value: $0.value.text) },
+            preferredLanguages: preferredLanguages
+        )?.language
+    }
+
     /// Une traduction ARRIVÉE (`comment:translation-updated`) rejoint le
     /// dictionnaire, puis le texte affiché se re-résout. Pour un commentaire
     /// sans dictionnaire qui affiche déjà une traduction, rien ne change : on

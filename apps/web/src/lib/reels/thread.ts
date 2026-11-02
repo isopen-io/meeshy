@@ -27,9 +27,10 @@ const LOAD_MORE_DISTANCE = 3;
 /**
  * Le PALIER d'une page, lu dans la fenêtre de préchargement (#9702) :
  * `active` joue, `near` (N±1) monte son élément en `preload="auto"` — sa
- * première image est décodée avant le balayage —, `warm` (N±2) le monte en
- * attente de métadonnées, `far` ne porte que son affiche (ses octets de tête
- * sont amorcés à part, `media-primer.ts`, tant qu'il reste dans la fenêtre).
+ * première image est décodée avant le balayage —, `warm` (N±2) le monte sans
+ * rien charger (`reelPreloadOf`, #11308), `far` ne porte que son affiche. Les
+ * octets de tête de `warm` et `far` sont amorcés à part (`media-primer.ts`)
+ * tant qu'ils restent dans la fenêtre.
  */
 export type ReelPageMode = 'active' | 'near' | 'warm' | 'far';
 
@@ -148,6 +149,19 @@ const MODE_OF_TIER = { play: 'active', decode: 'near', mount: 'warm', prime: 'fa
  * que la fenêtre élargie ajoute au-delà, ce sont des octets, pas des éléments. */
 export function pageModeOf(index: number, activeIndex: number): ReelPageMode {
   return MODE_OF_TIER[preloadTierOf(index - activeIndex, { ahead: REEL_WINDOW_RADIUS, behind: REEL_WINDOW_RADIUS })];
+}
+
+/**
+ * **CE QU'UN ÉLÉMENT MONTÉ CHARGE** (#11308, défaut de #11253) — PURE. Un
+ * Android d'entrée de gamme tient deux ou trois décodeurs matériels : le réel
+ * visible et ses voisins immédiats les prennent tous. N±2 reste monté (un
+ * retour en arrière ne recrée rien) mais en `preload="none"` — aucun lecteur
+ * créé, aucun décodeur — sous l'affiche que porte l'élément ; ses octets de
+ * tête sont dans le cache HTTP par l'amorceur (`primeBytesOf`, palier
+ * `mount`), et il charge pour de bon en passant à N±1. `far` ne monte rien.
+ */
+export function reelPreloadOf(mode: ReelPageMode): 'auto' | 'none' {
+  return mode === 'active' || mode === 'near' ? 'auto' : 'none';
 }
 
 /**

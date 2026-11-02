@@ -235,7 +235,7 @@ enum FeedPostEngagementRequests {
     static func refreshBookmarksCache() async -> [FeedPost]? {
         do {
             let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
             await bestEffort("feedPostEngagementState.feed.save", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: bookmarksCacheKey) }
             return posts

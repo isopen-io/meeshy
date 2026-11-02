@@ -33,7 +33,7 @@ private let timelineExportLogger = MeeshyLog.logger(.storyTimelineExport)
 /// puis prépose l'interlude de marque via `StoryExportIntro.prepend` ».
 ///
 /// Miroir SDK-local de `StoryVideoExportServiceProviding`
-/// (`apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift`) :
+/// (`apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift`) :
 /// même FORME (protocole `@MainActor`, pas `Sendable` — les doubles de test
 /// restent de simples classes `@MainActor`), jamais la même DÉPENDANCE — le
 /// SDK ne peut pas importer le target app, donc ce protocole vit ici plutôt
@@ -122,15 +122,14 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
 
         // `outro: nil` = fermeture sur le LOGO SEUL, sans identité d'auteur :
         // divergence volontaire avec partage / Photos, préservée telle quelle.
-        do {
-            let finalURL = try await StoryExportBranding.wrap(
-                storyURL: outputURL, intro: intro, outro: nil, renderSize: renderSize)
-            removeTemporaryFile(at: outputURL, reason: "pré-emballage-de-marque")
-            return finalURL
-        } catch {
-            timelineExportLogger.warning("emballage de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-            return outputURL
+        // Un emballage qui échoue livre la story nue ET se signale (#14488).
+        let branding = await StoryExportBrandingFallback.deliver(bareStory: outputURL, path: .timeline, slideId: slide.id) {
+            try await StoryExportBranding.wrap(storyURL: outputURL, intro: intro, outro: nil, renderSize: renderSize)
         }
+        if case .branded = branding {
+            removeTemporaryFile(at: outputURL, reason: "pré-emballage-de-marque")
+        }
+        return branding.url
     }
 
     /// Purge d'un intermédiaire de composition. Échec non fatal (l'OS purge le
@@ -478,6 +477,7 @@ struct TimelineExportPreviewSheet: View {
         }
         .onAppear {
             let player = self.player ?? AVPlayer(url: url)
+            MediaPolicyMonitor.shared.adopt(player, role: .watched)
             self.player = player
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,

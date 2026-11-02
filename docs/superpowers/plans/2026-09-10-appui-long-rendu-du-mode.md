@@ -3775,12 +3775,12 @@ par :
 
 **3e — `LocalizationConsistencyTests.swift` : le cliquet suit les clés.** Remplacer :
 ```swift
-        "apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Views/StorySentinelView.swift",  // 4
     ]
 ```
 par :
 ```swift
-        "apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift",  // 4
+        "apps/ios/Meeshy/Features/Stories/Views/StorySentinelView.swift",  // 4
         // #5984 — les mots des options d'un message quittent `MessageActionsMenu`
         // et `MessageMoreSheet` (tous deux épinglés) pour leur source UNIQUE. Le
         // cliquet suit le CODE : sans cette ligne, 33 clés sortiraient des deux

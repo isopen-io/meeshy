@@ -274,7 +274,7 @@ public enum ProfileDecorOptions {
         groups(installed: installed, builtin: catalog.bannerPacks.map { ($0.slug, $0.installedByDefault, $0.designs) })
     }
 
-    /// Les cadres posés SUR la bannière (#10936) : aucun pack n'est installé d'office.
+    /// Les cadres posés SUR la bannière (#10936) : deux packs sont installés d'office (#11165).
     public static func bannerFrames(installed: [ShopPack]?, catalog: BannerFrameCatalog = .shared) -> [OptionGroup<BannerFrameDesign>] {
         groups(installed: installed, builtin: catalog.framePacks.map { ($0.slug, $0.installedByDefault, $0.frames) })
     }
@@ -283,7 +283,7 @@ public enum ProfileDecorOptions {
     private static func groups<Design: Sendable>(installed: [ShopPack]?, builtin: [(slug: String, byDefault: Bool, designs: [Design])]) -> [OptionGroup<Design>] where Design: Identifiable, Design.ID == String {
         let usable: [(slug: String, designs: [Design])]
         if let installed {
-            let owned = Set(installed.filter { $0.installed && $0.isOwned }.map(\.slug))
+            let owned = Set(installed.filter(\.isEquipableOnProfile).map(\.slug))
             usable = builtin.filter { owned.contains($0.slug) }.map { ($0.slug, $0.designs) }
         } else {
             usable = builtin.filter { $0.byDefault }.map { ($0.slug, $0.designs) }

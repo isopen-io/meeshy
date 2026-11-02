@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "settings.logout.title",
+          "androidName": "settings_logout_confirm_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.logout.message",
+          "androidName": "settings_logout_confirm_message",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

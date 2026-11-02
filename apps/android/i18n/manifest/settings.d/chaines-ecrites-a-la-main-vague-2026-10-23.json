@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {"androidName": "account_lifecycle_deletion_grace", "status": "android-only"},
+        {"androidName": "account_lifecycle_deletion_grace_no_date", "status": "android-only"},
+        {"androidName": "account_lifecycle_deletion_pending", "status": "android-only"},
+        {"androidName": "account_lifecycle_deletion_pending_expires", "status": "android-only"},
+        {"androidName": "activation_invite_banner_days", "status": "android-only"},
+        {"androidName": "activation_invite_banner_later", "status": "android-only"},
+        {"androidName": "activation_invite_banner_no_days", "status": "android-only"},
+        {"androidName": "activation_invite_banner_title", "status": "android-only"},
+        {"androidName": "birth_date_confirm", "status": "android-only"},
+        {"androidName": "birth_date_done", "status": "android-only"},
+        {"androidName": "birth_date_done_restricted", "status": "android-only"},
+        {"androidName": "birth_date_error_already_set", "status": "android-only"},
+        {"androidName": "birth_date_error_below_minimum", "status": "android-only"},
+        {"androidName": "birth_date_error_invalid", "status": "android-only"},
+        {"androidName": "birth_date_error_unavailable", "status": "android-only"},
+        {"androidName": "birth_date_error_unsupported", "status": "android-only"},
+        {"androidName": "birth_date_message", "status": "android-only"},
+        {"androidName": "birth_date_pick", "status": "android-only"},
+        {"androidName": "birth_date_title", "status": "android-only"}
+      ]
+    }
+  }
+}

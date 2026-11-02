@@ -162,6 +162,40 @@ public struct LastMessageFacet: Sendable {
         )
     }
 
+    /// La facette d'un message chiffré de bout en bout, telle qu'elle s'écrit
+    /// dans le cache des conversations (#12999) : ni texte ni traduction, une
+    /// nature scellée. La ligne de liste lit le clair dans le coffre
+    /// (`ConversationListEndToEndTextStore`), jamais ici. `applies == false`
+    /// rend la facette telle quelle.
+    public func sealedForEndToEnd(_ applies: Bool) -> LastMessageFacet {
+        guard applies else { return self }
+        return LastMessageFacet(
+            id: id, preview: nil, senderName: senderName, senderUserId: senderUserId, at: at,
+            attachments: attachments, attachmentCount: attachmentCount,
+            isBlurred: isBlurred, isViewOnce: isViewOnce, expiresAt: expiresAt,
+            translations: nil, originalLanguage: originalLanguage, location: location,
+            nature: (nature ?? LastMessageNature()).sealedEndToEnd
+        )
+    }
+
+    /// La facette de mon envoi à l'accusé, relue sur la ligne optimiste quand
+    /// elle est là (pièces jointes et effets réellement envoyés), scellée s'il
+    /// était chiffré de bout en bout.
+    public static func acknowledged(
+        _ optimistic: MeeshyMessage?, text: String, id: String, at date: Date, sealed: Bool
+    ) -> LastMessageFacet {
+        let facet = optimistic.map { LastMessageFacet(message: $0, preview: text, id: id, at: date) }
+            ?? .sent(id: id, text: text, at: date)
+        return facet.sealedForEndToEnd(sealed)
+    }
+
+    /// Scellée si la conversation que la liste tient sous `conversationId` est
+    /// chiffrée de bout en bout : tout envoi de cet appareil l'y est.
+    public func sealedForEndToEnd(in conversations: [MeeshyConversation], conversationId: String) -> LastMessageFacet {
+        sealedForEndToEnd(conversations.first { $0.id == conversationId }
+            .map { EndToEndPlaintextLaw.isEndToEndConversation($0.encryptionMode) } ?? false)
+    }
+
     /// Le groupe « dernier message » d'une ligne, tel qu'elle le porte — pour
     /// le recopier EN BLOC sur une autre ligne (retour au message précédent
     /// après une suppression, écriture qui ne possède pas ce groupe).

@@ -7,6 +7,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -209,5 +211,84 @@ class DataExportViewModelTest {
         sut.setFormat(ExportFormat.JSON) // already JSON — no-op
 
         assertThat(sut.state.value.artifact).isNotNull()
+    }
+
+    @Test
+    fun submit_success_emitsMediumHapticThenSuccessThenOneShareEffect() = runTest(dispatcher) {
+        val repo = mockk<DataExportRepository>()
+        coEvery { repo.export(any()) } returns NetworkResult.Success(dataWith(messages = 1))
+        val sut = vm(repo)
+
+        sut.submit()
+        advanceUntilIdle()
+
+        val effects = sut.effects.take(3).toList()
+        assertThat(effects[0]).isEqualTo(DataExportEffect.Haptic(DataExportHaptic.MEDIUM))
+        assertThat(effects[1]).isEqualTo(DataExportEffect.Haptic(DataExportHaptic.SUCCESS))
+        assertThat(effects[2]).isEqualTo(DataExportEffect.Share(sut.state.value.artifact!!))
+        assertThat(sut.state.value.isComplete).isTrue()
+    }
+
+    @Test
+    fun readingTheStateAgain_doesNotReplayTheShareEffect() = runTest(dispatcher) {
+        val repo = mockk<DataExportRepository>()
+        coEvery { repo.export(any()) } returns NetworkResult.Success(dataWith())
+        val sut = vm(repo)
+        sut.submit()
+        advanceUntilIdle()
+
+        val first = sut.effects.take(3).toList()
+        val shares = first.filterIsInstance<DataExportEffect.Share>()
+        sut.toggleMessages()
+
+        assertThat(shares).hasSize(1)
+    }
+
+    @Test
+    fun submit_failureThenRetry_emitsErrorHapticThenCompletes() = runTest(dispatcher) {
+        val repo = mockk<DataExportRepository>()
+        coEvery { repo.export(any()) } returnsMany listOf(
+            NetworkResult.Failure(ApiError(message = "boom", code = "HTTP_500", httpStatus = 500)),
+            NetworkResult.Success(dataWith()),
+        )
+        val sut = vm(repo)
+
+        sut.submit()
+        advanceUntilIdle()
+        assertThat(sut.state.value.error).isEqualTo(DataExportError.GENERIC)
+        assertThat(sut.state.value.isComplete).isFalse()
+
+        sut.submit()
+        advanceUntilIdle()
+
+        assertThat(sut.state.value.error).isNull()
+        assertThat(sut.state.value.isComplete).isTrue()
+        assertThat(sut.effects.take(5).toList()).containsExactly(
+            DataExportEffect.Haptic(DataExportHaptic.MEDIUM),
+            DataExportEffect.Haptic(DataExportHaptic.ERROR),
+            DataExportEffect.Haptic(DataExportHaptic.MEDIUM),
+            DataExportEffect.Haptic(DataExportHaptic.SUCCESS),
+            DataExportEffect.Share(sut.state.value.artifact!!),
+        ).inOrder()
+    }
+
+    @Test
+    fun resubmittingAfterACompletedExport_resetsTheCompleteState() = runTest(dispatcher) {
+        val repo = mockk<DataExportRepository>()
+        val gate = CompletableDeferred<NetworkResult<DataExportData>?>()
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        coEvery { repo.export(any()) } coAnswers {
+            if (calls.getAndIncrement() == 0) NetworkResult.Success(dataWith()) else gate.await()
+        }
+        val sut = vm(repo)
+        sut.submit()
+        advanceUntilIdle()
+        assertThat(sut.state.value.isComplete).isTrue()
+
+        sut.submit()
+        runCurrent()
+
+        assertThat(sut.state.value.isComplete).isFalse()
+        assertThat(sut.state.value.isExporting).isTrue()
     }
 }

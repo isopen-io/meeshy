@@ -47,6 +47,10 @@ describe('AuthorPlate', () => {
     const scratch = render({ plate: plate({ finish: 'scratch', metal: 'obsidian' }), width: 200 });
     expect(scratch).toContain('data-plate-scratch');
     expect(scratch).toContain('<mask');
+    // La luminance du masque, non une couleur de thème : blanc = visible, noir = masqué.
+    // La thématiser casserait le grattage — d'où l'exemption `harmony-exempt` sur ces lignes.
+    expect(scratch).toMatch(/<mask[^>]*>\s*<rect[^>]*fill="white"/);
+    expect(scratch).toMatch(/<path[^>]*stroke="black"/);
   });
 
   test('le pseudo s’écrit de gauche à droite, même en arabe', () => {

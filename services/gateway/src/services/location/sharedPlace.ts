@@ -7,13 +7,23 @@
  * `location` dédié, que `parseSharedPlace` valide et que le serveur seul
  * écrit dans `metadata.location`.
  *
- * Chiffrement : décision de conception assumée (voir
+ * Chiffrement : hors bout en bout (conversation en clair, `server`, `hybrid`),
+ * la position se stocke EN CLAIR dans `metadata.location`, au même titre que
+ * `postReplyTo` et `trackingLinks` — le serveur y lit déjà le texte.
+ *
+ * En bout en bout, plus jamais (#12526). Le choix du 2026-07-29 (spec
  * docs/superpowers/specs/2026-07-29-partage-position-design.md, table
- * « Décisions ») — la position voyage et se stocke EN CLAIR dans
- * `metadata.location`, au même titre que les autres blocs `metadata`
- * existants (`postReplyTo`, `trackingLinks`). Une position partagée en
- * conversation E2EE reste donc lisible par le serveur ; ce n'est pas un
- * oubli mais un choix explicite, à ne pas « corriger » silencieusement.
+ * « Décisions ») qui la rangeait en clair même là est RÉVOQUÉ par la directive
+ * du 2026-10-03 (#9224, #9229) : avec E2EE, le serveur ne voit jamais le
+ * clair, et un lieu est un contenu au même titre qu'un texte.
+ * `admitSharedPlace` est la loi : en `e2ee`, le lieu en clair est RETENU —
+ * ni écrit, ni diffusé — pendant que le message chiffré qui l'accompagne
+ * passe. Rejeter l'envoi entier casserait les clients iOS antérieurs qui
+ * joignent encore le lieu en clair à côté du chiffré (rétrocompatibilité,
+ * #9223) ; le retrait se journalise sous `E2EE_PLAINTEXT_LOCATION_WITHHELD`
+ * pour mesurer cet usage jusqu'à zéro. Les clients actuels ne l'envoient
+ * plus : iOS retire la tuile « Lieu » et refuse l'envoi avant tout octet
+ * (`EndToEndSendGate.carriesUnsealableContent`).
  *
  * Miroir de `postReplySnapshot.ts` pour la relecture.
  */
@@ -64,6 +74,28 @@ export function parseSharedPlace(input: unknown): SharedPlace | null {
     address: boundedText(obj['address']),
     category: boundedText(obj['category']),
   };
+}
+
+/** Code stable du retrait d'un lieu en clair dans une conversation e2ee (#12526). */
+export const E2EE_PLAINTEXT_LOCATION_WITHHELD = 'E2EE_PLAINTEXT_LOCATION_WITHHELD';
+
+export type SharedPlaceAdmission = {
+  /** Le lieu à écrire, ou `null` : absent, malformé, ou retenu. */
+  readonly place: SharedPlace | null;
+  /** Un lieu VALIDE a été retenu parce que la conversation est chiffrée de bout en bout. */
+  readonly withheld: boolean;
+};
+
+/**
+ * Le lieu déclaré par le client, admis au régime de sa conversation. En bout en
+ * bout, aucun lieu en clair ne s'écrit : il est retenu, et `withheld` le dit
+ * pour que l'appelant mesure l'usage. Un lieu malformé n'est jamais « retenu » :
+ * rien n'aurait été écrit de toute façon.
+ */
+export function admitSharedPlace(input: unknown, regime: { readonly endToEnd: boolean }): SharedPlaceAdmission {
+  const place = parseSharedPlace(input);
+  if (!regime.endToEnd) return { place, withheld: false };
+  return { place: null, withheld: place !== null };
 }
 
 /**

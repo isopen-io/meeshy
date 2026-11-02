@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "worldEntry.enter", "androidName": "world_entry_enter", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.name.prompt", "androidName": "world_entry_name_prompt", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.name.label", "androidName": "world_entry_name_label", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.name.placeholder", "androidName": "world_entry_name_placeholder", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.continue", "androidName": "world_entry_continue", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.language.greeting", "androidName": "world_entry_language_greeting", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.language.hint", "androidName": "world_entry_language_hint", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.language.group", "androidName": "world_entry_language_group", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.step", "androidName": "world_entry_step", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.back", "androidName": "world_entry_back", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.close", "androidName": "world_entry_close", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.unavailable", "androidName": "world_entry_unavailable", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.error.enter", "androidName": "world_entry_error_enter", "status": "adopted"},
+        {"catalog": "app", "iosKey": "worldEntry.error.offline", "androidName": "world_entry_error_offline", "status": "adopted"}
+      ]
+    }
+  }
+}

@@ -329,7 +329,7 @@ if (precachedFonts.length > 0) {
   console.error(
     `\n  LE SERVICE WORKER PRECACHE ${precachedFonts.length} POLICE(S) : ${precachedFonts.slice(0, 3).join(', ')}…` +
       ` — chaque visiteur les telechargerait A L'INSTALLATION, qu'il ouvre une story ou non.` +
-      ` Les exclure par globIgnores (vite.config.ts), c'est ce qui rend leur cout CONDITIONNEL (#6951)\n`,
+      ` Les exclure par globIgnores (vite/pwa.ts), c'est ce qui rend leur cout CONDITIONNEL (#6951)\n`,
   );
   rc = 1;
 }

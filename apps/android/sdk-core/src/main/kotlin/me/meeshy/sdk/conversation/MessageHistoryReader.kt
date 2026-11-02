@@ -1,6 +1,8 @@
 package me.meeshy.sdk.conversation
 
-import androidx.room.withTransaction
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.commitOrWrite
+
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,10 @@ internal class MessageHistoryReader(
     private val messageDao: MessageDao,
     private val syncMetaDao: SyncMetaDao,
     private val clock: CacheClock,
+    /** #13558 — a page lands only while the account that asked for it is still the one signed in. */
+    private val fence: AccountFence? = null,
+    /** #13792 — chaque page servie nourrit le registre des régimes. */
+    private val regime: EndToEndRegimeKeeper? = null,
 ) {
     /**
      * #5189 — the nominal-flow observe window, per conversation: how many of
@@ -64,6 +70,24 @@ internal class MessageHistoryReader(
     }
 
     /**
+     * Targeted completion of ONE message by its id (#13797): the socket payload of a received forward
+     * carries `forwardedFromId` without the `forwardedFrom` preview the list route serves, so the
+     * thread asks the server for that single message instead of re-reading the page. Best effort —
+     * returns whether the row was merged; a failure or a revoked account changes nothing.
+     */
+    suspend fun refreshMessage(conversationId: String, messageId: String): Boolean {
+        val ticket = fence?.currentTicket()
+        val response = when (val result = rawApiCall { messageApi.listAround(conversationId, messageId) }) {
+            is NetworkResult.Success -> result.data
+            is NetworkResult.Failure -> return false
+        }
+        val served = response.data?.firstOrNull { it.id == messageId }?.takeIf { response.success } ?: return false
+        val now = clock.nowMillis()
+        fence.commitOrWrite(ticket) { MessageIngestPipeline(database).ingest(listOf(served), now) } ?: return false
+        return true
+    }
+
+    /**
      * Cache-only read of a conversation's [limit] most recent messages, oldest
      * first — a "peek" surface (hard-press preview card) that must render
      * instantly without a network round-trip. Deliberately skips the
@@ -84,6 +108,7 @@ internal class MessageHistoryReader(
      * newest page fresher. Returns whether more history remains.
      */
     suspend fun loadOlder(conversationId: String, pageSize: Int = OLDER_PAGE_SIZE): Boolean {
+        val ticket = fence?.currentTicket()
         val cursor = messageDao.oldestSynced(conversationId) ?: return true
         val response = when (
             val result = rawApiCall { messageApi.list(conversationId, limit = pageSize, before = cursor.id) }
@@ -96,9 +121,7 @@ internal class MessageHistoryReader(
             throw MessageSyncException(response.error ?: response.message ?: "Unknown error")
         }
         val now = clock.nowMillis()
-        database.withTransaction {
-            messageDao.upsertAll(page.map { MessageEntityFactory.cached(it, now) })
-        }
+        fence.commitOrWrite(ticket) { MessageIngestPipeline(database, regime = regime).ingest(page, now) } ?: return true
         // #5189 — grow the observe window by exactly what was just paged in,
         // so these older rows (now cached) are not immediately hidden again
         // by messagesStream's bound.
@@ -117,6 +140,8 @@ internal class MessageHistoryReader(
         messageApi = messageApi,
         clock = clock,
         historyWindow = historyWindow(conversationId),
+        fence = fence,
+        regime = regime,
     )
 
     companion object {

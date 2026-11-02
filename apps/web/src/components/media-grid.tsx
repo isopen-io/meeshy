@@ -2,7 +2,7 @@ import { memo, useContext, useState } from 'react';
 
 
 import type { Attachment } from '@/lib/api/types';
-import { attachmentSrc, attachmentSrcSet, sizesFor } from '@/lib/api/media-url';
+import { attachmentPictureSrcSets, attachmentSrc, sizesFor } from '@/lib/api/media-url';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { electDescription } from '@/lib/view/media';
 import { kindOf } from '@/lib/view/message';
@@ -25,6 +25,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { Glyph } from './glyph';
 import { MaskedAttachment } from './masked-attachment';
+import { ServedPicture } from './served-picture';
 import { VideoTile } from './video-tile';
 import { useAttachmentMasked } from './view-once-opened';
 
@@ -64,24 +65,28 @@ export function ImageTile({
   const lang = described.language !== READER_LOCALE ? described.language : undefined;
   const [failed, setFailed] = useState(false);
   const showsFallbackLabel = attachment.fileUrl === '' || failed;
-  const srcSet = attachmentSrcSet(attachment.imageVariants);
+  const sources = attachmentPictureSrcSets(attachment);
+  const srcSet = sources.webp;
+  const sizes = sizesFor(MEDIA_GRID_MAX_WIDTH);
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
 
   const img = attachment.fileUrl === '' ? null : (
-    <img
-      data-attachment-image={attachment.id}
-      src={attachmentSrc(attachment.fileUrl)}
-      {...(srcSet !== undefined ? { srcSet: srcSet, sizes: sizesFor(MEDIA_GRID_MAX_WIDTH) } : {})}
-      alt={described.text}
-      hidden={failed}
-      {...(lang !== undefined ? { lang } : {})}
-      {...(attachment.width !== undefined ? { width: attachment.width } : {})}
-      {...(attachment.height !== undefined ? { height: attachment.height } : {})}
-      loading="lazy"
-      decoding="async"
-      className="absolute inset-0 size-full object-cover"
-      onError={() => setFailed(true)}
-    />
+    <ServedPicture avifSrcSet={sources.avif} sizes={sizes}>
+      <img
+        data-attachment-image={attachment.id}
+        src={attachmentSrc(attachment.fileUrl)}
+        {...(srcSet !== undefined ? { srcSet: srcSet, sizes } : {})}
+        alt={described.text}
+        hidden={failed}
+        {...(lang !== undefined ? { lang } : {})}
+        {...(attachment.width !== undefined ? { width: attachment.width } : {})}
+        {...(attachment.height !== undefined ? { height: attachment.height } : {})}
+        loading="lazy"
+        decoding="async"
+        className="absolute inset-0 size-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    </ServedPicture>
   );
 
   return (
@@ -383,7 +388,8 @@ function GridCellImage({
   const described = electDescription({ attachment, readerLanguages: languages, displayLanguage, fallbackLanguage });
   const lang = described.language !== READER_LOCALE ? described.language : undefined;
   const [failed, setFailed] = useState(false);
-  const srcSet = attachmentSrcSet(attachment.imageVariants);
+  const sources = attachmentPictureSrcSets(attachment);
+  const srcSet = sources.webp;
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
 
   return (
@@ -401,18 +407,20 @@ function GridCellImage({
     >
       <Glyph name="image" size={28} className="absolute inset-0 m-auto opacity-40" />
       {attachment.fileUrl === '' ? null : (
-        <img
-          data-attachment-image={attachment.id}
-          src={attachmentSrc(attachment.fileUrl)}
-          {...(srcSet !== undefined ? { srcSet: srcSet, sizes: sizesFor(widthPx) } : {})}
-          alt={described.text}
-          hidden={failed}
-          {...(lang !== undefined ? { lang } : {})}
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 size-full object-cover"
-          onError={() => setFailed(true)}
-        />
+        <ServedPicture avifSrcSet={sources.avif} sizes={sizesFor(widthPx)}>
+          <img
+            data-attachment-image={attachment.id}
+            src={attachmentSrc(attachment.fileUrl)}
+            {...(srcSet !== undefined ? { srcSet: srcSet, sizes: sizesFor(widthPx) } : {})}
+            alt={described.text}
+            hidden={failed}
+            {...(lang !== undefined ? { lang } : {})}
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 size-full object-cover"
+            onError={() => setFailed(true)}
+          />
+        </ServedPicture>
       )}
     </button>
   );

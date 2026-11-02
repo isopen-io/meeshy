@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lot image-recadrage-poignees : actions TalkBack propres à Android (iOS utilise l'action réglable). -->
+    <string name="image_crop_action_grow">Ingrandisci il riquadro</string>
+    <string name="image_crop_action_shrink">Riduci il riquadro</string>
+</resources>

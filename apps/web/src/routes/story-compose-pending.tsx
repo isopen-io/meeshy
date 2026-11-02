@@ -82,18 +82,37 @@ export function useStudioPendingSend(params: {
 }
 
 /** Le bandeau du plateau : hors ligne, l'état de la publication en attente
- * et le geste qui la retire. */
+ * et le geste qui la retire ; une publication NON ENVOYÉE d'une session
+ * précédente (#13416), et ses deux gestes ; un appareil qui ne garde pas les
+ * médias (navigation privée, quota), dit tant qu'il y en a. */
 export function StudioPendingBand(props: {
   readonly lang: InterfaceLanguage;
   readonly online: boolean;
   readonly pending: Pick<StudioPendingSend, 'awaitingNetwork' | 'sending' | 'cancel'>;
+  readonly unsent?: { readonly retry: () => void; readonly discard: () => void } | null;
+  readonly volatile?: boolean;
 }) {
   const { awaitingNetwork, sending, cancel } = props.pending;
   const cancellable = awaitingNetwork || sending;
-  if (!cancellable && props.online) return null;
+  const unsent = cancellable ? null : (props.unsent ?? null);
+  if (unsent !== null) {
+    return (
+      <div role="status" data-studio-unsent className="glass absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-4 py-1 text-caption" style={{ color: 'var(--color-ios-ink)' }}>
+        <p className="min-w-0 flex-1">{translate(props.lang, 'story.studio.unsent')}</p>
+        <button type="button" data-studio-unsent-discard onClick={unsent.discard} className="min-h-11 shrink-0 font-semibold" style={{ color: 'var(--color-danger)' }}>
+          {translate(props.lang, 'story.studio.unsent.discard')}
+        </button>
+        <button type="button" data-studio-unsent-retry onClick={unsent.retry} className="min-h-11 shrink-0 font-semibold">
+          {translate(props.lang, 'story.studio.unsent.retry')}
+        </button>
+      </div>
+    );
+  }
+  const volatile = props.volatile === true && !cancellable && props.online;
+  if (!cancellable && props.online && !volatile) return null;
   return (
-    <div role="status" data-studio-pending={cancellable ? (sending ? 'sending' : 'awaiting') : undefined} className="glass absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-4 py-1 text-caption" style={{ color: 'var(--color-ios-ink)' }}>
-      <p className="min-w-0 flex-1">{translate(props.lang, sending ? 'story.studio.pending.sending' : 'story.studio.offline')}</p>
+    <div role="status" data-studio-pending={cancellable ? (sending ? 'sending' : 'awaiting') : undefined} data-studio-volatile={volatile ? '' : undefined} className="glass absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-4 py-1 text-caption" style={{ color: 'var(--color-ios-ink)' }}>
+      <p className="min-w-0 flex-1">{translate(props.lang, volatile ? 'story.studio.volatile' : sending ? 'story.studio.pending.sending' : 'story.studio.offline')}</p>
       {cancellable ? (
         <button type="button" data-studio-cancel-send onClick={cancel} className="min-h-11 shrink-0 font-semibold" style={{ color: 'var(--color-danger)' }}>
           {translate(props.lang, 'story.studio.pending.cancel')}

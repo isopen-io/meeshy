@@ -1590,7 +1590,7 @@ describe('MessageHandler', () => {
       ]);
     });
 
-    it("expose `isEncrypted` explicitement à false plutôt que de l'omettre — un client ne doit jamais avoir à deviner qu'un texte est en clair", async () => {
+    it("expose `isEncrypted` explicitement à false, et ne sert jamais une traduction encore chiffrée comme du texte (#12822)", async () => {
       const msg = makeMongoTranslated({
         translations: {
           en: { text: 'Hello', translationModel: 'basic', createdAt: new Date() },
@@ -1602,7 +1602,8 @@ describe('MessageHandler', () => {
 
       const byLang = new Map(emittedTranslations().map((t) => [t.targetLanguage, t]));
       expect(byLang.get('en')).toEqual(expect.objectContaining({ isEncrypted: false }));
-      expect(byLang.get('de')).toEqual(expect.objectContaining({ isEncrypted: true }));
+      expect(byLang.has('de')).toBe(false);
+      expect(JSON.stringify(emittedTranslations())).not.toContain('Z2VoZWlt');
     });
 
     it('laisse intact un tableau déjà au format API — le type partagé `Message.translations` en promet un, il ne doit pas être re-transformé', async () => {

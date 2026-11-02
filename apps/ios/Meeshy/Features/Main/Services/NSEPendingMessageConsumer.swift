@@ -67,11 +67,11 @@ final class NSEPendingMessageConsumer {
         let user = AuthManager.shared.currentUser
         let userId = user?.id ?? ""
         let username = user?.username
-        // Une seule construction pour tout le lot : `preferredContentLanguages`
+        // Une seule construction pour tout le lot : `ReaderPrism.resolve(for:)`
         // est CALCULÉE et alloue un tableau à chaque lecture. Dans la boucle,
         // elle se payait une fois par message pré-récupéré — sur le fil
         // principal, avant la première bulle.
-        let prism = user?.preferredContentLanguages ?? []
+        let prism = ReaderPrism.resolve(for: user)
         // Ce que GRDB GRAVE dans `replyToJson` descend le prisme STRICT du
         // lecteur (`ReaderPrism`) — la descente de la bulle et des deux autres
         // chemins d'ingestion, REST et socket — jamais la liste à repli « fr » :
@@ -143,20 +143,7 @@ final class NSEPendingMessageConsumer {
             let pending = Self.readPending()
             guard !pending.isEmpty else { return ([], []) }
 
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .custom { decoder in
-                let container = try decoder.singleValueContainer()
-                let dateStr = try container.decode(String.self)
-                // Modern Date.ISO8601FormatStyle supports fractional seconds and
-                // is more efficient than legacy ISO8601DateFormatter.
-                if let date = try? Date(dateStr, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
-                    return date
-                }
-                if let date = try? Date(dateStr, strategy: .iso8601) {
-                    return date
-                }
-                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-            }
+            let decoder = MeeshyCoders.decoder(.api)
 
             var decoded: [DecodedPending] = []
             var corrupt: [URL] = []

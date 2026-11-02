@@ -15,7 +15,7 @@
  *
  *   · le service worker généré par Workbox répond bien au message
  *     `SKIP_WAITING` — c'est son MODÈLE qui le câble, sous la seule condition
- *     `skipWaiting: false` (`vite.config.ts` § VitePWA) ;
+ *     `skipWaiting: false` (`vite/pwa.ts` § VitePWA) ;
  *   · `registration.update()` déclenché au retour au premier plan trouve la
  *     version neuve et la met EN ATTENTE ;
  *   · l'activation de cette version retire du précache les entrées de

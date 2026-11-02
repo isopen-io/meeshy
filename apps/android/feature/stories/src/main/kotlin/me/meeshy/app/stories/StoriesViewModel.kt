@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -18,6 +19,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
 import me.meeshy.sdk.story.PendingStoryPublish
+import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
@@ -42,6 +44,8 @@ class StoriesViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val workManager: WorkManager,
     private val socialSocket: SocialSocketManager,
+    private val publications: PublicationOutbox,
+    private val coverMemo: StoryCoverMemo = StoryCoverMemo(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoriesUiState())
@@ -62,14 +66,18 @@ class StoriesViewModel @Inject constructor(
                     },
                 ),
                 storyRepository.publishQueue(),
-            ) { result, queue -> result to queue }
-                .collect { (result, queue) ->
+                // La session peut se résoudre APRÈS la première émission du cache (démarrage
+                // à froid) : la barre se recompose alors, sinon mes stories restent rangées
+                // comme celles d'un autre auteur jusqu'à la prochaine émission.
+                sessionRepository.currentUser,
+            ) { result, queue, user -> Triple(result, queue, user) }
+                .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false) } }
+                .collectEachSafely { (result, queue, user) ->
                     val pending = queue.pending
                     val failed = queue.failed
                     reconcileDeliveredPublishes(pending, failed)
                     rawStories = StoryTrayReducer.stories(result, rawStories)
                     val flags = StoryTrayReducer.flags(result, rawStories.isNotEmpty())
-                    val user = sessionRepository.currentUser.value
                     val currentUserId = user?.id
                     val self = user?.let {
                         StoryOptimisticTray.SelfIdentity(it.id, it.effectiveDisplayName, it.avatar)
@@ -82,6 +90,7 @@ class StoriesViewModel @Inject constructor(
                         groups = merged.toStoryGroups(currentUserId = currentUserId),
                         currentUserId = currentUserId,
                         mediaBaseUrl = config.apiBaseUrl,
+                        coverOf = { coverMemo.coverUrl(it, currentUserId) { null } },
                     )
                     _state.update {
                         it.copy(
@@ -95,6 +104,7 @@ class StoriesViewModel @Inject constructor(
         }
         observeStoryDeletions()
         observeStoryUpdates()
+        observeStoryCreations()
     }
 
     /**
@@ -105,8 +115,27 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryDeletions() {
         viewModelScope.launch {
-            socialSocket.storyDeleted.collect { payload ->
+            socialSocket.storyDeleted.collectEachArrivedSafely { payload ->
                 storyRepository.removeCachedStory(payload.storyId)
+            }
+        }
+    }
+
+    /**
+     * Folds a realtime `story:created` — a friend just posted — into the authoritative Room
+     * cache, so their ring appears (unseen, first) without waiting for a revalidation. A story
+     * already held (our own publish echoed back, a re-broadcast) is left as is. Mirrors iOS `StoryViewModel.storyCreated`.
+     * A friend's republication in story arrives by `post:reposted` instead, and joins the same way.
+     */
+    private fun observeStoryCreations() {
+        viewModelScope.launch {
+            socialSocket.storyCreated.collectEachArrivedSafely { payload ->
+                storyRepository.adoptAnnounced(payload.story)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postReposted.collectEachArrivedSafely { payload ->
+                storyRepository.adoptAnnouncedRepost(payload.repost)
             }
         }
     }
@@ -121,7 +150,7 @@ class StoriesViewModel @Inject constructor(
      */
     private fun observeStoryUpdates() {
         viewModelScope.launch {
-            socialSocket.storyUpdated.collect { payload ->
+            socialSocket.storyUpdated.collectEachArrivedSafely { payload ->
                 storyRepository.applyStoryUpdate(
                     updated = payload.story,
                     engagementReset = payload.engagementReset ?: false,
@@ -162,9 +191,12 @@ class StoriesViewModel @Inject constructor(
         }
     }
 
-    /** Permanently discards a failed publish the user no longer wants to retry. */
+    /**
+     * Permanently discards a failed publish the user no longer wants to retry — with the media
+     * bytes the device kept for it (#13417), which only this explicit gesture removes.
+     */
     fun discardPublish(cmid: String) {
-        viewModelScope.launch { storyRepository.discardPublish(cmid) }
+        viewModelScope.launch { publications.discard(cmid) }
     }
 
     /** Pull-to-refresh / retry. Background SWR keeps the visible tray; a failure just leaves the skeleton. */

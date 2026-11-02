@@ -9,6 +9,7 @@ const enMediaViewer = {
   'media.viewer.react_with': 'React with {emoji}',
   'media.viewer.reply': 'Reply',
   'media.viewer.compose': 'Create with this media',
+  'media.viewer.imager': 'Picture it',
   'media.viewer.saved': 'Saved',
   'media.viewer.save_failed': 'Couldn’t save',
   'media.viewer.offline': 'Offline — try again once connected',

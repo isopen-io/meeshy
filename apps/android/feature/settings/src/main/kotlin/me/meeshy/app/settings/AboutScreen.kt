@@ -1,9 +1,8 @@
 package me.meeshy.app.settings
 
-import android.content.Intent
 import android.content.pm.PackageInfo
-import android.net.Uri
 import android.os.Build
+import me.meeshy.ui.component.link.openExternalLink
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,7 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Code
@@ -62,6 +60,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.compatibility.versionCodeCompat
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * About screen (feature-parity §L) — the Android port of the iOS `AboutView`. Pure Compose glue over
@@ -102,8 +102,8 @@ fun AboutScreen(onBack: () -> Unit) {
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.settings_back),
+                                leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.settings_back)),
                             )
                         }
                     },
@@ -257,7 +257,7 @@ private fun LinkRow(link: AboutLink, label: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
+                context.openExternalLink(link.url)
             },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,

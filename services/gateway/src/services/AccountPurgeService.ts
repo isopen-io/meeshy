@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hashPassword } from '../utils/password-hash';
 import { clearPendingTwoFactor } from './auth/pending-two-factor';
@@ -12,6 +13,8 @@ import {
   type ReadingTelemetryErasure,
 } from './social/readingTelemetryErasure';
 import { deleteShareLinksRevokingGuests } from '../socketio/deleteShareLinksRevokingGuests';
+import { eraseCallTelemetryOf } from './calls/callTelemetryPrivacy';
+import { eraseE2EEDataOfUser } from './e2ee/device-retirement';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
@@ -22,6 +25,23 @@ export type AccountPurgeSummary = {
   readonly shareLinksDeleted: number;
   readonly notificationsDeleted: number;
   readonly addressBookContactsDeleted: number;
+  /** Ses liens de proximité (`UserRelation`, #13927) : la ligne d'une paire dont l'un des deux n'existe plus ne désigne plus personne. */
+  readonly relationsDeleted: number;
+  /** L'agrégat des échanges par paire (`PairInteractionDay`, #13932) : qui a échangé avec qui, quel jour et combien. */
+  readonly pairInteractionDaysDeleted: number;
+  /**
+   * Les consentements de cercle (`RelationFeatureSetting`, #14399) qu'il a
+   * donnés (`ownerId`) et ceux qu'on lui a donnés (`otherId`) : un partage
+   * consenti envers un compte effacé ne désigne plus personne (RGPD art. 17).
+   */
+  readonly relationConsentsDeleted: number;
+  /**
+   * Ses demandes de lien (`FriendRequest`), envoyées ou reçues, quel qu'en soit le
+   * statut (audit #14448, M1) : une demande ACCEPTÉE refaisait de lui un Ami de
+   * ses anciens liens (le niveau retombe sur elle sans ligne `UserRelation`), et
+   * une demande en attente restait dans la boîte de l'autre, son message compris.
+   */
+  readonly friendRequestsDeleted: number;
   readonly contactJoinNoticesDeleted: number;
   readonly arrivalAnnouncementsDeleted: number;
   /** Les traductions PARTAGÉES (#9899) que les participants du compte avaient scellées pour les autres. */
@@ -30,6 +50,10 @@ export type AccountPurgeSummary = {
   readonly packs: PackPurgeSummary;
   /** Ce que le compte a vu, lu, ouvert, fait défiler ou capturé (#10499, O6). */
   readonly readingTelemetry: ReadingTelemetryErasure;
+  /** Les lignes d'appel dont la télémétrie et la note ont été effacées (#11277) : la ligne, elle, reste. */
+  readonly callTelemetryErased: number;
+  /** Ses appareils chiffrés, leurs pré-clés publiques et les enveloppes qui lui restaient adressées (#12543). */
+  readonly e2eeErased: { readonly devices: number; readonly preKeys: number; readonly envelopes: number };
 };
 
 export type AccountPurgeOptions = {
@@ -44,8 +68,8 @@ export type AccountPurgeOptions = {
 };
 
 /**
- * Purge, à l'expiration de la période de grâce (#3632), la portion des
- * données d'un compte supprimé qui ne touche AUCUN autre utilisateur :
+ * Purge, à l'expiration de la période de grâce (#3632), les données d'un
+ * compte supprimé qui ne désignent plus personne une fois le compte effacé :
  * sessions, profil vocal, liens de partage créés par ce compte, notifications
  * qui lui étaient destinées, et son carnet d'adresses synchronisé (#8284 —
  * `eraseAddressBookOf`, qui retire aussi les annonces « X a rejoint Meeshy »
@@ -53,10 +77,22 @@ export type AccountPurgeOptions = {
  * et les traductions PARTAGÉES (#9899) que ses participants avaient scellées
  * pour les autres membres (`eraseSharedTranslationsOfAccount`, par
  * `sharedById` — le `Participant.id`, jamais le `User.id`).
- * Aucune ligne partagée avec un tiers — supprimables sans arbitrage sur ce
- * qu'un AUTRE participant continue de voir. Les notifications d'AUTRES comptes
+ * Certaines de ces lignes sont PARTAGÉES avec un tiers, et c'est assumé : un
+ * lien de cercle (`UserRelation`, #13927), l'agrégat des échanges de la paire
+ * (`PairInteractionDay`), un consentement de cercle dont le tiers est
+ * propriétaire (`RelationFeatureSetting.otherId`, #14399) et une demande de
+ * lien envoyée ou reçue (`FriendRequest`, #14448). Chacune ne vaut que par les
+ * DEUX comptes qu'elle relie ; l'un effacé, elle ne désigne plus personne, et
+ * la garder ferait revivre le compte dans les cercles du tiers. Rien de ce
+ * qu'un AUTRE participant continue de VOIR (messages, médias) n'est ici : ces
+ * contenus suivent l'anonymisation (#5689, #5690). Les notifications d'AUTRES comptes
  * nées de son activité (un message, une réaction) ne sont PAS visées ici :
  * elles suivent l'anonymisation des messages (#5689).
+ *
+ * Un identifiant qui n'est pas un ObjectId (vide, indéfini, blanc) est refusé
+ * AVANT toute suppression (`INVALID_USER_ID`, audit #14448 M2) : Prisma ignore
+ * un champ `undefined`, et `deleteMany({ where: { userId: undefined } })`
+ * viserait toute la collection.
  *
  * Idempotent par construction (`deleteMany` sur une ligne déjà absente ne
  * lève pas) : rejouable sans effet de bord si l'appelant retente après un
@@ -89,10 +125,15 @@ export async function purgeAccountIsolatedData(
   userId: string,
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry] =
+  if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
+  const [sessions, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
+      prisma.userRelation.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
+      prisma.pairInteractionDay.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
+      prisma.relationFeatureSetting.deleteMany({ where: { OR: [{ ownerId: userId }, { otherId: userId }] } }),
+      prisma.friendRequest.deleteMany({ where: { OR: [{ senderId: userId }, { receiverId: userId }] } }),
       // #10492 — les invités de ses liens sont révoqués AVANT la suppression :
       // la ligne emportait la marque d'une révocation différée, et ses invités
       // restaient actifs. Un lien dont la révocation échoue reste, fermé et
@@ -115,11 +156,17 @@ export async function purgeAccountIsolatedData(
       purgeGameData(prisma, userId),
       purgePackData(prisma, userId, { files: options.packFiles }),
       eraseReadingTelemetryOf(prisma, userId),
+      eraseCallTelemetryOf(prisma, userId),
+      eraseE2EEDataOfUser(prisma, userId),
     ]);
 
   const summary: AccountPurgeSummary = {
     sessionsDeleted: sessions.count,
     voiceProfileDeleted: voiceProfile.count,
+    relationsDeleted: relations.count,
+    pairInteractionDaysDeleted: pairInteractionDays.count,
+    relationConsentsDeleted: relationConsents.count,
+    friendRequestsDeleted: friendRequests.count,
     shareLinksDeleted: shareLinks.count,
     notificationsDeleted: notifications.count,
     addressBookContactsDeleted: addressBook.contactsDeleted,
@@ -129,18 +176,20 @@ export async function purgeAccountIsolatedData(
     game,
     packs,
     readingTelemetry,
+    callTelemetryErased: callTelemetry,
+    e2eeErased: e2ee,
   };
 
   logger.info(
     `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
-      `shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
+      `relations=${summary.relationsDeleted} pairInteractionDays=${summary.pairInteractionDaysDeleted} relationConsents=${summary.relationConsentsDeleted} friendRequests=${summary.friendRequestsDeleted} shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
       `gameDuos=${summary.game.duosDeleted} ` +
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
-      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} ` +
+      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} partnerProfiles=${packs.partnerProfilesDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry}`
   );
 
   return summary;

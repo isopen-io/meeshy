@@ -211,6 +211,7 @@
 
 import { randomUUID } from 'crypto';
 import { isDeclaredMinor } from '@meeshy/shared/utils/age';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 import {
   isSendReservationRefused,
   newcomerSendReservationKey,
@@ -289,9 +290,6 @@ export const GLOBAL_NEWCOMER_SLOW_MODE_SECONDS = 30;
 export const GLOBAL_ADULTS_ONLY_CODE = 'GLOBAL_ADULTS_ONLY' as const;
 export const MINOR_GLOBAL_REFUSAL_MESSAGE =
   'Meeshy Global est en lecture seule jusqu’à vos 18 ans : vous pouvez la lire et réagir, pas y écrire.';
-
-/** Rôles `User.role` qui écrivent partout, quel que soit leur rang local. */
-const PLATFORM_STAFF_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'BIGBOSS', 'MODERATOR']);
 
 /**
  * L'état de la conversation que la décision demande — état terminal ET police
@@ -621,7 +619,7 @@ export async function admitConversationWriteFor(
 
   const senderRank = WRITE_ROLE_RANK[sender.role ?? ''] ?? 0;
   const globalRole = sender.user?.role;
-  const isPlatformStaff = globalRole != null && PLATFORM_STAFF_ROLES.has(globalRole);
+  const isPlatformStaff = isPrivilegedPlatformRole(globalRole);
 
   // Le RANG d'abord : un refus définitif ne doit jamais être annoncé comme une
   // attente, qui ferait patienter un client qui ne passera jamais.
@@ -673,7 +671,7 @@ export function admitDerivedConversationWrite(params: {
 
   const senderRank = WRITE_ROLE_RANK[sender.role ?? ''] ?? 0;
   const platformRole = sender.user?.role;
-  const isPlatformStaff = platformRole != null && PLATFORM_STAFF_ROLES.has(platformRole);
+  const isPlatformStaff = isPrivilegedPlatformRole(platformRole);
   return senderRank >= requiredRank || isPlatformStaff ? ADMITTED : REFUSED('write-role-insufficient');
 }
 
@@ -765,7 +763,7 @@ async function admitGlobalWrite(
   if (!sender || accountCreatedAt == null) return ADMITTED;
 
   const platformRole = sender.user?.role;
-  const isPlatformStaff = platformRole != null && PLATFORM_STAFF_ROLES.has(platformRole);
+  const isPlatformStaff = isPrivilegedPlatformRole(platformRole);
   const senderRank = WRITE_ROLE_RANK[sender.role ?? ''] ?? 0;
   if (isPlatformStaff || senderRank >= SLOW_MODE_BYPASS_RANK) return ADMITTED;
 

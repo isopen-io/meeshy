@@ -88,8 +88,8 @@ public final class UserPreferencesManager: ObservableObject {
     /// miroir des préférences de notification est
     /// `appGroupNotificationPrefsKey` — lue par `NSEPreferencesGate` depuis le
     /// process de la NSE, donc `nonisolated` (constantes immuables Sendable).
-    public nonisolated static let appGroupSuiteName = "group.me.meeshy.apps"
-    public nonisolated static let appGroupNotificationPrefsKey = keyPrefix + PreferenceCategory.notification.rawValue
+    public nonisolated static let appGroupSuiteName = AppGroupPreferences.suiteName
+    public nonisolated static let appGroupNotificationPrefsKey = AppGroupPreferences.notificationPreferencesKey
     private static let minSyncInterval: TimeInterval = 5 * 60
     /// Fenêtre de regroupement des diffusions de catégorie
     /// (`observeRemotePreferenceBroadcast`). `internal` pour que les témoins

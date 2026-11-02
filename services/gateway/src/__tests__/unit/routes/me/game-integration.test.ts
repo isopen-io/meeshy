@@ -13,7 +13,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import { GAME_INTEGRATION_ROUTES, gameSettingsResponseSchema, gameUserGamePath, GAME_ROUTES, userGameProfileResponseSchema } from '@meeshy/shared/types/game';
-import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
+import { fakeGameDb, relateAt, seedUser, USER, OTHER, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 import { meGameRoutes } from '../../../../routes/me/game';
 import { userGameShowcaseRoutes } from '../../../../routes/users/game-showcase';
 import { setSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
@@ -131,11 +131,11 @@ describe('GET /users/:userId/game', () => {
     db.gloryLedger.rows.push({ id: `g-${userId}`, userId, delta: glory, reason: 'mint', requestId: `rq-g-${userId}` });
   };
 
-  it('un AMI lit le niveau, le palier, les étoiles, la forme de la Flamme, le rang, ses points, sa Gloire (#10913), le nombre de ses trophées et le palier du trésor — jamais les Meeshes ni les jours de série', async () => {
+  it('un PROCHE lit le niveau, le palier, les étoiles, la forme de la Flamme, le rang, ses points, sa Gloire (#10913), le nombre de ses trophées et le palier du trésor — jamais les Meeshes ni les jours de série', async () => {
     const db = fakeGameDb();
     veteran(db, USER);
     veteran(db, OTHER);
-    befriend(db);
+    relateAt(db, USER, OTHER, 'CLOSE');
     seedWealth(db, USER, 63, 16_000);
 
     const res = await get(await profileApp(db, OTHER), gameUserGamePath(USER));
@@ -291,7 +291,7 @@ describe('GET /users/:userId/game', () => {
     const db = fakeGameDb();
     veteran(db, USER, { lastStreakDate: new Date('2026-01-05T00:00:00Z'), flameFreezes: 0 });
     veteran(db, OTHER);
-    befriend(db);
+    relateAt(db, USER, OTHER, 'CLOSE');
     const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
     expect(data.standing?.flame).toBeNull();
   });
@@ -301,7 +301,7 @@ describe('GET /users/:userId/game', () => {
     const yesterday = new Date(TODAY.getTime() - 24 * 3600 * 1000);
     veteran(db, USER, { lastStreakDate: yesterday });
     veteran(db, OTHER);
-    befriend(db);
+    relateAt(db, USER, OTHER, 'CLOSE');
     const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
     expect(data.standing?.flame).toBe('brasier');
   });

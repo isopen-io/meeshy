@@ -82,9 +82,10 @@ final class StoryViewerTimerPausePreservationTests: XCTestCase {
     func test_refreshWhilePaused_keepsTimerPaused() {
         let (sut, _) = makeSUT()
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(timer: timer)
-        sut.refreshPrefetchWindowAndTimer(timer: timer, paused: true)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline, paused: true)
 
         XCTAssertTrue(
             timer.isPaused,
@@ -98,9 +99,10 @@ final class StoryViewerTimerPausePreservationTests: XCTestCase {
     func test_refreshWhilePaused_clockDoesNotAdvanceProgress() {
         let (sut, stories) = makeSUT()
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(timer: timer)
-        sut.refreshPrefetchWindowAndTimer(timer: timer, paused: true)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline, paused: true)
         timer.markContentReady(slideId: stories[0].id)
         timer._advanceClockForTesting(by: 3.0)
 
@@ -115,10 +117,11 @@ final class StoryViewerTimerPausePreservationTests: XCTestCase {
     func test_repeatedRefreshWhilePaused_staysPaused() {
         let (sut, stories) = makeSUT(storyCount: 3)
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(timer: timer)
-        sut.refreshPrefetchWindowAndTimer(timer: timer, paused: true)
-        sut.refreshPrefetchWindowAndTimer(timer: timer, paused: true)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline, paused: true)
+        sut.refreshPrefetchWindowAndTimer(pipeline, paused: true)
         timer.markContentReady(slideId: stories[0].id)
         timer._advanceClockForTesting(by: 5.0)
 
@@ -134,9 +137,10 @@ final class StoryViewerTimerPausePreservationTests: XCTestCase {
     func test_refreshWithoutPause_leavesTimerRunning() {
         let (sut, stories) = makeSUT()
         let timer = StoryReaderTimerController(useDisplayLink: false)
+        let pipeline = StoryPlaybackPipeline(timer: timer)
 
-        sut.installPrefetchPipelineIfNeeded(timer: timer)
-        sut.refreshPrefetchWindowAndTimer(timer: timer, paused: false)
+        sut.installPrefetchPipelineIfNeeded(pipeline)
+        sut.refreshPrefetchWindowAndTimer(pipeline, paused: false)
         timer.markContentReady(slideId: stories[0].id)
         timer._advanceClockForTesting(by: 3.0)
 

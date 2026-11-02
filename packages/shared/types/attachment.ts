@@ -12,11 +12,11 @@ import type {
   AttachmentTranslations,
   SocketIOTranslatedAudio,
 } from './attachment-audio.js';
+import { UPLOAD_SIZE_CEILINGS, uploadSizeLimit, type UploaderRole } from './upload-limits.js';
 
-/**
- * Types d'attachements supportés
- */
-export type AttachmentType = 'image' | 'document' | 'audio' | 'video' | 'text' | 'code';
+import type { AttachmentType } from './attachment-type.js';
+
+export type { AttachmentType };
 
 /**
  * Statuts de progression d'upload
@@ -134,12 +134,29 @@ export type ModerationStatus = 'pending' | 'approved' | 'flagged' | 'rejected';
  * D4 — a single responsive downscaled WebP variant of an image attachment,
  * used to build a client `srcset`. @see schema.prisma MessageAttachment.imageVariants
  */
+/**
+ * Another encoding of the SAME media, next to `fileUrl` (storage key in `url`):
+ * - #11261 — `h264`: compatibility rendition of an HEVC video;
+ * - #11263 — `heic` / `avif`: the ORIGINAL of an image the server served as
+ *   JPEG (`fileUrl`), kept for clients that decode it (iOS).
+ */
+export interface MediaRendition {
+  readonly codec: 'h264' | 'heic' | 'avif';
+  /** Media type of the rendition file (absent on the first video renditions: `video/mp4`). */
+  readonly mimeType?: string;
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+  readonly size: number;
+}
+
 export interface ImageVariant {
   readonly width: number;
   readonly height: number;
   readonly url: string;
   readonly size: number;
-  readonly format: 'webp';
+  /** `webp` dans `imageVariants`, `avif` dans `avifVariants` (#11262) — jamais mélangés. */
+  readonly format: 'webp' | 'avif';
 }
 
 /**
@@ -180,6 +197,10 @@ export interface Attachment {
   // ===== METADATA =====
   readonly title?: string;          // Human-readable title
   readonly alt?: string;            // Accessibility alt text
+  /** Langue source de `alt` (#12333). */
+  readonly altLanguage?: string;
+  /** Traductions de `alt` (`{ [lang]: { text } }`, #12333) — à résoudre par `resolveMediaDescription`. */
+  readonly altTranslations?: unknown;
   readonly caption?: string;        // Display caption
 
   // ===== IMAGE METADATA =====
@@ -192,6 +213,23 @@ export interface Attachment {
    * original for inline previews.
    */
   readonly imageVariants?: readonly ImageVariant[];
+  /**
+   * #11262 — the same responsive widths encoded as AVIF, in a SEPARATE array:
+   * older clients read `imageVariants` without filtering the format, so an
+   * AVIF never lands there. A client that decodes AVIF picks these first.
+   */
+  readonly avifVariants?: readonly ImageVariant[];
+  /**
+   * #11261 — additional video renditions next to the original: an HEVC upload
+   * gets an H.264 High ≤1080p rendition (HDR tone-mapped to SDR BT.709) for
+   * readers that cannot decode HEVC. The original `fileUrl` stays untouched.
+   */
+  readonly renditions?: readonly MediaRendition[];
+  /**
+   * #11264 — `pending` while the media worker renders a deferred rendition
+   * (thumbnail, variants, video rendition); absent or `ready` otherwise.
+   */
+  readonly processingState?: 'pending' | 'ready' | 'failed';
   /**
    * #6221 — le TYPE CLIENT rattrape son contrat : la passerelle SERT ce champ
    * (`api-schemas/message-attachment.ts:91`, `schema.prisma:1010`,
@@ -208,6 +246,8 @@ export interface Attachment {
   readonly sampleRate?: number;
   readonly codec?: string;
   readonly channels?: number;
+  /** Sonie intégrée EBU R128 (LUFS) du fichier stocké, mesurée à l'ingestion (#11259). */
+  readonly loudnessLufs?: number | null;
   readonly fps?: number;
   readonly videoCodec?: string;
 
@@ -235,6 +275,14 @@ export interface Attachment {
    * @see packages/shared/utils/forward-to-publication.ts
    */
   readonly capturedInApp: boolean;
+
+  /**
+   * La lens qui a produit ce média (#11327), retenue par la passerelle si elle
+   * est publiée et installée par l'expéditeur. EN CLAIR, E2EE compris (#11251).
+   * Optionnel : absente d'une ligne héritée ; le crédit se lit par `GET /lens/credits`.
+   * @see packages/shared/types/lens-partner.ts
+   */
+  readonly lensSlug?: string | null;
 
   // ===== VIEW-ONCE & BLUR =====
   readonly isViewOnce: boolean;
@@ -395,6 +443,7 @@ export interface UploadedAttachmentResponse {
   readonly sampleRate?: number;
   readonly codec?: string;
   readonly channels?: number;
+  readonly loudnessLufs?: number;
   readonly uploadedBy: string;
   readonly isAnonymous: boolean;
   readonly createdAt: string;
@@ -442,15 +491,18 @@ export interface UploadMultipleResponse {
 }
 
 /**
- * Limites de taille d'upload par type de fichier (en octets)
+ * Limites de taille d'upload par type de fichier (en octets), pour un compte
+ * inscrit — PROJECTION de `UPLOAD_SIZE_CEILINGS` (`upload-limits.ts`, #11266),
+ * gardée pour les consommateurs existants. La limite d'un anonyme se lit par
+ * `getSizeLimit(type, 'anonymous')` ou `uploadSizeLimit`.
  */
 export const UPLOAD_LIMITS = {
-  IMAGE: 4294967296, // 4GB
-  DOCUMENT: 4294967296, // 4GB
-  AUDIO: 4294967296, // 4GB
-  VIDEO: 4294967296, // 4GB
-  TEXT: 2147483648, // 2GB
-  CODE: 2147483648, // 2GB
+  IMAGE: UPLOAD_SIZE_CEILINGS.image,
+  DOCUMENT: UPLOAD_SIZE_CEILINGS.document,
+  AUDIO: UPLOAD_SIZE_CEILINGS.audio,
+  VIDEO: UPLOAD_SIZE_CEILINGS.video,
+  TEXT: UPLOAD_SIZE_CEILINGS.document,
+  CODE: UPLOAD_SIZE_CEILINGS.document,
 } as const;
 
 /**
@@ -507,6 +559,17 @@ export const TUS_CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
 export const SMALL_FILE_THRESHOLD = 50 * 1024 * 1024; // 50 MB - below this, use direct REST upload
 
 /**
+ * Fichiers d'UNE requête directe (`POST /attachments/upload`, multipart) — la
+ * borne `limits.files` du plugin multipart de la passerelle (`server.ts`), qui
+ * rend 413 au-delà. Un client qui envoie davantage (un partage en porte 100,
+ * `SHARE_LIMITS`) découpe en plusieurs requêtes. La voie directe tient chaque
+ * fichier en mémoire (`part.toBuffer()`) : elle reste celle des petits
+ * fichiers, `SMALL_FILE_THRESHOLD` par requête au plus ; le reste passe par la
+ * reprise (TUS), qui écrit sur disque tranche par tranche.
+ */
+export const MAX_DIRECT_UPLOAD_FILES = 30;
+
+/**
  * Type des limites d'upload
  */
 export type UploadLimits = typeof UPLOAD_LIMITS;
@@ -515,7 +578,9 @@ export type UploadLimits = typeof UPLOAD_LIMITS;
  * Types MIME acceptés par catégorie
  */
 export const ACCEPTED_MIME_TYPES = {
-  IMAGE: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'] as const,
+  // #11263 — HEIC/HEIF/AVIF acceptés : le serveur les sert en JPEG
+  // (`fileUrl`) et garde l'original dans `renditions`.
+  IMAGE: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'image/avif'] as const,
   DOCUMENT: [
     'application/pdf',
     'text/plain',
@@ -784,30 +849,11 @@ export function getAttachmentType(mimeType: string, filename?: string): Attachme
 }
 
 /**
- * Obtient la limite de taille pour un type d'attachement
+ * Obtient la limite de taille pour un type d'attachement et le rôle de
+ * l'appelant (inscrit par défaut) — #11266.
  */
-export function getSizeLimit(type: AttachmentType): number {
-  switch (type) {
-    case 'image':
-      return UPLOAD_LIMITS.IMAGE;
-    case 'audio':
-      return UPLOAD_LIMITS.AUDIO;
-    case 'video':
-      return UPLOAD_LIMITS.VIDEO;
-    case 'text':
-      return UPLOAD_LIMITS.TEXT;
-    case 'code':
-      return UPLOAD_LIMITS.CODE;
-    case 'document':
-      return UPLOAD_LIMITS.DOCUMENT;
-    default: {
-      // Exhaustive check - assure que tous les cas sont couverts
-      const _exhaustiveCheck: never = type;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      void _exhaustiveCheck;
-      return UPLOAD_LIMITS.DOCUMENT;
-    }
-  }
+export function getSizeLimit(type: AttachmentType, role: UploaderRole = 'registered'): number {
+  return uploadSizeLimit({ type, role });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

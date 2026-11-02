@@ -5,208 +5,308 @@
       "resDir": "feature/conversations/src/main/res",
       "entries": [
         {
+          "catalog": "app",
+          "iosKey": "common.active",
           "androidName": "common_active",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "common.cancel",
           "androidName": "common_cancel",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "common.inactive",
           "androidName": "common_inactive",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "common.retry",
           "androidName": "common_retry",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "common.share",
           "androidName": "common_share",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "conversationCard.expired",
           "androidName": "conversationCard_expired",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "participantProfile.linkExpires",
           "androidName": "participantProfile_linkExpires",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.a11y.copied",
           "androidName": "shareLink_a11y_copied",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.allLanguages",
           "androidName": "shareLink_detail_allLanguages",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.allowedLanguages",
           "androidName": "shareLink_detail_allowedLanguages",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.askedOnArrival",
           "androidName": "shareLink_detail_askedOnArrival",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.concurrent",
           "androidName": "shareLink_detail_concurrent",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.concurrentMax",
           "androidName": "shareLink_detail_concurrentMax",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.configuration",
           "androidName": "shareLink_detail_configuration",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.createdOn",
           "androidName": "shareLink_detail_createdOn",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.edit",
           "androidName": "shareLink_detail_edit",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.editTitle",
           "androidName": "shareLink_detail_editTitle",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.entryConditions",
           "androidName": "shareLink_detail_entryConditions",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.expiration",
           "androidName": "shareLink_detail_expiration",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.expires",
           "androidName": "shareLink_detail_expires",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.fieldBirthday",
           "androidName": "shareLink_detail_fieldBirthday",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.fieldEmail",
           "androidName": "shareLink_detail_fieldEmail",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.fieldFirstName",
           "androidName": "shareLink_detail_fieldFirstName",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.fieldLastName",
           "androidName": "shareLink_detail_fieldLastName",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.fieldNickname",
           "androidName": "shareLink_detail_fieldNickname",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.guestRights",
           "androidName": "shareLink_detail_guestRights",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.historyRight",
           "androidName": "shareLink_detail_historyRight",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.invalidLimits",
           "androidName": "shareLink_detail_invalidLimits",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.limits",
           "androidName": "shareLink_detail_limits",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.maxConcurrentField",
           "androidName": "shareLink_detail_maxConcurrentField",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.maxUsesField",
           "androidName": "shareLink_detail_maxUsesField",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.meeshyAccount",
           "androidName": "shareLink_detail_meeshyAccount",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.messageField",
           "androidName": "shareLink_detail_messageField",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.nameField",
           "androidName": "shareLink_detail_nameField",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.never",
           "androidName": "shareLink_detail_never",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.optional",
           "androidName": "shareLink_detail_optional",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.requireAccount",
           "androidName": "shareLink_detail_requireAccount",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.requireBirthday",
           "androidName": "shareLink_detail_requireBirthday",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.requireEmail",
           "androidName": "shareLink_detail_requireEmail",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.requireNickname",
           "androidName": "shareLink_detail_requireNickname",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.required",
           "androidName": "shareLink_detail_required",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.save",
           "androidName": "shareLink_detail_save",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.saveFailed",
           "androidName": "shareLink_detail_saveFailed",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.saved",
           "androidName": "shareLink_detail_saved",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.unlimited",
           "androidName": "shareLink_detail_unlimited",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.uses",
           "androidName": "shareLink_detail_uses",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "shareLink.detail.usesUnlimited",
           "androidName": "shareLink_detail_usesUnlimited",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "share.links.copy.a11y",
           "androidName": "share_links_copy_a11y",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "share.sheet.a11y.selected",
           "androidName": "sharelinks_detail_language_selected",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "sharelinks_list_refresh_failed",
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "conversations.error.retry",
           "androidName": "sharelinks_list_retry",
-          "status": "android-only"
+          "status": "adopted"
         }
       ]
     }

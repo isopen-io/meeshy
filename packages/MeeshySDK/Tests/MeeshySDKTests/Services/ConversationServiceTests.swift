@@ -100,6 +100,16 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["encryptionMode"], "sans choix, la passerelle pose Serveur")
+    }
+
+    func test_create_withEncryptionMode_sendsTheChosenMode() async throws {
+        let createResponse = CreateConversationResponse(id: "new123", type: "direct", title: nil, createdAt: Date())
+        mock.stub("/conversations", result: APIResponse(success: true, data: createResponse, error: nil))
+
+        _ = try await service.create(type: "direct", participantIds: ["u1"], encryptionMode: .hybrid)
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["encryptionMode"] as? String, "hybrid")
     }
 
     // MARK: - delete

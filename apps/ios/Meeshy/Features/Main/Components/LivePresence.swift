@@ -12,10 +12,12 @@ import SwiftUI
 /// seule à observer `PresenceRefreshSignal` (débouncé, jamais `PresenceManager`
 /// lui-même) : seul l'avatar se repeint, ni la carte ni la rangée qui le portent.
 struct LivePresence<Content: View>: View {
-    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
+    @ObservedObject private var presencePulse: PresenceRefreshSignal
     let content: () -> Content
 
-    init(@ViewBuilder content: @escaping () -> Content) {
+    init(presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal,
+         @ViewBuilder content: @escaping () -> Content) {
+        self.presencePulse = presencePulse
         self.content = content
     }
 

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { inBatches } from './inBatches';
 
 /**
  * Le corps PARTAGÉ des deux appliqueurs de texte par média
@@ -65,7 +66,7 @@ export async function applyMediaText(
     // la rendrait présente et vide.
     return { id, text: propre.trim().length > 0 ? propre : null };
   });
-  await Promise.all(written.map(({ id, text }) => client.postMedia.updateMany({
+  await inBatches(written.map(({ id, text }) => () => client.postMedia.updateMany({
     where: { id, postId },
     data: { [column]: text },
   })));

@@ -17,6 +17,9 @@ import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
 import { accountReaderKeyOf } from '../../../services/posts/readerKey';
 import { sharedTranslationRow, sharedTranslationTable } from '../../helpers/shared-translation-table';
 import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
+import { relationStore } from '../../helpers/user-relation-store';
+import { niveauEffectifUniforme } from '../../../services/friendship';
 
 jest.mock('../../../utils/password-hash', () => ({
   hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
@@ -28,6 +31,13 @@ function fakePrisma(overrides: Record<string, any> = {}) {
   return {
     userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    userRelation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    relationFeatureSetting: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    friendRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
+    ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
+      [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
     conversationShareLink: shareLinkTable([]),
     notification: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -41,6 +51,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     // Les traductions partagées (#9899) : un compte sans participant.
     participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
     sharedTranslation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
+    callParticipant: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), count: jest.fn<any>().mockResolvedValue(0) }]),
@@ -83,18 +95,48 @@ function shareLinkTable(initial: ShareLinkRow[]) {
 }
 
 function packTables(db: ReturnType<typeof fakePackDb>) {
-  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack } = db;
-  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack };
+  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset, partnerProfile, lensUsageDaily } = db;
+  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack, lensPack, lensPackAsset, partnerProfile, lensUsageDaily };
 }
 
 const NO_FILES = { packFiles: fakeFileStore([]).store };
 
 describe('purgeAccountIsolatedData', () => {
+  it('efface la télémétrie et la note de chacun de ses appels, sur tous ses participants, sans supprimer les lignes (#11277)', async () => {
+    const prisma = fakePrisma({
+      participant: { findMany: jest.fn<any>().mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]) },
+      callParticipant: { updateMany: jest.fn<any>().mockResolvedValue({ count: 4 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.callParticipant.updateMany).toHaveBeenCalledWith({
+      where: { participantId: { in: ['p1', 'p2'] } },
+      data: { analytics: null, feedback: null },
+    });
+    expect(summary.callTelemetryErased).toBe(4);
+  });
+
   it('deletes every UserSession row for the account', async () => {
     const prisma = fakePrisma({ userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }) } });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.sessionsDeleted).toBe(3);
+  });
+
+  it("efface ses appareils chiffrés, leurs pré-clés, les enveloppes qui lui sont adressées (#12543) et la trace de ses preuves de liaison (#12933)", async () => {
+    const prisma = fakePrisma({
+      e2EEDevice: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
+      e2EEOneTimePreKey: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 150 }) },
+      messageEnvelope: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 4 }) },
+      e2EERevokedIdentity: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+      e2EEBindingProof: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.e2EEDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.e2EEOneTimePreKey.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.messageEnvelope.deleteMany).toHaveBeenCalledWith({ where: { recipientUserId: USER_ID } });
+    expect(prisma.e2EERevokedIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.e2EEBindingProof.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(summary.e2eeErased).toEqual({ devices: 2, preKeys: 150, envelopes: 4 });
   });
 
   it('deletes the UserVoiceModel row for the account', async () => {
@@ -190,7 +232,141 @@ describe('purgeAccountIsolatedData', () => {
       contactJoinNoticesDeleted: 0,
       arrivalAnnouncementsDeleted: 0,
       sharedTranslationsDeleted: 0,
+      relationConsentsDeleted: 0,
     });
+  });
+});
+
+/**
+ * Les liens de proximité (`UserRelation`, #13926) n'ont AUCUNE relation Prisma
+ * vers `User` : sans purge explicite, la ligne d'un compte supprimé survivait,
+ * et son identifiant restait un voisin de cercle pour la personne d'en face
+ * (#13927). La ligne est partagée avec l'autre personne, mais elle ne désigne
+ * plus personne une fois l'un des deux effacé.
+ */
+describe('purgeAccountIsolatedData — liens de proximité', () => {
+  const OTHER = '507f1f77bcf86cd7994390ff';
+  const THIRD = '507f1f77bcf86cd7994390fe';
+
+  function relationTable(rows: Array<{ id: string; userLowId: string; userHighId: string }>) {
+    const table = {
+      rows: [...rows],
+      deleteMany: jest.fn<any>(async ({ where }: { where: Record<string, unknown> }) => {
+        const before = table.rows.length;
+        table.rows = table.rows.filter((row) => !matchesMongoWhere(row, where));
+        return { count: before - table.rows.length };
+      }),
+    };
+    return table;
+  }
+
+  it('supprime tous les liens du compte, qu\'il soit le côté low ou le côté high, et laisse ceux des autres', async () => {
+    const userRelation = relationTable([
+      { id: 'r1', userLowId: USER_ID, userHighId: OTHER },
+      { id: 'r2', userLowId: THIRD, userHighId: USER_ID },
+      { id: 'r3', userLowId: THIRD, userHighId: OTHER },
+    ]);
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ userRelation }), USER_ID, NO_FILES);
+
+    expect(userRelation.rows.map((row) => row.id)).toEqual(['r3']);
+    expect(summary.relationsDeleted).toBe(2);
+  });
+
+  it('audit #13932 — efface aussi l\'agrégat des échanges par paire : qui a parlé à qui, jour par jour, ne survit pas au compte', async () => {
+    const pairInteractionDay = relationTable([
+      { id: 'd1', userLowId: USER_ID, userHighId: OTHER },
+      { id: 'd2', userLowId: THIRD, userHighId: USER_ID },
+      { id: 'd3', userLowId: THIRD, userHighId: OTHER },
+    ]);
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ pairInteractionDay }), USER_ID, NO_FILES);
+
+    expect(pairInteractionDay.rows.map((row) => row.id)).toEqual(['d3']);
+    expect(summary.pairInteractionDaysDeleted).toBe(2);
+  });
+
+  it("#14399 — efface les consentements de cercle qu'il a donnés et ceux qu'on lui a donnés, et laisse ceux des autres", async () => {
+    const consents = [
+      { id: 's1', ownerId: USER_ID, otherId: OTHER },
+      { id: 's2', ownerId: THIRD, otherId: USER_ID },
+      { id: 's3', ownerId: THIRD, otherId: OTHER },
+    ];
+    const relationFeatureSetting = {
+      rows: [...consents],
+      deleteMany: jest.fn<any>(async ({ where }: { where: Record<string, unknown> }) => {
+        const before = relationFeatureSetting.rows.length;
+        relationFeatureSetting.rows = relationFeatureSetting.rows.filter((row) => !matchesMongoWhere(row, where));
+        return { count: before - relationFeatureSetting.rows.length };
+      }),
+    };
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ relationFeatureSetting }), USER_ID, NO_FILES);
+
+    expect(relationFeatureSetting.rows.map((row) => row.id)).toEqual(['s3']);
+    expect(summary.relationConsentsDeleted).toBe(2);
+  });
+
+  it("audit #14448 M1 — sa demande ACCEPTÉE ne refait pas de lui un Ami, et ses demandes en attente quittent la boîte de l'autre", async () => {
+    const at = new Date('2026-10-01T00:00:00.000Z');
+    const request = (id: string, senderId: string, receiverId: string, status: string) => ({
+      id, senderId, receiverId, status, targetLevel: 'BLOOD', message: 'coucou', createdAt: at, updatedAt: at, respondedAt: status === 'accepted' ? at : null,
+    });
+    const store = relationStore({
+      friendRequests: [
+        request('f1', USER_ID, OTHER, 'accepted'),
+        request('f2', THIRD, USER_ID, 'pending'),
+        request('f3', THIRD, OTHER, 'accepted'),
+      ],
+      relations: [{ id: 'r1', userLowId: USER_ID, userHighId: OTHER, grantedByLow: 'BLOOD', grantedByHigh: 'BLOOD', origin: 'request', transitions: [] }],
+    });
+    expect(await niveauEffectifUniforme(store.prisma as never, OTHER, USER_ID)).toBe('BLOOD');
+
+    const summary = await purgeAccountIsolatedData(fakePrisma({ ...store.prisma }), USER_ID, NO_FILES);
+
+    expect(await niveauEffectifUniforme(store.prisma as never, OTHER, USER_ID)).toBe('PUBLIC');
+    expect(store.friendRequests().map((row) => row.id)).toEqual(['f3']);
+    expect(summary.friendRequestsDeleted).toBe(2);
+  });
+});
+
+/**
+ * Audit #14448 M2 — un identifiant vide ou indéfini ne doit RIEN effacer. Pour
+ * Prisma, un champ `undefined` dans un `where` est IGNORÉ : `deleteMany({ where:
+ * { userId: undefined } })` vise toute la collection. Le double applique cette
+ * règle (`matchesMongoWhere`) : sans la garde, chaque table ci-dessous serait
+ * vidée, et le témoin le verrait.
+ */
+describe('purgeAccountIsolatedData — un identifiant illisible est refusé avant toute suppression', () => {
+  const OTHER = '507f1f77bcf86cd7994390ff';
+
+  function tableOf(rows: Array<Record<string, unknown>>) {
+    const table = {
+      rows: [...rows],
+      deleteMany: jest.fn<any>(async ({ where }: { where: Record<string, unknown> }) => {
+        const before = table.rows.length;
+        table.rows = table.rows.filter((row) => !matchesMongoWhere(row, where));
+        return { count: before - table.rows.length };
+      }),
+    };
+    return table;
+  }
+
+  it.each([undefined, null, '', '   ', 'pas-un-objectid', `${OTHER}0`])('%p : rejeté, et aucune ligne ne part', async (userId) => {
+    const userSession = tableOf([{ id: 'u1', userId: OTHER }]);
+    const userRelation = tableOf([{ id: 'r1', userLowId: OTHER, userHighId: USER_ID }]);
+    const prisma = fakePrisma({ userSession, userRelation });
+
+    await expect(purgeAccountIsolatedData(prisma, userId as never, NO_FILES)).rejects.toThrow('INVALID_USER_ID');
+
+    expect(userSession.rows).toHaveLength(1);
+    expect(userRelation.rows).toHaveLength(1);
+    expect(userSession.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.notification.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('le double lit `undefined` comme Prisma : le champ est ignoré, la clause vise toutes les lignes', () => {
+    expect(matchesMongoWhere({ userId: OTHER }, { userId: undefined })).toBe(true);
   });
 });
 
@@ -300,7 +476,7 @@ describe('purgeAccountIsolatedData — les packs du compte (#10151)', () => {
     expect(db.tables.userSticker.rows).toEqual([]);
     expect([...files.files]).toEqual([`stickers/${VOISIN}/b.webp`]);
     expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
-    expect(summary.packs).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 1, ownershipsDeleted: 1 });
+    expect(summary.packs).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 1, ownershipsDeleted: 1, partnerProfilesDeleted: 0 });
   });
 });
 

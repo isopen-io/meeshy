@@ -106,6 +106,33 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
+    fun theBannerOfAMilestoneCarriesItsNotificationSoTouchingItCanCelebrateIt() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+        val milestone = ApiNotification(
+            id = "g1",
+            type = "streak_milestone",
+            metadata = me.meeshy.sdk.model.NotificationMetadata(threshold = 7),
+        )
+
+        received.emit(milestone)
+        runCurrent()
+
+        assertThat(vm.banner.value?.game).isEqualTo(milestone)
+    }
+
+    @Test
+    fun theBannerOfAMessageIsNotAGameBanner() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "m1"))
+        runCurrent()
+
+        assertThat(vm.banner.value?.game).isNull()
+    }
+
+    @Test
     fun aDuplicateDeliveryWithinTheWindowDoesNotSurfaceAgain() = runTest(dispatcher.scheduler) {
         val vm = viewModel()
         runCurrent()
@@ -381,6 +408,52 @@ class NotificationBannerViewModelTest {
         val banner = vm.banner.value
         assertThat(banner?.previewHidden).isFalse()
         assertThat(banner?.presentation?.body).isEqualTo("Dinner at 8?")
+    }
+
+    @Test
+    fun aDirectBannerWhoseSenderHasNoPhotoNeverBorrowsTheConversationPhoto() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                context = NotificationContext(conversationId = "c1", conversationType = "dm", conversationAvatar = "legacy.png"),
+            ),
+        )
+        runCurrent()
+
+        assertThat(vm.banner.value?.avatarUrl).isNull()
+        assertThat(vm.banner.value?.avatarName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun aGroupBannerFallsBackToTheGroupPhotoUnderTheLocalGroupName() = runTest(dispatcher.scheduler) {
+        every { conversationRepository.conversationStream("c1") } returns flowOf(
+            ApiConversation(
+                id = "c1",
+                type = "group",
+                title = "Équipe Tech",
+                preferences = ApiConversationPreferences(customName = "Mon équipe"),
+            ),
+        )
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                context = NotificationContext(conversationId = "c1", conversationType = "group", conversationAvatar = "2026/09/g.png"),
+            ),
+        )
+        runCurrent()
+
+        assertThat(vm.banner.value?.avatarUrl).isEqualTo("2026/09/g.png")
+        assertThat(vm.banner.value?.avatarName).isEqualTo("Mon équipe")
     }
 
     @Test

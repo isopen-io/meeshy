@@ -51,6 +51,9 @@
  * paragraphe l'exigeait.
  */
 
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { unreadMessagesLabel } from '@/lib/view/unread-label';
+
 /** Cotes de la pose de FLUX — `UnreadCountBadge.swift`, trait pour trait. */
 export const UNREAD_BADGE_FLOW = {
   /** Plancher CARRÉ : à un chiffre la pastille reste un disque. */
@@ -82,13 +85,20 @@ export function unreadBadgeText(count: number): string {
  * crochet stable que `check-list-actions.mjs` interroge pour prouver que
  * « Lu »/« Non lu » a un effet, et il doit continuer de dire 4 312 quand
  * l'œil lit « 99+ ».
+ *
+ * **Et elle se LIT en toutes lettres** (#11575) : une image nommée par la
+ * phrase d'iOS (« 5 messages non lus », « plus de 99 messages non lus ») — un
+ * lecteur d'écran lisait un chiffre nu. Là où l'hôte nomme déjà le compte
+ * (bouton retour du fil, pliage de section), son `aria-label` prime.
  */
 export function UnreadBadge({
   count,
   opacity,
+  language = currentInterfaceLanguage(),
 }: {
   readonly count: number;
   readonly opacity?: number;
+  readonly language?: InterfaceLanguage;
 }) {
   const text = unreadBadgeText(count);
   if (text === '') return null;
@@ -96,6 +106,8 @@ export function UnreadBadge({
   return (
     <span
       data-unread={count}
+      role="img"
+      aria-label={unreadMessagesLabel(count, language)}
       className="grid shrink-0 place-items-center rounded-chip text-check font-bold text-ios-on-brand tabular-nums"
       style={{
         minWidth: UNREAD_BADGE_FLOW.minimumSize,

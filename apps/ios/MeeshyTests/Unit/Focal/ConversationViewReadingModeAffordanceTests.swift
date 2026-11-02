@@ -162,7 +162,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
             code.contains("toggledDensity"),
             "P2 : la bascule de densité Aa disparaît avec son bouton — le cycle du chip parcourt TOUS les modes disponibles, pas seulement Focal⇄Script."
         )
-        let chip = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift")
+        let chip = try strippedSource("Meeshy/Features/Focal/Lens/ReadingModeChip.swift")
         XCTAssertFalse(chip.contains("struct ReadingModeDensityButton"), "le type Aa lui-même est retiré — jamais de code mort monté nulle part.")
     }
 
@@ -200,7 +200,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
     }
 
     func test_chip_presentsItsMenuOnLongPress_viaContextMenu() throws {
-        let chip = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift")
+        let chip = try strippedSource("Meeshy/Features/Focal/Lens/ReadingModeChip.swift")
         XCTAssertTrue(
             chip.contains(".contextMenu"),
             "l'appui long présente le menu natif (.contextMenu — rendu Liquid Glass sur iOS 26) listant les modes."
@@ -219,7 +219,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
             code.contains("isReadingModeLensPresented"),
             "P2 : le chip ne présente plus de feuille — tap = cycle, appui long = menu. L'état de présentation disparaît avec elle."
         )
-        let sheet = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift")
+        let sheet = try strippedSource("Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift")
         XCTAssertFalse(
             sheet.contains("struct ReadingModeLensSheet: View"),
             "la vue de la feuille est supprimée (code mort sinon) — le CATALOGUE (LensRowModel + ReadingModeLensCatalog) reste, consommé par le menu."
@@ -282,12 +282,12 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
     // MARK: - Les fichiers Focal/Lens/ existent et déclarent les types attendus
 
     func test_lensFolder_declaresExpectedTypes() throws {
-        let chip = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift")
+        let chip = try strippedSource("Meeshy/Features/Focal/Lens/ReadingModeChip.swift")
         XCTAssertTrue(chip.contains("struct ReadingModeChip: View"))
         XCTAssertTrue(chip.contains("struct ReadingModeChipModel: Equatable"))
         XCTAssertTrue(chip.contains("enum ReadingModeCycle"))
 
-        let sheet = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift")
+        let sheet = try strippedSource("Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift")
         XCTAssertTrue(sheet.contains("struct LensRowModel: Equatable, Identifiable"))
         XCTAssertTrue(sheet.contains("enum ReadingModeLensCatalog"))
     }
@@ -297,8 +297,8 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
     func test_lensFiles_neverHardcodeLawConstants() throws {
         let forbidden = ["520", "380", "0.45", "0.82", "900", "25", "24"]
         for path in [
-            "Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",
-            "Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift"
+            "Meeshy/Features/Focal/Lens/ReadingModeChip.swift",
+            "Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift"
         ] {
             let code = try strippedSource(path)
             for literal in forbidden {
@@ -314,8 +314,8 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
 
     func test_lensFiles_neverUseOnTapGesture() throws {
         for path in [
-            "Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",
-            "Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift"
+            "Meeshy/Features/Focal/Lens/ReadingModeChip.swift",
+            "Meeshy/Features/Focal/Lens/ReadingModeLensSheet.swift"
         ] {
             let code = try strippedSource(path)
             XCTAssertFalse(

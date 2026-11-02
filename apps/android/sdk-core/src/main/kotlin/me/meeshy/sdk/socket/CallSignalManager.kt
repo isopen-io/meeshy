@@ -1,9 +1,11 @@
 package me.meeshy.sdk.socket
 
-import kotlinx.coroutines.flow.MutableSharedFlow
+import me.meeshy.sdk.model.socket.SocketEventNames
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -13,6 +15,7 @@ import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinAckParser
 import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallParticipantArrival
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
@@ -20,9 +23,12 @@ import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
-import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.WaitingCall
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import org.json.JSONObject
+import javax.inject.Provider
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -50,12 +56,25 @@ import kotlin.coroutines.resume
  * matching [MessageSocketManager]/[SocialSocketManager].
  */
 @Singleton
-class CallSignalManager @Inject constructor(
+class CallSignalManager internal constructor(
     private val socketManager: SocketManager,
     private val social: CallSocialSignalManager,
+    private val ticket: () -> AccountTicket?,
 ) {
-    private val _events = MutableSharedFlow<CallEvent>(replay = 0, extraBufferCapacity = 64)
-    val events: SharedFlow<CallEvent> = _events.asSharedFlow()
+    /** Le ticket du compte est pris À LA RÉCEPTION de chaque trame (#13588), comme la voie série des autres routes. */
+    @Inject
+    constructor(
+        socketManager: SocketManager,
+        social: CallSocialSignalManager,
+        fence: Provider<AccountFence>,
+    ) : this(socketManager, social, { fence.get().ticket() })
+
+    constructor(socketManager: SocketManager, social: CallSocialSignalManager) : this(socketManager, social, { null })
+
+    private fun arrivalTicket(): AccountTicket? = runCatching(ticket).getOrNull()
+
+    private val _events = SocketInboundRoute.subject<CallEvent>()
+    val events: SharedFlow<CallEvent> = _events.exposed()
 
     /**
      * The **identity** of each inbound `call:initiated` offer, alongside the
@@ -64,8 +83,8 @@ class CallSignalManager @Inject constructor(
      * arriving while a call is already active can be surfaced as a call-waiting
      * banner (and rejected / answered by its own id). Hot, no replay — like [events].
      */
-    private val _incomingOffers = MutableSharedFlow<WaitingCall>(replay = 0, extraBufferCapacity = 16)
-    val incomingOffers: SharedFlow<WaitingCall> = _incomingOffers.asSharedFlow()
+    private val _incomingOffers = SocketInboundRoute.subject<WaitingCall>()
+    val incomingOffers: SharedFlow<WaitingCall> = _incomingOffers.exposed()
 
     /**
      * The **identity-carrying** decode of each inbound teardown frame
@@ -80,8 +99,8 @@ class CallSignalManager @Inject constructor(
      * own end reduces it) and merely dismiss the banner when the waiting call ends.
      * Hot, no replay — like [events].
      */
-    private val _endedCalls = MutableSharedFlow<CallEndedSignal>(replay = 0, extraBufferCapacity = 16)
-    val endedCalls: SharedFlow<CallEndedSignal> = _endedCalls.asSharedFlow()
+    private val _endedCalls = SocketInboundRoute.subject<CallEndedSignal>()
+    val endedCalls: SharedFlow<CallEndedSignal> = _endedCalls.exposed()
 
     /**
      * The **data-carrying** decode of each inbound `call:signal` frame — the full
@@ -91,17 +110,22 @@ class CallSignalManager @Inject constructor(
      * parallel stream carries it so the app-side WebRTC coordinator can apply
      * remote descriptions and add candidates. Hot, no replay — like [events].
      */
-    private val _incomingSignals = MutableSharedFlow<CallSignalEnvelope>(replay = 0, extraBufferCapacity = 128)
-    val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.asSharedFlow()
+    private val _incomingSignals = SocketInboundRoute.subject<CallSignalEnvelope>()
+    val incomingSignals: SharedFlow<CallSignalEnvelope> = _incomingSignals.exposed()
 
     /**
-     * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers].
-     * The caller gets its ICE servers in the initiate ACK; the callee — whose
-     * `call:initiated` frame carries none — requests them on accept and configures
-     * the WebRTC engine once they land here. Hot, no replay.
+     * `true` while the signalling socket is connected, one value per edge. The gateway takes a dropped socket
+     * out of the call room and forgets its media: a call rejoins on each return (#13765, iOS `didReconnect`).
      */
-    private val _iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(replay = 0, extraBufferCapacity = 8)
-    val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.asSharedFlow()
+    val socketConnected: Flow<Boolean> =
+        socketManager.connectionState.map { it == SocketConnectionState.CONNECTED }.distinctUntilChanged()
+
+    /**
+     * Fresh STUN/TURN servers pushed by the gateway in reply to [emitRequestIceServers]: the call they answer,
+     * the set, and its lifetime (`ttl`), which re-arms the next refresh of a long call (#13773). Hot, no replay.
+     */
+    private val _iceServersRefreshed = SocketInboundRoute.subject<IceServersRefreshedPayload>()
+    val iceServersRefreshed: SharedFlow<IceServersRefreshedPayload> = _iceServersRefreshed.exposed()
 
     /**
      * A participant left the room WITHOUT ending the call (`call:participant-left`
@@ -109,24 +133,31 @@ class CallSignalManager @Inject constructor(
      * FSM-facing [events]; the consumer prunes the leaver's media by identity.
      * Hot, no replay — like [events]. (Audit appels 2026-07-11 #5.)
      */
-    private val _participantLeft = MutableSharedFlow<CallParticipantLeftPayload>(replay = 0, extraBufferCapacity = 16)
-    val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.asSharedFlow()
+    /**
+     * Who joined the room, named (`call:participant-joined`, participant nested) — a group call admits the
+     * arrival to its roster. [events] keeps only the joiner's id for the FSM. Hot, no replay.
+     */
+    private val _participantArrivals = SocketInboundRoute.subject<CallParticipantArrival>()
+    val participantArrivals: SharedFlow<CallParticipantArrival> = _participantArrivals.exposed()
+
+    private val _participantLeft = SocketInboundRoute.subject<CallParticipantLeftPayload>()
+    val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.exposed()
 
     /**
      * The gateway flagging the REMOTE peer's sustained bad network
      * (`call:quality-alert`). Drives the transient "your contact's connection is
      * unstable" indicator — iOS `isRemoteQualityDegraded` parity. Hot, no replay.
      */
-    private val _qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(replay = 0, extraBufferCapacity = 16)
-    val qualityAlerts: SharedFlow<CallQualityAlertPayload> = _qualityAlerts.asSharedFlow()
+    private val _qualityAlerts = SocketInboundRoute.subject<CallQualityAlertPayload>()
+    val qualityAlerts: SharedFlow<CallQualityAlertPayload> = _qualityAlerts.exposed()
 
     /**
      * The remote peer started/stopped capturing the call screen
      * (`call:screen-capture-alert`). Drives the privacy warning banner — iOS
      * `isRemoteScreenCapturing` parity. Hot, no replay.
      */
-    private val _screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(replay = 0, extraBufferCapacity = 16)
-    val screenCaptureAlerts: SharedFlow<CallScreenCaptureAlertPayload> = _screenCaptureAlerts.asSharedFlow()
+    private val _screenCaptureAlerts = SocketInboundRoute.subject<CallScreenCaptureAlertPayload>()
+    val screenCaptureAlerts: SharedFlow<CallScreenCaptureAlertPayload> = _screenCaptureAlerts.exposed()
 
     /**
      * Live caption segments from the remote speaker (`call:translated-segment`),
@@ -134,8 +165,8 @@ class CallSignalManager @Inject constructor(
      * the original `text`). Dense during speech — buffered like [incomingSignals].
      * Hot, no replay.
      */
-    private val _translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(replay = 0, extraBufferCapacity = 128)
-    val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.asSharedFlow()
+    private val _translatedSegments = SocketInboundRoute.subject<CallTranslatedSegmentPayload>()
+    val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.exposed()
 
     /**
      * The remote peer muted/unmuted the mic or turned the camera off/on
@@ -143,8 +174,8 @@ class CallSignalManager @Inject constructor(
      * camera off" indicators — iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
      * parity. Hot, no replay.
      */
-    private val _mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(replay = 0, extraBufferCapacity = 16)
-    val mediaToggles: SharedFlow<CallMediaTogglePayload> = _mediaToggles.asSharedFlow()
+    private val _mediaToggles = SocketInboundRoute.subject<CallMediaTogglePayload>()
+    val mediaToggles: SharedFlow<CallMediaTogglePayload> = _mediaToggles.exposed()
 
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
@@ -172,7 +203,7 @@ class CallSignalManager @Inject constructor(
             .put("type", if (isVideo) "video" else "audio")
         val raw = withTimeoutOrNull(INITIATE_ACK_TIMEOUT_MS) {
             suspendCancellableCoroutine { continuation ->
-                socketManager.emit("call:initiate", payload) { args ->
+                socketManager.emit(SocketEventNames.CALL_INITIATE, payload) { args ->
                     if (continuation.isActive) {
                         continuation.resume((args.firstOrNull() as? JSONObject)?.toString())
                     }
@@ -194,7 +225,7 @@ class CallSignalManager @Inject constructor(
         if (!awaitSocketConnected()) return CallJoinResult.Failure(SOCKET_OFFLINE)
         val raw = withTimeoutOrNull(JOIN_ACK_TIMEOUT_MS) {
             suspendCancellableCoroutine { continuation ->
-                socketManager.emit("call:join", JSONObject().put("callId", callId)) { args ->
+                socketManager.emit(SocketEventNames.CALL_JOIN, JSONObject().put("callId", callId)) { args ->
                     if (continuation.isActive) {
                         continuation.resume((args.firstOrNull() as? JSONObject)?.toString())
                     }
@@ -220,10 +251,10 @@ class CallSignalManager @Inject constructor(
         } != null
 
     /** Join the call room after answering / on reconnect (fire-and-forget). */
-    fun emitJoin(callId: String) = emit("call:join", callId)
+    fun emitJoin(callId: String) = emit(SocketEventNames.CALL_JOIN, callId)
 
     /** Leave the call room without ending the call for the peer. */
-    fun emitLeave(callId: String) = emit("call:leave", callId)
+    fun emitLeave(callId: String) = emit(SocketEventNames.CALL_LEAVE, callId)
 
     /** End the call for every participant. */
     /**
@@ -234,21 +265,21 @@ class CallSignalManager @Inject constructor(
      */
     fun emitEnd(callId: String, reason: String? = null) =
         socketManager.emit(
-            "call:end",
+            SocketEventNames.CALL_END,
             JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
         )
 
     /** Signal the peer that the local microphone was muted/unmuted. */
     fun emitToggleAudio(callId: String, enabled: Boolean) =
-        socketManager.emit("call:toggle-audio", JSONObject().put("callId", callId).put("enabled", enabled))
+        socketManager.emit(SocketEventNames.CALL_TOGGLE_AUDIO, JSONObject().put("callId", callId).put("enabled", enabled))
 
     /** Signal the peer that the local camera was turned off/on. */
     fun emitToggleVideo(callId: String, enabled: Boolean) =
-        socketManager.emit("call:toggle-video", JSONObject().put("callId", callId).put("enabled", enabled))
+        socketManager.emit(SocketEventNames.CALL_TOGGLE_VIDEO, JSONObject().put("callId", callId).put("enabled", enabled))
 
     /** Forward an SDP/ICE [signal] to the peer through the gateway relay. */
     fun emitSignal(callId: String, signal: JSONObject) =
-        socketManager.emit("call:signal", JSONObject().put("callId", callId).put("signal", signal))
+        socketManager.emit(SocketEventNames.CALL_SIGNAL, JSONObject().put("callId", callId).put("signal", signal))
 
     /** Send the local SDP offer (caller, after the peer joins). iOS payload parity. */
     fun emitOffer(callId: String, sdp: String, to: String, from: String, negotiationId: Int) =
@@ -298,7 +329,7 @@ class CallSignalManager @Inject constructor(
      * with `call:ice-servers-refreshed`. Fired on the TURN-credential-TTL refresh
      * timer and on ICE-restart. Parity with iOS `emitRequestIceServers`.
      */
-    fun emitRequestIceServers(callId: String) = emit("call:request-ice-servers", callId)
+    fun emitRequestIceServers(callId: String) = emit(SocketEventNames.CALL_REQUEST_ICE_SERVERS, callId)
 
     /**
      * Le device passe en arrière-plan pendant CET appel — le gateway étend la
@@ -309,14 +340,14 @@ class CallSignalManager @Inject constructor(
      */
     fun emitBackgrounded(callId: String, participantId: String) =
         socketManager.emit(
-            "call:backgrounded",
+            SocketEventNames.CALL_BACKGROUNDED,
             JSONObject().put("callId", callId).put("participantId", participantId),
         )
 
     /** Retour au premier plan pendant CET appel — tolérance heartbeat normale. */
     fun emitForegrounded(callId: String, participantId: String) =
         socketManager.emit(
-            "call:foregrounded",
+            SocketEventNames.CALL_FOREGROUNDED,
             JSONObject().put("callId", callId).put("participantId", participantId),
         )
 
@@ -330,7 +361,7 @@ class CallSignalManager @Inject constructor(
      */
     fun emitScreenCaptureDetected(callId: String, participantId: String, isCapturing: Boolean) =
         socketManager.emit(
-            "call:screen-capture-detected",
+            SocketEventNames.CALL_SCREEN_CAPTURE_DETECTED,
             JSONObject()
                 .put("callId", callId)
                 .put("participantId", participantId)
@@ -347,7 +378,7 @@ class CallSignalManager @Inject constructor(
      * sans lui, un callee Android qui (re)connecte mid-ring laisse l'appel
      * sonner dans le vide jusqu'au missed.
      */
-    fun emitCheckActive() = socketManager.emit("call:check-active", JSONObject())
+    fun emitCheckActive() = socketManager.emit(SocketEventNames.CALL_CHECK_ACTIVE, JSONObject())
 
     /**
      * Télémétrie de cycle de vie émise UNE fois à la fin de l'appel (parité iOS
@@ -357,7 +388,7 @@ class CallSignalManager @Inject constructor(
      * que le transport (l'enveloppe JSON + la clé `callId`).
      */
     fun emitAnalytics(callId: String, fields: Map<String, Any>) =
-        socketManager.emit("call:analytics", JSONObject(fields).put("callId", callId))
+        socketManager.emit(SocketEventNames.CALL_ANALYTICS, JSONObject(fields).put("callId", callId))
 
     /**
      * Liveness beat the gateway uses to detect a dead peer (heartbeat timeout →
@@ -365,7 +396,7 @@ class CallSignalManager @Inject constructor(
      * iOS `emitCallHeartbeat` — the gateway resolves the participant from the
      * socket's userId, so no from/to payload is needed.
      */
-    fun emitHeartbeat(callId: String) = emit("call:heartbeat", callId)
+    fun emitHeartbeat(callId: String) = emit(SocketEventNames.CALL_HEARTBEAT, callId)
 
     /**
      * Report the periodic quality + cumulative data-usage snapshot. The `stats`
@@ -376,7 +407,7 @@ class CallSignalManager @Inject constructor(
      */
     fun emitQualityReport(callId: String, report: CallQualityReport) =
         socketManager.emit(
-            "call:quality-report",
+            SocketEventNames.CALL_QUALITY_REPORT,
             JSONObject().put("callId", callId).put("stats", JSONObject(report.statsFields())),
         )
 
@@ -387,7 +418,7 @@ class CallSignalManager @Inject constructor(
      */
     fun emitReconnecting(callId: String, participantId: String, attempt: Int) =
         socketManager.emit(
-            "call:reconnecting",
+            SocketEventNames.CALL_RECONNECTING,
             JSONObject().put("callId", callId).put("participantId", participantId).put("attempt", attempt),
         )
 
@@ -397,7 +428,7 @@ class CallSignalManager @Inject constructor(
      */
     fun emitReconnected(callId: String, participantId: String) =
         socketManager.emit(
-            "call:reconnected",
+            SocketEventNames.CALL_RECONNECTED,
             JSONObject().put("callId", callId).put("participantId", participantId),
         )
 
@@ -407,33 +438,40 @@ class CallSignalManager @Inject constructor(
     private fun listen(event: String) {
         socketManager.on(event) { args ->
             val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
-            CallSignalMapper.map(event, raw)?.let(_events::tryEmit)
-            if (event == INITIATED_EVENT) {
-                CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::tryEmit)
-            }
-            if (event == SIGNAL_EVENT) {
-                CallSignalMapper.signalEnvelope(raw)?.let(_incomingSignals::tryEmit)
-            }
-            if (event == ICE_SERVERS_REFRESHED_EVENT) {
-                CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::tryEmit)
-            }
-            if (event == PARTICIPANT_LEFT_EVENT) {
-                CallSignalMapper.participantLeft(raw)?.let(_participantLeft::tryEmit)
-            }
-            if (event == QUALITY_ALERT_EVENT) {
-                CallSignalMapper.qualityAlert(raw)?.let(_qualityAlerts::tryEmit)
-            }
-            if (event == SCREEN_CAPTURE_ALERT_EVENT) {
-                CallSignalMapper.screenCaptureAlert(raw)?.let(_screenCaptureAlerts::tryEmit)
-            }
-            if (event == TRANSLATED_SEGMENT_EVENT) {
-                CallSignalMapper.translatedSegment(raw)?.let(_translatedSegments::tryEmit)
-            }
-            if (event == MEDIA_TOGGLED_EVENT) {
-                CallSignalMapper.mediaToggle(raw)?.let(_mediaToggles::tryEmit)
-            }
-            CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
+            ArrivalStamp.under(arrivalTicket()) { publish(event, raw) }
         }
+    }
+
+    private fun publish(event: String, raw: String) {
+        CallSignalMapper.map(event, raw)?.let(_events::emitArrived)
+        if (event == INITIATED_EVENT) {
+            CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::emitArrived)
+        }
+        if (event == SIGNAL_EVENT) {
+            CallSignalMapper.signalEnvelope(raw)?.let(_incomingSignals::emitArrived)
+        }
+        if (event == ICE_SERVERS_REFRESHED_EVENT) {
+            CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::emitArrived)
+        }
+        if (event == PARTICIPANT_JOINED_EVENT) {
+            CallSignalMapper.participantArrival(raw)?.let(_participantArrivals::emitArrived)
+        }
+        if (event == PARTICIPANT_LEFT_EVENT) {
+            CallSignalMapper.participantLeft(raw)?.let(_participantLeft::emitArrived)
+        }
+        if (event == QUALITY_ALERT_EVENT) {
+            CallSignalMapper.qualityAlert(raw)?.let(_qualityAlerts::emitArrived)
+        }
+        if (event == SCREEN_CAPTURE_ALERT_EVENT) {
+            CallSignalMapper.screenCaptureAlert(raw)?.let(_screenCaptureAlerts::emitArrived)
+        }
+        if (event == TRANSLATED_SEGMENT_EVENT) {
+            CallSignalMapper.translatedSegment(raw)?.let(_translatedSegments::emitArrived)
+        }
+        if (event == MEDIA_TOGGLED_EVENT) {
+            CallSignalMapper.mediaToggle(raw)?.let(_mediaToggles::emitArrived)
+        }
+        CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::emitArrived)
     }
 
     private companion object {
@@ -457,28 +495,30 @@ class CallSignalManager @Inject constructor(
         const val SOCKET_OFFLINE = "socket not connected"
 
         /** The single inbound frame that also carries incoming-offer identity. */
-        const val INITIATED_EVENT = "call:initiated"
+        const val INITIATED_EVENT = SocketEventNames.CALL_INITIATED
 
         /** The inbound frame carrying the SDP/ICE payload the WebRTC engine consumes. */
-        const val SIGNAL_EVENT = "call:signal"
+        const val SIGNAL_EVENT = SocketEventNames.CALL_SIGNAL
 
         /** The gateway's reply to [emitRequestIceServers], carrying fresh TURN/STUN. */
-        const val ICE_SERVERS_REFRESHED_EVENT = "call:ice-servers-refreshed"
+        const val ICE_SERVERS_REFRESHED_EVENT = SocketEventNames.CALL_ICE_SERVERS_REFRESHED
 
         /** A participant left the room without ending the call (group calls). */
-        const val PARTICIPANT_LEFT_EVENT = "call:participant-left"
+        const val PARTICIPANT_LEFT_EVENT = SocketEventNames.CALL_PARTICIPANT_LEFT
+
+        const val PARTICIPANT_JOINED_EVENT = SocketEventNames.CALL_PARTICIPANT_JOINED
 
         /** The gateway flagging the REMOTE peer's sustained bad network. */
-        const val QUALITY_ALERT_EVENT = "call:quality-alert"
+        const val QUALITY_ALERT_EVENT = SocketEventNames.CALL_QUALITY_ALERT
 
         /** The remote peer started/stopped a screen capture of the call. */
-        const val SCREEN_CAPTURE_ALERT_EVENT = "call:screen-capture-alert"
+        const val SCREEN_CAPTURE_ALERT_EVENT = SocketEventNames.CALL_SCREEN_CAPTURE_ALERT
 
         /** A live (optionally translated) caption segment from the remote speaker. */
-        const val TRANSLATED_SEGMENT_EVENT = "call:translated-segment"
+        const val TRANSLATED_SEGMENT_EVENT = SocketEventNames.CALL_TRANSLATED_SEGMENT
 
         /** The remote peer muted/unmuted the mic or toggled the camera. */
-        const val MEDIA_TOGGLED_EVENT = "call:media-toggled"
+        const val MEDIA_TOGGLED_EVENT = SocketEventNames.CALL_MEDIA_TOGGLED
 
         /**
          * The server removing THIS device from a call it no longer has the
@@ -494,7 +534,7 @@ class CallSignalManager @Inject constructor(
          * peer to those who REMAIN, and our sockets have just been evicted
          * from the call room anyway.
          */
-        const val FORCE_LEAVE_EVENT = "call:force-leave"
+        const val FORCE_LEAVE_EVENT = SocketEventNames.CALL_FORCE_LEAVE
 
         val INBOUND_EVENTS = listOf(
             INITIATED_EVENT,
@@ -505,12 +545,12 @@ class CallSignalManager @Inject constructor(
             SCREEN_CAPTURE_ALERT_EVENT,
             TRANSLATED_SEGMENT_EVENT,
             MEDIA_TOGGLED_EVENT,
-            "call:participant-joined",
-            "call:ended",
-            "call:missed",
+            SocketEventNames.CALL_PARTICIPANT_JOINED,
+            SocketEventNames.CALL_ENDED,
+            SocketEventNames.CALL_MISSED,
             FORCE_LEAVE_EVENT,
-            "call:error",
-            "call:already-answered",
+            SocketEventNames.CALL_ERROR,
+            SocketEventNames.CALL_ALREADY_ANSWERED,
         )
     }
 }

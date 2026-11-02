@@ -9,75 +9,36 @@ import MeeshySDK
 extension StoryComposerViewModel {
 
     /// **Adopte une PRÉ-MONTÉE** — l'asset est déjà chez le serveur, l'objet
-    /// cesse d'être local (#5086, vue `4c`).
+    /// cesse d'être local (#5086, vue `4c`). La recherche se fait par URL
+    /// LOCALE sur TOUTES les slides : l'objet a pu changer de slide pendant la
+    /// montée, et le registre est indexé par FICHIER. Les deux champs se posent
+    /// ENSEMBLE — la publication saute tout objet dont `postMediaId` est posé,
+    /// un `file://` partirait sinon. Elle couvre les médias visuels ET l'audio
+    /// (2026-09-06) : un son sans URL publiait sa coquille, pas son fichier.
     ///
-    /// La recherche se fait par URL LOCALE et non par identifiant d'objet, et
-    /// balaie TOUTES les slides. Deux raisons, chacune décisive :
+    /// **Une montée n'est pas un geste de l'auteur** (#14202) : elle vaut pour
+    /// toute la trajectoire d'annulation et n'y ajoute aucune étape. Sans
+    /// cela, le premier ↶ après « Remplacer le fond » ne défaisait que la
+    /// montée du nouveau fond. La trajectoire est réécrite AVANT le document :
+    /// ↶ ↷ se recalculent sur un document identique à l'état capturé.
     ///
-    /// - la montée est lancée à la POSE, et l'auteur peut déplacer l'objet
-    ///   d'une slide à l'autre pendant qu'elle voyage ; un index de slide
-    ///   capturé au départ désignerait la mauvaise à l'arrivée ;
-    /// - le registre de pré-montée est indexé par FICHIER, parce que c'est le
-    ///   fichier qui monte. Lui faire tenir des identifiants d'objet
-    ///   l'obligerait à suivre les créations et suppressions du document.
-    ///
-    /// Les deux champs se posent ENSEMBLE, et c'est ce qui rend l'adoption
-    /// sûre : la boucle de publication saute tout objet dont `postMediaId` est
-    /// non vide, donc un objet qui porterait l'identifiant sans l'URL distante
-    /// serait publié avec un `file://` que personne ne peut lire.
-    ///
-    /// - Returns: `true` si un objet a été adopté. `false` — l'auteur a retiré
-    ///   le média pendant la montée — n'est pas une erreur : l'appelant y lit
-    ///   qu'il peut oublier cette pré-montée.
-    /// `public` parce que le REGISTRE de pré-montée vit côté app : le SDK
-    /// fournit l'atome — muter le document —, l'app décide QUAND l'appeler.
+    /// - Returns: `false` si l'auteur a retiré le média pendant la montée :
+    ///   l'appelant (le registre, côté app) peut l'oublier.
     @discardableResult
-    /// **L'adoption couvre les DEUX familles qui portent un fichier** — les
-    /// médias visuels ET l'audio (2026-09-06).
-    ///
-    /// Elle ne connaissait que `mediaObjects`. Un son — de fond ou posé —
-    /// partait donc avec `mediaURL: null` et `postMediaId: null` : sa durée et
-    /// sa forme d'onde voyageaient, le FICHIER non. Mesuré sur un post
-    /// publié : « Son de fond, 33 secondes » à la composition, et rien à jouer
-    /// à la lecture, ni en détail, ni en réel.
-    ///
-    /// > **Une coquille voyage mieux qu'un fichier.** Tout ce qui DÉCRIT le son
-    /// > tenait dans le blob et partait ; seul le contenu manquait — et rien
-    /// > n'a rougi, parce qu'un objet audio sans URL reste un objet audio
-    /// > parfaitement formé.
-    ///
-    /// `StoryAudioPlayerObject` porte exactement la même paire
-    /// `postMediaId` / `mediaURL` que `StoryMediaObject` : la règle est la
-    /// même, seule la famille change, et c'est pourquoi elle s'écrit une fois
-    /// pour les deux plutôt qu'en cascade.
     public func adoptPreUploadedMedia(localURL: String, postMediaId: String, remoteURL: String) -> Bool {
-        for slideIdx in slides.indices {
-            var effects = slides[slideIdx].effects
-            if var medias = effects.mediaObjects,
-               let mediaIdx = medias.firstIndex(where: { $0.mediaURL == localURL }) {
-                if let local = URL(string: localURL), local.isFileURL {
-                    adoptedLocalMedia[remoteURL] = local
-                    adoptedLocalMedia[postMediaId] = local
-                }
-                relayLoadedImage(objectId: medias[mediaIdx].id, slideId: slides[slideIdx].id,
-                                 isImage: medias[mediaIdx].kind == .image,
-                                 localURL: localURL, to: [postMediaId, remoteURL])
-                medias[mediaIdx].postMediaId = postMediaId
-                medias[mediaIdx].mediaURL = remoteURL
-                effects.mediaObjects = medias
-                slides[slideIdx].effects = effects
-                return true
+        let adoption = StoryPreUploadAdoption(localURL: localURL, postMediaId: postMediaId, remoteURL: remoteURL)
+        guard let adopted = adoption.applied(to: slides) else { return false }
+        if let (slideId, media) = adoption.adoptedMedia(in: adopted) {
+            if let local = URL(string: localURL), local.isFileURL {
+                adoptedLocalMedia[remoteURL] = local
+                adoptedLocalMedia[postMediaId] = local
             }
-            if var audios = effects.audioPlayerObjects,
-               let audioIdx = audios.firstIndex(where: { $0.mediaURL == localURL }) {
-                audios[audioIdx].postMediaId = postMediaId
-                audios[audioIdx].mediaURL = remoteURL
-                effects.audioPlayerObjects = audios
-                slides[slideIdx].effects = effects
-                return true
-            }
+            relayLoadedImage(objectId: media.id, slideId: slideId, isImage: media.kind == .image,
+                             localURL: localURL, to: [postMediaId, remoteURL])
         }
-        return false
+        history.amendAll(adoption.appliedToSnapshot)
+        slides = adopted
+        return true
     }
 
     /// **Une adoption IMPERCEPTIBLE** (retour porteur 2026-09-28 : « un
@@ -107,5 +68,61 @@ extension StoryComposerViewModel {
         // `postMediaId` (`StoryMediaLayer`), le FOND sous son ADRESSE — la clé
         // de routage préfère l'URL à l'identifiant (`backgroundRoutingKey`).
         keys.forEach { registerLoadedImage(image, for: $0) }
+    }
+}
+
+/// La réécriture d'une montée aboutie, pure : la même pour le document vivant
+/// et pour chaque instantané d'annulation.
+nonisolated struct StoryPreUploadAdoption: Sendable {
+    let localURL: String
+    let postMediaId: String
+    let remoteURL: String
+
+    /// Le premier objet — média, puis son, slide par slide — qui porte encore
+    /// le fichier local ; `nil` s'il n'y en a plus.
+    func applied(to slides: [StorySlide]) -> [StorySlide]? {
+        for slideIdx in slides.indices {
+            var adopted = slides
+            var effects = adopted[slideIdx].effects
+            if var medias = effects.mediaObjects,
+               let mediaIdx = medias.firstIndex(where: { $0.mediaURL == localURL }) {
+                medias[mediaIdx].postMediaId = postMediaId
+                medias[mediaIdx].mediaURL = remoteURL
+                effects.mediaObjects = medias
+                adopted[slideIdx].effects = effects
+                return adopted
+            }
+            if var audios = effects.audioPlayerObjects,
+               let audioIdx = audios.firstIndex(where: { $0.mediaURL == localURL }) {
+                audios[audioIdx].postMediaId = postMediaId
+                audios[audioIdx].mediaURL = remoteURL
+                effects.audioPlayerObjects = audios
+                adopted[slideIdx].effects = effects
+                return adopted
+            }
+        }
+        return nil
+    }
+
+    func adoptedMedia(in slides: [StorySlide]) -> (slideId: String, media: StoryMediaObject)? {
+        for slide in slides {
+            if let media = slide.effects.mediaObjects?.first(where: {
+                $0.postMediaId == postMediaId && $0.mediaURL == remoteURL
+            }) {
+                return (slide.id, media)
+            }
+        }
+        return nil
+    }
+
+    /// Un instantané qui ne nomme pas le fichier est rendu tel quel, octet pour
+    /// octet : la déduplication de l'historique compare des octets.
+    func appliedToSnapshot(_ data: Data) -> Data {
+        let fichier = URL(string: localURL)?.lastPathComponent ?? localURL
+        guard data.range(of: Data(fichier.utf8)) != nil,
+              let slides = try? JSONDecoder().decode([StorySlide].self, from: data),
+              let adopted = applied(to: slides),
+              let encoded = StoryComposerHistoryPace.encode(adopted) else { return data }
+        return encoded
     }
 }

@@ -38,26 +38,16 @@ final class MediaThermalPolicyTests: XCTestCase {
         XCTAssertEqual(MediaThermalPolicy.forwardBufferDuration(thermalState: .critical), 0.5, accuracy: 0.0001)
     }
 
-    // MARK: - preferredPeakBitRate (bits/s; heat-first — always capped, never 0)
+    // MARK: - watchedForwardBufferDuration (seconds ahead for the item on screen)
 
-    func test_preferredPeakBitRate_visibleAndCool_capsForHeat() {
-        // Heat-first: the watched reel is bounded to a phone-adequate 1.5 Mbps
-        // rather than uncapped (0), so a high-bitrate HLS rendition can't spike decode.
-        XCTAssertEqual(MediaThermalPolicy.preferredPeakBitRate(isVisible: true, thermalState: .nominal), 1_500_000, accuracy: 0.0001)
+    func test_watchedForwardBufferDuration_nominal_keepsTwoSeconds() {
+        XCTAssertEqual(MediaThermalPolicy.watchedForwardBufferDuration(thermalState: .nominal), 2.0, accuracy: 0.0001)
+        XCTAssertEqual(MediaThermalPolicy.watchedForwardBufferDuration(thermalState: .fair), 2.0, accuracy: 0.0001)
     }
 
-    func test_preferredPeakBitRate_offscreenAndCool_capsLower() {
-        // Offscreen preroll may never be watched → cheaper than the active player.
-        XCTAssertEqual(MediaThermalPolicy.preferredPeakBitRate(isVisible: false, thermalState: .nominal), 1_000_000, accuracy: 0.0001)
-    }
-
-    func test_preferredPeakBitRate_serious_capsEvenWhenVisible() {
-        XCTAssertEqual(MediaThermalPolicy.preferredPeakBitRate(isVisible: true, thermalState: .serious), 900_000, accuracy: 0.0001)
-    }
-
-    func test_preferredPeakBitRate_critical_capsHardest() {
-        XCTAssertEqual(MediaThermalPolicy.preferredPeakBitRate(isVisible: true, thermalState: .critical), 600_000, accuracy: 0.0001)
-        XCTAssertEqual(MediaThermalPolicy.preferredPeakBitRate(isVisible: false, thermalState: .critical), 600_000, accuracy: 0.0001)
+    func test_watchedForwardBufferDuration_underPressure_halves() {
+        XCTAssertEqual(MediaThermalPolicy.watchedForwardBufferDuration(thermalState: .serious), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(MediaThermalPolicy.watchedForwardBufferDuration(thermalState: .critical), 1.0, accuracy: 0.0001)
     }
 
     // MARK: - shouldPrefetchVideo (whether to preroll upcoming reels)

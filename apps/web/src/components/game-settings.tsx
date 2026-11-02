@@ -1,4 +1,5 @@
 import type { GameLeagueBlock, GameVisibility } from '@meeshy/shared/types/game';
+import { PHOTO_INVITATIONS, type PhotoInvitations } from '@meeshy/shared/types/game-photo-settings';
 import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
 import { ATLAS_DEFAULT_VISIBILITY, SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
 
@@ -43,10 +44,23 @@ export type GameSettingsProps = {
   readonly gameNotifications?: boolean | undefined;
   readonly onGameNotifications?: ((on: boolean) => void) | undefined;
   /**
+   * « Moments à immortaliser » (#10268) — `notification.gamePhotoEnabled`, le PUSH d'une étape franchie app fermée, rangé
+   * dans la carte des notifications du jeu : les couper le coupe aussi (D8), l'interrupteur s'éteint alors sans écraser le
+   * choix gardé. `undefined` : pas encore lu (il attend). Sans branchement (`onGamePhoto`), pas d'interrupteur.
+   */
+  readonly gamePhoto?: boolean | undefined;
+  readonly onGamePhoto?: ((on: boolean) => void) | undefined;
+  /**
    * « Mon atmosphère » (#10163) — l'atmosphère des cadres de rang, une préférence du COMPTE ; `null` : pas encore
    * choisie, l'Afrique éternelle décore. Le geste ouvre l'écran de choix chez l'hôte. Sans branchement, pas de carte.
    */
   readonly atmosphere?: { readonly current: GloryAtmosphere | null; readonly onChange: () => void; readonly notice?: string | undefined } | undefined;
+  /**
+   * « Me proposer d'immortaliser » (#10174, L18) — chaque étape (défaut), les grands moments, jamais : une préférence du
+   * COMPTE, qui gouverne la bannière, la feuille, la carte photo des célébrations et la pastille du carnet. Sans
+   * branchement, pas de carte.
+   */
+  readonly invitations?: { readonly current: PhotoInvitations; readonly onChange: (next: PhotoInvitations) => void; readonly notice?: string | undefined } | undefined;
   readonly onCelebrations: (on: boolean) => void;
   readonly onHidden: (on: boolean) => void;
   readonly onVisibility: (patch: Partial<GameVisibility>) => void;
@@ -78,6 +92,24 @@ function SwitchRow({ marker, label, checked, disabled, onChange }: { readonly ma
         className="size-6 shrink-0 accent-[var(--color-ios-brand)]"
       />
     </label>
+  );
+}
+
+function GamePhotoSwitch({ online, game, photo, onChange }: { readonly online: boolean; readonly game: boolean | undefined; readonly photo: boolean | undefined; readonly onChange: (on: boolean) => void }) {
+  const cutByGame = game === false;
+  return (
+    <>
+      <SwitchRow
+        marker="data-game-setting-photo"
+        label={gameText('game.settings.notifications.photo_switch')}
+        checked={!cutByGame && (photo ?? true)}
+        disabled={!online || photo === undefined || cutByGame}
+        onChange={onChange}
+      />
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText(cutByGame ? 'game.settings.notifications.photo_cut' : 'game.settings.notifications.photo_body')}
+      </p>
+    </>
   );
 }
 
@@ -144,6 +176,40 @@ export function GameSettings(props: GameSettingsProps) {
         </GameCard>
       )}
 
+      {props.invitations === undefined ? null : (
+        <GameCard id="game-settings-invitations" labelledBy="game-settings-invitations-title">
+          <h2 id="game-settings-invitations-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+            {gameText('game.settings.invitations.title')}
+          </h2>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.settings.invitations.body')}
+          </p>
+          <fieldset className="flex flex-col" aria-labelledby="game-settings-invitations-title">
+            {PHOTO_INVITATIONS.map((value) => (
+              <label key={value} className="flex cursor-pointer items-center gap-3 rounded-chip px-1" style={{ minHeight: 44 }}>
+                <input
+                  type="radio"
+                  name="game-photo-invitations"
+                  value={value}
+                  data-game-setting-invitations={value}
+                  checked={props.invitations?.current === value}
+                  onChange={() => props.invitations?.onChange(value)}
+                  className="size-5 shrink-0 accent-[var(--color-ios-brand)]"
+                />
+                <span className="text-body font-semibold" style={{ color: GAME_INK }}>
+                  {gameText(`game.settings.invitations.${value}`)}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          {props.invitations.notice === undefined ? null : (
+            <p role="status" className="text-caption" style={{ color: GAME_INK_2 }}>
+              {props.invitations.notice}
+            </p>
+          )}
+        </GameCard>
+      )}
+
       {props.onGameNotifications === undefined ? null : (
         <GameCard id="game-settings-notifications" labelledBy="game-settings-notifications-title">
           <h2 id="game-settings-notifications-title" className="text-body font-bold" style={{ color: GAME_INK }}>
@@ -159,6 +225,9 @@ export function GameSettings(props: GameSettingsProps) {
             disabled={!online || props.gameNotifications === undefined}
             onChange={props.onGameNotifications}
           />
+          {props.onGamePhoto === undefined ? null : (
+            <GamePhotoSwitch online={online} game={props.gameNotifications} photo={props.gamePhoto} onChange={props.onGamePhoto} />
+          )}
           {errors.notifications === undefined ? null : (
             <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
               {errors.notifications}

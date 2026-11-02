@@ -43,29 +43,30 @@ class ReactionBreakdownTest {
     }
 
     @Test
-    fun a_single_emoji_reaction_yields_one_emoji_tab_and_no_all_tab() {
+    fun a_single_emoji_reaction_yields_the_all_tab_plus_one_emoji_tab() {
         val breakdown = ReactionBreakdown.of(
             response(ReactionGroup(emoji = "👍", count = 1, users = listOf(user("a", "Alice")))),
             currentUserId = "me",
         )
 
-        assertThat(breakdown.tabs).hasSize(1)
-        val tab = breakdown.tabs.single()
-        assertThat(tab).isInstanceOf(ReactionTab.Emoji::class.java)
-        assertThat((tab as ReactionTab.Emoji).emoji).isEqualTo("👍")
+        assertThat(breakdown.tabs).hasSize(2)
+        assertThat(breakdown.tabs.first()).isInstanceOf(ReactionTab.All::class.java)
+        assertThat(breakdown.tabs.first().count).isEqualTo(1)
+        val tab = breakdown.emojiTab()
+        assertThat(tab.emoji).isEqualTo("👍")
         assertThat(tab.count).isEqualTo(1)
         assertThat(tab.reactors.map { it.displayName }).containsExactly("Alice")
         assertThat(tab.reactors.single().emoji).isEqualTo("👍")
     }
 
     @Test
-    fun a_blank_username_falls_back_to_the_user_id() {
+    fun a_blank_username_has_no_display_name_so_the_sheet_shows_unknown() {
         val breakdown = ReactionBreakdown.of(
             response(ReactionGroup(emoji = "👍", count = 1, users = listOf(user("a", "   ")))),
             currentUserId = "me",
         )
 
-        assertThat(breakdown.tabs.single().reactors.single().displayName).isEqualTo("a")
+        assertThat(breakdown.emojiTab().reactors.single().displayName).isNull()
     }
 
     @Test
@@ -75,7 +76,7 @@ class ReactionBreakdownTest {
             currentUserId = "me",
         )
 
-        assertThat(breakdown.tabs.single().reactors.single().displayName).isEqualTo("Alice")
+        assertThat(breakdown.emojiTab().reactors.single().displayName).isEqualTo("Alice")
     }
 
     @Test
@@ -85,7 +86,7 @@ class ReactionBreakdownTest {
             currentUserId = "me",
         )
 
-        assertThat(breakdown.tabs.single().reactors.single().isSelf).isTrue()
+        assertThat(breakdown.emojiTab().reactors.single().isSelf).isTrue()
     }
 
     @Test
@@ -95,7 +96,7 @@ class ReactionBreakdownTest {
             currentUserId = "   ",
         )
 
-        assertThat(breakdown.tabs.single().reactors.single().isSelf).isFalse()
+        assertThat(breakdown.emojiTab().reactors.single().isSelf).isFalse()
     }
 
     @Test
@@ -111,7 +112,7 @@ class ReactionBreakdownTest {
             currentUserId = "me",
         )
 
-        assertThat(breakdown.tabs.single().reactors.map { it.displayName })
+        assertThat(breakdown.emojiTab().reactors.map { it.displayName })
             .containsExactly("Me", "Alice", "Bob")
             .inOrder()
     }
@@ -202,7 +203,7 @@ class ReactionBreakdownTest {
             currentUserId = "me",
         )
 
-        assertThat(breakdown.tabs.single().count).isEqualTo(2)
+        assertThat(breakdown.emojiTab().count).isEqualTo(2)
     }
 
     @Test
@@ -212,7 +213,7 @@ class ReactionBreakdownTest {
             currentUserId = "me",
         )
 
-        val tab = breakdown.tabs.single()
+        val tab = breakdown.emojiTab()
         assertThat(tab.count).isEqualTo(5)
         assertThat(tab.reactors).isEmpty()
     }
@@ -230,7 +231,7 @@ class ReactionBreakdownTest {
             currentUserId = "me",
         )
 
-        val reactors = breakdown.tabs.single().reactors
+        val reactors = breakdown.emojiTab().reactors
         assertThat(reactors).hasSize(1)
         assertThat(reactors.single().displayName).isEqualTo("Alice")
     }
@@ -248,7 +249,7 @@ class ReactionBreakdownTest {
             currentUserId = "me",
         )
 
-        val reactor = breakdown.tabs.single().reactors.single()
+        val reactor = breakdown.emojiTab().reactors.single()
         assertThat(reactor.userId).isEqualTo("a")
         assertThat(reactor.avatarUrl).isEqualTo("https://cdn/a.png")
     }
@@ -262,6 +263,50 @@ class ReactionBreakdownTest {
             currentUserId = "me",
         )
 
-        assertThat(breakdown.tabs.single().reactors.single().avatarUrl).isNull()
+        assertThat(breakdown.emojiTab().reactors.single().avatarUrl).isNull()
     }
+
+    @Test
+    fun the_viewer_adding_a_new_emoji_creates_its_tab_and_floats_first_in_all() {
+        val base = ReactionBreakdown.of(
+            response(ReactionGroup(emoji = "👍", count = 1, users = listOf(user("a", "Alice")))),
+            currentUserId = "me",
+        )
+
+        val next = base.withSelfReaction("❤️", selfId = "me", selfName = "Moi", present = true)
+
+        assertThat(next.tabs.first().count).isEqualTo(2)
+        assertThat(next.tabs.filterIsInstance<ReactionTab.Emoji>().map { it.emoji }).containsExactly("👍", "❤️")
+        assertThat((next.tabs.first() as ReactionTab.All).reactors.first().isSelf).isTrue()
+    }
+
+    @Test
+    fun the_viewer_adding_an_emoji_they_already_have_changes_nothing() {
+        val base = ReactionBreakdown.of(
+            response(ReactionGroup(emoji = "👍", count = 1, users = listOf(user("me", "Moi")))),
+            currentUserId = "me",
+        )
+
+        assertThat(base.withSelfReaction("👍", "me", "Moi", present = true)).isEqualTo(base)
+    }
+
+    @Test
+    fun the_viewer_taking_back_their_only_reaction_empties_the_breakdown() {
+        val base = ReactionBreakdown.of(
+            response(ReactionGroup(emoji = "👍", count = 1, users = listOf(user("me", "Moi")))),
+            currentUserId = "me",
+        )
+
+        assertThat(base.withSelfReaction("👍", "me", "Moi", present = false).isEmpty).isTrue()
+    }
+
+    @Test
+    fun a_blank_viewer_id_leaves_the_breakdown_untouched() {
+        val base = ReactionBreakdown.of(response(), currentUserId = "")
+
+        assertThat(base.withSelfReaction("👍", "  ", null, present = true)).isEqualTo(base)
+    }
+
+    private fun ReactionBreakdown.emojiTab(): ReactionTab.Emoji =
+        tabs.filterIsInstance<ReactionTab.Emoji>().single()
 }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_control_effects">المؤثرات</string>
+    <string name="call_effects_title">مؤثرات كاميرتي</string>
+    <string name="call_effects_category_face">الوجه</string>
+    <string name="call_effects_category_color">اللون</string>
+    <string name="call_effects_face_none">بلا</string>
+    <string name="call_effects_face_smoothing">تنعيم البشرة</string>
+    <string name="call_effects_face_toad">ضفدع</string>
+    <string name="call_effects_face_angel">ملاك</string>
+    <string name="call_effects_face_demon">شيطان</string>
+    <string name="call_effects_face_volcano">ثوران</string>
+    <string name="call_effects_preset_natural">طبيعي</string>
+    <string name="call_effects_preset_warm">دافئ</string>
+    <string name="call_effects_preset_cool">بارد</string>
+    <string name="call_effects_preset_vivid">زاهٍ</string>
+    <string name="call_effects_preset_muted">ناعم</string>
+    <string name="call_effects_settings">الإعدادات</string>
+    <string name="call_effects_settings_hint">يعرض السطوع وتمويه الخلفية بدلاً من المؤثرات</string>
+    <string name="call_effects_validate">تطبيق</string>
+    <string name="call_effects_validate_hint">يحتفظ بهذا المؤثر ويعود إلى المكالمة</string>
+    <string name="call_effects_quit">خروج</string>
+    <string name="call_effects_quit_hint">يعيد صورتك كما كانت ويعود إلى المكالمة</string>
+    <string name="call_effects_blur">تمويه الخلفية</string>
+    <string name="call_effects_smoothing_strength">قوة التنعيم</string>
+    <string name="call_effects_brightness">السطوع</string>
+    <string name="call_effects_percent">%1$d%%</string>
+    <string name="call_effects_next">المؤثر التالي</string>
+    <string name="call_effects_previous">المؤثر السابق</string>
+</resources>

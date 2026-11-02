@@ -81,8 +81,8 @@ extension ConversationView {
     /// qui fera demander confirmation avant de la publier au-delà de la
     /// conversation (`PublicationTargetRule.needsCaptureConfirmation`).
     func stageCapture(_ capture: CameraResult) {
-        switch ComposerReturnedMedia(capture: capture) {
-        case .image(let image): handleCameraCapture(image, capturedInApp: true)
+        switch capture {
+        case .photo(let image, let data): handleCameraCapture(image, data: data, capturedInApp: true)
         case .video(let url): handleCameraVideo(url, capturedInApp: true)
         }
     }

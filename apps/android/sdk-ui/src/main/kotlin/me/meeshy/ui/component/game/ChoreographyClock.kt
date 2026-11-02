@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.game
 
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect

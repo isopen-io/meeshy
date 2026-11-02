@@ -73,6 +73,7 @@ const itStickerPacks = {
   'packs.domain.avatar-ring': "Contorni avatar",
   'packs.domain.banner': "Banner",
   'packs.domain.banner-frame': "Cornici del banner",
+  'packs.domain.lens': "Lenti",
   'packs.domain.capture-frame': "Cornici di cattura",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Posseduto",
@@ -85,6 +86,11 @@ const itStickerPacks = {
   'packs.shop.domains': "Categoria del negozio",
   'packs.shop.hint': "Tutti i pacchetti: sticker, cornici, sfondi, contorni e banner. Ciò che possiedi appare nelle schermate che lo usano.",
   'packs.retry': "Riprova",
+  'packs.error.notRemovable': "Questo pacchetto resta installato: non si può rimuovere.",
+  'packs.frames.changeAtmosphere': "Cambia atmosfera",
+  'packs.frames.yourAtmosphere': "La tua atmosfera",
+  'packs.frames.atmosphereKept': "Questo pacchetto porta la tua atmosfera: resta installato. Cambia atmosfera per rimuoverlo.",
+  'packs.frames.atmosphereQueued': "Offline: la tua scelta partirà appena torna la connessione.",
 } satisfies StickerPacksCatalog;
 
 export default itStickerPacks;

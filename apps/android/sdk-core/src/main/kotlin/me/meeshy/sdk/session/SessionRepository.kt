@@ -1,12 +1,17 @@
 package me.meeshy.sdk.session
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ProfileEditApply
+import me.meeshy.sdk.model.ProfileSnapshot
+import me.meeshy.sdk.model.ServedProfileDecor
 import me.meeshy.sdk.model.UpdateProfileRequest
+import me.meeshy.sdk.model.auth.SessionOrigin
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.SessionTransitionFlags
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
@@ -25,8 +30,32 @@ import javax.inject.Singleton
 class SessionRepository @Inject constructor(
     private val authApi: AuthApi,
     private val tokenStore: TokenStore,
+    private val transition: SessionTransitionFlags,
+    private val pendingProfileEdits: PendingProfileEdits = PendingProfileEdits.NONE,
+    private val identities: SignedInIdentityStore = SignedInIdentityStore.NONE,
 ) {
+    constructor(authApi: AuthApi, tokenStore: TokenStore) : this(authApi, tokenStore, SessionTransitionFlags())
+
+    /** Horloge de la limite d'une relecture par minute ; remplaçable par les tests. */
+    internal var nowMillis: () -> Long = System::currentTimeMillis
+
+    private var lastRevalidatedAtMillis: Long? = null
+
     private val _currentUser = MutableStateFlow<MeeshyUser?>(null)
+
+    private val _hasResolvedStoredSession = MutableStateFlow(false)
+
+    /**
+     * Faux jusqu'à la fin de la restauration, vrai ensuite — succès OU échec définitif, et
+     * hors ligne avec une identité en cache (cache-first : l'écran de connexion ne s'affiche
+     * jamais sur une simple panne réseau). Une seule transition faux -> vrai par processus.
+     */
+    val hasResolvedStoredSession: StateFlow<Boolean> = _hasResolvedStoredSession.asStateFlow()
+
+    private val _sessionOrigin = MutableStateFlow<SessionOrigin?>(null)
+
+    /** D'où vient la session ouverte (fête d'arrivée, permission de notification). */
+    val sessionOrigin: StateFlow<SessionOrigin?> = _sessionOrigin.asStateFlow()
 
     /** The signed-in identity, or `null` when no session is active. */
     val currentUser: StateFlow<MeeshyUser?> = _currentUser.asStateFlow()
@@ -40,9 +69,13 @@ class SessionRepository @Inject constructor(
      * what a cold, widget-triggered process (which never runs this app's normal
      * startup flow) reads back.
      */
-    fun adopt(user: MeeshyUser) {
+    fun adopt(user: MeeshyUser, origin: SessionOrigin = SessionOrigin.LOGIN) {
+        if (tokenStore.userId != user.id) transition.bumpGeneration()
         _currentUser.value = user
         tokenStore.userId = user.id
+        identities.remember(user)
+        _sessionOrigin.value = origin
+        _hasResolvedStoredSession.value = true
     }
 
     /**
@@ -53,31 +86,125 @@ class SessionRepository @Inject constructor(
      */
     fun applyProfileEdit(request: UpdateProfileRequest) {
         val current = _currentUser.value ?: return
-        _currentUser.value = ProfileEditApply.apply(current, request)
+        publish(ProfileEditApply.apply(current, request))
+    }
+
+    /**
+     * Rétablit le cliché d'avant une édition abandonnée (retour arrière de l'optimisme). Sans effet
+     * hors session ou si [snapshot] est celui d'un autre compte.
+     */
+    fun restoreProfileSnapshot(snapshot: MeeshyUser) {
+        val current = _currentUser.value ?: return
+        if (current.id != snapshot.id) return
+        publish(snapshot)
+    }
+
+    /**
+     * Adopte la réponse du serveur à une mutation de MON profil en la FUSIONNANT sur l'identité
+     * locale ([ProfileSnapshot.mergingServerUser] : voicePublic, décor et activation survivent), puis
+     * réapplique les éditions encore en attente — sauf [deliveredCmid], celle qui vient de partir —
+     * pour qu'une confirmation ne remplace jamais un état optimiste plus récent. Sans effet hors
+     * session, pour un autre compte, ou si la session a changé pendant la lecture de la file.
+     */
+    suspend fun adoptMerging(server: MeeshyUser, deliveredCmid: String? = null) {
+        val generation = transition.generation
+        if (_currentUser.value?.id != server.id) return
+        val pending = pendingEditsFor(server.id, deliveredCmid)
+        if (generation != transition.generation) return
+        val current = _currentUser.value ?: return
+        if (current.id != server.id) return
+        publish(ProfileSnapshot.resolveServerUserWithOptimistic(ProfileSnapshot.mergingServerUser(server, current), pending))
+    }
+
+    private suspend fun pendingEditsFor(userId: String, excludingCmid: String? = null): List<UpdateProfileRequest> = try {
+        pendingProfileEdits.pendingFor(userId, excludingCmid)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    /**
+     * Publie le décor de profil de SOI (fusion : aucun autre champ de [MeeshyUser] ne bouge) pour
+     * que chaque surface qui observe [currentUser] se repeigne au toucher. Sans effet hors session.
+     */
+    fun applyProfileDecor(decor: ServedProfileDecor) {
+        val current = _currentUser.value ?: return
+        publish(current.copy(profileDecor = decor))
     }
 
     /**
      * Re-hydrates the identity from the gateway on app start. Clears the
      * identity when no token is held; a network failure leaves the current
-     * value untouched (offline-tolerant).
+     * value untouched (offline-tolerant). The server answer is merged onto the
+     * local identity and every profile edit still pending in the outbox is
+     * re-applied on top — a restart before confirmation never loses an edit.
      */
     suspend fun refresh() {
-        if (!tokenStore.isAuthenticated) {
-            _currentUser.value = null
-            return
-        }
-        when (val result = apiCall { authApi.me() }) {
-            is NetworkResult.Success -> {
-                _currentUser.value = result.data.user
-                tokenStore.userId = result.data.user.id
+        val generation = transition.generation
+        try {
+            if (!tokenStore.isAuthenticated) {
+                clear()
+                return
             }
-            is NetworkResult.Failure -> Unit
+            restoreRemembered(generation)
+            lastRevalidatedAtMillis = nowMillis()
+            val result = apiCall { authApi.me() }
+            if (generation != transition.generation) return
+            if (result is NetworkResult.Success) {
+                val server = result.data.user
+                val pending = pendingEditsFor(server.id)
+                if (generation != transition.generation) return
+                _currentUser.value = ProfileSnapshot.resolveServerUserWithOptimistic(
+                    ProfileSnapshot.mergingServerUser(server, _currentUser.value),
+                    pending,
+                )
+                tokenStore.userId = server.id
+                _currentUser.value?.let(identities::remember)
+                if (_sessionOrigin.value == null) _sessionOrigin.value = SessionOrigin.RESTORED
+            }
+        } finally {
+            _hasResolvedStoredSession.value = true
         }
+    }
+
+    /**
+     * La relecture du profil au retour au premier plan : au plus UNE par minute, et sans effet
+     * hors session.
+     */
+    suspend fun revalidateIfStale() {
+        val last = lastRevalidatedAtMillis
+        if (last != null && nowMillis() - last < REVALIDATION_WINDOW_MILLIS) return
+        refresh()
+    }
+
+    private fun publish(user: MeeshyUser) {
+        _currentUser.value = user
+        identities.remember(user)
+    }
+
+    /**
+     * Démarrage à froid : l'identité gardée du compte des jetons se sert avant la relecture du serveur, qui la remplace
+     * si elle aboutit — hors ligne, l'app garde le nom, l'avatar et les langues du compte au lieu d'un compte sans nom.
+     */
+    private suspend fun restoreRemembered(generation: Long) {
+        if (_currentUser.value != null) return
+        val userId = tokenStore.userId?.takeIf { it.isNotBlank() } ?: return
+        val remembered = identities.recall(userId) ?: return
+        if (generation != transition.generation || _currentUser.value != null || remembered.id != userId) return
+        _currentUser.value = remembered
+        _hasResolvedStoredSession.value = true
     }
 
     /** Drop the identity on logout / account switch. */
     fun clear() {
+        transition.bumpGeneration()
         _currentUser.value = null
+        _sessionOrigin.value = null
         tokenStore.userId = null
+    }
+
+    private companion object {
+        const val REVALIDATION_WINDOW_MILLIS = 60_000L
     }
 }

@@ -1,14 +1,22 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { act } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, Suspense } from 'react';
 
+import { apiDeps } from '@/lib/api/deps';
 import { gameBlockFixture } from '@/lib/api/game-fixture';
+import type { HttpTransport } from '@/lib/api/http';
+import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATIONS_QUERY_KEY, type NotificationCounts } from '@/lib/api/notifications';
+import { applyNotificationNew } from '@/lib/api/notifications-realtime';
+import { appQueryClient } from '@/lib/api/query-client';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { achievementMoment, flameMoment, meeshMoment, rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import type { Notebook, NotebookEntry } from '@/lib/game-photo/notebook';
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { scriptedTransport } from '@/test-support/scripted-transport';
 
-import { CarnetBody } from './progression-carnet';
+import ProgressionCarnetScreen, { CarnetBody } from './progression-carnet';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click } = createActMounter();
@@ -378,5 +386,76 @@ describe('à rattraper', () => {
     const host = await mount(<CarnetBody env={env} game={gameBlockFixture({ mintedLifetime: 0, glory: 0, levelRecord: 1, score: 0, flameRecord: 0, streak: 0, balance: 0 })} />);
     await settle();
     expect(host.textContent).not.toContain('À rattraper');
+  });
+});
+
+/**
+ * IMMORTALISÉE SUR UN AUTRE APPAREIL (D22 b, #10182 ; #10174) : l'identifiant servi (`keptAt`) sort l'étape de
+ * « À rattraper » même sans photo ici ; la piste reprend à l'étape suivante.
+ */
+describe('le registre partagé', () => {
+  test('une étape `keptAt` servie par le serveur n’est plus à rattraper', async () => {
+    const env = { notebook: { list: async () => [] as NotebookEntry[] }, now: () => new Date('2026-10-05T10:00:00.000Z') } as unknown as PhotoEnv;
+    const base = gameBlockFixture({ mintedLifetime: 10 });
+    const game = { ...base, photo: { atmosphere: null, invitations: 'every' as const, baselineAt: null, baseline: null, treasuryPeakTier: null, moments: [{ stepId: 'meesh:1', detectedAt: null, presentedAt: null, notifiedAt: null, keptAt: '2026-10-04T10:00:00.000Z' }] } };
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(host.querySelector('[data-carnet-catch-up="meesh:1"]')).toBeNull();
+    expect(host.querySelector('[data-carnet-catch-up="meesh:10"]')).not.toBeNull();
+  });
+});
+
+/* L'ÉCRAN, pas le suivi seul (#10175) : ouvrir le carnet à froid — aucune liste de la cloche en cache, la cloche à une
+   non-lue — éteint « moments à immortaliser » par UNE requête, et le carnet fermé n'en envoie plus aucune. Le transport
+   de l'application est remplacé le temps du témoin : en source `fixtures`, rien ne partirait et le témoin ne pourrait
+   pas tomber. */
+describe('ouvrir le carnet éteint « moments à immortaliser » dans la cloche', () => {
+  const READ_BY_TYPES = 'POST /api/v1/notifications/read-by-types';
+  const deps = apiDeps as unknown as { source: string; transport: HttpTransport };
+  const saved = { source: deps.source, transport: deps.transport };
+
+  beforeAll(async () => {
+    await loadGameCatalog('fr');
+  });
+  afterEach(() => {
+    deps.source = saved.source;
+    deps.transport = saved.transport;
+    appQueryClient.removeQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+  });
+
+  test('UNE requête read-by-types à l’ouverture, cache vide ; plus aucune une fois le carnet quitté', async () => {
+    const { transport, calls } = scriptedTransport({ [READ_BY_TYPES]: { ok: true, status: 200, data: undefined } });
+    deps.source = 'gateway';
+    deps.transport = transport;
+    appQueryClient.removeQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    appQueryClient.setQueryData<NotificationCounts>(NOTIFICATION_COUNTS_QUERY_KEY, { total: 1, unread: 1, byType: { game_photo_moment: 1 } });
+
+    await mount(
+      <QueryClientProvider client={new QueryClient()}>
+        <Suspense fallback={null}>
+          <ProgressionCarnetScreen />
+        </Suspense>
+      </QueryClientProvider>,
+    );
+    await settle();
+    const readByTypes = () => calls().filter((req) => `${req.method} ${req.path}` === READ_BY_TYPES);
+    expect(readByTypes().map((req) => req.body)).toEqual([{ types: ['game_photo_moment'] }]);
+
+    unmountAll();
+    const before = calls().length;
+    applyNotificationNew(appQueryClient, {
+      id: 'p-apres',
+      type: 'game_photo_moment',
+      title: null,
+      content: 'p-apres',
+      actor: null,
+      context: {},
+      metadata: {},
+      state: { isRead: false, createdAt: '2026-10-25T08:00:00.000Z' },
+    });
+    await settle();
+    expect(calls().length).toBe(before);
   });
 });

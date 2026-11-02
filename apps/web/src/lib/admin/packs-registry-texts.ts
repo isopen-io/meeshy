@@ -1,0 +1,210 @@
+import type { PackDomain } from '@meeshy/shared/types/content-pack';
+
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
+
+import type { RegistryFailure } from '@/lib/api/admin-packs-registry';
+
+/**
+ * **LES TEXTES DU REGISTRE DES PACKS** (W17, #11323) — dans le module du bloc,
+ * que l'écran du barème charge par `lazy(import())`, et non dans le catalogue
+ * d'administration (`interface_catalogs_admin`), que chaque écran de la console
+ * télécharge. Quatre langues, celles de l'administration ; le français est la
+ * source, les autres portent exactement ses clés (`satisfies`).
+ */
+const fr = {
+  title: 'Registre des packs',
+  hint: 'Publier, retirer, ordonner, mettre à prix, dater et cibler un pack du dépôt, sans déploiement. Chaque geste est journalisé avant d’agir.',
+  'domain.sticker': 'Stickers',
+  'domain.glory-frame': 'Cadres de gloire',
+  'domain.capture-frame': 'Cadres de prise',
+  'domain.wallpaper': 'Fonds',
+  'domain.avatar-ring': 'Contours',
+  'domain.banner': 'Bannières',
+  'domain.banner-frame': 'Cadres de bannière',
+  'domain.lens': 'Lens',
+  published: 'Publié',
+  withdrawn: 'Retiré',
+  free: 'Gratuit',
+  price: '{price} Meeshes',
+  order: 'Ordre {order}',
+  from: 'À partir du {date}',
+  until: 'Jusqu’au {date}',
+  targeted: 'Ciblé',
+  overridden: 'Surchargé · révision {revision}',
+  publish: 'Publier',
+  withdraw: 'Retirer',
+  edit: 'Modifier',
+  reset: 'Revenir au dépôt',
+  save: 'Enregistrer',
+  cancel: 'Annuler',
+  'field.order': 'Ordre',
+  'field.price': 'Prix en Meeshes (vide : gratuit)',
+  'field.startsAt': 'Début de la fenêtre (UTC)',
+  'field.endsAt': 'Fin de la fenêtre (UTC)',
+  'field.communities': 'Communautés (identifiants, séparés par des virgules)',
+  'field.countries': 'Pays (codes ISO, séparés par des virgules)',
+  'field.languages': 'Langues (codes, séparés par des virgules)',
+  'field.invalid': 'Ordre de 0 à 10 000, prix de 1 à 10 000, fin après le début.',
+  'failure.conflict': 'Le registre a changé depuis votre lecture : il vient d’être rechargé.',
+  'failure.unlawful': 'Cette surcharge viole une loi du registre (prix d’un pack intégré, pack gratuit rendu payant, fenêtre inversée).',
+  'failure.audit': 'Le journal d’audit est indisponible : rien n’a été écrit.',
+  'failure.forbidden': 'Ce geste demande le droit de conduire le Jeu.',
+  'failure.failed': 'Le registre n’a pas pu être modifié. Réessayez.',
+  'load.failed': 'Le registre n’a pas pu être lu.',
+  retry: 'Réessayer',
+  audit: 'Voir le journal d’audit des packs',
+  empty: 'Aucun pack au registre.',
+} as const;
+
+export type RegistryTextKey = keyof typeof fr;
+
+type Texts = Readonly<Record<RegistryTextKey, string>>;
+
+const en = {
+  title: 'Pack registry',
+  hint: 'Publish, withdraw, order, price, schedule and target a pack of the repository, without a deployment. Every action is logged before it runs.',
+  'domain.sticker': 'Stickers',
+  'domain.glory-frame': 'Glory frames',
+  'domain.capture-frame': 'Capture frames',
+  'domain.wallpaper': 'Wallpapers',
+  'domain.avatar-ring': 'Avatar rings',
+  'domain.banner': 'Banners',
+  'domain.banner-frame': 'Banner frames',
+  'domain.lens': 'Lenses',
+  published: 'Published',
+  withdrawn: 'Withdrawn',
+  free: 'Free',
+  price: '{price} Meeshes',
+  order: 'Order {order}',
+  from: 'From {date}',
+  until: 'Until {date}',
+  targeted: 'Targeted',
+  overridden: 'Overridden · revision {revision}',
+  publish: 'Publish',
+  withdraw: 'Withdraw',
+  edit: 'Edit',
+  reset: 'Back to the repository',
+  save: 'Save',
+  cancel: 'Cancel',
+  'field.order': 'Order',
+  'field.price': 'Price in Meeshes (empty: free)',
+  'field.startsAt': 'Window start (UTC)',
+  'field.endsAt': 'Window end (UTC)',
+  'field.communities': 'Communities (ids, comma-separated)',
+  'field.countries': 'Countries (ISO codes, comma-separated)',
+  'field.languages': 'Languages (codes, comma-separated)',
+  'field.invalid': 'Order from 0 to 10,000, price from 1 to 10,000, end after start.',
+  'failure.conflict': 'The registry changed since you read it: it has just been reloaded.',
+  'failure.unlawful': 'This override breaks a registry rule (price on a built-in pack, free pack made paid, inverted window).',
+  'failure.audit': 'The audit log is unavailable: nothing was written.',
+  'failure.forbidden': 'This action requires the right to run the Game.',
+  'failure.failed': 'The registry could not be changed. Try again.',
+  'load.failed': 'The registry could not be read.',
+  retry: 'Try again',
+  audit: 'See the pack audit log',
+  empty: 'No pack in the registry.',
+} satisfies Texts;
+
+const es = {
+  title: 'Registro de packs',
+  hint: 'Publicar, retirar, ordenar, poner precio, fechar y segmentar un pack del repositorio, sin despliegue. Cada acción se registra antes de ejecutarse.',
+  'domain.sticker': 'Stickers',
+  'domain.glory-frame': 'Marcos de gloria',
+  'domain.capture-frame': 'Marcos de captura',
+  'domain.wallpaper': 'Fondos',
+  'domain.avatar-ring': 'Contornos',
+  'domain.banner': 'Banners',
+  'domain.banner-frame': 'Marcos de banner',
+  'domain.lens': 'Lentes',
+  published: 'Publicado',
+  withdrawn: 'Retirado',
+  free: 'Gratis',
+  price: '{price} Meeshes',
+  order: 'Orden {order}',
+  from: 'Desde el {date}',
+  until: 'Hasta el {date}',
+  targeted: 'Segmentado',
+  overridden: 'Modificado · revisión {revision}',
+  publish: 'Publicar',
+  withdraw: 'Retirar',
+  edit: 'Editar',
+  reset: 'Volver al repositorio',
+  save: 'Guardar',
+  cancel: 'Cancelar',
+  'field.order': 'Orden',
+  'field.price': 'Precio en Meeshes (vacío: gratis)',
+  'field.startsAt': 'Inicio de la ventana (UTC)',
+  'field.endsAt': 'Fin de la ventana (UTC)',
+  'field.communities': 'Comunidades (identificadores, separados por comas)',
+  'field.countries': 'Países (códigos ISO, separados por comas)',
+  'field.languages': 'Idiomas (códigos, separados por comas)',
+  'field.invalid': 'Orden de 0 a 10 000, precio de 1 a 10 000, fin después del inicio.',
+  'failure.conflict': 'El registro cambió desde su lectura: se acaba de recargar.',
+  'failure.unlawful': 'Esta modificación infringe una regla del registro (precio de un pack integrado, pack gratuito vuelto de pago, ventana invertida).',
+  'failure.audit': 'El registro de auditoría no está disponible: no se escribió nada.',
+  'failure.forbidden': 'Esta acción requiere el derecho de dirigir el Juego.',
+  'failure.failed': 'No se pudo modificar el registro. Inténtelo de nuevo.',
+  'load.failed': 'No se pudo leer el registro.',
+  retry: 'Reintentar',
+  audit: 'Ver el registro de auditoría de los packs',
+  empty: 'Ningún pack en el registro.',
+} satisfies Texts;
+
+const pt = {
+  title: 'Registro de pacotes',
+  hint: 'Publicar, retirar, ordenar, precificar, datar e segmentar um pacote do repositório, sem implantação. Cada ação é registrada antes de ser executada.',
+  'domain.sticker': 'Figurinhas',
+  'domain.glory-frame': 'Molduras de glória',
+  'domain.capture-frame': 'Molduras de captura',
+  'domain.wallpaper': 'Fundos',
+  'domain.avatar-ring': 'Contornos',
+  'domain.banner': 'Banners',
+  'domain.banner-frame': 'Molduras de banner',
+  'domain.lens': 'Lentes',
+  published: 'Publicado',
+  withdrawn: 'Retirado',
+  free: 'Grátis',
+  price: '{price} Meeshes',
+  order: 'Ordem {order}',
+  from: 'A partir de {date}',
+  until: 'Até {date}',
+  targeted: 'Segmentado',
+  overridden: 'Alterado · revisão {revision}',
+  publish: 'Publicar',
+  withdraw: 'Retirar',
+  edit: 'Editar',
+  reset: 'Voltar ao repositório',
+  save: 'Salvar',
+  cancel: 'Cancelar',
+  'field.order': 'Ordem',
+  'field.price': 'Preço em Meeshes (vazio: grátis)',
+  'field.startsAt': 'Início da janela (UTC)',
+  'field.endsAt': 'Fim da janela (UTC)',
+  'field.communities': 'Comunidades (identificadores, separados por vírgulas)',
+  'field.countries': 'Países (códigos ISO, separados por vírgulas)',
+  'field.languages': 'Idiomas (códigos, separados por vírgulas)',
+  'field.invalid': 'Ordem de 0 a 10 000, preço de 1 a 10 000, fim depois do início.',
+  'failure.conflict': 'O registro mudou desde a sua leitura: acaba de ser recarregado.',
+  'failure.unlawful': 'Esta alteração viola uma regra do registro (preço de um pacote integrado, pacote grátis tornado pago, janela invertida).',
+  'failure.audit': 'O registro de auditoria está indisponível: nada foi escrito.',
+  'failure.forbidden': 'Esta ação exige o direito de conduzir o Jogo.',
+  'failure.failed': 'Não foi possível alterar o registro. Tente novamente.',
+  'load.failed': 'Não foi possível ler o registro.',
+  retry: 'Tentar novamente',
+  audit: 'Ver o registro de auditoria dos pacotes',
+  empty: 'Nenhum pacote no registro.',
+} satisfies Texts;
+
+const TEXTS: Readonly<Record<AdminLanguage, Texts>> = { fr, en, es, pt };
+
+const PLACEHOLDER = /\{(\w+)\}/g;
+
+export const registryText = (language: AdminLanguage, key: RegistryTextKey, params?: Readonly<Record<string, string>>): string =>
+  params === undefined ? TEXTS[language][key] : TEXTS[language][key].replace(PLACEHOLDER, (whole, name: string) => params[name] ?? whole);
+
+export const registryDomainText = (language: AdminLanguage, domain: PackDomain): string => registryText(language, `domain.${domain}`);
+
+export const registryFailureText = (language: AdminLanguage, failure: RegistryFailure): string => registryText(language, `failure.${failure}`);
+
+/** Témoins seulement : chaque langue porte les clés du français. */
+export const registryTextKeysOf = (language: AdminLanguage): readonly string[] => Object.keys(TEXTS[language]);

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="global_search_offline_banner">نتائج من هذا الجهاز فقط</string>
+    <string name="global_search_partial_failure">تعذّر تحميل بعض النتائج</string>
+    <string name="global_search_retry">إعادة المحاولة</string>
+    <string name="global_search_failed_title">البحث غير متاح</string>
+    <string name="global_search_failed_hint">تحقق من اتصالك وحاول مرة أخرى.</string>
+</resources>

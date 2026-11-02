@@ -7,6 +7,7 @@ import { WALLPAPER_PACKS } from '@/lib/appearance/wallpaper-catalog';
 import { loadAppearanceCatalog } from '@/lib/i18n-appearance-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { BACKDROP_DARK_END, BACKDROP_DARK_START } from '@/lib/view/thread-backdrop';
 
 import { BackgroundSection } from './appearance-picker-sections';
 
@@ -41,5 +42,28 @@ describe('les vignettes des fonds du sélecteur', () => {
     const animatedCount = animated!.designs.filter((design) => design.lottie !== undefined).length;
     expect(layers).toHaveLength(animatedCount);
     expect(host.querySelectorAll('[data-appearance-thumb]')).toHaveLength(animated!.designs.length);
+  });
+});
+
+/**
+ * LA VIGNETTE « SIGNATURE » EST UN APERÇU DU FOND RÉEL, PAS UNE JUMELLE (75w).
+ * Elle se peignait d'un dégradé recopié en ligne (`#0F0C29`/`#24243E`, teinte
+ * d'accent à 30 %, deux arrêts, texte `#fff`, aucune variante claire) — une
+ * divergence du vrai fond Signature (`.thread-backdrop` : mêmes cotes, 12 %,
+ * trois arrêts, scheme-aware). Elle DÉRIVE désormais des mêmes variables
+ * canoniques (`lib/view/thread-backdrop.ts`), sans aucune couleur en dur.
+ */
+describe('la vignette « Signature » du sélecteur', () => {
+  test('est alimentée par les variables canoniques du fond, sans dégradé en dur', async () => {
+    const host = await mounter.mount(
+      <BackgroundSection appearance={DEFAULT_APPEARANCE} language="fr" rtl={false} scheme="dark" accent="#6366F1" packs={[]} names={null} onChoose={() => undefined} />,
+    );
+    const thumb = host.querySelector('[data-appearance-signature-thumb]') as HTMLElement | null;
+    expect(thumb).not.toBeNull();
+    expect(thumb!.style.getPropertyValue('--backdrop-dark-start')).toBe(`#${BACKDROP_DARK_START}`);
+    expect(thumb!.style.getPropertyValue('--backdrop-dark-end')).toBe(`#${BACKDROP_DARK_END}`);
+    expect(thumb!.style.getPropertyValue('--accent')).toBe('#6366F1');
+    expect(thumb!.style.background).toBe('');
+    expect(thumb!.className).toContain('appearance-signature-thumb');
   });
 });

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_projection_channel_name">Captura de pantalla</string>
+    <string name="call_projection_share_title">Compartiendo tu pantalla</string>
+    <string name="call_projection_share_text">Tu pantalla es visible para los demás participantes.</string>
+    <string name="call_projection_recording_title">Grabando la llamada</string>
+    <string name="call_projection_recording_text">El vídeo de la llamada se está grabando.</string>
+    <string name="call_projection_stop">Detener</string>
+    <string name="call_projection_denied">No se permitió la captura de pantalla.</string>
+</resources>

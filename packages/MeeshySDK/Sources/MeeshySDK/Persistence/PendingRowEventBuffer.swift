@@ -4,6 +4,10 @@ struct PendingTombstone: Sendable {
     let deletedAt: Date
     let sparingOpenedViewOnce: Bool
     let expired: Bool
+    /// Lancée sur cet appareil, pas encore acceptée par le serveur (#13001).
+    var awaitingConfirmation = false
+    /// Annoncée par la passerelle seule, ou authentifiée (#13060).
+    var origin: PlaintextErasureOrigin = .announced
 }
 
 struct PendingEdit: Sendable {
@@ -11,16 +15,25 @@ struct PendingEdit: Sendable {
     let editedAt: Date
     let marksEdited: Bool
     let noticeJson: Data?
+    var authorship: EditAuthorship = .untouched
+}
+
+/// Une pièce retirée (`attachment:deleted`) avant que son message n'ait atteint la base.
+struct PendingAttachmentRemoval: Sendable {
+    let attachmentId: String
+    let conversationId: String
+    let removedAt: Date
 }
 
 typealias PendingReactionChange = @Sendable ([MeeshyReaction]) -> [MeeshyReaction]?
 
 /// Ce qui attend une ligne, dans l'ordre où cela se rejoue : la
-/// modification, les réactions, puis la suppression, qui l'emporte.
+/// modification, les réactions, les pièces retirées, puis la suppression, qui l'emporte.
 struct PendingRowEvents: Sendable {
     let rememberedAt: Date
     var edit: PendingEdit?
     var reactions: [PendingReactionChange] = []
+    var attachmentRemovals: [PendingAttachmentRemoval] = []
     var tombstone: PendingTombstone?
 }
 

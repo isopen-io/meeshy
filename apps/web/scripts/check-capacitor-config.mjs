@@ -285,12 +285,72 @@ export function auditSyncedPlugins(packageJson, importedPlugins) {
     );
 }
 
+/** #11229 — les dépendances dont le manifeste déclare un module Android (`capacitor.android`), comme `cap sync` les lit. */
+export function androidShellPlugins(packageJson, manifestOf) {
+  const declared = Object.keys({ ...packageJson?.dependencies, ...packageJson?.devDependencies });
+  return declared.filter((name) => manifestOf(name)?.capacitor?.android !== undefined).sort();
+}
+
+/**
+ * #11229 — PURE. `androidShellPlugins` écarte un paquet sans manifeste : sur
+ * une install partielle ou périmée, la liste des plugins serait vide et la
+ * garde des liens gradle passerait sans rien avoir vérifié. Une dépendance
+ * déclarée dont le manifeste est illisible est donc une violation à part.
+ */
+export function auditReadableManifests(packageJson, manifestOf) {
+  const declared = Object.keys({ ...packageJson?.dependencies, ...packageJson?.devDependencies }).sort();
+  return declared
+    .filter((name) => manifestOf(name) === undefined)
+    .map((name) => `manifeste illisible pour ${name} (node_modules/${name}/package.json) : lancer \`bun install --ignore-scripts\` avant le gate.`);
+}
+
+/** Le nom de module que `cap sync` donne à un plugin (`@capacitor/cli`, `android/update.js` § `getGradlePackageName`). */
+const gradleModuleOf = (name) => name.replace('@', '').replace('/', '-');
+
+/**
+ * #11229 — PURE. Un plugin déclaré mais absent des deux fichiers gradle que
+ * `cap sync` génère (et que le dépôt suit) n'entre pas dans l'APK : sa
+ * méthode n'est jamais déclarée à la coque, et le web retombe en silence sur
+ * son repli. Le gate #8090 ne le voit pas quand rien dans `src/` ne l'importe.
+ */
+export function auditAndroidShellLinks({ plugins, settingsGradle, buildGradle }) {
+  return plugins.flatMap((name) => {
+    const module = gradleModuleOf(name);
+    return [
+      ...(settingsGradle.includes(`include ':${module}'`) ? [] : [`${name} n’est pas inclus par android/capacitor.settings.gradle (lancer \`bunx cap sync android\`).`]),
+      ...(buildGradle.includes(`implementation project(':${module}')`) ? [] : [`${name} n’est pas lié par android/app/capacitor.build.gradle (lancer \`bunx cap sync android\`).`]),
+    ];
+  });
+}
+
 function sourcesUnder(dir) {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return sourcesUnder(path);
     return /\.(ts|tsx)$/.test(name) ? [readFileSync(path, 'utf8')] : [];
   });
+}
+
+/**
+ * (6) LE PLANCHER DE WEBVIEW (#11325) — PURE. La coque n'exige une WebView
+ * minimale que si la config ÉVALUÉE par la CLI la porte (`android.minWebViewVersion`,
+ * égale à `MIN_ANDROID_WEBVIEW_MAJOR` de `src/lib/shell/webview-floor.ts`), si
+ * la page servie en dessous (`server.errorPath`) existe sous `public/`, et si
+ * `main.tsx` fait le contrôle au démarrage. Un seul des trois manquant laisse
+ * l'utilisateur d'une vieille WebView devant un écran cassé, sans explication.
+ */
+export function auditWebViewFloor({ capConfig, floorSource, publicFiles, mainSource }) {
+  const floor = Number(/MIN_ANDROID_WEBVIEW_MAJOR\s*=\s*(\d+)/.exec(floorSource)?.[1]);
+  const page = /WEBVIEW_UPDATE_PAGE\s*=\s*'([^']+)'/.exec(floorSource)?.[1];
+  const declared = capConfig?.android?.minWebViewVersion;
+  const errorPath = capConfig?.server?.errorPath;
+  return [
+    ...(Number.isInteger(floor) && floor >= 55 ? [] : ['webview-floor.ts ne déclare pas MIN_ANDROID_WEBVIEW_MAJOR (entier ≥ 55, le minimum de Capacitor).']),
+    ...(declared === floor ? [] : [`android.minWebViewVersion vaut ${JSON.stringify(declared)}, attendu ${floor} (webview-floor.ts).`]),
+    ...(page !== undefined && errorPath === page ? [] : [`server.errorPath vaut ${JSON.stringify(errorPath)}, attendu ${JSON.stringify(page)} (webview-floor.ts).`]),
+    ...(page !== undefined && publicFiles.includes(page) ? [] : [`public/${page} manque : la coque n'aurait rien à servir sous le plancher.`]),
+    ...(/redirectBelowWebViewFloor\(/.test(mainSource) ? [] : ['main.tsx n’appelle pas redirectBelowWebViewFloor : aucun contrôle au démarrage.']),
+  ];
 }
 
 function run() {
@@ -338,6 +398,24 @@ function run() {
     console.log('✓ iOS refuse MEESHY_SHELL_START_PATH en nommant CAPBridgeViewController.loadWebView (forme admise).');
   }
 
+  let evaluated;
+  try {
+    evaluated = JSON.parse(androidResult.stdout)?.app?.extConfig;
+  } catch {
+    evaluated = undefined;
+  }
+  const floorViolations = auditWebViewFloor({
+    capConfig: evaluated,
+    floorSource: readFileSync(join(ROOT, 'src/lib/shell/webview-floor.ts'), 'utf8'),
+    publicFiles: readdirSync(join(ROOT, 'public')),
+    mainSource: readFileSync(join(ROOT, 'src/main.tsx'), 'utf8'),
+  });
+  if (floorViolations.length > 0) {
+    violations.push(...floorViolations.map((v) => `[webview] ${v}`));
+  } else {
+    console.log('✓ La coque Android exige sa WebView minimale, sert l’écran de mise à jour en dessous et le contrôle au démarrage (#11325).');
+  }
+
   const pluginViolations = auditSyncedPlugins(
     JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')),
     capacitorPluginsImportedBy(sourcesUnder(join(ROOT, 'src'))),
@@ -346,6 +424,25 @@ function run() {
     violations.push(...pluginViolations);
   } else {
     console.log('✓ Tout plugin Capacitor importé par src/ est synchronisé par cap sync (#8090).');
+  }
+
+  const manifestOf = (name) => {
+    const path = join(ROOT, 'node_modules', name, 'package.json');
+    return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
+  };
+  const webPackageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const linkViolations = [
+    ...auditReadableManifests(webPackageJson, manifestOf),
+    ...auditAndroidShellLinks({
+      plugins: androidShellPlugins(webPackageJson, manifestOf),
+      settingsGradle: readFileSync(join(ROOT, 'android/capacitor.settings.gradle'), 'utf8'),
+      buildGradle: readFileSync(join(ROOT, 'android/app/capacitor.build.gradle'), 'utf8'),
+    }),
+  ];
+  if (linkViolations.length > 0) {
+    violations.push(...linkViolations.map((v) => `[android] ${v}`));
+  } else {
+    console.log('✓ La coque Android lie chaque plugin Capacitor déclaré par package.json (#11229).');
   }
 
   if (violations.length > 0) {

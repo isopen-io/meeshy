@@ -30,9 +30,12 @@ public final class ReaderAudioMixer {
     public var activeClipCount: Int { entries.count }
 
     private let logger = MeeshyLog.logger(.media)
-    /// `internal` : l'extension du FOND vit dans son propre fichier
-    /// (`ReaderAudioMixer+Background.swift`) et y attache son node.
-    let engine = AVAudioEngine()
+    /// Le moteur sur lequel ce mixer attache ses nodes — celui de son HÔTE,
+    /// partagé par toutes les surfaces de lecture (#9878). `internal` :
+    /// l'extension du FOND (`ReaderAudioMixer+Background.swift`) y attache le
+    /// sien, et une réinitialisation des services média le remplace.
+    var engine: AVAudioEngine { engineHost.engine }
+    let engineHost: ReaderAudioEngineHost
 
     /// Format canonique de mixage — 48 kHz stereo Float32 (standard broadcast,
     /// natif AAC LC, natif iPhone speaker + AirPods). Avant ce fix, chaque
@@ -65,8 +68,14 @@ public final class ReaderAudioMixer {
         // but the format is guaranteed coherent across all attached nodes.
         return mixer.outputFormat(forBus: 0)
     }
-    /// One entry per configured clip, keyed by audio object id.
-    private var entries: [String: Entry] = [:]
+    /// One entry per configured clip, keyed by audio object id. `internal` :
+    /// le rattachement à un moteur neuf (`ReaderAudioMixer+SharedEngine.swift`)
+    /// remplace leurs nodes.
+    var entries: [String: Entry] = [:]
+    /// Avancé par chaque configuration : une ouverture de fichiers HORS du fil
+    /// principal qui revient après une configuration plus récente se tait
+    /// (`ReaderAudioMixer+FileLoading.swift`).
+    var configurationTicket: UInt64 = 0
     /// Wall-clock origin for the current playback pass — set on `play()` and
     /// used to derive the sample-accurate host-time targets for each clip.
     private var playbackStartHostTime: UInt64?
@@ -119,13 +128,22 @@ public final class ReaderAudioMixer {
     /// tourner d'`AVAudioEngine` (cf. `ReaderAudioSchedulerProviding`).
     private let scheduler: any ReaderAudioSchedulerProviding
 
-    public init() {
-        self.scheduler = ReaderAudioNodeScheduler()
+    /// Un mixer AUTONOME, sur un moteur à lui (témoins). Tout canevas passe
+    /// `ReaderAudioEngineHost.reader` (#9878).
+    public convenience init() {
+        self.init(engineHost: ReaderAudioEngineHost(), scheduler: ReaderAudioNodeScheduler())
     }
 
     /// Seam de test : `internal`, donc invisible hors du module.
-    init(scheduler: any ReaderAudioSchedulerProviding) {
+    convenience init(scheduler: any ReaderAudioSchedulerProviding) {
+        self.init(engineHost: ReaderAudioEngineHost(), scheduler: scheduler)
+    }
+
+    init(engineHost: ReaderAudioEngineHost,
+         scheduler: any ReaderAudioSchedulerProviding = ReaderAudioNodeScheduler()) {
+        self.engineHost = engineHost
         self.scheduler = scheduler
+        engineHost.register(self)
     }
 
     // MARK: - Configure
@@ -139,76 +157,77 @@ public final class ReaderAudioMixer {
     public func configure(audios: [StoryAudioPlayerObject],
                           urls: [String: URL],
                           loopsEveryClip: Bool = false) throws {
+        let files = ReaderAudioFileReader.readAudioFiles(Self.urls(urls, for: audios))
+        configure(audios: audios, files: files, loopsEveryClip: loopsEveryClip)
+    }
+
+    /// Le corps de la configuration, sur des fichiers DÉJÀ ouverts — par le
+    /// chemin synchrone ci-dessus, ou hors du fil principal par
+    /// `loadAndConfigure` (#9878).
+    func configure(audios: [StoryAudioPlayerObject],
+                   files: [String: AVAudioFile],
+                   loopsEveryClip: Bool) {
+        configurationTicket &+= 1
         teardown()
-        logger.info("ReaderAudioMixer.configure audios=\(audios.count) urls=\(urls.count)")
+        logger.info("ReaderAudioMixer.configure audios=\(audios.count) files=\(files.count)")
         for audio in audios {
-            guard let url = urls[audio.id] else {
-                logger.error("ReaderAudioMixer.configure skipping \(audio.id, privacy: .public) — no URL in dict")
+            guard let file = files[audio.id] else {
+                logger.error("ReaderAudioMixer.configure skipping \(audio.id, privacy: .public) — no readable file")
                 continue
             }
-            // AVAudioFile(forReading:) rejects HTTPS URLs with OSStatus 2003334207
-            // ("not a file"). Log explicitly so a silent skip becomes diagnosable.
-            if !url.isFileURL {
-                logger.error("ReaderAudioMixer.configure \(audio.id, privacy: .public) URL is not file:// scheme=\(url.scheme ?? "nil", privacy: .public) — AVAudioFile will reject")
-            }
-            do {
-                let file = try AVAudioFile(forReading: url)
-                let node = AVAudioPlayerNode()
-                engine.attach(node)
-                // Connect via canonical format — AVAudioEngine inserts a
-                // high-quality `AVAudioConverter` between this node and the
-                // mainMixer when `file.processingFormat` differs (samplerate or
-                // channel count). Cf. `canonicalFormat` docstring.
-                engine.connect(node,
-                               to: engine.mainMixerNode,
-                               format: Self.resolveCanonicalFormat(mixer: engine.mainMixerNode))
-                let initialVolume = audio.fadeIn ?? 0 > 0 ? 0 : audio.volume
-                node.volume = isMuted ? 0 : initialVolume
-                let sourceDuration = Double(file.length) / max(file.processingFormat.sampleRate, 1)
-                let duration = audio.duration ?? Float(file.length) / Float(file.processingFormat.sampleRate)
-                let trimBounds: MediaTrimBounds? = (audio.sourceStart == nil && audio.sourceEnd == nil)
-                    ? nil
-                    : audio.trimBounds(sourceDuration: sourceDuration)
-                entries[audio.id] = Entry(
-                    audioId: audio.id,
-                    file: file,
-                    node: node,
-                    startTime: audio.startTime ?? 0,
-                    targetVolume: audio.volume,
-                    fadeIn: audio.fadeIn ?? 0,
-                    fadeOut: audio.fadeOut ?? 0,
-                    duration: duration,
-                    loop: ReaderAudioLoopPolicy.loops(declared: audio.loop,
-                                                      isBackground: false,
-                                                      isEditPreview: loopsEveryClip),
-                    // Fenêtre de rognage NON destructive (bornes seules, aucun
-                    // ré-encodage). Résolue une fois ici — jamais recalculée à
-                    // chaque schedule — via `StoryAudioPlayerObject.trimBounds`,
-                    // le résolveur UNIQUE qui tolère les bornes vieillies. Le
-                    // fichier porte sa PROPRE durée source (`file.length` /
-                    // `processingFormat.sampleRate`, jamais `audio.duration` qui,
-                    // une fois rogné, est la durée OCCUPÉE sur la timeline — pas
-                    // celle de la source). Sans intention de rognage déclarée
-                    // (les deux bornes `nil`), on ne résout rien : `nil` fait
-                    // retomber `scheduleEntry` sur `scheduleFile`, le chemin
-                    // d'aujourd'hui, à coût nul pour l'immense majorité des clips.
-                    trimBounds: trimBounds,
-                    // Une boucle d'aperçu rejoue ses fondus à chaque tour
-                    // (#10367) ; `nil` garde les fondus posés une fois.
-                    envelopeCycle: ReaderLoopEnvelope.repeatsEveryPass(
-                        loopsEveryClip: loopsEveryClip,
-                        fadeIn: Double(audio.fadeIn ?? 0),
-                        fadeOut: Double(audio.fadeOut ?? 0))
-                        ? ReaderLoopEnvelope.cycle(
-                            declaredLoop: audio.loop,
-                            occupiedDuration: Double(duration),
-                            passLength: ReaderLoopLaw.passLength(sourceDuration: sourceDuration,
-                                                                 trimBounds: trimBounds))
-                        : nil
-                )
-            } catch {
-                logger.error("ReaderAudioMixer failed to load \(audio.id): \(error.localizedDescription)")
-            }
+            let node = AVAudioPlayerNode()
+            engine.attach(node)
+            // Connect via canonical format — AVAudioEngine inserts a
+            // high-quality `AVAudioConverter` between this node and the
+            // mainMixer when `file.processingFormat` differs (samplerate or
+            // channel count). Cf. `canonicalFormat` docstring.
+            engine.connect(node,
+                           to: engine.mainMixerNode,
+                           format: Self.resolveCanonicalFormat(mixer: engine.mainMixerNode))
+            let initialVolume = audio.fadeIn ?? 0 > 0 ? 0 : audio.volume
+            node.volume = isMuted ? 0 : initialVolume
+            let sourceDuration = Double(file.length) / max(file.processingFormat.sampleRate, 1)
+            let duration = audio.duration ?? Float(file.length) / Float(file.processingFormat.sampleRate)
+            let trimBounds: MediaTrimBounds? = (audio.sourceStart == nil && audio.sourceEnd == nil)
+                ? nil
+                : audio.trimBounds(sourceDuration: sourceDuration)
+            entries[audio.id] = Entry(
+                audioId: audio.id,
+                file: file,
+                node: node,
+                startTime: audio.startTime ?? 0,
+                targetVolume: audio.volume,
+                fadeIn: audio.fadeIn ?? 0,
+                fadeOut: audio.fadeOut ?? 0,
+                duration: duration,
+                loop: ReaderAudioLoopPolicy.loops(declared: audio.loop,
+                                                  isBackground: false,
+                                                  isEditPreview: loopsEveryClip),
+                // Fenêtre de rognage NON destructive (bornes seules, aucun
+                // ré-encodage). Résolue une fois ici — jamais recalculée à
+                // chaque schedule — via `StoryAudioPlayerObject.trimBounds`,
+                // le résolveur UNIQUE qui tolère les bornes vieillies. Le
+                // fichier porte sa PROPRE durée source (`file.length` /
+                // `processingFormat.sampleRate`, jamais `audio.duration` qui,
+                // une fois rogné, est la durée OCCUPÉE sur la timeline — pas
+                // celle de la source). Sans intention de rognage déclarée
+                // (les deux bornes `nil`), on ne résout rien : `nil` fait
+                // retomber `scheduleEntry` sur `scheduleFile`, le chemin
+                // d'aujourd'hui, à coût nul pour l'immense majorité des clips.
+                trimBounds: trimBounds,
+                // Une boucle d'aperçu rejoue ses fondus à chaque tour
+                // (#10367) ; `nil` garde les fondus posés une fois.
+                envelopeCycle: ReaderLoopEnvelope.repeatsEveryPass(
+                    loopsEveryClip: loopsEveryClip,
+                    fadeIn: Double(audio.fadeIn ?? 0),
+                    fadeOut: Double(audio.fadeOut ?? 0))
+                    ? ReaderLoopEnvelope.cycle(
+                        declaredLoop: audio.loop,
+                        occupiedDuration: Double(duration),
+                        passLength: ReaderLoopLaw.passLength(sourceDuration: sourceDuration,
+                                                             trimBounds: trimBounds))
+                    : nil
+            )
         }
         logger.info("ReaderAudioMixer.configure done entries=\(self.entries.count)")
     }
@@ -263,9 +282,7 @@ public final class ReaderAudioMixer {
             isPlaying = true
             return true
         }
-        if !engine.isRunning {
-            try engine.start()
-        }
+        try engineHost.startEngine()
         for entry in entries.values {
             scheduleEntry(entry, originHost: originHost, slideElapsed: slideElapsed)
             entry.node.play()
@@ -291,9 +308,7 @@ public final class ReaderAudioMixer {
             isPlaying = true
             return
         }
-        if !engine.isRunning {
-            try engine.start()
-        }
+        try engineHost.startEngine()
         for entry in entries.values where !entry.node.isPlaying {
             entry.node.play()
         }
@@ -339,13 +354,13 @@ public final class ReaderAudioMixer {
         if isPlaying, isSounding { MediaSessionCoordinator.shared.releaseAfterUserPause() }
         for entry in entries.values { entry.node.pause() }
         backgroundEntry?.player.pause()
-        if engine.isRunning { engine.pause() }
         // Jalon posé AVANT la remise à `false` : `slideElapsedSeconds` se gèle
         // sur la valeur de cet instant, et la reprise repart d'ici.
         if pausedAtHostTime == nil, playbackStartHostTime != nil {
             pausedAtHostTime = mach_absolute_time()
         }
         isPlaying = false
+        engineHost.clientDidGoIdle()
     }
 
     /// **Prépare le moteur dès que ses clips sont chargés** (#9837).
@@ -368,12 +383,12 @@ public final class ReaderAudioMixer {
     public func stop() {
         for entry in entries.values { entry.node.stop() }
         backgroundEntry?.player.stop()
-        if engine.isRunning { engine.stop() }
         playbackStartHostTime = nil
         pausedAtHostTime = nil
         startedSlideKey = nil
         playbackEpoch &+= 1
         isPlaying = false
+        engineHost.clientDidGoIdle()
     }
 
     // MARK: - Volume / mute
@@ -448,7 +463,7 @@ public final class ReaderAudioMixer {
         entries[audioId]?.node.volume
     }
 
-    private func effectiveVolume(for entry: Entry) -> Float {
+    func effectiveVolume(for entry: Entry) -> Float {
         (isMuted || entry.isUserMuted) ? 0 : entry.targetVolume
     }
 
@@ -507,15 +522,13 @@ public final class ReaderAudioMixer {
             bg.fadeTasks.forEach { $0.cancel() }
             backgroundEntry = nil
         }
-        if engine.isRunning {
-            engine.stop()
-        }
         playbackStartHostTime = nil
         pausedAtHostTime = nil
         startedSlideKey = nil
         playbackEpoch &+= 1
         backgroundStartOffset = 0
         isPlaying = false
+        engineHost.clientDidGoIdle()
     }
 
     // `nonisolated` : ne lit que `didShutdown` (Bool, Sendable) + log. Sans ce
@@ -776,49 +789,12 @@ public final class ReaderAudioMixer {
         return ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: origin)
     }
 
-    // MARK: - host-time helpers
-
-    private static let hostTimebase: mach_timebase_info_data_t = {
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        return info
-    }()
-
-    /// Forward to `AudioMixer.hostTime(forDelaySeconds:)` so a single, hardened
-    /// implementation (Double-based, clamped to `UInt64.max`, validates timebase
-    /// and finiteness — see P3-#5 in commit `841a528a`) is the source of truth
-    /// for the entire MeeshyUI audio pipeline. The previous local implementation
-    /// silently overflowed on non-Apple-Silicon timebases (numer=1, denom=3 on
-    /// Intel) for delays > 9.22s, which is well within the realistic envelope
-    /// of a 30s slide. Production callers keep the same call shape; the dedicated
-    /// `timebase:` overload below exists for tests that need to exercise the
-    /// overflow path explicitly.
-    static func hostTime(forDelaySeconds seconds: Double) -> UInt64 {
-        return AudioMixer.hostTime(forDelaySeconds: seconds)
-    }
-
-    /// Testable overload that injects an explicit timebase. Delegates to the
-    /// hardened `AudioMixer` helper so the two mixers stay bit-identical.
-    static func hostTime(
-        forDelaySeconds seconds: Double,
-        timebase: mach_timebase_info_data_t
-    ) -> UInt64 {
-        return AudioMixer.hostTime(forDelaySeconds: seconds, timebase: timebase)
-    }
-
-    static func delaySeconds(forHostTime target: UInt64, relativeTo now: UInt64) -> TimeInterval {
-        guard target > now else { return 0 }
-        let deltaTicks = target - now
-        let nanos = deltaTicks * UInt64(hostTimebase.numer) / UInt64(hostTimebase.denom)
-        return TimeInterval(nanos) / 1_000_000_000
-    }
-
     // MARK: - Internal
 
-    private struct Entry {
+    struct Entry {
         let audioId: String
         let file: AVAudioFile
-        let node: AVAudioPlayerNode
+        var node: AVAudioPlayerNode
         let startTime: Float
         var targetVolume: Float
         let fadeIn: Float
@@ -842,7 +818,7 @@ public final class ReaderAudioMixer {
 
     /// Internal helper for the single background audio slot.
     struct BackgroundEntry {
-        let player: AVAudioPlayerNode
+        var player: AVAudioPlayerNode
         let file: AVAudioFile
         let looping: Bool
         let audioId: String
@@ -923,7 +899,7 @@ extension ReaderAudioMixer {
 
     /// Les rampes d'enveloppe (minuteries d'attente, tâches de rampe) des deux
     /// slots tombent : elles tireraient le volume vers le haut sous un fondu.
-    private func cancelVolumeAutomation() {
+    func cancelVolumeAutomation() {
         entries = entries.mapValues { entry in
             entry.fadeTimers.forEach { $0.invalidate() }
             entry.fadeTasks.forEach { $0.cancel() }

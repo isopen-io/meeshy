@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="arrival_celebration_title">Address confirmed!</string>
+    <string name="arrival_celebration_lead">We are preparing your conversations…</string>
+    <string name="arrival_celebration_skip">Skip</string>
+</resources>

@@ -4,7 +4,7 @@ import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.model.report.ReportRequestBuilder
 
 /** The submit lifecycle of the report-a-message sheet, as a single enum (no redundant booleans). */
-enum class ReportSubmitStatus { Idle, Submitting, Submitted, Error }
+enum class ReportSubmitStatus { Idle, Confirming, Submitting, Submitted, Error }
 
 /**
  * Immutable state of the report-a-message sheet — the message analogue of the profile module's
@@ -19,19 +19,34 @@ enum class ReportSubmitStatus { Idle, Submitting, Submitted, Error }
 data class ReportMessageForm(
     val messageId: String,
     val reasons: List<ReportReason> = ReportReason.messageOrdered,
-    val selectedReason: ReportReason = ReportReason.SPAM,
+    val selectedReason: ReportReason? = null,
     val details: String = "",
     val status: ReportSubmitStatus = ReportSubmitStatus.Idle,
 ) {
     /** Live character count for the details field (never exceeds the cap — enforced in [withDetails]). */
     val detailsCount: Int get() = details.length
 
+    /** The optional details field only appears once a reason is chosen (iOS parity). */
+    val showsDetails: Boolean get() = selectedReason != null
+
+    /** The mandatory "Signaler ce message ?" dialog is up; nothing has been sent yet. */
+    val isConfirming: Boolean get() = status == ReportSubmitStatus.Confirming
+
     val isSubmitting: Boolean get() = status == ReportSubmitStatus.Submitting
     val isSubmitted: Boolean get() = status == ReportSubmitStatus.Submitted
     val hasError: Boolean get() = status == ReportSubmitStatus.Error
 
-    /** Submit is live unless one is in flight or has already succeeded (an error still allows a retry). */
-    val canSubmit: Boolean get() = status == ReportSubmitStatus.Idle || status == ReportSubmitStatus.Error
+    /** Submit needs a reason and no send in flight or done (an error still allows a retry). */
+    val canSubmit: Boolean
+        get() = selectedReason != null &&
+            (status == ReportSubmitStatus.Idle || status == ReportSubmitStatus.Error)
+
+    /** Tapping "Envoyer le signalement" only raises the confirmation dialog — it never sends. */
+    fun requestConfirmation(): ReportMessageForm =
+        if (canSubmit) copy(status = ReportSubmitStatus.Confirming) else this
+
+    fun cancelConfirmation(): ReportMessageForm =
+        if (isConfirming) copy(status = ReportSubmitStatus.Idle) else this
 
     fun withReason(reason: ReportReason): ReportMessageForm =
         copy(selectedReason = reason, status = clearedError())

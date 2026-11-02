@@ -73,7 +73,7 @@ describe('les deux adresses que l’app publiée ouvre sont servies', () => {
      `check-institutional.mjs`, qui compte les requêtes sur un navigateur réel,
      l'a vu. Les deux cas de table ci-dessous ferment la porte AVANT ce gate. */
   const miroirs: readonly { readonly nom: string; readonly source: string; readonly motif: RegExp }[] = [
-    { nom: 'nginx.conf', source: NGINX, motif: /location ~ \^\/\(([a-z|]+)\)\(\\\.html\|\/\)\?\$/ },
+    { nom: 'nginx.conf', source: NGINX, motif: /location ~ \^\/\(([a-z|-]+)\)\(\\\.html\|\/\)\?\$/ },
     { nom: 'sw-institutional.js', source: SW, motif: /const INSTITUTIONAL_ROUTES = \[([^\]]+)\]/ },
   ];
 

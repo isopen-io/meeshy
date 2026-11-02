@@ -225,8 +225,20 @@ function isPlausibleWebpFourCc(buffer: Buffer): boolean {
 }
 
 /**
+ * Marques `ftyp` d'une image HEIF (#11263) : HEIC d'iPhone (`heic`, `heix`,
+ * `mif1`…), séquences (`msf1`, `hevc`…) et AVIF (`avif`, `avis`). La marque
+ * majeure suffit, la box elle-même devant être plausible.
+ */
+const HEIF_IMAGE_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'hevm', 'hevs', 'mif1', 'msf1', 'avif', 'avis']);
+
+function isHeifImage(buffer: Buffer): boolean {
+  return startsWithAscii(buffer, 'ftyp', 4) && isPlausibleFtypBox(buffer) && HEIF_IMAGE_BRANDS.has(buffer.toString('latin1', 8, 12));
+}
+
+/**
  * Signatures des formats acceptés par `isImageMimeType`
- * (`ACCEPTED_MIME_TYPES.IMAGE` : jpeg/jpg, png, gif, webp).
+ * (`ACCEPTED_MIME_TYPES.IMAGE` : jpeg/jpg, png, gif, webp, et HEIC/HEIF/AVIF
+ * depuis #11263).
  *
  * GIF : NON renforcé au-delà de sa signature officielle (6 octets) — voir
  * « Formats volontairement laissés au magic number nu » dans la docstring
@@ -237,8 +249,57 @@ export function matchesImageSignature(buffer: Buffer): boolean {
   if (startsWithBytes(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) && isPlausiblePngIhdr(buffer)) return true; // PNG
   if (startsWithAscii(buffer, 'GIF87a') || startsWithAscii(buffer, 'GIF89a')) return true; // GIF
   if (startsWithAscii(buffer, 'RIFF') && startsWithAscii(buffer, 'WEBP', 8) && isPlausibleWebpFourCc(buffer)) return true; // WEBP
+  if (isHeifImage(buffer)) return true; // HEIC / HEIF / AVIF (#11263)
   return false;
 }
+
+// ─── Vidéo (#11266) ─────────────────────────────────────────────────────────
+
+/**
+ * Atomes de tête d'un QuickTime ancien, écrit sans box `ftyp` : `moov`,
+ * `mdat`, `wide`, `free`, `skip` ou `pnot` à l'octet 4 — un `.mov` d'appareil
+ * photo ou de logiciel antérieur à la norme ISO reste admis.
+ */
+const LEGACY_QUICKTIME_ATOMS = new Set(['moov', 'mdat', 'wide', 'free', 'skip', 'pnot']);
+
+/** DocType EBML d'une vidéo : WebM ou Matroska, dans la fenêtre de tête. */
+function hasEbmlVideoDocType(buffer: Buffer): boolean {
+  const window = buffer.subarray(0, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
+  return window.indexOf('webm', 4, 'latin1') !== -1 || window.indexOf('matroska', 4, 'latin1') !== -1;
+}
+
+function isLegacyQuickTime(buffer: Buffer): boolean {
+  return buffer.length >= 8 && LEGACY_QUICKTIME_ATOMS.has(buffer.toString('latin1', 4, 8));
+}
+
+/**
+ * Signatures des conteneurs vidéo admis (`ACCEPTED_MIME_TYPES.VIDEO` : MP4,
+ * MOV, WebM, Ogg — plus 3GP et Matroska que les appareils produisent). Mêmes
+ * renforts que l'audio (box `ftyp` plausible, DocType EBML, page Ogg), même
+ * contrat : un PRÉFIXE structurel, pas le fichier entier.
+ */
+export function matchesVideoSignature(buffer: Buffer): boolean {
+  if (startsWithAscii(buffer, 'ftyp', 4) && isPlausibleFtypBox(buffer)) return true; // MP4 / MOV / 3GP / M4V
+  if (startsWithBytes(buffer, [0x1a, 0x45, 0xdf, 0xa3]) && hasEbmlVideoDocType(buffer)) return true; // WebM / Matroska
+  if (startsWithAscii(buffer, 'OggS') && isPlausibleOggPage(buffer)) return true; // Ogg (Theora / VP8)
+  return isLegacyQuickTime(buffer); // QuickTime sans ftyp
+}
+
+/**
+ * Les types vidéo dont une signature est connue. Un autre `video/*` (FLV,
+ * AVI, MPEG-TS…) reste cru : on rejette ce qu'on sait faux, on n'exige pas de
+ * preuve pour ce qu'on ne sait pas vérifier (décision #5615 ci-dessous).
+ */
+const SNIFFED_VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/x-m4v',
+  'video/3gpp',
+  'video/3gpp2',
+  'video/webm',
+  'video/x-matroska',
+  'video/ogg',
+]);
 
 // ─── SVG / PDF ──────────────────────────────────────────────────────────────
 
@@ -286,7 +347,8 @@ export type DeclaredMimeSignatureVerdict =
  * mensonge avéré REJETTE l'upload plutôt que de le reclassifier.
  *
  * Décision produit (#5615) — que faire d'un type dont ce module ne connaît
- * AUCUNE signature (vidéo, texte, code, la plupart des formats de document) ?
+ * AUCUNE signature (texte, code, la plupart des formats de document ; la
+ * vidéo est vérifiée depuis #11266, ses conteneurs courants seulement) ?
  * **Accepté par défaut.** Vérifier une signature demande un vrai parseur de
  * conteneur pour la plupart de ces formats (`ACCEPTED_MIME_TYPES.DOCUMENT`/
  * `.CODE` couvrent des dizaines de types textuels indiscernables d'un texte
@@ -294,7 +356,7 @@ export type DeclaredMimeSignatureVerdict =
  * fausse impression de renfort, exactement ce que la docstring du module
  * refuse déjà pour GIF/MP3 non renforcés. La vérification porte donc
  * uniquement sur les familles où une signature FIABLE existe : image
- * (raster), audio, SVG, PDF. Pour tout le reste, la déclaration est crue —
+ * (raster), audio, vidéo, SVG, PDF. Pour tout le reste, la déclaration est crue —
  * c'est une liste noire implicite (on rejette ce qu'on sait faux), pas une
  * allowlist stricte (on n'exige pas de preuve pour ce qu'on ne sait pas
  * vérifier).
@@ -318,6 +380,12 @@ export function verifyDeclaredMimeType(declaredMimeType: string, buffer: Buffer)
     return matchesImageSignature(buffer)
       ? { verified: true }
       : { verified: false, reason: `Declared type "${declaredMimeType}" does not match any known image signature` };
+  }
+
+  if (SNIFFED_VIDEO_MIME_TYPES.has(normalized)) {
+    return matchesVideoSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match any known video signature` };
   }
 
   if (normalized.startsWith('audio/')) {

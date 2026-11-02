@@ -1,6 +1,7 @@
 package me.meeshy.sdk.composer
 
 import me.meeshy.sdk.model.ParticipantPermissions
+import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
 
 /**
  * The concrete affordances a message composer may offer for a given participant —
@@ -35,6 +36,19 @@ public data class ComposerAffordances(
      */
     public val isReadOnly: Boolean
         get() = !canSendText
+
+    public companion object {
+        /** Rien ne part : ni texte, ni pièce, ni lieu (conversation chiffrée de bout en bout, #13110). */
+        public val CLOSED: ComposerAffordances = ComposerAffordances(
+            canSendText = false,
+            canSendImages = false,
+            canSendFiles = false,
+            canSendVideos = false,
+            canSendAudios = false,
+            canSendLocations = false,
+            canSendLinks = false,
+        )
+    }
 }
 
 /**
@@ -48,6 +62,24 @@ public data class ComposerAffordances(
  * later reject. Android gates them at the source of truth instead.
  */
 public object ComposerAttachmentPolicy {
+    /**
+     * Les droits durcis, resserres par les FAMILLES que le lien ouvre ([allowance], iOS `GuestAttachmentAllowance`) : un lien
+     * restreint ne montre que les portes dont la famille est ouverte — l'image, le micro, les fichiers —, jamais un lieu ni
+     * un contact. Une famille n'accorde jamais un droit que le serveur a refuse (sauf le micro, que le durcissement ferme
+     * toujours et que la famille audio rouvre, comme sur un lien World Wide).
+     */
+    public fun affordances(permissions: ParticipantPermissions?, allowance: GuestAttachmentAllowance): ComposerAffordances {
+        val base = affordances(permissions)
+        if (!allowance.isRestricted) return base
+        return base.copy(
+            canSendImages = base.canSendImages && allowance.offersVisualMedia,
+            canSendFiles = base.canSendFiles && allowance.offersFiles,
+            canSendVideos = false,
+            canSendAudios = allowance.offersVoiceRecording,
+            canSendLocations = false,
+        )
+    }
+
     public fun affordances(permissions: ParticipantPermissions?): ComposerAffordances {
         val effective = permissions ?: ParticipantPermissions.defaultUser
         return ComposerAffordances(

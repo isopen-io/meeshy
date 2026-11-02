@@ -17,7 +17,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
 import { browserCommentUploadFor, forgetUploadedCommentMedia, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
-import { composingPostOf, postCommentImagingOf } from '@/lib/export/composed-comment-card';
+import { composingPostOf, postCommentImagingOf, storyCommentSupportOf } from '@/lib/export/composed-comment-card';
 import { commentInteractionOf, commentNegativeOf, interactionOf } from '@/lib/telemetry/card-context';
 import { commentTapOf } from '@/lib/telemetry/content-taps';
 import { readingTelemetry } from '@/lib/view/reading-telemetry';
@@ -26,6 +26,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
+import type { StoryPlaybackStory } from '@/lib/stories/playback';
 import type { CommentsComposerPresence } from '@/lib/view/comments-zone';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { CommentReplyTarget } from '@/lib/view/comment-reply-target';
@@ -75,6 +76,13 @@ export type CommentThreadProps = {
   /** Le téléversement d'une photo ou d'une vidéo jointe (#9167) — injectable
    * pour les témoins ; la production monte en TUS, contexte `comment`. */
   readonly uploadMedia?: CommentMediaUpload;
+  /**
+   * **LA STORY QUE LE LECTEUR JOUE** (#13922, jumelle de `story:` dans
+   * `CommentMoreMenu` iOS) — aucune caisse de cartes ne la porte : sans elle,
+   * « Imager » un de ses commentaires ne composerait pas la carte autour
+   * de son visuel.
+   */
+  readonly story?: StoryPlaybackStory;
 };
 
 export function CommentThread({
@@ -86,6 +94,7 @@ export function CommentThread({
   listHidden = false,
   onComposerChange,
   uploadMedia: injectedUpload,
+  story,
 }: CommentThreadProps) {
   const language = currentInterfaceLanguage();
   const online = useOnline();
@@ -178,11 +187,15 @@ export function CommentThread({
    * « IMAGER » UN COMMENTAIRE DE POST (#9687, jumelle de #9686) — l'atelier
    * s'ouvre TOUT DE SUITE sur la composition par défaut (post + commentaire,
    * ou le fil jusqu'à la réponse), et le fil reçoit les réponses de la racine
-   * dès qu'elles sont lues (celles de la caisse si le fil est déplié). Une
-   * story ou un statut gardent la carte du commentaire (`composingPostOf`).
+   * dès qu'elles sont lues (celles de la caisse si le fil est déplié). Le
+   * support est la story que le lecteur joue, sinon la carte d'une caisse ;
+   * connu, il compose toujours (`composingPostOf`), comme iOS.
    */
   /* Lu une fois par lot de commentaires, jamais par rangée : la recherche traverse toutes les caisses de cartes. */
-  const composingPost = useMemo(() => composingPostOf(findCardPost(appQueryClient, postId)), [postId, comments]);
+  const composingPost = useMemo(
+    () => composingPostOf(story !== undefined && story.id === postId ? storyCommentSupportOf(story) : findCardPost(appQueryClient, postId)),
+    [postId, comments, story],
+  );
   const viewerOfCard = { id: viewer.id ?? '', displayName: viewer.displayName };
   const imageComposed = (post: FeedPost, comment: PostComment, servedText: string, showsOriginal: boolean) => {
     const root = rootOf(comment);

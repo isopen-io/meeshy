@@ -3,7 +3,7 @@
 **Date:** 2026-07-20
 **Scope:** iOS only
 **Area:** Accessibility (VoiceOver) — Safety / Blocked-users management screen
-**Target file:** `apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift`
+**Target file:** `apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift`
 
 ## Why this surface
 Fresh surface (0 prior analysis, 0 in-flight PR — swarm 140i→177i verified via

@@ -53,7 +53,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     /// utilisateur, cf. la doc de `groupIntroDuration`), et aucun test ne doit
     /// prétendre le contraire.
     func test_groupIntroDuration_isHalfASecond() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let viewerSource = try source("Meeshy/Features/Stories/Views/StoryViewerView.swift")
         XCTAssertTrue(
             viewerSource.contains("static let groupIntroDuration: TimeInterval = 0.5"),
             "groupIntroDuration doit être fixé à 500 ms (directive user 2026-08-20)."
@@ -91,9 +91,9 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
         // Ce raisonnement ne vaut PAS pour une garde de LIEU — celle qui
         // affirme « ceci n'est pas à tel endroit » : l'unité concatène et
         // efface justement la distinction qu'un tel témoin mesure.
-        let unitSource = try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let unitSource = try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView.swift")
         // L'interstitiel est un type à lui (`StoryGroupIntroOverlay.swift`), sorti du fichier du lecteur.
-        let overlaySource = try source("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift")
+        let overlaySource = try source("Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift")
 
         let cubeFace = try body(of: "struct NeighborGroupCubeFace: View {", in: unitSource, closing: "\n}")
         let overlay = try body(
@@ -135,7 +135,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     // MARK: - Tap gauche sur l'intro = retour au groupe précédent (pas la story précédente)
 
     func test_goBackToPreviousGroupFromIntro_usesGroupTransition_notStoryIndexCheck() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift")
+        let viewerSource = try source("Meeshy/Features/Stories/Views/StoryViewerView+GroupIntro.swift")
         let block = try body(
             of: "func goBackToPreviousGroupFromIntro() {", in: viewerSource, closing: "\n    }"
         )
@@ -151,7 +151,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
             block.contains("landOnPreviousGroup()"),
             "goBackToPreviousGroupFromIntro doit atterrir sur le groupe précédent."
         )
-        let navigation = try source("Meeshy/Features/Main/Views/StoryViewerView+Navigation.swift")
+        let navigation = try source("Meeshy/Features/Stories/Views/StoryViewerView+Navigation.swift")
         let landing = try body(of: "func landOnPreviousGroup() {", in: navigation, closing: "\n    }")
         XCTAssertTrue(
             landing.contains("StoryViewerPosition.previousGroupLanding(") && landing.contains("currentGroupIndex = landing.group"),
@@ -167,7 +167,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     // MARK: - Gestes composés sur StoryGroupIntroOverlay
 
     func test_storyGroupIntroOverlay_hasOnBackAndDoubleTapGestures() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift")
+        let viewerSource = try source("Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift")
         let block = try body(
             of: "struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
         )
@@ -193,7 +193,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     /// `location`, jamais la distance parcourue — il faut un mouchard
     /// `DragGesture`).
     func test_storyGroupIntroOverlay_tapsAreGatedOnFingerMovement() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift")
+        let viewerSource = try source("Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift")
         let overlay = try body(
             of: "struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
         )
@@ -233,7 +233,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     // Le badge vit désormais dans `StoryAuthorIdentityCard` (extraction du
     // 2026-07-25) — assertion inchangée, seul le fichier cible suit le rendu.
     func test_presenceBadge_rendersNothingWhenOffline() throws {
-        let cardSource = try source("Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift")
+        let cardSource = try source("Meeshy/Features/Stories/Views/StoryAuthorIdentityCard.swift")
         let block = try body(of: "private var presenceBadge: some View {", in: cardSource)
         XCTAssertTrue(
             block.contains("state.showsIndicator"),
@@ -243,7 +243,7 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     }
 
     func test_accessibilitySummary_omitsPresenceWhenOffline() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift")
+        let viewerSource = try source("Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift")
         let block = try body(of: "private var accessibilitySummary: String {", in: viewerSource)
         XCTAssertTrue(
             block.contains("showsIndicator"),

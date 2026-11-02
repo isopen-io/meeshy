@@ -194,7 +194,7 @@ class LanguageDataTest {
     @Test
     fun interfaceLanguagesAreTheShippedUiCodesInOrder() {
         assertThat(LanguageData.interfaceLanguages.map { it.code })
-            .containsExactly("fr", "en", "es", "ar")
+            .containsExactly("fr", "en", "es", "de", "it", "ar")
             .inOrder()
     }
 

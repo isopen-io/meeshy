@@ -172,6 +172,35 @@ struct WarmImageProbeTests {
         }
     }
 
+    /// #9872 — un avatar de 40 pt se décodait à 2 048 px dans l'`init` de sa
+    /// cellule : la sonde ne connaissait pas la taille affichée. Seule la
+    /// miniature progressive, qui n'a pas de taille, garde la sonde plein format.
+    @Test("une sonde qui connaît la taille affichée la transmet")
+    func sized_components_probe_at_their_displayed_size() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Primitives/CachedAsyncImage.swift")
+        let unsized = source.components(separatedBy: "WarmImageProbe.warmedImage(for: resolved)").count - 1
+        let sized = source.components(separatedBy: "WarmImageProbe.warmedImage(for: resolved, maxPixelSize:").count - 1
+
+        #expect(unsized <= 1, "seule la miniature de `ProgressiveCachedImage`, sans taille, sonde au plafond d'écran")
+        #expect(sized >= 6, "avatar (×2), bannière (×2), image dimensionnée et progressive dimensionnée sondent au palier affiché")
+    }
+
+    @Test("la sonde dimensionnée sert d'abord ce qui est résident, palier puis plein format")
+    func sized_probe_serves_any_resident_variant_first() {
+        WarmImageProbe.reset()
+        let resident = pixel()
+        var probes = 0
+
+        let image = WarmImageProbe.warmedImage(
+            for: "https://x/avatar.jpg",
+            resident: { _ in resident },
+            probe: { _ in probes += 1; return nil }
+        )
+
+        #expect(image === resident)
+        #expect(probes == 0)
+    }
+
     @Test("la porte mémoire ne sonde jamais le disque")
     func resident_door_never_probes() {
         let image = WarmImageProbe.residentImage(for: "https://x/poster.jpg", resident: { _ in nil })

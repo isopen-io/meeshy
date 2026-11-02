@@ -310,19 +310,13 @@ public actor StoryPublishQueue {
     public nonisolated let publishFailed = SendablePassthrough<StoryPublishFailure>()
 
     private static let maxQueueSize = 50
-    private static let maxRetries = 5
-    /// Exponential backoff schedule (seconds). Index = retryCount before
-    /// next attempt. Beyond `maxRetries` the item is failed permanently.
-    /// TODO(lot ultérieur) : DÉCLARÉ MAIS JAMAIS LU — il n'existe aucune porte
-    /// temporelle entre deux passes, les passes sont déclenchées par
-    /// `observeConnection`, `setPublishHandler` et `retryFailedItem`. Le
-    /// brancher transformerait le comportement de reprise (fenêtres de
-    /// plusieurs heures) : hors périmètre, mais ne pas croire qu'il s'applique.
-    private static let retryDelays: [TimeInterval] = [30, 120, 600, 3600, 7200]
+    /// Budget seul : aucune porte temporelle entre deux passes, déclenchées par
+    /// `observeConnection`, `setPublishHandler` et `retryFailedItem`.
+    private static let retryPolicy = RetryPolicy.storyPublish
     /// Un item fautif ne doit pas geler les suivants ; une panne réseau ne doit
     /// pas brûler le budget de toute la file. La frontière entre les deux est
     /// le nombre d'échecs retryables CONSÉCUTIFS. Sans porte temporelle entre
-    /// deux passes (cf. `retryDelays`), un `continue` inconditionnel brûlerait
+    /// deux passes (cf. `retryPolicy`), un `continue` inconditionnel brûlerait
     /// 1 tentative sur CHAQUE item à chaque passe : 5 flaps réseau suffiraient
     /// à envoyer toute la file en échec permanent.
     private static let maxConsecutiveRetryableFailures = 2
@@ -335,11 +329,6 @@ public actor StoryPublishQueue {
     /// compter ferait boucler la passe à vide sur une file de claims.
     private static let maxItemsPerSweep = 10
     private static let queueFileName = "story_publish_queue.json"
-    /// Cap on the retry-able failure history (`failedItems`). Local media is
-    /// preserved for these items (unlike `items`, which drops media on any
-    /// terminal disposition) so the user can retry from `MyStoriesView` —
-    /// the cap bounds how much abandoned media can accumulate on disk.
-    private static let maxFailedItems = 20
     private static let failedQueueFileName = "story_publish_failed_queue.json"
 
     private var items: [StoryPublishQueueItem] = []
@@ -353,14 +342,12 @@ public actor StoryPublishQueue {
     private let logger = MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
 
     private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
+        let e = MeeshyCoders.encoder(.persistence)
         return e
     }()
 
     private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        let d = MeeshyCoders.decoder(.persistence)
         return d
     }()
 
@@ -405,10 +392,12 @@ public actor StoryPublishQueue {
     @discardableResult
     public func enqueue(_ item: StoryPublishQueueItem) -> String {
         if items.count >= Self.maxQueueSize {
-            // Drop the oldest pending item to make room. The dropped item is
-            // surfaced as a permanent failure so the user is aware that their
-            // long-stale draft was abandoned.
-            let dropped = items.removeFirst()
+            // #13415 — la plus ancienne cède sa place dans la FILE, jamais sur
+            // l'appareil : elle passe dans l'historique des échecs, avec ses
+            // médias, où l'auteur la reprend ou la supprime.
+            var dropped = items.removeFirst()
+            dropped.lastError = "File d'envoi pleine"
+            addToFailedItems(dropped)
             publishFailed.send(StoryPublishFailure(
                 queueId: dropped.id,
                 tempStoryId: dropped.tempStoryId,
@@ -662,7 +651,7 @@ public actor StoryPublishQueue {
                     items[idx].retryCount += 1
                     items[idx].lastError = error.localizedDescription
 
-                    if items[idx].retryCount >= Self.maxRetries {
+                    if Self.retryPolicy.isExhausted(afterFailures: items[idx].retryCount) {
                         permanentFailureIds.append(item.id)
                         failurePayloads.append(StoryPublishFailure(
                             queueId: item.id,
@@ -729,15 +718,11 @@ public actor StoryPublishQueue {
         }
     }
 
-    /// Appends a permanently-failed item to the retry-able history, dropping
-    /// the oldest entry (and its media) once `maxFailedItems` is exceeded —
-    /// same drop-oldest pattern as `enqueue`'s `maxQueueSize` guard.
+    /// Appends a permanently-failed item to the retry-able history. #13415 —
+    /// no cap: a story the author did not publish leaves the device only by
+    /// their gesture (`discardFailedItem`) or a successful retry.
     private func addToFailedItems(_ item: StoryPublishQueueItem) {
         failedItems.append(item)
-        if failedItems.count > Self.maxFailedItems {
-            let dropped = failedItems.removeFirst()
-            removeLocalMedia(of: dropped)
-        }
         saveFailedItemsToDisk()
     }
 
@@ -844,8 +829,7 @@ public actor StoryPublishQueue {
 
         do {
             let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            let decoder = MeeshyCoders.decoder(.persistence)
             return try decoder.decode([StoryPublishQueueItem].self, from: data)
         } catch {
             return []

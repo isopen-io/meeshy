@@ -407,14 +407,14 @@ final class PlayerBannerTests: XCTestCase {
     }
 
     func test_theSlotWakesNeitherTheCacheNorTheNetwork_unlessTheScreenHostsTheBanner() throws {
-        let host = try source("Meeshy/Features/Main/Game/PlayerBannerHost.swift")
+        let host = try source("Meeshy/Features/Game/PlayerBannerHost.swift")
         XCTAssertTrue(host.contains("guard isHosted, !hidden else { return }"),
                       "un fil, Progression ou une visionneuse ne lisent ni le cache ni le réseau ; « Jeu masqué » non plus")
         XCTAssertTrue(host.contains("hosted: isHosted"), "le retour sur un écran principal relance la lecture")
     }
 
     func test_theSlotNeverReadsTheWindowInsetsItself() throws {
-        let host = try source("Meeshy/Features/Main/Game/PlayerBannerHost.swift")
+        let host = try source("Meeshy/Features/Game/PlayerBannerHost.swift")
         XCTAssertFalse(host.contains("DeviceLayout.safeAreaTop"), "lire l'encart de la fenêtre clé depuis l'intérieur fige la vue (#8772) : il est mesuré par préférence")
         XCTAssertTrue(host.contains("withAnimation(PlayerBannerMotion.animation"), "la sortie s'anime par l'état AFFICHÉ, pas par une .animation(value:)")
         XCTAssertFalse(host.contains(".animation(TopChromeBarMotion"), "une .animation(value:) n'anime pas une sortie (#9048)")
@@ -423,7 +423,7 @@ final class PlayerBannerTests: XCTestCase {
 
     /// #9536 : le fond du bandeau est la bannière de profil du joueur, en translucide.
     func test_theBarPutsTheProfileBannerUnderTheInformation() throws {
-        let host = try source("Meeshy/Features/Main/Game/PlayerBannerHost.swift")
+        let host = try source("Meeshy/Features/Game/PlayerBannerHost.swift")
         XCTAssertTrue(host.contains("backdrop: AuthManager.shared.currentUser?.banner"), "la bannière de profil de l'utilisateur est le fond")
     }
 

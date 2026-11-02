@@ -169,8 +169,7 @@ extension PostService {
             let response: APIResponse<APIPost> = try await api.post(PostsEndpoint.root, body: body)
             return response.data
         }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.api)
         let response: APIResponse<APIPost> = try await api.requestWithHeaders(
             PostsEndpoint.root, method: "POST", body: try encoder.encode(body),
             queryItems: nil, headers: ["X-Client-Mutation-Id": clientMutationId]

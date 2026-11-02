@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.icons.MeeshyIcons
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,13 +21,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.NearMe
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,10 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,7 +55,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.location.awaitFreshLocationFix
@@ -85,6 +80,7 @@ fun NearbyScreen(
     onBack: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     viewModel: NearbyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -146,7 +142,7 @@ fun NearbyScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.nearby_back),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
@@ -201,8 +197,12 @@ fun NearbyScreen(
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
                             NearbyPostCard(
+                                modifier = Modifier.animateItem(),
+                                onOpenProfile = onOpenProfile,
                                 post = post,
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
+                                onOpenPost = onOpenPost,
+                                onOpenReel = onPostClick,
                             )
                         }
                         if (state.isLoadingMore) {
@@ -267,48 +267,48 @@ private fun NearbyStatusCard(
 }
 
 @Composable
-private fun NearbyPostCard(
+internal fun NearbyPostCard(
+    modifier: Modifier = Modifier,
+    onOpenProfile: ((String) -> Unit)? = null,
     post: FeedPostPresentation,
     onClick: () -> Unit,
+    onOpenPost: (String) -> Unit = {},
+    onOpenReel: (String) -> Unit = onOpenPost,
 ) {
+    post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
+        ReelPostCard(
+            post = post,
+            cover = cover,
+            onOpenReel = onOpenReel,
+            modifier = modifier,
+            onOpenProfile = onOpenProfile,
+        )
+        return
+    }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(contentAlignment = Alignment.Center) {
-                    MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp)
-                    if (!post.authorAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = post.authorAvatarUrl,
-                            contentDescription = post.authorName ?: unknownAuthor,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                        )
-                    }
-                }
+                val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                MeeshyAvatar(
+                    name = post.authorName ?: unknownAuthor,
+                    size = 40.dp,
+                    imageUrl = post.authorAvatarUrl,
+                    modifier = profileTap,
+                )
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Text(
                     text = post.authorName ?: unknownAuthor,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MeeshyTheme.tokens.textPrimary,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).then(profileTap),
                 )
-                if (post.isReel) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayCircle,
-                        contentDescription = stringResource(R.string.feed_reel),
-                        tint = MeeshyPalette.Indigo500,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
             }
 
             if (post.content.isNotBlank()) {
@@ -321,6 +321,8 @@ private fun NearbyPostCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+
+            FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
 
             post.distanceMeters?.let { meters ->
                 Spacer(Modifier.height(MeeshySpacing.sm))

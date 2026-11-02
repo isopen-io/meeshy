@@ -5,6 +5,15 @@
       "id": "fantastique.tarot",
       "mood": "fantastique",
       "name": "Tarot",
+      "localizedNames": {
+        "fr": "Tarot",
+        "en": "Tarot",
+        "es": "Tarot",
+        "pt": "Tarô",
+        "de": "Tarot",
+        "it": "Tarocchi",
+        "ar": "تاروت"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -220,6 +229,15 @@
       "id": "fantastique.grimoire",
       "mood": "fantastique",
       "name": "Grimoire",
+      "localizedNames": {
+        "fr": "Grimoire",
+        "en": "Grimoire",
+        "es": "Grimorio",
+        "pt": "Grimório",
+        "de": "Zauberbuch",
+        "it": "Grimorio",
+        "ar": "كتاب السحر"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -370,6 +388,15 @@
       "id": "fantastique.portail",
       "mood": "fantastique",
       "name": "Portail",
+      "localizedNames": {
+        "fr": "Portail",
+        "en": "Portal",
+        "es": "Portal",
+        "pt": "Portal",
+        "de": "Portal",
+        "it": "Portale",
+        "ar": "بوابة"
+      },
       "surfaces": [
         "capture",
         "live"
@@ -514,6 +541,15 @@
       "id": "fantastique.pacte",
       "mood": "fantastique",
       "name": "Pacte",
+      "localizedNames": {
+        "fr": "Pacte",
+        "en": "Pact",
+        "es": "Pacto",
+        "pt": "Pacto",
+        "de": "Pakt",
+        "it": "Patto",
+        "ar": "ميثاق"
+      },
       "surfaces": [
         "capture",
         "live"

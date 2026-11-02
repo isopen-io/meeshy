@@ -25,11 +25,15 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 
 const REPO_ROOT = join(__dirname, '../../../../../..');
 
-const CALL_MANAGER_DIRECTORY = 'apps/ios/Meeshy/Features/Main/Services';
+// L'appel iOS a son dossier depuis #13139, et `CallManager` délègue depuis #11522 à
+// des collaborateurs (`CallCollaborators/`) qui émettent eux aussi : on lit TOUT le
+// Swift du domaine, sinon un littéral hors contrat écrit chez un collaborateur passe.
+const CALL_DOMAIN_DIRECTORY = 'apps/ios/Meeshy/Features/Call';
 
-const CALL_MANAGER_FILES = readdirSync(join(REPO_ROOT, CALL_MANAGER_DIRECTORY))
-  .filter((name) => name === 'CallManager.swift' || /^CallManager\+.+\.swift$/.test(name))
-  .map((name) => `${CALL_MANAGER_DIRECTORY}/${name}`);
+const CALL_DOMAIN_FILES = readdirSync(join(REPO_ROOT, CALL_DOMAIN_DIRECTORY), { recursive: true })
+  .map(String)
+  .filter((name) => name.endsWith('.swift'))
+  .map((name) => `${CALL_DOMAIN_DIRECTORY}/${name}`);
 
 const MESSAGE_SOCKET_DIRECTORY = 'packages/MeeshySDK/Sources/MeeshySDK/Sockets';
 
@@ -41,12 +45,16 @@ const MESSAGE_SOCKET_FILES = readdirSync(join(REPO_ROOT, MESSAGE_SOCKET_DIRECTOR
   .filter((name) => /^(MessageSocketManager|MessageSocketEvents|MessageSocketProviding)(\+.+)?\.swift$/.test(name))
   .map((name) => `${MESSAGE_SOCKET_DIRECTORY}/${name}`);
 
+// Android n'épelle plus ses noms dans `CallSignalManager` : ils vivent dans le
+// catalogue `SocketEventNames`, que le gestionnaire référence. Lire les deux garde
+// le catalogue ET tout littéral qui reviendrait en clair dans le gestionnaire.
+const ANDROID_EVENT_NAMES = 'apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/socket/SocketEventNames.kt';
+const ANDROID_CALL_SIGNAL_MANAGER = 'apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt';
+
 const CALL_SIGNALING_SOURCES: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
-  [`${CALL_MANAGER_DIRECTORY}/CallManager(+*).swift`, CALL_MANAGER_FILES],
+  [`${CALL_DOMAIN_DIRECTORY}/**/*.swift`, CALL_DOMAIN_FILES],
   [`${MESSAGE_SOCKET_DIRECTORY}/MessageSocket(Manager|Events|Providing)(+*).swift`, MESSAGE_SOCKET_FILES],
-  ...[
-    'apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt',
-  ].map((path) => [path, [path]] as const),
+  [`${ANDROID_EVENT_NAMES} + ${ANDROID_CALL_SIGNAL_MANAGER}`, [ANDROID_EVENT_NAMES, ANDROID_CALL_SIGNAL_MANAGER]],
 ];
 
 const sharedContract = new Set<string>([

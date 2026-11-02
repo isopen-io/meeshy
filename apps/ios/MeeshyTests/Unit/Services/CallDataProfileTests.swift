@@ -201,4 +201,70 @@ final class CallNetworkPathMonitorTests: XCTestCase {
 
         XCTAssertEqual(received.paths.count, 1)
     }
+
+    // MARK: - Maillage d'un appel de groupe : chaque lien à sa juste taille (#11292)
+
+    func test_meshLink_singleEncode_keepsTheFullPrimaryBudget() {
+        let budget = CallVideoBudget.meshLink(encodes: 1)
+        XCTAssertEqual(budget.maxBitrateBps, QualityThresholds.maxVideoBitrate)
+        XCTAssertEqual(budget.scaleResolutionDownBy, 1, accuracy: 0.0001)
+    }
+
+    func test_meshLink_bitrateIsTheUplinkSharedByEveryEncode() {
+        let budget = CallVideoBudget.meshLink(encodes: 2, uplinkBps: 2_400_000)
+        XCTAssertEqual(budget.maxBitrateBps, 1_200_000, "budget / (N − 1)")
+        XCTAssertEqual(budget.maxFramerate, 20)
+    }
+
+    /// Six participants : cinq encodages, plus jamais cinq 720p.
+    func test_meshLink_sixParticipants_fiveSmallEncodes() {
+        let budget = CallVideoBudget.meshLink(encodes: 5, uplinkBps: 2_500_000)
+        XCTAssertEqual(budget.maxBitrateBps, 500_000)
+        XCTAssertEqual(budget.maxFramerate, 20)
+        XCTAssertEqual(720 / budget.scaleResolutionDownBy, 240, accuracy: 0.5, "240p par lien")
+    }
+
+    func test_meshLink_resolutionShrinksAsTheMeshGrows() {
+        let hauteurs = [2, 3, 4, 5].map { 720 / CallVideoBudget.meshLink(encodes: $0).scaleResolutionDownBy }
+        XCTAssertEqual(hauteurs.map { Int($0.rounded()) }, [540, 360, 360, 240])
+    }
+
+    func test_meshLink_neverStarvesALinkBelowItsFloor() {
+        let budget = CallVideoBudget.meshLink(encodes: 7, uplinkBps: 300_000)
+        XCTAssertEqual(budget.maxBitrateBps, CallVideoBudget.meshFloorBitrateBps)
+    }
+
+    func test_survivalFloor_isTheStillFrameOfThePrimary() {
+        let floor = CallVideoBudget.survivalFloor
+        XCTAssertEqual(floor.maxBitrateBps, QualityThresholds.minVideoBitrate)
+        XCTAssertEqual(floor.maxFramerate, QualityThresholds.survivalFrozenFPS)
+        XCTAssertEqual(floor.degradationPreference, .maintainResolution)
+    }
+
+    // MARK: - La caméra descend avec le palier et l'état thermique (#11293)
+
+    func test_captureCeiling_coolDeviceAndHDEncode_capturesHD() {
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 1, thermal: .fair), .hd)
+        XCTAssertEqual(CallCaptureCeiling.hd, CallCaptureCeiling(width: 1280, height: 720, fps: 30))
+    }
+
+    func test_captureCeiling_seriousThermal_drops_to640x480At24() {
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 1, thermal: .serious), .reduced)
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 1, thermal: .critical), .reduced)
+        XCTAssertEqual(CallCaptureCeiling.reduced, CallCaptureCeiling(width: 640, height: 480, fps: 24))
+    }
+
+    func test_captureCeiling_encoderAt360pOrBelow_capturesReducedToo() {
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 2, thermal: .nominal), .reduced)
+        XCTAssertEqual(CallCaptureCeiling.following(scaleDownBy: 1.5, thermal: .nominal), .hd)
+    }
+
+    func test_sourceOutput_followsTheEncoder_neverAboveTheCapture() {
+        let hd = CallCaptureCeiling.sourceOutput(scaleDownBy: 1.5, framerate: 24, capture: .hd)
+        XCTAssertEqual(hd.height, 480)
+        XCTAssertEqual(hd.fps, 24)
+        let reduit = CallCaptureCeiling.sourceOutput(scaleDownBy: 1, framerate: 30, capture: .reduced)
+        XCTAssertEqual(reduit.height, 480, "la sortie ne dépasse jamais la capture")
+        XCTAssertEqual(reduit.fps, 24)
+    }
 }

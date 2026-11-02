@@ -54,6 +54,7 @@ function makeMocks() {
   return {
     userFindUnique: jest.fn<any>().mockResolvedValue(mockUser),
     participantFindMany: jest.fn<any>()
+      .mockResolvedValue([])  // tout autre lecteur (appels, #11277) : aucun participant
       .mockResolvedValueOnce([{ id: 'part-1' }])  // for messages: participant ids
       .mockResolvedValueOnce(mockParticipations),  // for contacts
     messageFindMany: jest.fn<any>().mockResolvedValue(mockMessages),
@@ -92,13 +93,21 @@ async function buildApp(opts: {
     ),
     // Les packs (#10151) : aucun choix, aucune bibliothèque, aucune proposition.
     ...Object.fromEntries(
-      ['userStickerPack', 'userSticker', 'stickerPack', 'userPackOwnership', 'communityAppearancePack'].map(
+      ['userStickerPack', 'userSticker', 'stickerPack', 'userPackOwnership', 'communityAppearancePack', 'lensPack', 'partnerProfile'].map(
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }],
       ),
     ),
     // La télémétrie de lecture (#10499, O6) : un compte qui n'a rien lu.
     ...Object.fromEntries(
       ['postImpression', 'postEngagement', 'postView', 'contentEvent'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
+      ),
+    ),
+    // La télémétrie d'appel (#11277) : un compte qui n'a jamais appelé.
+    callParticipant: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    // Les cercles (#14400) : aucun lien, aucun échange, aucun consentement.
+    ...Object.fromEntries(
+      ['userRelation', 'pairInteractionDay', 'relationFeatureSetting'].map(
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]) }],
       ),
     ),
@@ -153,6 +162,8 @@ describe('GET /export — default JSON (all types)', () => {
     expect(body.data.requestedTypes).toEqual([
       'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
       'readingActivity',
+      'calls',
+      'relations',
     ]);
     expect(body.data.profile).toBeDefined();
     expect(body.data.profile.id).toBe(USER_ID);

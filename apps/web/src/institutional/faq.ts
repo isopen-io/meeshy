@@ -204,6 +204,7 @@ export const PAGE_FAQ: ContentPage = {
       { label: "Centre d'aide", href: '/help' },
       { label: 'Nous contacter', href: '/contact' },
       { label: 'Confidentialité', href: '/privacy' },
+      { label: 'Sécurité des enfants', href: '/child-safety' },
     ],
   },
 };

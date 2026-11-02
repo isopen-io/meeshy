@@ -32,7 +32,7 @@ describe('l’orientation de la PWA suit celle des coques (#7877)', () => {
   });
 
   test('le manifeste web ne verrouille pas le portrait', () => {
-    const orientation = orientationDuManifesteWeb(lire('vite.config.ts'));
+    const orientation = orientationDuManifesteWeb(lire('vite', 'pwa.ts'));
     expect(orientation === null || orientation === 'any').toBe(true);
   });
 });

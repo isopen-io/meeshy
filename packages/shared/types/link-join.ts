@@ -1,6 +1,19 @@
 import { z } from 'zod';
 
 import { normalizeLanguageForDedup } from '../utils/language-normalize.js';
+import { atLeastVisible, blankOrAtLeastVisible, lengthFloorRefusal, nameTooShort } from '../utils/validation-primitives.js';
+import { nameMinLength, usernameMinLength } from './api-schemas/identity-bounds.js';
+
+/**
+ * Le pseudo SAISI par un invité (#13825) : la même borne que le pseudo d'un
+ * compte, comptée sur le texte visible. Un champ absent, vide ou blanc reste permis — la
+ * passerelle nomme alors l'invité elle-même (`automaticNicknameBase`,
+ * directive porteur 2026-10-13).
+ */
+export const guestNicknameSchema = z
+  .string()
+  .refine(blankOrAtLeastVisible(usernameMinLength), lengthFloorRefusal(usernameMinLength))
+  .optional();
 
 /**
  * LA FORME D'UNE DEMANDE DE JONCTION PAR LIEN — écrite UNE fois, opposable des
@@ -35,9 +48,9 @@ import { normalizeLanguageForDedup } from '../utils/language-normalize.js';
  * (règle 1) écrit à la frontière d'écriture.
  */
 export const linkJoinProfileSchema = z.object({
-  firstName: z.string().min(1, 'Le prenom est requis').max(50),
-  lastName: z.string().min(1, 'Le nom est requis').max(50),
-  username: z.string().optional(),
+  firstName: z.string().min(1, 'Le prenom est requis').max(50).refine(atLeastVisible(nameMinLength), nameTooShort),
+  lastName: z.string().min(1, 'Le nom est requis').max(50).refine(atLeastVisible(nameMinLength), nameTooShort),
+  username: guestNicknameSchema,
   email: z.email().optional().or(z.literal('')),
   birthday: z.iso.datetime().optional().or(z.literal('')),
   language: z

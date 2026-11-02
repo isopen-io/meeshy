@@ -18,6 +18,8 @@ import { logError } from '../../utils/logger.js';
 import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
 import { refreshParticipantNameSnapshots, type AccountNameFields } from '../../services/participantNameSnapshots';
 import { evictFromAdminRooms, isAdminRank } from '../../socketio/evictFromAdminRooms';
+import { changedNameViolations, sendLengthFloorRefusal, sendZodRefusal } from '../../utils/identity-name-floor';
+import { visibleNameText } from '@meeshy/shared/utils/visible-name-length';
 
 const NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] as const;
 
@@ -225,7 +227,7 @@ function rendreErreur(
   message: string
 ): void {
   if (error instanceof z.ZodError) {
-    sendBadRequest(reply, 'Invalid input data');
+    sendZodRefusal(reply, 'Invalid input data', error);
     return;
   }
   if (replyIdentifierTaken(reply, error)) return;
@@ -355,6 +357,18 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         const profil = updateUserProfileValidationSchema.parse(
           Object.fromEntries(champsProfil.map((c) => [c, corps[c]]))
         );
+        // La console renvoie la fiche ENTIÈRE : un nom hérité (« A ») renvoyé
+        // tel quel passe, un nom CHANGÉ tient la borne (#13825). Ce site écrit
+        // la valeur telle quelle ; la comparaison se fait sur le texte visible.
+        const nomsTropCourts = changedNameViolations({
+          incoming: { firstName: profil.firstName, lastName: profil.lastName, displayName: profil.displayName },
+          stored: cible,
+          normalize: (_champ, valeur) => visibleNameText(valeur),
+        });
+        if (nomsTropCourts.length > 0) {
+          sendLengthFloorRefusal(reply, 'Invalid input data', nomsTropCourts);
+          return;
+        }
         const changes: Record<string, AuditChange> = {};
         for (const champ of champsProfil) {
           const avant = (cible as unknown as Record<string, unknown>)[champ];

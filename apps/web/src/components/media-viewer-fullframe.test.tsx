@@ -6,6 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { dropCarriedAudio } from '@/lib/view/audio-carry';
+import { installHapticsDriver, type HapticCue } from '@/lib/view/haptics';
 import type { MediaCarrier } from '@/lib/view/media';
 
 import MediaViewer from './media-viewer';
@@ -223,5 +224,45 @@ describe('MediaViewer — clavier', () => {
     const before = playbackCalls.length;
     key(dialog, ' ');
     expect(playbackCalls.length).toBe(before + 1);
+  });
+});
+
+describe('MediaViewer — toucher la pièce ne vibre pas (#12424, jumelle iOS #12421)', () => {
+  const cues: HapticCue[] = [];
+  const listen = (): void => {
+    cues.length = 0;
+    installHapticsDriver({ cue: (name) => (cues.push(name), true), pattern: () => true });
+  };
+
+  test('le toucher qui masque puis rend les détails et les actions ne déclenche aucun retour haptique', async () => {
+    listen();
+    try {
+      const dialog = await mount([photo('a'), photo('b')]);
+      const frame = frameOf(dialog);
+      click(frame);
+      expect(topBar(dialog).getAttribute('data-chrome-yields')).toBe('hidden');
+      click(frame);
+      expect(topBar(dialog).getAttribute('data-chrome-yields')).toBe('shown');
+      expect(cues).toEqual([]);
+    } finally {
+      installHapticsDriver(null);
+    }
+  });
+
+  test('l’appui long qui efface le chrome ne vibre pas non plus', async () => {
+    listen();
+    try {
+      const dialog = await mount([photo('a'), photo('b')]);
+      const frame = frameOf(dialog);
+      act(() => void frame.dispatchEvent(pointer('pointerdown')));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 560));
+      });
+      act(() => void frame.dispatchEvent(pointer('pointerup')));
+      expect(topBar(dialog).getAttribute('data-chrome-yields')).toBe('hidden');
+      expect(cues).toEqual([]);
+    } finally {
+      installHapticsDriver(null);
+    }
   });
 });

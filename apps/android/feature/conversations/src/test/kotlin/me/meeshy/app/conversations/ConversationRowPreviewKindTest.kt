@@ -15,7 +15,7 @@ class ConversationRowPreviewKindTest {
     fun `summary kind propagates when no typing or draft`() {
         val preview = conversationRowPreview(
             typingLine = null,
-            draftLine = null,
+            draft = null,
             summary = SummaryLine("Message expiré", MessageSummaryKind.EXPIRED),
         )
 
@@ -28,7 +28,7 @@ class ConversationRowPreviewKindTest {
     fun `typing supersedes summary kind (typing is STANDARD accent)`() {
         val preview = conversationRowPreview(
             typingLine = "Alice écrit…",
-            draftLine = "Brouillon : plus tard",
+            draft = DraftPreview("Brouillon :", "plus tard"),
             summary = SummaryLine("Contenu masqué", MessageSummaryKind.HIDDEN),
         )
 
@@ -38,15 +38,15 @@ class ConversationRowPreviewKindTest {
     }
 
     @Test
-    fun `draft supersedes summary kind (draft is STANDARD accent)`() {
+    fun `draft supersedes summary kind (draft is STANDARD, label apart)`() {
         val preview = conversationRowPreview(
             typingLine = null,
-            draftLine = "Brouillon : plus tard",
+            draft = DraftPreview("Brouillon :", "plus tard"),
             summary = SummaryLine("Vue unique", MessageSummaryKind.VIEW_ONCE),
         )
 
         assertThat(preview).isEqualTo(
-            RowPreview("Brouillon : plus tard", isAccent = true, kind = MessageSummaryKind.STANDARD)
+            RowPreview("plus tard", isAccent = false, kind = MessageSummaryKind.STANDARD, draftLabel = "Brouillon :")
         )
     }
 
@@ -54,7 +54,7 @@ class ConversationRowPreviewKindTest {
     fun `standard summary kind renders in secondary colour`() {
         val preview = conversationRowPreview(
             typingLine = null,
-            draftLine = null,
+            draft = null,
             summary = SummaryLine("Vous : yo", MessageSummaryKind.STANDARD),
         )
 
@@ -67,7 +67,7 @@ class ConversationRowPreviewKindTest {
     fun `ephemeral active summary preserves its kind for styling`() {
         val preview = conversationRowPreview(
             typingLine = null,
-            draftLine = null,
+            draft = null,
             summary = SummaryLine("À bientôt", MessageSummaryKind.EPHEMERAL_ACTIVE),
         )
 

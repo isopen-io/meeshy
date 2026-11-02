@@ -16,9 +16,9 @@ import me.meeshy.sdk.model.StoryItem
  * viewer's Compose glue — so the decision of *which* hash to show stays pure and
  * unit-tested, and there is one source of truth for it.
  *
- * The hash only ever backs the IMAGE background branch: a video background paints
- * an ExoPlayer surface with no placeholder slot, so its poster hash (if any) is
- * deliberately not offered here.
+ * The hash backs the IMAGE background branch. A video background has no placeholder slot
+ * on its ExoPlayer surface, so this resolver does not offer the video's own hash: the
+ * projector carries it separately and the RESTING scene (no player, #13663) paints it.
  */
 object StorySlidePlaceholder {
 

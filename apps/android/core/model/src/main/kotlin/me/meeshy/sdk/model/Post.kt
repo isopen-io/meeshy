@@ -17,6 +17,9 @@ data class ApiAuthor(
     /** Le décor servi avec la personne (#10945) ; absent sans contour ou sur un ancien serveur. */
     @Serializable(with = TolerantPostAuthorDecorSerializer::class)
     val profileDecor: PostAuthorDecor? = null,
+    /** Présence embarquée par le fil de stories (visibilité décidée par la passerelle) ; absente = aucun point. */
+    val isOnline: Boolean? = null,
+    val lastActiveAt: String? = null,
 ) {
     /** Le contour d'avatar équipé, ou `null`. */
     val avatarRing: PostServedRing? get() = profileDecor?.avatarRing
@@ -210,7 +213,7 @@ data class ApiPost(
     val moodEmoji: String? = null,
     val audioUrl: String? = null,
     val audioDuration: Int? = null,
-    @Serializable(with = StoryEffectsWireSerializer::class)
+    @Serializable(with = PostReadStoryEffectsSerializer::class)
     val storyEffects: StoryEffects? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
     val isLikedByMe: Boolean? = null,
@@ -233,6 +236,8 @@ data class ApiPost(
     val uniqueViewCount: Int? = null,
     val anonymousUniqueViewCount: Int? = null,
     val isRepostedByMe: Boolean? = null,
+    /** Le son de la story peut-il être repris par d'autres ? Servi par la passerelle ; `null` = non servi. */
+    val allowSoundExtraction: Boolean? = null,
     /** Personnes référencées (INLINE/PINNED/NOTE/SILENT), profil résolu au chargement. */
     @Serializable(with = TolerantPostReferencesSerializer::class)
     val mentions: List<PostReference>? = null,

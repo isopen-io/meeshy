@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_close_draft_title">Chiudere la bozza?</string>
+    <string name="composer_close_draft_keep">Mantieni la bozza</string>
+    <string name="composer_close_draft_discard">Scarta</string>
+    <string name="composer_sheet_dismiss">Chiudi il pannello</string>
+    <string name="composer_caption_limit_reached">Limite della didascalia raggiunto</string>
+    <string name="composer_caption_too_long">Didascalia troppo lunga</string>
+</resources>

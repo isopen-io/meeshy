@@ -13,12 +13,14 @@ import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ShareLinkEligibility
+import me.meeshy.sdk.model.ShareLinkPickerGroup
+import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.model.UserRole
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
 /**
- * Backs [ShareLinkPickerScreen] — the conversation picker that launches the
+ * Backs [ShareLinkConversationPickerSheet] — the conversation picker that launches the
  * existing share-link creation flow. Reads the same cache-first,
  * stale-while-revalidate stream every other list surface reads
  * ([ConversationRepository.conversationsStream], never the network-blind
@@ -37,27 +39,36 @@ class ShareLinkPickerViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val syncErrorMessage = MutableStateFlow<String?>(null)
+    private val query = MutableStateFlow("")
 
     val state: StateFlow<ShareLinkPickerUiState> =
         combine(
             repository.conversationsStream(onSyncError = { syncErrorMessage.value = it.message }),
             sessionRepository.currentUser,
             syncErrorMessage,
-        ) { result, user, errorMessage ->
+            query,
+        ) { result, user, errorMessage, search ->
             val conversations = result.valueOrNull
+            val eligible = conversations?.let {
+                ShareLinkEligibility.eligibleConversations(
+                    conversations = it,
+                    currentUserId = user?.id,
+                    platformRole = user?.resolvedRole ?: UserRole.USER,
+                )
+            } ?: emptyList()
             ShareLinkPickerUiState(
                 isLoading = conversations == null,
-                eligibleConversations = conversations?.let {
-                    ShareLinkEligibility.eligibleConversations(
-                        conversations = it,
-                        currentUserId = user?.id,
-                        platformRole = user?.resolvedRole ?: UserRole.USER,
-                    )
-                } ?: emptyList(),
+                eligibleConversations = eligible,
+                sections = ShareLinkEligibility.sections(eligible, search) { it.displayTitle(user?.id) },
+                query = search,
                 currentUserId = user?.id,
                 errorMessage = errorMessage,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ShareLinkPickerUiState())
+
+    fun onQueryChange(value: String) {
+        query.value = value
+    }
 
     /** Retries a failed background revalidation (empty-with-error state's CTA). */
     fun retry() {
@@ -72,6 +83,8 @@ class ShareLinkPickerViewModel @Inject constructor(
 data class ShareLinkPickerUiState(
     val isLoading: Boolean = true,
     val eligibleConversations: List<ApiConversation> = emptyList(),
+    val sections: List<ShareLinkPickerGroup> = emptyList(),
+    val query: String = "",
     val currentUserId: String? = null,
     val errorMessage: String? = null,
 )

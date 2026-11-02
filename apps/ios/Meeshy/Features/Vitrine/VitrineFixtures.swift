@@ -79,7 +79,7 @@ nonisolated struct VitrineFixtures: Decodable, Sendable {
     }
 
     static func decoder(_ data: Data) throws -> VitrineFixtures {
-        let fixtures = try APIClient.makeAPIPayloadDecoder().decode(VitrineFixtures.self, from: data)
+        let fixtures = try MeeshyCoders.decoder(.api).decode(VitrineFixtures.self, from: data)
         guard fixtures.version == versionAttendue else { throw VitrineFixturesErreur.versionInconnue(fixtures.version) }
         return fixtures
     }

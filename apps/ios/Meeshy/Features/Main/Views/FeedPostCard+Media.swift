@@ -343,7 +343,6 @@ private struct FeedVideoMediaCell: View {
                 accentColor: accentColor,
                 frame: .card,
                 availability: availability,
-                performance: .inline,
                 onDownload: onDownload,
                 onExpand: onExpand
             )

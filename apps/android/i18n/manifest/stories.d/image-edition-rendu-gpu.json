@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.exposure",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.brightness",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.contrast",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.saturation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.vibrance",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.temperature",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.sharpness",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.blur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.vignette",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.effects.bloom",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.effects.grain",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.reset",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

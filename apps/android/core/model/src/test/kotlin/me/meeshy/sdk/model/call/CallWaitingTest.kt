@@ -37,6 +37,18 @@ class CallWaitingTest {
     }
 
     @Test
+    fun `from a frame keeps its conversation so the call can be minimised into it`() {
+        val call = WaitingCall.from(payload().copy(conversationId = "conv-42"))
+
+        assertThat(call?.conversationId).isEqualTo("conv-42")
+    }
+
+    @Test
+    fun `from a frame without conversation keeps a blank conversation`() {
+        assertThat(WaitingCall.from(payload())?.conversationId).isEmpty()
+    }
+
+    @Test
     fun `from a blank call id yields null - nothing to reject or answer`() {
         assertThat(WaitingCall.from(payload(callId = ""))).isNull()
     }

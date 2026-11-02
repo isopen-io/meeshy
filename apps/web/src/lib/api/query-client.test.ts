@@ -372,8 +372,8 @@ describe('la session purge AUSSI les seaux du service worker (D-6)', () => {
     };
   }
 
-  test('la FIN d’un compte ⇒ les seaux `api` et `medias` sont supprimés, le précache SURVIT (#8674 : plus au simple changement)', async () => {
-    const cacheStorage = fakeCaches(['api', 'medias', 'workbox-precache-v2-https://x/']);
+  test('la FIN d’un compte ⇒ les seaux `api`, `medias` et `recent-media` (#11326) sont supprimés, le précache SURVIT (#8674 : plus au simple changement)', async () => {
+    const cacheStorage = fakeCaches(['api', 'medias', 'recent-media', 'workbox-precache-v2-https://x/']);
 
     forgetAccountCaches({ userId: 'u-1', storage: fakeStorage(), cacheStorage });
     await Promise.resolve();

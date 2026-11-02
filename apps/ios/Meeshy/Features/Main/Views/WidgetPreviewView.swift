@@ -30,7 +30,7 @@ struct WidgetPreviewView: View {
     /// B1 (Prisme Linguistique) — prisme du lecteur, même autorité que
     /// `ConversationListView` et que `WidgetDataManager`.
     private var preferredContentLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        ReaderPrism.resolve(for: AuthManager.shared.currentUser)
     }
 
     private var recentConversations: [Conversation] {

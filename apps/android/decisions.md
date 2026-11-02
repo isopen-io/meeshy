@@ -498,7 +498,7 @@ in CI; safe staged rollout of a large, security-sensitive app.
 ---
 
 ## ADR-024 — `applicationId = me.meeshy.android`, distinct de la coque Capacitor
-**Date:** 2026-10-22 · **Status:** accepted (décision porteur, #11570)
+**Date:** 2026-10-22 · **Status:** superseded par ADR-028 (#13619)
 
 **Context.** Le dégel du 2026-10-22 remet l'app native en développement, et la coque Capacitor de `apps/web`
 sert déjà Android sous `me.meeshy.app` (`apps/web/android/app/build.gradle`). Les deux déclaraient le même
@@ -563,3 +563,84 @@ l'utilisateur ne compare pas).
 `LanguageQuickStrip` et `StoryActionRail` s'assouplissent (raideur 200 → 158). `EmojiDetector.fontSizeSp` (90 / 60 /
 45) et `MessageBubble` écrivent encore l'emoji en `sp` mis à l'échelle : le branchement de `emojiTextStyle` relève du
 lot qui découpe la bulle (fichier chaud).
+
+## ADR-026 — Épinglage SPKI de la passerelle (production et staging)
+
+**Décision.** Le client OkHttp PARTAGÉ (REST, Socket.IO polling et WebSocket) porte un intercepteur réseau `CertificatePinInterceptor`, contribué par `CertificatePinnerContributor` (`@IntoSet HttpClientContributor`). Pour `gate.meeshy.me` et `gate.staging.meeshy.me`, un certificat de la chaîne doit porter une empreinte SHA-256 de SPKI (RSA 2048/4096, EC P-256/P-384) du pin-set (`GatewayPins` : clé courante + clé de secours), sinon `SSLPeerUnverifiedException` avant tout envoi de requête (donc de jeton). Miroir d'iOS (`CertificatePinning.swift`), dont le verdict (`CertificatePinDecision`) est repris dans `:core:model`. Le journal ne contient que l'hôte et le nombre d'empreintes, jamais la chaîne.
+
+**Mode non configuré.** localhost, 10.0.2.2 et tout environnement personnalisé ne sont pas épinglés ; un pin-set vide laisse aussi l'hôte non configuré (validation système seule) — état de livraison tant que les empreintes de production ne sont pas renseignées (elles ne se mesurent pas depuis le conteneur de développement). `network_security_config.xml` refuse le clair en release ; la variante debug n'ouvre que localhost et 10.0.2.2.
+
+**Expiration.** `GatewayPins.EXPIRES_AT_EPOCH_MILLIS` : passé ce jour, le pin-set est ignoré, la validation système reste, un avertissement est journalisé une fois par processus. Pas de brique silencieuse : l'application ne cesse pas de fonctionner parce qu'une rotation a été oubliée, mais l'oubli est visible.
+
+**Procédure de rotation.** (1) Générer la future clé hors ligne ; calculer `openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`. (2) Publier une version qui l'ajoute à `BACKUP` (ancienne `CURRENT` conservée) et repousser la date d'expiration. (3) Attendre l'adoption de cette version (version minimale). (4) Faire émettre le certificat sur la nouvelle clé. (5) Version suivante : la nouvelle clé en `CURRENT`, nouvelle clé de secours en `BACKUP`. Jamais de bascule sèche (rétrocompatibilité de la production).
+
+---
+
+## ADR-027 — La fin de session vide aussi le cache VIDÉO Media3, réels publics compris
+**Date:** 2026-10-28 · **Status:** accepted · **Issue:** #13571
+
+**Context.** `AccountMediaWipe` ne vidait que l'audio ; les tronçons vidéo des pièces jointes privées
+(`/api/v1/attachments/file/…`) lus avec le jeton de A restaient sur disque pour B.
+
+**Decision.** Audio et vidéo sont vidés ensemble. Le cache vidéo ne distingue pas un réel public d'une pièce
+jointe privée (clé = URL) : on ne garde rien plutôt que de deviner.
+
+**Rejected.** Ne garder que les vidéos publiques : exigerait de classer chaque URL, et une erreur de classement
+fait fuiter une vidéo privée entre comptes. Le coût (re-téléchargement de réels publics) est borné et sans risque.
+
+**Consequences.** Premier réel du compte suivant à froid ; plus aucune vidéo du compte quitté sur disque.
+
+---
+
+## ADR-028 — L'app native reprend la fiche Play `me.meeshy.app` ; la coque devient `me.meeshy.webapp`
+**Date:** 2026-10-29 · **Status:** accepted (décision porteur, #13619 — remplace ADR-024)
+
+**Context.** La coque Capacitor était publiée en production sous `me.meeshy.app`. Le porteur fait de
+l'application native l'application Android de Meeshy et met la coque hors service pour le moment.
+Un identifiant Play ne se renomme pas : seule la fiche existante garde les utilisateurs et les avis.
+
+**Decision.** `applicationId = me.meeshy.app` (`.debug` en debug), version 3.x au-dessus des 2.x de la coque,
+`versionCode` lu de `-PmeeshyBuildNumber` au-dessus de tout code déjà envoyé, signature avec la clé d'envoi
+de la fiche (lue hors dépôt, comme la coque). La coque passe sous `me.meeshy.webapp` et déclare ce
+`bundleId` ; la passerelle lit `me.meeshy.app` comme NATIVE, y compris le jeton qu'une coque 2.x avait
+enregistré (la mise à jour garde le jeton FCM et son `bundleId`).
+
+**Rejected.** Une nouvelle fiche `me.meeshy.android` : elle repartait de zéro utilisateur et laissait la coque
+en production. Distinguer coque et native sous `me.meeshy.app` par la version : inutile, la coque n'y est plus servie.
+
+**Consequences.** Les utilisateurs de la coque reçoivent la native en mise à jour et se reconnectent une fois
+(la session WebView ne se transfère pas). L'app Firebase `me.meeshy.app` et l'entrée `assetlinks.json`
+`me.meeshy.app` servent la native telles quelles. Republier la coque exige une fiche `me.meeshy.webapp`, une
+app Firebase et une entrée `assetlinks.json` à son nom.
+
+
+---
+
+## ADR-029 — La session d'un compte survit à la réinstallation, dans le Block Store, liée à l'appareil
+**Date:** 2026-11-01 · **Status:** accepted · **Issue:** #14058
+
+**Context.** iOS garde ses jetons dans le Keychain (`ThisDeviceOnly`), qui survit à la désinstallation ;
+Android (`allowBackup="false"`) redemandait identifiant et mot de passe après chaque réinstallation.
+
+**Decision.** `BackedUpTokenStore` décore le `TokenStore` : toute session COMPLÈTE de compte (identité, JWT,
+jeton de session — le pair que `POST /auth/refresh` exige ; jamais le mot de passe) est recopiée dans le Block
+Store (`setShouldBackupToCloud(false)`, une clé par serveur), et `clear()` l'efface sous le même verrou. La
+charge porte l'`ANDROID_ID` : un transfert d'appareil à appareil (que le Block Store fait même sans nuage) ne
+s'ouvre pas, il s'efface. Au démarrage sans session, `AuthRepository.restoreBackedUpSession()` renouvelle la
+sauvegarde ; un refus l'efface sans message — un 401, ou un 403 `AGE_BELOW_MINIMUM`, seuls verdicts de la
+passerelle (#14078, `SessionRefresher.refuses`) — ; hors ligne, en panne serveur ou derrière un proxy, elle est gardée.
+Un renouvellement en cours de session suit la même règle : ce qui n'est pas un refus rend `Renewal.Deferred`, la
+session et sa sauvegarde restent (#14078). Un refus sans session locale
+n'annonce plus d'expiration (`SessionRefresher.signalsExpiry`). Une connexion à la main annule la restauration. « Rester connecté » décoché (décision porteur) : aucune
+sauvegarde, et l'entrée existante est effacée (`KeepSignedInConsent`, relu dans `SavedAccount.keepsSession`).
+
+**Rejected.** `allowBackup` + Auto Backup : la sauvegarde part dans le nuage et vers un autre appareil.
+Sauvegarder le mot de passe ou un `CredentialManager` : ce serait garder un secret que l'utilisateur n'a pas
+confié à l'app. Restaurer sans renouveler : l'app s'ouvrirait sur un jeton peut-être révoqué.
+
+**Consequences.** La survie suppose Play Services et la Sauvegarde Google active sur l'appareil ; sinon, le
+comportement d'avant. La copie dort chez Play Services, hors du Keystore de l'app. Les comptes gardés « rester
+connecté » ont chacun leur entrée (#14079, `AccountShelf`, clé `<serveur>.account.<id>`, même liaison à l'appareil),
+les quinze plus récents — le Block Store porte seize entrées, l'une est la session active. `KeptAccountsBackup`
+accorde le coffre à la liste des comptes ; à l'installation neuve, les comptes que l'appareil ne connaît plus
+reviennent au sélecteur avec leur session dormante. Une déconnexion ou un refus n'efface que l'entrée du compte visé.

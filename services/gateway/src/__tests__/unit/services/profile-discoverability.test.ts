@@ -42,6 +42,7 @@ function prismaDouble(options: {
       }),
     },
     userPreference: { findMany: jest.fn<any>(async () => []) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn<any>(async () =>
         friendsOfMe.map((id) => ({ senderId: MOI, receiverId: id }))

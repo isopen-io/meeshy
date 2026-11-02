@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.bottom",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.bottomLeft",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.bottomRight",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.frame",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.right",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.topLeft",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.handle.topRight",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.move.down",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.move.left",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.move.right",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.move.up",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.position",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.crop.a11y.size",
+          "status": "adopted"
+        },
+        {
+          "androidName": "image_crop_action_grow",
+          "status": "android-only"
+        },
+        {
+          "androidName": "image_crop_action_shrink",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

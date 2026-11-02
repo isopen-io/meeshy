@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mention_suggestions_title">Pessoas para mencionar</string>
+    <string name="mention_suggestion_action">Mencionar</string>
+</resources>

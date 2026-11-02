@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../api/build-catalog.js';
 import { renderSwiftEndpoints } from '../api/build-swift-endpoints.js';
 import { filterOutOpsOnlyRoutes } from '../api/ops-only-routes.js';
+import { filterRoutesReadBy } from '../api/route-readers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../..');
@@ -79,7 +80,7 @@ function readManifest(): readonly ManifestRouteInput[] {
 function main(): void {
   // #5424 — même filtre que `generate-api-endpoints.ts` : les routes
   // d'EXPLOITATION ne rejoignent pas les énumérations Swift.
-  const { entries } = buildApiEndpointsCatalog(filterOutOpsOnlyRoutes(readManifest()));
+  const { entries } = buildApiEndpointsCatalog(filterRoutesReadBy(filterOutOpsOnlyRoutes(readManifest()), 'ios'));
   const files = renderSwiftEndpoints(entries);
 
   mkdirSync(OUTPUT_DIR, { recursive: true });

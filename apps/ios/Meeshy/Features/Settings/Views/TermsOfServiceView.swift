@@ -1,0 +1,164 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+import MeeshyUI
+
+struct TermsOfServiceView: View {
+    @Environment(\.dismiss) private var dismiss
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    @State private var selectedLanguage: String
+
+    private let accentColor = MeeshyColors.brandPrimaryHex
+
+    private static let supportedLanguages: Set<String> = ["fr", "en"]
+
+    @MainActor
+    init() {
+        // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
+        let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let deviceLocale = Locale.current.language.languageCode?.identifier
+        _selectedLanguage = State(initialValue: Self.resolveInitialLanguage(preferred: preferred, deviceLocale: deviceLocale))
+    }
+
+    static func resolveInitialLanguage(preferred: [String], deviceLocale: String?) -> String {
+        let candidates = preferred + [deviceLocale].compactMap { $0 }
+        for candidate in candidates {
+            let code = String(candidate.prefix(2)).lowercased()
+            if supportedLanguages.contains(code) { return code }
+        }
+        return "fr"
+    }
+
+    private let sections: [String: [(title: String, content: String)]] = [
+        "fr": [
+            ("Acceptation des conditions",
+             "En utilisant Meeshy, vous acceptez ces conditions d'utilisation. Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser notre service."),
+            ("Licence d'utilisation",
+             "Nous vous accordons une licence limitee, non exclusive et revocable pour utiliser Meeshy conformement a ces conditions. Vous ne pouvez pas copier, modifier ou distribuer l'application."),
+            ("Conduite de l'utilisateur",
+             "Vous vous engagez a ne pas utiliser Meeshy pour envoyer du spam, du contenu illegal, harcelant ou portant atteinte aux droits d'autrui. Tout abus sera sanctionne par la suspension ou la fermeture de votre compte."),
+            ("Contenu",
+             "Vous conservez la propriete de votre contenu. En utilisant Meeshy, vous nous accordez une licence limitee pour transmettre et stocker votre contenu afin de fournir nos services. En contrepartie, nous nous engageons a crediter l'auteur de tout contenu publie, y compris lorsqu'il est transfere ou republie, partout ou son origine peut etre tracee. Cet engagement est de moyens : la mention peut etre absente ou incomplete si nos systemes ne conservent pas ce lien, ou si les reglages de confidentialite des personnes concernees, y compris ceux de l'auteur, s'y opposent."),
+            ("Resiliation du compte",
+             "Vous pouvez supprimer votre compte a tout moment. Nous nous reservons le droit de suspendre ou fermer les comptes qui violent ces conditions."),
+            ("Avertissement",
+             "Meeshy est fourni tel quel, sans garantie expresse ou implicite. Nous ne garantissons pas un fonctionnement ininterrompu ou sans erreur du service."),
+            ("Limitation de responsabilite",
+             "Dans la mesure permise par la loi, Meeshy ne sera pas responsable des dommages indirects, accessoires ou consecutifs lies a l'utilisation de notre service."),
+            ("Modifications des conditions",
+             "Nous pouvons modifier ces conditions a tout moment. Les modifications prendront effet des leur publication dans l'application. L'utilisation continue constitue votre acceptation."),
+            ("Contact",
+             "Pour toute question concernant ces conditions, contactez-nous a legal@meeshy.me")
+        ],
+        "en": [
+            ("Acceptance of Terms",
+             "By using Meeshy, you agree to these terms of service. If you do not accept these terms, please do not use our service."),
+            ("License to Use",
+             "We grant you a limited, non-exclusive, revocable license to use Meeshy in accordance with these terms. You may not copy, modify, or distribute the application."),
+            ("User Conduct",
+             "You agree not to use Meeshy to send spam, illegal content, harassment, or content that infringes on others' rights. Any abuse will result in account suspension or termination."),
+            ("Content",
+             "You retain ownership of your content. By using Meeshy, you grant us a limited license to transmit and store your content to provide our services. In return, we undertake to credit the author of any published content, including content that is forwarded or reshared, wherever its origin can be traced. This is a best-efforts commitment: the credit may be missing or incomplete where our systems do not retain that link, or where the privacy settings of the people concerned, including the author's, prevent it."),
+            ("Account Termination",
+             "You may delete your account at any time. We reserve the right to suspend or terminate accounts that violate these terms."),
+            ("Disclaimer",
+             "Meeshy is provided as-is, without express or implied warranty. We do not guarantee uninterrupted or error-free operation of the service."),
+            ("Limitation of Liability",
+             "To the extent permitted by law, Meeshy shall not be liable for indirect, incidental, or consequential damages arising from the use of our service."),
+            ("Changes to Terms",
+             "We may modify these terms at any time. Changes take effect upon publication in the application. Continued use constitutes your acceptance."),
+            ("Contact",
+             "For any questions about these terms, contact us at legal@meeshy.me")
+        ]
+    ]
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient.ignoresSafeArea()
+
+            CollapsibleHeaderPage(
+                title: String(localized: "legal.terms.title", defaultValue: "Conditions d'utilisation", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
+        }
+    }
+
+    // MARK: - Content
+
+    private var pageContent: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            languagePicker
+
+            lastUpdated
+
+            if let currentSections = sections[selectedLanguage] {
+                ForEach(Array(currentSections.enumerated()), id: \.offset) { index, section in
+                    termsSection(number: index + 1, title: section.title, content: section.content)
+                }
+            }
+
+            Spacer().frame(height: 40)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
+    }
+
+    // MARK: - Language Picker
+
+    private var languagePicker: some View {
+        Picker(String(localized: "legal.terms.language", defaultValue: "Langue", bundle: .main), selection: $selectedLanguage) {
+            Text(String(localized: "legal.terms.language.fr", defaultValue: "Français", bundle: .main)).tag("fr")
+            Text(String(localized: "legal.terms.language.en", defaultValue: "Anglais", bundle: .main)).tag("en")
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel(String(localized: "legal.terms.a11y.languagePicker", defaultValue: "Langue du document", bundle: .main))
+    }
+
+    // MARK: - Last Updated
+
+    private var lastUpdated: some View {
+        Text(selectedLanguage == "fr" ? String(localized: "legal.terms.lastUpdated.fr", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main) : String(localized: "legal.terms.lastUpdated.en", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+            .foregroundStyle(theme.textMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, MeeshySpacing.xs)
+    }
+
+    // MARK: - Terms Section
+
+    private func termsSection(number: Int, title: String, content: String) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "\(number).circle.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+                    .foregroundColor(Color(hex: accentColor))
+
+                Text(title)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .foregroundStyle(theme.textPrimary)
+            }
+
+            Text(content)
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
+                .foregroundStyle(theme.textSecondary)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(MeeshySpacing.mdPlus)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.surfaceGradient(tint: accentColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(theme.border(tint: accentColor), lineWidth: 1)
+                )
+        )
+        .accessibilityElement(children: .combine)
+    }
+}

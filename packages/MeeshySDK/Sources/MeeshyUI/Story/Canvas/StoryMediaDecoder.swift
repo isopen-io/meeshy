@@ -1,9 +1,10 @@
-import AVFoundation
+import Foundation
 import UIKit
+import MeeshySDK
 
 /// Hardware-accelerated media decode utilities for the Story canvas.
-/// Wraps `AVAssetImageGenerator` (which uses VideoToolbox HW decode under the
-/// hood when available) for fast first-frame extraction on media drop.
+/// La première image passe par `VideoThumbnailGenerator` (#11844), le
+/// générateur unique du dépôt (décodage VideoToolbox, cache borné).
 /// Target latency: < 100 ms on iPhone SE 3 for a 4K source.
 public enum StoryMediaDecoder {
 
@@ -13,17 +14,7 @@ public enum StoryMediaDecoder {
     /// downscaling pass.
     public nonisolated static func firstFrame(of url: URL,
                                               maxDimension: CGFloat? = nil) async throws -> UIImage? {
-        let asset = AVURLAsset(url: url)
-        let imageGenerator = AVAssetImageGenerator(asset: asset)
-        imageGenerator.appliesPreferredTrackTransform = true
-        imageGenerator.requestedTimeToleranceBefore = .zero
-        imageGenerator.requestedTimeToleranceAfter  = .zero
-        if let dim = maxDimension {
-            imageGenerator.maximumSize = CGSize(width: dim, height: dim)
-        }
-        // iOS 16+ async API. The generator dispatches to VideoToolbox HW decode
-        // automatically when the codec/profile is supported by the device.
-        let cgImage = try await imageGenerator.image(at: .zero).image
-        return UIImage(cgImage: cgImage)
+        await VideoThumbnailGenerator.shared.image(
+            for: .firstFrame(of: url, maxDimension: maxDimension, tolerance: .exact))
     }
 }

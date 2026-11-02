@@ -99,7 +99,10 @@ export function appearancePrisma() {
     },
   };
 
-  const client: Record<string, unknown> = { ...(base.prisma as unknown as Record<string, unknown>), meeshLedger, userPackOwnership, user, communityAppearancePack };
+  // Les lens (#11271) : aucune lens dans ce double — la vitrine et le magasin des fichiers les lisent quand même.
+  const lensPack = { findMany: async () => [], findUnique: async () => null, findFirst: async () => null };
+  const lensPackAsset = { findMany: async () => [] };
+  const client: Record<string, unknown> = { ...(base.prisma as unknown as Record<string, unknown>), meeshLedger, userPackOwnership, user, communityAppearancePack, lensPack, lensPackAsset };
   const snapshot = () => ({ ledger: [...ledger], ownerships: [...ownerships], choices: [...base.choices] });
   client.$transaction = async (work: (tx: unknown) => Promise<unknown>) => {
     const before = snapshot();

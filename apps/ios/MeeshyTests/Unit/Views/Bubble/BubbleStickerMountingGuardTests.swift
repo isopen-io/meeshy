@@ -116,7 +116,7 @@ final class BubbleStickerMountingGuardTests: XCTestCase {
     /// porte — trois modes de lecture sur quatre servaient l'emoji de repli à
     /// la place du gabarit disponible.
     func test_focalRow_montsTheSameArtwork() throws {
-        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
 
         XCTAssertTrue(row.contains("MessageStickerArtwork("),
                       "Focal, Script et Rivière dessinent le sticker, comme la bulle.")

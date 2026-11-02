@@ -1,9 +1,13 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Folder
@@ -12,76 +16,137 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.conversationlist.SectionFoldedUnread
+import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.CollapsibleSection
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 
-/** The populated list: pull-to-refresh over the pinned / category / all sections. */
+internal const val CONVERSATION_LIST_TAG = "conversation-list"
+
+/** La liste : tirer pour rafraîchir sur la tête (rail + filtres) puis, selon [content], le squelette, la carte d'état ou les sections épinglés / catégories / toutes. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ConversationListBody(
     state: ConversationListUiState,
     listState: LazyListState,
     viewModel: ConversationListViewModel,
+    content: ConversationListContent,
+    onNewConversation: () -> Unit = {},
+    onRefresh: () -> Unit = {},
+    rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
+    header: @Composable () -> Unit = {},
 ) {
+    val signals by viewModel.rowSignals.collectAsStateWithLifecycle()
+    val haptics = rememberMeeshyHaptics()
+    LaunchedEffect(viewModel) { viewModel.pullRefreshSucceeded.collect { haptics.success() } }
     PullToRefreshBox(
         isRefreshing = state.isUserRefreshing,
-        onRefresh = viewModel::refresh,
+        onRefresh = {
+            haptics.light()
+            viewModel.refresh()
+            onRefresh()
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         // Sections (parity iOS): Épingles first, then Mes conversations. The split is the
         // pure ConversationSections SSOT, which also omits an empty section. Section bodies
         // compose eagerly (few items on a real account).
         val sections = ConversationSections.of(state.conversations, state.categories)
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            sections.forEach { section ->
-                val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
-                item(key = key) {
-                    CollapsibleSection(
-                        title = section.title ?: stringResource(section.kind.titleRes()),
-                        count = section.items.size,
-                        iconContainerColor = section.kind.containerColor(),
-                        icon = {
-                            Icon(
-                                section.kind.icon(),
-                                contentDescription = null,
-                                tint = MeeshyPalette.White,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        },
-                    ) {
-                        section.items.forEach { conversation ->
-                            ConversationListRow(state, conversation, viewModel)
-                        }
-                    }
-                }
+        val nowMillis by rememberMinuteClock()
+        val tailHeight = LIST_TAIL_HEIGHT
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag(CONVERSATION_LIST_TAG)) {
+            item(key = "list-story-rail", contentType = "story-rail") { header() }
+            conversationListStateItems(
+                content = content,
+                onRetry = viewModel::refresh,
+                onNewConversation = onNewConversation,
+            ) {
+                populatedItems(state, sections, viewModel, nowMillis, signals, rowNavigation, tailHeight)
             }
         }
     }
 }
+
+private fun LazyListScope.populatedItems(
+    state: ConversationListUiState,
+    sections: List<ConversationSection>,
+    viewModel: ConversationListViewModel,
+    nowMillis: Long,
+    signals: ConversationRowSignals,
+    rowNavigation: ConversationRowNavigation,
+    tailHeight: Dp,
+) {
+    if (!ConversationSections.showsHeaders(sections)) {
+        sections.forEach { section ->
+            items(section.items, key = { "row-${it.id}" }) { conversation ->
+                ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+            }
+        }
+        item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
+        return
+    }
+    sections.forEach { section ->
+        val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
+        item(key = key) {
+            CollapsibleSection(
+                title = section.title ?: stringResource(section.kind.titleRes()),
+                count = section.items.size,
+                foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false),
+                iconContainerColor = section.kind.containerColor(),
+                icon = {
+                    Icon(
+                        section.kind.icon(),
+                        contentDescription = null,
+                        tint = MeeshyPalette.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                },
+            ) {
+                section.items.forEach { conversation ->
+                    ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+                }
+            }
+        }
+    }
+    item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
+}
+
+/** Marge de fin de liste (iOS `Color.clear.frame(height: 60)`) : les disques flottants ne réservent rien, comme iOS (#13671). */
+private val LIST_TAIL_HEIGHT = 60.dp
 
 @Composable
 private fun ConversationListRow(
     state: ConversationListUiState,
     conversation: ApiConversation,
     viewModel: ConversationListViewModel,
+    now: Long,
+    signals: ConversationRowSignals,
+    rowNavigation: ConversationRowNavigation,
 ) {
-    val actions = remember(viewModel, conversation.id) {
+    val currentUserId = state.currentUserId
+    val actions = remember(viewModel, conversation, currentUserId, rowNavigation) {
         ConversationRowActions.forConversation(viewModel, conversation.id)
+            .withNavigation(rowNavigation, conversation, currentUserId)
     }
-    val now = System.currentTimeMillis()
     ConversationRow(
         model = ConversationRowModel(
             conversation = conversation,
             currentUserId = state.currentUserId,
             currentUserPrefs = state.currentUser,
-            presence = state.presenceStateFor(conversation, now),
+            peerUserId = conversation.otherParticipantUserId(currentUserId),
             storyRing = state.storyRingFor(conversation, now),
             moodEmoji = state.moodEmojiFor(conversation),
             draft = state.draftFor(conversation.id),
@@ -89,6 +154,10 @@ private fun ConversationListRow(
             categories = state.categories,
             previewMessages = state.previewFor(conversation.id),
             isLocked = state.isLocked(conversation.id),
+            nowMillis = now,
+            hasPendingSync = signals.hasPendingSync(conversation.id),
+            here = signals.peerHere(conversation, currentUserId).toAvatarHere(),
+            callInProgress = signals.hasCallInProgress(conversation.id),
         ),
         actions = actions,
     )

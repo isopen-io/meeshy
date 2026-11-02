@@ -66,4 +66,14 @@ class BrandMarkGeometryTest {
         assertThat(top.endXAt(progress = 1f)).isEqualTo(762f)
         assertThat(top.endXAt(progress = 4f)).isEqualTo(762f)
     }
+
+    @Test
+    fun `the inked bounds include the round caps in the 1024 space`() {
+        val bounds = BrandMarkGeometry.inkBounds()
+
+        assertThat(bounds.left).isEqualTo(206f)
+        assertThat(bounds.right).isEqualTo(818f)
+        assertThat(bounds.top).isEqualTo(328f)
+        assertThat(bounds.bottom).isEqualTo(696f)
+    }
 }

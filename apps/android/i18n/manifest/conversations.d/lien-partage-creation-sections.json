@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "share.link.create.choose_group", "androidName": "share_link_create_choose_group", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.conversation.a11yHint", "androidName": "share_link_conversation_a11y_hint", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.section.conversation", "androidName": "share_link_section_conversation", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.access.account_required.subtitle", "androidName": "share_link_access_account_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.access.nickname_required.subtitle", "androidName": "share_link_access_nickname_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.access.email_required.subtitle", "androidName": "share_link_access_email_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.access.birthday_required", "androidName": "share_link_access_birthday", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.access.birthday_required.subtitle", "androidName": "share_link_access_birthday_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.section.access.subtitle", "androidName": "share_link_section_access_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.section.permissions.subtitle", "androidName": "share_link_section_permissions_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.section.limits.subtitle", "androidName": "share_link_section_limits_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.permission.send_messages.subtitle", "androidName": "share_link_permission_messages_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.permission.send_images.subtitle", "androidName": "share_link_permission_images_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.permission.send_files.subtitle", "androidName": "share_link_permission_files_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.permission.view_history.subtitle", "androidName": "share_link_permission_history_subtitle", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.picker.search", "androidName": "share_link_picker_search", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.picker.section.groups", "androidName": "share_link_section_groups", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.picker.section.communities", "androidName": "share_link_section_communities", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversationType.public", "androidName": "share_link_type_public", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversationType.community", "androidName": "share_link_type_community", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversationType.group", "androidName": "share_link_type_group", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversationType.channel", "androidName": "share_link_type_channel", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversationType.global", "androidName": "share_link_type_global", "status": "adopted"},
+        {"catalog": "app", "iosKey": "conversationType.broadcast", "androidName": "share_link_type_broadcast", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.max_uses", "androidName": "share_link_max_uses", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.unlimited", "androidName": "share_link_unlimited", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.uses_label", "androidName": "share_link_uses_label", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.field.name.placeholder", "androidName": "share_link_field_name_placeholder", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.field.description.placeholder", "androidName": "share_link_field_description_placeholder", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.link.create.field.slug.placeholder", "androidName": "share_link_field_slug_placeholder", "status": "adopted"}
+      ]
+    }
+  }
+}

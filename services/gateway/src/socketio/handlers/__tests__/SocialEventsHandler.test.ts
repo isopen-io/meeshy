@@ -79,9 +79,11 @@ function makePrisma(friendIds: string[] = [FRIEND_ID_1, FRIEND_ID_2]): PrismaCli
   }));
 
   return {
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn<any>().mockResolvedValue(friendships),
     },
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null) },
   } as unknown as PrismaClient;
 }
 
@@ -217,6 +219,7 @@ describe('SocialEventsHandler', () => {
 
     it('returns empty array and does not throw when DB rejects', async () => {
       const prisma = {
+        userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
         friendRequest: { findMany: jest.fn<any>().mockRejectedValue(new Error('db error')) },
       } as unknown as PrismaClient;
       const { handler } = buildHandler({ prisma });
@@ -226,12 +229,14 @@ describe('SocialEventsHandler', () => {
 
     it('resolves friend IDs in both sender and receiver direction', async () => {
       const prisma = {
+        userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
         friendRequest: {
           findMany: jest.fn<any>().mockResolvedValue([
             { senderId: FRIEND_ID_1, receiverId: AUTHOR_ID },
             { senderId: AUTHOR_ID, receiverId: FRIEND_ID_2 },
           ]),
         },
+        user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null) },
       } as unknown as PrismaClient;
       const { handler, io } = buildHandler({ prisma });
 
@@ -798,6 +803,7 @@ describe('SocialEventsHandler', () => {
   describe('friends cache eviction', () => {
     it('evicts oldest entry when cache reaches 500 entries', async () => {
       const prisma = {
+        userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
         friendRequest: {
           findMany: jest.fn<any>().mockResolvedValue([]),
         },

@@ -73,6 +73,7 @@ const arStickerPacks = {
   'packs.domain.avatar-ring': "حلقات الصورة الرمزية",
   'packs.domain.banner': "اللافتات",
   'packs.domain.banner-frame': "إطارات اللافتة",
+  'packs.domain.lens': "العدسات",
   'packs.domain.capture-frame': "إطارات الالتقاط",
   'packs.price': "{price} ميشيز",
   'packs.owned': "مملوك",
@@ -85,6 +86,11 @@ const arStickerPacks = {
   'packs.shop.domains': "فئة المتجر",
   'packs.shop.hint': "كل الحزم: ملصقات وإطارات وخلفيات وحلقات ولافتات. ما تملكه يظهر في الشاشات التي تستخدمها.",
   'packs.retry': "إعادة المحاولة",
+  'packs.error.notRemovable': "تبقى هذه الحزمة مثبّتة: لا يمكن إزالتها.",
+  'packs.frames.changeAtmosphere': "تغيير الأجواء",
+  'packs.frames.yourAtmosphere': "أجواؤك",
+  'packs.frames.atmosphereKept': "تحمل هذه الحزمة أجواءك، لذا تبقى مثبّتة. غيّر الأجواء لإزالتها.",
+  'packs.frames.atmosphereQueued': "غير متصل: سيُرسل اختيارك عند عودة الاتصال.",
 } satisfies StickerPacksCatalog;
 
 export default arStickerPacks;

@@ -13,12 +13,15 @@
  *   client renvoie telle quelle. Un curseur illisible est refusé, jamais
  *   interprété.
  * - **Projection fermée** : la lecture ne charge que ce que la ligne affiche
- *   (nom, type, langue, date, pays) ; le visage, l'identifiant, la présence et
- *   l'IP d'un arrivant ne sont pas lus, donc ne peuvent pas partir.
+ *   (nom, visage, type, langue, date, pays) ; l'identifiant, la présence et
+ *   l'IP d'un arrivant ne sont pas lus, donc ne peuvent pas partir. Le visage
+ *   (#12571) est celui que les arrivées récentes servent déjà aux mêmes
+ *   lecteurs, résolu par la loi partagée `resolveParticipantAvatar`.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import type { ShareLinkArrivalEntry, ShareLinkArrivalsPage } from '@meeshy/shared/types/share-link-stats';
 
 export type ArrivalsCursor = { readonly joinedAt: Date; readonly id: string };
@@ -55,24 +58,27 @@ const ARRIVAL_SELECT = {
   id: true,
   type: true,
   displayName: true,
+  avatar: true,
   language: true,
   joinedAt: true,
   joinCountry: true,
-  user: { select: { systemLanguage: true } },
+  user: { select: { systemLanguage: true, avatar: true } },
 } as const;
 
 type ArrivalRow = {
   readonly id: string;
   readonly type: string;
   readonly displayName: string;
+  readonly avatar: string | null;
   readonly language: string;
   readonly joinedAt: Date;
   readonly joinCountry: string | null;
-  readonly user: { readonly systemLanguage: string | null } | null;
+  readonly user: { readonly systemLanguage: string | null; readonly avatar: string | null } | null;
 };
 
 const toEntry = (row: ArrivalRow): ShareLinkArrivalEntry => ({
   displayName: row.displayName,
+  avatar: resolveParticipantAvatar(row),
   isAnonymous: row.type === 'anonymous',
   country: row.joinCountry,
   language: arrivalLanguage(row),

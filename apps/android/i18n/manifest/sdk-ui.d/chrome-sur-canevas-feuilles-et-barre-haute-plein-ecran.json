@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "ui", "iosKey": "common.cancel", "androidName": "common_cancel", "status": "adopted" },
+        { "catalog": "ui", "iosKey": "common.done", "androidName": "common_done", "status": "adopted" }
+      ]
+    }
+  }
+}

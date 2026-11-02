@@ -25,6 +25,7 @@ import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { changedNameViolations, sendLengthFloorRefusal, sendZodRefusal, type NameField } from '../../utils/identity-name-floor';
 import { sendSuccess, sendInternalError, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { servedUserPermissions } from '../../services/admin/served-permissions';
 import {
@@ -47,6 +48,16 @@ import { announceConversationLanguageChange } from '../../services/message-trans
  * et ne rapporte donc pas non plus `profile.bio`.
  */
 const BIO_MIN_LENGTH = 11;
+
+/**
+ * La valeur qu'un nom reçu PREND en base — capitalisation (prénom, nom) ou
+ * rognage (nom affiché), puis nettoyage. La MÊME fonction écrit le nom et
+ * normalise la valeur stockée avant de juger si le nom a changé (#13825).
+ */
+function writtenName(field: NameField, value: string): string {
+  const shaped = field === 'displayName' ? normalizeDisplayName(value) : capitalizeName(value);
+  return SecuritySanitizer.sanitizeText(shaped);
+}
 
 type ProfileState = {
   readonly bio: string | null;
@@ -140,9 +151,9 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       const updateData: any = {};
 
-      if (body.firstName !== undefined) updateData.firstName = SecuritySanitizer.sanitizeText(capitalizeName(body.firstName));
-      if (body.lastName !== undefined) updateData.lastName = SecuritySanitizer.sanitizeText(capitalizeName(body.lastName));
-      if (body.displayName !== undefined) updateData.displayName = SecuritySanitizer.sanitizeText(normalizeDisplayName(body.displayName));
+      if (body.firstName !== undefined) updateData.firstName = writtenName('firstName', body.firstName);
+      if (body.lastName !== undefined) updateData.lastName = writtenName('lastName', body.lastName);
+      if (body.displayName !== undefined) updateData.displayName = writtenName('displayName', body.displayName);
       // `email` et `phoneNumber` NE SONT PLUS lisibles sur `body` — retirés du
       // schéma (#4184) précisément pour qu'aucune ligne ne puisse plus les
       // écrire ici. Cette route les acceptait autrefois SANS preuve de
@@ -154,15 +165,37 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // ce soit ; ne pas recréer ce raccourci ici.
       if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
 
-      // Recalcul du taux de complétion (#3688) — SEULEMENT quand un des cinq
-      // champs de la formule bouge (displayName, bio ici ; avatar a sa propre
-      // route). firstName/lastName/langues n'y entrent pas : ne pas ouvrir la
-      // requête de lecture pour rien.
-      if (body.displayName !== undefined || body.bio !== undefined) {
-        const current = await fastify.prisma.user.findUnique({
-          where: { id: userId },
-          select: { displayName: true, avatar: true, bio: true, phoneNumber: true, email: true },
-        });
+      // UNE lecture de la ligne avant l'écriture, ouverte seulement quand un
+      // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les
+      // noms CHANGÉS, il faut donc la valeur stockée) ou un des cinq champs du
+      // taux de complétion (#3688 — displayName, bio ici ; avatar a sa propre
+      // route). Les langues seules n'ouvrent aucune requête.
+      const touchesName = body.firstName !== undefined || body.lastName !== undefined || body.displayName !== undefined;
+      const touchesCompletion = body.displayName !== undefined || body.bio !== undefined;
+      const current = touchesName || touchesCompletion
+        ? await fastify.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              firstName: true, lastName: true, displayName: true,
+              avatar: true, bio: true, phoneNumber: true, email: true,
+            },
+          })
+        : null;
+
+      // Un compte hérité (« A ») renvoyé tel quel par l'iOS publié passe ; un
+      // nom CHANGÉ sous la borne est refusé, rien n'est écrit (#13825).
+      const nameViolations = touchesName
+        ? changedNameViolations({
+            incoming: { firstName: body.firstName, lastName: body.lastName, displayName: body.displayName },
+            stored: current,
+            normalize: writtenName,
+          })
+        : [];
+      if (nameViolations.length > 0) {
+        return sendLengthFloorRefusal(reply, 'Invalid data', nameViolations);
+      }
+
+      if (touchesCompletion) {
         if (current) {
           updateData.profileCompletionRate = calculateProfileCompletionRate({
             displayName: updateData.displayName ?? current.displayName,
@@ -335,7 +368,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         /* istanbul ignore next — authContext always set by authenticate preValidation */
         const userId = authContext?.userId || 'unknown';
         logError(fastify.log, `[PROFILE_UPDATE] Validation error for user ${userId}: ${JSON.stringify(error.issues)}`, error);
-        return sendBadRequest(reply, 'Invalid data');
+        return sendZodRefusal(reply, 'Invalid data', error);
       }
 
       logError(fastify.log, 'Update user profile error:', error);

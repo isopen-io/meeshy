@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { blendMaskInto, createSegmentedBlur, gaussianTaps, maskBytes, SEGMENT_INTERVAL_MS, type Compositor, type SegmenterPort } from './video-effects-blur';
+import { blendMaskInto, createSegmentedBlur, gaussianTaps, maskBytes, SEGMENT_INTERVAL_MS, segmentIntervalFor, type Compositor, type SegmenterPort } from './video-effects-blur';
 
 /**
  * LE FLOU D'ARRIÈRE-PLAN PAR SEGMENTATION (#8471) — quand la caméra ne le
@@ -10,7 +10,7 @@ import { blendMaskInto, createSegmentedBlur, gaussianTaps, maskBytes, SEGMENT_IN
  * est flouté — l'arrière-plan ne fuit jamais pendant le chargement.
  */
 
-function harness(options: { readonly failLoad?: boolean } = {}) {
+function harness(options: { readonly failLoad?: boolean; readonly intervalMs?: number } = {}) {
   let clock = 0;
   const masks: Array<{ bytes: number[]; width: number; height: number }> = [];
   const rendered: unknown[] = [];
@@ -45,6 +45,7 @@ function harness(options: { readonly failLoad?: boolean } = {}) {
     },
     schedule: (task) => void tasks.push(task),
     now: () => clock,
+    ...(options.intervalMs === undefined ? {} : { intervalMs: options.intervalMs }),
   });
   const settle = async () => {
     for (let round = 0; round < 4; round += 1) await Promise.resolve();
@@ -150,5 +151,32 @@ describe('le flou gaussien séparable', () => {
     expect([...taps.offsets].sort((a, b) => a - b)).toEqual([...taps.offsets]);
     expect(taps.offsets[0]).toBeGreaterThan(1);
     expect(taps.offsets[3]).toBeLessThan(8);
+  });
+});
+
+describe('la cadence de decoupe suit le tier de l\'appareil (W10)', () => {
+  test('huit decoupes par seconde sur un appareil bas, douze sur un moyen, quinze sinon', () => {
+    expect(segmentIntervalFor('low')).toBe(1000 / 8);
+    expect(segmentIntervalFor('mid')).toBe(1000 / 12);
+    expect(segmentIntervalFor('high')).toBe(SEGMENT_INTERVAL_MS);
+    expect(segmentIntervalFor('pro')).toBe(SEGMENT_INTERVAL_MS);
+  });
+
+  test('l\'etage respecte l\'intervalle qu\'on lui donne', async () => {
+    const h = harness({ intervalMs: 1000 / 8 });
+    h.stage.render(frame, 640, 480, 0);
+    h.load();
+    await h.settle();
+    h.stage.render(frame, 640, 480, 0);
+    await h.settle();
+    expect(h.segmented).toHaveLength(1);
+    h.tick(SEGMENT_INTERVAL_MS + 1);
+    h.stage.render(frame, 640, 480, 0);
+    await h.settle();
+    expect(h.segmented).toHaveLength(1);
+    h.tick(1000 / 8);
+    h.stage.render(frame, 640, 480, 0);
+    await h.settle();
+    expect(h.segmented).toHaveLength(2);
   });
 });

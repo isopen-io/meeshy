@@ -55,7 +55,7 @@ class PostDetailViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private val repository: PostRepository = mockk(relaxed = true)
+    private val repository: PostRepository = mockk<PostRepository>(relaxed = true).also { coEvery { it.knownPost(any()) } returns null }
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
@@ -63,6 +63,7 @@ class PostDetailViewModelTest {
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
+    private val workManager: androidx.work.WorkManager = mockk(relaxed = true)
     private var clockNow: Long = 0L
     private val clock = object : CacheClock {
         override fun nowMillis(): Long = clockNow
@@ -120,7 +121,7 @@ class PostDetailViewModelTest {
         val privacyStore = InMemoryPrivacyPreferencesStore(
             PrivacyPreferences(allowAnalytics = allowAnalytics),
         )
-        return PostDetailViewModel(repository, session, socialSocket, config, clock, privacyStore, handle)
+        return PostDetailViewModel(repository, session, socialSocket, config, clock, privacyStore, workManager, handle)
     }
 
     @Test
@@ -240,17 +241,114 @@ class PostDetailViewModelTest {
     }
 
     @Test
-    fun `onFlagTap switches the displayed language to a translation`() = runTest {
+    fun `onFlagTap on a translation opens it under the text without replacing the displayed language`() = runTest {
         coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
 
-        // System=en, regional=es → default resolution shows English; both are strip chips.
+        // System=en, regional=es → default resolution shows English; es is a second, readable language.
         val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
         vm.onFlagTap("es")
 
         vm.state.test {
             val s = awaitItem()
+            assertThat(s.post?.content).isEqualTo("Hello")
+            assertThat(s.secondaryTranslation?.content).isEqualTo("Hola")
+            assertThat(s.secondaryTranslation?.code).isEqualTo("es")
+        }
+    }
+
+    @Test
+    fun `the detail strip leaves out the language read and marks the secondary one, like iOS`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        // Rang 2 (es) : la puce marquee est celle du panneau ouvert, jamais celle du texte lu (en).
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+
+        vm.state.test {
+            val before = awaitItem()
+            assertThat(before.detailLanguageStrip.map { it.code }).doesNotContain("en")
+            assertThat(before.detailLanguageStrip.map { it.code }).containsAtLeast("fr", "es")
+            assertThat(before.detailLanguageStrip.none { it.isActive }).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+        vm.onFlagTap("es")
+        vm.state.test {
+            val after = awaitItem()
+            assertThat(after.post?.content).isEqualTo("Hello")
+            assertThat(after.detailLanguageStrip.single { it.isActive }.code).isEqualTo("es")
+            assertThat(after.secondaryTranslation?.code).isEqualTo("es")
+        }
+    }
+
+    @Test
+    fun `the detail strip offers no content-less language - those are asked from the explorer`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "de")))
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.detailLanguageStrip.map { it.code }).doesNotContain("de")
+            assertThat(s.post?.languageExplorer?.missing).contains("de")
+        }
+    }
+
+    @Test
+    fun `a second tap on the same translation closes the secondary panel`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+        vm.onFlagTap("es")
+        vm.onFlagTap("es")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.post?.content).isEqualTo("Hello")
+            assertThat(s.secondaryTranslation).isNull()
+        }
+    }
+
+    @Test
+    fun `onFlagTap on the original makes it the displayed text and clears the secondary panel`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+        vm.onFlagTap("es")
+        vm.onFlagTap("fr")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.post?.content).isEqualTo("Bonjour")
+            assertThat(s.secondaryTranslation).isNull()
+        }
+    }
+
+    @Test
+    fun `picking a language in the explorer switches the displayed text and its chip together`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+        vm.onFlagTap("es")
+        vm.onLanguageSelected("es")
+
+        vm.state.test {
+            val s = awaitItem()
             assertThat(s.post?.content).isEqualTo("Hola")
             assertThat(s.post?.languageStrip?.first { it.code == "es" }?.isActive).isTrue()
+            assertThat(s.post?.languageExplorer?.translations?.first { it.code == "es" }?.isActive).isTrue()
+            assertThat(s.secondaryTranslation).isNull()
+        }
+    }
+
+    @Test
+    fun `picking the language already read keeps it instead of reverting`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
+        vm.onLanguageSelected("es")
+        vm.onLanguageSelected("es")
+
+        vm.state.test {
+            assertThat(awaitItem().post?.content).isEqualTo("Hola")
         }
     }
 
@@ -259,7 +357,7 @@ class PostDetailViewModelTest {
         coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
 
         val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "es")))
-        vm.onFlagTap("es")
+        vm.onLanguageSelected("es")
         vm.onFlagTap("es")
 
         vm.state.test {
@@ -751,6 +849,13 @@ class PostDetailViewModelTest {
     }
 
     @Test
+    fun `an administrator may list the viewers of a post, a plain reader may not`() = runTest {
+        val admin = user(Prefs()).copy(role = "ADMIN")
+        assertThat(loadedVm(currentUser = admin).state.value.canListViewers).isTrue()
+        assertThat(loadedVm(currentUser = user(Prefs())).state.value.canListViewers).isFalse()
+    }
+
+    @Test
     fun `repost of an original post targets its own id with no content and flags it reposted`() = runTest {
         val vm = loadedVm(loaded = post(id = "p1", content = "Hello"))
 
@@ -798,7 +903,7 @@ class PostDetailViewModelTest {
     }
 
     @Test
-    fun `a repost failure reverts the reposted flag and surfaces the error`() = runTest {
+    fun `a repost failure reverts the reposted flag and says so in the reader's language`() = runTest {
         val vm = loadedVm()
         coEvery { repository.repost(any(), content = any(), isQuote = any()) } returns
             NetworkResult.Failure(ApiError("repost boom"))
@@ -806,7 +911,7 @@ class PostDetailViewModelTest {
         vm.repost()
 
         assertThat(vm.state.value.isReposted).isFalse()
-        assertThat(vm.state.value.errorMessage).isEqualTo("repost boom")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.REPOST_FAILED)
     }
 
     @Test
@@ -920,7 +1025,7 @@ class PostDetailViewModelTest {
     }
 
     @Test
-    fun `a submitQuote failure reverts the reposted flag and surfaces the error`() = runTest {
+    fun `a submitQuote failure reverts the reposted flag and says so in the reader's language`() = runTest {
         val vm = loadedVm(loaded = post(id = "p1"))
         coEvery { repository.repost(any(), content = any(), isQuote = any()) } returns
             NetworkResult.Failure(ApiError("quote boom"))
@@ -930,7 +1035,75 @@ class PostDetailViewModelTest {
         vm.submitQuote()
 
         assertThat(vm.state.value.isReposted).isFalse()
-        assertThat(vm.state.value.errorMessage).isEqualTo("quote boom")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.REPOST_FAILED)
         assertThat(vm.state.value.quoteComposer).isNull()
+    }
+
+    // --- Like and bookmark from the detail (iOS PostDetailView+Heart): optimistic flip, durable
+    //     outbox send that works even when the post is absent from the feed cache. ---
+
+    @Test
+    fun `toggleLike flips the heart and the count instantly and enqueues a durable like`() = runTest {
+        val vm = loadedVm(loaded = post(likeCount = 2, isLikedByMe = false))
+
+        vm.toggleLike()
+
+        assertThat(vm.state.value.post?.isLiked).isTrue()
+        assertThat(vm.state.value.post?.likeCount).isEqualTo(3)
+        coVerify(exactly = 1) { repository.setLiked("p1", liked = true) }
+        io.mockk.verify(exactly = 1) { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `toggleLike on a liked post unlikes it`() = runTest {
+        val vm = loadedVm(loaded = post(likeCount = 5, isLikedByMe = true))
+
+        vm.toggleLike()
+
+        assertThat(vm.state.value.post?.isLiked).isFalse()
+        assertThat(vm.state.value.post?.likeCount).isEqualTo(4)
+        coVerify(exactly = 1) { repository.setLiked("p1", liked = false) }
+    }
+
+    @Test
+    fun `toggleLike before the post has loaded is inert`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<ApiPost>>()
+        coEvery { repository.getPost("p1") } coAnswers { gate.await() }
+        val vm = viewModel()
+
+        vm.toggleLike()
+
+        coVerify(exactly = 0) { repository.setLiked(any(), any()) }
+        gate.complete(NetworkResult.Success(post()))
+    }
+
+    @Test
+    fun `toggleBookmark flips the bookmark and its count instantly and enqueues it`() = runTest {
+        val vm = loadedVm(loaded = post().copy(bookmarkCount = 0, isBookmarkedByMe = false))
+
+        vm.toggleBookmark()
+
+        assertThat(vm.state.value.post?.isBookmarked).isTrue()
+        assertThat(vm.state.value.post?.bookmarkCount).isEqualTo(1)
+        coVerify(exactly = 1) { repository.setBookmarked("p1", bookmarked = true) }
+    }
+
+    @Test
+    fun `a failed enqueue reverts the optimistic like`() = runTest {
+        val vm = loadedVm(loaded = post(likeCount = 2, isLikedByMe = false))
+        coEvery { repository.setLiked(any(), any()) } throws IllegalStateException("db")
+
+        vm.toggleLike()
+
+        assertThat(vm.state.value.post?.isLiked).isFalse()
+        assertThat(vm.state.value.post?.likeCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `the author's avatar stored as a key loads from the API attachment route`() = runTest {
+        val vm = loadedVm(loaded = post().copy(author = ApiAuthor(id = "u1", username = "amina", avatar = "avatars/user/u1.jpg")))
+
+        assertThat(vm.state.value.post?.authorAvatarUrl)
+            .isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/avatars/user/u1.jpg")
     }
 }

@@ -22,23 +22,39 @@ data class LastMessagePreviewLabels(
     val expired: String = "",
     val hidden: String = "",
     val viewOnce: String = "",
+    /** The bare « Draft » a text-less draft says (iOS `draft.label`); blank falls back to [draftPrefix]. */
+    val draftLabel: String = "",
+    /** « Message chiffré » : a message this device cannot open (#13110); blank falls back to [none]. */
+    val encrypted: String = "",
+    /** « Sticker » (iOS `attachment.sticker`, #14389); blank falls back to the media-type label. */
+    val sticker: String = "",
 )
 
 /**
- * The draft-preview line for a conversation row, or `null` when [draft] is absent
- * or inert (so the caller falls back to [lastMessagePreview]). A meaningful draft's
- * own text wins over the last message — iOS shows an accent "Draft: …" preview for a
- * conversation the user has started replying to — prefixed by
- * [LastMessagePreviewLabels.draftPrefix]. A reply-only draft (armed reply, empty
- * text) shows the prefix with an ellipsis so the row still signals an unsent reply.
+ * A row's draft line, as iOS `LentilleConversationRow.draftLine` paints it: a [label] in the
+ * error colour, then the draft's own [body] in the secondary ink. `null` [body] is a draft with
+ * no text (an armed reply): the row then says the bare label (« Brouillon »), never a prefix
+ * followed by an ellipsis.
+ */
+data class DraftPreview(val label: String, val body: String?)
+
+/**
+ * The draft line for a conversation row, or `null` when [draft] is absent or inert (so the
+ * caller falls back to [lastMessagePreview]). A meaningful draft wins over the last message:
+ * its trimmed text under [LastMessagePreviewLabels.draftPrefix] (`draft.label_prefix`), or the
+ * bare [LastMessagePreviewLabels.draftLabel] (`draft.label`) when it holds no text.
  */
 fun draftPreview(
     draft: ConversationDraft?,
     labels: LastMessagePreviewLabels,
-): String? {
+): DraftPreview? {
     if (draft == null || !draft.isMeaningful) return null
     val text = draft.text.trim()
-    return if (text.isEmpty()) labels.draftPrefix + "…" else labels.draftPrefix + text
+    return if (text.isEmpty()) {
+        DraftPreview(label = labels.draftLabel.ifBlank { labels.draftPrefix }, body = null)
+    } else {
+        DraftPreview(label = labels.draftPrefix, body = text)
+    }
 }
 
 /**
@@ -64,7 +80,7 @@ fun lastMessagePreview(
     resolvedContent: String? = null,
 ): String {
     if (message == null) return labels.none
-    val body = (resolvedContent ?: message.content)?.trim().orEmpty().ifEmpty {
+    val body = stickerBody(message, labels) ?: (resolvedContent ?: message.content)?.trim().orEmpty().ifEmpty {
         when (message.messageType) {
             "image" -> labels.photo
             "video" -> labels.video
@@ -81,6 +97,17 @@ fun lastMessagePreview(
         else -> message.senderName?.takeIf { it.isNotBlank() }
     }
     return if (sender == null) body else labels.senderFormat.format(sender, body)
+}
+
+/**
+ * A sticker leaves as an `image` carrying `metadata.sticker`, which the gateway hoists onto the row
+ * (`lastMessage.sticker`, #10752): its presence alone tells it from a photo. Like iOS
+ * `ConversationPreviewBody.of`, the row says the sticker's alternative text, else « Sticker ».
+ */
+private fun stickerBody(message: ApiConversationLastMessage, labels: LastMessagePreviewLabels): String? {
+    if (message.sticker == null && message.messageType != "sticker") return null
+    val alt = message.attachments?.firstOrNull()?.alt?.trim()
+    return alt?.takeIf { it.isNotEmpty() } ?: labels.sticker.takeIf { it.isNotBlank() }
 }
 
 /**
@@ -129,6 +156,10 @@ fun messageSummaryLine(
         )
         MessageSummaryKind.VIEW_ONCE -> SummaryLine(
             text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.viewOnce),
+            kind = kind,
+        )
+        MessageSummaryKind.ENCRYPTED -> SummaryLine(
+            text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.encrypted.ifBlank { labels.none }),
             kind = kind,
         )
     }

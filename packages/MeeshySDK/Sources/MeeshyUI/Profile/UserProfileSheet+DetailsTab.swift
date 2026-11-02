@@ -349,12 +349,13 @@ extension UserProfileSheet {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
         HapticFeedback.medium()
         Task {
-            do {
-                try await ReportService.shared.reportUser(userId: userId, reportType: reportType, reason: nil)
-                postToast(String(localized: "profile.toast.reportSent", defaultValue: "Signalement envoyé", bundle: .module), isSuccess: true)
-            } catch {
-                postToast(String(localized: "profile.toast.reportFailed", defaultValue: "Impossible d'envoyer le signalement", bundle: .module), isSuccess: false)
-            }
+            let sent = await connectionActions.report(userId: userId, reportType: reportType)
+            postToast(
+                sent
+                    ? String(localized: "profile.toast.reportSent", defaultValue: "Signalement envoyé", bundle: .module)
+                    : String(localized: "profile.toast.reportFailed", defaultValue: "Impossible d'envoyer le signalement", bundle: .module),
+                isSuccess: sent
+            )
         }
     }
 

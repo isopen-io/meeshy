@@ -7,6 +7,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.work.Configuration
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.launch
 import me.meeshy.app.push.DeclinedCallStore
@@ -16,14 +18,17 @@ import me.meeshy.app.startup.AppInitializerRunner
 import me.meeshy.app.startup.AppLifecycleRunner
 import me.meeshy.sdk.lifecycle.AppLifecycleDispatcher
 import me.meeshy.sdk.model.lifecycle.TrimLevel
+import me.meeshy.sdk.call.frames.CallFrameSceneImages
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
+import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.ui.component.media.MeeshyImageLoader
 import timber.log.Timber
 import javax.inject.Inject
 
 @HiltAndroidApp
-class MeeshyApplication : Application(), Configuration.Provider {
+class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -33,6 +38,9 @@ class MeeshyApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var socketManager: SocketManager
+
+    @Inject
+    lateinit var presenceStore: PresenceStore
 
     @Inject
     lateinit var callSignalManager: CallSignalManager
@@ -60,6 +68,9 @@ class MeeshyApplication : Application(), Configuration.Provider {
             .setWorkerFactory(workerFactory)
             .build()
 
+    /** Le chargeur partagé de Coil : il respecte l'orientation EXIF de toute photo (`MeeshyImageLoader`). */
+    override fun newImageLoader(): ImageLoader = MeeshyImageLoader.build(this)
+
     override fun onCreate() {
         super.onCreate()
         if (BuildConfig.DEBUG) {
@@ -71,7 +82,11 @@ class MeeshyApplication : Application(), Configuration.Provider {
         // so a channel only ever created there would still be missing exactly when it's
         // needed most. See NotificationChannelIds for the full gateway-drift rationale.
         notificationChannelInstaller.install()
+        // La carte de présence s'abonne AVANT toute connexion : les flux socket sont chauds sans rejeu.
+        presenceStore.start()
         installAppStatePresence()
+        // Les illustrations des cadres d'appel se lisent dans les actifs de l'app (le `Bundle.main` d'iOS).
+        CallFrameSceneImages.install(this)
         appInitializerRunner.runAll()
         lifecycleDispatcher.onAppCreate()
         lifecycleRunner.runStartup()

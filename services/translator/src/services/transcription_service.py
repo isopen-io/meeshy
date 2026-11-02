@@ -32,7 +32,13 @@ from config.settings import get_settings
 
 # Import du smart segment merger pour fusionner intelligemment les mots courts
 from utils.smart_segment_merger import merge_short_segments
-from .audio_pipeline.transcription_guards import resolve_transcription_confidence
+
+def _resolve_confidence(text, probability):
+    # Import différé : `audio_pipeline/__init__` charge `transcription_stage`, qui
+    # importe ce module — un import en tête de fichier forme une boucle.
+    from .audio_pipeline.transcription_guards import resolve_transcription_confidence
+    return resolve_transcription_confidence(text, probability)
+
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -58,6 +64,12 @@ except ImportError:
 
 
 from utils.audio_utils import get_audio_duration as _get_librosa_duration
+from utils.audio_pipeline_metrics import timed_audio_stage
+from .audio_pipeline.speaker_probe import ProbeDecision, diarization_mode, probe_multi_speaker, should_diarize
+from services.task_privacy import shown
+
+# La sonde n'a entendu qu'une voix : la transcription part sans diarization (#11268).
+DIARIZATION_SKIPPED = object()
 
 
 @dataclass
@@ -422,12 +434,15 @@ class TranscriptionService:
             diarization_result = None
 
             if enable_diarization and return_timestamps:
-                logger.info("[TRANSCRIPTION] 🚀 Lancement parallèle: Whisper + Diarization")
+                logger.info("[TRANSCRIPTION] 🚀 Lancement parallèle: Whisper + Diarization (si plusieurs voix, #11268)")
                 whisper_result, diarization_result = await asyncio.gather(
                     self._run_whisper(audio_path, model, return_timestamps),
-                    self._run_diarization(audio_path),
+                    self._run_diarization_if_several_voices(audio_path),
                     return_exceptions=True
                 )
+                if diarization_result is DIARIZATION_SKIPPED:
+                    enable_diarization = False
+                    diarization_result = None
 
                 # Gérer les erreurs de chaque tâche
                 if isinstance(whisper_result, Exception):
@@ -504,7 +519,7 @@ class TranscriptionService:
             result = TranscriptionResult(
                 text=full_text,
                 language=info.language,
-                confidence=resolve_transcription_confidence(full_text, info.language_probability),
+                confidence=_resolve_confidence(full_text, info.language_probability),
                 segments=segments,
                 duration_ms=int(info.duration * 1000),
                 source="whisper",
@@ -530,6 +545,7 @@ class TranscriptionService:
             traceback.print_exc()
             raise RuntimeError(f"Échec de la transcription: {e}")
 
+    @timed_audio_stage("whisper")
     async def _run_whisper(self, audio_path: str, model, return_timestamps: bool):
         """
         Exécute Whisper dans un thread et retourne (segments_list, info).
@@ -555,6 +571,14 @@ class TranscriptionService:
         )
         segments_list = list(segments_raw)
         return segments_list, info
+
+    async def _run_diarization_if_several_voices(self, audio_path: str):
+        """La diarization complète, seulement si la sonde entend plusieurs voix (#11268) ; sinon `DIARIZATION_SKIPPED`."""
+        decision = await should_diarize(audio_path, mode=diarization_mode(os.environ), probe=probe_multi_speaker)
+        if decision is ProbeDecision.SKIP:
+            logger.info("[TRANSCRIPTION] ⚪ Une seule voix entendue : diarization évitée")
+            return DIARIZATION_SKIPPED
+        return await self._run_diarization(audio_path)
 
     async def _run_diarization(self, audio_path: str, sender_voice_profile=None):
         """
@@ -801,7 +825,7 @@ class TranscriptionService:
                     marker = "⭐" if speaker.is_primary else " "
                     logger.info(
                         f"[{speaker.speaker_id}]{marker} ({speaker.speaking_ratio * 100:.0f}%): "
-                        f"\"{full_text}\""
+                        f"\"{shown(full_text)}\""
                     )
 
             unassigned = [s for s in sorted_segments if not s.speaker_id]

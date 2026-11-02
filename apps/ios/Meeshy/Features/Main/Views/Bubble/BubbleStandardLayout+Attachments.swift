@@ -81,7 +81,7 @@ extension BubbleStandardLayout {
             onTapLocation: { att in
                 fullscreenLocationAttachment = att
             },
-            onPlayAudio: onPlayAudio
+            onPlayAudio: onPlayAudio, contactCardScope: content.contactCardScope
         )
     }
 

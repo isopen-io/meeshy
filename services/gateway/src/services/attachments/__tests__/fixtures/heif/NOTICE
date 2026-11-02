@@ -1,0 +1,2 @@
+photo-p3.heic : 64×48, profil Display P3, encodé par heif-enc de libheif 1.17.6 (x265, -q 80)
+depuis une image générée par sharp ; témoin de #11263. Aucune donnée tierce.

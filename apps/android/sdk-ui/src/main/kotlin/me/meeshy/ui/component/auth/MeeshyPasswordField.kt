@@ -129,8 +129,12 @@ public fun MeeshyPasswordField(
     }
 }
 
+/**
+ * Le bouton œil seul, pour un champ Material qui le pose en `trailingIcon` (écran de connexion).
+ * Même loi et mêmes annonces que celui de [MeeshyPasswordField].
+ */
 @Composable
-private fun PasswordEyeButton(
+public fun PasswordEyeButton(
     reveal: PasswordReveal,
     tint: Color,
     enabled: Boolean,

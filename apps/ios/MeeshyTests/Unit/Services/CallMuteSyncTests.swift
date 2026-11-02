@@ -86,7 +86,7 @@ final class CallMuteSyncTests: XCTestCase {
     /// l'unité `CallManager` (le fichier et ses extensions `CallManager+*`).
     func test_callManagerUnit_createsLocalTrackOnlyThroughMuteSync() throws {
         let unit = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
         )
         XCTAssertFalse(unit.contains("webRTCService.startLocalMedia("),
                        "La piste locale naît seulement par startLocalMediaKeepingMute (#8434)")

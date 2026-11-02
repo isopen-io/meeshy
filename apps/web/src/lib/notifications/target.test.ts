@@ -5,7 +5,7 @@ import { notificationTarget, pushTapTarget, resolveTarget } from './target';
 
 /**
  * OÙ MÈNE UNE NOTIFICATION (#6288) — miroir de `NotificationContentRouter`
- * (`apps/ios/Meeshy/Features/Main/Navigation/NotificationContentRouter.swift`).
+ * (`apps/ios/Meeshy/Features/Navigation/NotificationContentRouter.swift`).
  *
  * La règle d'iOS tient en une phrase, et c'est elle que ces témoins gardent :
  * **le TYPE n'est pas un discriminant d'entité.** `story_thread_reply` est émis
@@ -142,6 +142,14 @@ describe('les autres familles', () => {
     expect(notificationTarget(record({ type: 'game_mission_window' }))).toEqual(expected);
     expect(resolveTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
     expect(pushTapTarget({ type: 'game_mission_window', route: 'progression' })).toEqual(expected);
+  });
+
+  /* LES MOMENTS À IMMORTALISER (#10175, § 5.16.4) — une étape franchie app fermée s'annonce par UNE notification
+     groupée ; son toucher ouvre le CARNET, là où l'étape se photographie, jamais le hub que nomme l'indice. */
+  test('une notification « moments à immortaliser » ouvre le carnet, malgré l’indice `progression` du serveur', () => {
+    expect(notificationTarget(record({ type: 'game_photo_moment' }))).toEqual({ route: 'progressionCarnet' });
+    expect(resolveTarget({ type: 'game_photo_moment', route: 'progression' })).toEqual({ route: 'progressionCarnet' });
+    expect(pushTapTarget({ type: 'game_photo_moment', route: 'progression' })).toEqual({ route: 'progressionCarnet' });
   });
 
   test('un tap de bannière du jeu atterrit sur la même page', () => {

@@ -106,4 +106,47 @@ final class PlaybackResumeLawTests: XCTestCase {
     func test_victim_emptyPool_isNil() {
         XCTAssertNil(PlayerPoolEviction.victim(order: [], distances: ["a": 1]))
     }
+
+    // MARK: - Un lecteur qui serait évincé aussitôt ne se prépare pas (#9882)
+
+    func test_admits_whileThePoolHasRoom() {
+        XCTAssertTrue(PlayerPoolEviction.admits(
+            candidate: "conversation", order: ["plusOne"], distances: ["plusOne": 1], capacity: 3))
+    }
+
+    /// Le pool tient les voisins du réel affiché : une vidéo de conversation
+    /// (aucune distance déclarée) n'y prend la place de personne, et ne
+    /// dépense donc aucun décodeur pour un lecteur jeté à l'insertion.
+    func test_admits_aConversationPlayer_neverAgainstTheReelNeighbours() {
+        XCTAssertFalse(PlayerPoolEviction.admits(
+            candidate: "conversation",
+            order: ["minusOne", "plusOne", "plusTwo"],
+            distances: ["minusOne": -1, "plusOne": 1, "plusTwo": 2],
+            capacity: 3))
+    }
+
+    func test_admits_aNearerNeighbour_overAFartherOne() {
+        XCTAssertTrue(PlayerPoolEviction.admits(
+            candidate: "plusOne",
+            order: ["minusOne", "plusTwo", "story"],
+            distances: ["minusOne": -1, "plusOne": 1, "plusTwo": 2],
+            capacity: 3))
+        XCTAssertFalse(PlayerPoolEviction.admits(
+            candidate: "plusThree",
+            order: ["minusOne", "plusOne", "plusTwo"],
+            distances: ["minusOne": -1, "plusOne": 1, "plusTwo": 2, "plusThree": 3],
+            capacity: 3))
+    }
+
+    /// Sans distance déclarée (aucun lecteur de réels ouvert), l'ordre
+    /// d'arrivée reste la règle : le nouveau venu chasse le plus ancien.
+    func test_admits_withoutDistances_followsTheArrivalOrder() {
+        XCTAssertTrue(PlayerPoolEviction.admits(
+            candidate: "story", order: ["a", "b", "c"], distances: [:], capacity: 3))
+    }
+
+    func test_admits_aPlayerAlreadyHeld() {
+        XCTAssertTrue(PlayerPoolEviction.admits(
+            candidate: "plusOne", order: ["plusOne"], distances: [:], capacity: 1))
+    }
 }

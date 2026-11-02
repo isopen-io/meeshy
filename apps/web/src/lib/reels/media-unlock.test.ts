@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { createReelMediaUnlocker } from './media-unlock';
+import { createReelMediaUnlocker, reelUnlockScopeOf } from './media-unlock';
 
 /**
  * LE GESTE DÉVERROUILLE LES RÉELS VOISINS (iOS) — WebKit n'autorise la lecture
@@ -84,5 +84,23 @@ describe('createReelMediaUnlocker — un geste, chaque voisin béni une fois', (
     pager.append(reel('near', 'b', log, { playing: true }));
     createReelMediaUnlocker().unlock(pager);
     expect(log).toEqual([]);
+  });
+});
+
+describe('sur Android, N±2 n’est jamais réveillé par la bénédiction (#11308)', () => {
+  test('Chromium et Gecko autorisent le son sur l’activation du DOCUMENT : le play() d’un N±2 en `preload="none"` ne ferait que le charger et réveiller son décodeur', () => {
+    const log: Log = [];
+    const pager = window.document.createElement('div');
+    pager.append(reel('near', 'b', log), reel('warm', 'c', log));
+    createReelMediaUnlocker({ scope: 'near' }).unlock(pager);
+    expect(log).toEqual(['play:b:muted', 'pause:b']);
+  });
+
+  test('la coque Android et un navigateur Android bénissent N±1 seulement ; WebKit garde N±1 et N±2', () => {
+    expect(reelUnlockScopeOf({ platform: 'android', userAgent: 'Mozilla/5.0 (Linux; Android 14; wv) AppleWebKit/537.36' })).toBe('near');
+    expect(reelUnlockScopeOf({ platform: undefined, userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/129.0 Mobile' })).toBe('near');
+    expect(reelUnlockScopeOf({ platform: 'ios', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15' })).toBe('mounted');
+    expect(reelUnlockScopeOf({ platform: undefined, userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Safari/605.1.15' })).toBe('mounted');
+    expect(reelUnlockScopeOf({ platform: undefined, userAgent: undefined })).toBe('mounted');
   });
 });

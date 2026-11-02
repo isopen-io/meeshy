@@ -5,6 +5,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useLoudnessLevel } from '@/lib/media/loudness-level';
 import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
 import { useOptionalRoute } from '@/lib/router';
 import {
@@ -98,6 +99,8 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
     },
     [bind],
   );
+  const trackSrc = carried.trackUrl === '' ? '' : attachmentSrc(carried.trackUrl);
+  const loudness = useLoudnessLevel({ element, lufs: attachment.loudnessLufs, playsOriginal: carried.trackUrl === attachment.fileUrl, src: trackSrc });
 
   /* La télécommande de la bulle : des verbes STABLES, qui appellent toujours la
      dernière commande (`toggle` change d'identité avec l'état). */
@@ -136,12 +139,14 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
         style={{ maxWidth: 420, backgroundColor: 'var(--ios-indigo-600)', color: 'var(--ios-on-brand)' }}
       >
         <audio
+          key={loudness.remountKey}
           ref={bindAudio}
           preload="auto"
           data-np-attachment={attachment.id}
           data-mini-audio-track={carried.trackLanguage}
           className="hidden"
-          {...(carried.trackUrl === '' ? {} : { src: attachmentSrc(carried.trackUrl) })}
+          {...loudness.attributes}
+          {...(trackSrc === '' ? {} : { src: trackSrc })}
         />
         <button
           type="button"

@@ -1,3 +1,5 @@
+import type { DeviceTier } from '../device/capability-tier';
+
 /**
  * LA FENÊTRE DE PRÉCHARGEMENT DES RÉELS (#9702) — PURE, et jumelle de
  * `ReelPreloadWindow.swift` (iOS) : toute évolution touche les deux.
@@ -16,6 +18,9 @@
  *   revient jamais n'a besoin que du plancher.
  * - **La contrainte plafonne** : données économisées, 2G ou batterie faible
  *   rendent le plancher ; 3G ou peu de mémoire plafonnent à quatre.
+ * - **Le tier de l'appareil plafonne en dernier** (W10, jumeau de
+ *   `ReelPreloadWindow.radius(for:)`) : bas ⇒ quatre, moyen ⇒ six ; haut, pro
+ *   et appareil non classé gardent le maximum historique.
  *
  * Les PALIERS (`preloadTierOf`) suivent la rareté de la ressource : un
  * décodeur matériel est cher et borné (N±1 seulement le tient), un élément
@@ -28,6 +33,7 @@ const HISTORY_LENGTH = 12;
 /** Un réel traversé d'un trait par le défilement n'a pas été « regardé ». */
 const TRAVERSAL_MS = 150;
 const CONSTRAINED_RADIUS = 4;
+const MID_TIER_RADIUS = 6;
 const LOW_MEMORY_GB = 2;
 
 export type VisitDirection = 'forward' | 'backward';
@@ -43,6 +49,8 @@ export type PreloadContext = {
   readonly network: PreloadNetwork;
   readonly deviceMemoryGb?: number;
   readonly lowPower?: boolean;
+  /** Le tier de capacité (W10) ; absent = non classé, aucun plafond. */
+  readonly tier?: DeviceTier;
 };
 
 export type PreloadWindow = { readonly ahead: number; readonly behind: number };
@@ -67,13 +75,15 @@ function cadenceRadius(visits: readonly ReelVisit[]): number {
   return Math.round(PRELOAD_MIN_RADIUS + ((10_000 - dwell) / 9_000) * (PRELOAD_MAX_RADIUS - PRELOAD_MIN_RADIUS));
 }
 
+const tierRadius = (tier: DeviceTier | undefined): number => (tier === 'low' ? CONSTRAINED_RADIUS : tier === 'mid' ? MID_TIER_RADIUS : PRELOAD_MAX_RADIUS);
+
 function constraintCap(context: PreloadContext): number {
-  const { network, deviceMemoryGb, lowPower } = context;
+  const { network, deviceMemoryGb, lowPower, tier } = context;
   if (lowPower === true || network.saveData === true) return PRELOAD_MIN_RADIUS;
   if (network.effectiveType === 'slow-2g' || network.effectiveType === '2g') return PRELOAD_MIN_RADIUS;
   if (network.effectiveType === '3g') return CONSTRAINED_RADIUS;
   if (deviceMemoryGb !== undefined && deviceMemoryGb <= LOW_MEMORY_GB) return CONSTRAINED_RADIUS;
-  return PRELOAD_MAX_RADIUS;
+  return tierRadius(tier);
 }
 
 export function preloadWindowOf(context: PreloadContext): PreloadWindow {

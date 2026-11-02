@@ -38,6 +38,7 @@ const fr = {
   'listFilter.pinned': 'Épinglés',
   'listFilter.archived': 'Archivées',
   'listRow.muted': 'En sourdine',
+  'listRow.endToEnd': 'Chiffrée de bout en bout',
   'listRow.announce.pin.on': 'Conversation épinglée',
   'listRow.announce.pin.off': 'Conversation désépinglée',
   'listRow.announce.mute.on': 'Conversation en sourdine',

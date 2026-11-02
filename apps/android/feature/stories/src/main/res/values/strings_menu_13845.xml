@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_preview">Preview</string>
+    <string name="composer_more_pick_background">Choose a background</string>
+    <string name="composer_more_remove_background">Remove the scene background</string>
+    <string name="composer_more_clear_all">Clear all</string>
+    <string name="composer_clear_all_title">Clear everything?</string>
+    <string name="composer_clear_all_message">Every slide starts over, blank, on the neutral background. Undo brings the slides back.</string>
+    <string name="composer_clear_all_cancel">Cancel</string>
+    <string name="composer_media_from_library">Photo library</string>
+    <string name="composer_media_from_files">From files</string>
+    <string name="composer_media_sources">Choose a source</string>
+    <string name="composer_preview_close">Close the preview</string>
+    <string name="composer_preview_previous">Previous slide</string>
+    <string name="composer_preview_next">Next slide</string>
+</resources>

@@ -86,7 +86,7 @@ Deux singletons SDK transportent le temps réel : `MessageSocketManager` (~70 li
 **Impact.** Retour de background sur l'écran conversations : tray périmé — stories supprimées pendant la coupure toujours affichées (tap → « story introuvable »), nouvelles stories absentes — jusqu'à navigation vers le feed ou pull-to-refresh.
 
 **Correctif pas-à-pas.**
-1. `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`, dans `subscribeToSocketEvents()` juste après la garde `guard socketCancellables.isEmpty` (l.2420), ajouter :
+1. `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift`, dans `subscribeToSocketEvents()` juste après la garde `guard socketCancellables.isEmpty` (l.2420), ajouter :
    ```swift
    socialSocket.didReconnect
        .receive(on: DispatchQueue.main)

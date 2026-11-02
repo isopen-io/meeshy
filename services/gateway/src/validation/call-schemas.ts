@@ -468,6 +468,18 @@ export const socketCallAnalyticsSchema = z.object({
   deviceModel: z.string().max(100),
   isVideo: z.boolean(),
   endReason: z.string().max(50),
+  // #11277 — la QUALITÉ, tous optionnels (absents des clients d'avant) ; la
+  // forme est celle de `CallAnalyticsEvent` (`@meeshy/shared/types/call-analytics`).
+  freezeCount: z.number().int().nonnegative().optional(),
+  totalFreezesDuration: z.number().nonnegative().optional(),
+  qualityLimitationReason: z.string().max(20).optional(),
+  jitterBufferDelay: z.number().nonnegative().optional(),
+  concealedSamples: z.number().int().nonnegative().optional(),
+  nackCount: z.number().int().nonnegative().optional(),
+  pliCount: z.number().int().nonnegative().optional(),
+  mos: z.number().min(1).max(5).optional(),
+  candidateType: z.string().max(20).optional(),
+  relayProtocol: z.string().max(20).optional(),
 });
 export type SocketCallAnalyticsInput = z.infer<typeof socketCallAnalyticsSchema>;
 

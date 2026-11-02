@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.StoryKeyframe
  * The animated transform of a canvas clip at one playback instant. Every channel
  * is fully resolved: a channel with no keyframes falls back to the clip's static
  * base value, so a caller can read `x`/`y`/`scale`/`opacity` unconditionally.
+ * [scale] is the RENDERED scale: the clip's base scale times the keyframe factor (#14316).
  */
 data class ResolvedKeyframeTransform(
     val x: Double,
@@ -22,8 +23,11 @@ data class ResolvedKeyframeTransform(
  * A wire [StoryKeyframe] carries four independently-optional channels (`x`, `y`,
  * `scale`, `opacity`); a point that keys only one leaves the others `null`, and
  * that channel is then ignored — exactly as a position-only point ignores scale.
+ * **A keyed scale is a FACTOR of the clip's base scale**, never a replacement (#14316, iso iOS
+ * `StoryRenderer.applyKeyframeOverrides`, web `objectPose`; witness `packages/shared/fixtures/keyframe-scale.vectors.json`).
  * Each present channel is projected onto its own [KeyframeChannelSample] list and
- * handed to [StoryKeyframeInterpolator].
+ * handed to [StoryKeyframeInterpolator]. **Before a channel's first keyframe it yields
+ * to the base value** (no jump at the start of the clip).
  *
  * **Deliberate improvement over iOS.** iOS subtracts the clip's `startTime` from
  * the playhead for the *position* channel but forgets to for `scale`/`opacity`
@@ -53,19 +57,36 @@ object StoryKeyframeResolver {
         val frames = keyframes?.takeIf { it.isNotEmpty() } ?: return null
         val local = currentTime - startTime
 
-        val x = StoryKeyframeInterpolator.interpolate(frames.channel { it.x }, local)
-        val y = StoryKeyframeInterpolator.interpolate(frames.channel { it.y }, local)
-        val scale = StoryKeyframeInterpolator.interpolate(frames.channel { it.scale }, local)
-        val opacity = StoryKeyframeInterpolator.interpolate(frames.channel { it.opacity }, local)
+        val x = frames.heldChannel(local) { it.x }
+        val y = frames.heldChannel(local) { it.y }
+        val scale = frames.heldChannel(local) { it.scale }
+        val opacity = frames.heldChannel(local) { it.opacity }
 
         if (x == null && y == null && scale == null && opacity == null) return null
 
         return ResolvedKeyframeTransform(
             x = x ?: baseX,
             y = y ?: baseY,
-            scale = scale ?: baseScale,
+            scale = baseScale * (scale ?: 1.0),
             opacity = opacity ?: baseOpacity,
         )
+    }
+
+    /**
+     * Valeur d'un canal à l'instant local [local], ou `null` AVANT sa première keyframe : le
+     * canal garde alors la valeur de base de l'objet (miroir de `applyKeyframes` iOS). Chaque
+     * canal (x, y, échelle, opacité) est armé indépendamment — un texte peut animer son échelle
+     * dès t = 1 et son opacité dès t = 0. Sans ce maintien, l'objet sautait à la première valeur
+     * keyframée dès t = 0.
+     */
+    private inline fun List<StoryKeyframe>.heldChannel(
+        local: Float,
+        select: (StoryKeyframe) -> Double?,
+    ): Double? {
+        val samples = channel(select)
+        val first = samples.minOfOrNull { it.time } ?: return null
+        if (local < first) return null
+        return StoryKeyframeInterpolator.interpolate(samples, local)
     }
 
     private inline fun List<StoryKeyframe>.channel(

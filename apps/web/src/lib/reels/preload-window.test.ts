@@ -188,3 +188,22 @@ describe('primeTargetsOf — ce que l’amorceur reçoit, le plus proche d’abo
     expect(targets.map((t) => t.url)).toEqual(['b', 'x']);
   });
 });
+
+describe('preloadWindowOf - le tier de l\'appareil plafonne en dernier (W10, jumeau d\'iOS)', () => {
+  const frantic = visits([400, 500, 300, 450, 380, 420]);
+
+  test('un appareil bas plafonne a quatre, un moyen a six, haut et pro gardent le maximum', () => {
+    expect(preloadWindowOf(context({ visits: frantic, tier: 'low' })).ahead).toBe(4);
+    expect(preloadWindowOf(context({ visits: frantic, tier: 'mid' })).ahead).toBe(6);
+    expect(preloadWindowOf(context({ visits: frantic, tier: 'high' })).ahead).toBe(10);
+    expect(preloadWindowOf(context({ visits: frantic, tier: 'pro' })).ahead).toBe(10);
+  });
+
+  test('un appareil non classe ne perd rien de ce qu\'il avait', () => {
+    expect(preloadWindowOf(context({ visits: frantic })).ahead).toBe(10);
+  });
+
+  test('le plancher tient sur un appareil bas', () => {
+    expect(preloadWindowOf(context({ tier: 'low' }))).toEqual({ ahead: 2, behind: 2 });
+  });
+});

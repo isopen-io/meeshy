@@ -26,6 +26,40 @@ class LocalizationRulesTest {
     private fun List<Finding>.of(rule: Rule) = filter { it.rule == rule }
 
     @Test
+    fun `an exempted locale may omit the keys of legal xml and no others`() {
+        val module = moduleOf(
+            file("values", """<string name="legal_title">Terms</string>""", fileName = "legal.xml"),
+            file("values", """<string name="hello">Hello</string>"""),
+            file("values-de", """<string name="other">Anderes</string>"""),
+        )
+
+        val missing = LocalizationRules.check(module, emptyList(), setOf("de")).of(Rule.MISSING_KEY)
+
+        assertThat(missing.map { it.key }).containsExactly("hello")
+    }
+
+    @Test
+    fun `a locale that is not exempted still needs the legal keys`() {
+        val module = moduleOf(
+            file("values", """<string name="legal_title">Terms</string>""", fileName = "legal.xml"),
+            file("values-de", """<string name="other">Anderes</string>"""),
+        )
+
+        val missing = LocalizationRules.check(module, emptyList(), setOf("it")).of(Rule.MISSING_KEY)
+
+        assertThat(missing.map { it.key }).contains("legal_title")
+    }
+
+    @Test
+    fun `an exemption can only target legal xml`() {
+        assertThat(LocalizationRules.parseLegalExemptions(listOf("de legal.xml", "ar legal.xml")))
+            .containsExactly("de", "ar")
+        assertThrows(IllegalArgumentException::class.java) {
+            LocalizationRules.parseLegalExemptions(listOf("de strings.xml"))
+        }
+    }
+
+    @Test
     fun `a key missing from a present locale names the module, the key and the locale`() {
         val module = moduleOf(
             file("values", """<string name="hello">Hello</string><string name="bye">Bye</string>"""),

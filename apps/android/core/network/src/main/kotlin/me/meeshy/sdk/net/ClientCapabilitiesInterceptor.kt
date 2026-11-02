@@ -1,5 +1,7 @@
 package me.meeshy.sdk.net
 
+import me.meeshy.sdk.model.net.ClientCapabilities
+import me.meeshy.sdk.model.net.ClientCapability
 import okhttp3.Interceptor
 import okhttp3.Response
 
@@ -23,14 +25,19 @@ import okhttp3.Response
  * l'environnement ne la fait varier — d'où sa place dans un intercepteur nu
  * plutôt que dans une configuration.
  */
-class ClientCapabilitiesInterceptor : Interceptor {
+class ClientCapabilitiesInterceptor(
+    private val capabilities: List<ClientCapability> = ClientCapabilities.declared,
+) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (request.header(CANVAS_CAPS_HEADER) != null) return chain.proceed(request)
-        return chain.proceed(
-            request.newBuilder().header(CANVAS_CAPS_HEADER, CANVAS_CAPS_LEVEL).build(),
-        )
+        val builder = request.newBuilder()
+        if (request.header(CANVAS_CAPS_HEADER) == null) builder.header(CANVAS_CAPS_HEADER, CANVAS_CAPS_LEVEL)
+        val declared = ClientCapabilities.headerValue(capabilities)
+        if (declared != null && request.header(ClientCapabilities.HEADER_NAME) == null) {
+            builder.header(ClientCapabilities.HEADER_NAME, declared)
+        }
+        return chain.proceed(builder.build())
     }
 
     private companion object {

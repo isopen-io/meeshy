@@ -7,7 +7,9 @@ import CoreGraphics
 /// parcouru vers la gauche depuis le début du geste, et le champ de saisie
 /// cède d'autant — progressivement, et le doigt qui revient la rétrécit. Le
 /// champ garde toujours son micro (une cible de 44 pt) et le début de son
-/// texte d'invite. Au relâcher, la bande reprend sa largeur de repos.
+/// texte d'invite. Au relâcher, la bande GARDE sa largeur (#12440, retour
+/// porteur 2026-10-23) : elle ne reprend sa largeur de repos que lorsqu'on
+/// touche le texte ou qu'on choisit un émoji.
 ///
 /// Les emojis restent sous le doigt : la bande grandit par son bord gauche, son
 /// contenu se décale donc d'autant dans le cadre (`contentOffset`).
@@ -41,5 +43,30 @@ nonisolated enum QuickEmojiExpansion {
     /// suivent le doigt (`scroll`, borné) pendant que le cadre grandit.
     static func contentOffset(scroll: CGFloat, bandWidth: CGFloat, restingWidth: CGFloat) -> CGFloat {
         scroll + max(bandWidth - restingWidth, 0)
+    }
+
+    /// Ce qui arrive à la bande élargie (#12440).
+    enum Event: Equatable {
+        /// Le doigt quitte la bande, d'une largeur `bandWidth`.
+        case released(bandWidth: CGFloat)
+        /// Le texte est touché, ou prend le focus.
+        case textTouched
+        /// Un émoji part, de la rangée ou de sa feuille (recherche comprise).
+        case emojiChosen
+    }
+
+    /// L'élargissement que la bande GARDE après `event`, au-delà de sa largeur
+    /// de repos.
+    static func heldWidth(after event: Event, restingWidth: CGFloat) -> CGFloat {
+        switch event {
+        case .released(let bandWidth): max(bandWidth - restingWidth, 0)
+        case .textTouched, .emojiChosen: 0
+        }
+    }
+
+    /// Le défilement vers la gauche dont la bande tient compte : ce qu'elle
+    /// tenait déjà, plus ce que le geste en cours a parcouru.
+    static func leftwardTravel(held: CGFloat, gestureTravel: CGFloat) -> CGFloat {
+        held + gestureTravel
     }
 }

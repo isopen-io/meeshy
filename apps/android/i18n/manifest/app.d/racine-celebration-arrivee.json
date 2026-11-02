@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "arrival.celebration.title", "androidName": "arrival_celebration_title", "status": "candidate" },
+        { "androidName": "arrival_celebration_lead", "status": "android-only" },
+        { "androidName": "arrival_celebration_skip", "status": "android-only" }
+      ]
+    }
+  }
+}

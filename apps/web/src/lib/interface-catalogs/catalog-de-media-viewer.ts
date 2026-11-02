@@ -9,6 +9,7 @@ const deMediaViewer = {
   'media.viewer.react_with': 'Mit {emoji} reagieren',
   'media.viewer.reply': 'Antworten',
   'media.viewer.compose': 'Mit diesem Medium erstellen',
+  'media.viewer.imager': 'Als Bild',
   'media.viewer.saved': 'Gespeichert',
   'media.viewer.save_failed': 'Speichern nicht möglich',
   'media.viewer.offline': 'Offline – versuche es erneut, sobald du verbunden bist',

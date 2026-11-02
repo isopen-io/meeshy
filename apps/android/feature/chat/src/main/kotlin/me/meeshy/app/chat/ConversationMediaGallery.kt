@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.MessageExit
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.viewer.ImageViewerAuthor
 
 /**
  * One page of the fullscreen media gallery: the image [url] plus the optional
@@ -22,9 +24,21 @@ public data class GalleryPage(
     val thumbnailUrl: String? = null,
     val caption: String? = null,
     val senderName: String? = null,
+    /** Le compte et la photo de l'auteur (point de présence vivant) ; `null` sans auteur nommé. */
+    val author: ImageViewerAuthor? = null,
     val createdAtIso: String? = null,
     /** Author-authored accessibility description (`MessageAttachment.alt`, #6813); `null` falls back to the viewer's generic label. */
     val alt: String? = null,
+    /**
+     * A view-once or blurred piece (iOS `mediaExitGate`): shown because its own bubble
+     * opened it, but never saved nor shared out of Meeshy.
+     */
+    val isProtected: Boolean = false,
+    /**
+     * Une pièce qui disparaît (vue unique, flou, flamme — #9574) : la visionneuse, fenêtre à part, s'exclut des
+     * captures et ne copie rien dans le cache disque d'images tant qu'elle la montre.
+     */
+    val shieldsCapture: Boolean = false,
 )
 
 /**
@@ -63,6 +77,9 @@ public data class ConversationGallery(
      */
     val senderNames: List<String?> get() = pages.map { it.senderName }
 
+    /** The per-page author faces, positionally aligned with [imageUrls]; `null` where no author is named. */
+    val authorIdentities: List<ImageViewerAuthor?> get() = pages.map { it.author }
+
     /**
      * The per-page sent-timestamps (ISO-8601), positionally aligned with
      * [imageUrls]; a page whose owning message has no timestamp holds `null`.
@@ -75,6 +92,12 @@ public data class ConversationGallery(
      * viewer falls back to its generic localized image label).
      */
     val altTexts: List<String?> get() = pages.map { it.alt }
+
+    /** Per page, whether the piece may leave Meeshy (save, share) — false for a protected one. */
+    val exportable: List<Boolean> get() = pages.map { !it.isProtected }
+
+    /** Android ne protège qu'une fenêtre entière : une seule page qui disparaît ferme celle de la visionneuse. */
+    val shieldsCapture: Boolean get() = pages.any { it.shieldsCapture }
 
     /** True when the conversation carries no showable image — nothing to open. */
     val isEmpty: Boolean get() = pages.isEmpty()
@@ -92,6 +115,11 @@ public data class ConversationGallery(
  * out-of-range or negative index never escapes the message). When the tapped
  * message is unknown, deleted, or carries no image, the gallery still opens on
  * the whole conversation from its first image rather than collapsing to nothing.
+ *
+ * A view-once or blurred message (iOS `galleryAttachments`) never joins the series
+ * opened from another photo: its bubble hides it, and a swipe must not show it in
+ * the clear. It enters only when its OWN bubble opened the viewer — then as a
+ * non-exportable page — and never again once this reader has burnt it.
  *
  * Each page carries its owning message's text as the caption (trimmed, null when
  * blank) — every image of a multi-image message shares that one caption, exactly
@@ -111,13 +139,22 @@ public object ConversationMediaGallery {
         var matched = false
         for (message in messages) {
             if (message.isDeleted) continue
+            val isTapped = message.messageId == messageId
+            val isProtected = message.isProtectedMedia
+            if (isProtected && (!isTapped || message.isViewOnceOpenedByMe)) continue
             val images = message.images
-            if (!matched && message.messageId == messageId && images.isNotEmpty()) {
+            if (!matched && isTapped && images.isNotEmpty()) {
                 startIndex = pages.size + imageIndex.coerceIn(0, images.lastIndex)
                 matched = true
             }
             val caption = message.text.trim().ifBlank { null }
             val senderName = message.senderName?.trim()?.ifBlank { null }
+            val author = senderName?.let {
+                ImageViewerAuthor(
+                    userId = message.senderProfile?.userId?.takeUnless { message.isOutgoing },
+                    avatarUrl = message.senderAvatarUrl,
+                )
+            }
             val createdAtIso = message.createdAtIso?.trim()?.ifBlank { null }
             images.forEach {
                 pages.add(
@@ -126,8 +163,11 @@ public object ConversationMediaGallery {
                         thumbnailUrl = it.thumbnailUrl,
                         caption = caption,
                         senderName = senderName,
+                        author = author,
                         createdAtIso = createdAtIso,
                         alt = it.alt,
+                        isProtected = isProtected || !message.exitOffer.offers(MessageExit.SAVE),
+                        shieldsCapture = isProtected || message.exitOffer.capture.shieldsCapture(),
                     ),
                 )
             }
@@ -136,3 +176,6 @@ public object ConversationMediaGallery {
         return ConversationGallery(pages, startIndex.coerceIn(0, pages.lastIndex))
     }
 }
+
+private val BubbleContent.isProtectedMedia: Boolean
+    get() = isViewOnce || isBlurred || blurReveal != null

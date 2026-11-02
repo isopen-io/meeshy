@@ -23,7 +23,8 @@
   },
   "scripts": {
     "generate:ios": "node scripts/generate-from-ios.mjs",
-    "check": "node scripts/generate-from-ios.mjs --check && node scripts/check-jetons.mjs",
+    "generate:android": "node scripts/generate-android-from-ios.mjs",
+    "check": "node scripts/generate-from-ios.mjs --check && node scripts/generate-android-from-ios.mjs --check && node scripts/check-jetons.mjs",
     "check:jetons": "node scripts/check-jetons.mjs",
     "test": "bun test scripts/"
   }

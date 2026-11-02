@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_history_error">Erro ao carregar</string>
+    <string name="call_history_loading_more">Carregando chamadas anteriores</string>
+    <string name="call_history_redial">Ligar de volta</string>
+    <string name="call_history_redial_hint">Abre a escolha entre chamada de voz e de vídeo</string>
+    <string name="call_detail_type">Tipo</string>
+    <string name="call_detail_date">Data</string>
+    <string name="call_detail_duration">Duração</string>
+    <string name="call_detail_data">Dados</string>
+    <string name="call_detail_phone">Número</string>
+    <string name="call_detail_type_audio">Chamada de voz</string>
+    <string name="call_detail_type_video">Chamada de vídeo</string>
+</resources>

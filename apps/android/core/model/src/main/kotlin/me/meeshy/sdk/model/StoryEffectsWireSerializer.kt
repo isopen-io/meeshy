@@ -77,12 +77,21 @@ object StoryEffectsWireSerializer : KSerializer<StoryEffects> {
         val element = input.decodeJsonElement()
         val document = element as? JsonObject ?: return StoryEffects()
         val mark = (document["v"] as? JsonPrimitive)?.intOrNull
-            ?: return input.json.decodeFromJsonElement(legacy, document)
-        if (mark < 3) return input.json.decodeFromJsonElement(legacy, JsonObject(document - LAYOUT_KEY))
+            ?: return decodeLegacy(input, document)
+        if (mark < 3) return decodeLegacy(input, JsonObject(document - LAYOUT_KEY))
         val canvas = runCatching { forwardTolerant.decodeFromJsonElement(CanvasV3.serializer(), document) }
             .getOrNull() ?: return StoryEffects()
         return StoryEffects.rendering(canvas, sceneIndex = 0)
     }
+
+    /**
+     * La forme v1 se lit élément par élément (les familles d'objets sont tolérantes) ;
+     * un document dont la FORME même est fausse (une famille qui n'est pas une liste, un
+     * fond qui n'est pas une chaîne) se lit vide plutôt que d'emporter le post entier.
+     */
+    private fun decodeLegacy(input: JsonDecoder, document: JsonObject): StoryEffects =
+        runCatching { input.json.decodeFromJsonElement(legacy, document) }
+            .getOrElse { StoryEffects() }
 
     override fun serialize(encoder: Encoder, value: StoryEffects) {
         encoder.encodeSerializableValue(legacy, value)

@@ -263,6 +263,45 @@ describe('POST /posts/from-attachment — iOS-01 : refus d\'un média protégé'
     await app.close();
   };
 
+  it("refuse de publier la pièce d'un expéditeur avec qui un blocage existe, dans un sens ou dans l'autre (#14242)", async () => {
+    const SENDER_USER = '507f1f77bcf86cd799439099';
+    const blocked = jest.fn<any>(async (args: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
+      args.where.OR.some((c) => c.id === SENDER_USER && c.blockedUserIds.has === USER_ID) ? { id: SENDER_USER } : null);
+    const { app } = await buildApp({
+      messageAttachment: { findUnique: jest.fn<any>().mockResolvedValue(makeAttachmentRow({}, { senderId: '507f1f77bcf86cd7994390aa', sender: { userId: '507f1f77bcf86cd799439099' } })) },
+      user: { findFirst: blocked },
+    });
+    const res = await app.inject({ method: 'POST', url: '/posts/from-attachment', payload: { attachmentId: ATTACHMENT_ID } });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('ATTACHMENT_NOT_FOUND');
+    expect(mockDuplicate).not.toHaveBeenCalled();
+    expect(mockCreatePost).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("un expéditeur anonyme (participant sans compte) n'a rien à bloquer (#14242)", async () => {
+    mockCreatePost.mockResolvedValue({ id: 'post-1', type: 'POST', authorId: USER_ID, visibility: 'PUBLIC' });
+    const { app } = await buildApp({
+      messageAttachment: { findUnique: jest.fn<any>().mockResolvedValue(makeAttachmentRow({}, { senderId: '507f1f77bcf86cd7994390aa', sender: { userId: null } })) },
+      user: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'x' }) },
+    });
+    const res = await app.inject({ method: 'POST', url: '/posts/from-attachment', payload: { attachmentId: ATTACHMENT_ID } });
+    expect(res.statusCode).not.toBe(404);
+    await app.close();
+  });
+
+  it("publie la pièce d'un expéditeur sans blocage (#14242)", async () => {
+    mockCreatePost.mockResolvedValue({ id: 'post-1', type: 'POST', authorId: USER_ID, visibility: 'PUBLIC' });
+    const { app } = await buildApp({
+      messageAttachment: { findUnique: jest.fn<any>().mockResolvedValue(makeAttachmentRow({}, { senderId: '507f1f77bcf86cd7994390aa', sender: { userId: '507f1f77bcf86cd799439099' } })) },
+      user: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    });
+    const res = await app.inject({ method: 'POST', url: '/posts/from-attachment', payload: { attachmentId: ATTACHMENT_ID } });
+    expect(res.statusCode).not.toBe(404);
+    expect(mockDuplicate).toHaveBeenCalled();
+    await app.close();
+  });
+
   it('refuse une pièce jointe à VUE UNIQUE au niveau ATTACHEMENT', async () => {
     await expectRefused(makeAttachmentRow({ isViewOnce: true }));
   });

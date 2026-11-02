@@ -65,8 +65,32 @@ class EmojiCatalogTest {
     @Test
     fun `default quick reactions are the iOS strip`() {
         assertThat(EmojiCatalog.defaultQuickReactions)
-            .containsExactly("❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍")
+            .containsExactly(
+                "👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉",
+                "💯", "😍", "👀", "🤣", "💪", "✨", "🥺",
+            )
             .inOrder()
+        assertThat(EmojiCatalog.defaultQuickReactions).hasSize(15)
+    }
+
+    @Test
+    fun `the double tap emoji is the heart`() {
+        assertThat(EmojiCatalog.DOUBLE_TAP_EMOJI).isEqualTo("❤️")
+        assertThat(EmojiCatalog.defaultQuickReactions).contains(EmojiCatalog.DOUBLE_TAP_EMOJI)
+    }
+
+    @Test
+    fun `the reaction picker has six tabs in iOS order`() {
+        assertThat(ReactionPickerCategories.all.map { it.id.key })
+            .containsExactly("reactions", "faces", "gestures", "hearts", "animals", "objects")
+            .inOrder()
+        assertThat(ReactionPickerCategories.all.all { it.emojis.isNotEmpty() }).isTrue()
+    }
+
+    @Test
+    fun `the reaction bar defaults to scale one and a half with a 1_35 hover`() {
+        assertThat(ReactionBarLaw.DEFAULT_SCALE).isEqualTo(1.5f)
+        assertThat(ReactionBarLaw.HOVER_SCALE).isEqualTo(1.35f)
     }
 
     @Test

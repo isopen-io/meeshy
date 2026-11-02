@@ -67,6 +67,9 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     friendRequest: {
       findMany: jest.fn(),
     },
+    userRelation: { findMany: jest.fn(async () => []) },
+    userContact: { findMany: jest.fn(async () => []) },
+    postReaction: { findMany: jest.fn(async () => []) },
     conversationMessageStats: {
       findUnique: jest.fn(),
     },
@@ -477,46 +480,24 @@ describe('MentionService', () => {
       expect(mockRedis.set).toHaveBeenCalled();
     });
 
-    it('should prioritize conversation members over friends', async () => {
-      const mockMembers = [
-        {
-          user: {
-            id: 'user-1',
-            username: 'member',
-            firstName: 'Member',
-            lastName: 'User',
-            displayName: null,
-            avatar: null,
-          },
-        },
-      ];
+    it('places a known user (friend) before the members of an open conversation (#14052)', async () => {
+      const member = { id: 'user-1', username: 'member', firstName: 'Member', lastName: 'User', displayName: null, avatar: null };
+      const friend = { id: 'user-2', username: 'friend', firstName: 'Friend', lastName: 'User', displayName: null, avatar: null };
 
-      const mockFriendships = [
-        {
-          senderId: currentUserId,
-          receiverId: 'user-2',
-          status: 'accepted',
-          sender: null,
-          receiver: {
-            id: 'user-2',
-            username: 'friend',
-            firstName: 'Friend',
-            lastName: 'User',
-            displayName: null,
-            avatar: null,
-          },
-        },
-      ];
-
-      prisma.participant.findMany.mockResolvedValue(mockMembers);
-      prisma.friendRequest.findMany.mockResolvedValue(mockFriendships);
+      prisma.participant.findMany.mockResolvedValue([{ user: member }]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: currentUserId, receiverId: friend.id, status: 'accepted', sender: null, receiver: friend },
+      ]);
+      prisma.user.findMany.mockImplementation(async ({ where }: { where: { id?: { in?: string[] } } }) =>
+        where.id?.in ? [friend].filter((u) => where.id?.in?.includes(u.id)) : []
+      );
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
 
-      expect(result[0].username).toBe('member');
-      expect(result[0].badge).toBe('conversation');
-      expect(result[1]?.username).toBe('friend');
-      expect(result[1]?.badge).toBe('friend');
+      expect(result.map((s) => [s.username, s.badge, s.group])).toEqual([
+        ['friend', 'friend', 'known'],
+        ['member', 'conversation', 'context'],
+      ]);
     });
 
     it('should filter by query string', async () => {
@@ -876,7 +857,7 @@ describe('MentionService', () => {
 
       await service.invalidateCacheForConversation(conversationId);
 
-      expect(mockRedis.keys).toHaveBeenCalledWith(`mentions:suggestions:v2:${conversationId}:*`);
+      expect(mockRedis.keys).toHaveBeenCalledWith(`mentions:suggestions:v4:${conversationId}:*`);
       expect(mockRedis.del).toHaveBeenCalledTimes(2);
     });
 
@@ -1086,7 +1067,7 @@ describe('MentionService', () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'unknown_type',
-          participants: [],
+          participants: [{ userId: senderId }],
         });
 
         const result = await service.validateMentionPermissions(

@@ -120,6 +120,80 @@ final class CallMontageLayersTests: XCTestCase {
         XCTAssertEqual(Self.colouredPixels(pixels, at: interieur), 0, "noir désature la photo de l'appel : aucun pixel coloré")
     }
 
+    // MARK: - Écran et Mosaïque d'une photo seule (#12589)
+
+    func test_render_screenAlone_cornerIsBezel_centreIsPhoto_bandIsLight() throws {
+        let canvas = CGSize(width: 216, height: 384)
+        let rendu = try XCTUnwrap(CallMontageRenderer.render(
+            style: .screen, portraits: [CallMontagePortrait(id: "a", name: "A", image: Self.photoSombre())],
+            canvas: canvas, caption: CallMontageCaption(title: "Meeshy", subtitle: "", clock: "09:41")))
+        let pixels = Self.rgba(CIImage(cgImage: rendu), size: canvas, context: Self.contexte())
+        let coin = Self.pixelAt(pixels, x: 1, y: 1, width: 216)
+        XCTAssertLessThan(coin.0 + coin.1 + coin.2, 30, "le coin est le bord de l'appareil, noir")
+        let bord = Self.pixelAt(pixels, x: 2, y: 192, width: 216)
+        XCTAssertLessThan(bord.0, 30, "les 3 % de bord noir courent sur toute la hauteur")
+        let centre = Self.pixelAt(pixels, x: 108, y: 200, width: 216)
+        XCTAssertGreaterThan(Int(centre.0), 40, "le centre est la photo (un gris sombre), pas le noir du bord")
+        XCTAssertLessThan(Int(centre.0), 110, "et pas le blanc du reflet")
+        let barre = CallMontageSoloLayout.screen(in: CGRect(origin: .zero, size: canvas)).statusBand
+        let claires = Self.lightPixels(pixels, in: barre, width: 216)
+        XCTAssertGreaterThan(claires, 6, "l'heure et la signature s'écrivent en clair dans la barre d'état")
+    }
+
+    func test_render_screenAlone_reflectionLightensThePhotoInsideItsPolygon() throws {
+        let canvas = CGSize(width: 216, height: 384)
+        let rendu = try XCTUnwrap(CallMontageRenderer.render(
+            style: .screen, portraits: [CallMontagePortrait(id: "a", name: "A", image: Self.photoSombre())],
+            canvas: canvas, caption: legende))
+        let pixels = Self.rgba(CIImage(cgImage: rendu), size: canvas, context: Self.contexte())
+        let reflet = CallMontageSoloLayout.screen(in: CGRect(origin: .zero, size: canvas)).reflection
+        let cx = reflet.map(\.x).reduce(0, +) / CGFloat(reflet.count)
+        let cy = reflet.map(\.y).reduce(0, +) / CGFloat(reflet.count)
+        let dedans = Self.pixelAt(pixels, x: Int(cx), y: Int(cy), width: 216)
+        let dehors = Self.pixelAt(pixels, x: 170, y: 250, width: 216)
+        XCTAssertGreaterThan(Int(dedans.0), Int(dehors.0) + 6, "le reflet éclaircit l'écran de 6 %")
+    }
+
+    func test_render_gridAlone_jointPixelsAreLight() throws {
+        let canvas = CGSize(width: 432, height: 768)
+        let rendu = try XCTUnwrap(CallMontageRenderer.render(
+            style: .grid, portraits: [CallMontagePortrait(id: "a", name: "A", image: Self.photoSombre())],
+            canvas: canvas, caption: legende))
+        let pixels = Self.rgba(CIImage(cgImage: rendu), size: canvas, context: Self.contexte())
+        let mosaique = CallMontageSoloLayout.mosaic(in: CGRect(origin: .zero, size: canvas))
+        let joint = Self.pixelAt(pixels, x: Int(mosaique.tiles[0].maxX + mosaique.joint / 2),
+                                 y: Int(mosaique.tiles[0].midY), width: 432)
+        XCTAssertGreaterThan(Int(joint.0), 190, "le joint entre deux carreaux est blanc")
+        let carreau = Self.pixelAt(pixels, x: Int(mosaique.tiles[4].midX), y: Int(mosaique.tiles[4].midY), width: 432)
+        XCTAssertLessThan(Int(carreau.0), 90, "le carreau reste la photo, à une teinte près")
+        let rangee = Self.pixelAt(pixels, x: Int(mosaique.tiles[4].midX), y: Int(mosaique.tiles[0].maxY + mosaique.joint / 2), width: 432)
+        XCTAssertGreaterThan(Int(rangee.0), 190, "le joint entre deux rangées aussi")
+        XCTAssertGreaterThan(Self.lightPixels(pixels, in: mosaique.band, width: 432), 20, "la signature se lit dans la bande basse")
+    }
+
+    func test_layers_screenAndGridSolo_paintAtEveryAspect() throws {
+        let toiles = [CGSize(width: 150, height: 200), CGSize(width: 108, height: 192), CGSize(width: 160, height: 200),
+                      CGSize(width: 160, height: 160), CGSize(width: 192, height: 108)]
+        let photo = Self.photo()
+        let contexte = Self.contexte()
+        for style in [CallMontageStyle.screen, .grid] {
+            for taille in toiles {
+                let scene = try XCTUnwrap(CallMontageRenderer.layers(style: style, person: personne, caption: legende, size: taille),
+                                          "\(style) \(taille)")
+                XCTAssertEqual(scene.slots.count, 1)
+                let gpu = CallLiveFrameCompositor().compose(scene, videos: [personne.id: CIImage(cgImage: photo)])
+                let pixels = Self.rgba(gpu, size: taille, context: contexte)
+                XCTAssertEqual(Self.translucentPixels(pixels), 0, "\(style) \(taille) : composée, la toile est pleine")
+                let cpu = try XCTUnwrap(CallMontageRenderer.render(
+                    style: style, portraits: [CallMontagePortrait(id: personne.id, name: personne.name, image: photo)],
+                    canvas: taille, caption: legende))
+                let masque = Self.rgba(try XCTUnwrap(scene.slots.first?.mask), size: taille, context: contexte)
+                let ecart = Self.slotGap(Self.rgba(CIImage(cgImage: cpu), size: taille, context: contexte), pixels, mask: masque)
+                XCTAssertLessThan(ecart, 0.05, "\(style) \(taille) : la couche et le rendu direct se superposent")
+            }
+        }
+    }
+
     func test_tone_noirIsLuminosity_othersInColor() {
         XCTAssertEqual(CallMontageRenderer.tone(of: .noir), .luminosity)
         XCTAssertEqual(CallMontageRenderer.tone(of: .polaroid), .color)
@@ -129,6 +203,33 @@ final class CallMontageLayersTests: XCTestCase {
 
     static func contexte() -> CIContext {
         CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
+    }
+
+    static func photoSombre() -> CGImage {
+        let contexte = CGContext(data: nil, width: 300, height: 400, bitsPerComponent: 8, bytesPerRow: 0,
+                                 space: CGColorSpaceCreateDeviceRGB(),
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        contexte.setFillColor(CGColor(gray: 0.2, alpha: 1))
+        contexte.fill(CGRect(x: 0, y: 0, width: 300, height: 400))
+        return contexte.makeImage()!
+    }
+
+    static func pixelAt(_ pixels: [UInt8], x: Int, y: Int, width: Int) -> (UInt8, UInt8, UInt8) {
+        let i = (y * width + x) * 4
+        return (pixels[i], pixels[i + 1], pixels[i + 2])
+    }
+
+    /// Les pixels presque blancs d'une zone : ce que l'écriture claire laisse sur un fond sombre.
+    static func lightPixels(_ pixels: [UInt8], in rect: CGRect, width: Int) -> Int {
+        let hauteur = pixels.count / 4 / width
+        let zone = rect.integral.intersection(CGRect(x: 0, y: 0, width: width, height: hauteur))
+        guard !zone.isNull else { return 0 }
+        return (Int(zone.minY) ..< Int(zone.maxY)).reduce(0) { total, y in
+            total + (Int(zone.minX) ..< Int(zone.maxX)).filter { x in
+                let p = pixelAt(pixels, x: x, y: y, width: width)
+                return p.0 > 200 && p.1 > 200 && p.2 > 200
+            }.count
+        }
     }
 
     static func photo() -> CGImage {

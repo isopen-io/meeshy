@@ -22,7 +22,11 @@ struct ConversationOverlayMenu: View {
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
 
-    var body: some View {
+    var body: some View { overlay }
+
+    /// Le menu tel que l'hôte le monte, rappels compris : les témoins lisent
+    /// ce qui est CÂBLÉ ici, pas une liste recomposée à part (#12625).
+    var overlay: MessageOverlayMenu {
         MessageOverlayMenu(
             message: msg,
             contactColor: accentColor,
@@ -47,9 +51,9 @@ struct ConversationOverlayMenu: View {
             onEdit: { actions.beginEdit(msg) },
             onReply: { actions.reply(msg) },
             onRetry: { Task { await viewModel.retryMessage(messageId: msg.id) } },
-            textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+            textTranslations: UnencryptedMessageGate.translations(of: msg, in: viewModel),
             transcription: viewModel.messageTranscriptions[msg.id],
-            translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+            translatedAudios: UnencryptedMessageGate.translatedAudios(of: msg, in: viewModel),
             threadLanguage: threadLanguage,
             onReact: { emoji in
                 viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
@@ -65,8 +69,12 @@ struct ConversationOverlayMenu: View {
                 actions.compose(msg)
             },
             onSelect: { actions.beginSelection(msg.id) },
+            // « Supprimer » à un geste (#12625) : `requestDeleteMessage`
+            // abandonne un envoi raté tout de suite et ouvre, sinon, la
+            // confirmation des verdicts (pour tous / retirer / pour moi).
+            onDelete: { actions.requestDelete(msg.id) },
             isDirect: isDirect,
-            preferredTranslation: viewModel.preferredTranslation(for: msg.id),
+            preferredTranslation: UnencryptedMessageGate.preferredTranslation(of: msg, in: viewModel),
             mentionDisplayNames: viewModel.mentionDisplayNames,
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
             userRegionalLanguage: AuthManager.shared.currentUser?.regionalLanguage,
@@ -85,6 +93,12 @@ struct ConversationOverlayMenu: View {
             onExportImage: { quick in actions.export(msg, quick) },
             onExpandFullPicker: {
                 overlayState.fullReactionPickerMessage = msg
+            },
+            isUnencrypted: UnencryptedMessageGate.isUnencrypted(msg, in: viewModel),
+            // #11339 — un vocal lu depuis l'aperçu : la même entrée de file
+            // que le fil, sans auto-avance derrière lui.
+            onPlayAudio: { attachmentId in
+                viewModel.playAudio(attachmentId: attachmentId, continuesQueue: false)
             }
         )
     }

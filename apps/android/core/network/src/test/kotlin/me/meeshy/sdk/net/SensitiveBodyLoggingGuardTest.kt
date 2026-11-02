@@ -254,4 +254,28 @@ class SensitiveBodyLoggingGuardTest {
             )
         }
     }
+
+    /**
+     * Un carnet d'adresses entier (noms, numeros, e-mails) part dans ces corps et revient dans
+     * leurs reponses. Les chemins sont NOMMES ici, hors de l'iteration du set, et passent par le
+     * niveau BASIC : meme en logging BODY, aucun corps n'atteint logcat.
+     */
+    @Test
+    fun `aucun carnet d'adresses n'atteint le journal, meme en logging BODY`() {
+        listOf(
+            "/directory/contacts",
+            "/users/me/contacts/match",
+            "/users/me/contacts/sync",
+            "/contacts/resolve",
+        ).forEach { route ->
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue("$route n'a rien journalise", lignes.isNotEmpty())
+            assertTrue(
+                "$route a journalise son corps : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
+    }
 }

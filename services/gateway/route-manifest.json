@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 734,
+  "routeCount": 786,
   "routes": [
     {
       "method": "DELETE",
@@ -154,6 +154,20 @@
       "path": "/api/v1/admin/broadcasts/:id",
       "module": "broadcastRoutes",
       "mountPrefix": "/api/v1/admin/broadcasts",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/packs/registry/:domain/:slug",
+      "module": "packsRegistryAdminRoutes",
+      "mountPrefix": "/api/v1/admin/packs",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S4",
@@ -307,6 +321,20 @@
     },
     {
       "method": "DELETE",
+      "path": "/api/v1/bring/:bringId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
       "path": "/api/v1/calls/:callId",
       "module": "callRoutes",
       "mountPrefix": "/api/v1",
@@ -379,6 +407,20 @@
       "method": "DELETE",
       "path": "/api/v1/communities/:id/members/:memberId",
       "module": "communityRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/conversations/:conversationId/encryption",
+      "module": "encryptionRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -464,6 +506,20 @@
       "path": "/api/v1/directory/blocks/:userId",
       "module": "directoryBlocksRoutes",
       "mountPrefix": "/api/v1/directory",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/e2ee/devices/:deviceId",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -825,9 +881,37 @@
     },
     {
       "method": "DELETE",
+      "path": "/api/v1/packs/capture-frame/:slug/install",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
       "path": "/api/v1/packs/glory-frame/:slug/install",
       "module": "gloryFramePacksRoutes",
       "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/packs/lens/:slug/install",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -1511,6 +1595,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/analytics/playback",
+      "module": "analyticsRoutes",
+      "mountPrefix": "/api/v1/admin/analytics",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/analytics/realtime",
       "module": "analyticsRoutes",
       "mountPrefix": "/api/v1/admin/analytics",
@@ -2047,6 +2145,20 @@
         "S6"
       ],
       "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/packs/registry",
+      "module": "packsRegistryAdminRoutes",
+      "mountPrefix": "/api/v1/admin/packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
@@ -2658,6 +2770,22 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/attachments/:attachmentId/subtitles/:lang",
+      "module": "attachmentRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "optional-identity",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/attachments/:attachmentId/thumbnail",
       "module": "attachmentRoutes",
       "mountPrefix": "/api/v1",
@@ -2787,6 +2915,20 @@
       "path": "/api/v1/auth/sessions",
       "module": "authRoutes",
       "mountPrefix": "/api/v1/auth",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/bring/:userId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -3390,6 +3532,76 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/e2ee/devices",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/e2ee/devices/self/prekey-count",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/e2ee/envelopes",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/e2ee/keys/:userId",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/e2ee/keys/:userId/devices",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/friend-requests/received",
       "module": "friendRequestRoutes",
       "mountPrefix": "/api/v1",
@@ -3499,6 +3711,77 @@
         "S1"
       ],
       "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/credits",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/partners/:partnerId/logo",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/partners/me",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/partners/pending",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lens/usage/:slug",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4462,6 +4745,48 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/packs/capture-frame",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/capture-frame/:slug",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/capture-frame/installed",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/packs/glory-frame",
       "module": "gloryFramePacksRoutes",
       "mountPrefix": "/api/v1/packs/glory-frame",
@@ -4493,6 +4818,90 @@
       "path": "/api/v1/packs/glory-frame/installed",
       "module": "gloryFramePacksRoutes",
       "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/lens",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/lens/:slug",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/lens/:slug/document",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/lens/installed",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/lens/pending",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/lens/submissions",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -4891,6 +5300,62 @@
       "path": "/api/v1/reactions/user/:userId",
       "module": "reactionRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/:userId",
+      "module": "relationsLevelRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/:userId/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/config",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -7848,6 +8313,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/bring/:userId",
+      "module": "bringRoutes",
+      "mountPrefix": "/api/v1/bring",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/calls",
       "module": "callRoutes",
       "mountPrefix": "/api/v1",
@@ -8300,6 +8779,48 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/e2ee/conversations/:conversationId/signals",
+      "module": "e2eeSignalRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/e2ee/devices",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/e2ee/envelopes/ack",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/friend-requests",
       "module": "friendRequestRoutes",
       "mountPrefix": "/api/v1",
@@ -8317,6 +8838,50 @@
       "path": "/api/v1/invitations/email",
       "module": "invitationRoutes~2",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lens/partners/:userId/revoke",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lens/partners/:userId/verify",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lens/usage/:slug",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -8862,6 +9427,62 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/packs/lens/:slug/restore",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/lens/:slug/review",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/lens/:slug/withdraw",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/packs/lens/submissions",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/packs/wallpaper/:slug/purchase",
       "module": "appearancePacksRoutes",
       "mountPrefix": "/api/v1/packs/wallpaper",
@@ -9191,6 +9812,34 @@
       "path": "/api/v1/reactions",
       "module": "reactionRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/relations/:userId/level",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/relations/:userId/ritual",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -9880,6 +10529,20 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/admin/packs/registry/:domain/:slug",
+      "module": "packsRegistryAdminRoutes",
+      "mountPrefix": "/api/v1/admin/packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/admin/users/:userId/profile-images/:kind",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
@@ -9967,6 +10630,34 @@
       "path": "/api/v1/directory/contacts",
       "module": "directoryContactsRoutes",
       "mountPrefix": "/api/v1/directory",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/e2ee/devices/:deviceId/keys",
+      "module": "e2eeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/lens/partners/me",
+      "module": "lensPartnerRoutes",
+      "mountPrefix": "/api/v1/lens",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -10286,9 +10977,37 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/packs/capture-frame/:slug/install",
+      "module": "captureFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/capture-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/packs/glory-frame/:slug/install",
       "module": "gloryFramePacksRoutes",
       "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/packs/lens/:slug/install",
+      "module": "lensPacksRoutes",
+      "mountPrefix": "/api/v1/packs/lens",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -10317,6 +11036,20 @@
       "path": "/api/v1/posts/:postId",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/relations/:userId/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

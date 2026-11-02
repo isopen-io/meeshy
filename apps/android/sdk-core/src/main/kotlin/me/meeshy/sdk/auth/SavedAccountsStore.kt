@@ -82,3 +82,18 @@ class SharedPrefsSavedAccountsStore(
         private val SERIALIZER = ListSerializer(SavedAccount.serializer())
     }
 }
+
+/**
+ * The row state of every remembered account (current / signed in / signed out),
+ * derived from which accounts the token vault holds tokens for — the store keeps
+ * display data only, the vault is the truth about sessions.
+ */
+fun SavedAccountsStore.rowStates(
+    vault: me.meeshy.sdk.net.AccountTokenVault,
+    activeUserId: String?,
+): Map<String, me.meeshy.sdk.model.auth.AccountRowState> {
+    val list = accounts.value
+    val book = me.meeshy.sdk.model.auth.AccountSessionBook.of(list, activeUserId)
+    val withTokens = vault.accountsWithTokens(list.map { it.id })
+    return list.associate { it.id to book.rowState(it.id, withTokens) }
+}

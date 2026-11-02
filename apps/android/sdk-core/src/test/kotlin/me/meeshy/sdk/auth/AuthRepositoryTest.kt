@@ -662,6 +662,19 @@ class AuthRepositoryTest {
         assertThat((result as NetworkResult.Failure).error.code).isEqualTo(AuthFailureCode.LINK_CONFIRMATION_REQUIRED)
     }
 
+    @Test
+    fun verifyMagicLink_session_isReturnedButNeverStored() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(ApiResponse(success = false)).apply { magicLinkResponse = served(sessionBody()) }
+        val (repo, session) = repository(api, store)
+
+        val outcome = repo.verifyMagicLink("tok").getOrNull()
+
+        assertThat(outcome).isInstanceOf(LoginOutcome.Authenticated::class.java)
+        assertThat(store.isAuthenticated).isFalse()
+        assertThat(session.currentUser.value).isNull()
+    }
+
     // ---- attente d'une preuve ------------------------------------------------------------
 
     @Test

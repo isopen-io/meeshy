@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "location.map-style.section", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.map-style.standard", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.map-style.hybrid", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.map-style.imagery", "status": "adopted" },
+        { "catalog": "app", "iosKey": "common.done", "status": "adopted" }
+      ]
+    }
+  }
+}

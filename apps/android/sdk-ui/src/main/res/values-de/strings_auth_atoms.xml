@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atomes d'authentification : libellés alignés sur le catalogue iOS (MeeshyUI). -->
+    <string name="password_reveal_show">Passwort anzeigen</string>
+    <string name="password_reveal_hide">Passwort ausblenden</string>
+    <string name="password_reveal_state_revealed">Angezeigt</string>
+    <string name="password_reveal_state_masked">Ausgeblendet</string>
+
+    <string name="auth_password_strength_veryWeak">Zu schwach</string>
+    <string name="auth_password_strength_weak">Schwach</string>
+    <string name="auth_password_strength_medium">Mittel</string>
+    <string name="auth_password_strength_good">Gut</string>
+    <string name="auth_password_strength_strong">Stark</string>
+    <string name="auth_password_strength_excellent">Ausgezeichnet</string>
+
+    <string name="brand_signature_accessibilityLabel">Meeshy Version %1$s, Build %2$s.</string>
+    <string name="brand_signature_credit_open">Die Plattform services.ceo im Browser öffnen</string>
+</resources>

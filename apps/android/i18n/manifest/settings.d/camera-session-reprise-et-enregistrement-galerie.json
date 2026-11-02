@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.capture.header",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.capture.original.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.capture.original.subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.capture.rendered.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.capture.rendered.subtitle",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

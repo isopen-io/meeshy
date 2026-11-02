@@ -39,6 +39,7 @@
     "html"
   ],
   "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+  "reporters": ["default", "<rootDir>/jest-ci-annotations-reporter.js"],
   "transform": {
     "^.+\\.ts$": ["ts-jest", { "tsconfig": "tsconfig.jest.json", "diagnostics": { "ignoreCodes": [2322, 2339, 2345, 2740] } }]
   },

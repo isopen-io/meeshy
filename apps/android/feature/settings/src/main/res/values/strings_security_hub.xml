@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_title">Security</string>
+    <string name="security_section_password">Password</string>
+    <string name="security_section_sessions">Sessions</string>
+    <string name="security_sessions_manage">Manage active sessions</string>
+    <string name="security_phone_placeholder">+33 6 12 34 56 78</string>
+</resources>

@@ -26,7 +26,7 @@ public object AppLanguage {
     /** The interface languages the app ships UI strings for, in display order. */
     public val supportedLanguages: List<LanguageInfo> = LanguageData.interfaceLanguages
 
-    /** The codes of [supportedLanguages] (fr/en/es/ar). */
+    /** The codes of [supportedLanguages] (fr/en/es/de/it/ar). */
     public val supportedCodes: List<String> = supportedLanguages.map { it.code }
 
     /** Whether [code] is one of the supported interface languages (trim/case-insensitive). */

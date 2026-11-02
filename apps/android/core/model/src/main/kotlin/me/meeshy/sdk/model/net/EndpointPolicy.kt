@@ -61,9 +61,20 @@ public object EndpointPolicy {
         route.startsWith("/auth/login") || route == "/auth/verification/status" -> EndpointAuthKind.CREDENTIALS
         route == "/auth/refresh" ||
             route.startsWith("/auth/register") ||
-            route.startsWith("/auth/magic-link") -> EndpointAuthKind.NONE
+            route.startsWith("/auth/magic-link") ||
+            isPublicAffiliate(route) -> EndpointAuthKind.NONE
         else -> DEFAULT.authKind
     }
+
+    /**
+     * Les quatre routes PUBLIQUES du parrainage — servies avant toute inscription, donc sans jeton :
+     * clic, visite, validation d'un jeton et métadonnées Open Graph. Les quatre autres exigent la session.
+     */
+    private fun isPublicAffiliate(route: String): Boolean =
+        route.startsWith("/affiliate/click/") ||
+            route == "/affiliate/track-visit" ||
+            route.startsWith("/affiliate/validate/") ||
+            (route.startsWith("/affiliate/") && route.endsWith("/og"))
 
     /**
      * Le 503 du Signal Protocol annonce un état PERMANENT, jamais une surcharge

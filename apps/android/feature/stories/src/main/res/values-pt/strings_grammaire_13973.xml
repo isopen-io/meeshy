@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_edit_replace">Substituir</string>
+    <string name="composer_edit_remove_background_title">Remover o fundo?</string>
+    <string name="composer_edit_remove_background_message">A foto ou o vídeo de fundo sai deste slide. ↶ traz de volta.</string>
+</resources>

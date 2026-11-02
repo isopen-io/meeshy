@@ -10,6 +10,7 @@ import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -61,6 +62,19 @@ class BlockedListViewModelTest {
         assertThat(vm.state.value.showSkeleton).isFalse()
         assertThat(vm.state.value.isEmpty).isFalse()
         assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun `pull to refresh re-reads the blocklist from the network and settles`() = runTest {
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1")))
+        val vm = viewModel()
+        vm.load()
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1"), user("u2")))
+
+        vm.refresh()
+
+        assertThat(vm.state.value.blocked.map { it.id }).containsExactly("u1", "u2")
+        assertThat(vm.state.value.isRefreshing).isFalse()
     }
 
     @Test
@@ -131,18 +145,35 @@ class BlockedListViewModelTest {
     }
 
     @Test
-    fun `a failed enqueue restores the removed row and surfaces the error`() = runTest {
+    fun `a failed enqueue restores the removed row and toasts the failure without replacing the list`() = runTest {
         coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1"), user("u2")))
         coEvery { repository.setBlockedDurably("u1", false) } throws RuntimeException("nope")
         val vm = viewModel()
+        val seen = mutableListOf<BlockedFeedback>()
+        backgroundScope.launch(dispatcher) { vm.feedback.collect { seen += it } }
         vm.load()
 
         vm.unblock("u1")
 
         assertThat(vm.state.value.blocked.map { it.id }).containsExactly("u1", "u2").inOrder()
         assertThat(vm.state.value.pendingIds).isEmpty()
-        assertThat(vm.state.value.errorMessage).isEqualTo("nope")
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(seen).containsExactly(BlockedFeedback.UnblockFailed)
         verify(exactly = 0) { workManager.enqueue(any<WorkRequest>()) }
+    }
+
+    @Test
+    fun `a successful unblock toasts that the user is unblocked`() = runTest {
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1")))
+        coEvery { repository.setBlockedDurably("u1", false) } returns "cmid"
+        val vm = viewModel()
+        val seen = mutableListOf<BlockedFeedback>()
+        backgroundScope.launch(dispatcher) { vm.feedback.collect { seen += it } }
+        vm.load()
+
+        vm.unblock("u1")
+
+        assertThat(seen).containsExactly(BlockedFeedback.Unblocked)
     }
 
     @Test
@@ -244,7 +275,7 @@ class BlockedListViewModelTest {
         vm.load()
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") }, any())
         }
     }
 
@@ -258,7 +289,7 @@ class BlockedListViewModelTest {
         vm.unblock("u1")
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u2") }, any())
         }
     }
 
@@ -272,7 +303,7 @@ class BlockedListViewModelTest {
         vm.unblock("u1")
 
         coVerify {
-            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") })
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") }, any())
         }
     }
 }

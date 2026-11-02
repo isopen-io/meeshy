@@ -333,4 +333,31 @@ class CallPresenterTest {
         assertThat(ui.isPeerMuted).isFalse()
         assertThat(ui.isPeerCameraOff).isFalse()
     }
+
+    @Test
+    fun `a reconnection after established media keeps the connected layout`() {
+        val ui = CallPresenter.present(CallState.Reconnecting(1), config, media, mediaEstablished = true)
+
+        assertThat(ui.showsConnectedLayout).isTrue()
+    }
+
+    @Test
+    fun `a reconnection before any media does not show the connected layout`() {
+        val ui = CallPresenter.present(CallState.Reconnecting(1), config, media, mediaEstablished = false)
+
+        assertThat(ui.showsConnectedLayout).isFalse()
+    }
+
+    @Test
+    fun `ringing and ended never show the connected layout`() {
+        assertThat(present(CallState.Ringing(isOutgoing = true)).showsConnectedLayout).isFalse()
+        assertThat(present(CallState.Ended(CallEndReason.Local)).showsConnectedLayout).isFalse()
+    }
+
+    @Test
+    fun `the final duration reaches the ended panel in seconds so it can be spoken`() {
+        val ui = CallPresenter.present(CallState.Ended(CallEndReason.Remote), config, media, elapsedSeconds = 125)
+
+        assertThat(ui.durationSeconds).isEqualTo(125)
+    }
 }

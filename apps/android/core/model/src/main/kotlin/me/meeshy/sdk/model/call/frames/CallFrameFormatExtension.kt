@@ -131,6 +131,8 @@ public data class CallFrameSceneLayer(
     val color: String?,
     val amount: Double?,
     val maxParticles: Int?,
+    /** La part du plus petit côté que garde chaque coin d'une moulure `image` étirée en neuf morceaux ; `null` ⇒ l'image couvre la toile. */
+    val slice: Double? = null,
 )
 
 public enum class CallFrameBehaviorTrigger(override val raw: String) : CallFrameRaw {

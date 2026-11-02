@@ -20,6 +20,25 @@ public interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :id")
     public suspend fun find(id: String): MessageEntity?
 
+    /** Les lignes du fil dont la charge nomme [postId] : candidates à une citation retirée (#13296). */
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND payload LIKE '%' || :postId || '%'")
+    public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
+
+    /**
+     * #13792 — parmi les [window] lignes les plus RÉCENTES du fil, celles qui PEUVENT dire le bout en bout (drapeau chiffré,
+     * ou « e2ee » dans la charge : mode du message, d'une pièce, avis d'activation, lignes non encore rétro-remplies
+     * comprises). Le filtre de texte ne court que sur la fenêtre, jamais sur tout l'historique : la sous-requête ne trie que
+     * des identifiants, par l'index `(conversationId, createdAt)`. Un pré-filtre : la loi se lit sur la charge décodée
+     * (`EndToEndRegimeMemory.cachedThreadSeals`). Les avis de désactivation n'y sont pas lus : comme iOS et le web, aucun
+     * avis ne rouvre (#12949, #13821), et un serveur compromis ne peut pas rouvrir le clair par un avis.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE id IN (" +
+            "SELECT id FROM messages WHERE conversationId = :conversationId ORDER BY createdAt DESC LIMIT :window) " +
+            "AND (isEncrypted = 1 OR payload LIKE '%e2ee%' OR payload LIKE '%\"isEncrypted\":true%')",
+    )
+    public suspend fun endToEndCandidates(conversationId: String, window: Int): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
 
@@ -53,6 +72,40 @@ public interface MessageDao {
 
     @Upsert
     public suspend fun upsertAll(rows: List<MessageEntity>)
+
+    @Query("SELECT * FROM messages WHERE id IN (:ids)")
+    public suspend fun findAll(ids: List<String>): List<MessageEntity>
+
+    /** Third level of the id lookup: a row whose primary key is still the local id but whose server id is known. */
+    @Query("SELECT * FROM messages WHERE serverId = :serverId LIMIT 1")
+    public suspend fun findByServerId(serverId: String): MessageEntity?
+
+    /** Rows written before the queryable columns existed, oldest first, for the Kotlin backfill. */
+    @Query("SELECT * FROM messages WHERE columnsBackfilled = 0 ORDER BY createdAt ASC LIMIT :limit")
+    public suspend fun unbackfilled(limit: Int): List<MessageEntity>
+
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND pinnedAt IS NOT NULL ORDER BY pinnedAt DESC")
+    public suspend fun pinned(conversationId: String): List<MessageEntity>
+
+    /** Ephemeral rows whose deadline has passed — what the retention sweep removes. */
+    @Query("SELECT * FROM messages WHERE expiresAt IS NOT NULL AND expiresAt <= :nowMillis")
+    public suspend fun expiredBefore(nowMillis: Long): List<MessageEntity>
+
+    /** The reader opened a view-once message: permanent, and invisible to a REST refresh. */
+    @Query(
+        "UPDATE messages SET viewOnceOpenedAt = :openedAt, changeVersion = changeVersion + 1 " +
+            "WHERE id = :id AND viewOnceOpenedAt IS NULL",
+    )
+    public suspend fun markViewOnceOpened(id: String, openedAt: Long)
+
+    @Query(
+        "UPDATE messages SET sendState = :sendState, retryCount = :retryCount, lastError = :lastError, " +
+            "changeVersion = changeVersion + 1 WHERE id = :id",
+    )
+    public suspend fun recordSendAttempt(id: String, sendState: String?, retryCount: Int, lastError: String?)
+
+    @Query("SELECT COUNT(*) FROM messages WHERE columnsBackfilled = 0")
+    public suspend fun countUnbackfilled(): Int
 
     /**
      * Prunes server rows absent from the latest sync. Optimistic local rows
@@ -97,7 +150,7 @@ public interface MessageDao {
     )
     public suspend fun newestSyncedCreatedAt(conversationId: String): Long?
 
-    @Query("UPDATE messages SET sendState = :sendState WHERE id = :id")
+    @Query("UPDATE messages SET sendState = :sendState, changeVersion = changeVersion + 1 WHERE id = :id")
     public suspend fun updateSendState(id: String, sendState: String?)
 
     @Query("DELETE FROM messages WHERE id IN (:ids)")
@@ -109,3 +162,23 @@ public interface MessageDao {
     @Query("DELETE FROM messages")
     public suspend fun clear()
 }
+
+/**
+ * Upserts server-truth rows without erasing what only this device knows (retry counter, last
+ * error, opened view-once, change version). Call it inside the transaction that writes the page.
+ * The message ingestion pipeline (`MessageIngestPipeline`) goes further and skips unchanged rows.
+ */
+public suspend fun MessageDao.upsertKeepingLocal(rows: List<MessageEntity>) {
+    if (rows.isEmpty()) return
+    val previous = rows.map { it.id }.chunked(ID_CHUNK).flatMap { findAll(it) }.associateBy { it.id }
+    upsertAll(rows.map { it.carryingLocalColumnsOf(previous[it.id]) })
+}
+
+/**
+ * Whether this row stores exactly what [other] stores, ignoring the bookkeeping that every write
+ * moves (`cachedAt`, `changeVersion`) — the test that decides whether an upsert is a real change.
+ */
+public fun MessageEntity.sameStoredContentAs(other: MessageEntity): Boolean =
+    copy(cachedAt = other.cachedAt, changeVersion = other.changeVersion) == other
+
+private const val ID_CHUNK = 500

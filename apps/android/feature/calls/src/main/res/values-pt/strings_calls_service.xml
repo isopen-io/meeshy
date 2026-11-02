@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_service_channel_name">Chamadas em andamento</string>
+    <string name="call_service_on_hold">Em espera</string>
+    <string name="call_service_reconnecting">Reconectando…</string>
+    <string name="call_service_unmute">Ativar microfone</string>
+</resources>

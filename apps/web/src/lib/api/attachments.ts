@@ -2,7 +2,9 @@ import * as attachmentsEndpoints from '@meeshy/shared/api/endpoints/attachments'
 
 import type { ConversationsDeps } from './conversations';
 import { uploadedAttachmentsOf } from './fixtures';
-import type { ApiResult } from './http';
+import { isHeifFamily, UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
+
+import type { ApiFailure, ApiResult } from './http';
 import type { Attachment } from './types';
 
 /**
@@ -244,4 +246,30 @@ export async function fetchAttachmentStatusDetails(
     path: `${attachmentsEndpoints.byAttachmentIdStatusDetails(params.attachmentId)}${search.length > 0 ? `?${search}` : ''}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
+}
+
+export { UPLOAD_FORMAT_REFUSED };
+
+const UNSUPPORTED_MEDIA_TYPE = 415;
+
+/**
+ * **LE VERDICT D'UN LOT TÉLÉVERSÉ** (W9, #11315) — `null` quand chaque fichier
+ * a sa pièce. `uploadMultiple` avale un fichier refusé SOUS `success: true` :
+ * moins de pièces que de fichiers est un échec (`UPLOAD_PARTIAL`), jamais un
+ * envoi amputé. Quand le lot porte une photo HEIC, la cause probable est
+ * nommée — le format — par `UPLOAD_FORMAT_REFUSED`, et un `415` sur ce lot
+ * aussi ; tout autre échec traverse inchangé.
+ */
+export function uploadShortfall(
+  files: readonly { readonly type: string; readonly name: string }[],
+  result: ApiResult<{ readonly attachments: readonly Attachment[] }>,
+): ApiFailure | null {
+  const carriesHeif = files.some(isHeifFamily);
+  if (!result.ok) {
+    return result.status === UNSUPPORTED_MEDIA_TYPE && carriesHeif ? { ...result, code: UPLOAD_FORMAT_REFUSED } : result;
+  }
+  if (result.data.attachments.length >= files.length) return null;
+  return carriesHeif
+    ? { ok: false, status: 200, error: 'Format de photo refusé par la passerelle', code: UPLOAD_FORMAT_REFUSED }
+    : { ok: false, status: 200, error: 'Lot de pièces jointes incomplet', code: 'UPLOAD_PARTIAL' };
 }

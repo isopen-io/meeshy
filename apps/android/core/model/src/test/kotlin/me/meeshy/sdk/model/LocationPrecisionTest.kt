@@ -27,12 +27,31 @@ class LocationPrecisionTest {
     }
 
     @Test
-    fun `around arrondit a 3 decimales et garde nom et adresse`() {
-        val out = LocationPrecision.AROUND.coarsen(paris)
+    fun `around arrondit a 3 decimales et ne laisse partir ni nom ni adresse ni categorie exacts`() {
+        val names = PlaceCoarseNames(subLocality = "Gros-Caillou", locality = "Paris", country = "France")
+        val out = LocationPrecision.AROUND.coarsen(paris, names)
         assertThat(out.latitude).isEqualTo(48.857)
         assertThat(out.longitude).isEqualTo(2.352)
-        assertThat(out.name).isEqualTo("Tour Eiffel")
-        assertThat(out.category).isEqualTo("monument")
+        assertThat(out.name).isEqualTo("Gros-Caillou")
+        assertThat(out.address).isEqualTo("Paris, France")
+        assertThat(out.category).isNull()
+    }
+
+    @Test
+    fun `around sans composant geographique ne porte que les coordonnees arrondies`() {
+        val out = LocationPrecision.AROUND.coarsen(paris)
+        assertThat(out).isEqualTo(SharedPlace(48.857, 2.352, null, null, null))
+    }
+
+    @Test
+    fun `seul exact transmet la rue, le nom et la categorie du point choisi`() {
+        val names = PlaceCoarseNames(subLocality = "Gros-Caillou", locality = "Paris", country = "France")
+        LocationPrecision.entries.filter { it != LocationPrecision.EXACT }.forEach { precision ->
+            val out = precision.coarsen(paris, names)
+            assertThat(out.name).isNotEqualTo(paris.name)
+            assertThat(out.address).isNotEqualTo(paris.address)
+            assertThat(out.category).isNull()
+        }
     }
 
     @Test
@@ -96,5 +115,28 @@ class LocationPrecisionTest {
         assertThat(LocationPrecision.fromStorage(null)).isEqualTo(LocationPrecision.EXACT)
         assertThat(SharedMapStyle.fromStorage("hybrid")).isEqualTo(SharedMapStyle.HYBRID)
         assertThat(LocationSharingPreferences().precision).isEqualTo(LocationPrecision.EXACT)
+    }
+
+    @Test
+    fun `aux poles et a l'antimeridien l'arrondi reste dans les bornes et deterministe`() {
+        LocationPrecision.entries.forEach { precision ->
+            assertThat(precision.roundCoordinate(90.0)).isEqualTo(90.0)
+            assertThat(precision.roundCoordinate(-90.0)).isEqualTo(-90.0)
+            assertThat(precision.roundCoordinate(180.0)).isEqualTo(180.0)
+            assertThat(precision.roundCoordinate(-180.0)).isEqualTo(-180.0)
+            assertThat(precision.roundCoordinate(0.0)).isEqualTo(0.0)
+        }
+        assertThat(LocationPrecision.CITY.roundCoordinate(89.96)).isEqualTo(90.0)
+        assertThat(LocationPrecision.CITY.roundCoordinate(179.97)).isEqualTo(180.0)
+        assertThat(LocationPrecision.NEIGHBORHOOD.roundCoordinate(-179.996)).isEqualTo(-180.0)
+    }
+
+    @Test
+    fun `le meme point degrade deux fois donne le meme resultat`() {
+        val place = SharedPlace(latitude = 48.85661, longitude = 2.35222)
+        LocationPrecision.entries.forEach { precision ->
+            assertThat(precision.coarsen(place)).isEqualTo(precision.coarsen(place))
+            assertThat(precision.coarsen(precision.coarsen(place))).isEqualTo(precision.coarsen(place))
+        }
     }
 }

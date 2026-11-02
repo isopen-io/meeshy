@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_lifecycle_deletion_pending">A deletion request is waiting for your confirmation. Open the link we e-mailed you.</string>
+    <string name="account_lifecycle_deletion_pending_expires">The link expires on %1$s.</string>
+    <string name="account_lifecycle_deletion_grace">Your account will be deleted on %1$s. To cancel, open the link in the e-mail before that date.</string>
+    <string name="account_lifecycle_deletion_grace_no_date">Your account is scheduled for deletion. To cancel, open the link in the e-mail.</string>
+    <string name="activation_invite_banner_title">Validate your account</string>
+    <string name="activation_invite_banner_days">Days left: %1$d</string>
+    <string name="activation_invite_banner_no_days">Prove your e-mail address and add a phone number.</string>
+    <string name="activation_invite_banner_later">Later</string>
+    <string name="birth_date_title">Date of birth</string>
+    <string name="birth_date_message">Tell us your date of birth. It can only be set once.</string>
+    <string name="birth_date_pick">Choose my date</string>
+    <string name="birth_date_confirm">Confirm</string>
+    <string name="birth_date_done">Thank you, your date of birth is recorded.</string>
+    <string name="birth_date_done_restricted">Thank you. You can read Meeshy, but writing is closed for your age.</string>
+    <string name="birth_date_error_already_set">Your date of birth is already set.</string>
+    <string name="birth_date_error_below_minimum">Meeshy is not open to people under 13.</string>
+    <string name="birth_date_error_invalid">This date is not valid.</string>
+    <string name="birth_date_error_unsupported">This server does not support this yet.</string>
+    <string name="birth_date_error_unavailable">Could not save your date of birth. Try again.</string>
+</resources>

@@ -13,7 +13,7 @@ final class StoryElementLanguageTests: XCTestCase {
         let vm = StoryComposerViewModel()
         vm.declaredContentLanguage = "es"
 
-        let sticker = vm.addSticker(emoji: "🎉")
+        let sticker = vm.addSticker(emoji: "🎉")!
         let loc = vm.addLocation(place: SharedPlace(latitude: 0, longitude: 0, name: "x"))
 
         XCTAssertEqual(sticker.sourceLanguage, "es",

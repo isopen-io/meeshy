@@ -178,6 +178,7 @@ function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<Prisma
     participant: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
     },
     adminAuditLog: { create: jest.fn(async () => ({ id: 'audit-1' })) },
     message: {
@@ -844,6 +845,10 @@ describe('MessageHandler — handleMessageEdit et les mentions', () => {
     (deps.prisma.mention.deleteMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
     (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
     (deps.prisma.participant.findFirst as jest.Mock<any>).mockResolvedValue(null);
+    // #14066 — l'auteur de l'édition est un membre ACTIF : sinon il ne cite personne.
+    (deps.prisma.participant.findUnique as jest.Mock<any>).mockResolvedValue({
+      userId: USER_ID, isActive: true, conversationId: makeMessageRecord().conversationId,
+    });
     (deps.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({
       username: 'author', displayName: 'Author', avatar: null,
     });

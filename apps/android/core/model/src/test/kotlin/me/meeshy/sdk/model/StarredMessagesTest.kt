@@ -152,3 +152,30 @@ class StarredMessagesTest {
         assertThat(after).isSameInstanceAs(starred)
     }
 }
+
+class StarredMessagesSyncTest {
+    private fun snap(id: String, preview: String = "p", conv: String = "c1") =
+        StarredMessage(messageId = id, conversationId = conv, contentPreview = preview)
+
+    @Test
+    fun `updatePreview rewrites only the targeted star`() {
+        val s = StarredMessages(listOf(snap("a", "old"), snap("b", "keep"))).updatePreview("a", "new")
+
+        assertThat(s.items.map { it.contentPreview }).containsExactly("new", "keep").inOrder()
+    }
+
+    @Test
+    fun `updatePreview is inert for an unknown id or an unchanged preview`() {
+        val s = StarredMessages(listOf(snap("a", "same")))
+
+        assertThat(s.updatePreview("zz", "x")).isSameInstanceAs(s)
+        assertThat(s.updatePreview("a", "same")).isSameInstanceAs(s)
+    }
+
+    @Test
+    fun `clear empties the set and is inert on an empty one`() {
+        assertThat(StarredMessages(listOf(snap("a"))).clear().items).isEmpty()
+        val empty = StarredMessages()
+        assertThat(empty.clear()).isSameInstanceAs(empty)
+    }
+}

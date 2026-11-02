@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,11 +16,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,17 +39,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import me.meeshy.ui.R as UiR
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,8 +83,8 @@ fun NewConversationScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.new_conversation_back),
+                            leadingNavigationIcon(),
+                            contentDescription = leadingNavigationLabel(stringResource(R.string.new_conversation_back)),
                         )
                     }
                 },
@@ -112,23 +120,48 @@ fun NewConversationScreen(
                 )
             }
 
+            if (state.selected.isNotEmpty()) {
+                NewConversationEncryptionSection(
+                    offer = state.encryptionOffer,
+                    checked = state.encryptionMode,
+                    enabled = !state.isCreating,
+                    onSelect = viewModel::selectEncryptionMode,
+                )
+            }
+
             OutlinedTextField(
                 value = state.query,
                 onValueChange = viewModel::onQueryChange,
                 singleLine = true,
                 label = { Text(stringResource(R.string.new_conversation_search_hint)) },
+                trailingIcon = {
+                    if (state.query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.onQueryChange("") }) {
+                            Icon(
+                                Icons.Filled.Cancel,
+                                contentDescription = stringResource(R.string.conversations_search_clear),
+                                tint = MeeshyTheme.tokens.textMuted,
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
             )
 
-            state.errorMessage?.let { message ->
+            state.error?.let { error ->
                 Text(
-                    text = message,
+                    text = stringResource(error.messageRes()),
                     color = MeeshyPalette.Error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
                 )
+            }
+
+            if (state.showsContacts) {
+                ContactsSection(state = state, onToggle = viewModel::toggleSelection)
+                return@Column
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
@@ -145,6 +178,9 @@ fun NewConversationScreen(
                         }
                     }
                 }
+                if (state.showsNoResults) {
+                    NoUserFound(modifier = Modifier.align(Alignment.TopCenter))
+                }
                 if (state.isSearching && state.results.isEmpty()) {
                     CircularProgressIndicator(
                         modifier = Modifier
@@ -157,67 +193,192 @@ fun NewConversationScreen(
     }
 }
 
+private fun NewConversationError.messageRes(): Int = when (this) {
+    NewConversationError.BLOCKED -> R.string.new_conversation_error_blocked
+    NewConversationError.CREATE_FAILED -> R.string.new_conversation_error_create
+}
+
+/**
+ * The surface the picker opens on (iOS `NewConversationView.contactsSection`): « Your contacts »,
+ * served from the cache first; a loading state only on a cold cache; « No contacts » with a hint
+ * to search once the roster answered with nobody.
+ */
 @Composable
-private fun SelectedChips(
+private fun ContactsSection(state: NewConversationUiState, onToggle: (String) -> Unit) {
+    val loadingLabel = stringResource(R.string.new_conversation_contacts_loading)
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item(key = "contacts-header") {
+            Text(
+                text = stringResource(R.string.new_conversation_contacts_section),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm)
+                    .semantics { heading() },
+            )
+        }
+        items(state.contacts, key = { "contact-${it.id}" }) { user ->
+            UserRow(user = user, onClick = { onToggle(user.id) })
+        }
+        if (state.isLoadingContacts && state.contacts.isEmpty()) {
+            item(key = "contacts-loading") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(MeeshySpacing.xl)
+                        .semantics { contentDescription = loadingLabel },
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(24.dp))
+                }
+            }
+        }
+        if (state.showsNoContacts) {
+            item(key = "contacts-empty") { NoContacts() }
+        }
+    }
+}
+
+@Composable
+private fun NoContacts() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 48.dp, start = MeeshySpacing.xl, end = MeeshySpacing.xl)
+            .semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            Icons.Filled.PersonOff,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textMuted.copy(alpha = 0.5f),
+            modifier = Modifier.size(36.dp),
+        )
+        Text(
+            text = stringResource(R.string.new_conversation_contacts_empty_title),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.new_conversation_contacts_empty_subtitle),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textMuted,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** « Aucun utilisateur trouvé » (parity iOS `NewConversationView.emptyState`). */
+@Composable
+private fun NoUserFound(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 60.dp)
+            .semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Icon(
+            Icons.Filled.PersonOff,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textMuted.copy(alpha = 0.5f),
+            modifier = Modifier.size(36.dp),
+        )
+        Text(
+            text = stringResource(R.string.new_conversation_no_user_found),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyTheme.tokens.textMuted,
+        )
+    }
+}
+
+@Composable
+internal fun SelectedChips(
     selected: List<SelectableUser>,
     onRemove: (String) -> Unit,
 ) {
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         items(selected, key = { it.id }) { user ->
-            AssistChip(
-                onClick = { onRemove(user.id) },
-                label = { Text(user.displayName) },
-                trailingIcon = {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.new_conversation_remove),
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MeeshyPalette.Indigo500.copy(alpha = 0.12f),
-                ),
-            )
+            SelectedChip(user = user, onRemove = { onRemove(user.id) })
         }
     }
 }
 
 @Composable
-private fun UserRow(
+internal fun SelectedChip(
+    user: SelectableUser,
+    onRemove: () -> Unit,
+) {
+    val chipShape = CircleShape
+    Row(
+        modifier = Modifier
+            .clip(chipShape)
+            .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f))
+            .border(1.dp, MeeshyPalette.Indigo500.copy(alpha = 0.3f), chipShape)
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        MeeshyAvatar(
+            name = user.displayName,
+            size = 24.dp,
+            imageUrl = user.avatarUrl,
+            presence = rememberPresence(user.id, user.servedPresence),
+        )
+        Text(
+            text = user.displayName,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary,
+            maxLines = 1,
+        )
+        Icon(
+            MeeshyIcons.CloseCircleFilled,
+            contentDescription = stringResource(R.string.new_conversation_remove),
+            tint = MeeshyTheme.tokens.textMuted,
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onRemove)
+                .padding(2.dp),
+        )
+    }
+}
+
+@Composable
+internal fun UserRow(
     user: SelectableUser,
     onClick: () -> Unit,
 ) {
+    val blockedLabel = stringResource(UiR.string.connection_badge_blocked)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .semantics { role = Role.Button }
+            .alpha(if (user.isBlocked) 0.5f else 1f)
+            .clickable(enabled = !user.isBlocked, onClick = onClick)
+            .semantics {
+                role = Role.Button
+                if (user.isBlocked) stateDescription = blockedLabel
+            }
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        Box {
-            MeeshyAvatar(name = user.displayName, size = 44.dp)
-            meeshyPresenceDotColor(
-                if (user.isOnline) PresenceState.ONLINE else PresenceState.OFFLINE,
-            )?.let { dot ->
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(MeeshyPalette.White)
-                        .padding(2.dp)
-                        .clip(CircleShape)
-                        .background(dot),
-                )
-            }
-        }
+        MeeshyAvatar(
+            name = user.displayName,
+            size = 44.dp,
+            imageUrl = user.avatarUrl,
+            presence = rememberPresence(user.id, user.servedPresence),
+        )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = user.displayName,
@@ -231,7 +392,20 @@ private fun UserRow(
                 color = MeeshyTheme.tokens.textSecondary,
             )
         }
-        if (user.isSelected) {
+        if (user.isBlocked) {
+            Text(
+                text = blockedLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyPalette.Error.copy(alpha = 0.8f),
+            )
+            Icon(
+                Icons.Filled.Block,
+                contentDescription = null,
+                tint = MeeshyPalette.Error.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp),
+            )
+        } else if (user.isSelected) {
             Box(
                 modifier = Modifier
                     .size(24.dp)

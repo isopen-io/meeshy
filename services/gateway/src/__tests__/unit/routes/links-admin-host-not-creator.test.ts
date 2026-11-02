@@ -274,13 +274,13 @@ describe('Routes d’administration d’un lien — l’autorité de plateforme 
   beforeEach(() => jest.clearAllMocks());
 
   describe.each(ROUTES)('$name', ({ inject, arm }) => {
-    it('répond à un ADMIN de la plateforme, simple membre de la conversation', async () => {
+    it.each(['MODERATOR', 'ADMIN'])('répond à un %s de la plateforme, simple membre de la conversation (#11217)', async (platformRole) => {
       const prisma = makePrisma();
       prisma.conversationShareLink.findFirst = findFirstHonouringWhere(
         linkCreatedByOtherWithCallerAs('member')
       );
       arm(prisma);
-      const app = await buildApp(prisma, 'ADMIN');
+      const app = await buildApp(prisma, platformRole);
 
       const res = await app.inject(inject);
 
@@ -288,12 +288,12 @@ describe('Routes d’administration d’un lien — l’autorité de plateforme 
       await app.close();
     });
 
-    it('refuse un MODERATOR de la plateforme — participant ordinaire dans une conversation', async () => {
+    it.each(['AUDIT', 'ANALYST'])('refuse un %s de la plateforme — participant ordinaire dans une conversation', async (platformRole) => {
       const prisma = makePrisma();
       prisma.conversationShareLink.findFirst = findFirstHonouringWhere(
         linkCreatedByOtherWithCallerAs('member')
       );
-      const app = await buildApp(prisma, 'MODERATOR');
+      const app = await buildApp(prisma, platformRole);
 
       const res = await app.inject(inject);
 

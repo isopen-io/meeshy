@@ -19,7 +19,7 @@ import { translate } from '@/lib/i18n-catalog';
  * LES SUPERPOSITIONS DE LA RANGÉE ÉLUE (#5648) — extraites de `focal-row.tsx`
  * pour que la Lentille magnifiée (et les surfaces à venir) copient la MÊME
  * partition, plutôt que d'en réécrire une jumelle. Miroir de
- * `Main/Focal/Row/FocalRow.swift:848-1047`.
+ * `Focal/Row/FocalRow.swift:848-1047`.
  *
  * QUATRE SUPERPOSITIONS, aucune ne réserve de hauteur — `position: absolute`
  * sur le bloc de contenu, TOUTES à l'intérieur du cadre de verre à

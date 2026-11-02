@@ -3,8 +3,8 @@
  *
  * GW5 : au-delà de 4 Ko, APNs rejette SILENCIEUSEMENT (`PayloadTooLarge`), et
  * `handleFailedToken` compterait un strike sur un token parfaitement sain. La
- * dégradation se fait donc par ÉTAGES, avec re-vérification après chaque coupe :
- * la traduction du Prisme d'abord, le texte du message ensuite. Une bannière
+ * dégradation se fait donc par ÉTAGE, avec re-vérification après la coupe :
+ * le texte du message (la traduction du Prisme ne voyage plus, #14319). Une bannière
  * générique DÉLIVRÉE — la NSE retombe sur le corps composé par le serveur —
  * vaut mieux qu'un push rejeté qui ne s'affiche jamais.
  *
@@ -35,19 +35,18 @@ const payloadBytes = (payload: unknown): number =>
   Buffer.byteLength(JSON.stringify(payload), 'utf8');
 
 export function boundApnsPayload<T extends BoundablePushPayload>(payload: T): T {
-  const { translatedContent: _tc, translatedLanguage: _tl, ...sansTraduction } = payload.data;
   const {
     encryptedContent: _ec,
     content: _mc,
     originalLanguage: _ol,
     ...sansContenu
-  } = sansTraduction;
+  } = payload.data;
 
   // Le dernier étage est aussi le repli : quand même lui dépasse, on l'envoie —
   // c'est la charge la plus courte qu'on sache composer.
   const degrade = { ...payload, data: sansContenu };
   return (
-    [payload, { ...payload, data: sansTraduction }, degrade].find(
+    [payload, degrade].find(
       (candidate) => payloadBytes(candidate) <= APNS_SAFE_PAYLOAD_BYTES,
     ) ?? degrade
   );

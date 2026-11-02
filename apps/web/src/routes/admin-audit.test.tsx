@@ -233,6 +233,7 @@ describe('tri, filtres et pagination — dans l’adresse, dans la liste blanche
       'Signalements',
       'Communautés',
       'Réglages',
+      'Packs',
     ]);
     expect(names('entity')).toEqual([
       'Tous',

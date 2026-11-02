@@ -159,6 +159,24 @@ extension LocalizationConsistencyTests {
         return result
     }
 
+    /// **Une clé que le manifeste Android ADOPTE n'est pas morte** (#13918) :
+    /// `xcstrings_to_android.py` lit ses traductions dans ce catalogue, même
+    /// quand le code iOS ne la cite plus. Miroir de `android_adopted_app_keys`
+    /// (`check_localization.py`).
+    func androidAdoptedAppKeys(repoRoot: URL) -> Set<String> {
+        let racine = repoRoot.appendingPathComponent("apps/android/i18n/manifest")
+        let fichiers = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "json" } ?? []
+        return Set(fichiers.flatMap { url -> [String] in
+            let json = (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) }
+            let modules = ((json as? [String: Any])?["modules"] as? [String: Any]) ?? [:]
+            return modules.values
+                .flatMap { (($0 as? [String: Any])?["entries"] as? [[String: Any]]) ?? [] }
+                .filter { $0["catalog"] as? String == "app" && $0["status"] as? String == "adopted" }
+                .compactMap { $0["iosKey"] as? String }
+        })
+    }
+
     /// Locales the app actually ships — read from `Info.plist`, not hard-coded.
     func shippedLocales(repoRoot: URL) throws -> Set<String> {
         let url = repoRoot.appendingPathComponent("apps/ios/Meeshy/Info.plist")
@@ -330,14 +348,35 @@ extension LocalizationConsistencyTests {
     /// `MeeshyPasswordField` uses so its tests can inject a bundle (#8054). A
     /// parameter the file also fills with `.main`, or never fills at all, stays
     /// counted against the app catalog.
+    ///
+    /// A caller fills the parameter under its ARGUMENT LABEL, which is not always
+    /// its name: the SDK copy types declare `in bundle: Bundle` and are filled with
+    /// `in: .module` (`JoinFlowCopy`, `NotificationListCopy`, `CommunitySettingsCopy`).
     func forwardsModuleBundle(_ segment: String, in source: String) -> Bool {
         guard let range = segment.range(of: #"bundle:\s*[A-Za-z_][A-Za-z0-9_]*"#, options: .regularExpression)
         else { return false }
         let parameter = segment[range].dropFirst("bundle:".count).trimmingCharacters(in: .whitespaces)
+        let labels = argumentLabels(of: parameter, in: source)
         let fills = { (value: String) in
-            source.range(of: "\\b\(parameter):\\s*\\.\(value)\\b", options: .regularExpression) != nil
+            labels.contains { label in
+                source.range(of: "\\b\(label):\\s*\\.\(value)\\b", options: .regularExpression) != nil
+            }
         }
         return fills("module") && !fills("main")
+    }
+
+    /// The labels under which callers fill a `Bundle` parameter: its own name, plus
+    /// the external label of every `label parameter: Bundle` declaration in the file.
+    func argumentLabels(of parameter: String, in source: String) -> [String] {
+        guard let declaration = try? NSRegularExpression(
+            pattern: "\\b([A-Za-z_][A-Za-z0-9_]*)\\s+\(parameter):\\s*Bundle\\b"
+        ) else { return [parameter] }
+        let ns = source as NSString
+        let external = declaration
+            .matches(in: source, range: NSRange(location: 0, length: ns.length))
+            .map { ns.substring(with: $0.range(at: 1)) }
+            .filter { $0 != "_" }
+        return [parameter] + external
     }
 
     /// The inline `defaultValue:` literal of a call segment, when it is written on

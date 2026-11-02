@@ -21,6 +21,7 @@
  */
 
 import { addDays, dayDiff, dayNumber, isDayKey } from './day-prng.js';
+import { parsePackChoiceKey } from '../../types/content-pack.js';
 import { leagueWeekOfMoment, weekdayIndex, type LeagueMoment } from './league.js';
 import {
   SEASON_DAYS,
@@ -68,6 +69,8 @@ export type SeasonDefinition = {
   /** Les points d'une étape ordinaire, dans `[SEASON_STEP_POINTS_MIN, SEASON_STEP_POINTS_MAX]`. */
   readonly stepPoints: number;
   readonly copy: SeasonCopyByLocale | null;
+  /** Le pack que la saison récompense (#11274), par sa clé `packChoiceKey` ; absent = aucun. */
+  readonly rewardPack?: string;
 };
 
 export type SeasonSchedule = {
@@ -110,6 +113,13 @@ const lawfulText = (value: unknown, max: number): value is string =>
   !SEASON_COPY_MONEY_PATTERN.test(value);
 
 /** Sept langues, trois textes chacune, dans les limites ; rien d'autre. */
+/** Une clé de pack lisible (`<domaine>.<slug>`, ou le slug nu d'un sticker). */
+export const isLawfulRewardPackKey = (value: unknown): value is string =>
+  typeof value === 'string' && parsePackChoiceKey(value) !== null;
+
+const rewardPackOf = (value: unknown): { readonly rewardPack?: string } =>
+  isLawfulRewardPackKey(value) ? { rewardPack: value } : {};
+
 export function isLawfulSeasonCopy(value: unknown): value is SeasonCopyByLocale {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
@@ -137,7 +147,7 @@ function definitionFromUnknown(raw: unknown): SeasonDefinition | null {
   // Des textes devenus illisibles (une loi des textes durcie) ne retirent QUE les textes : jamais les dates
   // d'une saison, qui se décalerait sinon en silence.
   const copy = r.copy !== undefined && r.copy !== null && isLawfulSeasonCopy(r.copy) ? r.copy : null;
-  return { number: r.number, startDay: r.startDay, status: r.status, themeKey: r.themeKey, stepPoints: r.stepPoints, copy };
+  return { number: r.number, startDay: r.startDay, status: r.status, themeKey: r.themeKey, stepPoints: r.stepPoints, copy, ...rewardPackOf(r.rewardPack) };
 }
 
 type Plan = {
@@ -315,6 +325,8 @@ export type SeasonEdit = {
   readonly themeKey?: string;
   readonly stepPoints?: number;
   readonly copy?: unknown;
+  /** `null` retire le pack récompense ; absent le garde. */
+  readonly rewardPack?: string | null;
 };
 
 export type SeasonEditRefusal =
@@ -330,7 +342,8 @@ export type SeasonEditRefusal =
   | 'overlaps-next'
   | 'invalid-theme'
   | 'rewards-out-of-bounds'
-  | 'copy-invalid';
+  | 'copy-invalid'
+  | 'invalid-reward-pack';
 
 export type SeasonEditResult =
   | { readonly ok: true; readonly schedule: SeasonSchedule; readonly definition: SeasonDefinition }
@@ -360,6 +373,7 @@ export function applySeasonEdit(schedule: SeasonSchedule, edit: SeasonEdit, now:
   if (edit.stepPoints !== undefined && !isLawfulStepPoints(edit.stepPoints)) return refuse('rewards-out-of-bounds');
   if (edit.copy !== undefined && edit.copy !== null && !isLawfulSeasonCopy(edit.copy)) return refuse('copy-invalid');
   if (edit.status !== undefined && edit.status !== 'scheduled' && edit.status !== 'paused') return refuse('invalid-status');
+  if (edit.rewardPack !== undefined && edit.rewardPack !== null && !isLawfulRewardPackKey(edit.rewardPack)) return refuse('invalid-reward-pack');
   if (edit.startDay !== undefined) {
     if (typeof edit.startDay !== 'string' || !isDayKey(edit.startDay)) return refuse('invalid-day');
     if (!isMonday(edit.startDay)) return refuse('not-monday');
@@ -372,6 +386,7 @@ export function applySeasonEdit(schedule: SeasonSchedule, edit: SeasonEdit, now:
     themeKey: (edit.themeKey as SeasonThemeKey | undefined) ?? base.themeKey,
     stepPoints: edit.stepPoints ?? base.stepPoints,
     copy: edit.copy === undefined ? base.copy : ((edit.copy as SeasonCopyByLocale | null) ?? null),
+    ...(edit.rewardPack === undefined ? rewardPackOf(base.rewardPack) : rewardPackOf(edit.rewardPack)),
   };
 
   if (definition.status === 'scheduled' && edit.startDay !== undefined) {

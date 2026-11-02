@@ -51,10 +51,10 @@ final class ComposerReturnMediaTests: XCTestCase {
         let compact = code.components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(compact.contains("ComposerViewfinder{resultinonCapture(result)}") && compact.contains("onCapture:{stageCapture($0)}"),
                       "La prise rejoint le message par le chemin de pose d'une capture (#9775).")
-        XCTAssertTrue(compact.contains("funcstageCapture(_capture:CameraResult){switchComposerReturnedMedia(capture:capture)"),
+        XCTAssertTrue(compact.contains("funcstageCapture(_capture:CameraResult){switchcapture{"),
                       "La prise se pose comme un média retouché, image ou vidéo.")
-        XCTAssertTrue(compact.contains("handleCameraCapture(image,capturedInApp:true)"),
-                      "Une photo du viseur de la barre part déclarée capturée dans l'app (#9775).")
+        XCTAssertTrue(compact.contains("case.photo(letimage,letdata):handleCameraCapture(image,data:data,capturedInApp:true)"),
+                      "Une photo du viseur de la barre part déclarée capturée dans l'app (#9775), par ses OCTETS (#9885).")
         XCTAssertTrue(compact.contains("handleCameraVideo(url,capturedInApp:true)"),
                       "Une vidéo du viseur de la barre part déclarée capturée dans l'app (#9775).")
     }

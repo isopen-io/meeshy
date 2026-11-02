@@ -1,6 +1,7 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.net.MeeshyApi
 
 /** Outcome of coalescing an incoming mutation against the pending queue (ARCHITECTURE.md §5). */
 public sealed interface CoalesceDecision {
@@ -38,6 +39,7 @@ public sealed interface CoalesceDecision {
  *   bookmark (or unbookmark) keeps only the latest (same idempotent-terminal rule);
  * - a repeated friend request to the same receiver keeps only the latest
  *   (only one request can exist — idempotent send, latest greeting wins);
+ * - a repeated answer to the same friend request keeps only the latest (last answer wins);
  * - a repeated profile edit (same user id) keeps only the latest snapshot
  *   (each carries the full PATCH body — the newest edit subsumes the pending one);
  * - a repeated settings update (same user id) keeps only the latest snapshot
@@ -57,14 +59,19 @@ public object OutboxCoalescer {
             OutboxKind.EDIT_MESSAGE -> replaceSameKind(incoming, sameTarget, OutboxKind.EDIT_MESSAGE)
             OutboxKind.READ_RECEIPT -> terminalToggle(incoming, sameTarget, OutboxKind.MARK_UNREAD, OutboxKind.READ_RECEIPT)
             OutboxKind.MARK_UNREAD -> terminalToggle(incoming, sameTarget, OutboxKind.READ_RECEIPT, OutboxKind.MARK_UNREAD)
-            OutboxKind.UPDATE_CONVERSATION_PREFS ->
-                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_CONVERSATION_PREFS)
+            OutboxKind.UPDATE_CONVERSATION_PREFS -> replaceSameKind(
+                carryPrefsGrafts(incoming, sameTarget.filter { it.kindEnum == OutboxKind.UPDATE_CONVERSATION_PREFS }),
+                sameTarget,
+                OutboxKind.UPDATE_CONVERSATION_PREFS,
+            )
             OutboxKind.UPDATE_PROFILE ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PROFILE)
             OutboxKind.UPDATE_SETTINGS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_SETTINGS)
             OutboxKind.UPDATE_PRIVACY_SETTINGS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PRIVACY_SETTINGS)
+            OutboxKind.UPDATE_AUDIO_SETTINGS ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_AUDIO_SETTINGS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             OutboxKind.BLOCK_USER -> terminalToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)
@@ -79,6 +86,8 @@ public object OutboxCoalescer {
                 terminalToggle(incoming, sameTarget, OutboxKind.BOOKMARK_POST, OutboxKind.UNBOOKMARK_POST)
             OutboxKind.SEND_FRIEND_REQUEST ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.SEND_FRIEND_REQUEST)
+            OutboxKind.RESPOND_FRIEND_REQUEST ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.RESPOND_FRIEND_REQUEST)
             else -> CoalesceDecision.Enqueue(incoming)
         }
     }
@@ -109,6 +118,25 @@ public object OutboxCoalescer {
             CoalesceDecision.Replace(superseded, incoming)
         }
     }
+
+    /**
+     * A prefs snapshot carries `appearance` and `clearCategory` only when it made that change
+     * ([ConversationPrefsPayload.appearance], [ConversationPrefsPayload.clearCategory]); a later snapshot that
+     * supersedes a pending one must not drop it, so the newest pending appearance is grafted on, and a pending
+     * category removal survives unless the later snapshot files the row in a category again.
+     */
+    private fun carryPrefsGrafts(incoming: OutboxEntity, superseded: List<OutboxEntity>): OutboxEntity {
+        val next = decodePrefs(incoming.payload) ?: return incoming
+        val pending = superseded.asReversed().mapNotNull { decodePrefs(it.payload) }
+        val appearance = next.appearance ?: pending.firstNotNullOfOrNull { it.appearance }
+        val clearCategory = next.clearCategory || (next.categoryId == null && pending.any { it.clearCategory })
+        val grafted = next.copy(appearance = appearance, clearCategory = clearCategory)
+        if (grafted == next) return incoming
+        return incoming.copy(payload = MeeshyApi.json.encodeToString(ConversationPrefsPayload.serializer(), grafted))
+    }
+
+    private fun decodePrefs(payload: String): ConversationPrefsPayload? =
+        runCatching { MeeshyApi.json.decodeFromString(ConversationPrefsPayload.serializer(), payload) }.getOrNull()
 
     private fun annihilateOpposite(
         incoming: OutboxEntity,

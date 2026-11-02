@@ -9,4 +9,14 @@
     <cache-path
         name="captures"
         path="captures/" />
+    <!-- Fullscreen viewer "Share outside Meeshy": a local copy of the viewed media, handed
+         to the system share sheet (GalleryMediaSharer). -->
+    <cache-path
+        name="shared-media"
+        path="shared-media/" />
+    <!-- Composer "Transférer" : the MP4 baked from the scene, handed to the system share sheet
+         (SceneExportCoordinator). Swept at the next export. -->
+    <cache-path
+        name="scene-exports"
+        path="scene-exports/" />
 </paths>

@@ -32,32 +32,47 @@ describe('les lois du fil (miroir de MessageCardThread.swift)', () => {
   });
 });
 
-describe('l’imbrication dans la carte', () => {
-  const context = [{ part: { author: 'Bob', text: 'Magnifique' }, depth: 0 }, { part: { author: 'Dan', text: 'Où ça' }, depth: 1 }];
-
-  test('une réponse de niveau 1 est retirée et précédée de la séparation du template — jamais d’une barre', () => {
-    const flat = layout({ context, replyDepth: 0 });
-    const nested = layout({ context, replyDepth: 1 });
-    expect((text(nested.ops, 'Sur la corniche')?.x ?? 0) - (text(flat.ops, 'Sur la corniche')?.x ?? 0)).toBe(THREAD_INDENT);
-    const separators = (ops: readonly CardOp[]) => ops.filter((op) => op.kind === 'separator').length;
-    expect(separators(nested.ops)).toBeGreaterThan(separators(flat.ops));
-    expect(nested.ops.filter((op) => op.kind === 'bar').length).toBe(layout({ context: [], replyDepth: 0 }).ops.filter((op) => op.kind === 'bar').length);
+describe('le fil dans la carte, comme iOS : un bloc titré, une ligne par commentaire (#13922)', () => {
+  const lines = [
+    { text: 'Bob : Magnifique', level: 0 },
+    { text: 'Dan : Où ça', level: 1 },
+  ];
+  const thread = (entries: readonly { readonly text: string; readonly level: number }[]) => ({
+    reply: { author: 'Fil de commentaires', text: entries.map((entry) => entry.text).join('\n'), thread: entries },
   });
 
-  test('chaque niveau retire son texte d’un cran', () => {
-    const nested = layout({ context });
-    expect((text(nested.ops, 'Où ça')?.x ?? 0) - (text(nested.ops, 'Magnifique')?.x ?? 0)).toBe(THREAD_INDENT);
+  test('le bloc se nomme par son titre, et chaque ligne se peint dans la police de la réponse', () => {
+    const l = layout(thread(lines));
+    expect(text(l.ops, 'Fil de commentaires')).toBeDefined();
+    expect(text(l.ops, 'Bob : Magnifique')?.font).toBe(text(l.ops, 'Dan : Où ça')?.font);
+    expect(text(layout().ops, 'Sur la corniche')?.font).toBe(text(l.ops, 'Bob : Magnifique')?.font);
+  });
+
+  test('une ligne de niveau 1 est retirée d’un cran et précédée de la séparation du template — jamais d’une barre', () => {
+    const nested = layout(thread(lines));
+    const flat = layout(thread(lines.map((entry) => ({ ...entry, level: 0 }))));
+    expect((text(nested.ops, 'Dan : Où ça')?.x ?? 0) - (text(nested.ops, 'Bob : Magnifique')?.x ?? 0)).toBe(THREAD_INDENT);
+    const separators = (ops: readonly CardOp[]) => ops.filter((op) => op.kind === 'separator').length;
+    expect(separators(nested.ops)).toBeGreaterThan(separators(flat.ops));
+    expect(nested.ops.filter((op) => op.kind === 'bar').length).toBe(flat.ops.filter((op) => op.kind === 'bar').length);
   });
 
   test('la séparation suit le template : la flèche pose ↳, le silence ne trace rien', () => {
-    expect(text(layout({ template: 'aurore.rond.fleche', context, replyDepth: 1 }).ops, '↳')).toBeDefined();
-    const silent = layout({ template: 'aurore.rond.silence', context: [], replyDepth: 1 });
-    expect(silent.ops.some((op) => op.kind === 'separator')).toBe(false);
+    expect(text(layout({ template: 'aurore.rond.fleche', ...thread(lines) }).ops, '↳')).toBeDefined();
+    expect(layout({ template: 'aurore.rond.silence', ...thread(lines) }).ops.some((op) => op.kind === 'separator')).toBe(false);
   });
 
-  test('la hauteur grandit avec l’imbrication, jamais au-delà de la carte', () => {
-    expect(layout({ context, replyDepth: 1 }).height).toBeGreaterThanOrEqual(layout({ context: [], replyDepth: 0 }).height);
-    expect(layout({ context, replyDepth: 1 }).height).toBeLessThanOrEqual(1920);
+  test('une ligne trop longue se coupe dans la largeur que son niveau laisse', () => {
+    const long = 'Dan : ' + 'mot '.repeat(80).trim();
+    const l = layout(thread([lines[0]!, { text: long, level: 3 }]));
+    const shifted = l.ops.filter((op): op is CardTextOp => op.kind === 'text' && op.text.startsWith('mot'));
+    expect(shifted.length).toBeGreaterThan(0);
+    expect(new Set(shifted.map((op) => op.x))).toEqual(new Set([(text(l.ops, 'Bob : Magnifique')?.x ?? 0) + threadShift(3)]));
+  });
+
+  test('la hauteur grandit avec le fil, jamais au-delà de la carte', () => {
+    expect(layout(thread(lines)).height).toBeGreaterThanOrEqual(layout().height);
+    expect(layout(thread(Array.from({ length: 40 }, (_, index) => ({ text: `U${index} : ${'long '.repeat(20)}`, level: index % 4 })))).height).toBeLessThanOrEqual(1920);
   });
 });
 

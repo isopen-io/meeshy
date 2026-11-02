@@ -34,7 +34,7 @@ final class StoryComposerAnimatedStickerTests: XCTestCase {
 
         let sticker = vm.addSticker(image: Self.pixel(),
                                     provider: StoryStickerLibraryItem.provider,
-                                    animatedData: octets)
+                                    animatedData: octets)!
 
         XCTAssertEqual(vm.loadedStickerAnimations[sticker.id], octets)
         XCTAssertNotNil(vm.loadedImages[sticker.id],
@@ -48,7 +48,7 @@ final class StoryComposerAnimatedStickerTests: XCTestCase {
         let vm = StoryComposerViewModel()
 
         let sticker = vm.addSticker(image: Self.pixel(),
-                                    provider: StoryStickerLibraryItem.provider)
+                                    provider: StoryStickerLibraryItem.provider)!
 
         XCTAssertTrue(vm.loadedStickerAnimations.isEmpty)
         XCTAssertNil(vm.loadedStickerAnimations[sticker.id])
@@ -63,7 +63,7 @@ final class StoryComposerAnimatedStickerTests: XCTestCase {
 
         _ = vm.addSticker(image: Self.pixel(),
                           provider: StoryStickerLibraryItem.provider,
-                          animatedData: Self.gifBytes)
+                          animatedData: Self.gifBytes)!
 
         XCTAssertGreaterThan(vm.loadedImagesVersion, 0)
     }
@@ -76,7 +76,7 @@ final class StoryComposerAnimatedStickerTests: XCTestCase {
         let vm = StoryComposerViewModel()
         let sticker = vm.addSticker(image: Self.pixel(),
                                     provider: StoryStickerLibraryItem.provider,
-                                    animatedData: Self.gifBytes)
+                                    animatedData: Self.gifBytes)!
 
         vm.deleteElement(id: sticker.id)
 
@@ -93,7 +93,7 @@ final class StoryComposerAnimatedStickerTests: XCTestCase {
         let octets = Self.gifBytes
         let sticker = vm.addSticker(image: Self.pixel(),
                                     provider: StoryStickerLibraryItem.provider,
-                                    animatedData: octets)
+                                    animatedData: octets)!
         vm.pushHistorySnapshot()
         vm.deleteElement(id: sticker.id)
         vm.pushHistorySnapshot()

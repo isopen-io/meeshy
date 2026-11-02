@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "location.title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.search-placeholder", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.settings.open", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.recenter", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.geocoding", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.move-prompt", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.unknown", "status": "adopted" },
+        { "catalog": "app", "iosKey": "common.confirm", "status": "adopted" },
+        { "catalog": "app", "iosKey": "permission.location.denied", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.precision.badge.exact", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.precision.badge.around", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.precision.badge.neighborhood", "status": "adopted" },
+        { "catalog": "app", "iosKey": "location.precision.badge.city", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.chip.kind.location", "status": "adopted" },
+        { "catalog": "app", "iosKey": "a11y.message.location", "status": "adopted" },
+        { "catalog": "app", "iosKey": "message.action.copyAddress", "status": "adopted" },
+        { "androidName": "chat_action_map", "status": "android-only" }
+      ]
+    }
+  }
+}

@@ -1,5 +1,7 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 
+import type { NetworkConnection } from '../device/capability-tier';
+
 import type { OpusShape } from './call-opus-sdp';
 import type { TierEncoding } from './call-quality';
 
@@ -7,16 +9,16 @@ import type { TierEncoding } from './call-quality';
  * **CE QU'UN APPEL A LE DROIT DE DÉPENSER** (#8697) — une table pure, le même
  * barème qu'iOS : Opus 32 kb/s en Wi-Fi, 24 en cellulaire, 16 en économie de
  * données ou sur un lien mauvais ; vidéo 1,2 Mb/s, 600 kb/s, 300 kb/s. Le
- * profil vient de ce que l'appareil annonce (`navigator.connection` :
- * `type`, `effectiveType`, `saveData` — la coque Android le sert par sa
- * WebView) ; sans rien d'annoncé, c'est du Wi-Fi. Le profil PLAFONNE le palier
+ * profil vient de ce que l'appareil annonce (la connexion annoncée :
+ * `type`, `effectiveType`, `saveData` — la coque Android la sert par sa
+ * WebView, lue par `device/capability-tier.ts`) ; sans rien d'annoncé, c'est du Wi-Fi. Le profil PLAFONNE le palier
  * de qualité (`call-quality.ts`) et ne le relève jamais : un lien mauvais en
  * Wi-Fi descend comme ailleurs.
  */
 
 export type DataProfile = 'wifi' | 'cellular' | 'economy';
 
-export type ConnectionInfo = { readonly type?: string; readonly effectiveType?: string; readonly saveData?: boolean };
+export type ConnectionInfo = NetworkConnection;
 
 export type ProfileBudget = {
   readonly audioBitrate: number;
@@ -77,7 +79,4 @@ export function captureShape(profile: DataProfile): CaptureShape {
   return { width: { ideal: width, max: 1280 }, height: { ideal: height, max: 720 }, frameRate: { ideal: frameRate, max: 30 } };
 }
 
-export function browserConnection(): ConnectionInfo | null {
-  if (typeof navigator === 'undefined') return null;
-  return (navigator as Navigator & { readonly connection?: ConnectionInfo }).connection ?? null;
-}
+export { browserConnection } from '../device/capability-tier';

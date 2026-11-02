@@ -12,8 +12,27 @@ final class IncomingCallViewTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/IncomingCallView.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Views/IncomingCallView.swift")
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: - Photo et contour du correspondant (#12336)
+
+    func test_incomingCallView_showsThePeersPhotoInsideItsEquippedRing() throws {
+        let source = AppSourceGuard.stripComments(try incomingCallViewSource())
+        XCTAssertTrue(
+            source.contains("let peerProfile: MeeshyUser?"),
+            "IncomingCallView doit recevoir le profil résolu du correspondant."
+        )
+        XCTAssertTrue(
+            source.contains("CachedAvatarImage(") && source.contains("urlString: peerProfile?.avatar"),
+            "Le disque de l'appel entrant montre la photo du correspondant, sinon ses " +
+            "initiales — jamais les initiales SOUS la photo (#12568)."
+        )
+        XCTAssertTrue(
+            source.contains(".avatarRingWithin(") && source.contains("ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing)"),
+            "Le disque de l'appel entrant doit porter le contour équipé du correspondant."
+        )
     }
 
     // MARK: - VoiceOver announcement on appear

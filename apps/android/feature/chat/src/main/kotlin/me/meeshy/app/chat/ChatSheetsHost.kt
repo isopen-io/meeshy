@@ -1,0 +1,596 @@
+package me.meeshy.app.chat
+
+import android.widget.Toast
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import java.time.ZoneId
+import java.util.Locale
+import me.meeshy.app.chat.appearance.ConversationAppearanceSheet
+import me.meeshy.app.chat.export.CardDiscussion
+import me.meeshy.app.chat.export.CardExportSheet
+import me.meeshy.app.chat.export.DiscussionCardExportSheet
+import me.meeshy.app.chat.fileviewer.FileViewerHost
+import me.meeshy.app.chat.fileviewer.FileViewerRequest
+import me.meeshy.app.chat.mediahub.ConversationMediaHubContent
+import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
+import me.meeshy.app.chat.options.ConversationOptionsExit
+import me.meeshy.app.chat.options.rememberConversationOptionsSlots
+import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.selection.MessageSelectionHost
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.ClientStatMessage
+import me.meeshy.sdk.model.MessageDeletability
+import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.PlainSignalAdmission
+import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.viewer.GalleryImageSaver
+import me.meeshy.ui.component.viewer.MeeshyImageViewer
+import me.meeshy.sdk.model.e2ee.ConversationEncryptionRegime
+import me.meeshy.sdk.model.e2ee.ConversationSecurityRow
+import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.format.RelativeTimeFormat
+import me.meeshy.ui.format.rememberRelativeTimeStrings
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.bubble.BubbleContent
+
+/**
+ * Sheets layer: every overlay of the chat screen (image gallery, message actions, file
+ * download, conversation sheets, report, language explorer, emoji picker, reactions, pins,
+ * effects, reply thread, forward), drawn in the order they were stacked before the split.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ChatSheetsHost(host: ChatHostContext) {
+    val state = host.state
+    val actions = host.actions
+    val sheets = host.sheets
+    val accentColor = host.accentColor
+    val bubbleFrames = host.bubbleFrames
+    val gallery = state.imageViewer
+    val localRoute = rememberLocalDetailRoute()
+    var exportMessageId by rememberSaveable { mutableStateOf<String?>(null) }
+    var discussionEndingAt by rememberSaveable { mutableStateOf<String?>(null) }
+    if (gallery != null) {
+        val relativeStrings = rememberRelativeTimeStrings()
+        val galleryNow = remember(gallery) { System.currentTimeMillis() }
+        val galleryZone = ZoneId.systemDefault()
+        val galleryLocale = Locale.getDefault()
+        val galleryTimestamps = remember(gallery, relativeStrings) {
+            gallery.createdAtIsos.map { iso ->
+                iso?.let { isoToEpochMillisOrNull(it) }?.let { millis ->
+                    RelativeTimeFormat.short(
+                        epochMillis = millis,
+                        referenceMillis = galleryNow,
+                        zone = galleryZone,
+                        locale = galleryLocale,
+                        strings = relativeStrings,
+                    )
+                }
+            }
+        }
+        val galleryContext = LocalContext.current
+        val savedMessage = stringResource(R.string.image_saved_to_gallery)
+        val saveFailedMessage = stringResource(R.string.image_save_failed)
+        MeeshyImageViewer(
+            imageUrls = gallery.imageUrls,
+            initialIndex = gallery.startIndex,
+            onDismiss = actions.dismissImageViewer,
+            captions = gallery.captions,
+            authors = gallery.senderNames,
+            authorIdentities = gallery.authorIdentities,
+            timestamps = galleryTimestamps,
+            thumbnailUrls = gallery.thumbnailUrls,
+            altTexts = gallery.altTexts,
+            exportable = gallery.exportable,
+            secure = gallery.shieldsCapture,
+            onImageSaved = { result ->
+                val message = if (result.isSuccess) savedMessage else saveFailedMessage
+                Toast.makeText(galleryContext, message, Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
+
+    val signalClearance = LocalChatSignalClearance.current
+    val actionTarget = state.actionMessageId?.let { id ->
+        state.messages.firstOrNull { it.messageId == id }
+    }
+    val saveMessageMedia = rememberSaveMessageMedia()
+    if (actionTarget != null) {
+        val nowMillis = System.currentTimeMillis()
+        val createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso)
+        bubbleFrames[actionTarget.messageId]?.let { frame ->
+            val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) {
+                bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds)
+            }
+            CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers) {
+                MessageOverlayPreviewHero(
+                    frame = frame,
+                    content = actionTarget,
+                    accentColor = accentColor,
+                )
+            }
+        }
+        MessageActionsSheet(
+            bubble = actionTarget,
+            canEdit = !state.isEndToEnd && MessageEditability.canEdit(
+                isOwn = actionTarget.isOutgoing,
+                createdAtMillis = createdAtMillis,
+                nowMillis = nowMillis,
+            ),
+            canDeleteForEveryone = MessageDeletability.canDeleteForEveryone(
+                isOwn = actionTarget.isOutgoing,
+                createdAtMillis = createdAtMillis,
+                nowMillis = nowMillis,
+            ),
+            pinAction = MessagePinToggle.resolve(
+                isDeleted = actionTarget.isDeleted,
+                pinnedAtIso = actionTarget.pinnedAtIso,
+            ),
+            ownReactions = state.ownReactions[actionTarget.messageId] ?: emptySet(),
+            quickReactions = state.quickReactions,
+            accentColor = accentColor,
+            onReact = { emoji -> actions.toggleReaction(actionTarget.messageId, emoji) },
+            onExpandPicker = { actions.openEmojiPicker(actionTarget.messageId) },
+            onEdit = { actions.startEdit(actionTarget.messageId) },
+            onDeleteForEveryone = { actions.deleteForEveryone(actionTarget.messageId) },
+            onDeleteForMe = { actions.deleteForMe(actionTarget.messageId) },
+            onReply = { actions.startReply(actionTarget.messageId) },
+            onForward = { actions.openForward(actionTarget.messageId) },
+            onPin = { actions.togglePin(actionTarget.messageId) },
+            onStar = { actions.toggleStar(actionTarget.messageId) },
+            onToggleOriginal = { actions.toggleShowOriginal(actionTarget.messageId) },
+            onExploreLanguages = { actions.openLanguageExplorer(actionTarget.messageId) },
+            onReport = { actions.openReport(actionTarget.messageId) },
+            onOpenFile = { actions.onFileAttachmentOpen(actionTarget.messageId, null) },
+            onShareFile = { actions.onFileAttachmentShare(actionTarget.messageId, null) },
+            onDismiss = actions.dismissMessageActions,
+            hostedEntries = hostedDetailEntries(state.showReadReceipts),
+            onViews = { localRoute.open(MessageDetailRoute.Views(actionTarget.messageId)) },
+            onHistory = { localRoute.open(MessageDetailRoute.History(actionTarget.messageId)) },
+            onSentiment = { localRoute.open(MessageDetailRoute.Sentiment(actionTarget.messageId)) },
+            onMap = { localRoute.open(MessageDetailRoute.Map(actionTarget.messageId)) },
+            onExportCard = { exportMessageId = actionTarget.messageId },
+            onSelect = {
+                // Un lecteur sans interface de sélection (Résumé, Rivière) rend la main au Script.
+                host.readingMode?.let { reading ->
+                    MessageSelectionHost.landing(reading.state.mode)?.let { landing ->
+                        reading.select(landing)
+                        actions.scrollToMessage(actionTarget.messageId)
+                    }
+                }
+                actions.beginSelection(actionTarget.messageId)
+            },
+            canWrite = state.viewerMayWrite,
+            hasThread = ReplyThreads.of(state.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) })
+                .threadFor(actionTarget.messageId) != null,
+            conversationIsEndToEnd = state.isEndToEnd,
+            onThread = { actions.openReplyThread(actionTarget.messageId) },
+            onSaveMedia = { saveMessageMedia(actionTarget) },
+            onSharePiece = { pieceId -> actions.onFileAttachmentShare(actionTarget.messageId, pieceId) },
+            onTranscription = { localRoute.open(MessageDetailRoute.Transcription(actionTarget.messageId)) },
+            onReactions = { actions.openReactionDetails(actionTarget.messageId) },
+            signalClearance = signalClearance,
+        )
+    }
+
+    exportMessageId?.let { id ->
+        val target = state.messages.firstOrNull { it.messageId == id }
+        if (target == null) {
+            // Le message a quitté le fil : l'atelier ne se rouvrira pas sur lui plus tard.
+            LaunchedEffect(id) { exportMessageId = null }
+        } else {
+            CardExportSheet(bubble = target, conversationTitle = state.conversationTitle, onDismiss = { exportMessageId = null })
+        }
+    }
+    discussionEndingAt?.let { id ->
+        DiscussionCardExportSheet(state.messages, endingAt = id, conversationTitle = state.conversationTitle, onDismiss = { discussionEndingAt = null })
+    }
+
+    var fileViewer by remember { mutableStateOf<FileViewerRequest?>(null) }
+    var hubContactSeeds by remember { mutableStateOf(emptyMap<String, ContactCardResolutionScope>()) }
+    val openHubFile: (ApiMessage, ApiMessageAttachment) -> Unit = { carrier, attachment ->
+        hubContactSeeds = hubContactSeeds + (attachment.id to hubContactSeed(carrier, attachment))
+        actions.onHubFileOpen(carrier.id, attachment)
+    }
+    val contactGate = LocalChatContactCardScope.current
+    FileViewerHost(fileViewer, accentColor, host.navigation.onOpenConversation) { fileViewer = null }
+    FileAttachmentDownloadOverlay(
+        download = state.fileDownload,
+        onOpenInApp = { fileViewer = it.copy(contactScope = state.messages.contactScopeOf(it.attachmentId, contactGate, hubContactSeeds)) },
+        onDismiss = actions.dismissFileDownload,
+        onRetry = { actions.retryFileDownload() },
+    )
+
+    if (sheets.info) {
+        // Chaque entrée referme la fiche puis ouvre sa feuille : une seule feuille à la fois.
+        fun openFrom(open: () -> Unit): () -> Unit = { sheets.info = false; open() }
+        val encryptionRegime = if (state.isEndToEnd) {
+            ConversationEncryptionRegime.END_TO_END
+        } else {
+            ConversationEncryptionRegime.of(state.encryptionMode)
+        }
+        val entries = buildList {
+            add(
+                ConversationInfoEntry(
+                    icon = encryptionRegime.icon(),
+                    label = stringResource(R.string.encryption_detail_title),
+                    subtitle = stringResource(encryptionRegime.summaryRes()),
+                    onClick = openFrom { sheets.encryption = true },
+                ),
+            )
+            if (ConversationSecurityRow.showsSafetyNumber(!state.isGroup, encryptionRegime)) {
+                add(
+                    ConversationInfoEntry(
+                        icon = MeeshyIcons.LockFilled,
+                        label = stringResource(R.string.encryption_legacy_title),
+                        subtitle = stringResource(R.string.encryption_legacy_subtitle),
+                        onClick = openFrom { sheets.securityVerification = true },
+                    ),
+                )
+            }
+            // Moderator+ viewers of a group get the conversation-settings sheet (write-role /
+            // announcement / slow-mode); the share link is the « Partager » button of the Options.
+            if (state.slowModeExempt) {
+                add(ConversationInfoEntry(MeeshyIcons.Tune, stringResource(R.string.conversation_settings_title), openFrom { sheets.settings = true }))
+            }
+        }
+        val infoTitle = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title)
+        // L'onglet Options d'iOS (#13777) : une conversation quittée ou supprimée referme aussi le fil.
+        val options = rememberConversationOptionsSlots(
+            conversationId = state.conversationId,
+            peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
+            title = infoTitle,
+            accentColor = accentColor,
+            onOpenAppearance = openFrom { sheets.appearance = true },
+            onShare = openFrom(host.navigation.onCreateShareLink),
+            onExit = { exit ->
+                sheets.info = false
+                if (exit != ConversationOptionsExit.BLOCKED) host.navigation.onBack()
+            },
+        )
+        // Les onglets d'iOS (#13785) : Membres, Médias, Stats (l'analyse en tête, comme le tableau de bord iOS), Options.
+        val analysisEntry = ConversationInfoEntry(
+            MeeshyIcons.Sparkles,
+            stringResource(R.string.conversation_analysis_title),
+            openFrom { sheets.analysis = true },
+        )
+        val tabs = ConversationInfoTabSlots(
+            members = { modifier -> ConversationMembersContent(state.conversationId, accentColor, modifier) },
+            media = { modifier ->
+                ConversationMediaHubContent(
+                    conversationId = state.conversationId,
+                    accentColor = accentColor,
+                    isEndToEnd = state.isEndToEnd,
+                    conversationTitle = state.conversationTitle,
+                    onGoToMessage = { messageId ->
+                        sheets.info = false
+                        actions.scrollToMessage(messageId)
+                    },
+                    onOpenFile = openHubFile,
+                    modifier = modifier,
+                )
+            },
+            stats = { modifier ->
+                ConversationStatsContent(
+                    conversationId = state.conversationId,
+                    accentColor = accentColor,
+                    clientMessages = rememberClientStatMessages(state.messages),
+                    modifier = modifier,
+                    header = { ConversationInfoEntryRow(analysisEntry, accentColor) },
+                )
+            },
+            options = { modifier ->
+                Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.lg).padding(bottom = MeeshySpacing.xl)) {
+                    options.body()
+                }
+            },
+        )
+        ConversationInfoSheet(
+            title = infoTitle,
+            subtitle = if (state.isGroup && state.memberCount > 0) {
+                stringResource(R.string.chat_header_members, state.memberCount)
+            } else {
+                null
+            },
+            avatarUrl = host.header.avatarUrl,
+            accentColor = accentColor,
+            peerUserId = state.directPeerUserId.takeUnless { state.isGroup },
+            conversationId = state.conversationId,
+            entries = entries,
+            tabs = tabs,
+            onDismiss = { sheets.info = false },
+            pinnedPreview = ConversationInfoPinnedPreview.of(state.pinnedMessages),
+            onOpenPinned = openFrom(actions.openPinnedSheet),
+            headerActions = options.header,
+        )
+    }
+
+    if (sheets.encryption) {
+        ConversationEncryptionSheet(
+            conversationId = state.conversationId,
+            isDirect = !state.isGroup,
+            accentColor = accentColor,
+            onDismiss = { sheets.encryption = false },
+        )
+    }
+
+    if (sheets.securityVerification) {
+        SecurityVerificationSheet(
+            conversationName = state.conversationTitle ?: stringResource(R.string.chat_conversation_info_title),
+            onDismiss = { sheets.securityVerification = false },
+        )
+    }
+
+    if (sheets.settings) {
+        ConversationSettingsSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { sheets.settings = false },
+        )
+    }
+
+    if (sheets.members) {
+        ConversationMembersSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { sheets.members = false },
+        )
+    }
+
+    if (sheets.stats) {
+        ConversationStatsSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            clientMessages = rememberClientStatMessages(state.messages),
+            onDismiss = { sheets.stats = false },
+        )
+    }
+
+    if (sheets.appearance) {
+        ConversationAppearanceSheet(
+            conversationId = state.conversationId,
+            computedAccentHex = state.accentColorHex,
+            onDismiss = { sheets.appearance = false },
+        )
+    }
+
+    if (sheets.media) {
+        ConversationMediaHubSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            isEndToEnd = state.isEndToEnd,
+            conversationTitle = state.conversationTitle,
+            onGoToMessage = { messageId ->
+                sheets.media = false
+                actions.scrollToMessage(messageId)
+            },
+            onOpenFile = openHubFile,
+            onDismiss = { sheets.media = false },
+        )
+    }
+
+    if (sheets.analysis) {
+        ConversationAnalysisSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { sheets.analysis = false },
+        )
+    }
+
+    val detailRoute = MessageDetailRoutes.fromChatState(
+        reportMessageId = state.reportForm?.messageId,
+        languagesMessageId = state.explorerMessageId.takeIf { state.languageExplorer != null },
+        reactionsMessageId = state.reactionDetails?.messageId,
+    ) ?: localRoute.current
+    MessageDetailHost(
+        route = detailRoute,
+        onDismiss = { route ->
+            when (route) {
+                is MessageDetailRoute.Report -> actions.dismissReport()
+                is MessageDetailRoute.Languages -> actions.dismissLanguageExplorer()
+                is MessageDetailRoute.Reactions -> actions.closeReactionDetails()
+                else -> localRoute.close(route)
+            }
+        },
+        extra = { route ->
+            val target = state.messages.firstOrNull { it.messageId == route.messageId }
+            if (target != null) {
+                val sheetModifier = Modifier.navigationBarsPadding()
+                when (route) {
+                    is MessageDetailRoute.Views -> MessageViewsSheet(target, state.conversationId, accentColor, sheetModifier)
+                    is MessageDetailRoute.History -> MessageHistorySheet(target, accentColor, sheetModifier)
+                    is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
+                    is MessageDetailRoute.Map -> MessageMapSheet(target, state.accentColorHex, sheetModifier)
+                    is MessageDetailRoute.Transcription ->
+                        MessageTranscriptionSheet(route.messageId, actions.attachmentsOf(route.messageId), accentColor, sheetModifier)
+                    else -> Unit
+                }
+            }
+        },
+        reactions = {
+            state.reactionDetails?.let { details ->
+                ReactionDetailsSheet(
+                    details = details,
+                    accentColor = accentColor,
+                    onSelectTab = actions.selectReactionTab,
+                    // #13790 — la fiche « qui a réagi » se lit partout ; elle ne fait réagir que vers une conversation connue claire.
+                    onReact = { emoji: String -> actions.addReactionFromDetails(details.messageId, emoji) }
+                        .takeIf { PlainSignalAdmission.offers(signalClearance) },
+                    onOpenFullPicker = { actions.openEmojiPicker(details.messageId) }.takeIf { PlainSignalAdmission.offers(signalClearance) },
+                    modifier = Modifier.navigationBarsPadding(),
+                )
+            }
+        },
+        languages = { route ->
+            state.languageExplorer?.let { explorer ->
+                MessageLanguageExplorerSheet(
+                    explorer = explorer,
+                    accentColor = accentColor,
+                    onSelectLanguage = { code -> actions.onFlagTap(route.messageId, code) },
+                    onRetranslate = { code -> actions.onExplorerRetranslate(route.messageId, code) },
+                    onDismiss = actions.dismissLanguageExplorer,
+                )
+            }
+        },
+        report = {
+            state.reportForm?.let { form ->
+                ReportMessageSheet(
+                    form = form,
+                    accentColor = accentColor,
+                    onSelectReason = actions.selectReportReason,
+                    onDetailsChange = actions.onReportDetailsChange,
+                    onSubmit = actions.submitReport,
+                    onConfirmSubmit = actions.confirmReportSubmit,
+                    onCancelConfirm = actions.cancelReportConfirmation,
+                    onDismiss = actions.dismissReport,
+                )
+            }
+        },
+    )
+
+    val pickerMessageId = state.emojiPickerMessageId
+    if (pickerMessageId != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = actions.dismissEmojiPicker,
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { actions.dismissEmojiPicker() } },
+            ) {
+                me.meeshy.ui.component.ReactionCategorySheet(
+                    onReact = { emoji ->
+                        actions.toggleReaction(pickerMessageId, emoji)
+                        actions.dismissEmojiPicker()
+                    },
+                    onDismiss = actions.dismissEmojiPicker,
+                    accentColor = accentColor,
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).navigationBarsPadding(),
+                )
+            }
+        }
+    }
+
+    if (state.isPinnedSheetOpen) {
+        ModalBottomSheet(
+            onDismissRequest = actions.closePinnedSheet,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            PinnedMessagesSheet(
+                pins = state.pinnedMessages,
+                accentColor = accentColor,
+                onTap = actions.onPinnedMessageTap,
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+
+    if (state.isEffectsPickerOpen) {
+        ModalBottomSheet(
+            onDismissRequest = actions.dismissEffectsPicker,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            EffectsPickerSheet(
+                effects = state.pendingEffects,
+                accentColor = accentColor,
+                onToggle = actions.toggleEffect,
+                onSelectDuration = actions.selectEphemeralDuration,
+                onClear = actions.clearEffects,
+                onDone = actions.dismissEffectsPicker,
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+
+    val replyThread = state.replyThreadOverlay
+    if (replyThread != null) {
+        ModalBottomSheet(
+            onDismissRequest = actions.closeReplyThread,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            ReplyThreadSheet(
+                overlay = replyThread,
+                accentColor = accentColor,
+                onReplyTap = actions.onReplyThreadReplyTap,
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+
+    val forward = state.forward
+    if (forward != null) {
+        val discussionEnd = remember(forward, state.messages) { CardDiscussion.offeredEnd(forward, state.messages, System.currentTimeMillis()) }
+        ModalBottomSheet(
+            onDismissRequest = actions.closeForward,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            ShareSheet(
+                forward = forward,
+                accentColor = accentColor,
+                actions = ShareSheetActions(
+                    onQueryChange = actions.onForwardQueryChange,
+                    onToggle = { recipient -> recipient.conversationId?.let(actions.toggleForwardRecipient) },
+                    onCaptionChange = actions.onForwardCaptionChange,
+                    onDurationChange = actions.onForwardDurationChange,
+                    onSend = actions.sendForward,
+                    onDismiss = actions.closeForward,
+                    onImageDiscussion = discussionEnd?.let { id -> { actions.closeForward(); discussionEndingAt = id } },
+                ),
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+}
+
+/** Detail/selection entries the chat host can serve today; each joins once its fiche renderer exists. */
+private val HOSTED_DETAIL_ENTRIES: Set<MessageAction> =
+    setOf(
+        MessageAction.Views, MessageAction.History, MessageAction.Sentiment, MessageAction.Map, MessageAction.Select,
+        MessageAction.ExportCard, MessageAction.OpenLink, MessageAction.CopyLink, MessageAction.Thread, MessageAction.Translate,
+        MessageAction.Share, MessageAction.Transcription, MessageAction.Reactions,
+    )
+
+/**
+ * Réciprocité des accusés, comme `MessageActionResolver` iOS : qui a coupé ses accusés de lecture
+ * ne voit pas qui a lu — l'entrée « Vu par » disparaît du menu.
+ */
+internal fun hostedDetailEntries(
+    showReadReceipts: Boolean,
+    gallerySaveSupported: Boolean = GalleryImageSaver.isSupported,
+): Set<MessageAction> {
+    val served = if (gallerySaveSupported) HOSTED_DETAIL_ENTRIES + MessageAction.SaveMedia else HOSTED_DETAIL_ENTRIES
+    return if (showReadReceipts) served else served - MessageAction.Views
+}
+
+/** Les messages chargés, projetés pour les statistiques locales (la feuille Stats et l'onglet Stats de la fiche). */
+@Composable
+private fun rememberClientStatMessages(messages: List<BubbleContent>): List<ClientStatMessage> {
+    val zone = remember { ZoneId.systemDefault() }
+    return remember(messages) { messages.filterNot { it.isDeleted }.map { it.toClientStatMessage(zone) } }
+}

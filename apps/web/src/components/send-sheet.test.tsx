@@ -348,16 +348,16 @@ describe('SendSheet — ce qui part', () => {
     expect(calls.filter((call) => call.port === 'sendMessage')).toHaveLength(2);
   });
 
-  test('V9 : au-delà de vingt fichiers, l’écran dit la limite, marque l’excédent et propose de le retirer', async () => {
-    const files = Array.from({ length: 22 }, (_, i) => new File(['x'], `${i}.jpg`, { type: 'image/jpeg' }));
+  test('V9 : au-delà de cent fichiers, l’écran dit la limite, marque l’excédent et propose de le retirer', async () => {
+    const files = Array.from({ length: 102 }, (_, i) => new File(['x'], `${i}.jpg`, { type: 'image/jpeg' }));
     const host = await mount({ request: { payload: { kind: 'files', files }, intent: 'share' } });
     await mounter.click(row(host, 'conversation:c-lyon'));
-    expect(host.querySelector('[data-send-over-limit]')?.textContent).toContain('Un partage emporte au plus 20 fichiers');
+    expect(host.querySelector('[data-send-over-limit]')?.textContent?.replace(/\s/gu, ' ')).toContain('Un partage emporte au plus 100 fichiers et 5 Go.');
     expect(host.querySelectorAll('[data-send-piece][data-over]')).toHaveLength(2);
     expect(sendButton(host)?.disabled).toBe(true);
     expect(sendButton(host)?.textContent).toBe('Retirez 2 fichiers pour envoyer');
     await mounter.click(buttonNamed(host, 'Retirer les 2 derniers'));
-    expect(host.querySelectorAll('[data-send-piece]')).toHaveLength(20);
+    expect(host.querySelectorAll('[data-send-piece]')).toHaveLength(100);
     expect(sendButton(host)?.disabled).toBe(false);
   });
 
@@ -525,14 +525,14 @@ describe('SendSheet — envoyer', () => {
   });
 });
 
-describe('SendSheet — copier, partager hors de Meeshy', () => {
+describe('SendSheet — copier, partager', () => {
   test('un texte sans adresse n’a rien à copier ni à partager dehors ; un lien, si', async () => {
     const without = await mount({ request: { payload: { kind: 'text', text: 'Bonjour' }, intent: 'share' } });
-    expect(buttonNamed(without, 'Partager hors de Meeshy')).toBe(null);
+    expect(buttonNamed(without, 'Partager')).toBe(null);
 
     const shared: unknown[] = [];
     const host = await mount({ platform: { share: async (data) => void shared.push(data), copy: async () => {} } });
-    await mounter.click(buttonNamed(host, 'Partager hors de Meeshy'));
+    await mounter.click(buttonNamed(host, 'Partager'));
     expect(shared).toEqual([{ url: 'https://meeshy.me/p/1' }]);
   });
 
@@ -587,10 +587,10 @@ describe('SendSheet — le partage est COMPTÉ quand il est parti (#8884)', () =
     expect(counted).toBe(0);
   });
 
-  test('« Partager hors de Meeshy » compte quand la feuille du système a partagé, pas quand elle est refusée', async () => {
+  test('« Partager » compte quand la feuille du système a partagé, pas quand elle est refusée', async () => {
     let counted = 0;
     const accepted = await mount({ request: sharedRequest(() => void (counted += 1)), platform: { share: async () => {} } });
-    await mounter.click(buttonNamed(accepted, 'Partager hors de Meeshy'));
+    await mounter.click(buttonNamed(accepted, 'Partager'));
     await mounter.settle();
     expect(counted).toBe(1);
 
@@ -603,7 +603,7 @@ describe('SendSheet — le partage est COMPTÉ quand il est parti (#8884)', () =
         },
       },
     });
-    await mounter.click(buttonNamed(refused, 'Partager hors de Meeshy'));
+    await mounter.click(buttonNamed(refused, 'Partager'));
     await mounter.settle();
     expect(refusedCount).toBe(0);
   });
@@ -623,5 +623,13 @@ describe('sizeIn — le poids se dit dans la langue du lecteur', () => {
     expect(plain(sizeIn('fr', 500 * 1024 * 1024))).toBe('500 Mo');
     expect(plain(sizeIn('en', 500 * 1024 * 1024))).toBe('500 MB');
     expect(plain(sizeIn('fr', 2048))).toBe('2 ko');
+  });
+
+  test('à partir d’un gibioctet, le poids se dit en gigaoctets — « 5 Go », jamais « 5 120 Mo »', () => {
+    const plain = (text: string) => text.replace(/\s/gu, ' ');
+    expect(plain(sizeIn('fr', 5 * 1024 * 1024 * 1024))).toBe('5 Go');
+    expect(plain(sizeIn('en', 5 * 1024 * 1024 * 1024))).toBe('5 GB');
+    expect(plain(sizeIn('fr', 1.5 * 1024 * 1024 * 1024))).toBe('1,5 Go');
+    expect(plain(sizeIn('fr', 1023 * 1024 * 1024))).toBe('1 023 Mo');
   });
 });

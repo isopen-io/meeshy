@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createLottieBudget } from './budget';
+import { createLottieBudget, liveLottieLayersFor, MAX_LIVE_LOTTIE_LAYERS } from './budget';
 
 /**
  * UNE LISTE LONGUE NE MONTE JAMAIS PLUS DE N FILMS (#10815) — le budget borne
@@ -116,5 +116,14 @@ describe('le budget des couches Lottie', () => {
     expect(budget.holders()).toBe(0);
     a.setVisible(true);
     expect(state.granted).toEqual(['a']);
+  });
+});
+
+describe('le plafond des films vivants suit le tier de l\'appareil (W10)', () => {
+  test('trois films sur un appareil bas, cinq sur un moyen, huit sinon', () => {
+    expect(liveLottieLayersFor('low')).toBe(3);
+    expect(liveLottieLayersFor('mid')).toBe(5);
+    expect(liveLottieLayersFor('high')).toBe(MAX_LIVE_LOTTIE_LAYERS);
+    expect(liveLottieLayersFor('pro')).toBe(MAX_LIVE_LOTTIE_LAYERS);
   });
 });

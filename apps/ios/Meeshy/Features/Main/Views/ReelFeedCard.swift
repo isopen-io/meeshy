@@ -300,7 +300,7 @@ struct ReelFeedCard: View, Equatable {
                     document: document,
                     isActive: isActive,
                     accentColor: accentHex,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                    preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                 )
                 .equatable()
                 .frame(width: width, height: height)
@@ -575,6 +575,7 @@ struct ReelFeedCard: View, Equatable {
                 Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
             }
         }
+        ImagerMenuButton(action: PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator))
         if PublicationViewersAccess.mayList(postType: post.type, isAuthor: isAuthor, viewerRole: AuthManager.shared.currentUser?.role) {
             PublicationViewersMenuButton { showViewersSheet = true }
         }

@@ -29,6 +29,7 @@ public struct MeeshyVideoThumbnail: View {
     public var showDurationBadge: Bool
     public var cornerRadius: CGFloat
     public var onTap: (() -> Void)?
+    let imageLoader: any MediaImageLoading
 
     @State private var thumbnail: UIImage?
     @State private var isLoading = false
@@ -41,8 +42,10 @@ public struct MeeshyVideoThumbnail: View {
         showPlayBadge: Bool = true,
         showDurationBadge: Bool = true,
         cornerRadius: CGFloat = 0,
+        imageLoader: any MediaImageLoading = CoordinatorImageLoader.thumbnails,
         onTap: (() -> Void)? = nil
     ) {
+        self.imageLoader = imageLoader
         self.attachment = attachment
         self.videoUrlString = attachment.fileUrl
         self.accentColor = accentColor
@@ -205,9 +208,7 @@ public struct MeeshyVideoThumbnail: View {
         //    poster était ré-extrait (1 Mo réseau) à chaque ouverture froide.
         //    Décodé borné (`maxPixelSize`) : la clé est partagée avec le poster
         //    plein écran, qui peut y avoir écrit une frame 1080p.
-        let thumbStore = await CacheCoordinator.shared.thumbnails
-        if thumbStore.cachedFileURL(for: thumbKey) != nil,
-           let image = await thumbStore.image(for: thumbKey, maxPixelSize: Self.persistedPosterDecodeSize) {
+        if let image = await Self.persistedPoster(forKey: thumbKey, using: imageLoader) {
             withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
             return
         }
@@ -218,7 +219,7 @@ public struct MeeshyVideoThumbnail: View {
         do {
             let image = try await Self.extractRemoteFirstFrame(from: url)
             if let jpegData = image.jpegData(compressionQuality: 0.7) {
-                await thumbStore.store(jpegData, for: thumbKey)
+                await imageLoader.store(jpegData, for: thumbKey)
             }
             guard !Task.isCancelled else { return }
             withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
@@ -233,6 +234,11 @@ public struct MeeshyVideoThumbnail: View {
     /// surface de liste/bulle — borne la mémoire quand la clé `thumb:<url>`
     /// porte une frame de grade plein écran.
     private static let persistedPosterDecodeSize: CGFloat = 600
+
+    static func persistedPoster(forKey key: String, using loader: any MediaImageLoading) async -> UIImage? {
+        guard await loader.persistedFileURL(for: key) != nil else { return nil }
+        return await loader.image(for: key, maxPixelSize: persistedPosterDecodeSize)
+    }
 
     // MARK: - Remote first-frame extraction (atom)
 
@@ -263,20 +269,18 @@ public struct MeeshyVideoThumbnail: View {
         try data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
-        let asset = AVURLAsset(url: tempURL)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxDimension, height: maxDimension)
-
-        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-        let (cgImage, _) = try await generator.image(at: time)
-        return UIImage(cgImage: cgImage)
+        guard let image = await VideoThumbnailGenerator.shared.image(for: VideoThumbnailRequest(
+            url: tempURL, instants: .start(atMost: 0.1),
+            maximumSize: CGSize(width: maxDimension, height: maxDimension), cachesResult: false)) else {
+            throw VideoThumbnailError.undecodable
+        }
+        return image
     }
 
     // MARK: - Duration formatting
 
     private static func formatDuration(milliseconds: Int) -> String {
-        DurationFormat.clock(wholeSeconds: milliseconds / 1000)
+        MediaFormat.duration(milliseconds / 1000)
     }
 }
 

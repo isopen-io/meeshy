@@ -149,4 +149,18 @@ describe('PackShop × stickers', () => {
     expect(installedSlugs()).toEqual([]);
     expect(shop.querySelector('[data-shop-toggle="exemple-meeshy"]')?.getAttribute('aria-pressed')).toBe('false');
   });
+
+  test('un retrait REFUSÉ par le serveur (409) dit en mots que le pack reste installé, jamais le message générique', async () => {
+    appQueryClient.setQueryData(PACK_CATALOGUE_QUERY_KEY, [{ ...community, installed: true }]);
+    appQueryClient.setQueryData(INSTALLED_PACKS_QUERY_KEY, []);
+    const { deps } = gatewayDeps((request) =>
+      request.method === 'DELETE' ? { ok: false, status: 409, error: 'This pack cannot be removed', code: 'PACK_NOT_REMOVABLE' } : { ok: false, status: 503, error: 'indisponible' },
+    );
+    const shop = await mountShop(deps);
+    await mounter.click(shop.querySelector<HTMLElement>('[data-shop-toggle="exemple-meeshy"]'));
+    await until(() => shop.querySelector('[role="status"]')?.textContent !== '');
+    expect(shop.querySelector('[role="status"]')?.textContent).toBe('Ce pack reste installé : il ne peut pas être retiré.');
+    expect(shop.querySelector<HTMLElement>('[role="status"]')?.style.color).not.toContain('--ios-error');
+    expect(shop.querySelector('[data-shop-toggle="exemple-meeshy"]')?.getAttribute('aria-pressed')).toBe('true');
+  });
 });

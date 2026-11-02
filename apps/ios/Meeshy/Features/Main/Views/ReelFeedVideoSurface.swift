@@ -128,7 +128,9 @@ struct ReelFeedVideoSurface: View {
 
     var body: some View {
         VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, _ in
-            content(ready: availability == .ready)
+            // #12027 : prêt aussi pendant un téléchargement LISIBLE — le
+            // moteur joue sa tête (`SharedAVPlayerManager.load`, étape 3).
+            content(ready: availability.playsNow(fileUrl: attachment.fileUrl))
         }
         .onReceive(manager.$activeURL) { activeURL = $0 }
         .onReceive(manager.$player) { player = $0 }

@@ -81,8 +81,8 @@ extension StoryMediaLayer {
 
     @MainActor
     private func loadFileImageImmediately(_ media: StoryMediaObject, url: URL) {
-        guard let data = try? Data(contentsOf: url),
-              let cgImage = CanvasImageOrientation.displayCGImage(Self.filtered(UIImage(data: data), for: media)) else {
+        guard let cgImage = CanvasImageOrientation.displayCGImage(
+            Self.filtered(StoryLayerImageDecoding.decodedImageNow(fileAt: url), for: media)) else {
             return
         }
         contents = cgImage

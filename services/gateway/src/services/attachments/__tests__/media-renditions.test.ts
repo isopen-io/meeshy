@@ -114,7 +114,7 @@ describe('media-renditions — la fabrique commune des rendus (#11260)', () => {
 
   describe('vidéo', () => {
     const relPath = '2026/10/u1/clip.mov';
-    const bigClip = { width: 3840, height: 2160, bitrate: 20_000_000, videoCodec: 'hevc' };
+    const bigClip = { width: 3840, height: 2160, bitrate: 20_000_000, videoCodec: 'vp9' };
 
     async function placeClip(bytes: number): Promise<void> {
       await fs.mkdir(path.dirname(path.join(root, relPath)), { recursive: true });
@@ -168,7 +168,7 @@ describe('media-renditions — la fabrique commune des rendus (#11260)', () => {
       expect(deps.runFfmpeg).not.toHaveBeenCalled();
       expect(out.storedPath).toBe(relPath);
       expect(out.storedMimeType).toBe('video/quicktime');
-      expect(out.metadata.videoCodec).toBe('hevc');
+      expect(out.metadata.videoCodec).toBe('vp9');
     });
 
     it('ne transcode pas au-delà du plafond synchrone et garde l original', async () => {

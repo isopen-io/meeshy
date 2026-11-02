@@ -36,6 +36,15 @@ enum StoryLayerImageDecoding {
         }.value
     }
 
+    /// **Le chemin SYNCHRONE** — export, capture, instantané : leur couche doit
+    /// porter ses pixels dès le retour de l'appel (#9872). `UIImage(contentsOfFile:)`
+    /// laisse ImageIO lire le fichier sans en recopier les octets en mémoire,
+    /// là où `Data(contentsOf:)` dupliquait le fichier entier sous le MainActor.
+    /// Mêmes pixels, même orientation EXIF que `UIImage(data:)`.
+    nonisolated static func decodedImageNow(fileAt url: URL) -> UIImage? {
+        UIImage(contentsOfFile: url.path)
+    }
+
     /// Décode des octets déjà en mémoire (chemin cache / réseau), hors du
     /// MainActor. Le cache rend des OCTETS : sans ce saut, l'appelant décodait
     /// sur le fil principal une image qu'il venait pourtant d'attendre.

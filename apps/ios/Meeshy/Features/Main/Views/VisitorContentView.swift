@@ -361,7 +361,6 @@ struct VisitorMediaView: View {
                     accentColor: MeeshyColors.brandPrimaryHex,
                     frame: .card,
                     availability: availability,
-                    performance: .inline,
                     autoplayOnAppear: isPrimaryVideo,
                     autoplayMuted: true,
                     onDownload: onDownload

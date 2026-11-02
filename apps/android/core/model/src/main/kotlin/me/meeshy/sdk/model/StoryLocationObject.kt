@@ -17,6 +17,10 @@ data class StoryLocationObject(
     val rotation: Double = 0.0,
     val zIndex: Int = 0,
     val anchor: StoryAnchorPoint = StoryAnchorPoint(),
+    /** Langue d'origine de l'élément (`null` : publications antérieures). */
+    val sourceLanguage: String? = null,
+    /** Gabarit qui décore la pastille ; `null` ou inconnu : la pastille d'origine. */
+    val styleId: String? = null,
     val startTime: Double? = null,
     val duration: Double? = null,
     val fadeIn: Double? = null,

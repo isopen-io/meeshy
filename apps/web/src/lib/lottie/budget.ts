@@ -1,3 +1,5 @@
+import { currentDeviceTier, type DeviceTier } from '../device/capability-tier';
+
 /**
  * **LE PLAFOND DES FILMS VIVANTS** (#10815) — une liste longue (conversations,
  * fil, participants) porte un contour animé par rangée ; sans borne, chaque
@@ -79,7 +81,20 @@ export function createLottieBudget(max: number): LottieBudget {
   return { claim, holders: () => holders.size };
 }
 
-/** Le budget de la session : huit films vivants, toutes surfaces confondues. */
+/** Le plafond historique : huit films vivants, toutes surfaces confondues. */
 export const MAX_LIVE_LOTTIE_LAYERS = 8;
 
-export const sharedLottieBudget: LottieBudget = createLottieBudget(MAX_LIVE_LOTTIE_LAYERS);
+const MID_TIER_LIVE_LAYERS = 5;
+const LOW_TIER_LIVE_LAYERS = 3;
+
+/**
+ * Le plafond propre à l'appareil (W10) : il ne fait que BAISSER (bas et moyen) ;
+ * haut, pro et appareil non classé gardent le maximum historique. Chaque film
+ * vivant tient un arbre SVG animé : trois sur un appareil bas, cinq sur un moyen.
+ * Argumenté, non mesuré : le coût se relève au profil sur un appareil de chaque tier.
+ */
+export const liveLottieLayersFor = (tier: DeviceTier): number =>
+  tier === 'low' ? LOW_TIER_LIVE_LAYERS : tier === 'mid' ? MID_TIER_LIVE_LAYERS : MAX_LIVE_LOTTIE_LAYERS;
+
+/** Le budget de la session, dimensionné par le tier de l'appareil à la première lecture. */
+export const sharedLottieBudget: LottieBudget = createLottieBudget(liveLottieLayersFor(currentDeviceTier()));

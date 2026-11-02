@@ -55,4 +55,13 @@ object CallWaitingReducer {
         is CallWaitingEvent.RemotelyEnded ->
             if (state.pending?.callId == event.callId) CallWaitingState.EMPTY else state
     }
+
+    /**
+     * The pending call an [incoming] offer pushes out of the single slot, or `null`
+     * when nobody is displaced (empty banner, or a redelivery of the pending call).
+     * The displaced caller must be refused on the wire, else it rings into the void
+     * (parity with iOS `rejectSupersededPendingCall`).
+     */
+    fun displacedBy(state: CallWaitingState, incoming: WaitingCall): WaitingCall? =
+        state.pending?.takeIf { it.callId != incoming.callId }
 }

@@ -174,12 +174,12 @@ final class ReportMessageSheetPaletteTests: XCTestCase {
         // #4084 — la feuille est présentée depuis le menu d'options, qui vit
         // dans l'en-tête ; celui-ci a quitté `+Sidebar` pour son propre fichier.
         XCTAssertTrue(
-            strippedSource("Features/Main/Views/StoryViewerView+Header.swift")
+            strippedSource("Features/Stories/Views/StoryViewerView+Header.swift")
                 .contains("ReportMessageSheet("),
             "Point de présentation attendu : l'en-tête de StoryViewerView."
         )
         XCTAssertTrue(
-            strippedSource("Features/Main/Views/StoryViewerView.swift")
+            strippedSource("Features/Stories/Views/StoryViewerView.swift")
                 .contains(".preferredColorScheme(.dark)"),
             "C'est ce forçage qui fait hériter la feuille du mode sombre pour TOUS les utilisateurs."
         )

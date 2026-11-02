@@ -1,5 +1,9 @@
 package me.meeshy.ui.component.recording
 
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import me.meeshy.sdk.model.accessibility.RestingWaveform
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +63,7 @@ public fun VoiceRecordingPill(
 ) {
     val tokens = MeeshyTheme.tokens
     val canSend = session.canSend
+    val reduceMotion = LocalReduceMotion.current
 
     Surface(
         color = accentColor.copy(alpha = 0.06f),
@@ -90,6 +95,7 @@ public fun VoiceRecordingPill(
             RecordingWaveform(
                 levels = session.levels,
                 accentColor = accentColor,
+                reduceMotion = reduceMotion,
                 modifier = Modifier
                     .weight(1f)
                     .height(28.dp),
@@ -103,7 +109,7 @@ public fun VoiceRecordingPill(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(tokens.error.copy(alpha = session.recordingDotOpacity(reduceMotion = false))),
+                        .background(tokens.error.copy(alpha = session.recordingDotOpacity(reduceMotion = reduceMotion))),
                 )
                 Text(
                     text = session.formattedElapsed,
@@ -159,10 +165,14 @@ public fun VoiceRecordingPill(
  * toward its new level via [animateFloatAsState] rather than snapping, so a fast
  * meter tick still reads as fluid.
  */
+private const val BAR_MIN_HEIGHT_DP = 3f
+private const val BAR_MAX_HEIGHT_DP = 25f
+
 @Composable
 private fun RecordingWaveform(
     levels: List<Float>,
     accentColor: Color,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -170,12 +180,21 @@ private fun RecordingWaveform(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        levels.forEach { level ->
-            val animatedLevel by animateFloatAsState(targetValue = level, label = "waveformBar")
+        levels.forEachIndexed { index, level ->
+            val animatedLevel by animateFloatAsState(
+                targetValue = level,
+                animationSpec = if (reduceMotion) snap<Float>() else spring<Float>(),
+                label = "waveformBar",
+            )
+            val barHeight = if (reduceMotion) {
+                RestingWaveform.height(index, BAR_MIN_HEIGHT_DP, BAR_MAX_HEIGHT_DP)
+            } else {
+                BAR_MIN_HEIGHT_DP + (BAR_MAX_HEIGHT_DP - BAR_MIN_HEIGHT_DP) * animatedLevel
+            }
             Box(
                 modifier = Modifier
                     .width(2.5.dp)
-                    .height((3f + 22f * animatedLevel).dp)
+                    .height(barHeight.dp)
                     .clip(RoundedCornerShape(1.25.dp))
                     .background(accentColor.copy(alpha = 0.75f)),
             )

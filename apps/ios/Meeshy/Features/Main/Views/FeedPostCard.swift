@@ -188,7 +188,7 @@ struct FeedPostCard: View {
     /// flag tap (`activeDisplayLangCode`) always overrides the auto-resolution.
     private var currentDisplayLangCode: String {
         activeDisplayLangCode
-            ?? post.resolvedLanguageCode(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            ?? post.resolvedLanguageCode(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             ?? "fr"
     }
 
@@ -221,7 +221,7 @@ struct FeedPostCard: View {
         Self.availableFlags(
             originalLanguage: post.originalLanguage,
             translationKeys: post.translations.map { Array($0.keys) } ?? [],
-            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             activeLanguage: currentDisplayLangCode
         )
     }
@@ -564,7 +564,7 @@ struct FeedPostCard: View {
                         document: cardSceneDocument,
                         accentColor: accentColor,
                         preferredContentLanguages:
-                            AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                            ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                         // **L'index VOYAGE** : la tuile touchée ouvre SA scène.
                         onTapScene: { index in
                             if cardSceneOpensFullscreen { openSceneFullscreen(at: index) }
@@ -631,7 +631,7 @@ struct FeedPostCard: View {
                     StoryRepostSurface(
                         coordinator: reelAutoplay,
                         post: post,
-                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages
+                        preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                     )
                 } else if isReelRepost {
                     // Repost-of-REEL: a reel's content lives in media/caption, never
@@ -715,7 +715,7 @@ struct FeedPostCard: View {
                     onRepost: onRepost,
                     onQuote: onQuote,
                     onBookmark: onBookmark,
-                    onShare: onShare
+                    sendSubject: .publication(post)
                 )
                 .equatable()
             }
@@ -779,7 +779,7 @@ struct FeedPostCard: View {
                     }, onOpenReel: { reel, reels in
                         ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
                     }))
-                }
+                }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
@@ -809,7 +809,7 @@ struct FeedPostCard: View {
             startMediaId: fullscreenMediaId,
             startSceneIndex: fullscreenSceneIndex,
             accentColor: accentColor,
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             zoomSourceID: SceneZoomTransition.destinationID(postId: post.id, hasScene: cardSceneDocument != nil,
                                                             startMediaId: fullscreenMediaId)
         )
@@ -831,6 +831,7 @@ struct FeedPostCard: View {
     var canSaveMedia: Bool {
         PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
+    var imagerAction: (() -> Void)? { PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator) }
 
 
     // MARK: - Repost View

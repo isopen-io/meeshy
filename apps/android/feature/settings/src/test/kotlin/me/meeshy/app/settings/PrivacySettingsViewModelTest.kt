@@ -21,9 +21,14 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.location.InMemoryLocationSharingPreferencesStore
 import me.meeshy.sdk.location.LocationSharingPreferencesStore
 import me.meeshy.sdk.model.LocationPrecision
+import me.meeshy.sdk.model.PrivacyCatalog
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
+import me.meeshy.sdk.model.SharedMapStyle
+import me.meeshy.sdk.model.PrivacyInfoTopic
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.PrivacyToggle
+import me.meeshy.sdk.privacy.AnalyticsCollectionGate
+import me.meeshy.sdk.privacy.NoOpAnalyticsCollectionGate
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.privacy.PrivacyPreferencesSyncRepository
 import org.junit.After
@@ -72,7 +77,8 @@ class PrivacySettingsViewModelTest {
         sync: PrivacyPreferencesSyncRepository = mockk(relaxed = true),
         workManager: WorkManager = mockk(relaxed = true),
         locationStore: LocationSharingPreferencesStore = InMemoryLocationSharingPreferencesStore(),
-    ) = PrivacySettingsViewModel(store, sync, workManager, locationStore)
+        gate: AnalyticsCollectionGate = NoOpAnalyticsCollectionGate,
+    ) = PrivacySettingsViewModel(store, sync, workManager, locationStore, gate)
 
     @Test
     fun state_mirrorsThePersistedPreferences() = runTest {
@@ -105,13 +111,13 @@ class PrivacySettingsViewModelTest {
 
         // « Appels hors contacts » est vrai par défaut : le fermer est le vrai changement.
         vm.setToggle(PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS, false)
-        vm.setToggle(PrivacyToggle.BLOCK_SCREENSHOTS, true)
+        vm.setToggle(PrivacyToggle.SHOW_TYPING_INDICATOR, false)
         vm.setToggle(PrivacyToggle.ALLOW_ANALYTICS, true)
         advanceUntilIdle()
 
         val prefs = store.preferences.value
         assertThat(prefs.acceptCallsFromNonContacts).isFalse()
-        assertThat(prefs.blockScreenshots).isTrue()
+        assertThat(prefs.showTypingIndicator).isFalse()
         assertThat(prefs.allowAnalytics).isTrue()
     }
 
@@ -158,7 +164,7 @@ class PrivacySettingsViewModelTest {
         val vm = vm(store = store)
         advanceUntilIdle()
 
-        vm.setToggle(PrivacyToggle.BLOCK_SCREENSHOTS, true)
+        vm.setToggle(PrivacyToggle.SHOW_TYPING_INDICATOR, false)
         advanceUntilIdle()
 
         assertThat(store.writeCount).isEqualTo(1)
@@ -174,14 +180,14 @@ class PrivacySettingsViewModelTest {
         val vm = vm(store = store, sync = sync, workManager = workManager)
         advanceUntilIdle()
 
-        vm.setToggle(PrivacyToggle.BLOCK_SCREENSHOTS, true)
+        vm.setToggle(PrivacyToggle.SHOW_TYPING_INDICATOR, false)
         advanceUntilIdle()
 
         // instant local persist (UI SSOT)
-        assertThat(store.preferences.value.blockScreenshots).isTrue()
+        assertThat(store.preferences.value.showTypingIndicator).isFalse()
         // the durable enqueue carries the just-updated snapshot
         coVerify(exactly = 1) { sync.enqueueSync(any()) }
-        assertThat(captured.captured.blockScreenshots).isTrue()
+        assertThat(captured.captured.showTypingIndicator).isFalse()
         verify(exactly = 1) { workManager.enqueue(any<WorkRequest>()) }
     }
 
@@ -211,11 +217,11 @@ class PrivacySettingsViewModelTest {
         val vm = vm(store = store, sync = sync, workManager = workManager)
         advanceUntilIdle()
 
-        vm.setToggle(PrivacyToggle.BLOCK_SCREENSHOTS, true)
+        vm.setToggle(PrivacyToggle.SHOW_TYPING_INDICATOR, false)
         advanceUntilIdle()
 
         // local persist still happens (UI SSOT)
-        assertThat(store.preferences.value.blockScreenshots).isTrue()
+        assertThat(store.preferences.value.showTypingIndicator).isFalse()
         coVerify(exactly = 1) { sync.enqueueSync(any()) }
         verify(exactly = 0) { workManager.enqueue(any<WorkRequest>()) }
     }
@@ -224,7 +230,7 @@ class PrivacySettingsViewModelTest {
     fun locationPrecision_defaultsToExact() = runTest {
         val vm = vm()
         advanceUntilIdle()
-        assertThat(vm.state.value.locationPrecision).isEqualTo(LocationPrecision.EXACT)
+        assertThat(vm.state.value.locationSharing.precision).isEqualTo(LocationPrecision.EXACT)
     }
 
     @Test
@@ -237,6 +243,89 @@ class PrivacySettingsViewModelTest {
         advanceUntilIdle()
 
         assertThat(location.preferences.value.precision).isEqualTo(LocationPrecision.CITY)
-        assertThat(vm.state.value.locationPrecision).isEqualTo(LocationPrecision.CITY)
+        assertThat(vm.state.value.locationSharing.precision).isEqualTo(LocationPrecision.CITY)
+    }
+
+    @Test
+    fun setLocationMapStyle_persistsAndRepaints() = runTest {
+        val location = InMemoryLocationSharingPreferencesStore()
+        val vm = vm(locationStore = location)
+        advanceUntilIdle()
+
+        vm.setLocationMapStyle(SharedMapStyle.IMAGERY)
+        advanceUntilIdle()
+
+        assertThat(location.preferences.value.mapStyle).isEqualTo(SharedMapStyle.IMAGERY)
+        assertThat(vm.state.value.locationSharing.mapStyle).isEqualTo(SharedMapStyle.IMAGERY)
+    }
+
+    private class RecordingGate : AnalyticsCollectionGate {
+        val calls = mutableListOf<Boolean>()
+        override fun onAnalyticsConsentChanged(enabled: Boolean) { calls += enabled }
+    }
+
+    @Test
+    fun setToggle_onAComingSoonRow_isRefused_andTheStoredValueStaysIntact() = runTest {
+        val store = RecordingStore(PrivacyPreferences(blockScreenshots = true))
+        val sync = mockk<PrivacyPreferencesSyncRepository>(relaxed = true)
+        val vm = vm(store = store, sync = sync)
+        advanceUntilIdle()
+
+        listOf(
+            PrivacyToggle.BLOCK_SCREENSHOTS, PrivacyToggle.SAVE_MEDIA_TO_GALLERY,
+            PrivacyToggle.SHARE_USAGE_DATA, PrivacyToggle.ALLOW_CONTACT_REQUESTS,
+            PrivacyToggle.ALLOW_GROUP_INVITES,
+        ).forEach { vm.setToggle(it, !PrivacyCatalog.isEnabled(store.preferences.value, it)) }
+        advanceUntilIdle()
+
+        assertThat(store.writeCount).isEqualTo(0)
+        assertThat(store.preferences.value.blockScreenshots).isTrue()
+        coVerify(exactly = 0) { sync.enqueueSync(any()) }
+    }
+
+    @Test
+    fun setToggle_notifyContactsOnReturn_persistsAndSyncsTheThirteenthKey() = runTest {
+        val store = RecordingStore()
+        val sync = mockk<PrivacyPreferencesSyncRepository>()
+        val captured = slot<PrivacyPreferences>()
+        coEvery { sync.enqueueSync(capture(captured)) } returns "cmid_1"
+        val vm = vm(store = store, sync = sync)
+        advanceUntilIdle()
+
+        vm.setToggle(PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN, false)
+        advanceUntilIdle()
+
+        assertThat(store.preferences.value.notifyContactsOnReturn).isFalse()
+        assertThat(PrivacyPreferenceSyncBody.from(captured.captured).notifyContactsOnReturn).isFalse()
+    }
+
+    @Test
+    fun info_opensForARowAndClosesOnDismiss() = runTest {
+        val vm = vm()
+        advanceUntilIdle()
+        assertThat(vm.state.value.presentedInfo).isNull()
+
+        vm.showInfo(PrivacyInfoTopic.READ_RECEIPTS)
+        advanceUntilIdle()
+        assertThat(vm.state.value.presentedInfo).isEqualTo(PrivacyInfoTopic.READ_RECEIPTS)
+
+        vm.dismissInfo()
+        advanceUntilIdle()
+        assertThat(vm.state.value.presentedInfo).isNull()
+    }
+
+    @Test
+    fun analyticsGate_isCalledOncePerRealChange_andNeverForOtherTogglesOrNoOps() = runTest {
+        val gate = RecordingGate()
+        val vm = vm(gate = gate)
+        advanceUntilIdle()
+
+        vm.setToggle(PrivacyToggle.ALLOW_ANALYTICS, true)
+        vm.setToggle(PrivacyToggle.ALLOW_ANALYTICS, true)
+        vm.setToggle(PrivacyToggle.SHOW_LAST_SEEN, false)
+        vm.setToggle(PrivacyToggle.ALLOW_ANALYTICS, false)
+        advanceUntilIdle()
+
+        assertThat(gate.calls).containsExactly(true, false).inOrder()
     }
 }

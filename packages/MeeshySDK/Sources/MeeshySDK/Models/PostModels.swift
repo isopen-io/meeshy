@@ -454,12 +454,6 @@ private func thumbnailColorForMime(_ mimeType: String?) -> String {
     AttachmentKind(mimeType: mimeType ?? "").hexTintColor
 }
 
-private func formatFileSize(_ bytes: Int) -> String {
-    if bytes < 1024 { return "\(bytes) B" }
-    if bytes < 1048576 { return String(format: "%.1f KB", Double(bytes) / 1024) }
-    return String(format: "%.1f MB", Double(bytes) / 1048576)
-}
-
 extension APIPostMedia {
     /// Single source of truth `APIPostMedia → FeedMedia` mapping, shared by post
     /// media, repost media AND comment media. Carries the full Prisme Linguistique
@@ -528,7 +522,7 @@ extension APIPostMedia {
             width: width, height: height,
             duration: duration.map { $0 / 1000 },
             fileName: originalName ?? fileName,
-            fileSize: fileSize.map { formatFileSize($0) },
+            fileSize: fileSize.map { MediaFormat.bytes(Int64($0)) },
             caption: caption,
             alt: alt,
             captionLanguage: captionLanguage,
@@ -696,7 +690,7 @@ extension APIRepostOf {
                 width: m.width, height: m.height,
                 duration: m.duration.map { $0 / 1000 },
                 fileName: m.originalName ?? m.fileName,
-                fileSize: m.fileSize.map { formatFileSize($0) }
+                fileSize: m.fileSize.map { MediaFormat.bytes(Int64($0)) }
             )
         }
         let repostTranslations: [String: PostTranslation]? = translations?.mapValues { entry in

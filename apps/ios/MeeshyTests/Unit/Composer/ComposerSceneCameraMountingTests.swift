@@ -24,7 +24,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(nom)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(nom)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -62,7 +62,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         let dossier = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer")
+            .appendingPathComponent("Meeshy/Features/Composer")
         let fichiers = try FileManager.default
             .contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "swift" }
@@ -120,7 +120,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         // La pile est un NŒUD depuis #8387 (`composerStackNode` monte
         // `ComposerHostStack`, dont le `body` est `composerStack`) : la
         // découpe de type ne change rien à ce que le viseur enveloppe.
-        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("backgroundMenuPresented(composerStackNode)")
+        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("sceneMenuPresented(composerStackNode)")
                       || code[enveloppe.upperBound...].hasPrefix("composerStackNode)"),
                       "posé APRÈS le socle, le viseur ne l'aurait jamais couvert")
         let couches = compact(try source("MeeshyComposerHost+Layers.swift"))
@@ -218,7 +218,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift")
         let code = compact(AppSourceGuard.stripComments(
             try String(contentsOf: url, encoding: .utf8)))
         XCTAssertTrue(code.contains("funcposeSceneCapture(_result:CameraResult)"))
@@ -344,7 +344,7 @@ final class ComposerSceneCameraPosingTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(nom)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(nom)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

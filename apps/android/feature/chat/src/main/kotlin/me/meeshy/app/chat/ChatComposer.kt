@@ -1,98 +1,68 @@
 package me.meeshy.app.chat
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.media.MediaRecorder
-import android.os.Build
+import me.meeshy.sdk.media.MediaUploadSource
+import me.meeshy.sdk.media.MediaIntake
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.theme.MeeshyTheme
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import java.io.File
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import me.meeshy.ui.component.composer.ComposerStickerPick
+import me.meeshy.ui.component.composer.LocalComposerStickerSheet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import me.meeshy.feature.chat.R
 import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.SlowModeState
-import me.meeshy.sdk.model.ComposerLanguage
-import me.meeshy.sdk.model.LanguageData
-import me.meeshy.sdk.model.SentimentLevel
-import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
-import me.meeshy.sdk.model.waveform.VoiceRecordingFile
-import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
-import me.meeshy.sdk.model.waveform.VoiceRecordingSession
-import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.sdk.model.EphemeralChoice
+import me.meeshy.sdk.model.EphemeralDuration
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.guest.GuestAttachmentAllowance
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.composer.ComposerCapability
+import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.sdk.model.composer.ComposerToolbarLaw
+import me.meeshy.sdk.model.composer.ComposerMinimizeOutcome
+import me.meeshy.sdk.model.composer.ConversationComposerFold
 import me.meeshy.ui.component.recording.VoiceRecordingPill
-import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * The chat composer — text field, attachment ladder, effects/language pills,
- * voice recording pill and reply/edit/clipboard context rows. Extracted out of
- * `ChatScreen.kt` (issue found in review: the file was over three times the
- * repo's 800-1100 line budget, and this composable plus the four helpers below
- * it were the largest single-responsibility slice still living there) so the
- * budget stops growing every time the composer itself grows. Called from
- * `ChatScreen`'s `bottomBar`, which owns [ChatUiState] and feeds this composer
- * its already-resolved [SlowModeState] via [rememberComposerSlowMode].
+ * La barre de composition : un simple assemblage autour d'UNE plaque de verre ([ComposerGlassPlate])
+ * qui porte bandeaux, plateau, rails et rangée de saisie, et d'un état minimisé en bouton flottant.
+ * L'hôte (le chat, ou une autre surface) la pilote par ses rappels : [hostCallbacks] (interaction,
+ * contenu présent), [focusTrigger] (focus à la demande), [emojiInjection] et [externalAttachments]
+ * (injections externes), [foldSlot] (chevron de repli en surimpression), [foldable] (le ⌄ de la
+ * conversation tout à droite de la rangée d'outils, iOS #9955). Le texte externe (édition, brouillon) passe
+ * par [draft] + [draftRevision].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChatComposer(
     draft: String,
@@ -101,574 +71,518 @@ internal fun ChatComposer(
     isEditing: Boolean,
     affordances: ComposerAffordances,
     slowMode: SlowModeState,
-    replyingToLabel: String?,
-    hasEffects: Boolean,
+    isEndToEnd: Boolean = false,
+    replyBanner: ComposerReplyBanner?,
     clipboardContent: ClipboardContent?,
-    sentiment: SentimentLevel?,
     languageCode: String,
     accentColor: Color,
     onDraftChange: (String) -> Unit,
     onPickLanguage: (String) -> Unit,
     onSend: () -> Unit,
-    onOpenEffects: () -> Unit,
+    onClearEffects: () -> Unit = {},
     onCancelEdit: () -> Unit,
     onCancelReply: () -> Unit,
     onRemoveClipboard: () -> Unit,
-    onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
+    onPickFile: (file: File, fileName: String, mimeType: String?) -> Unit,
+    hasPendingAttachments: Boolean = false,
+    onPickUris: ((List<Uri>) -> Unit)? = null,
+    editingOriginalText: String? = null,
+    onStageVoiceFile: ((File) -> Unit)? = null,
+    onStageCapturedUris: (suspend (List<Uri>) -> Unit)? = null,
+    selfAuthor: me.meeshy.sdk.model.composer.look.ComposerLookPerson? = null,
+    secondaryColor: Color = MeeshyPalette.Indigo600,
+    hostCallbacks: ComposerHostCallbacks = ComposerHostCallbacks(),
+    focusTrigger: Int = 0,
+    emojiInjection: ComposerEmojiInjection? = null,
+    externalAttachments: ComposerExternalAttachments? = null,
+    foldSlot: (@Composable () -> Unit)? = null,
+    canMinimize: Boolean = false,
+    foldable: Boolean = false,
+    effects: MessageEffects = MessageEffects(),
+    onToggleEffect: (Long) -> Unit = {},
+    onSelectEphemeralDuration: (EphemeralDuration) -> Unit = {},
+    onSelectEphemeralChoice: (EphemeralChoice?) -> Unit = {},
+    quickEmojis: List<String> = ComposerToolbarLaw.QUICK_EMOJI_DEFAULTS,
+    onQuickEmoji: ((String) -> Unit)? = null,
+    pendingSlot: (@Composable () -> Unit)? = null,
+    pendingAttachmentCount: Int = 0,
+    /** Ouvre le sélecteur de lieu ; `null` = la tuile « Lieu » n'est pas offerte. */
+    onLocationRequest: (() -> Unit)? = null,
+    /** Les familles que le lien d'un invité ouvre ; restreintes, la porte « Fichier » ouvre la feuille de l'invité (#10006). */
+    guestAllowance: GuestAttachmentAllowance = GuestAttachmentAllowance.UNRESTRICTED,
+    conversationTitle: String = "",
+    /** Le réglage du composeur universel (#14265) : une porte qu'il ferme ne s'affiche pas ; la conversation les ouvre toutes. */
+    configuration: ComposerConfiguration = ComposerConfiguration.CONVERSATION,
+    /** Le texte indicatif du champ ; `null` = celui d'un message. */
+    placeholder: String? = null,
+    /**
+     * Une conversation envoie le sticker choisi d'un geste, avec sa recette (#14334, iOS `sendStickerImage`) ; `null` (un
+     * commentaire) : son image rejoint les pièces.
+     */
+    onSendSticker: ((ComposerStickerPick) -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    var guestSheetOpen by rememberSaveable { mutableStateOf(false) }
     val ioScope = rememberCoroutineScope()
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+    val haptics = rememberMeeshyHaptics()
+    val focusManager = LocalFocusManager.current
+    val focusRequester = remember { FocusRequester() }
+    val receivePicked: (List<Uri>) -> Unit = receive@{ uris ->
+        if (uris.isEmpty()) return@receive
+        if (onPickUris != null) return@receive onPickUris(uris)
         ioScope.launch {
-            val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uri) } ?: return@launch
-            onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+            val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
+            onPickFile(picked.file, picked.fileName, picked.mimeType)
         }
     }
-    var recording by remember { mutableStateOf(VoiceRecordingSession.idle()) }
-    var activeVoiceRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var activeVoiceRecordingFile by remember { mutableStateOf<File?>(null) }
-
-    // Stops+releases the real MediaRecorder session (Android hardware), distinct from
-    // VoiceRecordingSession.stop() (the pure UI state machine) below — the two "stop"s
-    // are independent concerns. Returns the recorded file, if any, for the caller to
-    // decide what to do with (send it, or discard it on cancel).
-    fun releaseVoiceRecorder(): File? {
-        activeVoiceRecorder?.let { recorder ->
-            // stop() throws IllegalStateException if called too soon after start() with
-            // no data captured yet (e.g. a cancel within the same frame as the tap) —
-            // never worth crashing the composer over a take too short to matter.
-            runCatching { recorder.stop() }
-            recorder.release()
-        }
-        activeVoiceRecorder = null
-        val file = activeVoiceRecordingFile
-        activeVoiceRecordingFile = null
-        return file
-    }
-
-    fun startVoiceRecording() {
-        val dir = File(context.cacheDir, "voice").apply { mkdirs() }
-        val file = File(dir, VoiceRecordingFile.next(System.currentTimeMillis()))
-        val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
-        }
-        try {
-            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            recorder.setOutputFile(file.absolutePath)
-            recorder.prepare()
-            recorder.start()
-            activeVoiceRecorder = recorder
-            activeVoiceRecordingFile = file
-            recording = recording.start()
-        } catch (e: Exception) {
-            recorder.release()
-            file.delete()
-        }
-    }
-
-    val micPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) startVoiceRecording() }
-
-    fun requestVoiceRecording() {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (granted) startVoiceRecording() else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-    }
-
-    fun cancelVoiceRecording() {
-        releaseVoiceRecorder()?.delete()
-        recording = recording.cancel()
-    }
-
-    // Both the pill's Stop and Send controls finalise the take the same way — there is
-    // no staging tray in this composer (every other attachment kind, file/clipboard, is
-    // delivered immediately on pick too), so "stop and add to attachments" reads as
-    // "deliver it now", identically to "send". A take below the minimum sendable
-    // duration (canSend == false) never reaches here — the pill disables both buttons.
-    fun finishVoiceRecording() {
-        val file = releaseVoiceRecorder()
-        val stop = recording.stop()
-        recording = stop.session
-        val completedFile = file.takeIf { stop.outcome is VoiceRecordingOutcome.Completed }
-        val bytes = completedFile?.let { runCatching { it.readBytes() }.getOrNull() }
-        file?.delete()
-        if (completedFile != null && bytes != null && bytes.isNotEmpty()) {
-            onPickFile(bytes, completedFile.name, "audio/mp4")
-        }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents(), receivePicked)
+    // La photothèque est le sélecteur de photos du système (#14286), comme la grille des médias récents — jamais
+    // celui des fichiers, qui ouvrait documentsui.
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(RecentMediaSource.HEAD_SAMPLE_COUNT),
+        receivePicked,
+    )
+    val openPhotos: () -> Unit = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+    val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
+    var minimized by rememberSaveable { mutableStateOf(false) }
+    var fieldFocused by remember { mutableStateOf(false) }
+    val isComposing = ConversationComposerFold.isComposing(isFocused = fieldFocused, isRecording = voice.isRecording)
+    // Clavier baissé (retour système) = le champ rend la main, comme `resignFirstResponder` sur
+    // iOS : sans cela le champ resterait focalisé et le ⌄ ne reviendrait jamais.
+    val density = LocalDensity.current
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
+    var imeWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeWasVisible && !imeVisible && fieldFocused) focusManager.clearFocus()
+        imeWasVisible = imeVisible
     }
     var attachmentTrayOpen by remember { mutableStateOf(false) }
-    // Camera and Emoji got a live handler in this lot (issue #3738) and join the
-    // ladder; Location stays off — the gateway's shared-place wire field
-    // (`messageSchema.location`, services/gateway/src/services/location/sharedPlace.ts)
-    // has no producer in Android's message model yet (`ApiMessage`/`MessageRepository`
-    // live in :core:model/:sdk-core, outside this lot's chat-only perimeter), so
-    // wiring the tile would be a dead end — tracked as a follow-up rather than left
-    // silently inert.
-    val ladderTiles = remember(affordances) {
-        ComposerAttachmentLadder.tiles(
-            affordances = affordances,
-            hasRecentMediaStrip = true,
-            showCamera = true,
-            showLocation = false,
-            showEmoji = true,
-        )
+    var ephemeralRailOpen by remember { mutableStateOf(false) }
+    var effectsPanelOpen by remember { mutableStateOf(false) }
+    // La flèche de la pilule d'enregistrement envoie TOUT DE SUITE (iOS) : la prise rejoint le
+    // plateau, puis part dès que sa préparation est finie ; le stop, lui, la laisse au plateau.
+    var sendVoiceWhenStaged by remember { mutableStateOf(false) }
+    var pendingCountAtVoiceSend by remember { mutableStateOf(0) }
+    LaunchedEffect(sendVoiceWhenStaged, pendingAttachmentCount, canSend) {
+        if (!sendVoiceWhenStaged) return@LaunchedEffect
+        if (pendingAttachmentCount > pendingCountAtVoiceSend && canSend) {
+            sendVoiceWhenStaged = false
+            onSend()
+        } else {
+            kotlinx.coroutines.delay(VOICE_SEND_TIMEOUT_MS)
+            sendVoiceWhenStaged = false
+        }
     }
     var cameraChooserOpen by remember { mutableStateOf(false) }
-    var composerEmojiPickerOpen by remember { mutableStateOf(false) }
-    // Cursor-aware mirror of `draft`, kept only so the Emoji tile can insert at
-    // the caret instead of always appending — `draft` itself stays the single
-    // source of truth the ViewModel owns (autosave restore, send-clears,
-    // edit-message loads all flow through it), so an external change re-syncs
-    // the mirror with the caret pinned to the end of the new text.
-    var fieldValue by remember { mutableStateOf(TextFieldValue(draft, selection = TextRange(draft.length))) }
-    LaunchedEffect(draftRevision) {
-        fieldValue = TextFieldValue(draft, selection = TextRange(draft.length))
+    var emojiPickerOpen by remember { mutableStateOf(false) }
+    val ladderTiles = remember(affordances, onLocationRequest != null, guestAllowance, configuration) {
+        ComposerAttachmentLadder.tiles(
+            affordances,
+            hasRecentMediaStrip = true,
+            showCamera = true,
+            showContact = guestAllowance.offersContactsAndPlaces,
+            showLocation = onLocationRequest != null,
+            showEmoji = true,
+            configuration = configuration,
+        )
     }
-    val chatCameraCapture = rememberChatCameraCapture(
-        onCaptured = { uri, _ ->
-            withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }?.let { picked ->
-                onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+    val pickContactCard = rememberContactCardPicker(onCard = onPickFile)
+    // Cursor-aware mirror of `draft` so the Emoji tile inserts at the caret; `draft` stays the source of truth.
+    var fieldValue by remember { mutableStateOf(TextFieldValue(draft, selection = TextRange(draft.length))) }
+    LaunchedEffect(draftRevision) { fieldValue = TextFieldValue(draft, selection = TextRange(draft.length)) }
+    fun insertEmoji(emoji: String) {
+        val r = ComposerEmojiInsertion.insert(fieldValue.text, fieldValue.selection.start, fieldValue.selection.end, emoji)
+        fieldValue = TextFieldValue(r.text, TextRange(r.cursor))
+        onDraftChange(r.text)
+    }
+    val hasContent = draft.isNotBlank() || hasPendingAttachments || clipboardContent != null
+    LaunchedEffect(hasContent) { hostCallbacks.onHasContentChange(hasContent) }
+    LaunchedEffect(focusTrigger) {
+        if (focusTrigger > 0) {
+            // Une saisie demandée (réponse, édition) rouvre une barre repliée (iOS `reopens`) ; le
+            // champ ne revient qu'à la frame suivante, d'où l'attente avant de lui donner le focus.
+            val wasFolded = minimized
+            minimized = false
+            repeat(if (wasFolded) FOCUS_RETRY_FRAMES else 1) {
+                if (runCatching { focusRequester.requestFocus() }.isSuccess) return@LaunchedEffect
+                withFrameNanos { }
+            }
+        }
+    }
+    LaunchedEffect(emojiInjection?.nonce) { emojiInjection?.let { insertEmoji(it.emoji) } }
+    LaunchedEffect(externalAttachments?.nonce) {
+        externalAttachments?.takeIf { it.uris.isNotEmpty() }?.let { onPickUris?.invoke(it.uris) }
+    }
+    var retouch by remember { mutableStateOf<ChatRetouchPending?>(null) }
+    suspend fun deliverCapture(file: ChatRetouchedFile) {
+        val stage = onStageCapturedUris ?: return onPickFile(withContext(Dispatchers.IO) { context.writeRetouchedCaptureFile(file) }, file.fileName, file.mimeType)
+        val uri = context.writeRetouchedCapture(file)
+        stage(listOf(uri))
+        withContext(Dispatchers.IO) { runCatching { context.contentResolver.delete(uri, null, null) } }
+    }
+    var videoRetouch by remember { mutableStateOf<ChatVideoRetouchPending?>(null) }
+    suspend fun deliverVideo(pending: ChatVideoRetouchPending, file: File) {
+        val stage = onStageCapturedUris
+        if (stage != null) {
+            stage(listOf(context.captureUri(file)))
+        } else {
+            withContext(Dispatchers.IO) { MediaIntake.adopt(file, context.cacheDir, file.name, ChatRetouchDelivery.VIDEO_MIME) }?.let { item ->
+                (item.source as? MediaUploadSource.OnDisk)?.let { onPickFile(it.file, file.name, ChatRetouchDelivery.VIDEO_MIME) }
+            }
+        }
+        withContext(Dispatchers.IO) { pending.discard() }
+    }
+    val handleCapture: suspend (Uri, Boolean) -> Unit = { uri, isVideo ->
+        val stage = onStageCapturedUris
+        val picked = if (isVideo) null else withContext(Dispatchers.IO) { readPickedAttachment(context, uri) }
+        val pending = picked?.let { withContext(Dispatchers.Default) { ChatRetouchPending.of(it.bytes, it.fileName, it.mimeType) } }
+        val video = if (isVideo) ChatVideoRetouchPending.of(context, uri, System.currentTimeMillis()) else null
+        if (video != null || pending != null || stage != null) picked?.file?.delete()
+        when {
+            video != null -> videoRetouch = video
+            pending != null -> retouch = pending
+            stage != null -> stage(listOf(uri))
+            else -> (picked ?: withContext(Dispatchers.IO) { readPickedAttachment(context, uri) })?.let { file ->
+                onPickFile(file.file, file.fileName, file.mimeType)
+            }
+        }
+    }
+    retouch?.let { pending ->
+        ChatCaptureRetouchHost(
+            pending = pending,
+            person = selfAuthor,
+            onDeliver = { file ->
+                ioScope.launch { deliverCapture(file) }
+                retouch = null
+            },
+            onDismiss = { retouch = null },
+        )
+    }
+    videoRetouch?.let { pending ->
+        ChatVideoRetouchHost(
+            pending = pending,
+            person = selfAuthor,
+            onDeliver = { file ->
+                ioScope.launch { deliverVideo(pending, file) }
+                videoRetouch = null
+            },
+            onDismiss = {
+                pending.discard()
+                videoRetouch = null
+            },
+        )
+    }
+    val showMic = !isEditing && draft.isBlank() && clipboardContent == null && !hasPendingAttachments && affordances.canSendAudios &&
+        configuration.offers(ComposerCapability.VOICE)
+    val canCapture = affordances.canSendImages || affordances.canSendVideos
+    val interact = hostCallbacks.onAnyInteraction
+    val stickerSheet = LocalComposerStickerSheet.current
+    var stickerSheetOpen by rememberSaveable { mutableStateOf(false) }
+    val openStickers: (() -> Unit)? = if (stickerSheet != null && affordances.canSendImages) {
+        { interact(); haptics.light(); stickerSheetOpen = true }
+    } else {
+        null
+    }
+    if (stickerSheetOpen && stickerSheet != null) {
+        stickerSheet(
+            { pick ->
+                stickerSheetOpen = false
+                onSendSticker?.invoke(pick) ?: onPickFile(pick.file, pick.file.name, pick.mimeType)
+            },
+            { stickerSheetOpen = false },
+        )
+    }
+    // Le ⌄ (iOS `CommentComposerFoldModifier.fold`) : ferme le clavier et ce qui est ouvert dans le
+    // verre, haptique légère, puis replie. Brouillon, réponse et pièces jointes vivent au-dessus.
+    val fold: () -> Unit = {
+        interact()
+        focusManager.clearFocus()
+        haptics.light()
+        attachmentTrayOpen = false
+        ephemeralRailOpen = false
+        effectsPanelOpen = false
+        cameraChooserOpen = false
+        emojiPickerOpen = false
+        fieldFocused = false
+        minimized = true
+    }
+
+    ComposerShellLayout(
+        minimized = minimized,
+        canMinimize = canMinimize,
+        onMinimizeOutcome = { outcome ->
+            when (outcome) {
+                ComposerMinimizeOutcome.MINIMIZE -> {
+                    attachmentTrayOpen = false
+                    focusManager.clearFocus()
+                    minimized = true
+                }
+                ComposerMinimizeOutcome.DISMISS_SURFACES -> {
+                    attachmentTrayOpen = false
+                    focusManager.clearFocus()
+                }
+                ComposerMinimizeOutcome.REBOUND -> Unit
             }
         },
-    )
-    Surface(color = MeeshyTheme.tokens.backgroundPrimary) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .imePadding(),
-        ) {
-            if (attachmentTrayOpen && ladderTiles.isNotEmpty() && !recording.isRecording && !affordances.isReadOnly) {
-                ComposerAttachmentTray(
-                    tiles = ladderTiles,
-                    recentMedia = {
-                        ComposerRecentMedia(affordances.canSendImages || affordances.canSendVideos, accentColor, onPickFile)
-                    },
-                    onTileClick = { kind ->
-                        attachmentTrayOpen = false
-                        when (kind) {
-                            AttachmentTileKind.Photo -> filePicker.launch("image/*")
-                            AttachmentTileKind.File -> filePicker.launch("*/*")
-                            AttachmentTileKind.Voice -> requestVoiceRecording()
-                            AttachmentTileKind.Camera -> cameraChooserOpen = true
-                            AttachmentTileKind.Emoji -> composerEmojiPickerOpen = true
-                            AttachmentTileKind.Location -> Unit
-                        }
-                    },
-                )
-            }
-            if (cameraChooserOpen) {
-                ComposerCameraChooser(
-                    canSendImages = affordances.canSendImages,
-                    canSendVideos = affordances.canSendVideos,
-                    onPickPhoto = chatCameraCapture::launchPhoto,
-                    onPickVideo = chatCameraCapture::launchVideo,
-                    onDismiss = { cameraChooserOpen = false },
-                )
-            }
-            if (replyingToLabel != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = MeeshySpacing.lg, end = MeeshySpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Reply,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.chat_replying_to, replyingToLabel),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = MeeshySpacing.xs),
-                    )
-                    IconButton(onClick = onCancelReply) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.chat_cancel_reply),
-                            tint = MeeshyTheme.tokens.textSecondary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
-            if (isEditing) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = MeeshySpacing.lg, end = MeeshySpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Edit,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.chat_editing_label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = MeeshySpacing.xs),
-                    )
-                    IconButton(onClick = onCancelEdit) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.chat_cancel_edit),
-                            tint = MeeshyTheme.tokens.textSecondary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
-            if (clipboardContent != null) {
-                ClipboardContentPreview(
-                    clip = clipboardContent,
-                    accentColor = accentColor,
-                    onRemove = onRemoveClipboard,
-                    modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
-                )
-            }
-            LaunchedEffect(recording.isRecording) {
-                while (recording.isRecording) {
-                    delay(100)
-                    recording = recording.tick(0.1)
-                    val amplitude = activeVoiceRecorder?.let { runCatching { it.maxAmplitude }.getOrNull() }
-                    if (amplitude != null) {
-                        recording = recording.meter(MicAmplitudeDecibels.toDecibels(amplitude))
-                    }
-                }
-            }
-            if (recording.isRecording) {
-                VoiceRecordingPill(
-                    session = recording,
-                    accentColor = accentColor,
-                    onCancel = ::cancelVoiceRecording,
-                    onStop = ::finishVoiceRecording,
-                    onSend = ::finishVoiceRecording,
-                    modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-                )
-            } else if (affordances.isReadOnly) {
-                ComposerReadOnlyNotice(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
-                )
-            } else {
-                if (!isEditing && slowMode.isActive && !slowMode.canSend) {
-                    ComposerSlowModeNotice(
-                        remainingSeconds = slowMode.remainingSeconds,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        minimizedContent = {
+            ComposerUnfoldButton(
+                onTap = {
+                    interact()
+                    haptics.light()
+                    minimized = false
+                },
+            )
+        },
+        expandedContent = {
+            val protection = ComposerToolbarLaw.dominant(effects.flags)
+            val protectionTint = protection?.let { composerProtectionColor(it) }
+            val iconTint = composerIconTint(effects.flags)
+            ComposerGlassPlate(foldSlot = foldSlot, protectionTint = protectionTint) {
+                if (cameraChooserOpen) {
+                    ComposerViewfinderHost(
+                        canSendImages = affordances.canSendImages,
+                        canSendVideos = affordances.canSendVideos,
+                        captureScope = ioScope,
+                        onCaptured = handleCapture,
+                        onDismiss = { cameraChooserOpen = false },
                     )
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (!isEditing) {
-                        if (ladderTiles.isNotEmpty()) {
-                            IconButton(onClick = { attachmentTrayOpen = !attachmentTrayOpen }) {
-                                Icon(
-                                    imageVector = if (attachmentTrayOpen) Icons.Filled.Close else Icons.Filled.Add,
-                                    contentDescription = stringResource(R.string.chat_attach_open),
-                                    tint = if (attachmentTrayOpen) accentColor else MeeshyTheme.tokens.textSecondary,
-                                )
-                            }
-                        }
-                        IconButton(onClick = onOpenEffects) {
-                            Icon(
-                                imageVector = Icons.Filled.AutoAwesome,
-                                contentDescription = stringResource(R.string.chat_effects_open),
-                                tint = if (hasEffects) accentColor else MeeshyTheme.tokens.textSecondary,
-                            )
-                        }
-                        ComposerLanguagePill(
-                            languageCode = languageCode,
-                            accentColor = accentColor,
-                            onPick = onPickLanguage,
-                        )
-                    }
-                    OutlinedTextField(
-                        value = fieldValue,
-                        onValueChange = { newValue ->
-                            fieldValue = newValue
-                            onDraftChange(newValue.text)
+                if (replyBanner != null) ComposerReplyRow(replyBanner, accentColor, onCancelReply)
+                if (isEditing) ComposerEditRow(editingOriginalText, onCancelEdit)
+                pendingSlot?.invoke()
+                if (clipboardContent != null) {
+                    ClipboardContentPreview(
+                        clip = clipboardContent,
+                        accentColor = accentColor,
+                        onRemove = onRemoveClipboard,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+                    )
+                }
+                val inputAvailable = !voice.isRecording && !isEndToEnd && !affordances.isReadOnly
+                if (inputAvailable && !isEditing && ephemeralRailOpen) {
+                    ComposerEphemeralRail(
+                        selected = EphemeralChoice.of(effects),
+                        accentColor = accentColor,
+                        onPick = { choice ->
+                            haptics.light()
+                            onSelectEphemeralChoice(choice)
+                            ephemeralRailOpen = false
                         },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
-                        maxLines = 4,
-                        trailingIcon = if (sentiment != null) {
-                            {
-                                val description = stringResource(R.string.chat_composer_sentiment)
-                                Text(
-                                    text = sentiment.emoji,
-                                    modifier = Modifier.semantics { contentDescription = description },
-                                )
+                    )
+                }
+                if (inputAvailable && !isEditing && effectsPanelOpen) {
+                    EffectsPickerSheet(
+                        effects = effects,
+                        accentColor = accentColor,
+                        onToggle = onToggleEffect,
+                        onSelectDuration = onSelectEphemeralDuration,
+                        onClear = onClearEffects,
+                        onDone = { effectsPanelOpen = false },
+                        inline = true,
+                        modifier = Modifier
+                            .padding(start = MeeshySpacing.sm, end = MeeshySpacing.sm, top = MeeshySpacing.sm)
+                            .clip(RoundedCornerShape(MeeshyRadius.lg))
+                            .background(if (MeeshyTheme.isDark) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.9f)),
+                    )
+                }
+                if (inputAvailable && !isEditing) {
+                    ComposerToolbar(
+                        effects = effects,
+                        languageCode = languageCode,
+                        showEphemeralRail = ephemeralRailOpen,
+                        onEphemeral = {
+                            interact()
+                            haptics.light()
+                            if (MessageEffectFlags.has(effects.flags, MessageEffectFlags.EPHEMERAL)) {
+                                onSelectEphemeralChoice(null)
+                                ephemeralRailOpen = false
+                            } else {
+                                effectsPanelOpen = false
+                                ephemeralRailOpen = !ephemeralRailOpen
                             }
+                        },
+                        onVeil = { veil ->
+                            interact()
+                            haptics.light()
+                            ComposerToolbarLaw.veilToggles(effects.flags, veil).forEach(onToggleEffect)
+                        },
+                        onEffects = {
+                            interact()
+                            ephemeralRailOpen = false
+                            effectsPanelOpen = !effectsPanelOpen
+                        },
+                        onPickLanguage = onPickLanguage,
+                        onLibrary = if (canCapture && configuration.offers(ComposerCapability.PHOTO_LIBRARY)) {
+                            { interact(); openPhotos() }
                         } else {
                             null
                         },
+                        onCamera = if (canCapture && configuration.offers(ComposerCapability.CAMERA)) {
+                            { interact(); cameraChooserOpen = true }
+                        } else {
+                            null
+                        },
+                        accentColor = accentColor,
+                        onFold = if (foldable && configuration.offersFold(minimized, isComposing)) fold else null,
+                        configuration = configuration,
+                        onSticker = openStickers,
                     )
-                    if (!isEditing && draft.isBlank() && clipboardContent == null &&
-                        affordances.canSendAudios
-                    ) {
-                        IconButton(onClick = ::requestVoiceRecording) {
-                            Icon(
-                                imageVector = Icons.Filled.Mic,
-                                contentDescription = stringResource(R.string.chat_record_voice),
-                                tint = MeeshyTheme.tokens.textSecondary,
+                }
+                when {
+                    voice.isRecording -> VoiceRecordingPill(
+                        session = voice.session,
+                        accentColor = accentColor,
+                        onCancel = voice.cancel,
+                        onStop = voice.finish,
+                        onSend = {
+                            pendingCountAtVoiceSend = pendingAttachmentCount
+                            voice.finish()
+                            sendVoiceWhenStaged = true
+                        },
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.smPlus),
+                    )
+                    isEndToEnd -> ComposerEndToEndNotice(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
+                    )
+                    affordances.isReadOnly -> ComposerReadOnlyNotice(
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
+                    )
+                    else -> {
+                        if (!isEditing && slowMode.isActive && !slowMode.canSend) {
+                            ComposerSlowModeNotice(
+                                remainingSeconds = slowMode.remainingSeconds,
+                                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
                             )
                         }
-                    } else {
-                        IconButton(onClick = onSend, enabled = canSend && (isEditing || slowMode.canSend)) {
-                            Icon(
-                                imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.chat_send),
-                            )
-                        }
+                        ComposerInputRow(
+                            isEditing = isEditing,
+                            hasAttachmentTiles = ladderTiles.isNotEmpty(),
+                            attachmentTrayOpen = attachmentTrayOpen,
+                            fieldValue = fieldValue,
+                            showMic = showMic,
+                            hasSomethingToSend = hasContent || isEditing,
+                            sendEnabled = canSend && (isEditing || slowMode.canSend),
+                            accentColor = accentColor,
+                            secondaryColor = secondaryColor,
+                            iconTint = iconTint,
+                            protectionTint = protectionTint,
+                            quickEmojis = quickEmojis,
+                            onQuickEmoji = onQuickEmoji?.takeIf { configuration.offers(ComposerCapability.QUICK_EMOJIS) }?.let { send ->
+                                { emoji: String ->
+                                    interact()
+                                    haptics.light()
+                                    send(emoji)
+                                }
+                            },
+                            onQuickEmojiLongPress = {
+                                interact()
+                                emojiPickerOpen = true
+                            },
+                            focusRequester = focusRequester,
+                            placeholder = placeholder,
+                            onFocusChange = { focused ->
+                                fieldFocused = focused
+                                if (focused) {
+                                    interact()
+                                    attachmentTrayOpen = false
+                                }
+                            },
+                            onToggleTray = {
+                                interact()
+                                if (attachmentTrayOpen) {
+                                    attachmentTrayOpen = false
+                                    runCatching { focusRequester.requestFocus() }
+                                } else {
+                                    focusManager.clearFocus()
+                                    attachmentTrayOpen = true
+                                }
+                            },
+                            onFieldChange = { typed ->
+                                val bounded = configuration.bounded(typed.text)
+                                val newValue = if (bounded == typed.text) typed else TextFieldValue(bounded, TextRange(bounded.length))
+                                if (newValue.text != fieldValue.text) attachmentTrayOpen = false
+                                fieldValue = newValue
+                                onDraftChange(newValue.text)
+                            },
+                            onRequestVoice = {
+                                interact()
+                                voice.request()
+                            },
+                            onSend = {
+                                interact()
+                                haptics.light()
+                                onSend()
+                            },
+                        )
                     }
                 }
-            }
-        }
-    }
-    if (composerEmojiPickerOpen) {
-        ModalBottomSheet(
-            onDismissRequest = { composerEmojiPickerOpen = false },
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            EmojiFullPicker(
-                onSelect = { emoji ->
-                    val result = ComposerEmojiInsertion.insert(
-                        text = fieldValue.text,
-                        selectionStart = fieldValue.selection.start,
-                        selectionEnd = fieldValue.selection.end,
-                        emoji = emoji,
+                if (attachmentTrayOpen && ladderTiles.isNotEmpty() && !voice.isRecording && !affordances.isReadOnly) {
+                    val recentStrip: @Composable () -> Unit = {
+                        ComposerRecentMedia(
+                            canCapture = canCapture,
+                            accentColor = accentColor,
+                            onPickFile = onPickFile,
+                            onPickUri = onPickUris?.let { stage -> { uri: Uri -> stage(listOf(uri)) } },
+                            onEdit = { picked ->
+                                attachmentTrayOpen = false
+                                ioScope.launch {
+                                    val now = System.currentTimeMillis()
+                                    val opened = when {
+                                        picked.mimeType?.startsWith("video") == true ->
+                                            ChatVideoRetouchPending.of(context, picked.file, now)?.also { videoRetouch = it }
+                                        else -> withContext(Dispatchers.Default) { ChatRetouchPending.of(picked.bytes, picked.fileName, picked.mimeType) }
+                                            ?.also { retouch = it }
+                                    }
+                                    if (opened == null) onPickFile(picked.file, picked.fileName, picked.mimeType) else picked.file.delete()
+                                }
+                            },
+                        )
+                    }
+                    ComposerAttachmentTray(
+                        tiles = ladderTiles,
+                        recentMedia = recentStrip.takeIf { configuration.offers(ComposerCapability.PHOTO_LIBRARY) },
+                        onTileClick = { kind ->
+                            attachmentTrayOpen = false
+                            when (kind) {
+                                AttachmentTileKind.Photo -> openPhotos()
+                                AttachmentTileKind.File ->
+                                    if (guestAllowance.isRestricted) guestSheetOpen = true else filePicker.launch("*/*")
+                                AttachmentTileKind.Voice -> voice.request()
+                                AttachmentTileKind.Camera -> cameraChooserOpen = true
+                                AttachmentTileKind.Emoji -> emojiPickerOpen = true
+                                AttachmentTileKind.Location -> onLocationRequest?.invoke()
+                                AttachmentTileKind.Contact -> pickContactCard()
+                            }
+                        },
                     )
-                    fieldValue = TextFieldValue(result.text, TextRange(result.cursor))
-                    onDraftChange(result.text)
-                },
-                accentColor = accentColor,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
-    }
-}
-
-/**
- * The composer's live language pill — the "smart context zone" affordance. Shows
- * the flag of the resolved source language ([ChatUiState.composerLanguageCode]),
- * following on-device detection as the viewer types, and opens a picker so they can
- * override it (long messages lock the detection, exactly like iOS). Thin,
- * coverage-exempt Compose glue over the pure [me.meeshy.sdk.model.ComposerLanguageState];
- * the picker offers the curated [LanguageData.commonLanguageCodes] set.
- */
-@Composable
-private fun ComposerLanguagePill(
-    languageCode: String,
-    accentColor: Color,
-    onPick: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val description = stringResource(R.string.chat_composer_language)
-    Box {
-        Text(
-            text = ComposerLanguage.flag(languageCode),
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshySpacing.sm))
-                .clickable { expanded = true }
-                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs)
-                .semantics { contentDescription = description },
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LanguageData.commonLanguageCodes.forEach { code ->
-                val info = LanguageData.info(code) ?: return@forEach
-                DropdownMenuItem(
-                    text = { Text("${info.flag}  ${info.nativeName}") },
-                    onClick = {
-                        expanded = false
-                        onPick(code)
-                    },
-                    trailingIcon = if (code == languageCode) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = accentColor,
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
+                }
             }
-        }
+        },
+    )
+    if (guestSheetOpen) {
+        GuestAttachmentSheet(
+            conversationTitle = conversationTitle,
+            allowance = guestAllowance,
+            onAccepted = { uris ->
+                if (onPickUris != null) {
+                    onPickUris(uris)
+                } else {
+                    ioScope.launch {
+                        val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uris.first()) } ?: return@launch
+                        onPickFile(picked.file, picked.fileName, picked.mimeType)
+                    }
+                }
+            },
+            onDismiss = { guestSheetOpen = false },
+        )
+    }
+    if (emojiPickerOpen) {
+        ComposerEmojiSheet(accentColor, onSelect = ::insertEmoji, onDismiss = { emojiPickerOpen = false })
     }
 }
 
-/**
- * Read-only composer state for a participant whose permissions deny sending text
- * (a share-link guest with `canSendMessages = false`). The thin, coverage-exempt
- * Compose glue over [ComposerAffordances.isReadOnly] — a muted lock row that
- * replaces the input entirely so the guest can read but never post.
- */
-@Composable
-private fun ComposerReadOnlyNotice(modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Lock,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(16.dp),
-        )
-        Text(
-            text = stringResource(R.string.chat_composer_read_only),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.padding(start = MeeshySpacing.xs),
-        )
-    }
-}
+/** Au-delà, une prise vocale qui n'a pas rejoint le plateau n'est plus envoyée d'office. */
+private const val VOICE_SEND_TIMEOUT_MS = 15_000L
 
-/**
- * The live slow-mode posture for the composer, ticked once a second while a
- * cooldown is running. The ViewModel's [ChatViewModel.send] gate is authoritative;
- * this is the thin, coverage-exempt Compose glue that animates the countdown so the
- * send button re-enables the instant the interval clears. The ticker only spins
- * while slow mode is active for the viewer, so a normal conversation never pays for
- * a recomposition loop.
- */
-@Composable
-internal fun rememberComposerSlowMode(state: ChatUiState): SlowModeState {
-    val throttled = (state.slowModeSeconds ?: 0) > 0 && !state.slowModeExempt
-    val now by produceState(
-        initialValue = System.currentTimeMillis(),
-        throttled,
-        state.lastSelfSentAtMillis,
-    ) {
-        value = System.currentTimeMillis()
-        while (throttled) {
-            delay(500)
-            value = System.currentTimeMillis()
-        }
-    }
-    return state.slowModeState(now)
-}
-
-/**
- * A subtle countdown row shown above the composer while slow mode blocks the next
- * send — an hourglass and the remaining seconds. Prisme discretion: it informs
- * without a modal or a banner, and self-clears when [remainingSeconds] reaches the
- * cleared window. SOTA over iOS, which never surfaces the cooldown at all.
- */
-@Composable
-private fun ComposerSlowModeNotice(remainingSeconds: Int, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.HourglassEmpty,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(14.dp),
-        )
-        Text(
-            text = stringResource(R.string.chat_slow_mode_wait, remainingSeconds),
-            style = MaterialTheme.typography.labelSmall,
-            color = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.padding(start = MeeshySpacing.xs),
-        )
-    }
-}
-
-/**
- * Preview chip for a large paste captured into a clipboard-content attachment —
- * the thin, coverage-exempt Compose glue over the pure [ClipboardContent] (parité
- * iOS `clipboardContentPreview`: doc glyph, title, truncated body, char count, and
- * an accent-tinted remove button).
- */
-@Composable
-private fun ClipboardContentPreview(
-    clip: ClipboardContent,
-    accentColor: Color,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(MeeshyRadius.md))
-            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.5f))
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Description,
-            contentDescription = null,
-            tint = accentColor,
-            modifier = Modifier.size(20.dp),
-        )
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = MeeshySpacing.sm),
-        ) {
-            Text(
-                text = stringResource(R.string.chat_clipboard_title),
-                style = MaterialTheme.typography.labelMedium,
-                color = MeeshyTheme.tokens.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = clip.truncatedPreview,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(R.string.chat_clipboard_char_count, clip.charCount),
-                style = MaterialTheme.typography.labelSmall,
-                color = accentColor,
-            )
-        }
-        IconButton(onClick = onRemove) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = stringResource(R.string.chat_clipboard_remove),
-                tint = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
+/** Les frames laissées au champ pour revenir d'une barre repliée avant de lui donner le focus. */
+private const val FOCUS_RETRY_FRAMES = 6

@@ -70,6 +70,7 @@ const f = {
   'admin.gameSeasons.refusal.invalid-theme': 'This theme is not in the catalogue.',
   'admin.gameSeasons.refusal.rewards-out-of-bounds': 'Points out of bounds: 50 to 200, in steps of 10.',
   'admin.gameSeasons.refusal.copy-invalid': 'Invalid texts: seven languages, three texts each, within the 30 / 50 / 120 limits.',
+  'admin.gameSeasons.refusal.invalid-reward-pack': 'Unreadable reward pack: a `<domain>.<slug>` key is expected.',
   'admin.gameSeasons.refusal.revision-conflict': 'Someone saved in the meantime: reload the calendar before trying again.',
   'admin.gameSeasons.refusal.proposal-not-pending': 'This proposal has already been handled.',
   'admin.gameSeasons.refusal.proposal-not-found': 'This proposal no longer exists.',

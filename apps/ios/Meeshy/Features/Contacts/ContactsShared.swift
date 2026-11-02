@@ -6,17 +6,21 @@ import MeeshyUI
 
 /// Top-level tabs of the People hub. The three primary surfaces of the
 /// redesigned contact view: the call journal, the dial pad, and the contact
-/// directory (an annuaire filtered by `ContactFilter`).
+/// directory (an annuaire filtered by `ContactFilter`) — plus « Cercles »
+/// (#13938), the circles of proximity: my links by level, what is missing to
+/// climb, my level-up requests.
 enum PeopleTab: String, CaseIterable, Hashable {
     case calls = "Appels"
     case keypad = "Clavier"
     case contacts = "Contacts"
+    case circles = "Cercles"
 
     var icon: String {
         switch self {
         case .calls: return "phone.fill"
         case .keypad: return "circle.grid.3x3.fill"
         case .contacts: return "person.2.fill"
+        case .circles: return "circle.circle.fill"
         }
     }
 
@@ -31,6 +35,8 @@ enum PeopleTab: String, CaseIterable, Hashable {
             return String(localized: "contacts.tab.keypad", defaultValue: "Clavier", bundle: .main)
         case .contacts:
             return String(localized: "contacts.tab.contacts", defaultValue: "Contacts", bundle: .main)
+        case .circles:
+            return String(localized: "contacts.tab.circles", defaultValue: "Cercles", bundle: .main)
         }
     }
 }

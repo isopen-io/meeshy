@@ -94,6 +94,10 @@ describe('posts/postIncludes — canonical shared selects', () => {
         'thumbnailUrl',
         'thumbHash',
         'imageVariants',
+        'avifVariants',
+        'renditions',
+        'processingState',
+        'lensSlug',
         'duration',
         'order',
         'caption',
@@ -108,6 +112,10 @@ describe('posts/postIncludes — canonical shared selects', () => {
         'translations',
       ];
       expect(Object.keys(mediaSelect).sort()).toEqual(expectedKeys.sort());
+    });
+
+    it('exposes lensSlug (#11327) — le crédit « Lens par X » voyage avec le média de story/post', () => {
+      expect(mediaSelect).toEqual(expect.objectContaining({ lensSlug: true }));
     });
 
     it('exposes the caption translation fields (#6280) — distinct from the audio-track translations', () => {
@@ -247,6 +255,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
           // #10315 — lus pour décider si l'original se sert encore, retirés par la projection.
           'visibility',
           'moderationHiddenAt',
+          'deletedAt',
         ].sort(),
       );
     });

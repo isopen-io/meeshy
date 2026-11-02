@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="twofactor_backup_codes_remaining">
+        <item quantity="one">%1$d código de backup restante</item>
+        <item quantity="many">%1$d códigos de backup restantes</item>
+        <item quantity="other">%1$d códigos de backup restantes</item>
+    </plurals>
+    <plurals name="data_export_ready_messages">
+        <item quantity="one">%1$d mensagem incluída</item>
+        <item quantity="many">%1$d mensagens incluídas</item>
+        <item quantity="other">%1$d mensagens incluídas</item>
+    </plurals>
+    <plurals name="data_export_ready_contacts">
+        <item quantity="one">%1$d contato incluído</item>
+        <item quantity="many">%1$d contatos incluídos</item>
+        <item quantity="other">%1$d contatos incluídos</item>
+    </plurals>
+</resources>

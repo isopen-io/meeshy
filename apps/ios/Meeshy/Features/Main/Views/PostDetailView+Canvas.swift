@@ -76,15 +76,15 @@ extension PostDetailView {
     /// un autre, et qu'une trace qui ne paraîtrait que sur l'un des deux serait
     /// pire qu'absente : elle ferait croire que l'autre ne joue rien.
     ///
-    /// L'existence est celle du badge (`backgroundTrace(of:)`) : pas de piste
-    /// ⇒ rien, et la scène reprend toute la hauteur. Montée AUSSI au-dessus
+    /// L'existence est celle de `creditedTrace(of:)` (le fond, sinon le son de
+    /// la bibliothèque posé, #14245) : pas de piste ⇒ rien. Montée AUSSI au-dessus
     /// de l'embed d'une story republiée (#9677), sur les effets que CET embed
     /// joue — ceux de la source.
     @ViewBuilder
     func sceneSoundHeader(_ playedEffects: StoryEffects?) -> some View {
         PostSceneSoundHeader(
-            trace: BackgroundSoundBadge.backgroundTrace(of: playedEffects),
-            announcement: BackgroundSoundBadge.announcement(for: playedEffects),
+            trace: BackgroundSoundBadge.creditedTrace(of: playedEffects),
+            announcement: BackgroundSoundBadge.creditAnnouncement(for: playedEffects),
             isMuted: isCanvasMuted,
             isPaused: isCanvasPaused,
             accentHex: accentColor,
@@ -115,7 +115,7 @@ extension PostDetailView {
                     document: document,
                     accentColor: accentColor,
                     preferredContentLanguages:
-                        AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                        ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                     // **Le détail JOUE — c'est la même règle que le canvas
                     // mono-scène juste en dessous.** Il n'y a qu'une publication à
                     // l'écran, donc aucune élection à arbitrer : ce qui gouverne
@@ -148,8 +148,8 @@ extension PostDetailView {
             storyCanvasOrPlaceholder(renderedItem: renderedItem,
                                      onOpen: { openDetailScene(at: 0) }) {
                 StoryReaderRepresentable(
-                    story: renderedItem,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                    story: renderedItem, sceneFloorHex: post.storyAccentHex,
+                    preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                     mute: isCanvasMuted,
                     isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,
                                                                 callActive: isCallActive,
@@ -210,7 +210,7 @@ extension PostDetailView {
                 // Les sons de PREMIER PLAN de la scène, en pastille (#9737) —
                 // le son de fond se dit par l'en-tête au-dessus, jamais ici.
                 .overlay {
-                    SceneSoundChipLayer(audios: renderedItem.storyEffects?.audioPlayerObjects ?? [],
+                    SceneSoundChipLayer(audios: renderedItem.storyEffects.map { SceneAudioStageRule.overlaidAudios(in: $0) } ?? [],
                                         isInteractive: true,
                                         isHostMuted: isCanvasMuted)
                 }

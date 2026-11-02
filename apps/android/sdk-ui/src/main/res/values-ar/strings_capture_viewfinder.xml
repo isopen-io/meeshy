@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_disarm">العودة إلى المشهد</string>
+    <string name="capture_flip">تبديل الكاميرا</string>
+    <string name="capture_flash_on">الفلاش مفعّل</string>
+    <string name="capture_flash_auto">فلاش تلقائي</string>
+    <string name="capture_flash_off">الفلاش متوقف</string>
+    <string name="capture_flash_intensity">شدة الفلاش</string>
+    <string name="capture_drop_segment">إزالة آخر مقطع</string>
+    <string name="capture_validate">وضع في المشهد</string>
+    <string name="capture_recording">تسجيل</string>
+    <string name="capture_hint_photo">انقر مرتين لالتقاط صورة · اضغط مطولًا للتصوير</string>
+    <string name="capture_hint_holding">اترك الإصبع للوضع في المشهد</string>
+    <string name="capture_hint_lock">اسحب نحو القفل للتثبيت</string>
+    <string name="capture_hint_locked">انقر للإيقاف والوضع في المشهد</string>
+    <string name="capture_discard_video">تجاهل الفيديو؟</string>
+    <string name="capture_discard_confirm">تجاهل</string>
+    <string name="capture_discard_keep">متابعة</string>
+    <string name="capture_camera_unavailable">تعذّر تشغيل الكاميرا</string>
+    <string name="capture_take_lost">فُقدت اللقطة</string>
+    <string name="capture_zoom_reset">التقريب %1$s</string>
+    <string name="capture_shutter">التقاط صورة</string>
+    <string name="capture_shutter_film">التصوير دون استخدام اليدين</string>
+    <plurals name="capture_segments">
+        <item quantity="zero">%1$d مقطع</item>
+        <item quantity="one">مقطع واحد</item>
+        <item quantity="two">مقطعان</item>
+        <item quantity="few">%1$d مقاطع</item>
+        <item quantity="many">%1$d مقطعًا</item>
+        <item quantity="other">%1$d مقطع</item>
+    </plurals>
+</resources>

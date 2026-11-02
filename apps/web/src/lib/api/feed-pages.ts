@@ -1,6 +1,6 @@
 import type { ServedListing } from '@/lib/telemetry/served-listing';
 import type { InfiniteData } from '@tanstack/react-query';
-import type { Attachment } from '@meeshy/shared/types/attachment';
+import type { Attachment, ImageVariant, MediaRendition } from '@meeshy/shared/types/attachment';
 import type { PostVisibility } from '@meeshy/shared/types/post';
 
 /**
@@ -82,6 +82,14 @@ export type FeedMedia = {
   readonly transcription?: Attachment['transcription'] | null;
   /** Les pistes audio traduites et leurs transcriptions (`PostMedia.translations`) — dépouillées par `transcriptTranslationTracks`. */
   readonly translations?: Attachment['translations'] | null;
+  /** Octets de l'original (`PostMedia.fileSize`) : le tier moyen élit le plus léger des deux rendus vidéo. */
+  readonly fileSize?: number | null;
+  /** Variantes WebP responsive (`PostMedia.imageVariants`, #11260). */
+  readonly imageVariants?: readonly ImageVariant[] | null;
+  /** Les mêmes largeurs en AVIF (`PostMedia.avifVariants`, #11262). */
+  readonly avifVariants?: readonly ImageVariant[] | null;
+  /** Rendus additionnels (`PostMedia.renditions`, #11261) : le H.264 de compatibilité d'une vidéo HEVC. */
+  readonly renditions?: readonly MediaRendition[] | null;
 };
 
 /**

@@ -43,14 +43,13 @@ object MimeTypeResolver {
 
     /**
      * Chooses the best mime for a picked attachment: a meaningful [declaredType]
-     * (what the platform's content resolver reported — non-blank and not the opaque
-     * [OCTET_STREAM]) wins; otherwise the [fileName]'s extension is consulted. This
+     * (what the platform's content resolver reported — non-blank, not a wildcard type (a mixed share is typed with one), and not the opaque [OCTET_STREAM]) wins; otherwise the [fileName]'s extension is consulted. This
      * mirrors the iOS picker, which always derives the mime from the URL extension,
      * but prefers a real declared content-type when Android supplies one.
      */
     fun resolve(declaredType: String?, fileName: String): String {
         val declared = declaredType?.trim().orEmpty()
-        if (declared.isNotEmpty() && !declared.equals(OCTET_STREAM, ignoreCase = true)) {
+        if (declared.isNotEmpty() && '*' !in declared && !declared.equals(OCTET_STREAM, ignoreCase = true)) {
             return declared
         }
         return mimeTypeForFilename(fileName)

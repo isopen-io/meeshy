@@ -42,7 +42,7 @@ struct ConversationRowItem: View {
     let draftSummary: DraftSummary?
     /// B1 (Prisme Linguistique) — viewer preferred languages used to
     /// resolve the last-message preview translation. Passed once from
-    /// the list (`AuthManager.currentUser?.preferredContentLanguages`)
+    /// the list (`ReaderPrism.resolve(for:)`, the reader's strict prism)
     /// instead of read per-row to keep the row equatable.
     let preferredContentLanguages: [String]
     /// Empreinte de l'aperçu (ids + `updatedAt` + `deletedAt` + langue servie) :
@@ -115,6 +115,9 @@ struct ConversationRowItem: View {
     let focusElection: LentilleFocusElection
     let sceneActivity: LentilleSceneActivity
     let magnification: LentilleMagnification
+    /// Le clair local du dernier message scellé (#12968) — une VALEUR, lue
+    /// par la liste dans `ConversationListViewModel.endToEndTexts`.
+    var deviceText: ConversationPreviewDeviceText? = nil
 
     var body: some View {
         SwipeableRow(
@@ -244,11 +247,28 @@ struct ConversationRowItem: View {
         Task { await LiveCallJoiner.live.join(request) }
     }
 
+    /// La communauté d'une rangée : l'index de la liste d'abord, la liste
+    /// entière ensuite.
+    static func community(of conversation: Conversation, lookup: [String: MeeshyCommunity], all: [MeeshyCommunity]) -> MeeshyCommunity? {
+        guard conversation.type == .community || conversation.communityId != nil,
+              let communityId = conversation.communityId else { return nil }
+        return lookup[communityId] ?? all.first(where: { $0.id == communityId })
+    }
+
+    /// #11387 — verrouillée par PIN : la rangée ne montre rien de ce que la
+    /// conversation contient. LA décision (`ConversationLockManager
+    /// .hidesContent`) est celle que le chargeur d'aperçu lit : un verrou qui
+    /// bascule fait basculer `previewFingerprint.phase` (`.sealed`), donc le
+    /// portillon `.equatable()` ci-dessous laisse passer la rangée.
+    private var isContentLocked: Bool {
+        ConversationLockManager.shared.hidesContent(of: conversation.id)
+    }
+
     /// Coeur visuel de la ligne, commun aux deux chemins de menu.
     ///
     /// MUX de rang sous drapeau (contrat LWS-7, workshop I-067) : sous
     /// `LentilleFeatureFlag.isLentilleListEnabled` ON, `LentilleConversationRow`
-    /// (rang plat, `Lentille/Row/`) ; OFF, `ThemedConversationRow` (rang
+    /// (rang plat, `Lens/Row/`) ; OFF, `ThemedConversationRow` (rang
     /// historique) — INCHANGÉ, bit-à-bit identique à avant ce lot (mêmes
     /// arguments, même `.equatable()`). `SwipeableRow`, les deux chemins de
     /// menu contextuel OS et le portillon `.equatable()` de
@@ -307,7 +327,9 @@ struct ConversationRowItem: View {
                     typingUsername: typingUsername,
                     isSelected: isSelected,
                     draftSummary: draftSummary,
+                    isContentLocked: isContentLocked,
                     preferredContentLanguages: preferredContentLanguages,
+                    deviceText: deviceText,
                     onJoinLiveCall: { joinLiveCall() },
                     magnification: context
                 )
@@ -331,7 +353,9 @@ struct ConversationRowItem: View {
                 typingUsername: typingUsername,
                 isSelected: isSelected,
                 draftSummary: draftSummary,
+                isContentLocked: isContentLocked,
                 preferredContentLanguages: preferredContentLanguages,
+                deviceText: deviceText,
                 onJoinLiveCall: { joinLiveCall() }
             )
             .equatable()
@@ -560,6 +584,7 @@ extension ConversationRowItem: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        lhs.deviceText == rhs.deviceText &&
         // Compare swipe action ICONS, not just `.count`: the lock/block toggles
         // (`leadingSwipeActions`/`trailingSwipeActions`) read live state from
         // `ConversationLockManager` / `BlockService` — singletons NOT folded into

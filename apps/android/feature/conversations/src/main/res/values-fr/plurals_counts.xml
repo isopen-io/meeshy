@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Noms des compteurs de liens, accordés au nombre (CLDR) : « 1 lien », « 2 liens » (#13357). -->
+<resources>
+    <plurals name="links_count_links">
+        <item quantity="one">lien</item>
+        <item quantity="many">liens</item>
+        <item quantity="other">liens</item>
+    </plurals>
+    <plurals name="links_count_groups">
+        <item quantity="one">groupe</item>
+        <item quantity="many">groupes</item>
+        <item quantity="other">groupes</item>
+    </plurals>
+    <plurals name="links_count_members">
+        <item quantity="one">membre</item>
+        <item quantity="many">membres</item>
+        <item quantity="other">membres</item>
+    </plurals>
+    <plurals name="links_count_signups">
+        <item quantity="one">inscrit</item>
+        <item quantity="many">inscrits</item>
+        <item quantity="other">inscrits</item>
+    </plurals>
+    <plurals name="links_count_clicks">
+        <item quantity="one">clic</item>
+        <item quantity="many">clics</item>
+        <item quantity="other">clics</item>
+    </plurals>
+    <plurals name="links_count_joined">
+        <item quantity="one">rejoint</item>
+        <item quantity="many">rejoints</item>
+        <item quantity="other">rejoints</item>
+    </plurals>
+</resources>

@@ -1,10 +1,17 @@
 package me.meeshy.sdk.friend
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import me.meeshy.sdk.model.FriendRequest
+import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.FriendshipStatus
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,13 +31,30 @@ import javax.inject.Singleton
  * of the iOS `@Published version`.
  */
 @Singleton
-class FriendshipCache @Inject constructor() {
+class FriendshipCache @Inject constructor(
+    private val persisted: PersistedFriendCaches,
+    private val fence: AccountFence? = null,
+) {
+
+    /**
+     * A cache with no persisted roster, for tests and previews. Kept as a secondary
+     * constructor rather than a default argument: a default on every parameter makes
+     * Kotlin emit a second, no-arg JVM constructor that inherits `@Inject`, and Dagger
+     * refuses a type with two injected constructors.
+     */
+    constructor() : this(PersistedFriendCaches.None, null)
 
     private val lock = Any()
     private val friendIds = mutableSetOf<String>()
     private val sentPending = mutableMapOf<String, String>()
     private val receivedPending = mutableMapOf<String, String>()
     private var hydrated = false
+
+    /** The hydration currently running, shared by every concurrent caller. */
+    private var inflight: CompletableDeferred<Unit>? = null
+
+    /** Bumped on each claim, authoritative write and [clear]; only the current owner may apply. */
+    private var generation = 0L
 
     private val _version = MutableStateFlow(0)
 
@@ -49,6 +73,12 @@ class FriendshipCache @Inject constructor() {
     val currentFriendIds: Set<String> get() = synchronized(lock) { friendIds.toSet() }
 
     val pendingReceivedCount: Int get() = synchronized(lock) { receivedPending.size }
+
+    /** Sender ids of the requests received and still pending — what the Requests tab reconciles against. */
+    val currentReceivedPendingSenderIds: Set<String> get() = synchronized(lock) { receivedPending.keys.toSet() }
+
+    /** Receiver ids of the requests sent and still pending. */
+    val currentSentPendingReceiverIds: Set<String> get() = synchronized(lock) { sentPending.keys.toSet() }
 
     // MARK: - Lookup
 
@@ -72,6 +102,14 @@ class FriendshipCache @Inject constructor() {
      * pending entries; any other status (rejected/cancelled) is dropped. Fully
      * replaces prior state so a stale entry can never survive a refresh.
      */
+    suspend fun hydrate(sent: List<FriendRequest>, received: List<FriendRequest>, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) { hydrate(sent, received) }
+    }
+
+    /**
+     * [hydrate] sans garde de compte : pour un appelant qui n'a aucune requête réseau derrière lui (test, aperçu). Une
+     * réponse réseau passe par la variante à ticket : celle de A arrivée après la purge n'écrase pas le graphe de B (#13577).
+     */
     fun hydrate(sent: List<FriendRequest>, received: List<FriendRequest>) {
         synchronized(lock) {
             friendIds.clear()
@@ -90,8 +128,100 @@ class FriendshipCache @Inject constructor() {
                 }
             }
             hydrated = true
+            generation++
         }
         bumpVersion()
+    }
+
+    /**
+     * Coalesced hydration (port of the iOS `hydrate(friendService:seedSource:)`): the launch
+     * trigger and the auth-change trigger can fire together, and two hydrations replacing the
+     * graph under each other is what crashed iOS on warm start. Concurrent callers share ONE
+     * run; a caller arriving once the graph is hydrated returns at once.
+     *
+     * The owner first applies [seed] (the persisted Room rosters) so the friendship button is
+     * right before the paginated fetch answers, then [fetch] and replaces the graph with it. A
+     * result is applied only while its generation is still the current one, so a [clear]
+     * (logout) or an authoritative [hydrate] landing meanwhile is never overwritten by a
+     * stale response. A `null` fetch (offline, failure) leaves the seeded graph untouched.
+     */
+    suspend fun hydrateCoalesced(
+        seed: suspend () -> FriendshipSeed? = { persisted.seed() },
+        fetch: suspend () -> FriendshipPages?,
+    ) {
+        val claim = claimHydration() ?: return
+        if (!claim.isOwner) {
+            claim.done.await()
+            return
+        }
+        try {
+            runCatchingNonCancellation { seed() }?.let { applySeed(claim.generation, it) }
+            runCatchingNonCancellation { fetch() }?.let { applyFetched(claim.generation, it) }
+        } finally {
+            synchronized(lock) { if (inflight === claim.done) inflight = null }
+            claim.done.complete(Unit)
+        }
+    }
+
+    private class Claim(val done: CompletableDeferred<Unit>, val generation: Long, val isOwner: Boolean)
+
+    private fun claimHydration(): Claim? = synchronized(lock) {
+        if (hydrated) return@synchronized null
+        inflight?.let { return@synchronized Claim(it, generation, isOwner = false) }
+        generation++
+        val done = CompletableDeferred<Unit>()
+        inflight = done
+        Claim(done, generation, isOwner = true)
+    }
+
+    private fun applySeed(owner: Long, seed: FriendshipSeed) {
+        val applied = synchronized(lock) {
+            val empty = friendIds.isEmpty() && sentPending.isEmpty() && receivedPending.isEmpty()
+            if (owner != generation || !empty) return@synchronized false
+            seed.friends.forEach { friendIds.add(it.id) }
+            absorb(seed.sent, seed.received)
+            true
+        }
+        if (applied) bumpVersion()
+    }
+
+    private fun applyFetched(owner: Long, pages: FriendshipPages) {
+        val applied = synchronized(lock) {
+            if (owner != generation) return@synchronized false
+            friendIds.clear()
+            sentPending.clear()
+            receivedPending.clear()
+            absorb(pages.sent, pages.received)
+            hydrated = true
+            true
+        }
+        if (applied) bumpVersion()
+    }
+
+    /** Drops the persisted rosters' freshness so the next load round-trips the gateway. */
+    suspend fun invalidatePersistedFriendCaches() = persisted.invalidate()
+
+    private inline fun <T> runCatchingNonCancellation(block: () -> T): T? = try {
+        block()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (ignored: Exception) {
+        null
+    }
+
+    private fun absorb(sent: List<FriendRequest>, received: List<FriendRequest>) {
+        for (request in sent) {
+            when (request.status) {
+                "accepted" -> if (request.receiverId.isNotBlank()) friendIds.add(request.receiverId)
+                "pending" -> if (request.receiverId.isNotBlank()) sentPending[request.receiverId] = request.id
+            }
+        }
+        for (request in received) {
+            when (request.status) {
+                "accepted" -> if (request.senderId.isNotBlank()) friendIds.add(request.senderId)
+                "pending" -> if (request.senderId.isNotBlank()) receivedPending[request.senderId] = request.id
+            }
+        }
     }
 
     // MARK: - Mutations (optimistic updates)
@@ -158,11 +288,36 @@ class FriendshipCache @Inject constructor() {
             sentPending.clear()
             receivedPending.clear()
             hydrated = false
+            generation++
+            inflight = null
         }
         bumpVersion()
     }
 
     private fun bumpVersion() {
-        _version.value += 1
+        _version.update { it + 1 }
+    }
+}
+
+/** Pages drained from the gateway, ready to replace the graph. */
+data class FriendshipPages(val sent: List<FriendRequest>, val received: List<FriendRequest>)
+
+/** The persisted rosters (Room) served before the network answers, never marking the graph hydrated. */
+data class FriendshipSeed(
+    val friends: List<FriendRequestUser>,
+    val received: List<FriendRequest>,
+    val sent: List<FriendRequest>,
+)
+
+/** Expires the persisted friend rosters after a mutation so the next load revalidates. */
+interface PersistedFriendCaches {
+    suspend fun invalidate()
+
+    suspend fun seed(): FriendshipSeed?
+
+    object None : PersistedFriendCaches {
+        override suspend fun seed(): FriendshipSeed? = null
+
+        override suspend fun invalidate() = Unit
     }
 }

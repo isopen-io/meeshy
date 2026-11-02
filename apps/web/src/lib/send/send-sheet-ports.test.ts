@@ -4,6 +4,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { canSendPlaintext, endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 import { createImagePreparer, type ImagePort } from '@/lib/media/prepare-image-upload';
 
 import { createSendSheetPorts } from './send-sheet-ports';
@@ -49,12 +50,81 @@ describe('uploadFiles', () => {
   });
 });
 
+describe('uploadFiles — un partage de 100 fichiers et 5 Go (#12974)', () => {
+  const passThrough = createImagePreparer((() => Promise.reject(new Error('aucune photo à préparer'))) as ImagePort);
+  const doc = (name: string, bytes = 2): File => new File([new Uint8Array(bytes)], name, { type: 'application/pdf' });
+
+  test('au-delà de 30 fichiers, plusieurs requêtes directes — jamais une seule que la passerelle refuserait (413)', async () => {
+    let next = 0;
+    const { deps, requests } = scripted((request) => {
+      const count = (request.body as FormData).getAll('files').length;
+      return { ok: true, data: { attachments: Array.from({ length: count }, () => ({ id: `att-${(next += 1)}` })) } };
+    });
+    const ports = createSendSheetPorts({ language: 'fr', deps, prepare: passThrough });
+    const files = Array.from({ length: 100 }, (_, i) => doc(`${i}.pdf`));
+    const result = await ports.uploadFiles(files);
+    expect(requests.map((request) => (request.body as FormData).getAll('files').length)).toEqual([30, 30, 30, 10]);
+    expect(result).toEqual({ ok: true, data: { attachmentIds: Array.from({ length: 100 }, (_, i) => `att-${i + 1}`) } });
+  });
+
+  test('un fichier trop lourd pour la voie directe part en reprise (TUS), à son rang, sans contexte de publication', async () => {
+    const { deps, requests } = scripted((request) => {
+      const names = (request.body as FormData).getAll('files').map((entry) => (entry as File).name);
+      return { ok: true, data: { attachments: names.map((name) => ({ id: `att-${name}` })) } };
+    });
+    const created: string[] = [];
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        created.push(new Headers(init.headers).get('Upload-Metadata') ?? '');
+        return new Response(null, { status: 201, headers: { Location: '/api/v1/uploads/up-1' } });
+      }
+      return new Response(JSON.stringify({ success: true, data: { attachment: { id: 'att-tus', fileUrl: 'f', mimeType: 'application/pdf' } } }), {
+        status: 200,
+        headers: { 'Upload-Offset': '8' },
+      });
+    }) as typeof fetch;
+    const ports = createSendSheetPorts({
+      language: 'fr',
+      deps,
+      prepare: passThrough,
+      media: { source: 'gateway', base: 'https://up.test', credential: () => ({ kind: 'registered', token: 'jwt' }), fetchImpl },
+      uploadLimits: { maxFiles: 30, maxBytes: 4 },
+      resumableCheckpoints: null,
+    });
+    const result = await ports.uploadFiles([doc('a.pdf'), doc('lourd.pdf', 8), doc('b.pdf')]);
+    expect(result).toEqual({ ok: true, data: { attachmentIds: ['att-a.pdf', 'att-tus', 'att-b.pdf'] } });
+    expect(requests).toHaveLength(2);
+    expect(created).toHaveLength(1);
+    expect(created[0]).not.toContain('uploadcontext');
+  });
+
+  test('un lot refusé arrête l’envoi : rien n’est envoyé à moitié', async () => {
+    let calls = 0;
+    const { deps } = scripted(() => {
+      calls += 1;
+      return calls === 1 ? { ok: true, data: { attachments: Array.from({ length: 30 }, (_, i) => ({ id: `att-${i}` })) } } : { ok: false, status: 503, error: 'indisponible' };
+    });
+    const ports = createSendSheetPorts({ language: 'fr', deps, prepare: passThrough });
+    const result = await ports.uploadFiles(Array.from({ length: 40 }, (_, i) => doc(`${i}.pdf`)));
+    expect(result.ok).toBe(false);
+  });
+});
+
 describe('openDirect', () => {
   test('rend l’identifiant de la conversation directe', async () => {
     const { deps, requests } = scripted(() => ({ ok: true, data: { id: 'dm-1' } }));
     const ports = createSendSheetPorts({ language: 'fr', deps });
     expect(await ports.openDirect('u1')).toEqual({ ok: true, data: { id: 'dm-1' } });
     expect(requests[0]?.body).toEqual({ type: 'direct', participantIds: ['u1'] });
+  });
+
+  test('le tête-à-tête existant servi e2ee est appris AVANT tout téléversement (audit #12949)', async () => {
+    const { deps } = scripted(() => ({ ok: true, data: { id: 'dm-e2ee', type: 'direct', encryptionMode: 'e2ee' } }));
+    const ports = createSendSheetPorts({ language: 'fr', deps });
+    await ports.openDirect('u2');
+    await ports.openGroup({ userIds: ['u3', 'u4'], title: 'g' });
+    expect(canSendPlaintext({ conversationId: 'dm-e2ee' })).toBe(false);
+    endToEndRegimeLedger.getState().reset();
   });
 });
 

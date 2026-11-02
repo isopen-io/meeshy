@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { attachmentSrcSet, resolveAttachmentSrc, sizesFor } from './media-url';
+import { attachmentPictureSrcSets, attachmentSrcSet, resolveAttachmentSrc, sizesFor } from './media-url';
 import type { ImageVariant } from './types';
 
 /**
@@ -288,5 +288,53 @@ describe("resolveAttachmentSrc — l'adresse absolue qui grave un hôte (#7022)"
 
   test('une adresse EXTERNE sans forme de clé traverse INCHANGÉE', () => {
     expect(resolveAttachmentSrc('https://cdn.example.com/photo.png', 'https://gate.meeshy.me')).toBe('https://cdn.example.com/photo.png');
+  });
+});
+
+/**
+ * `attachmentPictureSrcSets` (W12, #11318) — AVIF d'abord, WebP ensuite, dans
+ * DEUX listes : `avifVariants` (S7, #11262) alimente `<source type="image/avif">`,
+ * `imageVariants` le `srcset` de l'`<img>`, que tout navigateur lit. Un AVIF ne
+ * descend jamais dans la liste WebP, même si une ligne les mélangeait.
+ */
+describe('attachmentPictureSrcSets — AVIF puis WebP', () => {
+  const variant = (width: number, url: string, format: ImageVariant['format']): ImageVariant => ({
+    width,
+    height: width,
+    url,
+    size: 1000,
+    format,
+  });
+
+  test('les deux listes, chacune résolue par attachmentSrc', () => {
+    expect(
+      attachmentPictureSrcSets({
+        avifVariants: [variant(640, '2026/10/a_640w.avif', 'avif')],
+        imageVariants: [variant(640, '2026/10/a_640w.webp', 'webp')],
+      }),
+    ).toEqual({
+      avif: 'https://gate.meeshy.me/api/v1/attachments/file/2026%2F10%2Fa_640w.avif 640w',
+      webp: 'https://gate.meeshy.me/api/v1/attachments/file/2026%2F10%2Fa_640w.webp 640w',
+    });
+  });
+
+  test('sans AVIF (pièce d’avant S7, image chiffrée) : le WebP seul, aucune source AVIF', () => {
+    expect(attachmentPictureSrcSets({ imageVariants: [variant(640, '2026/10/a.webp', 'webp')] })).toEqual({
+      webp: 'https://gate.meeshy.me/api/v1/attachments/file/2026%2F10%2Fa.webp 640w',
+    });
+  });
+
+  test('sans aucune variante : rien, l’<img> garde son src seul', () => {
+    expect(attachmentPictureSrcSets({})).toEqual({});
+    expect(attachmentPictureSrcSets({ avifVariants: [], imageVariants: [] })).toEqual({});
+  });
+
+  test('un format étranger à sa liste est écarté', () => {
+    expect(
+      attachmentPictureSrcSets({
+        avifVariants: [variant(640, '2026/10/x.webp', 'webp')],
+        imageVariants: [variant(640, '2026/10/y.avif', 'avif')],
+      }),
+    ).toEqual({});
   });
 });

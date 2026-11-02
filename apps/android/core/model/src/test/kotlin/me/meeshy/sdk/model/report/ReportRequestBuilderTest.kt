@@ -120,4 +120,29 @@ class ReportRequestBuilderTest {
         assertThat(ReportRequestBuilder.forPost("   ", ReportReason.SPAM, null)).isNull()
         assertThat(ReportRequestBuilder.forStory("", ReportReason.SPAM, null)).isNull()
     }
+
+    @Test
+    fun `forComment and forConversation carry their wire types and share the guards`() {
+        val comment = ReportRequestBuilder.forComment(" c1 ", ReportReason.HARASSMENT, "  rude  ")!!
+        assertThat(comment.reportedType).isEqualTo("comment")
+        assertThat(comment.reportedEntityId).isEqualTo("c1")
+        assertThat(comment.reportType).isEqualTo("harassment")
+        assertThat(comment.reason).isEqualTo("rude")
+
+        val conversation = ReportRequestBuilder.forConversation("k1", ReportReason.SPAM, "   ")!!
+        assertThat(conversation.reportedType).isEqualTo("conversation")
+        assertThat(conversation.reason).isNull()
+
+        assertThat(ReportRequestBuilder.forComment("", ReportReason.SPAM, null)).isNull()
+        assertThat(ReportRequestBuilder.forConversation("  ", ReportReason.SPAM, null)).isNull()
+    }
+
+    @Test
+    fun `every reason token stays a lowercase token the gateway accepts`() {
+        ReportReason.values().forEach { reason ->
+            assertThat(reason.wireValue).matches("[a-z_]+")
+            assertThat(ReportRequestBuilder.forConversation("k", reason, null)!!.reportType)
+                .isEqualTo(reason.wireValue)
+        }
+    }
 }

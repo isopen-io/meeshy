@@ -4,15 +4,23 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.feature.auth.R
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.auth.SavedAccountsStore
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.auth.CredentialRefusal
+import me.meeshy.sdk.model.auth.EmailVerificationRequest
+import me.meeshy.sdk.model.auth.KeepSignedInPolicy
+import me.meeshy.sdk.model.auth.LoginOutcome
+import me.meeshy.sdk.model.auth.PendingEmailVerification
 import me.meeshy.sdk.model.auth.SavedAccount
 import me.meeshy.sdk.model.auth.SavedAccounts
 import me.meeshy.sdk.model.auth.ServerEnvironment
@@ -30,14 +38,54 @@ data class AuthUiState(
     val errorMessage: String? = null,
     @get:StringRes val errorRes: Int? = null,
     val isAuthenticated: Boolean = false,
+    /** Un compte (JWT) est connecté, pas seulement une session d'invité de lien : un lien de visiteur en attente ne se rejoue qu'alors. */
+    val hasAccount: Boolean = false,
     val savedAccounts: List<SavedAccount> = emptyList(),
     val selectedAccount: SavedAccount? = null,
     val showNormalLogin: Boolean = false,
     val selectedEnvironment: ServerEnvironment = ServerEnvironment.PRODUCTION,
     val customHostInput: String = "",
     val showEnvironmentSelector: Boolean = false,
+    /**
+     * Le serveur choisi n'est pas celui du client réseau en cours, construit une fois par
+     * processus : l'écran redémarre l'app pour l'appliquer — sinon la connexion partirait vers
+     * l'ancien serveur sous l'étiquette du nouveau.
+     */
+    val restartToApplyEnvironment: Boolean = false,
+    /** iOS `AuthManager.twoFactorToken` : le défi d'un compte protégé, l'écran passe à l'étape du code. */
+    val twoFactorToken: String? = null,
+    val twoFactorCode: String = "",
+    /** La passerelle demande de prouver l'adresse (`verification-required`) : l'écran passe à l'étape du code reçu. */
+    val pendingVerification: PendingEmailVerification? = null,
+    val verificationCode: String = "",
+    val verificationResend: VerificationResend = VerificationResend.IDLE,
+    /** iOS `SettingsView` : le voile « Déconnexion en cours… » tient l'écran le temps de l'appel serveur. */
+    val isLoggingOut: Boolean = false,
+    /** iOS `SessionClosedNoticeView` : la session a été fermée sans que l'utilisateur l'ait demandé. */
+    val sessionClosedNotice: Boolean = false,
+    /** iOS `LoginView.keepSignedIn` : la case « Rester connecté sur cet appareil », cochée par défaut. */
+    val keepSignedIn: Boolean = true,
+    /** iOS `AuthManager.offersKeepSignedIn` : un AUTRE compte garde déjà sa session — sinon la case ne se montre pas. */
+    val offersKeepSignedIn: Boolean = false,
+    /**
+     * Réinstaller l'app garde la connexion (#14058) : le démarrage sans session relit la session sauvegardée hors
+     * de l'app et la renouvelle. Le rideau de démarrage tient pendant ce temps — l'écran de connexion ne clignote pas.
+     */
+    val isRestoringSession: Boolean = false,
 ) {
+    /** Ce que la session qui s'ouvre garde : le premier compte de l'appareil l'est sans question (iOS `keepsNewSession`). */
+    val keepsNewSession: Boolean get() = KeepSignedInPolicy.keepsNewSession(offersKeepSignedIn, keepSignedIn)
+
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
+
+    /** iOS `LoginView` : « Se connecter » de l'étape 2FA reste grisé sous 6 caractères. */
+    val canSubmitTwoFactor: Boolean get() = twoFactorCode.trim().length >= CODE_LENGTH && !isSubmitting
+
+    val canSubmitVerification: Boolean get() = verificationCode.trim().length >= CODE_LENGTH && !isSubmitting
+
+    private companion object {
+        const val CODE_LENGTH = 6
+    }
 
     /** iOS `LoginView.showPicker` — the remembered-account list instead of the credential form. */
     val showPicker: Boolean get() = SavedAccounts.showPicker(savedAccounts, showNormalLogin)
@@ -55,6 +103,9 @@ data class AuthUiState(
         )
 }
 
+/** Le renvoi du code de vérification : iOS `EmailVerificationView` (« Renvoyer le code », « Code renvoyé ! »). */
+enum class VerificationResend { IDLE, SENDING, SENT }
+
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -68,6 +119,7 @@ class AuthViewModel @Inject constructor(
     private val _state = MutableStateFlow(
         AuthUiState(
             isAuthenticated = authRepository.isAuthenticated,
+            hasAccount = authRepository.hasAccountSession,
             savedAccounts = savedAccountsStore.accounts.value,
             selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
             customHostInput = serverEnvironmentStore.customHost,
@@ -77,20 +129,47 @@ class AuthViewModel @Inject constructor(
             // "is this a debug build" flag would only ever agree with the existing
             // one, so this reuses rather than duplicates it.
             showEnvironmentSelector = config.enableLogging,
+            isRestoringSession = !authRepository.isAuthenticated,
         ),
     )
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
+
+    /** La restauration en vol : une connexion faite à la main la remplace, jamais l'inverse. */
+    private var restoration: Job? = null
 
     init {
         realtimeCoordinator.onAuthenticatedChanged(authRepository.isAuthenticated)
         if (authRepository.isAuthenticated) {
             viewModelScope.launch { authRepository.restoreSession() }
+        } else {
+            restoration = viewModelScope.launch { restoreBackedUpSession() }
         }
         viewModelScope.launch {
             savedAccountsStore.accounts.collect { accounts ->
-                _state.update { it.copy(savedAccounts = accounts) }
+                _state.update {
+                    it.copy(savedAccounts = accounts, offersKeepSignedIn = offersKeepSignedIn(accounts))
+                }
             }
         }
+    }
+
+    private fun abandonRestoration() {
+        restoration?.cancel()
+        restoration = null
+        _state.update { it.copy(isRestoringSession = false) }
+    }
+
+    private suspend fun restoreBackedUpSession() {
+        withTimeoutOrNull(RESTORE_TIMEOUT_MILLIS) { authRepository.restoreBackedUpSession() }?.let(::sessionOpened)
+        _state.update { it.copy(isRestoringSession = false) }
+    }
+
+    private fun offersKeepSignedIn(accounts: List<SavedAccount>): Boolean =
+        KeepSignedInPolicy.offers(accounts, activeId = null, accountsWithTokens = authRepository.accountsKeepingASession(accounts.map { it.id }))
+
+    /** La case « Rester connecté sur cet appareil » : le choix part avec la connexion (`rememberDevice`). */
+    fun onKeepSignedInChange(value: Boolean) {
+        _state.update { it.copy(keepSignedIn = value) }
     }
 
     fun onUsernameChange(value: String) {
@@ -148,7 +227,12 @@ class AuthViewModel @Inject constructor(
         if (env != ServerEnvironment.CUSTOM) {
             serverEnvironmentStore.select(env)
         }
+        _state.update { it.copy(restartToApplyEnvironment = selectionDiffersFromRunningServer()) }
     }
+
+    private fun selectionDiffersFromRunningServer(): Boolean =
+        ServerEnvironmentResolver.apiBaseUrl(serverEnvironmentStore.selectedEnvironment, serverEnvironmentStore.customHost)
+            .trimEnd('/') != config.apiBaseUrl.trimEnd('/')
 
     /** Custom-host text field binding — iOS `LoginView`'s `$customHost`. */
     fun onCustomHostChange(value: String) {
@@ -163,37 +247,178 @@ class AuthViewModel @Inject constructor(
         val host = _state.value.customHostInput
         if (!ServerEnvironmentResolver.canApplyCustomHost(host)) return
         serverEnvironmentStore.applyCustomHost(host.trim())
-        _state.update { it.copy(selectedEnvironment = ServerEnvironment.CUSTOM) }
+        _state.update {
+            it.copy(selectedEnvironment = ServerEnvironment.CUSTOM, restartToApplyEnvironment = selectionDiffersFromRunningServer())
+        }
     }
 
     fun login() {
         val current = _state.value
+        if (current.isSubmitting) return
         if (current.username.isBlank() || current.password.isBlank()) {
             _state.update { it.copy(errorRes = R.string.login_error_required) }
             return
         }
+        abandonRestoration()
         _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
         viewModelScope.launch {
-            val result = authRepository.login(current.username.trim(), current.password)
-            if (result is NetworkResult.Success) {
-                realtimeCoordinator.onAuthenticatedChanged(true)
-                val user = result.data.user
-                savedAccountsStore.upsert(
-                    SavedAccount(
-                        id = user.id,
-                        username = user.username,
-                        displayName = user.displayName,
-                        avatarUrl = user.avatar,
-                        lastActiveAtMillis = cacheClock.nowMillis(),
-                    ),
-                )
+            when (val result = authRepository.loginOutcome(current.username.trim(), current.password, rememberDevice = current.keepsNewSession)) {
+                is NetworkResult.Failure -> showRefusal(result.error.code, result.error.httpStatus, result.error.message)
+                is NetworkResult.Success -> followOutcome(result.data)
             }
+        }
+    }
+
+    fun onTwoFactorCodeChange(value: String) {
+        _state.update { it.copy(twoFactorCode = value.take(MAX_CODE_INPUT), errorMessage = null, errorRes = null) }
+    }
+
+    /** iOS `LoginView.attempt2FALogin` → `AuthManager.completeLoginWith2FA`. */
+    fun submitTwoFactor() {
+        val current = _state.value
+        val challenge = current.twoFactorToken ?: return
+        if (!current.canSubmitTwoFactor) return
+        abandonRestoration()
+        _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
+        viewModelScope.launch {
+            when (val result = authRepository.completeLoginWith2FA(challenge, current.twoFactorCode.trim())) {
+                is NetworkResult.Failure -> showRefusal(result.error.code, result.error.httpStatus, result.error.message)
+                is NetworkResult.Success -> sessionOpened(result.data.user)
+            }
+        }
+    }
+
+    /** « Annuler » de l'étape 2FA : retour au formulaire, le défi est oublié. */
+    fun cancelTwoFactor() {
+        _state.update { it.copy(twoFactorToken = null, twoFactorCode = "", errorMessage = null, errorRes = null) }
+    }
+
+    fun onVerificationCodeChange(value: String) {
+        _state.update {
+            it.copy(verificationCode = value.filter(Char::isDigit).take(MAX_CODE_INPUT), errorMessage = null, errorRes = null)
+        }
+    }
+
+    /**
+     * iOS `EmailVerificationViewModel.verifyCode` : le code reçu, avec le mot de passe déjà
+     * prouvé, ouvre la session — ou rend le défi de second facteur.
+     */
+    fun submitVerification() {
+        val current = _state.value
+        val pending = current.pendingVerification ?: return
+        if (!current.canSubmitVerification) return
+        abandonRestoration()
+        _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
+        viewModelScope.launch {
+            val request = EmailVerificationRequest(
+                email = pending.email,
+                code = current.verificationCode.trim(),
+                password = current.password.takeIf { it.isNotEmpty() },
+            )
+            when (val result = authRepository.confirmEmail(request)) {
+                is NetworkResult.Failure ->
+                    showRefusal(result.error.code, result.error.httpStatus, result.error.message, verifying = true)
+                is NetworkResult.Success -> followOutcome(result.data, adopt = true)
+            }
+        }
+    }
+
+    /** « Renvoyer le code » : la passerelle répond succès même sans compte (anti-énumération). */
+    fun resendVerification() {
+        val pending = _state.value.pendingVerification ?: return
+        if (_state.value.verificationResend == VerificationResend.SENDING) return
+        _state.update { it.copy(verificationResend = VerificationResend.SENDING, errorMessage = null, errorRes = null) }
+        viewModelScope.launch {
+            val result = authRepository.resendEmailVerification(pending.email)
             _state.update {
                 when (result) {
-                    is NetworkResult.Success -> it.copy(isSubmitting = false, isAuthenticated = true)
-                    is NetworkResult.Failure -> it.copy(isSubmitting = false, errorMessage = result.error.message)
+                    is NetworkResult.Success -> it.copy(verificationResend = VerificationResend.SENT)
+                    is NetworkResult.Failure ->
+                        it.copy(verificationResend = VerificationResend.IDLE, errorRes = R.string.email_verification_error_resend_failed)
                 }
             }
+        }
+    }
+
+    /** « Fermer » de l'étape de vérification : retour au formulaire. */
+    fun cancelVerification() {
+        _state.update {
+            it.copy(
+                pendingVerification = null,
+                verificationCode = "",
+                verificationResend = VerificationResend.IDLE,
+                errorMessage = null,
+                errorRes = null,
+            )
+        }
+    }
+
+    private fun followOutcome(outcome: LoginOutcome, adopt: Boolean = false) {
+        when (outcome) {
+            is LoginOutcome.Authenticated -> {
+                if (adopt) authRepository.adoptSession(outcome.session)
+                sessionOpened(outcome.session.user)
+            }
+            is LoginOutcome.TwoFactorRequired -> _state.update {
+                it.copy(
+                    isSubmitting = false,
+                    twoFactorToken = outcome.twoFactorToken,
+                    twoFactorCode = "",
+                    pendingVerification = null,
+                    verificationCode = "",
+                )
+            }
+            is LoginOutcome.VerificationRequired -> _state.update {
+                it.copy(
+                    isSubmitting = false,
+                    pendingVerification = outcome.pending,
+                    verificationCode = "",
+                    verificationResend = VerificationResend.IDLE,
+                )
+            }
+            is LoginOutcome.LinkConfirmationRequired ->
+                _state.update { it.copy(isSubmitting = false, errorRes = R.string.common_error_generic) }
+        }
+    }
+
+    private fun sessionOpened(user: MeeshyUser) {
+        realtimeCoordinator.onAuthenticatedChanged(true)
+        savedAccountsStore.upsert(
+            SavedAccount(
+                id = user.id,
+                username = user.username,
+                displayName = user.displayName,
+                avatarUrl = user.avatar,
+                lastActiveAtMillis = cacheClock.nowMillis(),
+                keepsSession = _state.value.keepsNewSession,
+            ),
+        )
+        _state.update {
+            it.copy(
+                isSubmitting = false,
+                isAuthenticated = true,
+                hasAccount = authRepository.hasAccountSession,
+                twoFactorToken = null,
+                twoFactorCode = "",
+                pendingVerification = null,
+                verificationCode = "",
+            )
+        }
+    }
+
+    private fun showRefusal(code: String?, httpStatus: Int?, message: String?, verifying: Boolean = false) {
+        val refusal = CredentialRefusal.classify(code, httpStatus)
+        val reason = refusal.serverReason(message)
+        val res = when (refusal) {
+            CredentialRefusal.OFFLINE -> R.string.email_verification_error_offline
+            CredentialRefusal.TOO_MANY_ATTEMPTS -> R.string.email_verification_error_too_many_attempts
+            CredentialRefusal.INVALID_CODE -> R.string.email_verification_error_invalid_code
+            CredentialRefusal.EXPIRED_CODE -> R.string.email_verification_error_expired_code
+            CredentialRefusal.REJECTED, CredentialRefusal.UNEXPECTED ->
+                if (verifying) R.string.email_verification_error_generic else R.string.common_error_generic
+        }
+        _state.update {
+            it.copy(isSubmitting = false, errorMessage = reason, errorRes = res.takeIf { reason == null })
         }
     }
 
@@ -203,11 +428,21 @@ class AuthViewModel @Inject constructor(
      * sockets reveilles, compte memorise pour le picker, etat aligne.
      */
     fun onExternalSessionOpened() {
+        abandonRestoration()
         realtimeCoordinator.onAuthenticatedChanged(authRepository.isAuthenticated)
-        _state.update { it.copy(isAuthenticated = authRepository.isAuthenticated) }
+        _state.update { it.copy(isAuthenticated = authRepository.isAuthenticated, hasAccount = authRepository.hasAccountSession) }
     }
 
-    fun logout() {
+    /**
+     * Ferme la session. [closedByServer] : la passerelle a refusé l'identité (session révoquée,
+     * expirée, compte fermé) ; l'écran de connexion dit alors pourquoi on y revient. Un second
+     * appel pendant la fermeture est sans effet.
+     */
+    fun logout(closedByServer: Boolean = false) {
+        val current = _state.value
+        if (current.isLoggingOut) return
+        val explain = closedByServer && current.isAuthenticated
+        _state.update { it.copy(isLoggingOut = true) }
         viewModelScope.launch {
             authRepository.logout()
             realtimeCoordinator.onAuthenticatedChanged(false)
@@ -219,7 +454,22 @@ class AuthViewModel @Inject constructor(
                 selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
                 customHostInput = serverEnvironmentStore.customHost,
                 showEnvironmentSelector = config.enableLogging,
+                sessionClosedNotice = explain,
+                offersKeepSignedIn = offersKeepSignedIn(savedAccountsStore.accounts.value),
             )
         }
+    }
+
+    /** « Se reconnecter » de l'avis de session fermée. */
+    fun dismissSessionClosedNotice() {
+        _state.update { it.copy(sessionClosedNotice = false) }
+    }
+
+    private companion object {
+        /** Un code TOTP (6 chiffres) ou de secours (`XXXX-XXXX`). */
+        const val MAX_CODE_INPUT = 9
+
+        /** Au-delà, la connexion se rend à la main : une sauvegarde hors ligne ne tient pas l'écran. */
+        const val RESTORE_TIMEOUT_MILLIS = 8_000L
     }
 }

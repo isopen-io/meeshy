@@ -266,7 +266,6 @@ struct CommentMediaView: View {
                 accentColor: accentColor,
                 frame: .card,
                 availability: availability,
-                performance: .inline,
                 onDownload: onDownload,
                 onExpand: {
                     showFullscreen = true

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * PRÉCHAUFFE les sept pages institutionnelles en HTML STATIQUE.
+ * PRÉCHAUFFE les pages institutionnelles en HTML STATIQUE (`src/institutional/pages.ts`).
  *
  * Pourquoi elles ne sont pas des routes de l'application :
  *
@@ -34,13 +34,7 @@ import { SHARE_PREVIEW_COPY } from '../src/share-preview/share-preview-copy';
 import budgets from '../budgets.json';
 
 import { InstitutionalPage } from '../src/institutional/page';
-import { PAGE_ABOUT } from '../src/institutional/about';
-import { PAGE_CONTACT } from '../src/institutional/contact';
-import { PAGE_FAQ } from '../src/institutional/faq';
-import { PAGE_HELP } from '../src/institutional/help';
-import { PAGE_PARTNERS } from '../src/institutional/partners';
-import { PAGE_PRIVACY } from '../src/institutional/privacy';
-import { PAGE_TERMS } from '../src/institutional/terms';
+import { INSTITUTIONAL_PAGES } from '../src/institutional/pages';
 import type { ContentPage } from '../src/institutional/type';
 import { meeViewFiles } from '../src/institutional/mee-views';
 import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
@@ -80,17 +74,7 @@ await loadInterfaceCatalog('fr');
  */
 const INSTITUTIONAL_PAGE_BUDGET_KB = budgets.institutional_page.kb.value;
 
-const PAGES: readonly { readonly route: string; readonly page: ContentPage }[] = [
-  { route: 'about', page: PAGE_ABOUT },
-  { route: 'contact', page: PAGE_CONTACT },
-  /* LES DEUX ADRESSES DU BINAIRE DÉJÀ DISTRIBUÉ (#7287) — `SupportView.swift`
-     les ouvre depuis l'App Store, et elles rendaient « adresse inconnue ». */
-  { route: 'faq', page: PAGE_FAQ },
-  { route: 'help', page: PAGE_HELP },
-  { route: 'partners', page: PAGE_PARTNERS },
-  { route: 'privacy', page: PAGE_PRIVACY },
-  { route: 'terms', page: PAGE_TERMS },
-];
+const PAGES = INSTITUTIONAL_PAGES;
 
 /**
  * L'ORIGINE PUBLIQUE, et pourquoi elle ne se devine pas.
@@ -319,11 +303,11 @@ for (const { route, page } of PAGES) {
      jamais annoncé — voir le doc-comment de `subresources`. */
   const requests = 1 + subresources(html).length;
   console.log(
-    `  /${route.padEnd(9)} ${String(gzKb).padStart(6)} Ko gzip · ` +
+    `  /${route.padEnd(12)} ${String(gzKb).padStart(6)} Ko gzip · ` +
       `${requests} requête${requests > 1 ? 's' : ''} · 0 script`,
   );
 }
-console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les ${PAGES.length}\n`);
+console.log(`  ${' '.repeat(13)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les ${PAGES.length}\n`);
 
 /**
  * LE GATE (revue de #5606, défaut 3) — un dépassement rend le script en

@@ -46,6 +46,13 @@ public object GameBlockParser {
     public fun fromEngagement(payload: JsonElement?): GameBlock? =
         parse((payload as? JsonObject)?.get("game"))
 
+    /**
+     * Les raretés mesurées du bloc `game` d'une charge `GET /me/engagement`, lues SEULES : une célébration n'a besoin
+     * que d'elles, et un bloc dont une autre partie évolue ne doit pas lui retirer son liseré. `null` : aucune entrée lisible.
+     */
+    public fun raritiesFromEngagement(payload: JsonElement?): Map<String, GameRarityEntry>? =
+        ((payload as? JsonObject)?.get("game") as? JsonObject)?.let(::parseRarities)
+
     public fun fromEngagement(text: String?): GameBlock? {
         if (text.isNullOrBlank()) return null
         val element = try {
@@ -67,6 +74,15 @@ public object GameBlockParser {
         boosts = parseBoosts(obj.reqObject("boosts")),
         guideSeen = obj.reqArray("guideSeen").strings("guideSeen"),
         starFragments = obj.lenient("starFragments", ::parseStarFragments),
+        league = obj.lenient("league", ::parseLeagueBlock),
+        duo = obj.lenient("duo", ::parseDuoBlock),
+        season = obj.lenient("season", ::parseSeasonBlock),
+        seasonUpcoming = obj.lenient("seasonUpcoming", ::parseUpcomingSeasonBlock),
+        trophies = obj.lenient("trophies", ::parseTrophiesBlock),
+        atlas = obj.lenient("atlas", ::parseAtlasBlock),
+        prestige = obj.lenient("prestige", ::parsePrestigeBlock),
+        visibility = obj.lenient("visibility", ::parseVisibility),
+        achievementRarities = parseRarities(obj),
     )
 
     private fun parseLevel(obj: JsonObject): GameLevel = GameLevel(

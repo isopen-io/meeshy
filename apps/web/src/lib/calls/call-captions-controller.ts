@@ -81,6 +81,13 @@ export type CaptionsDeps = {
   readonly language: () => string;
   readonly viewerName: () => string;
   readonly newId: () => string;
+  /**
+   * La passerelle peut-elle entendre ce qui se dit dans cette conversation
+   * (#13720) ? Faux pour une conversation chiffrée de bout en bout, vue comme
+   * telle ou au régime inconnu : rien ne s'annonce, rien ne se capte, aucun
+   * segment ne part — le panneau dit pourquoi (`sealed`).
+   */
+  readonly serverMayHearCaptions: (conversationId: string) => boolean;
 };
 
 export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): CaptionsPort {
@@ -97,6 +104,8 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
   };
   const patch = (fn: (call: ActiveCall) => ActiveCall): void => ctx.update((call) => (call.callId === ctx.callId ? fn(call) : call));
   const setState = (transcription: TranscriptionState): void => patch((call) => (call.transcription === transcription ? call : { ...call, transcription }));
+
+  const serverMayHear = (call: ActiveCall | null): boolean => call !== null && deps.serverMayHearCaptions(call.conversationId);
 
   const add = (caption: CallCaption): void => {
     patch((call) => ({ ...call, captions: mergeCaption(call.captions, caption) }));
@@ -118,6 +127,11 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
   const onResult = (result: SpeechResult): void => {
     const said = result.text.trim();
     if (stopped || capture === null || said === '') return;
+    if (!serverMayHear(live())) {
+      stopCapture();
+      setState('sealed');
+      return;
+    }
     const now = ctx.now();
     const current = utterance ?? { id: deps.newId(), startMs: now - captureStartedAt, at: now };
     utterance = result.isFinal ? null : current;
@@ -147,6 +161,11 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
 
   const reconcile = (): void => {
     const call = live();
+    if (call !== null && !serverMayHear(call)) {
+      stopCapture();
+      setState('sealed');
+      return;
+    }
     const listening = call !== null && !stopped && !call.micMuted && someoneListens({ mode: call.captionsMode, peers: call.captionPeers, members: call.members });
     const action = captureAction(listening, capture !== null);
     if (action === 'stop') {
@@ -219,7 +238,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
       if (call === null || stopped) return;
       const next = nextCaptionsMode(call.captionsMode);
       patch((current) => ({ ...current, captionsMode: next }));
-      if ((call.captionsMode === 'off') !== (next === 'off')) ctx.emit(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId: ctx.callId, active: next !== 'off' });
+      if ((call.captionsMode === 'off') !== (next === 'off') && serverMayHear(call)) ctx.emit(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId: ctx.callId, active: next !== 'off' });
       if (next !== 'off' && call.captions.some((caption) => !caption.mine)) ctx.shown();
       reconcile();
     },

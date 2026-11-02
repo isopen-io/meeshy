@@ -3,6 +3,7 @@ package me.meeshy.ui.theme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.component.chrome.LiquidGlassRecipe
 
 /**
  * Theme-aware signature gradients as Compose [Brush]es — the port of iOS
@@ -19,6 +20,16 @@ object MeeshyGradients {
             listOf(Color(0xFF09090B), Color(0xFF13111C), Color(0xFF1E1B4B))
         } else {
             listOf(Color(0xFFFFFFFF), Color(0xFFF8F7FF), Color(0xFFEEF2FF))
+        },
+        start = topLeading, end = bottomTrailing,
+    )
+
+    /** Dégradé de fond de ThemePalette (iOS `backgroundGradient`), distinct de [mainBackground]. */
+    public fun backgroundGradient(dark: Boolean): Brush = Brush.linearGradient(
+        colors = if (dark) {
+            listOf(Color(0xFF09090B), Color(0xFF0F0D19), Color(0xFF13111C))
+        } else {
+            listOf(Color(0xFFFFFFFF), Color(0xFFFAFAFF), Color(0xFFF8F7FF))
         },
         start = topLeading, end = bottomTrailing,
     )
@@ -61,6 +72,39 @@ object MeeshyGradients {
             } else {
                 listOf(tint.copy(alpha = intensity * 0.6f), tint.copy(alpha = intensity * 0.1f))
             },
+            start = topLeading, end = bottomTrailing,
+        )
+
+    /** Reflet du verre fait main : blanc depuis le bord haut jusqu'au centre. */
+    public fun liquidGlassSheen(dark: Boolean): Brush {
+        val sheen = LiquidGlassRecipe.resolve(dark, isTinted = false).sheen
+        return Brush.verticalGradient(
+            0f to Color.White.copy(alpha = sheen),
+            0.5f to Color.White.copy(alpha = 0f),
+        )
+    }
+
+    /** Liseré du verre fait main : plus clair du cote eclaire (haut-gauche) que du cote ombre. */
+    public fun liquidGlassRim(dark: Boolean, isTinted: Boolean): Brush {
+        val r = LiquidGlassRecipe.resolve(dark, isTinted)
+        return Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = r.rimLit),
+                Color.White.copy(alpha = r.rimShade),
+                Color.White.copy(alpha = r.rimLit * 0.5f),
+            ),
+            start = topLeading, end = bottomTrailing,
+        )
+    }
+
+    /** Dégradé accent -> secondaire d'une conversation (bouton d'envoi du composeur, iOS `sendButton`). */
+    public fun conversationAccent(accent: Color, secondary: Color): Brush =
+        Brush.linearGradient(listOf(accent, secondary), start = topLeading, end = bottomTrailing)
+
+    /** Bordure de focus de la capsule de saisie : accent puis indigo 600, aux opacités de [ComposerFocusBorderPolicy]. */
+    public fun composerFocusBorder(accent: Color, startAlpha: Float, endAlpha: Float): Brush =
+        Brush.linearGradient(
+            colors = listOf(accent.copy(alpha = startAlpha), MeeshyPalette.Indigo600.copy(alpha = endAlpha)),
             start = topLeading, end = bottomTrailing,
         )
 }

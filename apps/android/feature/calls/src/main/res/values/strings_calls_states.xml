@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_outgoing_ringing">Calling…</string>
+    <string name="call_outgoing_waiting">Waiting for the other person…</string>
+    <string name="call_outgoing_waiting_hint">The other person hasn\'t answered yet.</string>
+    <string name="call_connecting_label">Connecting…</string>
+    <string name="call_unknown_peer">Unknown</string>
+    <string name="call_type_audio">Audio call</string>
+    <string name="call_type_video">Video call</string>
+    <string name="call_incoming_audio">Incoming call</string>
+    <string name="call_incoming_video">Incoming video call</string>
+    <string name="call_incoming_badge_audio">Audio</string>
+    <string name="call_incoming_badge_video">Video</string>
+    <string name="call_incoming_decline">Decline</string>
+    <string name="call_incoming_accept">Answer</string>
+    <string name="call_incoming_accept_hint">Answers the incoming call</string>
+    <string name="call_incoming_decline_hint">Declines the incoming call</string>
+    <string name="call_incoming_a11y">%1$s, %2$s</string>
+    <string name="call_ended_local">Call ended</string>
+    <string name="call_ended_remote">Your contact ended the call</string>
+    <string name="call_duration_a11y">Call duration</string>
+    <string name="call_a11y_connecting">Connecting</string>
+    <string name="call_a11y_connected">Call connected</string>
+    <string name="call_a11y_reconnecting">Reconnecting</string>
+    <string name="call_a11y_ended">Call ended</string>
+    <string name="call_avatar_you">You</string>
+</resources>

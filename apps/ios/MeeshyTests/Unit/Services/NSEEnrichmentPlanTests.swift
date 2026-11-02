@@ -74,6 +74,33 @@ final class NSEEnrichmentPlanTests: XCTestCase {
         XCTAssertEqual(source.mimeType, "image/png")
     }
 
+    /// #11328 — la NSE descend l'URL d'ORIGINE que porte la charge, jamais un
+    /// rendu : une clé de rendu inconnue sur le fil ne change rien au plan.
+    func test_unknownRenditionKeys_neverReplaceTheOriginalURL() {
+        let request = makeRequest(mediaPayload([
+            "avifVariants": "{\"medium\":\"https://gate.meeshy.me/x_medium.avif\"}",
+            "renditions": "[{\"codec\":\"heic\"}]",
+        ]))
+
+        XCTAssertEqual(request.media?.url.absoluteString, "https://gate.meeshy.me/api/v1/attachments/file/x.jpg")
+        XCTAssertEqual(request.media?.mimeType, "image/jpeg")
+    }
+
+    /// #11328 — un AVIF ne se planifie pas : le télécharger pour le refuser
+    /// ensuite coûterait le budget de l'extension sans rien afficher.
+    func test_avifMediaOrThumbnail_isNeverPlanned() {
+        XCTAssertNil(makeRequest(mediaPayload([
+            "attachmentUrl": "https://gate.meeshy.me/x.avif", "attachmentMimeType": "image/avif",
+        ])).media)
+
+        let video = makeRequest([
+            "attachmentMimeType": "video/mp4",
+            "attachmentUrl": "https://gate.meeshy.me/v.mp4",
+            "thumbnailUrl": "/t/thumb.avif",
+        ])
+        XCTAssertNil(video.detail)
+    }
+
     func test_budget_downloadTimeout_mirrorsTheCurrentRule() {
         XCTAssertEqual(budget(elapsed: 5).downloadTimeout(at: now), 12)
         XCTAssertEqual(budget(elapsed: 20).downloadTimeout(at: now) ?? 0, 7, accuracy: 0.001)

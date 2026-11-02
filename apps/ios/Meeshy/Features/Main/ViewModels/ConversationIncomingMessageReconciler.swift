@@ -101,8 +101,8 @@ final class ConversationIncomingMessageReconciler {
             // Capture the optimistic plaintext BEFORE the await
             // below — `delegate.messages` (and therefore this
             // index) can change across the suspension point.
-            let optimisticContent = delegate.messages[optimisticIdx].content
-            let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            let optimistic = delegate.messages[optimisticIdx]
+            let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             var msgArray = [decoded]
             await delegate.decryptMessagesIfNeeded(&msgArray)
             guard let serverMsg = msgArray.first else { return }
@@ -115,9 +115,7 @@ final class ConversationIncomingMessageReconciler {
             // on server-ACK, so the optimistic row is the
             // authoritative readable copy. Without this the bubble
             // would flip plaintext → base64 ciphertext on echo.
-            let reconciledContent: String? = (apiMsg.isEncrypted == true)
-                ? optimisticContent
-                : serverMsg.content
+            let reconciledContent = Self.ackedContent(of: optimistic, echo: apiMsg, served: serverMsg)
             // La correspondance `cid → serverId` AVANT l'écriture, comme l'envoi REST : la
             // publication suivante du store rend la ligne sous son id serveur, et sans elle
             // `mergeIntoMessages` gardait la ligne optimiste à côté — deux bulles pour un
@@ -187,7 +185,7 @@ final class ConversationIncomingMessageReconciler {
                 if hasNewData, let persistence = persistenceProvider() {
                     // Write refreshed attachment data through persistence;
                     // store observation surfaces the update to the view.
-                    let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+                    let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
                     let attachmentsJson = try? JSONEncoder().encode(refreshed.attachments)
                     do {
                         try await persistence.updateAttachmentsJson(
@@ -250,7 +248,7 @@ final class ConversationIncomingMessageReconciler {
         // for the transient UI signals (scroll-to-bottom preview) —
         // the persisted row stays ciphertext on disk and the
         // display pipeline decrypts it.
-        let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+        let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
         var msgArray = [decoded]
         await delegate.decryptMessagesIfNeeded(&msgArray)
         guard let msg = msgArray.first else { return }
@@ -270,5 +268,15 @@ final class ConversationIncomingMessageReconciler {
         // le bas est atteint (`MessageListViewController.flushSeenNow`).
 
         // mark-as-received is handled globally by ConversationListViewModel
+    }
+
+    /// Le texte que la ligne de mon envoi garde à l'écho. Un envoi chiffré de
+    /// bout en bout garde le littéral : son clair vit dans le coffre, et la
+    /// bulle l'y relit (#12999). Un envoi chiffré par le serveur garde le clair
+    /// optimiste, que l'écho ne porte pas.
+    static func ackedContent(of optimistic: Message, echo apiMsg: APIMessage, served serverMsg: Message) -> String? {
+        guard apiMsg.isEncrypted == true else { return serverMsg.content }
+        let endToEnd = optimistic.isContentDecryptedOnDevice || apiMsg.encryptionMode == E2EEWire.mode || optimistic.isEncrypted
+        return endToEnd ? E2EEWire.contentPlaceholder : optimistic.content
     }
 }

@@ -10,15 +10,15 @@ import { asRecord } from '@/lib/api/admin';
  *   et `expiresAt`. Une story expirée n'est PAS supprimée — elle a fini sa vie
  *   (20 h pour une story, 1 h pour un statut) — et l'administrateur doit voir la
  *   différence : l'une a été retirée par quelqu'un, l'autre s'est éteinte.
- * - Trois audiences (`PRIVATE`, `ONLY`, `EXCEPT`) sont choisies par l'auteur
- *   pour UNE poignée de personnes : la LISTE plate de toutes les publications
+ * - Cinq audiences (`PRIVATE`, `ONLY`, `EXCEPT`, et les cercles `CLOSE` et `BLOOD`,
+ *   #13931) sont choisies par l'auteur pour UNE poignée de personnes : la LISTE plate de toutes les publications
  *   de la plateforme n'en lit pas le texte (la fiche, oui, pour qui modère).
  *
  * Fonctions PURES : importées par le décodeur de la liste et par l'écran.
  */
 export type PostStateCode = AdminPostState;
 
-export const RESTRICTED_POST_VISIBILITIES = ['PRIVATE', 'ONLY', 'EXCEPT'] as const;
+export const RESTRICTED_POST_VISIBILITIES = ['PRIVATE', 'ONLY', 'EXCEPT', 'CLOSE', 'BLOOD'] as const;
 
 export function isRestrictedVisibility(visibility: string | null | undefined): boolean {
   const code = visibility?.trim().toUpperCase() ?? '';

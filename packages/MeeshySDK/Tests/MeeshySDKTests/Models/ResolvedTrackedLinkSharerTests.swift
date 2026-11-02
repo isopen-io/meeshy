@@ -8,7 +8,7 @@ import Testing
 struct ResolvedTrackedLinkSharerTests {
 
     private func decode(_ json: String) throws -> ResolvedTrackedLink {
-        try APIClient.makeAPIPayloadDecoder().decode(ResolvedTrackedLink.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(ResolvedTrackedLink.self, from: Data(json.utf8))
     }
 
     private func resolution(sharer: String?) -> String {
@@ -72,7 +72,7 @@ struct ResolvedTrackedLinkSharerTests {
         let original = ResolvedTrackedLink(kind: "tracking", targetType: "POST", targetId: "p1",
                                            sharer: TrackedLinkSharer(displayName: "Ada", username: "ada"))
         let data = try JSONEncoder().encode(original)
-        let decoded = try APIClient.makeAPIPayloadDecoder().decode(ResolvedTrackedLink.self, from: data)
+        let decoded = try MeeshyCoders.decoder(.api).decode(ResolvedTrackedLink.self, from: data)
 
         #expect(decoded.sharer == original.sharer)
         #expect(decoded.targetId == "p1")

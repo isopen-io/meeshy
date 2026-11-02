@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+@preconcurrency import AVFoundation
 import os
 
 extension CacheCoordinator {
@@ -13,6 +14,27 @@ extension CacheCoordinator {
     /// Check audio disk cache synchronously. Returns local file URL if cached.
     nonisolated public static func audioLocalFileURL(for urlString: String) -> URL? {
         shared.audio.cachedFileURL(for: urlString)
+    }
+
+    /// L'asset à LIRE pour une vidéo (#9881) : le fichier s'il est sur le
+    /// disque ; sinon un `ProgressiveURLAsset` qui lit le transfert du cache
+    /// pendant sa course — une seule requête par URL, lecture dès la tête.
+    /// `startsTransfer` : l'appelant autorise l'ouverture d'un transfert
+    /// (story affichée) ; sinon l'asset ne joue qu'un transfert déjà lancé
+    /// par une surface qui a appliqué la politique réseau (bulle).
+    nonisolated public static func videoPlaybackAsset(for remote: URL, startsTransfer: Bool) -> AVURLAsset {
+        if remote.isFileURL { return AVURLAsset(url: remote) }
+        if let local = videoLocalFileURL(for: remote.absoluteString) { return AVURLAsset(url: local) }
+        let key = remote.absoluteString
+        return ProgressiveURLAsset(remoteURL: remote) {
+            await shared.video.readableDownload(for: key, startsTransfer: startsTransfer)
+        }
+    }
+
+    /// Un téléchargement de cette vidéo, lisible pendant sa course, est-il en
+    /// cours ? Lecture synchrone, sans saut d'acteur (#9881).
+    nonisolated public static func videoHasReadableTransfer(for urlString: String) -> Bool {
+        shared.video.hasReadableTransfer(for: urlString)
     }
 
     /// Variante async de `videoLocalFileURL` qui garantit un retour `file://`.
@@ -78,6 +100,12 @@ extension CacheCoordinator {
     /// still present.
     nonisolated public static func warmedImage(for urlString: String) -> UIImage? {
         shared.images.warmedImage(for: urlString)
+    }
+
+    /// Même sonde, décodée au palier de la taille AFFICHÉE (#9872) : un avatar
+    /// de liste ne paie plus le plafond d'écran.
+    nonisolated public static func warmedImage(for urlString: String, maxPixelSize: CGFloat) -> UIImage? {
+        shared.images.warmedImage(for: urlString, maxPixelSize: maxPixelSize)
     }
 
     /// Check image disk cache synchronously. Returns local file URL if cached

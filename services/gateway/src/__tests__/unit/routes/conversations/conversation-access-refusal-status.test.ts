@@ -97,7 +97,7 @@ const prismaMembreInconnu = () => ({
       customDestinationLanguage: null,
       isOnline: false,
       lastActiveAt: new Date('2026-09-01'),
-      emailVerifiedAt: null,
+      emailVerifiedAt: new Date('2026-01-02'),
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-09-01'),
       deviceLocale: null,
@@ -221,12 +221,12 @@ describe('une session ABSENTE ou MORTE rend 401 UNAUTHORIZED (#4792)', () => {
 });
 
 describe('un non-membre AUTHENTIFIÉ reçoit le 404 d\'une conversation inexistante (#8099)', () => {
-  it.each(ROUTES)('%s — 404 Conversation not found, sans code', async (_nom, appel) => {
+  it.each(ROUTES)('%s — 404 Conversation not found, au code d’une conversation inexistante', async (_nom, appel) => {
     const { statut, corps } = await appeler(appel, JETON_VIVANT, prismaMembreInconnu());
 
     expect(statut).toBe(404);
     expect(corps.error).toBe('Conversation not found');
-    expect(corps.code).toBeUndefined();
+    expect(corps.code).toBe('CONVERSATION_NOT_FOUND');
   });
 
   /**

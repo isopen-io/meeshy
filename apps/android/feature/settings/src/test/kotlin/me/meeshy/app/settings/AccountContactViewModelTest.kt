@@ -1,6 +1,7 @@
 package me.meeshy.app.settings
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.auth.PhonePlausibility
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -14,6 +15,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ChangeEmailResponse
@@ -60,6 +62,15 @@ class AccountContactViewModelTest {
             every { it.currentUser } returns MutableStateFlow(user())
         },
     ) = AccountContactViewModel(userRepository, sessionRepository)
+
+    /** Le code ne se vérifie qu'une fois envoyé (PhoneChangeFlow) : amène l'écran à cette étape. */
+    private fun TestScope.sendPhoneCode(sut: AccountContactViewModel, userRepo: UserRepository) {
+        coEvery { userRepo.changePhone(any()) } returns
+            NetworkResult.Success(ChangePhoneResponse(pendingPhoneNumber = "+33612345678"))
+        sut.onNewPhoneChange("+33612345678")
+        sut.submitPhoneChange()
+        advanceUntilIdle()
+    }
 
     private fun sessionWith(flow: MutableStateFlow<MeeshyUser?>): SessionRepository {
         val session = mockk<SessionRepository>(relaxed = true)
@@ -334,6 +345,23 @@ class AccountContactViewModelTest {
     }
 
     @Test
+    fun phoneRefusal_exposesTheReasonAndDisablesSubmit() = runTest(dispatcher) {
+        val sut = vm()
+
+        sut.onNewPhoneChange("12345678")
+        assertThat(sut.state.value.phoneRefusal).isEqualTo(PhonePlausibility.Refusal.TOO_SHORT)
+        assertThat(sut.state.value.canSubmitPhone).isFalse()
+
+        sut.onNewPhoneChange("1111100000")
+        assertThat(sut.state.value.phoneRefusal).isEqualTo(PhonePlausibility.Refusal.IDENTICAL_RUN)
+        assertThat(sut.state.value.canSubmitPhone).isFalse()
+
+        sut.onNewPhoneChange("+33642424242")
+        assertThat(sut.state.value.phoneRefusal).isNull()
+        assertThat(sut.state.value.canSubmitPhone).isTrue()
+    }
+
+    @Test
     fun submitPhoneChange_whenInvalid_doesNothing() = runTest(dispatcher) {
         val userRepo = mockk<UserRepository>(relaxed = true)
         val sut = vm(userRepository = userRepo)
@@ -420,7 +448,9 @@ class AccountContactViewModelTest {
 
     @Test
     fun canVerifyPhoneCode_falseUntilExactlySixDigits() = runTest(dispatcher) {
-        val sut = vm()
+        val userRepo = mockk<UserRepository>()
+        val sut = vm(userRepository = userRepo)
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("12345")
         assertThat(sut.state.value.canVerifyPhoneCode).isFalse()
 
@@ -448,7 +478,7 @@ class AccountContactViewModelTest {
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(user())
         val sut = vm(userRepository = userRepo, sessionRepository = session)
-        sut.onNewPhoneChange("+33612345678")
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("123456")
 
         sut.verifyPhoneCode()
@@ -468,6 +498,7 @@ class AccountContactViewModelTest {
         coEvery { userRepo.verifyPhoneChange(any()) } returns
             NetworkResult.Failure(ApiError(message = "bad code", httpStatus = 400))
         val sut = vm(userRepository = userRepo)
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("000000")
 
         sut.verifyPhoneCode()
@@ -484,6 +515,7 @@ class AccountContactViewModelTest {
         coEvery { userRepo.verifyPhoneChange(any()) } returns
             NetworkResult.Failure(ApiError(message = "offline", code = "NETWORK"))
         val sut = vm(userRepository = userRepo)
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("000000")
 
         sut.verifyPhoneCode()
@@ -534,6 +566,7 @@ class AccountContactViewModelTest {
         val userRepo = mockk<UserRepository>()
         coEvery { userRepo.verifyPhoneChange(any()) } coAnswers { gate.await() }
         val sut = vm(userRepository = userRepo)
+        sendPhoneCode(sut, userRepo)
         sut.onPhoneCodeChange("123456")
 
         sut.verifyPhoneCode()
@@ -546,5 +579,63 @@ class AccountContactViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { userRepo.verifyPhoneChange(any()) }
+    }
+
+    // ---- foreground return / resend countdown ----
+
+    @Test
+    fun onResume_withoutPendingEmail_doesNotRefreshTheSession() = runTest(dispatcher) {
+        val session = sessionWith(MutableStateFlow(user()))
+        val sut = vm(sessionRepository = session)
+        advanceUntilIdle()
+
+        sut.onResume()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { session.refresh() }
+    }
+
+    @Test
+    fun onResume_withPendingEmail_refreshesTheSession() = runTest(dispatcher) {
+        val session = sessionWith(MutableStateFlow(user()))
+        val repo = mockk<UserRepository>(relaxed = true)
+        coEvery { repo.changeEmail(any()) } returns NetworkResult.Success(ChangeEmailResponse())
+        val sut = vm(userRepository = repo, sessionRepository = session)
+        advanceUntilIdle()
+        sut.beginEditEmail()
+        sut.onNewEmailChange("new@meeshy.me")
+        sut.submitEmailChange()
+        advanceUntilIdle()
+
+        sut.onResume()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { session.refresh() }
+    }
+
+    @Test
+    fun resendCountdown_startsAtSixtySecondsAndDrainsBeforeResendIsOffered() = runTest(dispatcher) {
+        val repo = mockk<UserRepository>(relaxed = true)
+        coEvery { repo.changeEmail(any()) } returns NetworkResult.Success(ChangeEmailResponse())
+        val sut = vm(userRepository = repo)
+        advanceUntilIdle()
+        sut.beginEditEmail()
+        sut.onNewEmailChange("new@meeshy.me")
+        sut.submitEmailChange()
+        runCurrent()
+
+        assertThat(sut.state.value.resendCooldown?.remaining).isEqualTo(60)
+        assertThat(sut.state.value.canResendEmail).isFalse()
+        advanceTimeBy(60_001)
+        runCurrent()
+        assertThat(sut.state.value.canResendEmail).isTrue()
+    }
+
+    @Test
+    fun phoneCode_isLimitedToSixDigits() = runTest(dispatcher) {
+        val sut = vm()
+        advanceUntilIdle()
+        sut.onPhoneCodeChange("12a3456789")
+        assertThat(sut.state.value.phoneCode).isEqualTo("123456")
     }
 }

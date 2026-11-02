@@ -1,6 +1,8 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.model.ReactionGroup
 import me.meeshy.sdk.model.ReactionSyncResponse
+import me.meeshy.sdk.model.ReactionUserDetail
 
 /**
  * A single reactor listed inside a [ReactionTab] — a durable, SDK-agnostic
@@ -8,7 +10,8 @@ import me.meeshy.sdk.model.ReactionSyncResponse
  */
 data class ReactionReactor(
     val userId: String,
-    val displayName: String,
+    /** `null` when the server gave no name — the sheet then shows the localized "Unknown". */
+    val displayName: String?,
     val avatarUrl: String?,
     val emoji: String,
     val isSelf: Boolean,
@@ -50,13 +53,55 @@ sealed interface ReactionTab {
  *    group order (stable).
  *  - Within a tab the current user floats to the top; the rest keep their
  *    incoming order. Duplicated reactor ids within a group collapse to the first.
- *  - A leading [ReactionTab.All] appears only when there are ≥2 emoji tabs; its
+ *  - A leading [ReactionTab.All] appears as soon as there is one emoji tab (iOS "Toutes"); its
  *    reactors concatenate the emoji tabs in tab order, then float self entries
  *    to the front (a user who reacted with several emojis appears once per emoji).
  */
 data class ReactionBreakdown(val tabs: List<ReactionTab>) {
 
     val isEmpty: Boolean get() = tabs.isEmpty()
+
+    /**
+     * The breakdown with the viewer's own [emoji] reaction added ([present]) or taken back —
+     * the optimistic mirror of a toggle, so the open sheet moves at once. Inert without a viewer id.
+     */
+    fun withSelfReaction(emoji: String, selfId: String, selfName: String?, present: Boolean): ReactionBreakdown {
+        val id = selfId.trim()
+        val target = emoji.trim()
+        if (id.isEmpty() || target.isEmpty()) return this
+        val groups = tabs.filterIsInstance<ReactionTab.Emoji>().map { tab ->
+            ReactionGroup(
+                emoji = tab.emoji,
+                count = tab.count,
+                users = tab.reactors.map { ReactionUserDetail(it.userId, it.displayName.orEmpty(), it.avatarUrl) },
+            )
+        }
+        val existing = groups.firstOrNull { it.emoji == target }
+        val updated = when {
+            existing == null && present -> groups + ReactionGroup(
+                emoji = target,
+                count = 1,
+                users = listOf(ReactionUserDetail(id, selfName.orEmpty())),
+            )
+            existing == null -> groups
+            else -> groups.map { group ->
+                if (group.emoji != target) return@map group
+                val has = group.users.any { it.userId == id }
+                when {
+                    present && !has -> group.copy(
+                        count = group.count + 1,
+                        users = group.users + ReactionUserDetail(id, selfName.orEmpty()),
+                    )
+                    !present && has -> group.copy(
+                        count = (group.count - 1).coerceAtLeast(0),
+                        users = group.users.filterNot { it.userId == id },
+                    )
+                    else -> group
+                }
+            }
+        }
+        return of(ReactionSyncResponse(messageId = "", reactions = updated), id)
+    }
 
     companion object {
         fun of(response: ReactionSyncResponse, currentUserId: String): ReactionBreakdown {
@@ -72,8 +117,7 @@ data class ReactionBreakdown(val tabs: List<ReactionTab>) {
                         .map { detail ->
                             ReactionReactor(
                                 userId = detail.userId,
-                                displayName = detail.username.trim().takeIf { it.isNotEmpty() }
-                                    ?: detail.userId,
+                                displayName = detail.username.trim().takeIf { it.isNotEmpty() },
                                 avatarUrl = detail.avatar?.trim()?.takeIf { it.isNotEmpty() },
                                 emoji = emoji,
                                 isSelf = self != null && detail.userId == self,
@@ -89,8 +133,6 @@ data class ReactionBreakdown(val tabs: List<ReactionTab>) {
                 .sortedByDescending { it.count }
 
             if (emojiTabs.isEmpty()) return ReactionBreakdown(emptyList())
-            if (emojiTabs.size == 1) return ReactionBreakdown(emojiTabs)
-
             val all = ReactionTab.All(
                 count = emojiTabs.sumOf { it.count },
                 reactors = emojiTabs.flatMap { it.reactors }.selfFirst(),
@@ -115,6 +157,8 @@ data class ReactionDetailsUiState(
     val isLoading: Boolean,
     val breakdown: ReactionBreakdown,
     val selectedTabIndex: Int = 0,
+    /** The twelve most-used emojis for the quick-add strip (iOS `EmojiUsageTracker.topEmojis(count: 12)`). */
+    val quickEmojis: List<String> = emptyList(),
 ) {
     val selectedTab: ReactionTab? get() = breakdown.tabs.getOrNull(selectedTabIndex)
 

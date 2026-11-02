@@ -207,6 +207,11 @@ export function fixtureMarkAllNotificationsRead(): ApiResult<unknown> {
   return { ok: true, data: undefined };
 }
 
+export function fixtureMarkNotificationsReadByTypes(types: readonly string[]): ApiResult<unknown> {
+  for (const n of CORPUS) if (types.includes(n.type)) read.add(n.id);
+  return { ok: true, data: undefined };
+}
+
 export function fixtureDeleteNotification(id: string): ApiResult<unknown> {
   if (!known(id)) return NOT_FOUND;
   deleted.add(id);

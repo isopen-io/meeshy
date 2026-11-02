@@ -52,6 +52,18 @@ final class NotificationCorrectionRules {
             || !trimmed(shown.body).equals(notificationField(extras, "body"));
     }
 
+    /**
+     * #12479 — D-11 point 4, jumeau de `sw-push.js` § banniereAffichee : un
+     * push livre deux fois (la passerelle relance un envoi FCM deja accepte)
+     * ne sonne pas une seconde fois quand la banniere de SA notification est
+     * encore affichee. Une correction suit {@link #shows}.
+     */
+    static boolean repeats(Map<String, String> extras, Shown shown) {
+        if (shown == null || isCorrection(extras) || !NotificationFunnelRules.fcmDisplays(extras)) return false;
+        String id = trimmed(extras.get("notificationId"));
+        return !id.isEmpty() && id.equals(trimmed(shown.notificationId));
+    }
+
     private static String notificationField(Map<String, String> extras, String name) {
         String full = trimmed(extras.get("gcm.notification." + name));
         return full.isEmpty() ? trimmed(extras.get("gcm.n." + name)) : full;

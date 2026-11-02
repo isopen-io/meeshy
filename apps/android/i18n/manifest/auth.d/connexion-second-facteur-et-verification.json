@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "auth.login.two_factor.title", "status": "adopted"},
+        {"catalog": "app", "iosKey": "auth.login.two_factor.description", "status": "adopted"},
+        {"catalog": "app", "iosKey": "auth.login.two_factor.placeholder", "status": "adopted"},
+        {"catalog": "app", "iosKey": "auth.login.two_factor.label", "status": "adopted"},
+        {"catalog": "app", "iosKey": "common.error.generic", "status": "adopted"},
+        {"catalog": "app", "iosKey": "emailVerification.title", "status": "adopted", "androidName": "email_verification_title"},
+        {"catalog": "app", "iosKey": "emailVerification.subtitle", "status": "adopted", "androidName": "email_verification_subtitle"},
+        {"catalog": "app", "iosKey": "emailVerification.subtitle.accountCreated", "status": "adopted", "androidName": "email_verification_subtitle_account_created"},
+        {"catalog": "app", "iosKey": "emailVerification.subtitle.activationRequired", "status": "adopted", "androidName": "email_verification_subtitle_activation_required"},
+        {"catalog": "app", "iosKey": "emailVerification.inboxHint", "status": "adopted", "androidName": "email_verification_inbox_hint"},
+        {"catalog": "app", "iosKey": "emailVerification.code.a11yLabel", "status": "adopted", "androidName": "email_verification_code_a11y_label"},
+        {"catalog": "app", "iosKey": "emailVerification.codePlaceholder", "status": "adopted", "androidName": "email_verification_code_placeholder"},
+        {"catalog": "app", "iosKey": "emailVerification.verifyButton", "status": "adopted", "androidName": "email_verification_verify_button"},
+        {"catalog": "app", "iosKey": "emailVerification.noCode", "status": "adopted", "androidName": "email_verification_no_code"},
+        {"catalog": "app", "iosKey": "emailVerification.resendButton", "status": "adopted", "androidName": "email_verification_resend_button"},
+        {"catalog": "app", "iosKey": "emailVerification.resendConfirmed", "status": "adopted", "androidName": "email_verification_resend_confirmed"},
+        {"catalog": "app", "iosKey": "emailVerification.nav.close", "status": "adopted", "androidName": "email_verification_nav_close"},
+        {"catalog": "app", "iosKey": "emailVerification.error.offline", "status": "adopted", "androidName": "email_verification_error_offline"},
+        {"catalog": "app", "iosKey": "emailVerification.error.tooManyAttempts", "status": "adopted", "androidName": "email_verification_error_too_many_attempts"},
+        {"catalog": "app", "iosKey": "emailVerification.error.invalidCode", "status": "adopted", "androidName": "email_verification_error_invalid_code"},
+        {"catalog": "app", "iosKey": "emailVerification.error.expiredCode", "status": "adopted", "androidName": "email_verification_error_expired_code"},
+        {"catalog": "app", "iosKey": "emailVerification.error.generic", "status": "adopted", "androidName": "email_verification_error_generic"},
+        {"catalog": "app", "iosKey": "emailVerification.error.resendFailed", "status": "adopted", "androidName": "email_verification_error_resend_failed"},
+        {"catalog": "app", "iosKey": "settings.logout.inprogress", "androidName": "logout_in_progress", "status": "adopted"},
+        {"catalog": "app", "iosKey": "sessionClosed.signedOut.title", "androidName": "session_closed_signed_out_title", "status": "adopted"},
+        {"catalog": "app", "iosKey": "sessionClosed.signedOut.message", "androidName": "session_closed_signed_out_message", "status": "adopted"},
+        {"catalog": "app", "iosKey": "sessionClosed.continue", "androidName": "session_closed_continue", "status": "adopted"}
+      ]
+    }
+  }
+}

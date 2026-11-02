@@ -106,8 +106,8 @@ final class StageChromeAlignmentTests: XCTestCase {
         // Le cadrage du lecteur est un type à lui (`StoryReaderCanvasLayout`) : c'est lui qui consulte la loi,
         // et ni lui ni le canvas ne doivent garder l'ancien ternaire.
         let texte = try MyStoriesSourceCorpus.text(
-            of: "Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift")
-            + MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+            of: "Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift")
+            + MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift")
 
         XCTAssertTrue(
             texte.contains("StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio)"),
@@ -138,7 +138,7 @@ final class StageChromeAlignmentTests: XCTestCase {
         for (chemin, quoi) in [
             ("Meeshy/Features/Main/Views/ConversationMediaGalleryView+Geometry.swift",
              "StageChromeAlignment."),
-            ("Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift",
+            ("Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift",
              "StageChromeAlignment.verticalAlignment(canvasRatio:"),
         ] {
             XCTAssertTrue(

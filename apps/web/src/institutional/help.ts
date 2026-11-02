@@ -198,6 +198,7 @@ export const PAGE_HELP: ContentPage = {
       { label: 'FAQ', href: '/faq' },
       { label: 'Nous contacter', href: '/contact' },
       { label: 'Confidentialité', href: '/privacy' },
+      { label: 'Sécurité des enfants', href: '/child-safety' },
     ],
   },
 };

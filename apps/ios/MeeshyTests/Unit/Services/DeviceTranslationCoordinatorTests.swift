@@ -235,10 +235,11 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
         originalLanguage: String = "en",
         age: TimeInterval = 0,
         isMe: Bool = false,
-        editedAt: Date? = nil
+        editedAt: Date? = nil,
+        decryptedOnDevice: Bool = false
     ) -> MeeshyMessage {
         let createdAt = Date().addingTimeInterval(-age)
-        return MeeshyMessage(
+        var message = MeeshyMessage(
             id: id,
             conversationId: Ids.conversation,
             senderId: Ids.peer,
@@ -250,6 +251,8 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
             updatedAt: createdAt,
             isMe: isMe
         )
+        if decryptedOnDevice { message.adoptDecryptedContent(content) }
+        return message
     }
 
     private func makeRig(messages: [MeeshyMessage], readers: [String] = ["fr"]) -> TranslationRig {
@@ -439,7 +442,7 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
     }
 
     func test_start_inAnEndToEndEncryptedConversation_showsTheTranslationInMemoryOnly() async {
-        let rig = makeRig(messages: [makeMessage(age: 120)])
+        let rig = makeRig(messages: [makeMessage(age: 120, decryptedOnDevice: true)])
         defer { rig.coordinator.stop() }
         let shown = makeSignal("the translation is shown")
         rig.source.onApply = { shown.fulfill() }
@@ -470,8 +473,23 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
         XCTAssertTrue(rig.source.applied.isEmpty)
     }
 
+    /// Un texte que la passerelle forge dans une conversation chiffrée de bout
+    /// en bout n'a pas de provenance : l'appareil ne le traduit pas (#11402).
+    func test_start_inAnEndToEndEncryptedConversation_aForgedClearIsNeverTranslated() async {
+        let rig = makeRig(messages: [makeMessage(content: "Forged by the gateway", age: 120)])
+        defer { rig.coordinator.stop() }
+        let passed = watchThePass(of: rig)
+        let neverConsulted = watchTheEngine(of: rig)
+
+        rig.coordinator.start(source: rig.source, encryptionMode: "e2ee")
+        await fulfillment(of: [passed], timeout: patience)
+        await fulfillment(of: [neverConsulted], timeout: quietPeriod)
+
+        XCTAssertTrue(rig.source.applied.isEmpty)
+    }
+
     func test_update_toEndToEndEncryptionBeforeTheFirstPass_keepsTheTranslationInMemoryOnly() async {
-        let rig = makeRig(messages: [makeMessage(age: 120)])
+        let rig = makeRig(messages: [makeMessage(age: 120, decryptedOnDevice: true)])
         defer { rig.coordinator.stop() }
         let shown = makeSignal("the translation is shown")
         rig.source.onApply = { shown.fulfill() }
@@ -488,7 +506,7 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
     }
 
     func test_update_toEndToEndWhileTheEngineTranslates_keepsTheTranslationInMemoryAndSharesNothing() async {
-        let rig = makeRig(messages: [makeMessage()])
+        let rig = makeRig(messages: [makeMessage(decryptedOnDevice: true)])
         defer { rig.coordinator.stop() }
         let latch = Latch()
         let translating = makeSignal("the engine is translating")
@@ -535,7 +553,7 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
     }
 
     func test_start_calledTwice_relaysTheEncryptionModeOfTheSecondCall() async {
-        let rig = makeRig(messages: [makeMessage(age: 120)])
+        let rig = makeRig(messages: [makeMessage(age: 120, decryptedOnDevice: true)])
         defer { rig.coordinator.stop() }
         let shown = makeSignal("the translation is shown")
         rig.source.onApply = { shown.fulfill() }

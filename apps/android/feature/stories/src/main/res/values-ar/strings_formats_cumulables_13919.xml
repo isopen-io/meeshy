@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_as_storyAndPost">نشر القصة والمنشور</string>
+    <string name="composer_publish_as_postAndReel">نشر المنشور والريل</string>
+    <string name="composer_publish_as_storyPostAndReel">نشر القصة والمنشور والريل</string>
+    <string name="composer_publish_failed_story">لم تُنشر القصة</string>
+    <string name="composer_publish_failed_post">لم يُنشر المنشور</string>
+    <string name="composer_publish_failed_reel">لم يُنشر الريل</string>
+</resources>

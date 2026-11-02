@@ -1,5 +1,7 @@
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
+import type { MessageMenuBubbleSpan } from './popover';
+
 /**
  * LA SURFACE DE L'APERÇU, PAR MODE DE LECTURE (décision #11204, lot #11206) —
  * l'aperçu d'un message tenu longuement suit le mode de lecture de la
@@ -63,4 +65,18 @@ export function previewSurfaceOf(mode: ConversationReadingMode): PreviewSurface 
 export function readingModeOfRow(row: Element): ConversationReadingMode {
   const declared = row.querySelector('[data-reading-mode]')?.getAttribute('data-reading-mode') ?? row.getAttribute('data-reading-mode');
   return isReadingMode(declared) ? declared : 'bubbles';
+}
+
+/**
+ * LA BULLE DE LA RANGÉE PRESSÉE (#12635) — l'ancre horizontale du menu en
+ * Bulles : `Bubble` enveloppe sa colonne (contenu, pied, drapeaux) dans
+ * `.thread-bubble-measure`, la boîte que `thread-column.css` borne à 70 %.
+ * Une rangée plate n'en porte aucune ; une bulle sans mise en page non plus.
+ */
+const BUBBLE_SELECTOR = '.thread-bubble-measure';
+
+export function bubbleSpanOfRow(row: Element): MessageMenuBubbleSpan | undefined {
+  const rect = row.querySelector(BUBBLE_SELECTOR)?.getBoundingClientRect();
+  if (rect === undefined || rect.width <= 0) return undefined;
+  return { left: rect.left, right: rect.right };
 }

@@ -1,0 +1,142 @@
+/**
+ * LA COPIE DES MÉDIAS DU DISQUE VERS LE SEAU (#11267) — un seul outil pour deux
+ * usages :
+ * - la MIGRATION PAR LOTS de l'historique (`mediaMirrorCli.ts`, à blanc par
+ *   défaut, reprise par curseur) ;
+ * - le MIROIR CONTINU (`--follow`), qui recopie ce que les écrivains d'avant
+ *   l'interface `MediaObjectStore` posent encore sur le disque.
+ *
+ * Une clé n'est recopiée que si le seau ne l'a pas déjà, à la même taille et de
+ * la même date de source : on peut rejouer un lot autant de fois qu'on veut. Le disque reste la référence ;
+ * rien n'est effacé du disque ici.
+ */
+import path from 'node:path';
+import { imageVariantKeys, derivedFileCandidates } from '../../attachments/derivedAttachmentFiles';
+import { storageKeyFromMediaUrl } from '../../attachments/mediaStorageKey';
+import type { LocalObjectStore } from './LocalObjectStore';
+import { isSafeStorageKey, type MediaObjectStore, type StoredObjectHead } from './MediaObjectStore';
+
+export type MediaRow = {
+  readonly id?: string;
+  readonly filePath?: string | null;
+  readonly fileUrl?: string | null;
+  readonly thumbnailPath?: string | null;
+  readonly thumbnailUrl?: string | null;
+  readonly imageVariants?: unknown;
+  readonly avifVariants?: unknown;
+  readonly renditions?: unknown;
+  readonly translations?: unknown;
+  /** `Sound.coverUrl` : la couverture qu'un son vise vit chez un média de post, et lui survit. */
+  readonly coverUrl?: string | null;
+};
+
+/**
+ * Une clé à partir d'une valeur de colonne : adresse servie, clé nue, ou chemin absolu SOUS la racine.
+ * L'ADRESSE se lit d'abord : `/api/v1/attachments/file/…` est aussi un chemin absolu, et lu comme tel
+ * il tombait hors de la racine — toute clé portée par une seule URL échappait au miroir et au balayage.
+ */
+function keyOf(value: string | null | undefined, uploadRoot: string): string | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const fromAddress = storageKeyFromMediaUrl(value);
+  if (fromAddress !== null && isSafeStorageKey(fromAddress)) return fromAddress;
+  if (!path.isAbsolute(value)) return null;
+  const root = path.resolve(uploadRoot);
+  const resolved = path.resolve(value);
+  if (!resolved.startsWith(root + path.sep)) return null;
+  const relative = path.relative(root, resolved).split(path.sep).join('/');
+  return isSafeStorageKey(relative) ? relative : null;
+}
+
+export function mediaRowStorageKeys(row: MediaRow, uploadRoot: string): readonly string[] {
+  const candidates = [
+    row.filePath,
+    row.fileUrl,
+    row.thumbnailPath,
+    row.thumbnailUrl,
+    row.coverUrl,
+    ...imageVariantKeys(row.imageVariants),
+    ...imageVariantKeys(row.avifVariants),
+    ...imageVariantKeys(row.renditions),
+    ...derivedFileCandidates(row),
+  ];
+  return [...new Set(candidates.map((value) => keyOf(value, uploadRoot)).filter((key): key is string => key !== null))];
+}
+
+export type MirrorOutcome = 'copied' | 'already' | 'would-copy' | 'missing-local' | 'failed';
+
+/**
+ * Une copie est « déjà là » quand elle a la taille ET la date du fichier
+ * source : un fichier réécrit sur place à taille égale (métadonnées retirées,
+ * filigrane) garderait sinon une copie qui porte encore ce qu'on a retiré
+ * (audit D6). Une copie sans date de source est refaite une fois.
+ */
+function sameSource(copy: StoredObjectHead, source: StoredObjectHead): boolean {
+  return copy.size === source.size && source.lastModified !== null && copy.sourceModified?.getTime() === source.lastModified.getTime();
+}
+
+/**
+ * Contre-audit C1 — une copie OUVERTE avant l'effacement du fichier se termine
+ * après lui (le flux tient l'inode) : sans cette relecture, la copie
+ * réapparaîtrait au seau d'un fichier que l'effacement synchrone venait d'y
+ * retirer. La source est relue APRÈS l'écriture ; disparue ou changée, la
+ * copie qu'on vient d'écrire est retirée.
+ */
+async function sourceOutlivedCopy(local: LocalObjectStore, key: string, source: StoredObjectHead): Promise<boolean> {
+  const after = await local.head(key);
+  return after !== null && after.size === source.size && after.lastModified?.getTime() === source.lastModified?.getTime();
+}
+
+async function retract(mirror: MediaObjectStore, key: string): Promise<MirrorOutcome> {
+  await mirror.remove(key);
+  return 'missing-local';
+}
+
+export async function mirrorKey(params: {
+  readonly local: LocalObjectStore;
+  readonly mirror: MediaObjectStore;
+  readonly key: string;
+  readonly apply: boolean;
+}): Promise<MirrorOutcome> {
+  const { local, mirror, key, apply } = params;
+  const source = await local.head(key);
+  if (source === null) return 'missing-local';
+  try {
+    const existing = await mirror.head(key);
+    if (existing !== null && sameSource(existing, source)) return 'already';
+    if (!apply) return 'would-copy';
+    const body = await local.read(key);
+    if (body === null) return 'missing-local';
+    await mirror.write(key, { body, size: source.size, ...(source.lastModified === null ? {} : { sourceModified: source.lastModified }) });
+    return (await sourceOutlivedCopy(local, key, source)) ? 'copied' : await retract(mirror, key);
+  } catch {
+    return 'failed';
+  }
+}
+
+export type MirrorRowSource = {
+  readonly name: string;
+  /** Les lignes d'identifiant STRICTEMENT supérieur à `after`, dans l'ordre des identifiants. */
+  page(after: string | null, take: number): Promise<readonly (MediaRow & { readonly id: string })[]>;
+};
+
+export type MirrorCounts = Record<MirrorOutcome, number>;
+
+export const emptyMirrorCounts = (): MirrorCounts => ({ copied: 0, already: 0, 'would-copy': 0, 'missing-local': 0, failed: 0 });
+
+export async function runMirrorBatch(params: {
+  readonly source: MirrorRowSource;
+  readonly uploadRoot: string;
+  readonly local: LocalObjectStore;
+  readonly mirror: MediaObjectStore;
+  readonly after: string | null;
+  readonly batchSize: number;
+  readonly apply: boolean;
+}): Promise<{ readonly rows: number; readonly nextCursor: string | null; readonly done: boolean; readonly counts: MirrorCounts }> {
+  const rows = await params.source.page(params.after, params.batchSize);
+  const keys = rows.flatMap((row) => mediaRowStorageKeys(row, params.uploadRoot));
+  const outcomes: MirrorOutcome[] = [];
+  for (const key of keys) outcomes.push(await mirrorKey({ local: params.local, mirror: params.mirror, key, apply: params.apply }));
+  const counts = outcomes.reduce<MirrorCounts>((total, outcome) => ({ ...total, [outcome]: total[outcome] + 1 }), emptyMirrorCounts());
+  const last = rows[rows.length - 1];
+  return { rows: rows.length, nextCursor: last === undefined ? params.after : last.id, done: rows.length < params.batchSize, counts };
+}

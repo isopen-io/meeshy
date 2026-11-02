@@ -30,6 +30,7 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryViewer
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -87,7 +88,7 @@ private fun stringResourceTitle() =
 
 @Composable
 private fun countLabel(count: Int) =
-    androidx.compose.ui.res.stringResource(R.string.stories_viewers_count, count)
+    androidx.compose.ui.res.pluralStringResource(R.plurals.stories_viewers_count, count, count)
 
 @Composable
 private fun loadingLabel() =
@@ -110,7 +111,7 @@ private fun ViewerList(viewers: List<StoryViewer>) {
 }
 
 @Composable
-private fun ViewerRow(viewer: StoryViewer) {
+internal fun ViewerRow(viewer: StoryViewer) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -120,6 +121,8 @@ private fun ViewerRow(viewer: StoryViewer) {
             name = viewer.displayName,
             size = 40.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(viewer.displayName)),
+            imageUrl = viewer.avatarUrl,
+            presence = rememberPresence(viewer.id),
         )
         Text(
             text = viewer.displayName,

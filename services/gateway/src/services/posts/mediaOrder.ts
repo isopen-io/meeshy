@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
+import { inBatches } from './inBatches';
+
 /**
  * Le RANG des médias d'une publication, gravé au moment de la réclamation.
  *
@@ -41,11 +43,8 @@ export async function applyMediaOrder(
   const ranked = [...new Set(mediaIds)];
   if (ranked.length === 0) return;
 
-  await Promise.all(
-    ranked.map((id, order) =>
-      client.postMedia.updateMany({ where: { id, postId }, data: { order } }),
-    ),
-  );
+  await inBatches(ranked.map((id, order) => () =>
+    client.postMedia.updateMany({ where: { id, postId }, data: { order } })));
 }
 
 /**

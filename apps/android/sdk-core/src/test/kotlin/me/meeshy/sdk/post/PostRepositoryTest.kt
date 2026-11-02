@@ -26,6 +26,8 @@ import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.outbox.CommentPayload
 import me.meeshy.sdk.outbox.OutboxRepository
 import org.junit.Test
 import java.io.IOException
@@ -56,6 +58,18 @@ class PostRepositoryTest {
         val repo = PostRepository(api, translationApi, outbox)
         repo.refresh()
         return repo
+    }
+
+    @Test
+    fun clear_forgetsTheFeedOfThePreviousAccount() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi"))
+        assertThat(repo.cachedPost("p1")).isNotNull()
+
+        repo.clear()
+
+        assertThat(repo.cachedPost("p1")).isNull()
+        assertThat(repo.feedCacheSnapshot).isNull()
+        assertThat(repo.feedHasMore.value).isTrue()
     }
 
     @Test
@@ -840,6 +854,26 @@ class PostRepositoryTest {
         assertThat(stored).isFalse()
     }
 
+    // --- A post the outbox just created (#13417) joins the feed at once. ---
+
+    @Test
+    fun adoptPublished_putsTheAuthorsNewPostAtTheHeadOfTheFeed() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "older"))
+
+        repo.adoptPublished(ApiPost(id = "p2", content = "mine"))
+
+        assertThat(repo.feedCacheSnapshot?.map { it.id }).containsExactly("p2", "p1").inOrder()
+    }
+
+    @Test
+    fun adoptPublished_leavesAPostTheEchoAlreadyBroughtAlone() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "from the echo"))
+
+        repo.adoptPublished(ApiPost(id = "p1", content = "from the response"))
+
+        assertThat(repo.feedCacheSnapshot?.map { it.content }).containsExactly("from the echo")
+    }
+
     // --- Realtime post edit push (applyPostUpdate): the author edited the post and the
     //     gateway broadcast the whole new (unpersonalized) post. ---
 
@@ -1053,5 +1087,50 @@ class PostRepositoryTest {
         )
 
         assertThat(merged).isNull()
+    }
+
+    @Test
+    fun queueComment_enqueuesADurableCommentAndRaisesTheCachedCount() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", commentCount = 2))
+        val queued = slot<OutboxMutation>()
+        coEvery { outbox.enqueue(capture(queued), any()) } returns "cmid_c1"
+
+        val cmid = repo.queueComment("p1", "Bravo", parentId = "c9")
+
+        assertThat(cmid).isEqualTo("cmid_c1")
+        assertThat(queued.captured.kind).isEqualTo(OutboxKind.CREATE_COMMENT)
+        assertThat(queued.captured.lane).isEqualTo(OutboxLanes.COMMENT)
+        assertThat(queued.captured.targetId).isEqualTo("p1")
+        assertThat(MeeshyApi.json.decodeFromString(CommentPayload.serializer(), queued.captured.payload))
+            .isEqualTo(CommentPayload("Bravo", parentId = "c9"))
+        assertThat(repo.cachedPost("p1")?.commentCount).isEqualTo(3)
+    }
+
+    @Test
+    fun queueComment_onAPostOutsideTheCacheStillQueuesAndTouchesNothing() = runTest {
+        val repo = seed(ApiPost(id = "p1", commentCount = 2))
+        coEvery { outbox.enqueue(any(), any()) } returns "cmid_c2"
+
+        assertThat(repo.queueComment("elsewhere", "Bravo")).isEqualTo("cmid_c2")
+        assertThat(repo.cachedPost("p1")?.commentCount).isEqualTo(2)
+    }
+
+    @Test
+    fun queueComment_refusedByTheQueueChangesNoCount() = runTest {
+        val repo = seed(ApiPost(id = "p1", commentCount = 2))
+        coEvery { outbox.enqueue(any(), any()) } returns null
+
+        assertThat(repo.queueComment("p1", "Bravo")).isNull()
+        assertThat(repo.cachedPost("p1")?.commentCount).isEqualTo(2)
+    }
+
+    @Test
+    fun rollbackQueuedComment_givesTheCountBackAndNeverGoesBelowZero() = runTest {
+        val repo = seed(ApiPost(id = "p1", commentCount = 1))
+
+        repo.rollbackQueuedComment("p1")
+        repo.rollbackQueuedComment("p1")
+
+        assertThat(repo.cachedPost("p1")?.commentCount).isEqualTo(0)
     }
 }

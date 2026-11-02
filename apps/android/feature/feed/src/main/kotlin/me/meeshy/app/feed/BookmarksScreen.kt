@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,13 +19,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -57,6 +55,7 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
@@ -76,6 +75,7 @@ fun BookmarksScreen(
     onBack: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     viewModel: BookmarksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -101,7 +101,7 @@ fun BookmarksScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.bookmarks_back),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
@@ -141,10 +141,13 @@ fun BookmarksScreen(
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
                             SavedPostCard(
+                                modifier = Modifier.animateItem(),
+                                onOpenProfile = onOpenProfile,
                                 post = post,
                                 onRemove = { viewModel.removeBookmark(post.id) },
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                                 onOpenPost = onOpenPost,
+                                onOpenReel = onPostClick,
                             )
                         }
                         if (state.isLoadingMore) {
@@ -171,33 +174,43 @@ fun BookmarksScreen(
 }
 
 @Composable
-private fun SavedPostCard(
+internal fun SavedPostCard(
+    modifier: Modifier = Modifier,
+    onOpenProfile: ((String) -> Unit)? = null,
     post: FeedPostPresentation,
     onRemove: () -> Unit,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit,
 ) {
+    post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
+        ReelPostCard(
+            post = post,
+            cover = cover,
+            onOpenReel = onOpenReel,
+            modifier = modifier,
+            onBookmark = onRemove,
+            onOpenProfile = onOpenProfile,
+        )
+        return
+    }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(contentAlignment = Alignment.Center) {
-                    MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp)
-                    if (!post.authorAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = post.authorAvatarUrl,
-                            contentDescription = post.authorName ?: unknownAuthor,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                        )
-                    }
-                }
+                val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                MeeshyAvatar(
+                    name = post.authorName ?: unknownAuthor,
+                    size = 40.dp,
+                    imageUrl = post.authorAvatarUrl,
+                    presence = rememberPresence(post.authorId),
+                    modifier = profileTap,
+                )
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -205,6 +218,7 @@ private fun SavedPostCard(
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MeeshyTheme.tokens.textPrimary,
+                        modifier = profileTap,
                     )
                 }
                 IconButton(onClick = onRemove) {
@@ -241,33 +255,7 @@ private fun SavedPostCard(
                 )
             }
 
-            post.repostEmbed?.let { embed ->
-                Spacer(Modifier.height(MeeshySpacing.md))
-                RepostEmbedCell(embed = embed, onOpen = onOpenPost)
-            }
-
-            if (post.isReel) {
-                Spacer(Modifier.height(MeeshySpacing.md))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.semantics {
-                        contentDescription = post.authorName ?: unknownAuthor
-                    },
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayCircle,
-                        contentDescription = null,
-                        tint = MeeshyPalette.Indigo500,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(MeeshySpacing.xs))
-                    Text(
-                        text = stringResource(R.string.feed_reel),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-            }
+            FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
         }
     }
 }

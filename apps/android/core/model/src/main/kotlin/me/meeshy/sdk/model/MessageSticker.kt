@@ -17,27 +17,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
-/** Le mouvement d'une décoration de sticker — miroir de `StickerAnimation` (iOS). */
-enum class StickerAnimation(val wireName: String) {
-    PULSE("pulse"),
-    HEARTBEAT("heartbeat"),
-    WOBBLE("wobble"),
-    BOUNCE("bounce"),
-    FLOAT("float"),
-    SPIN("spin"),
-    BLINK("blink"),
-    SHAKE("shake"),
-    SWING("swing"),
-    POP("pop"),
-    TADA("tada"),
-    ;
-
-    companion object {
-        /** Un nom inconnu (publié par une version plus récente) vaut `null` : le sticker reste, immobile. */
-        fun fromWire(name: String?): StickerAnimation? = entries.firstOrNull { it.wireName == name }
-    }
-}
-
 /**
  * Ce qu'un sticker de CONVERSATION est — miroir de `MessageSticker` (iOS, #4823).
  *

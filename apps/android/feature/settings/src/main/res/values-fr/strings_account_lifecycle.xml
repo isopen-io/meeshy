@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_lifecycle_deletion_pending">Une demande de suppression attend votre confirmation. Ouvrez le lien reçu par e-mail.</string>
+    <string name="account_lifecycle_deletion_pending_expires">Le lien expire le %1$s.</string>
+    <string name="account_lifecycle_deletion_grace">Votre compte sera supprimé le %1$s. Pour annuler, ouvrez le lien reçu par e-mail avant cette date.</string>
+    <string name="account_lifecycle_deletion_grace_no_date">Votre compte est en cours de suppression. Pour annuler, ouvrez le lien reçu par e-mail.</string>
+    <string name="activation_invite_banner_title">Validez votre compte</string>
+    <string name="activation_invite_banner_days">Jours restants : %1$d</string>
+    <string name="activation_invite_banner_no_days">Prouvez votre adresse e-mail et ajoutez un numéro.</string>
+    <string name="activation_invite_banner_later">Plus tard</string>
+    <string name="birth_date_title">Date de naissance</string>
+    <string name="birth_date_message">Indiquez votre date de naissance. Elle ne peut être déclarée qu’une seule fois.</string>
+    <string name="birth_date_pick">Choisir ma date</string>
+    <string name="birth_date_confirm">Confirmer</string>
+    <string name="birth_date_done">Merci, votre date de naissance est enregistrée.</string>
+    <string name="birth_date_done_restricted">Merci. Vous pouvez lire Meeshy, mais l’écriture est fermée pour votre âge.</string>
+    <string name="birth_date_error_already_set">Votre date de naissance est déjà renseignée.</string>
+    <string name="birth_date_error_below_minimum">Meeshy n’est pas ouvert aux moins de 13 ans.</string>
+    <string name="birth_date_error_invalid">Cette date n’est pas valide.</string>
+    <string name="birth_date_error_unsupported">Ce serveur ne prend pas encore en charge cette étape.</string>
+    <string name="birth_date_error_unavailable">Impossible d’enregistrer votre date de naissance. Réessayez.</string>
+</resources>

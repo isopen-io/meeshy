@@ -93,7 +93,8 @@ struct ConversationReaderModeBranch: View {
     @Binding var overlayState: ConversationOverlayState
     let showScript: () -> Void
     let reply: (Message) -> Void
-    let presentMenu: (Message) -> Void
+    let menuAuthority: () -> ConversationMenuAuthority
+    let presentMenu: (Message, RiverPressedCell) -> Void
     let openViewOnce: (String) -> Bool
     let openMedia: (MessageAttachment) -> Void
 
@@ -122,7 +123,8 @@ struct ConversationReaderModeBranch: View {
                 isAnonymous: isAnonymous,
                 scrollState: $scrollState,
                 showScript: showScript,
-                reply: reply
+                reply: reply,
+                menuAuthority: menuAuthority
             )
             .id(viewModel.messages.isEmpty)
             .zIndex(80)

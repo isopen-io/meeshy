@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -12,12 +14,22 @@ import kotlinx.serialization.Serializable
  * codebase has already paid for a stricter-than-the-wire model on this exact
  * type of field (keyframes, transitions) making the WHOLE document fail.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class StorySticker(
     val id: String,
     val emoji: String = "",
     val postMediaId: String = "",
     val provider: String? = null,
+    /** Gabarit qui compose ce sticker (vide : emoji ou image) — miroir de `StorySticker.templateId`. */
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val templateId: String = "",
+    /** Valeurs des emplacements du gabarit, par nom d'emplacement. */
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val slots: Map<String, String> = emptyMap(),
+    /** Mouvement, tel qu'écrit sur le fil ([StickerAnimation.wireName]) ; un nom inconnu voyage intact. */
+    val animation: String? = null,
+    val sourceLanguage: String? = null,
     val x: Double = 0.5,
     val y: Double = 0.5,
     val scale: Double = 1.0,
@@ -32,4 +44,19 @@ data class StorySticker(
 ) {
     /** True once an integrated image backs this sticker — the renderer's cue to paint it over the emoji. */
     val hasImage: Boolean get() = postMediaId.isNotBlank()
+
+    /** Le mouvement connu de ce binaire, `null` pour aucun ou pour un nom plus récent. */
+    val stickerAnimation: StickerAnimation? get() = StickerAnimation.fromWire(animation)
+
+    /** Ce que le sticker EST, par le rang d'affichage ([StickerDisplayRank]). */
+    val kind: StickerKind get() = StickerDisplayRank.kindOf(templateId = templateId, postMediaId = postMediaId)
+
+    /** L'emoji tel qu'il part au fil : le sien, sinon le repli de son gabarit, sinon l'image de repli. */
+    fun wireEmoji(templateFallback: (String) -> String? = { null }): String =
+        StickerDisplayRank.wireEmoji(emoji = emoji, templateId = templateId, templateFallback = templateFallback)
+
+    companion object {
+        /** L'échelle à laquelle un sticker se POSE (miroir de `StorySticker.posedScale`, iOS). */
+        const val POSED_SCALE: Double = 2.2
+    }
 }

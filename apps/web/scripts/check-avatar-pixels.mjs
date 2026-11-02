@@ -56,6 +56,7 @@ import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { INSTANT } from './lib/instant.mjs';
+import { revealRow } from './lib/reveal-row.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -138,8 +139,13 @@ const peintures = async (page, root) =>
     );
     return racines.map((racine) => {
       const img = racine.querySelector('img');
+      const placeholder = racine.querySelector('[data-avatar-initials]');
       return {
         aUneImg: img !== null,
+        /* UN SEUL VISAGE (#12571) — le placeholder d'initiales d'une photo
+           chargée doit être MASQUÉ : un PNG transparent laisserait sinon voir
+           le dégradé dessous, et deux cercles de même rayon forment un liseré. */
+        initialesVisibles: placeholder === null ? false : getComputedStyle(placeholder).visibility !== 'hidden',
         largeurNaturelle: img === null ? 0 : img.naturalWidth,
         masquee: img === null ? false : getComputedStyle(img).display === 'none',
         initiales: (racine.textContent ?? '').trim(),
@@ -150,6 +156,10 @@ const peintures = async (page, root) =>
 /** « CETTE surface peint une photo » — le verdict, pas la source. */
 const peintUnePhoto = (mesures) =>
   mesures !== null && mesures.some((m) => m.aUneImg && !m.masquee && m.largeurNaturelle === PORTRAIT_WIDTH);
+
+/** « une photo PEINTE ne laisse AUCUN pixel d'initiales dessous » (#12571). */
+const photoSansInitiales = (mesures) =>
+  mesures !== null && mesures.every((m) => !(m.aUneImg && !m.masquee && m.largeurNaturelle === PORTRAIT_WIDTH) || !m.initialesVisibles);
 
 const ouvre = async (chemin) => {
   const page = await context.newPage();
@@ -169,7 +179,16 @@ const RANGS = [
   { row: 'c-deploiement', rang: 'repli — `Conversation.avatar` (un groupe porte la sienne)' },
 ];
 
+/* La liste est virtualisée (#11228) : une rangée plus bas que la première
+   fenêtre n'est dans le document qu'une fois amenée à l'écran, et sa photo
+   se charge alors. */
+const amene = async (row) => {
+  await revealRow(liste, row);
+  await liste.waitForTimeout(400);
+};
+
 for (const { row, rang } of RANGS) {
+  await amene(row);
   const mesures = await peintures(liste, `[data-row="${row}"]`);
   constate(mesures !== null, `la rangée « ${row} » est introuvable dans la Lentille`);
   constate(
@@ -183,11 +202,25 @@ for (const { row, rang } of RANGS) {
 }
 
 /**
+ * UN SEUL VISAGE (#12571) — là où la photo est peinte, ses initiales sont
+ * masquées : un PNG transparent (`photo.png`) ne montre plus de dégradé dessous.
+ */
+for (const { row } of RANGS) {
+  await amene(row);
+  const mesures = await peintures(liste, `[data-row="${row}"]`);
+  constate(
+    photoSansInitiales(mesures),
+    `LISTE DES CONVERSATIONS — « ${row} » peint sa photo ET garde ses initiales visibles dessous (double visage) : ${JSON.stringify(mesures)}`,
+  );
+}
+
+/**
  * LE CONTRE-TÉMOIN — `c-annonces` est un salon PUBLIC (donc un groupe du point
  * de vue de la vue, `isGroup`) SANS `Conversation.avatar` : il n'a aucune
  * photo à servir et doit peindre ses initiales seules. Sans cette assertion,
  * le gate ne distinguerait pas une résolution juste d'un `<img>` posé partout.
  */
+await amene('c-annonces');
 const annonces = await peintures(liste, '[data-row="c-annonces"]');
 constate(annonces !== null && annonces.length > 0, 'la rangée « c-annonces » est introuvable dans la Lentille');
 constate(

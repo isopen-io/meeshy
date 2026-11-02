@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_file_download">Descargar</string>
+    <string name="bubble_file_downloading">Descargando %1$d %%</string>
+    <string name="bubble_file_downloading_unknown">Descargando…</string>
+    <string name="bubble_file_ready">Listo para abrir</string>
+    <string name="bubble_file_download_failed">Error de descarga — toca para reintentar</string>
+    <string name="bubble_piece_sealed">Adjunto cifrado</string>
+    <string name="bubble_piece_sealed_a11y">Adjunto cifrado de extremo a extremo: no se abre en este dispositivo</string>
+    <string name="bubble_file_cancel">Cancelar la descarga</string>
+</resources>

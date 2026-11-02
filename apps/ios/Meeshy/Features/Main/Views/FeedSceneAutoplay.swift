@@ -162,7 +162,8 @@ struct PostSceneCard: View {
                     sceneIndex: .constant(0),
                     isPlaying: .constant(isActive),
                     accentColorHex: accentColor,
-                    carrier: carrier
+                    carrier: carrier,
+                    sceneFloorHex: post.storyAccentHex
                 )
                 .preferredContentLanguages(preferredContentLanguages)
             }
@@ -247,7 +248,7 @@ struct PostSceneCardContainer: View {
             document: document,
             isActive: coordinator.activeReelId == post.id,
             accentColor: accentColor,
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             onTapPost: onTapPost,
             onTapScene: onTapScene
         )
@@ -292,7 +293,7 @@ struct PostSceneSurface: View {
                 document: document,
                 isActive: false,
                 accentColor: accentColor,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                 onTapPost: onTapPost,
                 onTapScene: onTapScene
             )

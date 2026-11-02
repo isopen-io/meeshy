@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.detail.copy_link.success",
+          "androidName": "feed_link_copied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.empty.subtitle",
+          "androidName": "feed_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.load.error",
+          "androidName": "feed_load_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.retry",
+          "androidName": "feed_retry",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.like.error",
+          "androidName": "feed_notice_like_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.bookmark.error",
+          "androidName": "feed_notice_bookmark_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.repost.error",
+          "androidName": "feed_notice_repost_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.pinError",
+          "androidName": "feed_notice_pin_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.deleteError",
+          "androidName": "feed_notice_delete_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.reportError",
+          "androidName": "feed_notice_report_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.reported",
+          "androidName": "feed_notice_reported",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.toast.publishError",
+          "androidName": "feed_notice_publish_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.toast.published",
+          "androidName": "feed_notice_published",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.translation.error",
+          "androidName": "feed_notice_translation_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comment.loadError",
+          "androidName": "post_comments_load_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comment.sendError",
+          "androidName": "post_comments_send_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comment.replyError",
+          "androidName": "post_comments_reply_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comments.deleted",
+          "androidName": "post_comments_deleted",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.comments.delete_error",
+          "androidName": "post_comments_delete_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "comment.action.copy",
+          "androidName": "post_comments_copy_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.comment.more_options",
+          "androidName": "post_comments_more_options",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

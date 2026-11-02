@@ -160,4 +160,21 @@ class AuthExpiryInterceptorTest {
         val response = AuthExpiryInterceptor { }.intercept(chainReturning(401))
         assertEquals(401, response.code)
     }
+
+    @Test
+    fun `seule la requete proprietaire signale l expiration`() {
+        var expired = 0
+        AuthExpiryInterceptor(signalsExpiry = { false }, onSessionExpired = { expired++ }).intercept(chainReturning(401))
+        assertEquals(0, expired)
+        AuthExpiryInterceptor(signalsExpiry = { true }, onSessionExpired = { expired++ }).intercept(chainReturning(401))
+        assertEquals(1, expired)
+    }
+
+    @Test
+    fun `les routes d entree d authentification restent exclues meme proprietaires`() {
+        var expired = 0
+        AuthExpiryInterceptor(signalsExpiry = { true }, onSessionExpired = { expired++ })
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/auth/login/2fa"))
+        assertEquals(0, expired)
+    }
 }

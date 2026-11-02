@@ -57,4 +57,13 @@ data class StoryAudioPlayerObject(
     val name: String? = null,
     /** Niveau d'avant le mute d'auteur ; invariant `mutedVolumeMemento != null => volume == 0`. */
     override val mutedVolumeMemento: Float? = null,
+    /** URL serveur d'une piste empruntée à la bibliothèque (aucun média de post derrière). */
+    val mediaURL: String? = null,
+    /** Identité du son emprunté : sert l'usage et le crédit côté serveur. */
+    val soundId: String? = null,
+    val soundAuthorUsername: String? = null,
+    val soundCreatedAt: String? = null,
+    /** Pose de la pastille de premier plan (défauts du fil : 1 et 0). */
+    val scale: Double? = null,
+    val rotation: Double? = null,
 ) : me.meeshy.sdk.model.scene.StoryVolumeCarrying

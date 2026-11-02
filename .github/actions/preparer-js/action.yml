@@ -1,0 +1,61 @@
+# #12557 — LA PRÉPARATION JS DE LA CI, UNE FOIS. Dix jobs de ci.yml recopiaient
+# les mêmes sept étapes (bun, pnpm, Node, cache, installation avec reprise) ;
+# chaque correction se rejouait dix fois, et l'une finissait toujours par
+# manquer. `scripts/check-ci-build-order.mjs` lit ces étapes à travers l'appel
+# (`compositeOf`, scripts/lib/lecture-workflow.mjs) : l'ordre bun → install →
+# build reste gardé.
+#
+# Le gestionnaire vient de `env.PACKAGE_MANAGER` et la version de bun de
+# `env.BUN_VERSION`, posés en tête du workflow appelant.
+name: Préparer Node et les dépendances
+description: bun ou pnpm, Node, cache de bun et installation des dépendances avec reprise.
+runs:
+  using: composite
+  steps:
+    - name: Setup bun
+      if: env.PACKAGE_MANAGER == 'bun'
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ env.BUN_VERSION }}
+
+    # pnpm est toujours requis : turborepo le lit (version de packageManager).
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v6.1.0
+
+    - name: Setup Node.js (with pnpm cache)
+      if: env.PACKAGE_MANAGER == 'pnpm'
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'pnpm'
+
+    - name: Setup Node.js (without cache for bun)
+      if: env.PACKAGE_MANAGER == 'bun'
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Cache bun dependencies
+      if: env.PACKAGE_MANAGER == 'bun'
+      uses: actions/cache@v6
+      with:
+        path: ~/.bun/install/cache
+        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+        restore-keys: |
+          bun-${{ runner.os }}-
+
+    - name: Install dependencies (bun with retry)
+      if: env.PACKAGE_MANAGER == 'bun'
+      shell: bash
+      run: |
+        for i in 1 2 3; do
+          bun install && break || {
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          }
+        done
+
+    - name: Install dependencies (pnpm)
+      if: env.PACKAGE_MANAGER == 'pnpm'
+      shell: bash
+      run: pnpm install --no-frozen-lockfile

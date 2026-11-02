@@ -62,7 +62,8 @@ final class CallDeclineReplyTests: XCTestCase {
             replyQueue: queue,
             messagePersistence: persistence,
             currentUserId: { userId },
-            prepareReplyQueue: {}
+            prepareReplyQueue: {},
+            destinationGuard: .isolated()
         )
         return SUTContext(sut: sut, messageService: messageService, queue: queue, persistence: persistence)
     }
@@ -189,7 +190,7 @@ final class CallDeclineReplyTests: XCTestCase {
     }
 
     func test_rejectWithReply_plansBeforeRejectingAndRejectsBeforeSending() throws {
-        let body = try source("Meeshy/Features/Main/Services/CallManager+DeclineReply.swift")
+        let body = try source("Meeshy/Features/Call/Services/CallManager+DeclineReply.swift")
         let plan = try XCTUnwrap(body.range(of: "CallDeclineReplyRule.plan("))
         let reject = try XCTUnwrap(body.range(of: "rejectCall()"))
         let send = try XCTUnwrap(body.range(of: "messenger.send("))
@@ -199,14 +200,14 @@ final class CallDeclineReplyTests: XCTestCase {
     }
 
     func test_incomingCallView_offersTheDeclineWithMessageSheet() throws {
-        let body = try source("Meeshy/Features/Main/Views/IncomingCallView.swift")
+        let body = try source("Meeshy/Features/Call/Views/IncomingCallView.swift")
 
         XCTAssertTrue(body.contains("CallDeclineSheet("))
         XCTAssertTrue(body.contains("call.decline.open.label"))
     }
 
     func test_declineSheet_usesTheQuickRepliesAndFortyFourPointTargets() throws {
-        let body = try source("Meeshy/Features/Main/Views/CallDeclineSheet.swift")
+        let body = try source("Meeshy/Features/Call/Views/CallDeclineSheet.swift")
 
         XCTAssertTrue(body.contains("CallDeclineQuickReply.allCases"))
         XCTAssertTrue(body.contains("rejectCall(withReply:"))

@@ -1,5 +1,7 @@
 import XCTest
 import AVFoundation
+import ImageIO
+import UniformTypeIdentifiers
 @testable import Meeshy
 import os
 
@@ -91,6 +93,44 @@ final class ShareMediaStagingTests: XCTestCase {
         XCTAssertEqual(staged.bytes, 2048)
         XCTAssertTrue(FileManager.default.fileExists(
             atPath: mediaRoot.appendingPathComponent(staged.relPath).path))
+    }
+
+    /// Une photo partagée depuis Photos porte son lieu : il ne quitte pas
+    /// l'appareil par défaut (#11847, défaut validé de #11247), et ses pixels
+    /// ne sont pas ré-encodés pour autant.
+    func test_stage_aPhotoWithLocation_isStagedWithoutIt() throws {
+        let dir = try makeDirectory()
+        let source = try makeGeotaggedJPEG(in: dir)
+        let mediaRoot = try makeDirectory()
+
+        let staged = try ShareMediaStaging.stage(
+            source: source, into: mediaRoot, shareId: "cid_gps",
+            index: 0, mime: "image/jpeg", freeBytes: 1_000_000_000
+        )
+
+        let copy = try Data(contentsOf: mediaRoot.appendingPathComponent(staged.relPath))
+        let image = try XCTUnwrap(CGImageSourceCreateWithData(copy as CFData, nil))
+        let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(image, 0, nil) as? [CFString: Any])
+        XCTAssertNil(properties[kCGImagePropertyGPSDictionary], "le lieu de la photo ne doit pas partir")
+        XCTAssertEqual(staged.bytes, copy.count, "la fiche annonce les octets réellement copiés")
+    }
+
+    private func makeGeotaggedJPEG(in directory: URL) throws -> URL {
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try XCTUnwrap(CGContext(data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0,
+                                              space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        context.setFillColor(CGColor(srgbRed: 0.2, green: 0.5, blue: 0.8, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
+        let image = try XCTUnwrap(context.makeImage())
+        let url = directory.appendingPathComponent("IMG_0001.jpeg")
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        let gps: [CFString: Any] = [
+            kCGImagePropertyGPSLatitude: 48.8566, kCGImagePropertyGPSLatitudeRef: "N",
+            kCGImagePropertyGPSLongitude: 2.3522, kCGImagePropertyGPSLongitudeRef: "E",
+        ]
+        CGImageDestinationAddImage(destination, image, [kCGImagePropertyGPSDictionary: gps] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return url
     }
 
     func test_stage_withoutExtension_fallsBackToBin() throws {

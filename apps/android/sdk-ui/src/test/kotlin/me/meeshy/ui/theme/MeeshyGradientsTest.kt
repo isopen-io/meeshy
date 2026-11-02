@@ -40,3 +40,17 @@ class MeeshySurfaceGradientTest {
             .isNotEqualTo(MeeshyGradients.tintedBorder(tint, dark = false))
     }
 }
+
+class MeeshyGlassRimGradientTest {
+    @Test
+    fun `le liseré liquid glass branche sur sombre et clair`() {
+        assertThat(MeeshyGradients.liquidGlassRim(dark = true, isTinted = false))
+            .isNotEqualTo(MeeshyGradients.liquidGlassRim(dark = false, isTinted = false))
+    }
+
+    @Test
+    fun `le reflet liquid glass branche sur sombre et clair`() {
+        assertThat(MeeshyGradients.liquidGlassSheen(dark = true))
+            .isNotEqualTo(MeeshyGradients.liquidGlassSheen(dark = false))
+    }
+}

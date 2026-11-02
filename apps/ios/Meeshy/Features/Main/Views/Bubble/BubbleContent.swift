@@ -397,6 +397,10 @@ nonisolated struct BubbleContent: Equatable {
     /// Lecture de commodité — dérivée, jamais stockée à côté.
     var isForwarded: Bool { forwardAttribution != nil }
     let editedAt: Date?
+    /// #11375 — la dernière modification est celle d'un modérateur de plateforme.
+    /// `var … = false` et non `let` : l'init memberwise sert encore les témoins
+    /// qui ne la nomment pas.
+    var editedByModerator: Bool = false
     let isEditSaving: Bool
     let hasEditHistory: Bool
     let reactions: [MeeshyReactionSummary]
@@ -419,6 +423,10 @@ nonisolated struct BubbleContent: Equatable {
     /// de témoins (`Unit/Focal/…`) qui énumèrent chaque champ ; une valeur par
     /// défaut garde leur appel intact, un `let` sans défaut les casserait tous.
     var sticker: Sticker? = nil
+
+    /// #13622 — ce que la conversation porteuse permet aux cartes de visite de
+    /// faire du réseau ; `.unknown` (défaut) ne résout rien.
+    var contactCardScope: ContactCardResolutionScope = .unknown
 
     /// Convenience pour tests + branch logic du body.
     var isEmojiOnly: Bool { text?.isEmojiOnly ?? false }
@@ -509,6 +517,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.isPinned == rhs.isPinned
             && lhs.forwardAttribution == rhs.forwardAttribution
             && lhs.editedAt == rhs.editedAt
+            && lhs.editedByModerator == rhs.editedByModerator
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
             && lhs.reactions.map(\.emoji) == rhs.reactions.map(\.emoji)
@@ -520,5 +529,6 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.callNotice == rhs.callNotice
             && lhs.joinNotice == rhs.joinNotice
             && lhs.sticker == rhs.sticker
+            && lhs.contactCardScope == rhs.contactCardScope
     }
 }

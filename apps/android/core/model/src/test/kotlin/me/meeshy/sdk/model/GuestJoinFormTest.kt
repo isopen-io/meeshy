@@ -79,6 +79,63 @@ class GuestJoinFormTest {
     }
 
     @Test
+    fun namesOfOneCharacterBlockSubmit_twoCharactersPass_trimmed() {
+        // #13825 : prénom et nom ≥ 2 caractères rognés.
+        val base = GuestJoinForm.from(info())
+        assertThat(base.withFirstName("A").withLastName("Lovelace").isFirstNameValid).isFalse()
+        assertThat(base.withFirstName("A").withLastName("Lovelace").canSubmit).isFalse()
+        assertThat(base.withFirstName("Ada").withLastName("L").isLastNameValid).isFalse()
+        assertThat(base.withFirstName("Ada").withLastName("L").canSubmit).isFalse()
+        assertThat(base.withFirstName("  A  ").withLastName("Lovelace").canSubmit).isFalse()
+        assertThat(base.withFirstName("Al").withLastName("Li").canSubmit).isTrue()
+        assertThat(base.withFirstName(" Al ").withLastName(" Li ").toRequest()?.firstName).isEqualTo("Al")
+    }
+
+    @Test
+    fun nicknameRequiredNeedsThreeCharacters_trimmed() {
+        val form = namedForm(GuestJoinForm.from(info(requireNickname = true)))
+        assertThat(form.withUsername("Al").isUsernameValid).isFalse()
+        assertThat(form.withUsername("Al").canSubmit).isFalse()
+        assertThat(form.withUsername("  Al  ").canSubmit).isFalse()
+        assertThat(form.withUsername("Ali").isUsernameValid).isTrue()
+        assertThat(form.withUsername(" Ali ").canSubmit).isTrue()
+    }
+
+    @Test
+    fun anOptionalNicknameThatIsTypedStillNeedsThreeCharacters() {
+        val form = namedForm(GuestJoinForm.from(info(requireNickname = false)))
+        assertThat(form.withUsername("Al").isUsernameValid).isFalse()
+        assertThat(form.withUsername("Al").canSubmit).isFalse()
+        assertThat(form.withUsername("   ").isUsernameValid).isTrue()
+        assertThat(form.withUsername("Ali").canSubmit).isTrue()
+    }
+
+    @Test
+    fun aNicknameIsMeasuredOnWhatTheGatewayKeepsOfIt() {
+        val form = namedForm(GuestJoinForm.from(info(requireNickname = true)))
+        assertThat(form.withUsername("Al#").isUsernameValid).isFalse()
+        assertThat(form.withUsername("Al#").isUsernameTooShort).isTrue()
+        assertThat(form.withUsername("Zoé").canSubmit).isFalse()
+        assertThat(form.withUsername("Zoe").canSubmit).isTrue()
+    }
+
+    @Test
+    fun namesCountTheirVisibleCharacters() {
+        val base = GuestJoinForm.from(info())
+        assertThat(base.withFirstName("A\u200E").withLastName("Lovelace").isFirstNameTooShort).isTrue()
+        assertThat(base.withFirstName("A\u200E").withLastName("Lovelace").canSubmit).isFalse()
+        assertThat(base.withFirstName("😀😀").withLastName("Lovelace").isFirstNameValid).isTrue()
+    }
+
+    @Test
+    fun theSuggestedNicknameAlwaysClearsTheMinimum() {
+        val form = GuestJoinForm.from(info(requireNickname = true))
+            .withFirstName("Al").withLastName("Li").suggestingUsername(7)
+        assertThat(form.isUsernameValid).isTrue()
+        assertThat(form.canSubmit).isTrue()
+    }
+
+    @Test
     fun requireNickname_blocksUntilUsernamePresent() {
         val blank = namedForm(GuestJoinForm.from(info(requireNickname = true)))
         assertThat(blank.isUsernameValid).isFalse()
@@ -103,6 +160,8 @@ class GuestJoinFormTest {
         assertThat(blank.isEmailValid).isFalse()
         assertThat(blank.canSubmit).isFalse()
 
+        assertThat(blank.withEmail("ada").isEmailValid).isFalse()
+        assertThat(blank.withEmail("ada@calc").isEmailValid).isFalse()
         val filled = blank.withEmail("ada@calc.org")
         assertThat(filled.isEmailValid).isTrue()
         assertThat(filled.canSubmit).isTrue()
@@ -158,14 +217,29 @@ class GuestJoinFormTest {
         val form = namedForm(GuestJoinForm.from(info(), language = "es"))
             .withUsername("  ada_l  ")
             .withEmail(" ada@calc.org ")
-            .withBirthday(" 1815-12-10 ")
 
         val request = form.toRequest()!!
 
         assertThat(request.username).isEqualTo("ada_l")
         assertThat(request.email).isEqualTo("ada@calc.org")
-        assertThat(request.birthday).isEqualTo("1815-12-10")
         assertThat(request.language).isEqualTo("es")
+    }
+
+    @Test
+    fun toRequest_sendsTheBirthdayOnlyWhenTheLinkRequiresIt() {
+        val required = namedForm(GuestJoinForm.from(info(requireBirthday = true))).withBirthday(" 1815-12-10 ")
+        val notRequired = namedForm(GuestJoinForm.from(info())).withBirthday("1815-12-10")
+
+        assertThat(required.toRequest()!!.birthday).isEqualTo("1815-12-10")
+        assertThat(notRequired.toRequest()!!.birthday).isNull()
+    }
+
+    @Test
+    fun toRequest_omitsBlankEmailAndUsername() {
+        val request = namedForm(GuestJoinForm.from(info())).withEmail("  ").withUsername(" ").toRequest()!!
+
+        assertThat(request.email).isNull()
+        assertThat(request.username).isNull()
     }
 
     @Test

@@ -275,7 +275,7 @@ final class MediaChromeRailTests: XCTestCase {
         XCTAssertTrue(page.contains("FullscreenTopBar(exit: .back, onClose: onClose)"))
         XCTAssertTrue(page.contains("onClose()"), "le glissement depuis le bord de début de lecture ferme toujours le lecteur")
 
-        let story = try source("Meeshy/Features/Main/Views/StoryViewerContainer.swift")
+        let story = try source("Meeshy/Features/Stories/Views/StoryViewerContainer.swift")
         XCTAssertFalse(story.contains("exit: .back"))
     }
 
@@ -289,9 +289,9 @@ final class MediaChromeRailTests: XCTestCase {
         let railReels = try source("Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift")
         XCTAssertEqual(railReels.components(separatedBy: ".mediaChromeGlyph()").count - 1, 1)
 
-        let railStory = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        let railStory = try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
         XCTAssertTrue(railStory.contains(".mediaChromeRail(for: .story(currentStory)"))
-        let bouton = try source("Meeshy/Features/Main/Views/StoryViewerView+ActionButton.swift")
+        let bouton = try source("Meeshy/Features/Stories/Views/StoryViewerView+ActionButton.swift")
         XCTAssertTrue(bouton.contains(".mediaChromeGlyph()"))
         XCTAssertFalse(bouton.contains(".foregroundColor(.white"), "le glyphe et le libellé ne sont plus blancs d'office")
     }

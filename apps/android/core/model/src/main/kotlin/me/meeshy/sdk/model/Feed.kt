@@ -112,4 +112,14 @@ data class FeedPost(
     val originalLanguage: String? = null,
     val translations: Map<String, PostTranslation>? = null,
     val translatedContent: String? = null,
-)
+    /** Effets de la story portée par ce post (`FeedPost.storyEffects`). */
+    @Serializable(with = StoryEffectsWireSerializer::class)
+    val storyEffects: StoryEffects? = null,
+    val audioUrl: String? = null,
+    /** Liens suivis du contenu ; `null` = adresses brutes. */
+    @Serializable(with = TolerantTrackedLinksSerializer::class)
+    val trackingLinks: List<TrackedLink>? = null,
+) {
+    /** `[urlBrute: jeton]` du contenu. */
+    val trackedLinkMap: Map<String, String> get() = trackingLinks.orEmpty().trackedLinkMap()
+}

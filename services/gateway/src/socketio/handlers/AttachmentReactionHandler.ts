@@ -10,6 +10,7 @@ import type { AckOf } from '@meeshy/shared/types/socketio-events';
 import { resolveParticipantFromMessage } from '../utils/participant-resolver';
 import type { SocketUser } from '../utils/socket-helpers';
 import { AttachmentReactionService } from '../../services/AttachmentReactionService';
+import { E2eeSignalChannelRequiredError } from '../../services/e2ee/e2ee-signal-channel';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
@@ -189,7 +190,11 @@ export class AttachmentReactionHandler {
       callback?.({ success: true });
     } catch (error: unknown) {
       logger.error('attachment reaction failed', { action, error });
-      callback?.({ success: false, error: error instanceof Error ? error.message : 'Failed' });
+      callback?.({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed',
+        ...(error instanceof E2eeSignalChannelRequiredError ? { code: error.code } : {}),
+      });
     }
   }
 

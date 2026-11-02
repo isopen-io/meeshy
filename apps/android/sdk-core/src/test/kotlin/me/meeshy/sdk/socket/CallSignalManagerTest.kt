@@ -647,6 +647,19 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `a participant-joined frame republishes the named arrival on participantArrivals`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.participantArrivals.test {
+            deliver(handlers, "call:participant-joined", """{"callId":"c1","participant":{"userId":"u2","displayName":"Bob"}}""")
+            val arrival = awaitItem()
+            assertThat(arrival.callId).isEqualTo("c1")
+            assertThat(arrival.arrival.userId).isEqualTo("u2")
+            assertThat(arrival.arrival.displayName).isEqualTo("Bob")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a participant-left frame emits nothing on the FSM events flow`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
@@ -710,6 +723,22 @@ class CallSignalManagerTest {
         managerAndSocket.first.events.test {
             deliver(handlers, "call:translated-segment", """{"callId":"c1","segment":{"text":"bonjour"}}""")
             expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `the signalling socket's connection is published once per edge, for a call to rejoin on its return`() = runTest {
+        val state = MutableStateFlow(SocketConnectionState.CONNECTED)
+        val (managerAndSocket, _) = managerWithHandlers(connectionState = state)
+
+        managerAndSocket.first.socketConnected.test {
+            assertThat(awaitItem()).isTrue()
+            state.value = SocketConnectionState.CONNECTING
+            assertThat(awaitItem()).isFalse()
+            state.value = SocketConnectionState.DISCONNECTED
+            state.value = SocketConnectionState.CONNECTED
+            assertThat(awaitItem()).isTrue()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 }

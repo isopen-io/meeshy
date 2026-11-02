@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.languages.demo.translated",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.sample.1",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.sample.2",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.global.sample.3",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.story.badge",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.friends.badge",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.notifications.sample",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

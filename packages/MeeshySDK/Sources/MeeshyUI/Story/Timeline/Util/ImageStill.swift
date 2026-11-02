@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import ImageIO
+import MeeshySDK
 
 /// Vignette FIXE (image) pour les lanes — pendant du filmstrip vidéo.
 /// `CGImageSourceCreateThumbnailAtIndex` décode à la taille cible (jamais le
@@ -19,16 +20,8 @@ enum ImageStill {
         let key = "\(url.absoluteString)|\(Int(maxHeight))|\(scale)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
         let image: UIImage? = await Task.detached(priority: .utility) {
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxHeight * 4 * scale
-            ]
-            guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-                return nil
-            }
-            return UIImage(cgImage: cg)
+            ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: maxHeight * 4 * scale, decodeImmediately: false)
+                .map { UIImage(cgImage: $0) }
         }.value
         if let image {
             cache.setObject(image, forKey: key)

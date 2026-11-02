@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.RegisterResponse
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
+import app.cash.turbine.test
+import me.meeshy.sdk.model.auth.SessionOrigin
 import org.junit.Test
 
 private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
@@ -201,5 +203,205 @@ class SessionRepositoryTest {
         repo.refresh()
 
         assertThat(tokenStore.userId).isEqualTo("cached")
+    }
+
+    @Test
+    fun `hasResolvedStoredSession passe une seule fois de faux a vrai apres la restauration`() = runTest {
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+
+        repo.hasResolvedStoredSession.test {
+            assertThat(awaitItem()).isFalse()
+            repo.refresh()
+            assertThat(awaitItem()).isTrue()
+            repo.refresh()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `hors ligne avec un jeton detenu la session est resolue sans effacer l identite`() = runTest {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore(jwt = "jwt"))
+        repo.adopt(user("u1"))
+        repo.refresh()
+
+        assertThat(repo.hasResolvedStoredSession.value).isTrue()
+        assertThat(repo.currentUserId).isEqualTo("u1")
+    }
+
+    @Test
+    fun `sans jeton la restauration se termine aussi`() = runTest {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+        repo.refresh()
+        assertThat(repo.hasResolvedStoredSession.value).isTrue()
+    }
+
+    @Test
+    fun `une session restauree porte l origine RESTORED et une connexion LOGIN`() = runTest {
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val restored = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+        restored.refresh()
+        assertThat(restored.sessionOrigin.value).isEqualTo(SessionOrigin.RESTORED)
+
+        val fresh = SessionRepository(api, InMemoryTokenStore())
+        fresh.adopt(user("u2"), SessionOrigin.REGISTRATION)
+        assertThat(fresh.sessionOrigin.value).isEqualTo(SessionOrigin.REGISTRATION)
+        fresh.clear()
+        assertThat(fresh.sessionOrigin.value).isNull()
+    }
+
+    @Test
+    fun `la relecture du profil est limitee a une par minute`() = runTest {
+        var calls = 0
+        val delegate = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u9"))))
+        val api = object : AuthApi by delegate {
+            override suspend fun me(): ApiResponse<MeEnvelope> {
+                calls++
+                return delegate.me()
+            }
+        }
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+        var now = 1_000_000L
+        repo.nowMillis = { now }
+
+        repo.revalidateIfStale()
+        now += 59_000
+        repo.revalidateIfStale()
+        assertThat(calls).isEqualTo(1)
+        now += 2_000
+        repo.revalidateIfStale()
+        assertThat(calls).isEqualTo(2)
+    }
+
+    @Test
+    fun `une reponse tardive d une session remplacee est ecartee`() = runTest {
+        lateinit var repo: SessionRepository
+        val delegate = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("old"))))
+        val api = object : AuthApi by delegate {
+            override suspend fun me(): ApiResponse<MeEnvelope> {
+                repo.clear()
+                repo.adopt(user("new"))
+                return delegate.me()
+            }
+        }
+        repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"))
+
+        repo.refresh()
+
+        assertThat(repo.currentUserId).isEqualTo("new")
+    }
+
+    @Test
+    fun `a restart before confirmation re-applies the pending profile edit over the server state`() = runTest {
+        val server = user("u1").copy(displayName = "Server", bio = "old bio")
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(server)))
+        val pending = PendingProfileEdits { userId, _ ->
+            if (userId == "u1") listOf(UpdateProfileRequest(bio = ""), UpdateProfileRequest(displayName = "Pending")) else emptyList()
+        }
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"), me.meeshy.sdk.net.SessionTransitionFlags(), pending)
+
+        repo.refresh()
+
+        assertThat(repo.currentUser.value?.displayName).isEqualTo("Pending")
+        assertThat(repo.currentUser.value?.bio).isNull()
+    }
+
+    @Test
+    fun `an unreadable outbox never blocks the re-read`() = runTest {
+        val api = FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(user("u1").copy(displayName = "Server"))))
+        val broken = PendingProfileEdits { _, _ -> throw IllegalStateException("db closed") }
+        val repo = SessionRepository(api, InMemoryTokenStore(jwt = "jwt"), me.meeshy.sdk.net.SessionTransitionFlags(), broken)
+
+        repo.refresh()
+
+        assertThat(repo.currentUser.value?.displayName).isEqualTo("Server")
+    }
+
+    @Test
+    fun `restoreProfileSnapshot rolls the optimistic edit back`() {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+        val snapshot = user("u1").copy(bio = "before")
+        repo.adopt(snapshot)
+        repo.applyProfileEdit(UpdateProfileRequest(bio = ""))
+
+        repo.restoreProfileSnapshot(snapshot)
+
+        assertThat(repo.currentUser.value).isEqualTo(snapshot)
+    }
+
+    @Test
+    fun `restoreProfileSnapshot never paints another account`() {
+        val repo = SessionRepository(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore())
+        repo.adopt(user("u2"))
+
+        repo.restoreProfileSnapshot(user("u1"))
+
+        assertThat(repo.currentUserId).isEqualTo("u2")
+    }
+
+    private class RecordingIdentityStore(private val stored: Map<String, MeeshyUser> = emptyMap()) : SignedInIdentityStore {
+        val remembered = mutableListOf<MeeshyUser>()
+        override suspend fun recall(userId: String): MeeshyUser? = stored[userId]
+        override fun remember(user: MeeshyUser) {
+            remembered += user
+        }
+    }
+
+    private fun sessionWith(api: FakeAuthApi, tokens: InMemoryTokenStore, identities: SignedInIdentityStore) =
+        SessionRepository(api, tokens, me.meeshy.sdk.net.SessionTransitionFlags(), PendingProfileEdits.NONE, identities)
+
+    @Test
+    fun `a cold start without network serves the identity remembered for the stored account`() = runTest {
+        val remembered = user("u1").copy(displayName = "Atabeth Lune")
+        val repo = sessionWith(
+            FakeAuthApi(ApiResponse(success = false)),
+            InMemoryTokenStore(jwt = "jwt", userId = "u1"),
+            RecordingIdentityStore(mapOf("u1" to remembered)),
+        )
+
+        repo.refresh()
+
+        assertThat(repo.currentUser.value).isEqualTo(remembered)
+        assertThat(repo.hasResolvedStoredSession.value).isTrue()
+    }
+
+    @Test
+    fun `the identity remembered for another account is never served`() = runTest {
+        val repo = sessionWith(
+            FakeAuthApi(ApiResponse(success = false)),
+            InMemoryTokenStore(jwt = "jwt", userId = "u1"),
+            RecordingIdentityStore(mapOf("u2" to user("u2"))),
+        )
+
+        repo.refresh()
+
+        assertThat(repo.currentUser.value).isNull()
+    }
+
+    @Test
+    fun `the server identity replaces the remembered one and is remembered in turn`() = runTest {
+        val server = user("u1").copy(displayName = "Server")
+        val identities = RecordingIdentityStore(mapOf("u1" to user("u1").copy(displayName = "Disk")))
+        val repo = sessionWith(
+            FakeAuthApi(ApiResponse(success = true, data = MeEnvelope(server))),
+            InMemoryTokenStore(jwt = "jwt", userId = "u1"),
+            identities,
+        )
+
+        repo.refresh()
+
+        assertThat(repo.currentUser.value?.displayName).isEqualTo("Server")
+        assertThat(identities.remembered.last()).isEqualTo(repo.currentUser.value)
+    }
+
+    @Test
+    fun `every identity the session publishes is remembered for the next cold start`() {
+        val identities = RecordingIdentityStore()
+        val repo = sessionWith(FakeAuthApi(ApiResponse(success = false)), InMemoryTokenStore(), identities)
+
+        repo.adopt(user("u1").copy(displayName = "Old"))
+        repo.applyProfileEdit(UpdateProfileRequest(displayName = "New"))
+
+        assertThat(identities.remembered.map { it.displayName }).containsExactly("Old", "New").inOrder()
     }
 }

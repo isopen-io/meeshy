@@ -1,7 +1,14 @@
 package me.meeshy.app.feed
 
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,24 +18,26 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.DropdownMenu
@@ -47,9 +56,13 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,10 +75,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.PostReactionPaletteState
+import me.meeshy.sdk.model.PostReactionPick
+import me.meeshy.ui.component.reaction.PostReactionPalette
+import me.meeshy.ui.component.reaction.PostReactionPaletteAnchor
+import me.meeshy.ui.modifier.reactionPaletteTrigger
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.bubble.RichMessageText
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.sdk.model.PostAbsenceReason
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.LanguageChip
@@ -74,6 +93,8 @@ import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -94,10 +115,26 @@ import java.util.Locale
 fun PostDetailScreen(
     onBack: () -> Unit = {},
     onOpenPost: (String) -> Unit = {},
+    onOpenReel: (String) -> Unit = onOpenPost,
+    onOpenProfile: ((String) -> Unit)? = null,
+    onOpenHashtag: (String) -> Unit = {},
+    viewersSheet: @Composable (postId: String, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var viewersOpen by remember { mutableStateOf(false) }
+    if (viewersOpen) state.post?.id?.let { id -> viewersSheet(id) { viewersOpen = false } }
+    val quickEmojis by viewModel.quickEmojis.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    // Collected (not keyed) so consuming the notice never cancels the toast on screen, as in the feed.
+    LaunchedEffect(viewModel) {
+        viewModel.state.map { it.notice }.distinctUntilChanged().filterNotNull().collect { notice ->
+            viewModel.consumeNotice()
+            snackbar.showSnackbar(context.getString(notice.messageRes()))
+        }
+    }
 
     LaunchedEffect(state.errorMessage) {
         // Sans post, l'echec a son propre ecran (PostDetailAbsenceView) : pas de snackbar doublon.
@@ -126,23 +163,27 @@ fun PostDetailScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = MeeshyIcons.Back,
                                 contentDescription = stringResource(R.string.post_detail_back),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
                         }
                     },
+                    actions = { state.post?.let { PostDetailImagerMenu(it) } },
                 )
             },
-            snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Color.Transparent,
+            // #14313 — le bas appartient au composeur épinglé : il porte lui-même la barre de navigation et le clavier
+            // (`ComposerShellLayout`). Laissé à l'échafaudage, l'encart bas était compté deux fois (~140 px de vide).
+            contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
         ) { padding ->
             PullToRefreshBox(
                 isRefreshing = state.isRefreshing,
                 onRefresh = viewModel::refresh,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    .consumeWindowInsets(padding),
             ) {
                 when {
                     state.showSkeleton -> PostDetailSkeleton()
@@ -159,10 +200,24 @@ fun PostDetailScreen(
                     else -> PostDetailContent(
                         post = state.post!!,
                         isReposted = state.isReposted,
+                        secondaryTranslation = state.secondaryTranslation,
+                        detailLanguageStrip = state.detailLanguageStrip,
+                        translatingCodes = state.translatingLanguages,
                         onFlagTap = viewModel::onFlagTap,
+                        onSelectLanguage = viewModel::onLanguageSelected,
                         onOpenPost = onOpenPost,
+                        onOpenReel = onOpenReel,
+                        onOpenProfile = onOpenProfile,
+                        onOpenHashtag = onOpenHashtag,
+                        onOpenViewers = if (state.canListViewers) ({ viewersOpen = true }) else null,
                         onRepost = viewModel::repost,
                         onQuote = viewModel::beginQuote,
+                        onLike = viewModel::toggleLike,
+                        quickEmojis = quickEmojis,
+                        onReact = viewModel::react,
+                        onBookmark = viewModel::toggleBookmark,
+                        onCommentNotice = { notice -> snackbar.showSnackbar(context.getString(notice.messageRes)) },
+                        snackbarHost = { SnackbarHost(snackbar) },
                     )
                 }
             }
@@ -180,122 +235,183 @@ fun PostDetailScreen(
 }
 
 @Composable
-private fun PostDetailContent(
+internal fun PostDetailContent(
     post: FeedPostPresentation,
     isReposted: Boolean,
+    secondaryTranslation: PostSecondaryTranslation?,
+    detailLanguageStrip: List<LanguageChip>,
+    translatingCodes: Set<String>,
     onFlagTap: (String) -> Unit,
+    onSelectLanguage: (String) -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit,
+    onOpenProfile: ((String) -> Unit)?,
+    onOpenHashtag: (String) -> Unit,
+    onOpenViewers: (() -> Unit)?,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    onLike: () -> Unit,
+    quickEmojis: List<String>,
+    onReact: (PostReactionPick) -> Unit,
+    onBookmark: () -> Unit,
+    onCommentNotice: suspend (CommentNotice) -> Unit,
+    commentsSection: @Composable () -> Unit = { PostCommentsSection(onNotice = onCommentNotice, support = post.commentCardSupport) },
+    commentComposer: @Composable () -> Unit = { PostCommentsComposerBar() },
+    snackbarHost: @Composable () -> Unit = {},
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MeeshySpacing.lg),
-    ) {
-        MeeshyGlassSurface(
-            shape = RoundedCornerShape(MeeshyRadius.xl),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(Modifier.padding(MeeshySpacing.lg)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(contentAlignment = Alignment.Center) {
-                        MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 44.dp)
-                        if (!post.authorAvatarUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = post.authorAvatarUrl,
-                                contentDescription = post.authorName ?: unknownAuthor,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape),
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(MeeshySpacing.md))
-                    Column(Modifier.weight(1f)) {
+    var gallery by remember(post.id) { mutableStateOf<FeedGallery?>(null) }
+    var explorerOpen by rememberSaveable(post.id) { mutableStateOf(false) }
+    post.languageExplorer?.takeIf { explorerOpen }?.let { explorer ->
+        PostTranslationSheet(
+            explorer = explorer,
+            translating = translatingCodes,
+            onSelectLanguage = onSelectLanguage,
+            onDismiss = { explorerOpen = false },
+        )
+    }
+    gallery?.let { opened -> FeedImageViewerHost(gallery = opened, onDismiss = { gallery = null }) }
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(MeeshySpacing.lg),
+            ) {
+                MeeshyGlassSurface(
+                    shape = RoundedCornerShape(MeeshyRadius.xl),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(MeeshySpacing.lg)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = post.authorName ?: unknownAuthor,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MeeshyTheme.tokens.textPrimary,
+                            val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+                            MeeshyAvatar(
+                                name = post.authorName ?: unknownAuthor,
+                                size = 44.dp,
+                                imageUrl = post.authorAvatarUrl,
+                                presence = rememberPresence(post.authorId),
+                                modifier = profileTap,
                             )
-                            if (post.moodEmoji != null) {
-                                Text(
-                                    text = post.moodEmoji,
-                                    modifier = Modifier.padding(start = MeeshySpacing.xs),
-                                )
+                            Spacer(Modifier.width(MeeshySpacing.md))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = post.authorName ?: unknownAuthor,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MeeshyTheme.tokens.textPrimary,
+                                        modifier = profileTap,
+                                    )
+                                    if (post.moodEmoji != null) {
+                                        Text(
+                                            text = post.moodEmoji,
+                                            modifier = Modifier.padding(start = MeeshySpacing.xs),
+                                        )
+                                    }
+                                }
+                                post.createdAtIso?.let {
+                                    Text(
+                                        text = detailRelativeTime(it),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MeeshyTheme.tokens.textSecondary,
+                                    )
+                                }
+                                PostReachLine(post = post)
+                                onOpenViewers?.let { open -> ViewersEntry(onClick = open) }
                             }
                         }
-                        post.createdAtIso?.let {
-                            Text(
-                                text = detailRelativeTime(it),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MeeshyTheme.tokens.textSecondary,
+
+                        if (post.content.isNotBlank() && !post.showsReelCard) {
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            HashtagAwareLinks(onOpenHashtag) {
+                                SelectionContainer {
+                                    RichMessageText(
+                                        text = post.content,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MeeshyTheme.tokens.textPrimary,
+                                    )
+                                }
+                            }
+                        }
+
+                        PostSecondaryTranslationPanel(secondaryTranslation)
+
+                        if (detailLanguageStrip.isNotEmpty() || post.languageExplorer != null) {
+                            Spacer(Modifier.height(MeeshySpacing.sm))
+                            DetailLanguageStrip(
+                                chips = detailLanguageStrip,
+                                onChipTap = onFlagTap,
+                                onOpenExplorer = post.languageExplorer?.let { { explorerOpen = true } },
                             )
                         }
-                        PostReachLine(post = post)
-                    }
-                }
 
-                if (post.content.isNotBlank()) {
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    SelectionContainer {
-                        Text(
-                            text = post.content,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MeeshyTheme.tokens.textPrimary,
+                        val scenes = post.scenes
+                        if (scenes != null) {
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            PostDetailScenes(scenes = scenes)
+                        } else if (post.images.isNotEmpty()) {
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            PostImageLayout(
+                                images = post.images,
+                                layout = post.layout,
+                                onImageTap = { index ->
+                                    gallery = FeedMediaGallery.of(post, index).takeUnless(FeedGallery::isEmpty)
+                                },
+                            )
+                        }
+
+                        post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
+                            Spacer(Modifier.height(MeeshySpacing.md))
+                            ReelPostCard(
+                                post = post,
+                                cover = cover,
+                                onOpenReel = onOpenReel,
+                                showsActions = false,
+                                captionLines = DETAIL_CAPTION_LINES,
+                                onOpenProfile = onOpenProfile,
+                            )
+                        } ?: FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
+
+                        Spacer(Modifier.height(MeeshySpacing.md))
+                        DetailStatsRow(
+                            post = post,
+                            isReposted = isReposted,
+                            onRepost = onRepost,
+                            onQuote = onQuote,
+                            onLike = onLike,
+                            quickEmojis = quickEmojis,
+                            onReact = onReact,
+                            onBookmark = onBookmark,
                         )
                     }
                 }
 
-                if (post.languageStrip.isNotEmpty()) {
-                    Spacer(Modifier.height(MeeshySpacing.sm))
-                    DetailLanguageStrip(chips = post.languageStrip, onChipTap = onFlagTap)
-                }
-
-                if (post.images.isNotEmpty()) {
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    PostImageLayout(images = post.images, layout = post.layout, onImageTap = null)
-                }
-
-                post.repostEmbed?.let { embed ->
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    RepostEmbedCell(embed = embed, onOpen = onOpenPost)
-                }
-
-                if (post.isReel) {
-                    Spacer(Modifier.height(MeeshySpacing.md))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.PlayCircle,
-                            contentDescription = null,
-                            tint = MeeshyPalette.Indigo500,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(MeeshySpacing.xs))
-                        Text(
-                            text = stringResource(R.string.feed_reel),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MeeshyTheme.tokens.textSecondary,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(MeeshySpacing.md))
-                DetailStatsRow(
-                    post = post,
-                    isReposted = isReposted,
-                    onRepost = onRepost,
-                    onQuote = onQuote,
-                )
+                Spacer(Modifier.height(MeeshySpacing.lg))
+                commentsSection()
             }
+            Box(Modifier.align(Alignment.BottomCenter)) { snackbarHost() }
         }
+        Box(Modifier.fillMaxWidth().imePadding()) { commentComposer() }
+    }
+}
 
-        Spacer(Modifier.height(MeeshySpacing.lg))
-        PostCommentsSection()
+private const val DETAIL_CAPTION_LINES = 6
+
+/** « Vues » : l'entrée de la liste de qui a vu (ADMIN/BIGBOSS), même libellé qu'iOS. */
+@Composable
+private fun ViewersEntry(onClick: () -> Unit) {
+    val label = stringResource(R.string.post_detail_viewers)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier
+            .padding(top = MeeshySpacing.xs)
+            .clickable(onClick = onClick)
+            .semantics { role = Role.Button; contentDescription = label },
+    ) {
+        Icon(Icons.Filled.Visibility, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
     }
 }
 
@@ -341,18 +457,45 @@ private fun DetailStatsRow(
     isReposted: Boolean,
     onRepost: () -> Unit,
     onQuote: () -> Unit,
+    onLike: () -> Unit,
+    quickEmojis: List<String>,
+    onReact: (PostReactionPick) -> Unit,
+    onBookmark: () -> Unit,
 ) {
+    var palette by remember { mutableStateOf(PostReactionPaletteState()) }
     Row(
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box {
         DetailStat(
             icon = { tint ->
-                Icon(Icons.Filled.Favorite, contentDescription = stringResource(R.string.feed_like), tint = tint, modifier = Modifier.size(18.dp))
+                Icon(
+                    if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like),
+                    tint = tint,
+                    modifier = Modifier.size(20.dp),
+                )
             },
             count = post.likeCount,
             active = post.isLiked,
+            activeTint = MeeshyPalette.Error,
+            heart = true,
+            onClick = onLike,
+            triggerModifier = Modifier.reactionPaletteTrigger(onOpen = { palette = palette.opened() }),
         )
+        PostReactionPalette(
+            isOpen = palette.isOpen,
+            onDismiss = { palette = palette.dismissed() },
+            onPick = { emoji ->
+                val (next, pick) = palette.picked(emoji)
+                palette = next
+                pick?.let(onReact)
+            },
+            emojis = quickEmojis,
+            anchor = PostReactionPaletteAnchor.Start,
+        )
+        }
         DetailStat(
             icon = { tint ->
                 Icon(Icons.Filled.ChatBubbleOutline, contentDescription = stringResource(R.string.feed_comments), tint = tint, modifier = Modifier.size(18.dp))
@@ -368,10 +511,16 @@ private fun DetailStatsRow(
         )
         DetailStat(
             icon = { tint ->
-                Icon(Icons.Outlined.BookmarkBorder, contentDescription = stringResource(R.string.feed_bookmark), tint = tint, modifier = Modifier.size(18.dp))
+                Icon(
+                    if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    contentDescription = stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark),
+                    tint = tint,
+                    modifier = Modifier.size(20.dp),
+                )
             },
             count = post.bookmarkCount,
             active = post.isBookmarked,
+            onClick = onBookmark,
         )
     }
 }
@@ -381,17 +530,25 @@ private fun DetailStat(
     icon: @Composable (Color) -> Unit,
     count: Int,
     active: Boolean,
+    activeTint: Color = MeeshyPalette.Indigo500,
+    onClick: (() -> Unit)? = null,
+    triggerModifier: Modifier = Modifier,
+    heart: Boolean = false,
 ) {
-    val tint = if (active) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        icon(tint)
+    val tint = if (active) activeTint else MeeshyTheme.tokens.textSecondary
+    val haptics = rememberMeeshyHaptics()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = triggerModifier
+            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .let { base -> if (onClick == null) base else base.clickable(role = Role.Button, onClick = { haptics.light(); onClick() }) }
+            .padding(horizontal = MeeshySpacing.xs),
+    ) {
+        EngagementGlyph(active = active, tint = tint, size = 20.dp, burst = heart, tilt = heart) { icon(tint) }
         if (count > 0) {
             Spacer(Modifier.width(MeeshySpacing.xs))
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
+            EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
         }
     }
 }
@@ -410,24 +567,21 @@ private fun DetailRepostStat(
     onQuote: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val tint = if (active) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary
+    val tint = if (active) MeeshyPalette.Success else MeeshyTheme.tokens.textSecondary
     val a11y = stringResource(R.string.feed_reposts)
+    val haptics = rememberMeeshyHaptics()
     Box {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .clickable { expanded = true }
+                .clickable { haptics.light(); expanded = true }
                 .semantics { contentDescription = a11y },
         ) {
-            Icon(Icons.Filled.Repeat, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+            EngagementIcon(icon = Icons.Filled.Repeat, active = active, tint = tint)
             if (count > 0) {
                 Spacer(Modifier.width(MeeshySpacing.xs))
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MeeshyTheme.tokens.textSecondary,
-                )
+                EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -454,17 +608,13 @@ private fun DetailRepostStat(
 private fun DetailLanguageStrip(
     chips: List<LanguageChip>,
     onChipTap: (String) -> Unit,
+    onOpenExplorer: (() -> Unit)? = null,
 ) {
     FlowRow(
         verticalArrangement = Arrangement.Center,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(
-            imageVector = Icons.Filled.Translate,
-            contentDescription = stringResource(R.string.feed_translated),
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(14.dp),
-        )
+        PostTranslationsBadge(onOpenExplorer)
         chips.forEach { chip ->
             val info = chip.info
             val accent = info?.colorHex

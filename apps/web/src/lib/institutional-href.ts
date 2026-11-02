@@ -14,12 +14,21 @@
  * lie donc l'adresse PUBLIQUE, que Capacitor confie au navigateur du système,
  * comme l'app iOS native (`AboutView.swift`).
  */
-export type InstitutionalPage = 'about' | 'contact' | 'faq' | 'help' | 'partners' | 'privacy' | 'terms';
+export type InstitutionalPage = 'about' | 'child-safety' | 'contact' | 'faq' | 'help' | 'partners' | 'privacy' | 'terms';
 
 const CANONICAL_ORIGIN = 'https://meeshy.me';
 
+/** Toute adresse du SITE que la coque ne sert pas — la landing par langue et ses ancres comme les pages (#12930). */
+export function siteHref(path: string, options: { readonly shell: boolean }): string {
+  return options.shell ? `${CANONICAL_ORIGIN}${path}` : path;
+}
+
+export function appSiteHref(path: string): string {
+  return siteHref(path, { shell: __SHELL__ });
+}
+
 export function institutionalHref(page: InstitutionalPage, options: { readonly shell: boolean }): string {
-  return options.shell ? `${CANONICAL_ORIGIN}/${page}` : `/${page}`;
+  return siteHref(`/${page}`, options);
 }
 
 export function appInstitutionalHref(page: InstitutionalPage): string {

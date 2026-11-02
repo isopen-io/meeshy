@@ -1,7 +1,12 @@
+import { lazyLensStage } from '@/lib/meeshy-lens/lens-lazy';
+
+import { currentDeviceTier } from '../device/capability-tier';
+
 import { browserReducedMotion, createFaceLayer } from './face-effects-draw';
-import { browserFaceDetector } from './face-tracker';
-import { createSegmentedBlur, type SegmenterPort } from './video-effects-blur';
+import { browserFaceDetector, createFaceTracker, type FaceDetectorPort } from './face-tracker';
+import { createSegmentedBlur, segmentIntervalFor, type SegmenterPort } from './video-effects-blur';
 import { createBlurCompositor } from './video-effects-compositor';
+import type { Box } from './face-effects';
 import type { BlurStage, FrameEnv, Surface } from './video-effects-frames';
 
 /**
@@ -44,15 +49,33 @@ export function browserBlur(): BlurStage | null {
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, premultipliedAlpha: false, preserveDrawingBuffer: false });
   if (gl === null) return null;
   try {
-    return createSegmentedBlur({ compositor: createBlurCompositor(gl), canvas, loadSegmenter, snapshot, schedule: (task) => void setTimeout(task, 0), now });
+    return createSegmentedBlur({ compositor: createBlurCompositor(gl), canvas, loadSegmenter, snapshot, schedule: (task) => void setTimeout(task, 0), now, intervalMs: segmentIntervalFor(currentDeviceTier()) });
   } catch {
     return null;
   }
 }
 
+/**
+ * Le suiveur du visage que l'étage des lens interroge — son propre suiveur,
+ * sur le détecteur que l'étage lui remet : à 478 points sur un appareil de
+ * palier A (`lens-browser.ts`, W15 #11321), sinon celui du navigateur.
+ * L'étage ne le bâtit qu'à une lens ancrée au visage (`lensUsesFace`).
+ */
+function trackFace(detector: FaceDetectorPort): (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }) => Box {
+  const state = { tracker: createFaceTracker(detector), frame: 0 };
+  return (source, frame) => {
+    state.frame += 1;
+    return state.tracker.next(source, frame, state.frame - 1);
+  };
+}
+
 export function browserFrameEnv(options: { readonly reducedMotion?: () => boolean } = {}): LocalFrameEnv {
   const face = createFaceLayer(browserFaceDetector(), options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion });
-  return { surface: offscreen2d, now, face, blur: browserBlur, frameFrom: (canvas, init) => new VideoFrame(canvas, init) };
+  const lensFace = { track: trackFace, browserDetector: browserFaceDetector, tier: currentDeviceTier, now };
+  const lens = lazyLensStage(() =>
+    import('@/lib/meeshy-lens/lens-browser').then((module) => module.browserLensStage({ face: lensFace, ...(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion }) })),
+  );
+  return { surface: offscreen2d, now, face, blur: browserBlur, lens, frameFrom: (canvas, init) => new VideoFrame(canvas, init) };
 }
 
 /** Le repli du fil principal : `matchMedia` y existe, le calque de visage le lit lui-même. */

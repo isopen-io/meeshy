@@ -1,11 +1,20 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.media.MediaTrimBounds
+
+import me.meeshy.sdk.model.ImageAdjustments
+import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryLocationObject
+import me.meeshy.sdk.model.StoryObjectPlacement
+import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.SceneObjectCaps
+import me.meeshy.sdk.model.composer.StoryLimits
+import me.meeshy.sdk.model.composer.scene.SceneFrame
 import me.meeshy.sdk.model.StorySlideDuration
-import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 
@@ -39,6 +48,28 @@ data class StorySlide(
     val background: StoryBackgroundValue? = null,
     val backgroundMediaId: String? = null,
     val backgroundLoop: Boolean = true,
+    /** La fenêtre gardée de la vidéo de FOND dans sa source (iOS `sourceStart`/`sourceEnd` de l'objet `isBackground`, #13973) ; `null` : entière. */
+    val backgroundTrim: MediaTrimBounds? = null,
+    /** Le quart de tour du FOND et le volume d'une vidéo de fond (iOS `rotation` / `volume` de l'objet `isBackground`, #14083). */
+    val backgroundSetting: StoryBackgroundSetting = StoryBackgroundSetting(),
+    /** Les sons de la slide (fond + premier plan) : le fond appartient à la SLIDE, pas à la publication. */
+    val audio: List<StoryAudioPlayerObject> = emptyList(),
+    /** Cadrage du fond média, fond de ses bandes, ouverture et fermeture : ce que le panneau Cadre et les effets règlent. */
+    val frame: SceneFrame = SceneFrame(),
+    /** La durée de SOURCE de chaque piste (identifiant -> secondes), retenue à l'emprunt : le Temps remplace `duration`, pas elle. */
+    val soundSources: Map<String, Float> = emptyMap(),
+    /** Les médias de la slide POSÉS sur la scène (hors fond), chacun avec sa pose ; ils partent en `mediaObjects[]`. */
+    val placedMedia: List<StoryPlacedMedia> = emptyList(),
+    /** Les réglages et effets du média de FOND (iOS `StoryMediaObject.adjustments` de l'objet `isBackground`, #13652) ; `null` : rien de réglé. */
+    val backgroundAdjustments: ImageAdjustments? = null,
+    /** Les pastilles de lieu posées sur la scène (#13846), dans l'ordre de leur pose ; elles partent en `locationObjects[]`. */
+    val places: List<StoryLocationObject> = emptyList(),
+    /** La transcription de chaque piste (identifiant -> charge du fil) : elle suit la piste, rognée ou déplacée (#13848). */
+    val soundTranscriptions: Map<String, me.meeshy.sdk.model.MobileTranscriptionPayload> = emptyMap(),
+    /** Les vidéos s'atténuent sous le son de fond (iOS `isDuckingDisabled`, réglé ici pour la diapo entière). */
+    val videosDuckUnderSound: Boolean = true,
+    /** Le look de chaque média de la diapo (#13841), posé ou de fond : un RÉGLAGE peint en direct, cuit à la publication seulement. */
+    val mediaLooks: Map<String, me.meeshy.sdk.model.StoryMediaLook> = emptyMap(),
 )
 
 /**
@@ -95,6 +126,15 @@ data class StorySlideDeck(
     /** At least one slide carries a freehand-drawn stroke. */
     val hasDrawing: Boolean get() = slides.any { it.strokes.isNotEmpty() }
 
+    /** At least one slide carries a sound track (a borrowed or captured sound alone publishes). */
+    val hasAudio: Boolean get() = slides.any { it.audio.isNotEmpty() }
+
+    /** At least one slide carries a place pastille (#13846). */
+    val hasPlaces: Boolean get() = slides.any { it.places.isNotEmpty() }
+
+    /** Une image de sticker dont les octets ne sont pas arrivés : la publier la perdrait, la publication l'attend. */
+    val awaitsStickerImage: Boolean get() = slides.any { slide -> slide.stickers.any { it.isAwaitingImage } }
+
     /**
      * The slides that would each become a published story — those carrying real
      * content (non-blank text **or** attached media **or** a publishable text
@@ -108,12 +148,17 @@ data class StorySlideDeck(
                 slide.mediaIds.isNotEmpty() ||
                 slide.elements.any { it.isPublishable } ||
                 slide.stickers.any { it.isPublishable } ||
-                slide.strokes.isNotEmpty()
+                slide.strokes.isNotEmpty() ||
+                slide.audio.isNotEmpty() ||
+                slide.places.isNotEmpty()
         }
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
     val selectedRemainingMediaSlots: Int
-        get() = (MAX_MEDIA_PER_SLIDE - selectedSlide.mediaIds.size).coerceAtLeast(0)
+        get() = SceneObjectCaps.remainingMediaSlots(selectedSlide.mediaIds.size)
+
+    /** La slide sélectionnée peut porter un média de plus : cinquante médias visuels ; les sons ont leur propre seau (#13590). */
+    val selectedCanAddMedia: Boolean get() = selectedRemainingMediaSlots > 0
 
     /** Free text-element slots left on the **selected** slide; never negative. */
     val selectedRemainingTextSlots: Int
@@ -132,7 +177,11 @@ data class StorySlideDeck(
     /** Every slide's raw text is within [maxChars] (surrounding whitespace counts). */
     fun isWithinTextLimit(maxChars: Int): Boolean = slides.all { it.text.length <= maxChars }
 
-    /** Every slide's media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). */
+    /**
+     * Every slide's VISUAL media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). The shared ten
+     * (media + sounds, [selectedCanAddMedia]) gates ADDING only, as on iOS, whose publish gate counts nothing:
+     * a draft composed before the shared cap may carry more, and it still publishes, nothing dropped.
+     */
     fun isWithinMediaLimit(): Boolean = slides.all { it.mediaIds.size <= MAX_MEDIA_PER_SLIDE }
 
     /** Every slide's text-element count is within the per-slide cap ([MAX_TEXT_ELEMENTS_PER_SLIDE]). */
@@ -149,7 +198,7 @@ data class StorySlideDeck(
      */
     fun addMediaToSelected(mediaId: String): StorySlideDeck {
         val selected = selectedSlide
-        if (mediaId in selected.mediaIds || selected.mediaIds.size >= MAX_MEDIA_PER_SLIDE) return this
+        if (mediaId in selected.mediaIds || !selectedCanAddMedia) return this
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
             if (i == index) slide.copy(mediaIds = slide.mediaIds + mediaId) else slide
@@ -169,8 +218,13 @@ data class StorySlideDeck(
                 val clearsBackground = slide.backgroundMediaId == mediaId
                 slide.copy(
                     mediaIds = slide.mediaIds - mediaId,
+                    placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
                     backgroundMediaId = slide.backgroundMediaId.takeIf { !clearsBackground },
                     backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
+                    backgroundTrim = slide.backgroundTrim.takeIf { !clearsBackground },
+                    backgroundAdjustments = slide.backgroundAdjustments.takeIf { !clearsBackground },
+                    backgroundSetting = if (clearsBackground) StoryBackgroundSetting() else slide.backgroundSetting,
+                    mediaLooks = slide.mediaLooks - mediaId,
                 )
             } else {
                 slide
@@ -193,7 +247,7 @@ data class StorySlideDeck(
         }
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
-            if (i == index) slide.copy(elements = slide.elements + element.normalised()) else slide
+            if (i == index) slide.copy(elements = slide.elements + element.normalised().copy(zIndex = StorySceneStack.nextZ(slide))) else slide
         }
         return copy(slides = next)
     }
@@ -277,29 +331,12 @@ data class StorySlideDeck(
     }
 
     /**
-     * Restacks the on-canvas text element [id] within its holding slide's paint order
-     * per [op] (the list order *is* the z-order: index 0 = back, last = front). The
-     * other elements keep their relative order and every other slide and the selection
-     * are untouched. Inert (same instance) when [id] is unknown or the move would not
-     * change the order (already at the extreme, a single-element slide), so the ≤1
-     * paint-order invariant lives in one place and the caller stays glue.
+     * Restacks the text element [id] on the ONE pile of its slide's scene objects ([StorySceneStack], #13852): a step or
+     * to either end, across texts, placed media, stickers, places and voices. Inert (same instance) when [id] is unknown
+     * or the move would not change the order.
      */
-    fun reorderTextElement(id: String, op: StoryZOrder): StorySlideDeck {
-        val slideIndex = slides.indexOfFirst { slide -> slide.elements.any { it.id == id } }
-        if (slideIndex < 0) return this
-        val elements = slides[slideIndex].elements
-        val from = elements.indexOfFirst { it.id == id }
-        val target = when (op) {
-            StoryZOrder.TO_BACK -> 0
-            StoryZOrder.BACKWARD -> from - 1
-            StoryZOrder.FORWARD -> from + 1
-            StoryZOrder.TO_FRONT -> elements.lastIndex
-        }.coerceIn(0, elements.lastIndex)
-        if (target == from) return this
-        val restacked = elements.toMutableList().apply { add(target, removeAt(from)) }
-        val next = slides.mapIndexed { i, s -> if (i == slideIndex) s.copy(elements = restacked) else s }
-        return copy(slides = next)
-    }
+    fun reorderTextElement(id: String, op: StoryZOrder): StorySlideDeck =
+        restacked(SceneObjectRef(ComposerObjectKind.TEXT, id), op)
 
     /**
      * Appends [sticker] (with its position clamped into the canvas) to the **selected**
@@ -315,7 +352,7 @@ data class StorySlideDeck(
         }
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide ->
-            if (i == index) slide.copy(stickers = slide.stickers + sticker.normalised()) else slide
+            if (i == index) slide.copy(stickers = slide.stickers + sticker.normalised().copy(zIndex = StorySceneStack.nextZ(slide))) else slide
         }
         return copy(slides = next)
     }
@@ -379,6 +416,10 @@ data class StorySlideDeck(
      * other slide and the selection — untouched. The editor binds here so each slide
      * keeps its own caption as the user moves between slides.
      */
+    /** Réécrit le texte de CHAQUE slide (la publication est un seul niveau : retirer un hashtag les touche toutes). */
+    fun mapSlideTexts(transform: (String) -> String): StorySlideDeck =
+        copy(slides = slides.map { slide -> slide.copy(text = transform(slide.text)) })
+
     fun updateSelectedText(text: String): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(text = text) else slide }
@@ -393,6 +434,13 @@ data class StorySlideDeck(
     fun updateSelectedTransform(transform: StoryCanvasTransform): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(transform = transform) else slide }
+        return copy(slides = next)
+    }
+
+    /** Rewrites the **selected** slide's [SceneFrame] through [change], leaving every other slide untouched. */
+    fun updateSelectedFrame(change: (SceneFrame) -> SceneFrame): StorySlideDeck {
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(frame = change(slide.frame)) else slide }
         return copy(slides = next)
     }
 
@@ -428,7 +476,11 @@ data class StorySlideDeck(
      * already equals the slide's pin, so the slider never churns recomposition.
      */
     fun setSelectedDuration(seconds: Double): StorySlideDeck {
-        val clamped = StoryDurationPin.clamp(seconds)
+        val clamped = StoryLimits.durationWithinBudget(
+            wanted = StoryDurationPin.clamp(seconds),
+            usedByOthers = totalDurationSeconds - selectedSlideDurationSeconds,
+            floor = StoryDurationPin.MIN_SECONDS,
+        )
         if (selectedSlide.durationSecondsPin == clamped) return this
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(durationSecondsPin = clamped) else slide }
@@ -443,14 +495,31 @@ data class StorySlideDeck(
      * on-canvas caption text so far, so the fallback is fed the publishable text elements;
      * a background media pipeline will extend the same call when it lands.
      */
-    val selectedSlideDurationSeconds: Double
-        get() = selectedSlide.durationSecondsPin ?: StorySlideDuration.contentDerivedSeconds(
-            mediaObjects = null,
-            audioPlayerObjects = null,
-            textObjects = selectedSlide.elements
-                .filter { it.isPublishable }
-                .map { StoryTextObject(id = it.id, text = it.text) },
-        )
+    val selectedSlideDurationSeconds: Double get() = slideDurationSeconds(selectedSlide)
+
+    /** La durée effective d'UNE slide : son épingle, sinon celle que son contenu impose. */
+    fun slideDurationSeconds(
+        slide: StorySlide,
+        backdropId: String? = slide.backgroundMediaId,
+        videoSourceSeconds: (String) -> Double? = { null },
+    ): Double =
+        slide.durationSecondsPin ?: StorySlideContentDuration.seconds(slide, backdropId, videoSourceSeconds)
+
+    /** La durée de la story entière : toutes les slides additionnées, bornée à deux heures par [StoryLimits.TOTAL_SECONDS]. */
+    val totalDurationSeconds: Double get() = slides.sumOf { slideDurationSeconds(it) }
+
+    /** La durée totale tient dans les deux heures (#13590). */
+    fun isWithinTotalDuration(): Boolean = totalDurationSeconds <= StoryLimits.TOTAL_SECONDS
+
+    /** Chaque texte posé tient dans [StoryLimits.TEXT_LENGTH] caractères (un brouillon antérieur au plafond doit être raccourci). */
+    fun isWithinElementTextLimit(): Boolean =
+        slides.all { slide -> slide.elements.all { it.text.codePointCount(0, it.text.length) <= StoryLimits.TEXT_LENGTH } }
+
+    /** Chaque scène tient dans les plafonds de cinquante par famille (médias, sons, textes, stickers). */
+    fun isWithinSceneCaps(): Boolean = isWithinMediaLimit() && isWithinTextElementLimit() && isWithinStickerLimit() && isWithinSoundLimit()
+
+    /** Chaque scène porte au plus cinquante sons. */
+    fun isWithinSoundLimit(): Boolean = slides.all { it.audio.size <= SceneObjectCaps.AUDIO }
 
     /** The **selected** slide's author-chosen backdrop, or `null` when none is set. */
     val selectedSlideBackground: StoryBackgroundValue? get() = selectedSlide.background
@@ -490,9 +559,11 @@ data class StorySlideDeck(
      * replaces any prior designation, and designating the current background again clears it
      * (a natural on/off tap). Inert (same instance) when [mediaId] is not attached to the
      * selected slide, so the ≤1-background invariant lives in one place and the caller stays
-     * glue. Every other slide and the selection are left untouched.
+     * glue. Every other slide and the selection are left untouched. Designated from a placed [objectId] (#13905), only that
+     * object leaves the scene: its copies of the same file stay posed, as iOS carries `isBackground` per object. A source
+     * left posed under the file's own id takes the departed copy's id, so no posed object is ever named like the background.
      */
-    fun toggleSelectedBackgroundMedia(mediaId: String): StorySlideDeck {
+    fun toggleSelectedBackgroundMedia(mediaId: String, objectId: String? = null): StorySlideDeck {
         val selected = selectedSlide
         if (mediaId !in selected.mediaIds) return this
         val next = if (selected.backgroundMediaId == mediaId) null else mediaId
@@ -500,7 +571,24 @@ data class StorySlideDeck(
         val slidesNext = slides.mapIndexed { i, slide ->
             // A fresh designation always starts looping (the default); a stale
             // author-chosen `loop = false` must never carry over to a new background.
-            if (i == index) slide.copy(backgroundMediaId = next, backgroundLoop = true) else slide
+            // Le fond et la scène s'excluent, comme `isBackground` sur iOS : désigner un média posé le retire de la scène.
+            if (i == index) {
+                slide.copy(
+                    backgroundMediaId = next,
+                    backgroundLoop = true,
+                    backgroundTrim = null,
+                    backgroundAdjustments = null,
+                    backgroundSetting = StoryBackgroundSetting(),
+                    placedMedia = when {
+                        next == null -> slide.placedMedia
+                        objectId != null && slide.placedMedia.any { it.id == objectId && it.mediaId == next } ->
+                            slide.placedMedia.filterNot { it.id == objectId }.map { if (it.id == next) it.copy(id = objectId) else it }
+                        else -> slide.placedMedia.filterNot { it.mediaId == next }
+                    },
+                )
+            } else {
+                slide
+            }
         }
         return copy(slides = slidesNext)
     }
@@ -521,6 +609,51 @@ data class StorySlideDeck(
             if (i == index) slide.copy(backgroundLoop = loop) else slide
         }
         return copy(slides = slidesNext)
+    }
+
+    /**
+     * La fenêtre gardée de la vidéo de fond [mediaId] de la slide choisie (#13973) ; comme ses réglages, la couper la
+     * DÉSIGNE si le plateau la peignait sans désignation. Inerte si [mediaId] n'est ni le fond ni le candidat, ou si rien ne change.
+     */
+    fun setSelectedBackgroundTrim(mediaId: String, trim: MediaTrimBounds?): StorySlideDeck {
+        val selected = selectedSlide
+        val designated = selected.backgroundMediaId
+        if (mediaId !in selected.mediaIds || (designated != null && designated != mediaId)) return this
+        if (designated == mediaId && selected.backgroundTrim == trim) return this
+        val index = selectedIndex
+        return copy(slides = slides.mapIndexed { i, slide ->
+            if (i != index) slide
+            else slide.copy(
+                backgroundMediaId = mediaId,
+                backgroundLoop = if (designated == null) true else slide.backgroundLoop,
+                placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
+                backgroundTrim = trim,
+            )
+        })
+    }
+
+    /**
+     * Règle les réglages et effets du fond de la slide choisie (#13652). Le média [mediaId] est le fond désigné ; sans fond
+     * désigné, régler le média que le plateau peint en fond le DÉSIGNE (sinon ses réglages n'auraient pas d'objet de fond à
+     * qui s'écrire au fil). Un sac neutre s'efface (`null`). Inerte si [mediaId] n'est pas le fond ni le candidat, ou si rien ne change.
+     */
+    fun setSelectedBackgroundAdjustments(mediaId: String, adjustments: ImageAdjustments?): StorySlideDeck {
+        val selected = selectedSlide
+        val designated = selected.backgroundMediaId
+        if (mediaId !in selected.mediaIds || (designated != null && designated != mediaId)) return this
+        val next = adjustments?.takeUnless { it.isNeutral }
+        if (designated == mediaId && selected.backgroundAdjustments == next) return this
+        if (designated == null && next == null) return this
+        val index = selectedIndex
+        return copy(slides = slides.mapIndexed { i, slide ->
+            if (i != index) slide
+            else slide.copy(
+                backgroundMediaId = mediaId,
+                backgroundLoop = if (designated == null) true else slide.backgroundLoop,
+                placedMedia = slide.placedMedia.filterNot { it.mediaId == mediaId },
+                backgroundAdjustments = next,
+            )
+        })
     }
 
     /**
@@ -600,15 +733,25 @@ data class StorySlideDeck(
         return copy(selectedId = id)
     }
 
+    /**
+     * Où poser un objet NEUF de la slide sélectionnée : jamais sur un texte ou un sticker déjà
+     * posé (cascade de [StoryObjectPlacement], le premier reste au centre).
+     */
+    fun nextObjectPosition(): StoryObjectPlacement.Point = StoryObjectPlacement.next(
+        selectedSlide.elements.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) } +
+            selectedSlide.stickers.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) } +
+            selectedSlide.placedMedia.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) },
+    )
+
     companion object {
         /** Maximum slides per story — parity with the iOS composer's `maxSlides`. */
         const val MAX_SLIDES: Int = 10
 
         /** Maximum media attachments per slide — each slide becomes one ≤10-media story (iOS parity). */
-        const val MAX_MEDIA_PER_SLIDE: Int = 10
+        const val MAX_MEDIA_PER_SLIDE: Int = SceneObjectCaps.MEDIA
 
         /** Maximum on-canvas text elements per slide — parity with the iOS composer's ≤5 rule. */
-        const val MAX_TEXT_ELEMENTS_PER_SLIDE: Int = 5
+        const val MAX_TEXT_ELEMENTS_PER_SLIDE: Int = SceneObjectCaps.TEXT
 
         /**
          * Maximum on-canvas stickers per slide. iOS enforces no hard composer cap (its
@@ -616,7 +759,7 @@ data class StorySlideDeck(
          * upper bound that prevents a pathological slide from carrying an unbounded
          * sticker count while never getting in a real user's way.
          */
-        const val MAX_STICKERS_PER_SLIDE: Int = 30
+        const val MAX_STICKERS_PER_SLIDE: Int = SceneObjectCaps.STICKER
 
         /** A fresh deck of a single empty slide, selected. */
         fun single(slideId: String): StorySlideDeck =

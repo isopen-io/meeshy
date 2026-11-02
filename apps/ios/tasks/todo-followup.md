@@ -161,7 +161,7 @@ disponible. Plan :
    (services + modèle + tests). Les paths :
    - `apps/ios/Meeshy/Features/Main/Services/ReplyThreadLoader.swift`
    - `apps/ios/Meeshy/Features/Main/Services/ThreadRepliesLoader.swift`
-   - `apps/ios/Meeshy/Features/Main/Services/StoryInteractionService.swift`
+   - `apps/ios/Meeshy/Features/Stories/Services/StoryInteractionService.swift`
    - `apps/ios/Meeshy/Features/Main/Models/ConversationLoadingPhase.swift`
    - `apps/ios/MeeshyTests/Unit/Services/ReplyThreadLoaderTests.swift`
    - `apps/ios/MeeshyTests/Unit/Services/ThreadRepliesLoaderTests.swift`

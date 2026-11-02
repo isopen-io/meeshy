@@ -30,4 +30,23 @@ class AvatarInitialsTest {
         assertThat(avatarInitials("")).isEqualTo("?")
         assertThat(avatarInitials("   ")).isEqualTo("?")
     }
+
+    @Test
+    fun `seules les lettres comptent, la ponctuation d'un nom de carnet est sautee`() {
+        assertThat(avatarInitials("Théo (foot)")).isEqualTo("TF")
+        assertThat(avatarInitials("(foot)")).isEqualTo("F")
+        assertThat(avatarInitials("Jean-Pierre Dupont")).isEqualTo("JD")
+    }
+
+    @Test
+    fun `un mot sans lettre, emoji compris, est saute`() {
+        assertThat(avatarInitials("Alice \uD83C\uDF89 Martin")).isEqualTo("AM")
+        assertThat(avatarInitials("\uD83C\uDF89 Alice")).isEqualTo("A")
+    }
+
+    @Test
+    fun `sans aucune lettre le premier caractere reste le repli, un emoji entier`() {
+        assertThat(avatarInitials("\uD83C\uDF89")).isEqualTo("\uD83C\uDF89")
+        assertThat(avatarInitials("--- 42")).isEqualTo("-")
+    }
 }

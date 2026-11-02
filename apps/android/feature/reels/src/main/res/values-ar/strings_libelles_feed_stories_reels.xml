@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reels_bookmark">حفظ</string>
+    <string name="reels_unbookmark">إزالة من المحفوظات</string>
+    <string name="reels_comments_loading">جارٍ تحميل التعليقات…</string>
+    <string name="reels_comments_error">تعذّر تحميل التعليقات</string>
+    <string name="reels_comments_input_hint">أضف تعليقًا…</string>
+    <string name="reels_comments_failed">فشل — اضغط لإعادة المحاولة</string>
+    <string name="reels_comments_view_post">عرض المنشور</string>
+</resources>

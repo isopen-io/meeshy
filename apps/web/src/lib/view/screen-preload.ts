@@ -1,3 +1,5 @@
+import { browserConnection } from '../device/capability-tier';
+
 /**
  * LES ÉCRANS PRINCIPAUX SE PRÉCHARGENT EN TÂCHE DE FOND (#10636) — la liste,
  * le fil, le Flux, les réglages, le profil, la cloche et le jeu : ce qu'on
@@ -8,7 +10,9 @@
  * Un écran par moment d'inactivité, l'un après l'autre : le préchargement ne
  * dispute jamais le fil principal ni le réseau à ce que l'utilisateur fait.
  * Rien ne part sur un réseau économe (`saveData`) ou très lent (2G) : les
- * écrans s'y chargent à l'intention, au toucher d'un lien.
+ * écrans s'y chargent à l'intention, au toucher d'un lien. Sauf quand ils
+ * sont LIVRÉS avec l'application (`bundled`, la coque Android les lit dans
+ * l'APK) : les précharger n'y coûte aucun octet de réseau (#13021).
  */
 export const PRELOADED_SCREENS = ['list', 'thread', 'feed', 'settings', 'profile', 'notifications', 'progression'] as const;
 
@@ -25,12 +29,14 @@ export function preloadScreensWhenIdle({
   preload,
   idle,
   network,
+  bundled = false,
 }: {
   readonly preload: (key: PreloadedScreen) => Promise<unknown>;
   readonly idle: IdleScheduler;
   readonly network: NetworkHints;
+  readonly bundled?: boolean;
 }): void {
-  if (network.saveData === true || SLOW_NETWORKS.has(network.effectiveType ?? '')) return;
+  if (!bundled && (network.saveData === true || SLOW_NETWORKS.has(network.effectiveType ?? ''))) return;
   const next = (index: number): void => {
     const key = PRELOADED_SCREENS[index];
     if (key === undefined) return;
@@ -49,14 +55,11 @@ export const browserIdle: IdleScheduler = (run) => {
   else setTimeout(run, 200);
 };
 
-/** Les indications réseau de `navigator.connection`, absentes hors Chromium. */
+/** Les indications réseau annoncées par l'appareil (absentes hors Chromium), lues par le lecteur unique. */
 export function browserNetworkHints(): NetworkHints {
-  const connection: unknown = typeof navigator === 'object' ? Reflect.get(navigator, 'connection') : undefined;
-  if (typeof connection !== 'object' || connection === null) return {};
-  const saveData: unknown = Reflect.get(connection, 'saveData');
-  const effectiveType: unknown = Reflect.get(connection, 'effectiveType');
+  const { saveData, effectiveType } = browserConnection() ?? {};
   return {
-    ...(typeof saveData === 'boolean' ? { saveData } : {}),
-    ...(typeof effectiveType === 'string' ? { effectiveType } : {}),
+    ...(saveData !== undefined ? { saveData } : {}),
+    ...(effectiveType !== undefined ? { effectiveType } : {}),
   };
 }

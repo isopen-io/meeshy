@@ -15,7 +15,8 @@ import { messageActionsOf, type ActionMessage, type ActionScope } from './messag
  *   et l'auteur en est prévenu. Une sélection qui mêle les miens et ceux des
  *   autres se retire en entier : la passerelle ignore le motif sur les messages
  *   de l'auteur.
- * - « POUR MOI » : un compte et un message que le serveur connaît.
+ * - « POUR MOI » : un compte, un participant ACTIF (#11415) et un message que
+ *   le serveur connaît — un ancien membre ne se voit pas offrir un geste refusé.
  *
  * L'offre vaut pour TOUS les messages visés ou pour aucun : un seul message
  * d'un autre retire « pour tous » au lot entier, comme

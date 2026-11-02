@@ -44,6 +44,12 @@ public data class CallStats(
     val availableOutgoingBitrateBps: Int = 0,
     /** Mean inbound-audio jitter in milliseconds (libwebrtc reports seconds). */
     val jitterMs: Double = 0.0,
+    /** Cumulative inbound **audio** bytes (drives the audio kb/s of the quality sheet). */
+    val inboundAudioBytes: Int = 0,
+    /** Cumulative inbound **video** bytes. */
+    val inboundVideoBytes: Int = 0,
+    /** `true` when the selected ICE pair rides a TURN relay, `false` when direct, `null` while unknown. */
+    val relayed: Boolean? = null,
 ) {
     /**
      * The interval [CallQualitySample] this snapshot yields against the [previous]
@@ -89,6 +95,8 @@ public data class CallStats(
         val mimeType: String? = null,
         /** The numeric stats fields already adapted to `Double`. */
         val values: Map<String, Double> = emptyMap(),
+        /** The string stats fields the route detection reads (`candidateType`, `state`, …). */
+        val strings: Map<String, String> = emptyMap(),
     )
 
     public companion object {
@@ -108,6 +116,26 @@ public data class CallStats(
          * An empty list yields the all-zero snapshot. Missing numeric fields default
          * to `0`. The reducer never throws.
          */
+        /**
+         * The route of the SELECTED ICE pair (iOS `relayedRoute`): the transport's
+         * `selectedCandidatePairId`, else the nominated succeeded pair. Relayed as soon
+         * as either end is a `relay` candidate; `null` when nothing is known.
+         */
+        public fun relayedRoute(entries: List<RawEntry>): Boolean? {
+            val byId = entries.associateBy { it.id }
+            val selectedId = entries.firstOrNull { it.type == "transport" }?.strings?.get("selectedCandidatePairId")
+            val nominated = entries.firstOrNull {
+                it.type == "candidate-pair" && it.strings["state"] == "succeeded" &&
+                    (it.values["nominated"] ?: 0.0) > 0.0
+            }
+            val pair = selectedId?.let { byId[it] } ?: nominated ?: return null
+            val types = listOf("localCandidateId", "remoteCandidateId")
+                .mapNotNull { pair.strings[it] }
+                .mapNotNull { byId[it]?.strings?.get("candidateType") }
+            if (types.isEmpty()) return null
+            return types.contains("relay")
+        }
+
         public fun reduce(entries: List<RawEntry>): CallStats {
             var rtt = 0.0
             var availableOutgoingBitrateBps = 0
@@ -116,6 +144,8 @@ public data class CallStats(
             var bytesReceived = 0
             var inboundAudio = 0
             var inboundVideo = 0
+            var inboundAudioBytes = 0
+            var inboundVideoBytes = 0
             var outbound = 0
             var primaryCodecId: String? = null
             var audioJitterSum = 0.0
@@ -137,16 +167,19 @@ public data class CallStats(
                     "inbound-rtp" -> {
                         entry.values["packetsLost"]?.let { packetsLost += it.toInt() }
                         val received = (entry.values["packetsReceived"] ?: 0.0).toInt()
+                        val receivedBytes = (entry.values["bytesReceived"] ?: 0.0).toInt()
                         if (entry.kind == "video") {
                             inboundVideo += received
+                            inboundVideoBytes += receivedBytes
                         } else {
                             inboundAudio += received
+                            inboundAudioBytes += receivedBytes
                             entry.values["jitter"]?.let {
                                 audioJitterSum += it
                                 audioJitterCount += 1
                             }
                         }
-                        bytesReceived += (entry.values["bytesReceived"] ?: 0.0).toInt()
+                        bytesReceived += receivedBytes
                         if (primaryCodecId == null) primaryCodecId = entry.codecId
                     }
 
@@ -178,6 +211,9 @@ public data class CallStats(
                 outboundPacketsSent = outbound,
                 availableOutgoingBitrateBps = availableOutgoingBitrateBps,
                 jitterMs = jitterMs,
+                inboundAudioBytes = inboundAudioBytes,
+                inboundVideoBytes = inboundVideoBytes,
+                relayed = relayedRoute(entries),
             )
         }
     }

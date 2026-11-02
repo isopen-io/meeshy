@@ -111,6 +111,9 @@ async function buildApp(
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   app.decorate('prisma', {
+    // #13298 — la relation de blocage du lecteur, vide ici : la clause qui en
+    // découle l'est aussi.
+    user: { findMany: async () => [], findUnique: async () => ({ blockedUserIds: [] }) },
     friendRequest: {
       findMany: async (args: any) => {
         lectures += 1;

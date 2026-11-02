@@ -355,7 +355,10 @@ muet dans toutes les autres langues d'interface.
 - **E2EE non résolu.** `Message` porte `encryptedContent`/`isEncrypted`
   (`schema.prisma:661-672`) : une position en `metadata.location` clair reste
   lisible par le serveur, y compris en conversation chiffrée. À trancher
-  explicitement avant l'implémentation du volet message.
+  explicitement avant l'implémentation du volet message. **Tranché le
+  2026-10-27 (#12526)** : en conversation `e2ee`, aucun lieu en clair ne
+  s'écrit — retenu à côté d'un chiffré, refusé seul
+  (`services/gateway/decisions/2026-10-27-un-lieu-en-clair-n-entre-jamais-dans-une-conversation-chiffree-de-bout-en-bout-12526.md`).
 - **Pas de requête géographique possible** avec `metadata.location` — accepté au
   titre du choix de persistance sans migration.
 - **Le web ne rendra rien** : un post géolocalisé vu sur web perdra sa position

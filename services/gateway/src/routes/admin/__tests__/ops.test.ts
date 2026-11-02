@@ -2,7 +2,8 @@
  * Les routes d'opérations serveur de l'administration (#10384–#10386) :
  * - GET /host-metrics : BIGBOSS et ADMIN, l'instantané de la sonde ;
  * - GET /status : BIGBOSS et ADMIN, l'état publié par le runner ;
- * - POST /:operation : BIGBOSS et ADMIN, confirmation nommée, délai, audit avant dépôt.
+ * - POST /:operation : BIGBOSS et ADMIN, confirmation nommée, délai, fenêtre du
+ *   nettoyage (02:00–06:00 heure de Paris, #11452), audit avant dépôt.
  *
  * Les réponses traversent le vrai sérialiseur (`app.inject`) : un témoin assert
  * sur ce que la réponse DIT, jamais sur le seul statut.
@@ -27,6 +28,8 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 const ACTOR_ID = '507f1f77bcf86cd799439011';
 const NOW = new Date('2026-10-12T22:00:00.000Z');
+/** 03:00 à Paris : dans la fenêtre du nettoyage (#11452) ; NOW tombe à minuit, hors fenêtre. */
+const NIGHT = new Date('2026-10-13T01:00:00.000Z');
 const REQUEST_ID = '0b4f8a0e-6f43-4a4c-9a4b-2d2c7f7d1c11';
 
 const SAMPLE = {
@@ -68,9 +71,15 @@ function opsDirs() {
   return { requests, state };
 }
 
-type Options = { role?: string | null; relayDirs?: { requests: string; state: string } | null; backupDir?: string; backupSchedule?: { hour: number; minute: number } };
+type Options = {
+  role?: string | null;
+  relayDirs?: { requests: string; state: string } | null;
+  backupDir?: string;
+  backupSchedule?: { hour: number; minute: number };
+  at?: Date;
+};
 
-async function buildApp({ role = 'BIGBOSS', relayDirs, backupDir, backupSchedule }: Options = {}) {
+async function buildApp({ role = 'BIGBOSS', relayDirs, backupDir, backupSchedule, at = NOW }: Options = {}) {
   const dirs = relayDirs === undefined ? opsDirs() : relayDirs;
   const audit = jest.fn<(args: unknown) => Promise<unknown>>(async () => ({}));
   const snapshot = jest.fn<(since?: Date) => Promise<HostMetricsSnapshot>>(async () => SNAPSHOT);
@@ -88,7 +97,7 @@ async function buildApp({ role = 'BIGBOSS', relayDirs, backupDir, backupSchedule
       OPS_REQUESTS_DIR: dirs?.requests,
       OPS_STATE_DIR: dirs?.state,
     },
-    now: () => NOW,
+    now: () => at,
     newId: () => REQUEST_ID,
   });
   const app: FastifyInstance = Fastify({ logger: false });
@@ -102,7 +111,7 @@ async function buildApp({ role = 'BIGBOSS', relayDirs, backupDir, backupSchedule
       registeredUser: { id: ACTOR_ID, role, username: 'acteur' },
     } });
   });
-  await app.register(buildAdminOpsRoutes({ probe, relay, now: () => NOW, backupStatusFile: path.join(backupDir ?? '/nonexistent', 'etat.json'), ...(backupSchedule ? { backupSchedule } : {}) }));
+  await app.register(buildAdminOpsRoutes({ probe, relay, now: () => at, backupStatusFile: path.join(backupDir ?? '/nonexistent', 'etat.json'), ...(backupSchedule ? { backupSchedule } : {}) }));
   await app.ready();
   return { app, audit, snapshot, dirs };
 }
@@ -182,7 +191,7 @@ describe('POST /:operation', () => {
   });
 
   it('ADMIN : 202 aussi — le rang d’administration lance sauvegarde et nettoyage (#11441)', async () => {
-    const { app, audit, dirs } = await buildApp({ role: 'ADMIN' });
+    const { app, audit, dirs } = await buildApp({ role: 'ADMIN', at: NIGHT });
     const res = await post(app, 'image-prune', { confirm: 'image-prune' });
     expect(res.statusCode).toBe(202);
     expect(readdirSync(dirs!.requests)).toEqual([`${REQUEST_ID}.json`]);
@@ -295,12 +304,68 @@ describe('POST /:operation', () => {
   });
 
   it('409 OPERATION_IN_PROGRESS au second appel immédiat', async () => {
-    const { app } = await buildApp();
+    const { app } = await buildApp({ at: NIGHT });
     expect((await post(app, 'image-prune', { confirm: 'image-prune' })).statusCode).toBe(202);
     const second = await post(app, 'image-prune', { confirm: 'image-prune' });
     expect(second.statusCode).toBe(409);
     expect(second.json().code).toBe('OPERATION_IN_PROGRESS');
     await app.close();
+  });
+
+  describe('la fenêtre du nettoyage : de 02:00 à 06:00, heure de Paris (#11452)', () => {
+    const withState = (lastPrune: string | null) => {
+      const dirs = opsDirs();
+      writeFileSync(
+        path.join(dirs.state, 'ops.json'),
+        JSON.stringify({ v: 1, runs: { backup: null, 'image-prune': null }, lastAcceptedAt: { backup: null, 'image-prune': lastPrune } }),
+      );
+      return dirs;
+    };
+
+    it('hors fenêtre : 409 OPERATION_OUTSIDE_WINDOW avec data.availableAt, rien de déposé, la tentative journalisée — ce n’est pas OPERATION_COOLDOWN', async () => {
+      const { app, audit, dirs } = await buildApp({ role: 'ADMIN', relayDirs: withState(null) });
+      const res = await post(app, 'image-prune', { confirm: 'image-prune' });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ success: false, code: 'OPERATION_OUTSIDE_WINDOW', data: { availableAt: '2026-10-13T00:00:00.000Z' } });
+      expect(readdirSync(dirs!.requests)).toEqual([]);
+      expect(audit).toHaveBeenCalledTimes(1);
+      const entry = (audit.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+      expect(entry.action).toBe('SERVER_OPERATION_REFUSED');
+      expect(JSON.parse(entry.metadata as string)).toEqual({ operation: 'image-prune', environment: 'staging', code: 'OPERATION_OUTSIDE_WINDOW' });
+      await app.close();
+    });
+
+    it('dans la fenêtre mais sous un délai qui finit après 06:00 : 409 OPERATION_COOLDOWN, et availableAt est l’ouverture du lendemain', async () => {
+      const { app } = await buildApp({ relayDirs: withState('2026-10-13T03:15:00.000Z'), at: new Date('2026-10-13T03:30:00.000Z') });
+      const res = await post(app, 'image-prune', { confirm: 'image-prune' });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ code: 'OPERATION_COOLDOWN', data: { availableAt: '2026-10-14T00:00:00.000Z' } });
+      const status = (await app.inject({ method: 'GET', url: '/status' })).json().data;
+      expect(status.availableAt['image-prune']).toBe('2026-10-14T00:00:00.000Z');
+      await app.close();
+    });
+
+    it('aux changements d’heure : ouverte à 03:00 d’été le 29 mars (01:00 UTC), à 02:00 d’été le 25 octobre (00:00 UTC), fermée à 06:00 d’hiver (05:00 UTC)', async () => {
+      const at = async (instant: string) => {
+        const { app } = await buildApp({ relayDirs: withState(null), at: new Date(instant) });
+        const res = await post(app, 'image-prune', { confirm: 'image-prune' });
+        await app.close();
+        return { status: res.statusCode, code: res.json().code as string | undefined, availableAt: res.json().data?.availableAt as string | undefined };
+      };
+      expect(await at('2026-03-29T00:59:00.000Z')).toEqual({ status: 409, code: 'OPERATION_OUTSIDE_WINDOW', availableAt: '2026-03-29T01:00:00.000Z' });
+      expect((await at('2026-03-29T01:00:00.000Z')).status).toBe(202);
+      expect((await at('2026-10-25T00:00:00.000Z')).status).toBe(202);
+      expect((await at('2026-10-25T04:59:00.000Z')).status).toBe(202);
+      expect(await at('2026-10-25T05:00:00.000Z')).toEqual({ status: 409, code: 'OPERATION_OUTSIDE_WINDOW', availableAt: '2026-10-26T01:00:00.000Z' });
+    });
+
+    it('la sauvegarde n’est jamais restreinte par l’heure : 202 à minuit comme à midi', async () => {
+      for (const instant of [NOW, new Date('2026-10-13T10:00:00.000Z'), new Date('2026-10-25T05:00:00.000Z')]) {
+        const { app } = await buildApp({ at: instant });
+        expect((await post(app, 'backup', { confirm: 'backup' })).statusCode).toBe(202);
+        await app.close();
+      }
+    });
   });
 
   it('503 OPS_RELAY_UNAVAILABLE sans relais installé', async () => {
@@ -339,8 +404,11 @@ describe('GET /status', () => {
       environment: 'staging',
       relayInstalled: true,
       runs: { backup: null, 'image-prune': null },
-      availableAt: { backup: null, 'image-prune': null },
+      // Minuit à Paris : le nettoyage attend l'ouverture de 02:00 (#11452).
+      availableAt: { backup: null, 'image-prune': '2026-10-13T00:00:00.000Z' },
     });
+    // La fenêtre est servie telle quelle : le sérialiseur n'en retire aucun champ.
+    expect(data.windows).toEqual({ backup: null, 'image-prune': { timeZone: 'Europe/Paris', startHour: 2, endHour: 6, open: false } });
     expect(data.backup).toMatchObject({ status: 'ok', lastSuccess: { documents: 10, mismatches: 0 }, nextRunAt: '2026-10-13T00:30:00.000Z' });
     await app.close();
   });

@@ -12,7 +12,7 @@
  * (le défaut corrigé) rendrait un pont différent du substitut de référence
  * et casserait l'égalité assertée ici.
  *
- * @see apps/ios/MeeshyTests/Unit/Lentille/ProviderSubstitutionTests.swift
+ * @see apps/ios/MeeshyTests/Unit/Lens/ProviderSubstitutionTests.swift
  * @see tasks/lentille-implementation-contract.md R19
  */
 import { describe, it, expect } from 'vitest'

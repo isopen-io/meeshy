@@ -155,6 +155,22 @@ describe('reclaimMediaRowBytes', () => {
     expect(count).toBe(4);
   });
 
+  it('test_reclaim_deletesTheAvifVariantsToo (#11262)', async () => {
+    const prisma = buildPrisma();
+    const storage = buildStorage();
+
+    await reclaimMediaRowBytes(prisma, storage, [
+      {
+        fileUrl: '2026/10/u/a.jpg',
+        thumbnailUrl: null,
+        imageVariants: [{ width: 640, height: 427, url: '2026/10/u/a_640w.webp', size: 9000, format: 'webp' }],
+        avifVariants: [{ width: 640, height: 427, url: '2026/10/u/a_640w.avif', size: 6000, format: 'avif' }],
+      },
+    ]);
+
+    expect(deleted(storage)).toEqual(['2026/10/u/a.jpg', '2026/10/u/a_640w.avif', '2026/10/u/a_640w.webp']);
+  });
+
   it('test_reclaim_legacyRowsWithoutVariants_behaveAsBefore', async () => {
     const prisma = buildPrisma();
     const storage = buildStorage();

@@ -161,3 +161,18 @@ release :
   gitignoré, ou secrets CI), jamais committés.
 - Après le premier build/upload signé, revenir ici §1 → §2 pour poser l'empreinte
   définitive dans `assetlinks.json`.
+
+---
+
+## 5. Hôtes vérifiés — décision (#11829)
+
+| Hôte | `applinks:` iOS | `autoVerify` Android | Raison |
+|------|-----------------|----------------------|--------|
+| `meeshy.me` | oui | oui | pages web : `/auth/magic-link`, `/u/`, `/chat/`, `/join/` |
+| `www.meeshy.me` | oui | oui | même contenu, même `assetlinks.json` |
+| `api.meeshy.me` | oui | **non** | hôte d'API : aucune page à ouvrir dans l'app |
+| `gate.meeshy.me` | oui | **non** | hôte d'API (passerelle) : idem |
+
+Sur Android, un hôte `autoVerify` oblige `https://<hôte>/.well-known/assetlinks.json` à répondre ;
+déclarer un hôte d'API ne fait qu'ajouter une vérification qui peut échouer sans jamais servir une page.
+`AppLinksAssetlinksGuardTest` verrouille cet ensemble d'hôtes.

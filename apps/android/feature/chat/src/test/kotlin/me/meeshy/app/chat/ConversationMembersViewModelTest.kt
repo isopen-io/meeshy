@@ -7,6 +7,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -17,6 +18,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.ParticipantCacheRepository
+import me.meeshy.sdk.model.MemberRoster
+import kotlinx.coroutines.flow.emptyFlow
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.MemberRole
@@ -24,6 +28,8 @@ import me.meeshy.sdk.model.MemberRoleAction
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.PaginatedParticipant
 import me.meeshy.sdk.model.ParticipantBannedEvent
+import me.meeshy.sdk.model.ParticipantJoinedEvent
+import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.net.ApiError
@@ -95,17 +101,61 @@ class ConversationMembersViewModelTest {
         roleUpdated: MutableSharedFlow<ParticipantRoleUpdatedEvent> = MutableSharedFlow(),
         left: MutableSharedFlow<ParticipantLeftEvent> = MutableSharedFlow(),
         banned: MutableSharedFlow<ParticipantBannedEvent> = MutableSharedFlow(),
+        joined: MutableSharedFlow<ParticipantJoinedEvent> = MutableSharedFlow(),
+        unbanned: MutableSharedFlow<ParticipantUnbannedEvent> = MutableSharedFlow(),
     ): MessageSocketManager = mockk<MessageSocketManager>(relaxed = true).also {
         every { it.participantRoleUpdated } returns roleUpdated
         every { it.participantLeft } returns left
         every { it.participantBanned } returns banned
+        every { it.participantJoined } returns joined
+        every { it.participantUnbanned } returns unbanned
+    }
+
+    /**
+     * A roster cache that behaves like the real one on the network side (first page replaces,
+     * next page appends at the stored cursor) so the screen is driven through [repository].
+     */
+    private fun rosterCache(
+        repository: ConversationRepository,
+        initial: MemberRoster? = null,
+        observed: Flow<MemberRoster?> = emptyFlow(),
+    ): ParticipantCacheRepository {
+        var roster: MemberRoster? = initial
+        val cache = mockk<ParticipantCacheRepository>(relaxed = true)
+        coEvery { cache.firstPage(any(), any()) } coAnswers {
+            val cached = roster
+            if (cached != null && !secondArg<Boolean>()) return@coAnswers NetworkResult.Success(cached)
+            when (val r = repository.participants(firstArg<String>(), null, null, 30)) {
+                is NetworkResult.Success -> {
+                    val fresh = MemberRoster.EMPTY.withFirstPage(r.data)
+                    roster = fresh
+                    NetworkResult.Success(fresh)
+                }
+                is NetworkResult.Failure -> cached?.let { NetworkResult.Success(it) } ?: r
+            }
+        }
+        coEvery { cache.nextPage(any()) } coAnswers {
+            val cur = roster ?: MemberRoster.EMPTY
+            val cursor = cur.nextCursor ?: return@coAnswers NetworkResult.Success(cur)
+            when (val r = repository.participants(firstArg<String>(), null, cursor, 30)) {
+                is NetworkResult.Success -> {
+                    val merged = cur.withNextPage(r.data)
+                    roster = merged
+                    NetworkResult.Success(merged)
+                }
+                is NetworkResult.Failure -> r
+            }
+        }
+        every { cache.observe(any()) } returns observed
+        return cache
     }
 
     private fun viewModel(
         repository: ConversationRepository = repo(),
         sessionRepository: SessionRepository = session(),
         socketManager: MessageSocketManager = socket(),
-    ) = ConversationMembersViewModel(repository, sessionRepository, socketManager)
+        participantCache: ParticipantCacheRepository = rosterCache(repository),
+    ) = ConversationMembersViewModel(repository, participantCache, sessionRepository, socketManager)
 
     // MARK: loading
 
@@ -527,5 +577,249 @@ class ConversationMembersViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.searchQuery).isEmpty()
+    }
+
+    // MARK: cache-first roster
+
+    @Test
+    fun `a cached roster is served without waiting for the network`() = runTest {
+        val repository = repo(NetworkResult.Failure(ApiError("offline")))
+        val cached = MemberRoster.EMPTY.withFirstPage(page(listOf(member("p1")), totalCount = 1))
+        val vm = viewModel(repository, participantCache = rosterCache(repository, initial = cached))
+
+        vm.load("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1")
+        assertThat(vm.state.value.status).isEqualTo(MembersLoadStatus.Loaded)
+        coVerify(exactly = 0) { repository.participants(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a silent revalidation of the cache reaches the screen`() = runTest {
+        val repository = repo()
+        val observed = MutableSharedFlow<MemberRoster?>()
+        val vm = viewModel(repository, participantCache = rosterCache(repository, observed = observed))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        observed.emit(MemberRoster.EMPTY.withFirstPage(page(listOf(member("p1"), member("p9")))))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1", "p9").inOrder()
+    }
+
+    @Test
+    fun `a role-updated event is written to the cache too`() = runTest {
+        val events = MutableSharedFlow<ParticipantRoleUpdatedEvent>()
+        val repository = repo(NetworkResult.Success(page(listOf(member("p1", userId = "u1")))))
+        val cache = rosterCache(repository)
+        val vm = viewModel(repository, socketManager = socket(roleUpdated = events), participantCache = cache)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        events.emit(ParticipantRoleUpdatedEvent(conversationId = "c1", userId = "u1", role = "moderator"))
+        advanceUntilIdle()
+
+        coVerify { cache.updateRole("c1", "u1", "moderator") }
+    }
+
+    @Test
+    fun `a left and a banned event remove the member from the cache`() = runTest {
+        val left = MutableSharedFlow<ParticipantLeftEvent>()
+        val banned = MutableSharedFlow<ParticipantBannedEvent>()
+        val repository = repo()
+        val cache = rosterCache(repository)
+        val vm = viewModel(repository, socketManager = socket(left = left, banned = banned), participantCache = cache)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        left.emit(ParticipantLeftEvent(conversationId = "c1", userId = "u1"))
+        banned.emit(ParticipantBannedEvent(conversationId = "c1", userId = "u2"))
+        advanceUntilIdle()
+
+        coVerify { cache.removeParticipant("c1", "u1") }
+        coVerify { cache.removeParticipant("c1", "u2") }
+    }
+
+    // MARK: arrivals (#13795)
+
+    private fun growingRepo(): ConversationRepository {
+        val repository = repo()
+        var served = 0
+        coEvery { repository.participants("c1", null, any(), any()) } answers {
+            served += 1
+            NetworkResult.Success(
+                if (served == 1) page(listOf(member("p1")), totalCount = 1)
+                else page(listOf(member("p1"), member("p2")), totalCount = 2),
+            )
+        }
+        return repository
+    }
+
+    @Test
+    fun `a member who joined appears in the roster and the headcount without a pull`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1")
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p2", memberCount = 2))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1", "p2").inOrder()
+        assertThat(vm.state.value.memberCount).isEqualTo(2)
+        assertThat(vm.state.value.status).isEqualTo(MembersLoadStatus.Loaded)
+    }
+
+    @Test
+    fun `an unbanned member who got the membership back appears in the roster`() = runTest {
+        val unbanned = MutableSharedFlow<ParticipantUnbannedEvent>()
+        val vm = viewModel(growingRepo(), socketManager = socket(unbanned = unbanned))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        unbanned.emit(ParticipantUnbannedEvent(conversationId = "c1", userId = "p2"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1", "p2").inOrder()
+    }
+
+    @Test
+    fun `an unban that restored no membership leaves the roster alone`() = runTest {
+        val unbanned = MutableSharedFlow<ParticipantUnbannedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(unbanned = unbanned))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        unbanned.emit(ParticipantUnbannedEvent(conversationId = "c1", userId = "p2", membershipRestored = false))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.participants("c1", null, any(), any()) }
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1")
+    }
+
+    @Test
+    fun `a join in another conversation costs nothing here`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "other", userId = "p2"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.participants("c1", null, any(), any()) }
+    }
+
+    @Test
+    fun `a failed silent refetch keeps the roster on screen, loaded`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = repo()
+        val cache = rosterCache(repository)
+        val vm = viewModel(repository, socketManager = socket(joined = joined), participantCache = cache)
+        vm.load("c1")
+        advanceUntilIdle()
+        coEvery { cache.firstPage("c1", true) } returns NetworkResult.Failure(ApiError("offline"))
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p2"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1")
+        assertThat(vm.state.value.status).isEqualTo(MembersLoadStatus.Loaded)
+    }
+
+    @Test
+    fun `while a search is active a join refetches that search, never the full roster`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = repo()
+        coEvery { repository.participants("c1", "ada", any(), any()) } returns
+            NetworkResult.Success(page(listOf(member("ada1")), totalCount = 1))
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+        vm.onSearchQueryChange("ada")
+        advanceUntilIdle()
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("ada1")
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p2"))
+        advanceUntilIdle()
+
+        coVerify(atLeast = 2) { repository.participants("c1", "ada", any(), any()) }
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("ada1")
+    }
+
+    @Test
+    fun `two joins in a row end on the latest roster`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = repo()
+        var served = 0
+        coEvery { repository.participants("c1", null, any(), any()) } answers {
+            served += 1
+            NetworkResult.Success(page((1..served).map { member("p$it") }, totalCount = served))
+        }
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p2"))
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p3"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).isEqualTo((1..served).map { "p$it" })
+        assertThat(vm.state.value.memberCount).isEqualTo(served)
+    }
+
+    @Test
+    fun `a storm of joins costs one silent refetch, not one per event`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        (2..9).forEach { index ->
+            joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p$index"))
+            advanceTimeBy(40)
+        }
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { repository.participants("c1", null, any(), any()) }
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1", "p2").inOrder()
+    }
+
+    @Test
+    fun `joins far apart each get their own refetch`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p2"))
+        advanceUntilIdle()
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p3"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 3) { repository.participants("c1", null, any(), any()) }
+    }
+
+    @Test
+    fun `a join announced then a rebinding to another conversation fetches nothing for the old one`() = runTest {
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>()
+        val repository = growingRepo()
+        val vm = viewModel(repository, socketManager = socket(joined = joined))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "p2"))
+        vm.load("c2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.participants("c1", null, any(), any()) }
     }
 }

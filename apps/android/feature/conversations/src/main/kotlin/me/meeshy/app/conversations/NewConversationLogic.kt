@@ -1,7 +1,12 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.ConversationCreationEncryption
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.CreationEncryptionMode
+import me.meeshy.sdk.model.CreationEncryptionOffer
 import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
+import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.directConversationRequest
 import me.meeshy.sdk.net.api.UserSearchResult
 
@@ -17,8 +22,15 @@ data class SelectableUser(
     val username: String,
     val avatarUrl: String?,
     val isOnline: Boolean,
+    val lastActiveAt: String? = null,
     val isSelected: Boolean = false,
-)
+    /** Blocked by me: the row says « Blocked », dims, and cannot be picked (iOS `isBlocked`). */
+    val isBlocked: Boolean = false,
+) {
+    /** La présence que la ligne a servie, recoupée par la carte vivante ; rien servi = aucun point. */
+    val servedPresence: UserPresence?
+        get() = UserPresence.served(isOnline, lastActiveAt)
+}
 
 /**
  * Stateless rules behind the new-conversation flow (port of the iOS
@@ -32,6 +44,9 @@ object NewConversationLogic {
     /** Min selected participants before a conversation can be created. */
     const val MIN_PARTICIPANTS: Int = 1
 
+    /** A query shorter than this is not searched: the picker shows the contacts instead. */
+    const val MIN_QUERY_LENGTH: Int = 2
+
     /** A single peer is a direct chat; two or more is a group. */
     fun conversationType(selectedCount: Int): String =
         if (selectedCount >= 2) TYPE_GROUP else TYPE_DIRECT
@@ -43,34 +58,102 @@ object NewConversationLogic {
         rawTitle.trim().takeIf { it.isNotEmpty() && conversationType(selectedCount) == TYPE_GROUP }
 
     /**
+     * Ce téléphone ne sait encore ni lire ni écrire le bout en bout (pile libsignal, #13015) :
+     * l'écran de création le montre « bientôt » aux rôles qui pourraient le choisir, et le défaut
+     * reste Serveur. Passe à `true` le jour où l'Android natif chiffre un tête-à-tête.
+     */
+    const val END_TO_END_SUPPORTED: Boolean = false
+
+    /** Ce que la section Chiffrement propose pour [selectedCount] personnes choisies (`creationEncryptionOffer`). */
+    fun encryptionOffer(platformRole: String?, selectedCount: Int): CreationEncryptionOffer =
+        ConversationCreationEncryption.offer(platformRole, conversationType(selectedCount), END_TO_END_SUPPORTED)
+
+    /**
+     * Le mode qui partira : celui que l'utilisateur a touché s'il reste DISPONIBLE dans l'offre
+     * (un tête-à-tête devenu groupe retire le bout en bout), sinon le défaut de l'offre.
+     */
+    fun resolvedEncryptionMode(offer: CreationEncryptionOffer, picked: CreationEncryptionMode?): CreationEncryptionMode =
+        picked?.takeIf { mode -> offer.choices.any { it.mode == mode && it.available } } ?: offer.defaultMode
+
+    /**
      * The creation request for the picker's selection. A single peer is a DIRECT, built by the
      * very [directConversationRequest] that the story/mood reply and a profile's Message button
      * create through (`ConversationRepository.directConversationWith`, #11615) — so no two
      * entry points can ever describe a direct differently; two or more peers are a group.
+     * Seul cet écran choisit un mode de chiffrement : il part avec la demande, les autres
+     * chemins n'en envoient aucun (la passerelle pose Serveur).
      */
-    fun request(participantIds: List<String>, rawTitle: String): CreateConversationRequest =
-        participantIds.singleOrNull()?.let(::directConversationRequest)
-            ?: CreateConversationRequest(
-                type = conversationType(participantIds.size),
-                title = resolvedTitle(rawTitle, participantIds.size),
-                participantIds = participantIds,
-            )
+    fun request(
+        participantIds: List<String>,
+        rawTitle: String,
+        encryptionMode: CreationEncryptionMode,
+    ): CreateConversationRequest =
+        (
+            participantIds.singleOrNull()?.let(::directConversationRequest)
+                ?: CreateConversationRequest(
+                    type = conversationType(participantIds.size),
+                    title = resolvedTitle(rawTitle, participantIds.size),
+                    participantIds = participantIds,
+                )
+            ).copy(encryptionMode = encryptionMode.wire)
 
     fun displayName(result: UserSearchResult): String =
         result.displayName?.takeIf { it.isNotBlank() } ?: result.username
 
-    /** Project search results into selectable rows, flagging already-picked users. */
+    /**
+     * Project search results into selectable rows, flagging already-picked users. A user
+     * served twice (offset pages shifting between two requests) keeps one row — the list
+     * is keyed by id, a repeated key crashes Compose — and the signed-in user is never
+     * offered (parity iOS `NewConversationViewModel`: `filter { $0.id != currentUserId }`).
+     */
     fun rows(
         results: List<UserSearchResult>,
         selectedIds: Set<String>,
-    ): List<SelectableUser> = results.map { result ->
-        SelectableUser(
-            id = result.id,
-            displayName = displayName(result),
-            username = result.username,
-            avatarUrl = result.avatar,
-            isOnline = result.isOnline == true,
-            isSelected = result.id in selectedIds,
-        )
-    }
+        signedInUserId: String? = null,
+    ): List<SelectableUser> = results
+        .distinctBy { it.id }
+        .filterNot { it.id == signedInUserId }
+        .map { result ->
+            SelectableUser(
+                id = result.id,
+                displayName = displayName(result),
+                username = result.username,
+                avatarUrl = result.avatar,
+                isOnline = result.isOnline == true,
+                lastActiveAt = result.lastActiveAt,
+                isSelected = result.id in selectedIds,
+            )
+        }
+
+    /**
+     * The « Your contacts » rows the picker opens on (iOS `NewConversationView.contactsSection`):
+     * the accepted friends, in the roster's order, the signed-in user never offered.
+     */
+    fun contactRows(
+        friends: List<FriendRequestUser>,
+        selectedIds: Set<String>,
+        signedInUserId: String? = null,
+    ): List<SelectableUser> = friends
+        .distinctBy { it.id }
+        .filterNot { it.id == signedInUserId }
+        .map { friend ->
+            SelectableUser(
+                id = friend.id,
+                displayName = friend.displayName?.takeIf { it.isNotBlank() }
+                    ?: listOfNotNull(friend.firstName, friend.lastName).joinToString(" ").takeIf { it.isNotBlank() }
+                    ?: friend.username,
+                username = friend.username,
+                avatarUrl = friend.avatar,
+                isOnline = friend.isOnline == true,
+                lastActiveAt = friend.lastActiveAt,
+                isSelected = friend.id in selectedIds,
+            )
+        }
+
+    /** Marks the rows of [blockedIds] blocked — and unpicked, since a blocked user is never offered. */
+    fun withBlocked(rows: List<SelectableUser>, blockedIds: Set<String>): List<SelectableUser> =
+        rows.map { row ->
+            val blocked = row.id in blockedIds
+            row.copy(isBlocked = blocked, isSelected = row.isSelected && !blocked)
+        }
 }

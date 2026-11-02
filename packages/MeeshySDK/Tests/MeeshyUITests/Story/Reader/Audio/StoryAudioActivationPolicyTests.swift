@@ -110,7 +110,7 @@ final class StoryAudioActivationPolicyTests: XCTestCase {
         let mixer = try source("Sources/MeeshyUI/Story/ReaderAudioMixer.swift")
         let corps = try corps(de: "public func play(originHost: UInt64, slideKey: String", dans: mixer)
         let politique = try XCTUnwrap(corps.range(of: "StoryAudioActivationPolicy.shouldHoldEngine("))
-        let demarrage = try XCTUnwrap(corps.range(of: "try engine.start()"))
+        let demarrage = try XCTUnwrap(corps.range(of: "try engineHost.startEngine()"))
         XCTAssertLessThan(politique.lowerBound, demarrage.lowerBound)
     }
 }
@@ -240,7 +240,8 @@ final class StoryCanvasAudioActivationTests: XCTestCase {
                        "la timeline d'une carte ne s'arrête pas pour un son qu'elle ne jouera pas")
         XCTAssertEqual(vue._readerAudioMixerForTesting.activeClipCount
                        + vue._readerAudioMixerForTesting.backgroundClipCount, 0)
-        XCTAssertFalse(vue._readerAudioMixerForTesting.engine.isRunning)
+        XCTAssertFalse(vue._readerAudioMixerForTesting.claimsRunningEngine,
+                       "le moteur des canevas est PARTAGÉ (#9878) : la carte ne le réclame pas")
         XCTAssertFalse(vue.didRequestPlaybackSession)
     }
 

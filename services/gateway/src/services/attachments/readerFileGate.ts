@@ -39,12 +39,19 @@ export type SignedFileAccess =
 
 export async function resolveSignedFileAccess(
   prisma: SignedFilePrisma,
-  input: { readonly token: string; readonly storageKey: string; readonly keys: SigningKeys; readonly now: Date }
+  input: {
+    readonly token: string;
+    readonly storageKey: string;
+    /** La clé effectivement servie quand le fichier signé a été remplacé par son scellé (#13100). */
+    readonly servedKey?: string;
+    readonly keys: SigningKeys;
+    readonly now: Date;
+  }
 ): Promise<SignedFileAccess> {
   const check = checkReaderFileToken(input);
   if (check.kind === 'invalid') return { kind: 'refuse', reason: `signature:${check.reason}` };
 
-  const verdict = await resolveFileRouteVerdict(input.storageKey, prisma, input.now);
+  const verdict = await resolveFileRouteVerdict(input.servedKey ?? input.storageKey, prisma, input.now);
   if (verdict.kind !== 'serve') return { kind: 'refuse', reason: `file:${verdict.kind}` };
 
   const reader = await resolveSignedReaderVerdict(prisma, {

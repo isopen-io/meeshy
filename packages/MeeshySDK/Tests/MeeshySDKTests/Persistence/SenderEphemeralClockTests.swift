@@ -122,7 +122,7 @@ final class SenderEphemeralClockTests: XCTestCase {
         let served = Self.sentAt.addingTimeInterval(300)
         try await actor.applyServedEphemeralDeadline(messageId: Self.serverId, expiresAt: served)
 
-        let echo = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data("""
+        let echo = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data("""
         {"id":"\(Self.serverId)","conversationId":"\(Self.conversationId)","senderId":"\(Self.sender)",
          "content":"disparaît","messageType":"text","messageSource":"user",
          "effectFlags":1,"ephemeralDuration":60,"isEncrypted":false,

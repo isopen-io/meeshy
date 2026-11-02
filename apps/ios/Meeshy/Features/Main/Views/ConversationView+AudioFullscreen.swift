@@ -107,6 +107,6 @@ extension ConversationMediaGalleryLayer {
                 scrollState.scrollToMessageTrigger += 1
             },
             actions: actions
-        )
+        ).environment(\.conversationMentionTarget, viewModel.mentionController.target)
     }
 }

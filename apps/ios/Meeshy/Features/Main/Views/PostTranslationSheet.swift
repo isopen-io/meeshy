@@ -22,7 +22,7 @@ struct PostTranslationSheet: View {
         let existing = Set(availableTranslations.keys.map { $0.lowercased() })
         let origLang = post.originalLanguage?.lowercased() ?? ""
         var missing: [String] = []
-        for lang in user?.preferredContentLanguages ?? [] {
+        for lang in ReaderPrism.resolve(for: user) {
             let l = lang.lowercased()
             if l != origLang && !existing.contains(l) && !missing.contains(l) {
                 missing.append(l)

@@ -433,3 +433,39 @@ describe('retractReactionNotifications', () => {
     });
   });
 });
+
+describe('le relais d’une réaction à l’entourage se retire avec elle (#14068)', () => {
+  const relayed = (index: number): NotificationRow => ({
+    id: `6080000000000000000${String(index).padStart(5, '0')}`,
+    userId: `6090000000000000000${String(index).padStart(5, '0')}`,
+    type: 'friend_content_reaction',
+    actorId: REACTOR_ID,
+    contextPostId: POST_ID,
+    emoji: '❤️',
+  });
+
+  it('retire TOUTES les lignes relayées, au-delà d’un lot, et laisse celles d’un autre acteur', async () => {
+    const audience = Array.from({ length: 120 }, (_, i) => relayed(i));
+    const tiers = { ...relayed(500), actorId: OTHER_REACTOR_ID };
+    seed([...audience, tiers]);
+    const filtered = runCommandRaw.getMockImplementation()!;
+    runCommandRaw.mockImplementation(async (command: any) => {
+      const result = (await filtered(command)) as { cursor: { firstBatch: unknown[] } };
+      return { cursor: { firstBatch: result.cursor.firstBatch.slice(0, command.batchSize) } };
+    });
+    deleteMany.mockImplementation(async (args: any) => {
+      const gone = new Set<string>(args.where.id.in);
+      rows = rows.filter((row) => !gone.has(row.id));
+      return { count: gone.size };
+    });
+
+    const count = await retractReactionNotifications(
+      prisma,
+      { subject: { kind: 'post', id: POST_ID }, actorId: REACTOR_ID, emoji: '❤️' },
+      announcer
+    );
+
+    expect(count).toBe(120);
+    expect(rows.map((row) => row.id)).toEqual([tiers.id]);
+  });
+});

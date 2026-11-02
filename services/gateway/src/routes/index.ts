@@ -124,6 +124,7 @@ import { adminModerationActRoutes } from './admin/moderation-acts';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
 import { gameSeasonsAdminRoutes } from './admin/game-seasons';
+import { packsRegistryAdminRoutes } from './admin/packs-registry';
 import { routeUsageAdminRoutes } from './admin/route-usage';
 import { adminOversightRoutes } from './admin/oversight';
 import { adminOpsRoutes } from './admin/ops';
@@ -143,6 +144,9 @@ import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
+import { captureFramePacksRoutes } from './packs-capture-frame';
+import { lensPacksRoutes } from './packs-lens';
+import { lensPartnerRoutes } from './lens-partners';
 import { packAssetsRoutes } from './pack-assets';
 import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
 import { packsShopRoutes } from './packs-shop';
@@ -153,13 +157,18 @@ import { directoryPersonRoutes } from './directory/person';
 import { directoryPresenceRoutes } from './directory/presence';
 import { directoryBlocksRoutes } from './directory/blocks';
 import { directoryFriendRequestsRoutes } from './directory/friend-requests';
+import { relationsRoutes } from './relations';
 import { directoryContactsRoutes } from './directory/contacts';
+import { relationsLevelRoutes } from './relations/level';
+import { bringRoutes } from './bring';
 import { contactsResolveRoutes } from './contacts/resolve';
 import { pushTokenRoutes } from './push-tokens';
 import conversationPreferencesRoutes from './conversation-preferences';
 import communityPreferencesRoutes from './community-preferences';
 import conversationEncryptionRoutes from './conversation-encryption';
 import signalProtocolRoutes from './signal-protocol';
+import e2eeRoutes from './e2ee';
+import e2eeSignalRoutes from './e2ee-signals';
 import affiliateRoutes from './affiliate';
 import { userStatsRoutes } from './user-stats';
 import { maintenanceRoutes } from './maintenance';
@@ -297,6 +306,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
   { name: 'admin-game-seasons', prefix: `${API_PREFIX}/admin/game`, module: gameSeasonsAdminRoutes },
+  // Le registre des packs, surchargé sans déploiement (#11275) : `canManageGame`, journal avant d'agir.
+  { name: 'admin-packs-registry', prefix: `${API_PREFIX}/admin/packs`, module: packsRegistryAdminRoutes },
   { name: 'admin-route-usage', prefix: `${API_PREFIX}/admin`, module: routeUsageAdminRoutes },
   // La « vue de dieu » (#8876) : journal d'audit, liens de suivi, fiche de
   // communauté et supervision, sous le MÊME préfixe que `admin-content` /
@@ -357,6 +368,10 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
   // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
   { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
+  // Les packs de cadres de CAPTURE (#10169, LC) — les douze ambiances de l'appel
+  // et du viseur, intégrées, installées d'office et retirables, sur le MÊME
+  // moteur. Installer ne télécharge rien (#10187) ; aucune proposition de tiers.
+  { name: 'packs-capture-frame', prefix: `${API_PREFIX}/packs/capture-frame`, module: captureFramePacksRoutes },
   // La boutique UNIFIÉE (#10632) — trois domaines de plus sur le MÊME moteur
   // (fonds de conversation, contours d'avatar, bannières de profil), chacun
   // avec son achat en Meeshes, et la vitrine qui les agrège. Un montage par
@@ -365,6 +380,11 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'packs-avatar-ring', prefix: `${API_PREFIX}/packs/avatar-ring`, module: avatarRingPacksRoutes },
   { name: 'packs-banner', prefix: `${API_PREFIX}/packs/banner`, module: bannerPacksRoutes },
   { name: 'packs-banner-frame', prefix: `${API_PREFIX}/packs/banner-frame`, module: bannerFramePacksRoutes },
+  // Les lens des partenaires (#11271, MeeshyLens v1) : proposer, modérer, installer, sur le MÊME moteur.
+  { name: 'packs-lens', prefix: `${API_PREFIX}/packs/lens`, module: lensPacksRoutes },
+  // L'identité des partenaires, le crédit « Lens par X » et l'usage k-anonyme (#11327). Préfixe
+  // DISTINCT de `/packs/lens` : ses chemins statiques (`credits`, `partners`) y masqueraient des slugs.
+  { name: 'lens-partners', prefix: `${API_PREFIX}/lens`, module: lensPartnerRoutes },
   { name: 'packs-shop', prefix: `${API_PREFIX}/packs/shop`, module: packsShopRoutes },
   // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
   // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune
@@ -378,7 +398,12 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'directory-presence', prefix: `${API_PREFIX}/directory`, module: directoryPresenceRoutes },
   { name: 'directory-blocks', prefix: `${API_PREFIX}/directory`, module: directoryBlocksRoutes },
   { name: 'directory-friend-requests', prefix: `${API_PREFIX}/directory`, module: directoryFriendRequestsRoutes },
+  { name: 'relations', prefix: `${API_PREFIX}/relations`, module: relationsRoutes },
   { name: 'directory-contacts', prefix: `${API_PREFIX}/directory`, module: directoryContactsRoutes },
+  // Le niveau EFFECTIF du lien avec une personne (#13998) — lecture seule, niveauEffectif pour seule loi.
+  { name: 'relations-level', prefix: `${API_PREFIX}/relations`, module: relationsLevelRoutes },
+  // Le Bring (#13936, D-3) : faire sonner un Ami, un Proche ou un Sang pour l'urgence extrême.
+  { name: 'bring', prefix: `${API_PREFIX}/bring`, module: bringRoutes },
   // La carte de visite partagée (#8101) — vCard → profils publics. Montage
   // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).
   { name: 'contacts-resolve', prefix: `${API_PREFIX}/contacts`, module: contactsResolveRoutes },
@@ -389,6 +414,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'community-preferences', prefix: API_PREFIX, module: communityPreferencesRoutes },
   { name: 'conversation-encryption', prefix: API_PREFIX, module: conversationEncryptionRoutes },
   { name: 'signal-protocol', prefix: API_PREFIX, module: signalProtocolRoutes },
+  // L'annuaire E2EE par appareil et le relais d'enveloppes libsignal (#3706).
+  { name: 'e2ee', prefix: API_PREFIX, module: e2eeRoutes },
+  { name: 'e2ee-signals', prefix: API_PREFIX, module: e2eeSignalRoutes },
   { name: 'affiliate', prefix: API_PREFIX, module: affiliateRoutes },
   { name: 'user-stats', prefix: API_PREFIX, module: userStatsRoutes },
   { name: 'maintenance', prefix: API_PREFIX, module: maintenanceRoutes },

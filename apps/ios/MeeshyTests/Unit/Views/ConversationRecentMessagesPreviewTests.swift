@@ -31,6 +31,24 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
         return message
     }
 
+    // MARK: - Un message en clair dans une conversation chiffrée (#11380)
+
+    /// L'aperçu sans chargeur (messages figés) marque les mêmes messages que
+    /// le chargeur : un clair reçu d'un membre, jamais le mien, jamais un
+    /// message encore scellé, et rien hors d'une conversation chiffrée.
+    func test_unencryptedIds_marksOnlyAMemberPlaintextInEndToEnd() {
+        let messages = [
+            message("forged"),
+            message("mine", senderId: "u-me", isMe: true),
+            message("sealed", isEncrypted: true, content: "Q2lwaGVydGV4dGU=")
+        ]
+
+        XCTAssertEqual(ConversationPreviewRenderer.unencryptedIds(
+            of: messages, regime: EndToEndRegime(encryptionMode: "e2ee", enabledAt: nil)
+        ), ["forged"])
+        XCTAssertEqual(ConversationPreviewRenderer.unencryptedIds(of: messages, regime: .serverReadable), [])
+    }
+
     // MARK: - La face suit le mode de lecture
 
     func test_kind_script_isTheFlatRow() {
@@ -188,6 +206,19 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
 
     func test_isSealed_clearMessage_isReadable() {
         XCTAssertFalse(ConversationPreviewRenderer.isSealed(message("m1", content: "")))
+    }
+
+    func test_sealedReason_encryptedMessage_saysEncrypted() {
+        XCTAssertEqual(ConversationPreviewRenderer.sealedReason(message("m1", isEncrypted: true, content: "")), .encrypted)
+    }
+
+    /// Une flamme « après lecture » reçue ET chiffrée est retenue parce
+    /// qu'elle brûle, pas parce qu'elle est illisible : elle se dit flamme.
+    func test_sealedReason_receivedEncryptedAfterReadFlame_saysAfterRead() {
+        var burning = message("m1", isEncrypted: true, content: "")
+        burning.effects = MessageEffects(flags: [.ephemeral, .ephemeralAfterRead])
+
+        XCTAssertEqual(ConversationPreviewRenderer.sealedReason(burning), .afterRead)
     }
 
     // MARK: - Les marges

@@ -1,4 +1,6 @@
 [versions]
+# Réinstaller l'app garde la connexion (#14058) : la session d'un compte dans le Block Store.
+playServicesAuthBlockstore = "16.4.0"
 agp = "8.13.0"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.25"
@@ -41,7 +43,24 @@ material3Adaptive = "1.0.0"
 camerax = "1.4.0"
 mlkitSubjectSegmentation = "16.0.0-beta1"
 
+# lot: primitives-cryptographiques-verifiees
+tink = "1.15.0"
+
+# lot: calls-core-telecom-integration
+coreTelecom = "1.0.0"
+
+# lot: traduction-appareil-moteur-et-detection-mlkit
+mlkitTranslate = "17.0.3"
+mlkitLanguageId = "17.0.0"
+
+# lot: effets-video-appel (#13331)
+mlkitSelfieSegmentation = "16.0.0-beta6"
+
+# lot: effets-de-visage-appel (#13706)
+mlkitFaceDetection = "17.1.0"
+
 [libraries]
+play-services-auth-blockstore = { module = "com.google.android.gms:play-services-auth-blockstore", version.ref = "playServicesAuthBlockstore" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "splashscreen" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -130,6 +149,24 @@ work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 androidx-media3-muxer = { module = "androidx.media3:media3-muxer", version.ref = "media3" }
 
 # lot: pieces-jointes-compression-image-et-video
+
+# lot: primitives-cryptographiques-verifiees
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
+
+# lot: epinglage-certificat-passerelle
+okhttp-tls = { module = "com.squareup.okhttp3:okhttp-tls", version.ref = "okhttp" }
+
+# lot: calls-core-telecom-integration
+androidx-core-telecom = { module = "androidx.core:core-telecom", version.ref = "coreTelecom" }
+
+# lot: traduction-appareil-moteur-et-detection-mlkit
+mlkit-translate = { module = "com.google.mlkit:translate", version.ref = "mlkitTranslate" }
+mlkit-language-id = { module = "com.google.android.gms:play-services-mlkit-language-id", version.ref = "mlkitLanguageId" }
+# lot: effets-video-appel (#13331) — modèle EMBARQUÉ : le flou marche sans téléchargement ni Play Services.
+mlkit-segmentation-selfie = { module = "com.google.mlkit:segmentation-selfie", version.ref = "mlkitSelfieSegmentation" }
+# lot: effets-de-visage-appel (#13706) — modèle servi par Play Services (déclaré à l'installation dans le manifeste de
+# sdk-core) : l'embarqué pèse ~13 Mo par appareil (bibliothèque native + modèles), celui-ci moins d'un.
+mlkit-face-detection = { module = "com.google.android.gms:play-services-mlkit-face-detection", version.ref = "mlkitFaceDetection" }
 
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]

@@ -76,6 +76,7 @@ const frStickerPacks = {
   'packs.domain.avatar-ring': "Contours d’avatar",
   'packs.domain.banner': "Bannières",
   'packs.domain.banner-frame': "Cadres de bannière",
+  'packs.domain.lens': "Lens",
   'packs.domain.capture-frame': "Cadres de capture",
   'packs.price': "{price} Meeshes",
   'packs.owned': "Possédé",
@@ -88,6 +89,11 @@ const frStickerPacks = {
   'packs.shop.domains': "Domaine de la boutique",
   'packs.shop.hint': "Tous les packs : stickers, cadres, fonds, contours et bannières. Ce que vous possédez apparaît dans les écrans concernés.",
   'packs.retry': "Réessayer",
+  'packs.error.notRemovable': "Ce pack reste installé : il ne peut pas être retiré.",
+  'packs.frames.changeAtmosphere': "Changer d’atmosphère",
+  'packs.frames.yourAtmosphere': "Votre atmosphère",
+  'packs.frames.atmosphereKept': "Ce pack porte votre atmosphère : il reste installé. Changez d’atmosphère pour le retirer.",
+  'packs.frames.atmosphereQueued': "Hors ligne : votre choix partira avec la connexion.",
 } as const;
 
 export default frStickerPacks;

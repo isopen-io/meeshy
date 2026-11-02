@@ -124,20 +124,61 @@ final class ImagineWorkshopTests: XCTestCase {
     }
 
     func test_media_theVideoLengthIsOfferedOnlyForAVideoDrawnFromALongSound() {
-        XCTAssertTrue(MessageCardTrayOffer.clipLengths(output: .image, media: [Self.voice(90)]).isEmpty, "une image n'a pas de durée")
-        XCTAssertEqual(MessageCardTrayOffer.clipLengths(output: .video, media: [Self.voice(90)]), [.fifteenSeconds, .thirtySeconds, .oneMinute])
+        XCTAssertTrue(MessageCardTrayOffer.clipLengths(output: .image, media: [Self.voice(55)]).isEmpty, "une image n'a pas de durée")
+        XCTAssertEqual(MessageCardTrayOffer.clipLengths(output: .video, media: [Self.voice(55)]), [.fifteenSeconds, .thirtySeconds, .oneMinute])
         XCTAssertEqual(MessageCardTrayOffer.clipLengths(output: .video, media: [Self.voice(20)]), [.fifteenSeconds, .thirtySeconds])
         XCTAssertTrue(MessageCardTrayOffer.clipLengths(output: .video, media: [Self.voice(9)]).isEmpty, "un son court part en entier")
         let clip = MessageCardMedia(id: "v", kind: .video, duration: 40)
         XCTAssertTrue(MessageCardTrayOffer.clipLengths(output: .video, media: [clip, Self.voice(90)]).isEmpty, "une vidéo jointe fixe sa durée")
     }
 
+    /// Au-delà d'une minute, « Imager » un message ou un commentaire coupe son
+    /// son ou sa vidéo en QUARTS depuis le début, comme la vue Imager d'une
+    /// œuvre (#14332, #13871) : 1/4 · 2/4 · 3/4 · 4/4, durée de chacun. Les
+    /// quarts REMPLACENT l'extrait 15 / 30 / 60 s ; sous la minute, il reste.
+    func test_media_aSoundOrAVideoOverAMinute_offersTheQuarters_inPlaceOfTheExcerpt() {
+        let long = [Self.voice(240)]
+        let quarters = MessageCardTrayOffer.clipQuarters(output: .video, media: long)
+        XCTAssertEqual(quarters.map(\.quarter), ImagerQuarter.allCases)
+        XCTAssertEqual(quarters.map(\.duration), [60, 120, 180, 240])
+        XCTAssertTrue(MessageCardTrayOffer.clipLengths(output: .video, media: long).isEmpty, "les quarts remplacent 15 / 30 / 60 s")
+
+        let film = [MessageCardMedia(id: "v", kind: .video, duration: 90)]
+        XCTAssertEqual(MessageCardTrayOffer.clipQuarters(output: .video, media: film).map(\.duration), [22.5, 45, 67.5, 90])
+        XCTAssertTrue(MessageCardTrayOffer.clipQuarters(output: .gif, media: film).isEmpty, "un GIF reste une boucle courte")
+        XCTAssertTrue(MessageCardTrayOffer.clipQuarters(output: .image, media: long).isEmpty, "une image n'a pas de durée")
+
+        let minute = [Self.voice(60)]
+        XCTAssertTrue(MessageCardTrayOffer.clipQuarters(output: .video, media: minute).isEmpty, "sous la minute, le réglage actuel reste")
+        XCTAssertEqual(MessageCardTrayOffer.clipLengths(output: .video, media: minute), [.fifteenSeconds, .thirtySeconds, .oneMinute])
+    }
+
+    func test_motionPlan_fourMinutesInTwoQuarters_rendersTwoMinutesFromTheStart() throws {
+        let long = [Self.voice(240)]
+        let half = try XCTUnwrap(MessageCardMotionPlan.of(.video, media: long, length: .fifteenSeconds, quarter: .two, start: 50))
+        XCTAssertEqual(half.duration, 120)
+        XCTAssertEqual(half.start, 0, "un quart se compte depuis le début")
+        XCTAssertNil(MessageCardTrayOffer.excerpt(plan: half, media: long), "aucun passage à glisser : la part part du début")
+
+        let whole = try XCTUnwrap(MessageCardMotionPlan.of(.video, media: long, quarter: .four))
+        XCTAssertEqual(whole.duration, 240)
+
+        let film = [MessageCardMedia(id: "v", kind: .video, duration: 240)]
+        let quarter = try XCTUnwrap(MessageCardMotionPlan.of(.video, media: film, quarter: .one, start: 30))
+        XCTAssertEqual(quarter.duration, 60)
+        XCTAssertEqual(quarter.start, 0)
+        XCTAssertEqual(quarter.fps, 15, "une vidéo garde sa cadence")
+
+        let short = try XCTUnwrap(MessageCardMotionPlan.of(.video, media: [Self.voice(45)], length: .thirtySeconds, quarter: .two))
+        XCTAssertEqual(short.duration, 30, "sous la minute, le quart ne change rien")
+    }
+
     func test_media_thePassageIsChosenOnlyWhenTheMediaOutlastsTheExcerpt() throws {
-        let long = [Self.voice(90)]
-        let plan = MessageCardMotionPlan.of(.video, media: long, length: .thirtySeconds, start: 70)
+        let long = [Self.voice(55)]
+        let plan = MessageCardMotionPlan.of(.video, media: long, length: .thirtySeconds, start: 40)
         let excerpt = try XCTUnwrap(MessageCardTrayOffer.excerpt(plan: plan, media: long))
-        XCTAssertEqual(excerpt.total, 90)
-        XCTAssertEqual(excerpt.window, MessageCardClip(start: 60, duration: 30))
+        XCTAssertEqual(excerpt.total, 55)
+        XCTAssertEqual(excerpt.window, MessageCardClip(start: 25, duration: 30))
         XCTAssertEqual(excerpt.levels(12).count, 12)
 
         let short = [Self.voice(20)]
@@ -254,11 +295,31 @@ final class ImagineWorkshopTests: XCTestCase {
         XCTAssertNotEqual(one, three)
     }
 
-    func test_catalog_theActionIsImager_theWorkshopIsImagine() throws {
+    /// UN titre et UN bouton, ceux des menus, pour l'atelier d'une carte et la
+    /// vue Imager d'une œuvre, sur iOS comme sur Android (#14348, #14346) : la
+    /// vue porte le mot du menu, « Imager », et enregistre par le verbe des
+    /// menus d'export, « Enregistrer » — dans chacune des sept langues.
+    func test_catalog_theWorkshopIsTitledByTheMenuWord_andSavesWithTheExportVerb() throws {
         let strings = try Self.catalog()
-        XCTAssertEqual(Self.value(strings["message.menu.export"], "fr"), "Imager")
-        XCTAssertEqual(Self.value(strings["export.card.title"], "fr"), "Imagine")
+        XCTAssertEqual(Self.value(strings["export.card.title"], "fr"), "Imager")
+        XCTAssertEqual(Self.value(strings["export.card.save"], "fr"), "Enregistrer")
         XCTAssertEqual(Self.value(strings["export.card.tab.frame"], "fr"), "Frame")
+        for language in Self.languages {
+            XCTAssertEqual(Self.value(strings["export.card.title"], language),
+                           Self.value(strings["message.menu.export"], language), "titre [\(language)]")
+            XCTAssertEqual(Self.value(strings["export.card.save"], language),
+                           Self.value(strings["feed.post.save"], language), "bouton [\(language)]")
+        }
+    }
+
+    func test_theWorkshopAndTheImagerView_neverFallBackToTheOldWords() throws {
+        for file in ["Meeshy/Features/Export/ImagerSheet.swift",
+                     "Meeshy/Features/Export/MessageCardExportSheet.swift",
+                     "Meeshy/Features/Export/MessageCardExportSheet+Output.swift"] {
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(file))
+            XCTAssertFalse(source.contains("\"Imagine\")"), "\(file) : le titre est « Imager »")
+            XCTAssertFalse(source.contains("\"Sauvegarder\")"), "\(file) : le bouton est « Enregistrer »")
+        }
     }
 
     func test_catalog_everyImagineWordSpeaksTheSevenLanguages() throws {

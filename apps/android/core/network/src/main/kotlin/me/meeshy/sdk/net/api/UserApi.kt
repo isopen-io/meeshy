@@ -23,8 +23,10 @@ import me.meeshy.sdk.model.UserStats
 import me.meeshy.sdk.model.VerifyEmailChangeRequest
 import me.meeshy.sdk.model.VerifyEmailChangeResponse
 import me.meeshy.sdk.model.VerifyPhoneChangeRequest
+import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.VerifyPhoneChangeResponse
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -40,7 +42,11 @@ data class UserSearchResult(
     val displayName: String? = null,
     val avatar: String? = null,
     val isOnline: Boolean? = null,
-)
+    val lastActiveAt: String? = null,
+) {
+    /** La présence que la ligne a SERVIE ; `null` (non-ami, rien servi) = aucun point. */
+    fun servedPresence(): UserPresence? = UserPresence.served(isOnline, lastActiveAt)
+}
 
 /** Avatar update body — port of UserService.updateAvatar inline body. */
 @Serializable
@@ -77,7 +83,33 @@ data class AccountDeletionOpenedResponse(
     val tokenExpiresAt: String? = null,
 )
 
+/** Un appareil enregistre pour les notifications (`GET users/me/devices`). */
+@Serializable
+data class RegisteredDevice(
+    val id: String,
+    val type: String? = null,
+    val platform: String? = null,
+    val deviceId: String? = null,
+    val deviceName: String? = null,
+    val appVersion: String? = null,
+    val isActive: Boolean = true,
+    val lastUsedAt: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+)
+
+@Serializable
+data class DeviceRevokedResponse(val message: String? = null)
+
 interface UserApi {
+    /** Les appareils de l'utilisateur. */
+    @GET("users/me/devices")
+    suspend fun listDevices(): ApiResponse<List<RegisteredDevice>>
+
+    /** Revoque un appareil par l'id de SA LIGNE (pas le `deviceId` materiel). */
+    @DELETE("users/me/devices/{id}")
+    suspend fun revokeDevice(@Path("id") id: String): ApiResponse<DeviceRevokedResponse>
+
     @GET("users/search")
     suspend fun search(
         @Query("q") query: String,

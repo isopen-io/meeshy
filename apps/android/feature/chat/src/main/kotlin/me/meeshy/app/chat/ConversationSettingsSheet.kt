@@ -54,7 +54,7 @@ import me.meeshy.ui.theme.MeeshyTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationSettingsSheet(
+internal fun ConversationSettingsSheet(
     conversationId: String,
     accentColor: Color,
     onDismiss: () -> Unit,

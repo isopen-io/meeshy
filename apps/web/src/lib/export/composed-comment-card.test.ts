@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
+import { postCommentCardHeadMedia, postCommentCardModes, postCommentCardWithheldByAudience } from '@meeshy/shared/utils/comment-card-composition';
+
 import type { FeedPost } from '@/lib/api/feed-pages';
 import type { PostComment } from '@/lib/api/publication-comments';
 
 import {
   NO_POST_COMMENT_PICK,
   composingPostOf,
+  storyCommentSupportOf,
   postCommentCardSourceOf,
   postCommentChoiceOf,
   postCommentImageable,
@@ -24,8 +27,10 @@ import {
  * médias peignables, et la projection sur `MessageCardSubject`.
  */
 
-const labels: PostCommentCardLabels = { folded: (count) => `+${count} réponses` };
+const labels: PostCommentCardLabels = { folded: (count) => `+${count} réponses`, thread: 'Fil de commentaires' };
 const viewer = { id: 'me', displayName: 'Moi' };
+/** L'instant où une story publiée le 2026-10-08 à 10 h est encore à l'affiche. */
+const FRESH = Date.parse('2026-10-08T12:00:00.000Z');
 
 const post = (overrides: Partial<FeedPost> = {}): FeedPost => ({
   id: 'p-1',
@@ -61,14 +66,34 @@ describe('la source que le web remet à la composition', () => {
     expect(subject?.quotedAt).toEqual(new Date('2026-10-08T10:00:00.000Z'));
   });
 
-  test('un fil : la tête en citation, le reste IMBRIQUÉ à son niveau (plus aplati), dans le texte servi', () => {
+  test('un fil : la tête en citation, puis le bloc « Fil de commentaires » d’iOS — une ligne par commentaire, à son niveau, dans le texte servi', () => {
     const translated = comment('r0', { parentId: 'root', createdAt: '2026-10-08T10:01:30.000Z', content: 'Where?', originalLanguage: 'en', translations: { fr: { text: 'Où ?' } } });
     const source = postCommentCardSourceOf({ post: post(), target: reply, targetText: 'texte r1', thread: [root, translated, reply], readerLanguages: ['fr'], viewer });
     const subject = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels);
     expect(subject?.quoted?.text).toBe('texte root');
-    expect(subject?.context?.map((entry) => [entry.part.author, entry.part.text, entry.depth])).toEqual([['R0', 'Où ?', 1]]);
+    expect(subject?.reply).toEqual({
+      author: 'Fil de commentaires',
+      text: 'R0 : Où ?\nR1 : texte r1',
+      handle: null,
+      thread: [
+        { author: 'R0', handle: 'r0', text: 'Où ?', level: 1, isReply: false },
+        { author: 'R1', handle: 'r1', text: 'texte r1', level: 1, isReply: true },
+      ],
+    });
+  });
+
+  test('deux blocs restent une citation et une réponse, sans bloc de fil', () => {
+    const source = postCommentCardSourceOf({ post: post(), target: reply, targetText: 'texte r1', thread: [root, reply], readerLanguages: ['fr'], viewer });
+    const subject = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels);
     expect(subject?.reply).toEqual({ author: 'R1', text: 'texte r1', handle: 'r1' });
-    expect(subject?.replyDepth).toBe(1);
+  });
+
+  test('le pli « +N réponses » est une ligne sans auteur, au niveau 1', () => {
+    const replies = Array.from({ length: 7 }, (_, index) => comment(`m${index}`, { parentId: 'root', createdAt: `2026-10-08T10:1${index}:00.000Z` }));
+    const target = replies[6]!;
+    const source = postCommentCardSourceOf({ post: post(), target, targetText: target.content, thread: [root, ...replies], readerLanguages: ['fr'], viewer });
+    const lines = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels)?.reply.thread ?? [];
+    expect(lines.find((line) => line.author === null)).toEqual({ author: null, handle: null, text: '+3 réponses', level: 1, isReply: false });
   });
 
   test('un commentaire en vol ou à vue unique n’a aucun mode ; un éphémère non plus', () => {
@@ -101,7 +126,7 @@ describe('la source que le web remet à la composition', () => {
     for (const piece of [{ isViewOnce: true }, { isBlurred: true }, { effectFlags: 4 }, { isEncrypted: true }]) {
       const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg', ...piece }];
       const storyPost = post({ type: 'STORY', media });
-      expect(composingPostOf(storyPost)).toBeNull();
+      expect(postCommentCardHeadMedia(postCommentCardSourceOf({ post: composingPostOf(storyPost, FRESH), target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer }))).toEqual([]);
       const source = postCommentCardSourceOf({ post: storyPost, target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
       expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
     }
@@ -124,45 +149,92 @@ describe('la source que le web remet à la composition', () => {
 });
 
 describe('qui compose, et quand « Imager » s’offre', () => {
-  test('un post compose ; une story ou un statut SANS média gardent la carte du commentaire, et sans post rien ne compose', () => {
+  const sourceOf = (support: FeedPost | null, target: PostComment = root, thread: readonly PostComment[] = []) =>
+    postCommentCardSourceOf({ post: support, target, targetText: 'x', thread, readerLanguages: ['fr'], viewer });
+  const headOf = (support: FeedPost | null) => postCommentCardHeadMedia(sourceOf(support)).map((entry) => entry.item.id);
+
+  test('un support CONNU compose toujours, comme iOS : seul un support inconnu laisse la carte du commentaire', () => {
     expect(composingPostOf(post())?.id).toBe('p-1');
     expect(composingPostOf(post({ type: 'REEL' }))?.id).toBe('p-1');
-    expect(composingPostOf(post({ type: 'STORY' }))).toBeNull();
-    expect(composingPostOf(post({ type: 'status' }))).toBeNull();
-    const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
-    expect(composingPostOf(post({ type: 'STORY', media }))?.id).toBe('p-1');
-    expect(composingPostOf(post({ type: 'status', media }))?.id).toBe('p-1');
-    expect(composingPostOf(post({ type: 'STORY', media: [{ id: 'v', fileUrl: '/v.m4a', mimeType: 'audio/mp4' }] }))).toBeNull();
+    expect(composingPostOf(post({ type: 'STORY' }), FRESH)?.id).toBe('p-1');
+    expect(composingPostOf(post({ type: 'status' }), FRESH)?.id).toBe('p-1');
+    expect(composingPostOf(undefined)).toBeNull();
+    expect(composingPostOf(null)).toBeNull();
   });
 
-  test('une story ou un post dont l’audience n’est pas PUBLIQUE n’est jamais support ni héros — seul le commentaire reste', () => {
+  test('une story ou un statut ne se met en tête que par son visuel — un son, un texte seul ne suffisent pas', () => {
+    const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
+    expect(headOf(composingPostOf(post({ type: 'STORY', media }), FRESH))).toEqual(['sm']);
+    expect(headOf(composingPostOf(post({ type: 'status', media }), FRESH))).toEqual(['sm']);
+    expect(headOf(composingPostOf(post({ type: 'STORY', media: [{ id: 'v', fileUrl: '/v.m4a', mimeType: 'audio/mp4' }] }), FRESH))).toEqual([]);
+    expect(postCommentCardModes(sourceOf(composingPostOf(post({ type: 'STORY' }), FRESH)))).toEqual(['commentAlone']);
+  });
+
+  test('une story ou un post dont l’audience n’est pas PUBLIQUE n’est jamais support ni héros — l’atelier le DIT, comme iOS', () => {
     const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
     const { visibility: _public, ...unknownAudience } = post({ media });
     for (const visibility of ['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', null, 'absent'] as const) {
       const audience = visibility === 'absent' ? {} : { visibility };
-      expect(composingPostOf({ ...unknownAudience, type: 'STORY', ...audience })).toBeNull();
-      const restricted = composingPostOf({ ...unknownAudience, ...audience });
-      expect(restricted?.id).toBe('p-1');
-      const source = postCommentCardSourceOf({ post: restricted, target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
-      expect(postCommentChoiceOf(source, NO_POST_COMMENT_PICK)?.mode).toBe('commentAlone');
-      expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
-      const alone = postCommentMessageCardSubjectOf(source, { mode: 'commentAlone', showsPost: true }, labels);
-      expect([alone?.quoted, alone?.media]).toEqual([null, []]);
+      for (const type of ['POST', 'STORY'] as const) {
+        const restricted = composingPostOf({ ...unknownAudience, type, ...audience }, FRESH);
+        expect(restricted?.id).toBe('p-1');
+        const source = sourceOf(restricted);
+        expect(postCommentChoiceOf(source, NO_POST_COMMENT_PICK)?.mode).toBe('commentAlone');
+        expect(postCommentCardWithheldByAudience(source)).toBe(true);
+        expect(postCommentMessageCardSubjectOf(source, { mode: 'postAndComment', showsPost: true }, labels)).toBeNull();
+        const alone = postCommentMessageCardSubjectOf(source, { mode: 'commentAlone', showsPost: true }, labels);
+        expect([alone?.quoted, alone?.media]).toEqual([null, []]);
+      }
     }
   });
 
-  test('une story échue n’est jamais support ; une story à canvas ne montre que sa vignette', () => {
+  test('une story échue compose sans tête et sans avis — par son échéance, à défaut 20 h après sa publication', () => {
     const media = [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }];
-    expect(composingPostOf(post({ type: 'STORY', media, expiresAt: '2020-01-01T00:00:00.000Z' }))).toBeNull();
-    expect(composingPostOf(post({ type: 'STORY', media, expiresAt: '2999-01-01T00:00:00.000Z' }))?.id).toBe('p-1');
-    expect(composingPostOf(post({ type: 'STORY', media, storyEffects: { layers: [] } }))).toBeNull();
+    const published = Date.parse('2026-10-08T10:00:00.000Z');
+    for (const [story, now] of [
+      [post({ type: 'STORY', media, expiresAt: '2026-10-08T12:00:00.000Z' }), published + 3 * 3_600_000],
+      [post({ type: 'STORY', media }), published + 21 * 3_600_000],
+      [post({ type: 'STORY', media, visibility: 'FRIENDS' }), published + 21 * 3_600_000],
+    ] as const) {
+      const expired = composingPostOf(story, now);
+      expect(expired?.id).toBe('p-1');
+      expect(headOf(expired)).toEqual([]);
+      expect(postCommentCardWithheldByAudience(sourceOf(expired))).toBe(false);
+    }
+    expect(headOf(composingPostOf(post({ type: 'STORY', media, expiresAt: '2999-01-01T00:00:00.000Z' }), published + 21 * 3_600_000))).toEqual(['sm']);
+  });
+
+  test('une story à canvas ne montre que sa vignette — sans elle, ni tête ni avis', () => {
+    expect(headOf(composingPostOf(post({ type: 'STORY', media: [{ id: 'sm', fileUrl: '/s.jpg', mimeType: 'image/jpeg' }], storyEffects: { layers: [] } }), FRESH))).toEqual([]);
     const withThumb = composingPostOf(
       post({ type: 'STORY', storyEffects: { layers: [] }, media: [{ id: 'sm', fileUrl: '/s.mp4', mimeType: 'video/mp4', thumbnailUrl: '/t.jpg', width: 1080, height: 1920 }] }),
+      FRESH,
     );
     expect(withThumb?.media?.map((piece) => [piece.fileUrl, piece.mimeType, piece.width, piece.height])).toEqual([['/t.jpg', 'image/jpeg', 1080, 1920]]);
     const audioThumb = [{ id: 'a', fileUrl: '/a.m4a', mimeType: 'audio/mp4', thumbnailUrl: '/cover.jpg' }];
-    expect(composingPostOf(post({ type: 'STORY', storyEffects: { layers: [] }, media: audioThumb }))).toBeNull();
-    expect(composingPostOf(undefined)).toBeNull();
+    const silent = composingPostOf(post({ type: 'STORY', storyEffects: { layers: [] }, media: audioThumb, visibility: 'FRIENDS' }), FRESH);
+    expect(headOf(silent)).toEqual([]);
+    expect(postCommentCardWithheldByAudience(sourceOf(silent))).toBe(false);
+  });
+
+  test('la story que le lecteur JOUE devient le support d’« Imager » : son visuel, son texte, son auteur, son audience', () => {
+    const support = storyCommentSupportOf({
+      id: 'st-1',
+      createdAt: '2026-10-08T10:00:00.000Z',
+      expiresAt: '2999-01-01T00:00:00.000Z',
+      content: 'Sunset',
+      originalLanguage: 'en',
+      translations: { fr: { text: 'Coucher de soleil' } },
+      author: { id: 'u-awa', username: 'awa', displayName: 'Awa' },
+      media: [{ id: 'sm', url: '/legacy.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920 }],
+      visibility: 'PUBLIC',
+    });
+    expect([support.type, support.visibility, support.media?.map((piece) => piece.fileUrl)]).toEqual(['STORY', 'PUBLIC', ['/legacy.jpg']]);
+    const source = sourceOf(composingPostOf(support));
+    const subject = postCommentMessageCardSubjectOf(source, postCommentChoiceOf(source, NO_POST_COMMENT_PICK)!, labels);
+    expect(subject?.quoted).toEqual({ author: 'Awa', text: 'Coucher de soleil', handle: 'awa' });
+    expect(subject?.media.map((item) => [item.id, item.hero === true])).toEqual([['sm', true]]);
+    expect(storyCommentSupportOf({ id: 'st-2', createdAt: '2026-10-08T10:00:00.000Z' }).visibility).toBeNull();
   });
 
   test('« Imager » s’offre dès qu’un mode compose — jamais sous un ancêtre protégé ni sans racine chargée', () => {
@@ -211,8 +283,7 @@ describe('le choix de composition dans l’atelier', () => {
     expect([...(postCommentChoiceOf(source, minusRoot)?.chosen ?? [])].sort()).toEqual(['r1', 'r3']);
     const subject = postCommentMessageCardSubjectOf(source, postCommentChoiceOf(source, minusRoot)!, labels);
     expect(subject?.quoted?.text).toBe('texte r1');
-    expect(subject?.context?.map((entry) => entry.part.text)).toEqual(['texte r3']);
-    expect(subject?.reply.text).toBe('texte r2');
+    expect(subject?.reply.thread?.map((line) => line.text)).toEqual(['texte r3', 'texte r2']);
   });
 
   test('un mode qui ne s’offre plus retombe sur le défaut ; rien ne s’image ⇒ aucun choix', () => {
@@ -274,8 +345,7 @@ describe('la carte peint le texte LU, jamais la syntaxe des liens (#9687, jumell
     const source = postCommentCardSourceOf({ post: post({ content: raw, translations: undefined }), target: reply, targetText: raw, thread: [root, linked, reply], readerLanguages: ['fr'], viewer });
     const withPost = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: true }, labels);
     expect(withPost?.quoted?.text).toBe(plain);
-    expect(withPost?.context?.map((entry) => `${entry.part.author} : ${entry.part.text}`)).toEqual(['ROOT : texte root', `R0 : ${plain}`]);
-    expect(withPost?.reply.text).toBe(plain);
+    expect(withPost?.reply.text).toBe(`ROOT : texte root\nR0 : ${plain}\nR1 : ${plain}`);
     expect(source.thread.find((entry) => entry.id === 'r0')?.text).toBe(plain);
   });
 });

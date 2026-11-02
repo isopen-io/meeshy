@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -17,9 +20,13 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import javax.inject.Inject
 
+/** One-shot outcome of an unblock, shown as a toast (iOS `BlockedViewModel`). */
+enum class BlockedFeedback(val isError: Boolean) { Unblocked(false), UnblockFailed(true) }
+
 data class BlockedListUiState(
     val blocked: List<BlockedUser> = emptyList(),
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val hasLoaded: Boolean = false,
     val errorMessage: String? = null,
     /** Ids with an unblock in flight — guards the button + double-taps. */
@@ -58,10 +65,25 @@ class BlockedListViewModel @Inject constructor(
     private val _state = MutableStateFlow(BlockedListUiState())
     val state: StateFlow<BlockedListUiState> = _state.asStateFlow()
 
+    private val _feedback = MutableSharedFlow<BlockedFeedback>(extraBufferCapacity = 8)
+    val feedback: SharedFlow<BlockedFeedback> = _feedback.asSharedFlow()
+
     fun load() {
         viewModelScope.launch {
             paintFromCache()
             revalidate()
+        }
+    }
+
+    /** Pull-to-refresh (iOS `.refreshable { loadBlocked(forceNetwork: true) }`). */
+    fun refresh() {
+        viewModelScope.launch {
+            _state.update { it.copy(isRefreshing = true) }
+            try {
+                revalidate()
+            } finally {
+                _state.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 
@@ -82,6 +104,7 @@ class BlockedListViewModel @Inject constructor(
     }
 
     private suspend fun revalidate() {
+        val ticket = blockedListRepository.ticket()
         when (val result = blockRepository.listBlocked()) {
             is NetworkResult.Success -> {
                 _state.update {
@@ -92,7 +115,7 @@ class BlockedListViewModel @Inject constructor(
                         errorMessage = null,
                     )
                 }
-                blockedListRepository.persist(result.data)
+                blockedListRepository.persist(result.data, ticket)
             }
             is NetworkResult.Failure ->
                 _state.update {
@@ -107,28 +130,26 @@ class BlockedListViewModel @Inject constructor(
 
     fun unblock(userId: String) {
         if (userId in _state.value.pendingIds) return
+        val ticket = blockedListRepository.ticket()
         val snapshot = _state.value.blocked
         if (snapshot.none { it.id == userId }) return
         val updated = snapshot.filterNot { it.id == userId }
         _state.update { it.copy(blocked = updated, pendingIds = it.pendingIds + userId) }
-        viewModelScope.launch { blockedListRepository.persist(updated) }
+        viewModelScope.launch { blockedListRepository.persist(updated, ticket) }
         viewModelScope.launch {
             try {
                 val cmid = blockRepository.setBlockedDurably(userId, blocked = false)
                 if (cmid != null) workManager.enqueue(OutboxFlushWorker.buildRequest())
                 _state.update { it.copy(pendingIds = it.pendingIds - userId) }
+                _feedback.tryEmit(BlockedFeedback.Unblocked)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                // The local enqueue failed — restore the row (and the cache) so the user can retry.
-                _state.update {
-                    it.copy(
-                        blocked = snapshot,
-                        pendingIds = it.pendingIds - userId,
-                        errorMessage = e.message,
-                    )
-                }
-                blockedListRepository.persist(snapshot)
+            } catch (_: Exception) {
+                // The local enqueue failed — restore the row (and the cache) so the user can
+                // retry. A toast says so; the list stays on screen (errorMessage is the LOAD's).
+                _state.update { it.copy(blocked = snapshot, pendingIds = it.pendingIds - userId) }
+                _feedback.tryEmit(BlockedFeedback.UnblockFailed)
+                blockedListRepository.persist(snapshot, ticket)
             }
         }
     }

@@ -85,13 +85,25 @@ final class PerpetualMotionGuardTests: XCTestCase {
     /// Les trois points « écrit… ». En tenue plate ils n'ont AUCUN libellé
     /// visible : ce qui dit « quelqu'un écrit » est leur présence, pas leur
     /// mouvement — d'où un repos à pleine taille et pleine opacité.
+    ///
+    /// Depuis #9891 la boucle vit dans l'atome du SDK, `MeeshyTypingDots`, que
+    /// la bulle et les deux rangées montent : c'est LUI qui doit décider.
     func test_lIndicateurDeFrappeDecideDuMouvement() throws {
-        try assertDeclarationDecidesAboutMotion(
-            marker: "struct TypingIndicatorBubble",
-            file: "TypingIndicatorBubble.swift",
-            because: "les points de frappe bouclent sans fin, et leur répétition "
-                   + "doit elle-même décider de Reduce Motion"
+        let url = appRoot
+            .appendingPathComponent("../../../packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyTypingDots.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct MeeshyTypingDots", in: source))
+        let code = DeclarationBodyScanner.mask(body)
+        XCTAssertTrue(code.contains("repeatForever"), "l'atome porte bien la boucle des points")
+        XCTAssertTrue(
+            Self.motionVocabulary.contains { code.contains($0) },
+            "`MeeshyTypingDots` ne décide pas de Reduce Motion — les points de frappe bouclent "
+            + "sans fin, et leur répétition doit elle-même décider de Reduce Motion"
         )
+        let bubble = DeclarationBodyScanner.mask(
+            try String(contentsOf: appRoot.appendingPathComponent("Features/Main/Views/TypingIndicatorBubble.swift"),
+                       encoding: .utf8))
+        XCTAssertTrue(bubble.contains("MeeshyTypingDots("), "la bulle monte l'atome au lieu d'une copie")
     }
 
     // MARK: - Règle 3 — un seul calcul de valeur de repos

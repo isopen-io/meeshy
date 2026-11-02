@@ -106,7 +106,7 @@ final class ComposerTrailingRailTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerTrailingRail.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

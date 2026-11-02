@@ -42,7 +42,7 @@ final class BubbleWindowMetricsTests: XCTestCase {
     private static let deviceLayout = "Meeshy/Core/DeviceLayout.swift"
     private static let bubbleStandardLayout = "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"
     private static let messageOverlayMenu = "Meeshy/Features/Main/Components/MessageOverlayMenu.swift"
-    private static let messageListView = "Meeshy/Features/Main/Views/MessageListView.swift"
+    private static let messageMenuPreviewContainer = "Meeshy/Features/Main/Views/MessageMenuPreviewContainer.swift"
 
     // MARK: - The ratio only constrains when it is taken against the window
 
@@ -159,7 +159,8 @@ final class BubbleWindowMetricsTests: XCTestCase {
         let code = codeLines(try source(Self.messageOverlayMenu))
 
         XCTAssertTrue(
-            code.contains(".environment(\\.bubbleContainerWidth, geometry.size.width > 0 ? geometry.size.width : nil)"),
+            code.contains("containerSize: geometry.size")
+                && code.contains(".environment(\\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)"),
             "The long-press preview must cap against the column it is drawn in, like the bubble it mirrors."
         )
         XCTAssertFalse(
@@ -169,7 +170,7 @@ final class BubbleWindowMetricsTests: XCTestCase {
     }
 
     func test_messageMenuPreviewContainer_capsAgainstTheWindow() throws {
-        let code = codeLines(try source(Self.messageListView))
+        let code = codeLines(try source(Self.messageMenuPreviewContainer))
 
         // La fenêtre qui PORTE l'aperçu (publiée par sa racine, Stage Manager / fenêtre détachée), la fenêtre
         // active n'étant que le repli avant la première mesure — jamais la dalle.
@@ -215,8 +216,9 @@ final class BubbleWindowMetricsTests: XCTestCase {
         let cellBody = String(code[cellSite.upperBound...].prefix(600))
         XCTAssertTrue(cellBody.contains("targetWidthPx: Int((cellPointWidth * displayScale).rounded())"),
                       "la case élit pour SA largeur, jamais pour l'écran")
-        XCTAssertEqual(code.components(separatedBy: "ImageVariantSelector.bestImageURL").count - 1, 1,
+        XCTAssertEqual(code.components(separatedBy: "BubbleImageSourceLaw.displayedURL(").count - 1, 1,
                        "seule la case de grille élit localement ; le plein écran passe par la galerie")
-        XCTAssertTrue(cellBody.contains("ImageVariantSelector.bestImageURL"))
+        XCTAssertFalse(code.contains("ImageVariantSelector."), "la bulle n'élit jamais elle-même : la case passe par BubbleImageSourceLaw")
+        XCTAssertTrue(cellBody.contains("BubbleImageSourceLaw.displayedURL("))
     }
 }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_tray_import_failed">No se pudo importar %1$s</string>
+    <string name="chat_tray_cap_reached">Límite de 199 archivos alcanzado</string>
+    <string name="chat_tray_remove">Quitar %1$s</string>
+    <string name="chat_tray_preparing">Preparando %1$s</string>
+    <string name="chat_tray_too_large">%1$s supera los %2$d MB y no se puede enviar</string>
+</resources>

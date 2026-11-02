@@ -28,7 +28,7 @@ import { resolveCapacitorConfig } from './capacitor.config';
 describe('resolveCapacitorConfig — le chemin de départ n’est qu’un paramètre de RECETTE', () => {
   test('un environnement vide ne pose PAS server.appStartPath', () => {
     const config = resolveCapacitorConfig({});
-    expect(config.server).toEqual({ androidScheme: 'https' });
+    expect(config.server).toEqual({ androidScheme: 'https', errorPath: 'webview-update.html' });
     expect(config.server?.appStartPath).toBeUndefined();
   });
 
@@ -154,10 +154,25 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
       appId: 'me.meeshy.app',
       appName: 'Meeshy',
       webDir: 'dist',
-      android: { backgroundColor: '#09090b' },
+      android: { backgroundColor: '#09090b', minWebViewVersion: 111 },
       ios: { backgroundColor: '#09090b', contentInset: 'never' },
       plugins: { SystemBars: { insetsHandling: 'css', initialViewportFitValueHint: 'cover' } },
-      server: { androidScheme: 'https' },
+      server: { androidScheme: 'https', errorPath: 'webview-update.html' },
     });
+  });
+});
+
+/**
+ * LE PLANCHER DE WEBVIEW (W19, #11325) — la coque déclare la version minimale
+ * d'Android System WebView qu'elle exige (`android.minWebViewVersion`) et la
+ * page servie en dessous (`server.errorPath`). Les deux littéraux sont ceux de
+ * `src/lib/shell/webview-floor.ts`, que le contrôle au démarrage lit aussi.
+ */
+describe('resolveCapacitorConfig — le plancher de WebView', () => {
+  test('la coque Android exige la WebView du plancher et sert l’écran de mise à jour en dessous', async () => {
+    const { MIN_ANDROID_WEBVIEW_MAJOR, WEBVIEW_UPDATE_PAGE } = await import('./src/lib/shell/webview-floor');
+    const config = resolveCapacitorConfig({});
+    expect(config.android?.minWebViewVersion).toBe(MIN_ANDROID_WEBVIEW_MAJOR);
+    expect(config.server?.errorPath).toBe(WEBVIEW_UPDATE_PAGE);
   });
 });

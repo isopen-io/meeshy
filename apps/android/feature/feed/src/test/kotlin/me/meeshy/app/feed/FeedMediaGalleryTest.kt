@@ -5,8 +5,8 @@ import org.junit.Test
 
 class FeedMediaGalleryTest {
 
-    private fun image(id: String, url: String, thumb: String? = null, alt: String? = null) =
-        FeedPostImage(id = id, url = url, thumbnailUrl = thumb, width = null, height = null, thumbHash = null, alt = alt)
+    private fun image(id: String, url: String, thumb: String? = null, alt: String? = null, caption: String? = null) =
+        FeedPostImage(id = id, url = url, thumbnailUrl = thumb, width = null, height = null, thumbHash = null, caption = caption, alt = alt)
 
     private fun presentation(
         images: List<FeedPostImage>,
@@ -113,16 +113,36 @@ class FeedMediaGalleryTest {
     }
 
     @Test
-    fun `post text becomes the shared caption for every page`() {
+    fun `each page of a multi image post shows its own media caption never the post text`() {
         val gallery = FeedMediaGallery.of(
             presentation(
-                images = listOf(image("a", "a"), image("b", "b")),
+                images = listOf(image("a", "a", caption = "The start"), image("b", "b")),
                 content = "Sunset run",
             ),
             imageIndex = 0,
         )
 
-        assertThat(gallery.captions).containsExactly("Sunset run", "Sunset run")
+        assertThat(gallery.captions).containsExactly("The start", null).inOrder()
+    }
+
+    @Test
+    fun `a single image post without its own caption falls back to the post text`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(images = listOf(image("a", "a")), content = "  Sunset run "),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly("Sunset run")
+    }
+
+    @Test
+    fun `a single image post prefers its own caption over the post text`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(images = listOf(image("a", "a", caption = "Mine")), content = "Sunset run"),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly("Mine")
     }
 
     @Test

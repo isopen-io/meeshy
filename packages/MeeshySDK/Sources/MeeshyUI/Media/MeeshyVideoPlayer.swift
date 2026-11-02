@@ -7,8 +7,8 @@ import MeeshySDK
 /// covers, reply chips, and composer attachment previews.
 ///
 /// Behaviour driven by `Style` + `ControlSet`. Layout driven by `Frame`.
-/// Performance driven by `PerformanceOptions` (preset inferred from
-/// `Style` when not specified).
+/// Buffering is the live media policy's (`MediaPolicyMonitor`), never a
+/// per-surface preset.
 ///
 /// Replaces : `InlineVideoPlayerView`, `VideoPlayerView`,
 /// `VideoFullscreenPlayerView`, the app-side `VideoMediaView`,
@@ -105,22 +105,6 @@ public struct MeeshyVideoPlayer: View {
         public static let flat   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
     }
 
-    // MARK: - PerformanceOptions
-
-    public struct PerformanceOptions: Sendable {
-        public var preferredForwardBufferDuration: Double
-        public var waitsToMinimizeStalling: Bool
-
-        public init(preferredForwardBufferDuration: Double, waitsToMinimizeStalling: Bool) {
-            self.preferredForwardBufferDuration = preferredForwardBufferDuration
-            self.waitsToMinimizeStalling = waitsToMinimizeStalling
-        }
-
-        public static let inline     = PerformanceOptions(preferredForwardBufferDuration: 2.0, waitsToMinimizeStalling: false)
-        public static let carousel   = PerformanceOptions(preferredForwardBufferDuration: 2.0, waitsToMinimizeStalling: false)
-        public static let fullscreen = PerformanceOptions(preferredForwardBufferDuration: 4.0, waitsToMinimizeStalling: false)
-    }
-
     // MARK: - VideoAuthor
 
     public struct VideoAuthor: Sendable {
@@ -160,7 +144,6 @@ public struct MeeshyVideoPlayer: View {
     public let accentColor: String
     public let frame: Frame
     public let availability: VideoAvailability
-    public let performance: PerformanceOptions
     /// WS3.7 — opaque opt-in for the `.inline` path: when `true`, the inline
     /// renderer starts playback (and unmutes the shared engine) on `.onAppear`
     /// instead of waiting for a tap, provided the asset is ready and no call
@@ -217,7 +200,6 @@ public struct MeeshyVideoPlayer: View {
         accentColor: String,
         frame: Frame = .bubble,
         availability: VideoAvailability = .ready,
-        performance: PerformanceOptions? = nil,
         autoplayOnAppear: Bool = false,
         autoplayMuted: Bool = false,
         playButtonDiameter: CGFloat = 64,
@@ -241,7 +223,6 @@ public struct MeeshyVideoPlayer: View {
         self.accentColor = accentColor
         self.frame = frame
         self.availability = availability
-        self.performance = performance ?? Self.inferPerformance(for: style)
         self.autoplayOnAppear = autoplayOnAppear
         self.autoplayMuted = autoplayMuted
         self.playButtonDiameter = playButtonDiameter
@@ -258,13 +239,6 @@ public struct MeeshyVideoPlayer: View {
         self.onClose = onClose
         self.onSaveSuccess = onSaveSuccess
         self.onSaveRequested = onSaveRequested
-    }
-
-    private static func inferPerformance(for style: Style) -> PerformanceOptions {
-        switch style {
-        case .inline:     return .inline
-        case .fullscreen: return .fullscreen
-        }
     }
 
     /// Sous un bouclier de capture (#9574), la vidéo protégée n'offre ni PiP

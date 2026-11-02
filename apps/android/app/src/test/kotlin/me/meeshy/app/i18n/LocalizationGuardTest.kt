@@ -38,8 +38,8 @@ class LocalizationGuardTest {
     }
 
     @Test
-    fun `the shipped locales are English, French, Spanish and Portuguese`() {
-        assertThat(tree.shippedLocales).containsAtLeast("en", "fr", "es", "pt")
+    fun `the shipped locales are English, French, Spanish, Portuguese, Arabic, German and Italian`() {
+        assertThat(tree.shippedLocales).containsAtLeast("en", "fr", "es", "pt", "ar", "de", "it")
     }
 
     @Test
@@ -98,8 +98,10 @@ class LocalizationGuardTest {
         val modules: List<ModuleResources> = ResourceTree.stringModules()
         val shippedLocales: List<String> = Ratchet.parseLines(ResourceTree.testData("shipped-locales.txt"))
         private val recorded: List<String> = Ratchet.parseGapSignatures(ResourceTree.testData("known-gaps.txt"))
+        private val legalExemptLocales: Set<String> =
+            LocalizationRules.parseLegalExemptions(Ratchet.parseLines(ResourceTree.testData("legal-locale-exemptions.txt")))
         val findings: List<Finding> =
-            modules.flatMap { LocalizationRules.check(it, shippedLocales) } +
+            modules.flatMap { LocalizationRules.check(it, shippedLocales, legalExemptLocales) } +
                 LocalizationRules.declaredLocalesWithoutResources(modules, AppLanguage.supportedCodes)
         val verdict: RatchetVerdict<Finding> = Ratchet.diff(findings, recorded) { it.signature }
 

@@ -1,9 +1,11 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
+import { useServedVideoSrc } from '@/lib/media/served-video';
 import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import {
   DURATION_BADGE_OPACITY,
@@ -138,13 +140,18 @@ export function VideoTile({
      `ref` STABLE : un rappel neuf à chaque rendu délierait puis relierait
      l'élément, et `bind(null)` ramène la lecture à `idle`. */
   const elementRef = useRef<HTMLMediaElement | null>(null);
+  const [element, setElement] = useState<HTMLMediaElement | null>(null);
   const bindElement = useCallback(
-    (element: HTMLMediaElement | null) => {
-      elementRef.current = element;
-      bind(element);
+    (bound: HTMLMediaElement | null) => {
+      elementRef.current = bound;
+      bind(bound);
+      setElement(bound);
     },
     [bind],
   );
+  /* Vue, une vidéo de message se relit hors ligne — si la bulle la déclare standard (#12052). */
+  const videoSrc = useServedVideoSrc(attachment);
+  useRememberSeenAttachment({ element, attachmentId: attachment.id, src: videoSrc, active: true });
 
   if (attachment.fileUrl === '') return <VideoFallback attachment={attachment} />;
 
@@ -192,16 +199,16 @@ export function VideoTile({
         ? { style: { width: slot.width, maxWidth: '100%', aspectRatio: `${slot.width} / ${slot.height}` } }
         : {})}
     >
-      {/* `key={attachment.fileUrl}` (même dispositif que `VoiceAttachment`) —
+      {/* `key={videoSrc}` (même dispositif que `VoiceAttachment`) —
           une source qui change REMONTE l'élément, jamais une réutilisation
           silencieuse d'un `<video>` déjà lié à une autre piste. */}
       <video
-        key={attachment.fileUrl}
+        key={videoSrc}
         ref={bindElement}
         preload="none"
         playsInline
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
-        src={attachmentSrc(attachment.fileUrl)}
+        src={videoSrc}
         className="absolute inset-0 size-full object-cover"
       />
 

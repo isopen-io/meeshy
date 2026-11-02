@@ -30,4 +30,13 @@ public struct StoryBackgroundTransform: Codable, Sendable {
         (scale ?? 1.0) == 1.0 && (offsetX ?? 0) == 0 && (offsetY ?? 0) == 0
             && (rotation ?? 0) == 0 && videoFitMode == nil && backdrop == nil
     }
+
+    /// **Ce qui survit à un changement de fond** (#14195) : l'ajustement et le
+    /// fond des bandes sont des choix de la SCÈNE (#6125) ; le zoom, le
+    /// décalage et la rotation visaient le fichier remplacé. `nil` quand rien
+    /// ne reste.
+    public var sceneChoices: StoryBackgroundTransform? {
+        let choix = StoryBackgroundTransform(videoFitMode: videoFitMode, backdrop: backdrop)
+        return choix.isIdentity ? nil : choix
+    }
 }

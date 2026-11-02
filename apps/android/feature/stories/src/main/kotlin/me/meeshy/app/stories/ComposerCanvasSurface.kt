@@ -1,7 +1,7 @@
 package me.meeshy.app.stories
 
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -12,67 +12,70 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import coil.compose.AsyncImage
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.StoryDrawingStroke
+import me.meeshy.sdk.model.composer.ComposerObjectKind
+import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
-import me.meeshy.sdk.model.scene.StoryColorMatrix
+import me.meeshy.sdk.model.composer.scene.StoryBackdrop
+import me.meeshy.sdk.model.composer.scene.StoryFitMode
+import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.ui.component.imageedit.sceneLook
 
 /**
  * The 9:16 story canvas for the **selected** slide. Renders that slide's first
- * media as the background, the slide's on-canvas [textElements] on top, and lets the
+ * media as the background, then the scene's objects in the ONE order of its [stack] (#13852: texts, placed media,
+ * stickers, and the [pins] — places and voice chips — interleaved by rank; composition order is paint AND touch order),
+ * the drawing on top, and lets the
  * user pinch-zoom + drag-pan the background and drag / tap / remove each element. All
  * transform and clamp math lives in the pure, unit-tested [StoryCanvasTransform] /
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
  * the measured canvas size into normalised fractions), so this Composable stays
- * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
+ * declarative glue. A tap on an object selects it — no frame, [sceneSelection] (#14207) —, a tap on the
+ * empty canvas deselects ([onBackgroundTap], #13836).
  *
- * While a text element is being edited the [floatingToolbar] floats in-place just
- * clear of that element — above or below it, clamped inside the canvas — at the
- * vertical anchor decided by the pure, unit-tested [StoryToolbarPlacement] (fed the
- * element's measured centre/half-height, the toolbar's measured height, and the
- * keyboard-shrunk canvas height). The composer applies `imePadding`, so the canvas
- * already excludes the soft keyboard and the toolbar always lands in view.
+ * Only the scene's own objects are painted IN it. The editor's chrome (cross, tools, publish) is laid OVER it by
+ * [StorySceneFirstLayout] (#13834, which replaces the « nothing on the canvas » geography of #4561/#4633 for the story):
+ * that chrome is a sibling, never a child, so the published render never shows it. The export does not read this
+ * surface: it renders every slide from the publish projection, by the stories engine (#13897).
  */
 @Composable
 internal fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
-    colorMatrix: StoryColorMatrix,
+    sceneBrush: Brush,
+    look: SceneLookRecipe,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
-    elementMenu: StoryElementContextMenu?,
+    sceneMenu: SceneObjectContextMenu?,
+    inlineEditEnabled: Boolean,
     stickers: List<StoryStickerElement>,
     selectedStickerId: String?,
     strokes: List<StoryDrawingStroke>,
@@ -83,22 +86,35 @@ internal fun StoryCanvasSurface(
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementLongPress: (String) -> Unit,
-    onElementMenuAction: (StoryElementAction) -> Unit,
-    onElementMenuDismiss: () -> Unit,
+    onSceneMenuAction: (SceneObjectMenu.Action) -> Unit,
+    onSceneMenuDismiss: () -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
     onElementDragEnd: () -> Unit,
     onElementTransform: (String, Float, Float) -> Unit,
-    onElementRemove: (String) -> Unit,
+    onElementTextChange: (String) -> Unit,
     onStickerTap: (String) -> Unit,
+    onStickerLongPress: (String) -> Unit,
     onStickerDrag: (String, Float, Float) -> Unit,
+    onStickerDragEnd: () -> Unit,
     onStickerTransform: (String, Float, Float) -> Unit,
-    onStickerRemove: (String) -> Unit,
+    placedMedia: List<PlacedMediaFrame>,
+    placedMediaGestures: PlacedMediaGestures,
     onBackgroundTap: () -> Unit,
     snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
-    floatingToolbar: @Composable () -> Unit = {},
+    fitMode: String = StoryFitMode.FILL,
+    backdrop: StoryBackdrop = StoryBackdrop.BLUR,
+    onBackgroundLongPress: (() -> Unit)? = null,
+    backgroundRotationDeg: Float = 0f,
+    selectedMediaId: String? = null,
+    stack: List<SceneObjectRef>,
+    pins: @Composable (ref: SceneObjectRef, canvasWidthPx: Float, canvasHeightPx: Float) -> Unit = { _, _, _ -> },
+    live: ComposerLiveStage? = null,
 ) {
-    val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
+    val backgroundTap by rememberUpdatedState(onBackgroundTap)
+    val backgroundLongPress by rememberUpdatedState(onBackgroundLongPress)
+    val frameShape = RoundedCornerShape(16.dp)
     val guideColor = MaterialTheme.colorScheme.primary
     val warnBorder = if (snapFeedback?.withinSafeZone == false) {
         BorderStroke(2.dp, MaterialTheme.colorScheme.error)
@@ -107,9 +123,6 @@ internal fun StoryCanvasSurface(
     }
     var canvasWidthPx by remember { mutableFloatStateOf(0f) }
     var canvasHeightPx by remember { mutableFloatStateOf(0f) }
-    var selectedHalfHeightPx by remember { mutableFloatStateOf(0f) }
-    var toolbarHeightPx by remember { mutableFloatStateOf(0f) }
-    val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
@@ -118,8 +131,8 @@ internal fun StoryCanvasSurface(
             modifier = Modifier
                 .fillMaxHeight()
                 .aspectRatio(9f / 16f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clip(frameShape)
+                .background(sceneBrush)
                 .then(
                     if (warnBorder != null) {
                         Modifier.border(warnBorder, RoundedCornerShape(16.dp))
@@ -140,7 +153,12 @@ internal fun StoryCanvasSurface(
                         Modifier
                     } else {
                         Modifier
-                            .pointerInput(Unit) { detectTapGestures { onBackgroundTap() } }
+                            .pointerInput(onBackgroundLongPress != null) {
+                                detectTapGestures(
+                                    onLongPress = if (onBackgroundLongPress != null) ({ _ -> backgroundLongPress?.invoke() }) else null,
+                                    onTap = { backgroundTap() },
+                                )
+                            }
                             .pointerInput(Unit) {
                                 detectTransformGestures { _, pan, zoom, _ ->
                                     onTransform(pan.x, pan.y, zoom, canvasWidthPx, canvasHeightPx)
@@ -149,12 +167,13 @@ internal fun StoryCanvasSurface(
                     },
                 ),
         ) {
+            val filled = StoryFitMode.rendersFilled(fitMode)
             if (backgroundModel != null) {
+                if (!filled) SceneBackdropLayer(backdrop, backgroundModel)
                 AsyncImage(
                     model = backgroundModel,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    colorFilter = ColorFilter.colorMatrix(ColorMatrix(colorMatrix.values.toFloatArray())),
+                    contentScale = if (filled) ContentScale.Crop else ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -162,9 +181,13 @@ internal fun StoryCanvasSurface(
                             scaleY = transform.scale
                             translationX = transform.offsetX
                             translationY = transform.offsetY
-                        },
+                            rotationZ = backgroundRotationDeg
+                        }
+                        .sceneLook(look),
                 )
             }
+            // La vidéo de fond joue en continu sur la scène (#13863), même avant que son affiche soit décodée.
+            live?.background?.let { slot -> LiveBackground(slot, transform, backgroundRotationDeg, look, fit = !filled) }
             if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
@@ -218,45 +241,64 @@ internal fun StoryCanvasSurface(
                     }
                 }
             }
-            textElements.forEach { element ->
-                TextElementLayer(
-                    element = element,
-                    selected = element.id == selectedElement?.id,
-                    menu = elementMenu?.takeIf { it.elementId == element.id },
-                    canvasWidthPx = canvasWidthPx,
-                    canvasHeightPx = canvasHeightPx,
-                    onTap = { onElementTap(element.id) },
-                    onLongPress = { onElementLongPress(element.id) },
-                    onMenuAction = onElementMenuAction,
-                    onMenuDismiss = onElementMenuDismiss,
-                    onDrag = { dxPx, dyPx ->
-                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                            onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+            val textById = textElements.associateBy { it.id }
+            val stickerById = stickers.associateBy { it.id }
+            val mediaById = placedMedia.associateBy { it.key }
+            stack.forEach { ref ->
+                key(ref.kind, ref.id) {
+                    when (ref.kind) {
+                        ComposerObjectKind.TEXT -> textById[ref.id]?.let { element ->
+                            TextElementLayer(
+                                element = element,
+                                selected = element.id == selectedElement?.id,
+                                menu = sceneMenu?.takeIf { it.ref == ref },
+                                inlineEditEnabled = inlineEditEnabled,
+                                canvasWidthPx = canvasWidthPx,
+                                canvasHeightPx = canvasHeightPx,
+                                onTap = { onElementTap(element.id) },
+                                onLongPress = { onElementLongPress(element.id) },
+                                onMenuAction = onSceneMenuAction,
+                                onMenuDismiss = onSceneMenuDismiss,
+                                onDrag = { dxPx, dyPx ->
+                                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                                        onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                                    }
+                                },
+                                onDragEnd = onElementDragEnd,
+                                onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
+                                onTextChange = onElementTextChange,
+                            )
                         }
-                    },
-                    onDragEnd = onElementDragEnd,
-                    onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
-                    onRemove = { onElementRemove(element.id) },
-                    onMeasured = { size ->
-                        if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
-                    },
-                )
-            }
-            stickers.forEach { sticker ->
-                StickerLayer(
-                    sticker = sticker,
-                    selected = sticker.id == selectedStickerId,
-                    canvasWidthPx = canvasWidthPx,
-                    canvasHeightPx = canvasHeightPx,
-                    onTap = { onStickerTap(sticker.id) },
-                    onDrag = { dxPx, dyPx ->
-                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                            onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                        ComposerObjectKind.MEDIA -> mediaById[ref.id]?.let { frame ->
+                            PlacedMediaLayer(
+                                frame, canvasWidthPx, canvasHeightPx, placedMediaGestures,
+                                selected = frame.key == selectedMediaId,
+                                live = live?.placed(frame.key),
+                            )
                         }
-                    },
-                    onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
-                    onRemove = { onStickerRemove(sticker.id) },
-                )
+                        ComposerObjectKind.STICKER -> stickerById[ref.id]?.let { sticker ->
+                            StickerLayer(
+                                sticker = sticker,
+                                selected = sticker.id == selectedStickerId,
+                                menu = sceneMenu?.takeIf { it.ref == ref },
+                                canvasWidthPx = canvasWidthPx,
+                                canvasHeightPx = canvasHeightPx,
+                                onTap = { onStickerTap(sticker.id) },
+                                onLongPress = { onStickerLongPress(sticker.id) },
+                                onMenuAction = onSceneMenuAction,
+                                onMenuDismiss = onSceneMenuDismiss,
+                                onDrag = { dxPx, dyPx ->
+                                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                                        onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                                    }
+                                },
+                                onDragEnd = onStickerDragEnd,
+                                onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
+                            )
+                        }
+                        ComposerObjectKind.PLACE, ComposerObjectKind.AUDIO -> pins(ref, canvasWidthPx, canvasHeightPx)
+                    }
+                }
             }
             // Topmost: paints every committed stroke, and — only while isDrawingActive —
             // also captures the drag that draws the next one, blocking the pan/zoom/tap
@@ -269,29 +311,24 @@ internal fun StoryCanvasSurface(
                 onStrokeCaptured = onStrokeCaptured,
                 modifier = Modifier.fillMaxSize(),
             )
-            if (selectedElement != null) {
-                val placement = StoryToolbarPlacement.resolve(
-                    elementCenterYpx = selectedElement.y * canvasHeightPx,
-                    elementHalfHeightPx = selectedHalfHeightPx,
-                    toolbarHeightPx = toolbarHeightPx,
-                    canvasHeightPx = canvasHeightPx,
-                    gapPx = gapPx,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .offset { IntOffset(0, placement.topPx.roundToInt()) }
-                        .padding(horizontal = 8.dp)
-                        .onSizeChanged { toolbarHeightPx = it.height.toFloat() }
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                            shape = RoundedCornerShape(12.dp),
-                        )
-                        .padding(8.dp),
-                ) {
-                    floatingToolbar()
-                }
-            }
         }
     }
 }
+
+/** La vidéo de fond sélectionnée joue à la place de son affiche, à la même pose, sous le même look (#13973, A-E3). */
+@Composable
+private fun LiveBackground(slot: ComposerLiveSlot, transform: StoryCanvasTransform, rotationDeg: Float, look: SceneLookRecipe, fit: Boolean) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = transform.scale
+                scaleY = transform.scale
+                translationX = transform.offsetX
+                translationY = transform.offsetY
+                rotationZ = rotationDeg
+            }
+            .sceneLook(look),
+    ) { slot.Picture(fit = fit) }
+}
+

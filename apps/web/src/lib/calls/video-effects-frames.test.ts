@@ -2,7 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { lookFilter } from '@/lib/media/photo-develop';
 
-import { NO_EFFECTS, frameSettings, type FrameSettings, type VideoEffects } from './video-effects';
+import type { LensDrawOp } from '@/lib/meeshy-lens/lens-plan';
+import type { LensSettings, LensStage } from '@/lib/meeshy-lens/lens-stage';
+
+import { NO_EFFECTS, frameSettings, needsFrames, type FrameSettings, type VideoEffects } from './video-effects';
 import { createFrameEngine, cropRect, frameTransform, timingsOf, type BlurStage, type FaceLayer, type FrameEnv } from './video-effects-frames';
 
 /**
@@ -190,5 +193,63 @@ describe('le flux des images', () => {
     await run(transformer, videoFrame(2));
     expect(engine.timings()).toEqual({ frames: 2, p50: 3, p95: 3, max: 3 });
     expect(reports).toEqual([2]);
+  });
+});
+
+describe('une lens MeeshyLens v1 (W14, #11320)', () => {
+  const lensSettings: LensSettings = {
+    lens: { schema: 1, id: 'essai', name: 'Essai', credits: { author: 'Studio', createdAt: '2026-10-01' }, surfaces: ['live'], cost: 'light', window: { startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-12-31T00:00:00Z' }, layers: [{ kind: 'frame', id: 'cadre', motif: 'elegant.art-deco' }], triggers: [] },
+    languages: ['fr'],
+    level: 'full',
+  };
+  const withLens = (camera: { readonly zoom?: number } = {}): FrameSettings => ({ ...settings({}, camera), lens: lensSettings });
+
+  function lensHarness() {
+    const graded = { name: 'graded' } as unknown as CanvasImageSource;
+    const journal: Array<readonly [string, ...unknown[]]> = [];
+    const ops: readonly LensDrawOp[] = [{ kind: 'frame', id: 'cadre', motif: 'elegant.art-deco', opacity: 1 }];
+    const stage: LensStage = {
+      plan: (given, from, frame, t) => (journal.push(['plan', given, from, frame, t]), ops),
+      grade: (image, given, frame) => (journal.push(['grade', image, given, frame]), graded),
+      paint: (context, painted, frame) => void journal.push(['paint', context, painted, frame]),
+      close: () => void journal.push(['close']),
+    };
+    return { graded, journal, ops, stage };
+  }
+
+  test('il faut traiter les images dès qu’une lens est posée', () => {
+    expect(needsFrames(settings())).toBe(false);
+    expect(needsFrames(withLens())).toBe(true);
+  });
+
+  test('la LUT étalonne l’image avant le canevas, puis la lens se peint par-dessus, planifiée sur l’image d’origine', () => {
+    const h = harness();
+    const l = lensHarness();
+    const engine = createFrameEngine(withLens(), { ...h.env, lens: l.stage });
+    expect(engine.draw(source, 640, 480, 42)).toBe(h.canvas as unknown as CanvasImageSource);
+    expect(l.journal.map(([name]) => name)).toEqual(['grade', 'plan', 'paint']);
+    expect(l.journal[0]).toEqual(['grade', source, lensSettings, { width: 640, height: 480 }]);
+    expect(h.draws[0]?.args).toEqual([l.graded, 0, 0]);
+    expect(l.journal[1]).toEqual(['plan', lensSettings, source, { width: 640, height: 480 }, 42]);
+    expect(l.journal[2]?.[2]).toBe(l.ops);
+  });
+
+  test('zoomée, la lens se planifie sur l’image RECADRÉE, comme l’effet de visage', () => {
+    const h = harness();
+    const l = lensHarness();
+    createFrameEngine(withLens({ zoom: 2 }), { ...h.env, lens: l.stage }).draw(source, 640, 480, 0);
+    expect(l.journal[1]?.[2]).toBe(h.canvas);
+  });
+
+  test('sans étage lens (pas de canevas hors écran), l’image part comme avant', () => {
+    const h = harness();
+    expect(createFrameEngine(withLens(), h.env).draw(source, 640, 480, 0)).toBeNull();
+  });
+
+  test('fermer le moteur ferme l’étage lens', () => {
+    const h = harness();
+    const l = lensHarness();
+    createFrameEngine(withLens(), { ...h.env, lens: l.stage }).close();
+    expect(l.journal).toEqual([['close']]);
   });
 });

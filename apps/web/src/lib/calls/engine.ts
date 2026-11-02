@@ -125,7 +125,7 @@ export type CallEngineDeps = {
   readonly tones: { readonly start: typeof startTone; readonly stop: typeof stopTone; readonly cue: typeof playCue; readonly prime: typeof primeTones };
   readonly ringLabel: () => string;
   readonly createQualityLoop: (deps: QualityLoopDeps) => QualityLoop;
-  /** Chaque changement de réseau (`online`, `navigator.connection`) — rend le désabonnement. */
+  /** Chaque changement de réseau (`online`, le type de connexion) — rend le désabonnement. */
   readonly watchNetwork: (onChange: () => void) => () => void;
   readonly platform: () => string;
   readonly deviceModel: () => string;

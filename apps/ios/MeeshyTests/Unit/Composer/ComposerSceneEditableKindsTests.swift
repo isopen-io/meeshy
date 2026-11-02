@@ -32,7 +32,7 @@ final class ComposerSceneEditableKindsTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift")
         // **Les commentaires sont DÉPOUILLÉS**, et ce n'est pas une précaution
         // de style : la première version de cette garde rougissait sur mon
         // propre commentaire, qui explique pourquoi le `break` a disparu — donc

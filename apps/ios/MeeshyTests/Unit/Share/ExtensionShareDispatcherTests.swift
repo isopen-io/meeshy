@@ -40,7 +40,8 @@ final class ExtensionShareDispatcherTests: XCTestCase {
             createDirect: { userId, _ in
                 log.created.append(userId)
                 return ExtensionShareDispatcher.CreatedDirect(id: "direct-\(userId)", isEncrypted: directIsEncrypted)
-            }
+            },
+            remembersEndToEnd: { _ in false }
         )
         return (sut, log)
     }
@@ -160,6 +161,18 @@ final class ExtensionShareDispatcherTests: XCTestCase {
         XCTAssertEqual(parse(#"{"success":true,"data":{"id":"d2","encryptionMode":"e2ee"}}"#), .init(id: "d2", isEncrypted: true))
         XCTAssertEqual(parse(#"{"success":true,"data":{"id":"d3"}}"#), .init(id: "d3", isEncrypted: true), "un mode tu compte comme chiffré")
         XCTAssertNil(parse(#"{"success":true,"data":{}}"#))
+    }
+
+    /// #12978 — `server` et `hybrid` : le serveur y reçoit le clair et le chiffre
+    /// lui-même. Seul le bout en bout (ou un mode inconnu) ferme l'envoi d'ici.
+    func test_theCreatedDirect_inAServerReadableMode_receivesTheShare() {
+        func parse(_ json: String) -> ExtensionShareDispatcher.CreatedDirect? {
+            ExtensionShareDispatcher.createdDirect(fromResponse: Data(json.utf8))
+        }
+        XCTAssertEqual(parse(#"{"success":true,"data":{"id":"d4","encryptionMode":"server"}}"#), .init(id: "d4", isEncrypted: false))
+        XCTAssertEqual(parse(#"{"success":true,"data":{"id":"d5","encryptionMode":"hybrid"}}"#), .init(id: "d5", isEncrypted: false))
+        XCTAssertEqual(parse(#"{"success":true,"data":{"id":"d6","encryptionMode":"inconnu"}}"#), .init(id: "d6", isEncrypted: true),
+                       "un mode inconnu se lit comme le bout en bout")
     }
 
     /// La fiche de relais nomme le compte qui l'a déposée : l'app ne la sert qu'à lui.

@@ -15,8 +15,12 @@ class InvalidUrlException(path: String) : IOException("URL invalide : $path")
  */
 class UrlGuardInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val path = chain.request().url.encodedPath
+        val request = chain.request()
+        // A WebSocket upgrade is not a REST route: the Socket.IO handshake path is
+        // `/socket.io/` by protocol, trailing slash included (shared client, #12102).
+        if (request.header("Upgrade").equals("websocket", ignoreCase = true)) return chain.proceed(request)
+        val path = request.url.encodedPath
         if (EndpointPolicy.hasEmptyPathSegment(path)) throw InvalidUrlException(path)
-        return chain.proceed(chain.request())
+        return chain.proceed(request)
     }
 }

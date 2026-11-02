@@ -123,6 +123,17 @@ public enum RelativeTimeFormatter {
         return String(format: lastSeenDateAtFormat, dateStr, time)
     }
 
+    // MARK: - Full — "il y a 3 jours" / "3 days ago" (Foundation, spelled out)
+
+    /// Spelled-out frame for surfaces that read a sentence rather than a chip
+    /// (active sessions, failed story rows, my-story card). Foundation phrases
+    /// it in every language; one cached formatter per locale.
+    public static func fullString(for date: Date, now: Date = Date(), locale: Locale = .current) -> String {
+        fullFormatters.string(for: date, relativeTo: now, locale: locale)
+    }
+
+    private static let fullFormatters = FullRelativeFormatterCache()
+
     // MARK: - Localized unit labels (app catalog, Bundle.main)
 
     private static var nowLabel: String {
@@ -221,6 +232,23 @@ private final class AbsoluteDateFormatterBox: Sendable {
         formatters.mutate { state -> String in
             state.clock.timeZone = timeZone
             return state.clock.string(from: date)
+        }
+    }
+}
+
+private final class FullRelativeFormatterCache: Sendable {
+    private let formatters = Locked(uncheckedState: [String: RelativeDateTimeFormatter]())
+
+    func string(for date: Date, relativeTo now: Date, locale: Locale) -> String {
+        formatters.mutate { cache -> String in
+            let formatter = cache[locale.identifier] ?? {
+                let made = RelativeDateTimeFormatter()
+                made.locale = locale
+                made.unitsStyle = .full
+                return made
+            }()
+            cache[locale.identifier] = formatter
+            return formatter.localizedString(for: date, relativeTo: now)
         }
     }
 }

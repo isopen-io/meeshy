@@ -43,6 +43,15 @@ data class StoryTextObject(
     val textAlign: String? = null,
     val textBg: String? = null,
     val backgroundStyle: StoryTextBackgroundStyle? = null,
+    /** Poids de police indépendant du style (`StoryTextWeight` côté iOS) ; `null` : dérivé du style. */
+    val fontWeight: String? = null,
+    /** Forme du cadre (`StoryTextFrameShape`) ; `null` : arrondi. Chaîne, pour qu'une forme plus récente voyage. */
+    val frameShape: String? = null,
+    /** Multiplicateur de la marge du cadre ; `null` : 1,0 (borné à 0…3 à la lecture). */
+    val framePaddingScale: Double? = null,
+    /** Liseré de la BOÎTE en design-pixels (distinct de [borderWidth], qui contoure les glyphes). */
+    val frameBorderWidth: Double? = null,
+    val frameBorderColor: String? = null,
     val borderColor: String? = null,
     val borderWidth: Double? = null,
     /** The EFFECT axis (#4870) — [StoryTextEffect.wire]; absent ⇒ none. A string, like `textStyle`, so a newer client's value decodes. */
@@ -57,4 +66,6 @@ data class StoryTextObject(
     val keyframes: List<StoryKeyframe>? = null,
     /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
     val name: String? = null,
+    /** La personne qu'un badge de mention ÉPINGLÉE nomme (#13846) ; `null` : un texte, que le serveur relit en mention INLINE. */
+    val referenceUserId: String? = null,
 )

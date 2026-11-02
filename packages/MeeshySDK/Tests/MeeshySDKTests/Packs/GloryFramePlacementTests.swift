@@ -38,7 +38,7 @@ struct GloryFramePlacementTests {
     @Test("chaque contrat du registre se lit sans refus, et chaque cadre y a son placement, dans une collection du pack")
     func everyPublishedFrameHasAPlacement() throws {
         let entries = try Self.registry()
-        #expect(entries.map(\.slug) == ["afrique", "egypte", "olympe", "celeste", "nord", "abysses", "neon", "moments", "tresor"])
+        #expect(entries.map(\.slug) == ["afrique", "egypte", "olympe", "celeste", "nord", "abysses", "neon", "moments", "tresor", "succes"])
         for entry in entries {
             let parsed = try #require(try Self.contract(entry))
             #expect(parsed.rejected == 0, "\(entry.slug)")

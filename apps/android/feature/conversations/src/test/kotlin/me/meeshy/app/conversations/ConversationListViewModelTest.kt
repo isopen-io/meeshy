@@ -57,7 +57,6 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
@@ -106,17 +105,12 @@ class ConversationListViewModelTest {
             every { this@mockk.conversationRestored } returns conversationRestored
             every { this@mockk.conversationClosed } returns conversationClosed
             every { this@mockk.participantLeft } returns participantLeft
+            every { this@mockk.participantJoined } returns MutableSharedFlow()
+            every { this@mockk.participantUnbanned } returns MutableSharedFlow()
             every { this@mockk.userStatus } returns userStatus
             every { this@mockk.presenceSnapshot } returns presenceSnapshot
             every { this@mockk.typingStarted } returns typingStarted
             every { this@mockk.typingStopped } returns typingStopped
-        }
-
-    private fun typingPresenceRelay(
-        forcedOnline: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
-    ): TypingPresenceRelay =
-        mockk<TypingPresenceRelay> {
-            every { this@mockk.forcedOnline } returns forcedOnline
         }
 
     private fun connectionSocket(
@@ -180,7 +174,6 @@ class ConversationListViewModelTest {
         connection: SocketManager = connectionSocket(),
         draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
         socket: MessageSocketManager = socketManager(),
-        relay: TypingPresenceRelay = typingPresenceRelay(),
         starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
         categoryRepository: CategoryRepository = categoryRepo(),
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
@@ -190,10 +183,15 @@ class ConversationListViewModelTest {
         lockStore: ConversationLockStore = InMemoryConversationLockStore(),
         storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
         statusBarCache: StatusBarCache = statusBarCache(),
+        loadingDeps: ConversationListLoadingDeps = ConversationListLoadingDeps.detached(),
     ) = ConversationListViewModel(
-        repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
+        repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
-        storyRepository, statusBarCache,
+        storyRepository, statusBarCache, io.mockk.mockk(relaxed = true),
+        me.meeshy.sdk.network.InMemoryNetworkMonitor(),
+        io.mockk.mockk(relaxed = true),
+        idleRowSignalsSource(),
+        loadingDeps,
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -335,52 +333,6 @@ class ConversationListViewModelTest {
         }
 
     @Test
-    fun a_live_user_status_event_is_stored_in_presence_by_user_id() = runTest(dispatcher) {
-        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
-        val repo = repositoryReturning(flowOf(CacheResult.Empty))
-        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow))
-        advanceUntilIdle()
-
-        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.presenceByUserId["other"]?.isOnline).isTrue()
-    }
-
-    @Test
-    fun a_forced_online_event_from_a_typing_frame_is_stored_in_presence_by_user_id() = runTest(dispatcher) {
-        val forcedOnlineFlow = MutableSharedFlow<UserStatusEvent>()
-        val repo = repositoryReturning(flowOf(CacheResult.Empty))
-        val vm = viewModel(repo, relay = typingPresenceRelay(forcedOnline = forcedOnlineFlow))
-        advanceUntilIdle()
-
-        forcedOnlineFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.presenceByUserId["other"]?.isOnline).isTrue()
-    }
-
-    @Test
-    fun a_presence_snapshot_populates_every_user_in_one_pass() = runTest(dispatcher) {
-        val presenceSnapshotFlow = MutableSharedFlow<PresenceSnapshotEvent>()
-        val repo = repositoryReturning(flowOf(CacheResult.Empty))
-        val vm = viewModel(repo, socket = socketManager(presenceSnapshot = presenceSnapshotFlow))
-        advanceUntilIdle()
-
-        presenceSnapshotFlow.emit(
-            PresenceSnapshotEvent(
-                users = listOf(
-                    UserStatusEvent(userId = "u1", isOnline = true),
-                    UserStatusEvent(userId = "u2", isOnline = false),
-                ),
-            ),
-        )
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.presenceByUserId.keys).containsExactly("u1", "u2")
-    }
-
-    @Test
     fun a_lock_store_emission_is_reflected_in_locked_conversation_ids() = runTest(dispatcher) {
         val lockStore = InMemoryConversationLockStore()
         val repo = repositoryReturning(flowOf(CacheResult.Empty))
@@ -404,55 +356,6 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.lockedConversationIds).isEmpty()
-    }
-
-    @Test
-    fun presenceStateFor_resolves_the_other_participants_live_presence() = runTest(dispatcher) {
-        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
-        val conversation = direct(id = "c1", otherId = "other")
-        val repo = repositoryReturning(
-            flowOf(CacheResult.Fresh(listOf(conversation), ageMillis = 0)),
-        )
-        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow), session = session("me"))
-        advanceUntilIdle()
-
-        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.presenceStateFor(conversation, nowEpochMillis = 0L))
-            .isEqualTo(me.meeshy.sdk.model.PresenceState.ONLINE)
-    }
-
-    @Test
-    fun presenceStateFor_is_null_for_a_group_conversation() = runTest(dispatcher) {
-        val group = ApiConversation(
-            id = "c2",
-            type = "group",
-            title = "Team",
-            participants = listOf(
-                ApiParticipant(id = "p-me", userId = "me", displayName = "Me"),
-                ApiParticipant(id = "p-other", userId = "other", displayName = "Contact"),
-            ),
-        )
-        val userStatusFlow = MutableSharedFlow<UserStatusEvent>()
-        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(group), ageMillis = 0)))
-        val vm = viewModel(repo, socket = socketManager(userStatus = userStatusFlow), session = session("me"))
-        advanceUntilIdle()
-
-        userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true))
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.presenceStateFor(group, nowEpochMillis = 0L)).isNull()
-    }
-
-    @Test
-    fun presenceStateFor_is_null_when_nothing_has_arrived_for_the_other_participant_yet() = runTest(dispatcher) {
-        val conversation = direct(id = "c3", otherId = "other")
-        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conversation), ageMillis = 0)))
-        val vm = viewModel(repo, session = session("me"))
-        advanceUntilIdle()
-
-        assertThat(vm.state.value.presenceStateFor(conversation, nowEpochMillis = 0L)).isNull()
     }
 
     @Test
@@ -767,6 +670,22 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun a_failed_refresh_over_a_populated_list_leaves_no_phantom_error_for_a_later_filter() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        coEvery { repo.refresh() } throws RuntimeException("Network unavailable")
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        vm.selectFilter(me.meeshy.sdk.model.ConversationFilter.UNREAD)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(ConversationListContent.of(vm.state.value)).isEqualTo(ConversationListContent.FilteredEmpty)
+    }
+
+    @Test
     fun refresh_failure_surfaces_the_error_message() = runTest(dispatcher) {
         val repo = repositoryReturning(flowOf(CacheResult.Empty))
         coEvery { repo.refresh() } throws RuntimeException("Network unavailable")
@@ -881,6 +800,49 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun the_launch_does_not_flash_offline_while_the_socket_makes_its_first_connection() = runTest(dispatcher) {
+        val connection = MutableStateFlow(SocketConnectionState.DISCONNECTED)
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val vm = viewModel(repo, connectionSocket(connection))
+        runCurrent()
+
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+
+        connection.value = SocketConnectionState.CONNECTING
+        runCurrent()
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+
+        connection.value = SocketConnectionState.CONNECTED
+        runCurrent()
+        connection.value = SocketConnectionState.DISCONNECTED
+        runCurrent()
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+
+        advanceTimeBy(ConversationListConnectionObserver.RECONNECT_GRACE_MILLIS + 1)
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.RECONNECTING)
+    }
+
+    @Test
+    fun a_socket_that_never_connects_is_announced_connecting_after_the_grace_period() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val vm = viewModel(repo, connectionSocket(MutableStateFlow(SocketConnectionState.DISCONNECTED)))
+        runCurrent()
+
+        advanceTimeBy(ConversationListViewModel.CONNECTION_GRACE_MILLIS + 1)
+
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.CONNECTING)
+    }
+
+    @Test
+    fun a_silent_background_revalidation_never_pushes_a_syncing_strip() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Stale(listOf(ApiConversation(id = "c1")), ageMillis = 999_999)))
+        val vm = viewModel(repo, connectionSocket(MutableStateFlow(SocketConnectionState.CONNECTED)))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+    }
+
+    @Test
     fun the_banner_follows_the_socket_connection_state() = runTest(dispatcher) {
         val connection = MutableStateFlow(SocketConnectionState.CONNECTING)
         val repo = repositoryReturning(
@@ -894,7 +856,7 @@ class ConversationListViewModelTest {
         val vm = viewModel(repo, connectionSocket(connection))
         advanceUntilIdle()
 
-        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.RECONNECTING)
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.CONNECTING)
 
         connection.value = SocketConnectionState.CONNECTED
         advanceUntilIdle()
@@ -1275,6 +1237,25 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun mark_read_after_mark_unread_drops_the_explicit_unread_mark() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        coEvery { repo.markUnreadOptimistic("c1") } returns true
+        coEvery { repo.markReadOptimistic("c1") } returns true
+        val deps = ConversationListLoadingDeps.detached()
+        val vm = viewModel(repo, loadingDeps = deps)
+        advanceUntilIdle()
+
+        vm.markUnread("c1")
+        assertThat(deps.explicitUnreadMarks.snapshot()).containsExactly("c1")
+        vm.markRead("c1")
+        advanceUntilIdle()
+
+        assertThat(deps.explicitUnreadMarks.snapshot()).isEmpty()
+    }
+
+    @Test
     fun mark_unread_no_op_does_not_schedule_a_flush() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
@@ -1376,6 +1357,40 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.previewFor("c1")).isEqualTo(recent)
+    }
+
+    @Test
+    fun a_locked_conversation_preview_reads_no_message_at_all() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val messageRepo = messageRepository(listOf(LocalMessage(message = ApiMessage(id = "m", conversationId = "c1"))))
+        val locks = me.meeshy.sdk.lock.InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "1234")
+        }
+        val vm = viewModel(repo, messageRepo = messageRepo, lockStore = locks)
+        advanceUntilIdle()
+
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { messageRepo.recentMessages("c1", any()) }
+        assertThat(vm.state.value.previewFor("c1")).isNull()
+    }
+
+    @Test
+    fun a_lock_set_after_the_preview_loaded_seals_what_was_already_read() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val messageRepo = messageRepository(listOf(LocalMessage(message = ApiMessage(id = "m", conversationId = "c1"))))
+        val locks = me.meeshy.sdk.lock.InMemoryConversationLockStore().apply { setMasterPin("123456") }
+        val vm = viewModel(repo, messageRepo = messageRepo, lockStore = locks)
+        advanceUntilIdle()
+        vm.loadPreviewMessages("c1")
+        advanceUntilIdle()
+
+        locks.setLock("c1", "1234")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.previewFor("c1")).isNull()
     }
 
     @Test

@@ -29,7 +29,7 @@ final class ConversationVideoInlineMinimalGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
         "Meeshy/Features/Main/Views/Bubble/BubbleCarouselView.swift",
         "Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift",
-        "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
+        "Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift",
     ]
 
     private static let posterPath = "Meeshy/Features/Main/Views/Bubble/ConversationVideoPoster.swift"
@@ -133,7 +133,7 @@ final class ConversationVideoInlineMinimalGuardTests: XCTestCase {
     /// d'une vidéo, et passent sa réponse au badge de téléchargement.
     func test_laCaseDeDebordement_neMontePasDeLecteur_niEnBullesNiDansLeFil() throws {
         for path in ["Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
-                     "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift"] {
+                     "Meeshy/Features/Focal/Row/FocalAttachmentBlock.swift"] {
             let source = try stripped(path)
             XCTAssertTrue(source.contains("MediaTileVideoPresentation.resolve("),
                           "\(path) décide seul de monter le lecteur sur une case de grille")

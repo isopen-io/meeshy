@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="starred_clear_confirm_title">Alle Favoriten entfernen?</string>
+    <string name="starred_clear_confirm_message">Deine favorisierten Nachrichten werden nicht mehr aufgelistet. Die Nachrichten bleiben in ihren Unterhaltungen.</string>
+</resources>

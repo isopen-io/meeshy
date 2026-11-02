@@ -50,7 +50,7 @@ export default function ProgressionPrestigeScreen() {
       titre={gameText('game.prestige.title')}
       teinte={GAME_BRAND}
       compte={(p) => {
-        const prestige = (p as EngagementWithGame).game?.prestige;
+        const prestige = p.game?.prestige;
         return prestige === undefined ? null : `${prestige.stars} / ${prestige.max}`;
       }}
     >

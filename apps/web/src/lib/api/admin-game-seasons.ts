@@ -333,6 +333,7 @@ export const SEASON_REFUSALS: readonly SeasonGatewayRefusal[] = [
   'invalid-theme',
   'rewards-out-of-bounds',
   'copy-invalid',
+  'invalid-reward-pack',
   'revision-conflict',
   'schedule-indexes-unavailable',
   'proposal-not-pending',

@@ -26,18 +26,28 @@ struct FeedComposerSheet: View {
     @ObservedObject var viewModel: FeedViewModel
     let initialText: String
     let pendingAttachmentType: String?
-    var quotePost: FeedPost? = nil
+    var quotePost: FeedPost?
     let onDismiss: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
-    @ObservedObject private var authManager = AuthManager.shared
+    @ObservedObject private var authManager: AuthManager
     @State private var composerText = ""
     @State private var delays = DelayedActions()
     @FocusState private var isFocused: Bool
     /// Une pièce en attente, ouverte dans la retouche de la caméra (#11170).
     @State private var pieceToRetouch: ComposerRetouchPiece?
+
+    init(viewModel: FeedViewModel, initialText: String, pendingAttachmentType: String?, quotePost: FeedPost? = nil,
+         onDismiss: @escaping () -> Void, authManager: AuthManager = .shared) {
+        self.viewModel = viewModel
+        self.initialText = initialText
+        self.pendingAttachmentType = pendingAttachmentType
+        self.quotePost = quotePost
+        self.onDismiss = onDismiss
+        self.authManager = authManager
+    }
     @State private var videosToPreview: [URL] = []
 
     @State private var pendingAttachments: [MessageAttachment] = []
@@ -69,9 +79,9 @@ struct FeedComposerSheet: View {
     @State private var audiencePickerMode: PostVisibility? = nil
 
     /// La visibilité choisie, relue comme un mode du modèle — un `rawValue`
-    /// inconnu (état corrompu) retombe sur PUBLIC, le défaut produit.
+    /// inconnu se lit RESTREINT (#13939), jamais public.
     private var selectedPostVisibility: PostVisibility {
-        PostVisibility(rawValue: postVisibility) ?? .public
+        PostVisibility(served: postVisibility)
     }
 
     /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour
@@ -443,10 +453,8 @@ struct FeedComposerSheet: View {
             // Le viseur du composeur, seul en plein écran (#9125).
             ComposerViewfinder { result in
                 switch result {
-                // Le fil du feed ré-encode déjà l'image : les octets d'origine
-                // ne lui servent pas, et il les jette explicitement.
-                case .photo(let image, _):
-                    handleCameraCapture(image)
+                case .photo(let image, let data):
+                    handleCameraCapture(image, data: data)
                 case .video(let url):
                     handleCameraVideo(url)
                 }
@@ -594,9 +602,9 @@ struct FeedComposerSheet: View {
         pendingThumbnails.removeValue(forKey: id)
     }
 
-    private func handleCameraCapture(_ image: UIImage) {
-        let prep = AttachmentPreparationService.shared.prepareImage(
-            image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
+    private func handleCameraCapture(_ image: UIImage, data: Data? = nil) {
+        let prep = AttachmentPreparationService.shared.prepareCapture(
+            image, data: data, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
         )
         trackSheetPreparation(prep)
     }

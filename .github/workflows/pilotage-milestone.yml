@@ -17,7 +17,7 @@
 # dupliqué. Il rend le numéro du milestone dans le résumé du run — c'est ce
 # numéro qu'attend l'API des issues.
 # =============================================================================
-name: Pilotage — milestone
+name: Pilotage · milestone
 
 on:
   workflow_dispatch:

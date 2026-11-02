@@ -22,6 +22,39 @@ final class ComposerPhotoEncodingTests: XCTestCase {
         XCTAssertEqual(CGImageSourceGetType(source) as String?, UTType.jpeg.identifier, "le type de la prise")
     }
 
+    // MARK: - Une prise que rien n'a peinte n'est pas ré-encodée (#9885)
+
+    func test_reusesTake_untouchedAtItsOwnDefinition_keepsTheTake() {
+        let prise = ComposerLookPainterTests.cgSource()
+        let toile = ComposerLookPainter.canvas(for: CGSize(width: 300, height: 400), aspect: 300.0 / 400.0)
+
+        XCTAssertTrue(ComposerPhotoEncoding.reusesTake(paints: false, canvas: toile, take: prise))
+    }
+
+    func test_reusesTake_aLookPainted_reencodes() {
+        let prise = ComposerLookPainterTests.cgSource()
+        let toile = CGSize(width: 300, height: 400)
+
+        XCTAssertFalse(ComposerPhotoEncoding.reusesTake(paints: true, canvas: toile, take: prise))
+    }
+
+    func test_reusesTake_aCropToAnotherCanvas_reencodes() {
+        let prise = ComposerLookPainterTests.cgSource()
+        let toile = ComposerLookPainter.canvas(for: CGSize(width: 300, height: 400))
+
+        XCTAssertNotEqual(toile, CGSize(width: 300, height: 400), "le témoin suppose une toile 9:16 qui recadre")
+        XCTAssertFalse(ComposerPhotoEncoding.reusesTake(paints: false, canvas: toile, take: prise))
+    }
+
+    func test_renderedPhotoBytes_untouchedTake_areTheTakeBytes() async throws {
+        let prise = try XCTUnwrap(Self.takeWithExif())
+        let octets = await ComposerCaptureSession.renderedPhotoBytes(
+            prise, fallback: nil, look: ComposerPhotoLook(), aspect: 300.0 / 400.0,
+            person: CallFramePerson(id: "self", name: "Moi", handle: "moi", isSelf: true), date: Date(),
+            scenes: MockComposerLookSceneProvider())
+        XCTAssertEqual(octets, prise, "aucune génération d'encodage pour une prise intacte")
+    }
+
     func test_encoded_withoutTake_isAPlainJpeg() throws {
         let octets = try XCTUnwrap(ComposerPhotoEncoding.encoded(ComposerLookPainterTests.cgSource(), like: nil))
         let source = try XCTUnwrap(CGImageSourceCreateWithData(octets as CFData, nil))

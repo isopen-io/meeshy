@@ -8,6 +8,12 @@ import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { coordinateNativeMedia } from '@/lib/view/native-media-coordination';
+import { useElectedVideoSrc } from '@/lib/media/served-video';
+
+import { ServedPicture } from './served-picture';
+
+/** #12316 — la colonne du fil ne dépasse pas 640 px ; en dessous, elle prend la largeur de l'écran. */
+export const FEED_MEDIA_SIZES = '(max-width: 640px) 100vw, 640px';
 
 /**
  * LA SURFACE D'UN MÉDIA — image (ThumbHash peint AVANT toute requête, puis
@@ -47,6 +53,7 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
    * rangée.
    */
   const [, setÉchecs] = useState(0);
+  const videoSrc = useElectedVideoSrc(media);
 
   if (playable && media.kind === 'video') {
     const language = currentInterfaceLanguage();
@@ -62,8 +69,8 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
             première image décodée, là où le `background-image` CSS
             disparaissait dès que l'élément prenait le cadre. */}
         <video
-          key={media.src}
-          src={media.src}
+          key={videoSrc}
+          src={videoSrc}
           {...(poster !== undefined ? { poster } : {})}
           preload="none"
           playsInline
@@ -159,22 +166,25 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
       {media.placeholder !== undefined ? (
         <img src={media.placeholder} alt="" aria-hidden="true" className="absolute inset-0 size-full object-cover" />
       ) : null}
-      <img
-        src={media.src}
-        onError={() => {
-          noteMediaAbsent(media.src);
-          setÉchecs((compte) => compte + 1);
-        }}
-        /* `PostMedia.alt` SERVI, jamais la légende (déjà rendue en texte
-           visible sous le média) : la répéter la ferait lire deux fois.
-           Sans texte d'accessibilité, l'image est DÉCORATIVE (`alt=""`) —
-           c'est la forme juste quand rien n'en décrit le contenu. */
-        alt={media.altText ?? ''}
-        loading="lazy"
-        onLoad={() => setLoaded(true)}
-        className="absolute inset-0 size-full object-cover transition-opacity duration-300"
-        style={{ opacity: media.placeholder === undefined || loaded ? 1 : 0 }}
-      />
+      <ServedPicture avifSrcSet={media.avifSrcSet} sizes={FEED_MEDIA_SIZES}>
+        <img
+          src={media.src}
+          {...(media.srcSet !== undefined ? { srcSet: media.srcSet, sizes: FEED_MEDIA_SIZES } : {})}
+          onError={() => {
+            noteMediaAbsent(media.src);
+            setÉchecs((compte) => compte + 1);
+          }}
+          /* `PostMedia.alt` SERVI, jamais la légende (déjà rendue en texte
+             visible sous le média) : la répéter la ferait lire deux fois.
+             Sans texte d'accessibilité, l'image est DÉCORATIVE (`alt=""`) —
+             c'est la forme juste quand rien n'en décrit le contenu. */
+          alt={media.altText ?? ''}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+          className="absolute inset-0 size-full object-cover transition-opacity duration-300"
+          style={{ opacity: media.placeholder === undefined || loaded ? 1 : 0 }}
+        />
+      </ServedPicture>
     </>
   );
 }

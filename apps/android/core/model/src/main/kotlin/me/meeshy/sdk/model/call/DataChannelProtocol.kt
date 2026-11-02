@@ -34,6 +34,14 @@ sealed interface DataChannelInbound {
     data class Caption(val segment: CallCaptionSegment) : DataChannelInbound
 
     /**
+     * #13333 — the journal entry an iPhone (or the web) pushes peer-to-peer on the channel:
+     * `{"type":"transcript-entry","entry":{…}}`, iOS `DataChannelTranscriptMessage`. Partial
+     * revisions and the final of one utterance share [CallTranscriptEntry.id] (the merge key with
+     * the gateway's translated relay that follows).
+     */
+    data class TranscriptEntry(val entry: CallTranscriptEntry) : DataChannelInbound
+
+    /**
      * A frame that carries no actionable state: the `ping` keep-alive, an unknown
      * future message type, or malformed/empty noise. Inert by design.
      */
@@ -52,11 +60,15 @@ object DataChannelCodec {
     const val TYPE_BYE: String = "bye"
     const val TYPE_PING: String = "ping"
     const val TYPE_CAPTION: String = "caption"
+    const val TYPE_TRANSCRIPT_ENTRY: String = "transcript-entry"
 
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
     }
+
+    /** iOS decodes every journal field as required: the entry travels whole, defaults included. */
+    private val entryJson = Json(json) { encodeDefaults = true }
 
     /** The in-band hangup frame; [reason] is omitted from the wire when null. */
     fun encodeBye(reason: String? = null): ByteArray =
@@ -84,6 +96,10 @@ object DataChannelCodec {
             ),
         ).encodeToByteArray()
 
+    /** The iOS journal frame: the wire every peer (iOS, web) decodes. */
+    fun encodeTranscriptEntry(entry: CallTranscriptEntry): ByteArray =
+        entryJson.encodeToString(TranscriptEntryWire(type = TYPE_TRANSCRIPT_ENTRY, entry = entry)).encodeToByteArray()
+
     fun decode(bytes: ByteArray): DataChannelInbound = decode(bytes.decodeToString())
 
     fun decode(frame: String): DataChannelInbound {
@@ -92,6 +108,7 @@ object DataChannelCodec {
         return when (obj.stringOrNull("type")) {
             TYPE_BYE -> DataChannelInbound.Bye(reason = obj.stringOrNull("reason"))
             TYPE_CAPTION -> decodeCaption(obj)
+            TYPE_TRANSCRIPT_ENTRY -> decodeTranscriptEntry(obj)
             else -> DataChannelInbound.Ignored
         }
     }
@@ -112,6 +129,13 @@ object DataChannelCodec {
         )
     }
 
+    private fun decodeTranscriptEntry(obj: JsonObject): DataChannelInbound {
+        val entry = obj["entry"] as? JsonObject ?: return DataChannelInbound.Ignored
+        val decoded = runCatching { json.decodeFromJsonElement(CallTranscriptEntry.serializer(), entry) }.getOrNull()
+            ?: return DataChannelInbound.Ignored
+        return if (decoded.isAddressable) DataChannelInbound.TranscriptEntry(decoded) else DataChannelInbound.Ignored
+    }
+
     private fun JsonObject.stringOrNull(key: String): String? =
         (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
@@ -120,6 +144,9 @@ object DataChannelCodec {
 
     @Serializable
     private data class ControlWire(val type: String, val reason: String? = null)
+
+    @Serializable
+    private data class TranscriptEntryWire(val type: String, val entry: CallTranscriptEntry)
 
     @Serializable
     private data class CaptionWire(

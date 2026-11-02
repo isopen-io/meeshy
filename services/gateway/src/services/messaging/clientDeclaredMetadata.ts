@@ -12,10 +12,13 @@
  * fait ici, jamais en posant une clé de plus dans `saveMessage` — c'est ainsi
  * que chaque bloc passe par un parseur, sans exception qu'on oublie.
  *
- * Chiffrement : ces blocs se stockent EN CLAIR, au même régime que
- * `postReplyTo` / `trackingLinks` (décision assumée, cf. `sharedPlace.ts`).
+ * Chiffrement : hors bout en bout, ces blocs se stockent EN CLAIR, au même
+ * régime que `postReplyTo` / `trackingLinks`. En `e2ee`, le LIEU en clair est
+ * retenu (#12526, `admitSharedPlace`) et `onWithheld` le signale à l'appelant,
+ * qui en mesure l'usage. Le régime est un paramètre REQUIS : un appelant ne
+ * peut pas l'oublier et écrire un lieu en clair à côté d'un chiffré.
  */
-import { parseSharedPlace, type SharedPlace } from '../location/sharedPlace';
+import { admitSharedPlace, type SharedPlace } from '../location/sharedPlace';
 import { parseMessageSticker } from '../stickers/messageSticker';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { parseAttachmentReplyTo, type AttachmentReplyTo } from './attachmentReplySnapshot';
@@ -32,9 +35,15 @@ export type ClientDeclaredMetadata = {
   readonly attachmentReplyTo?: AttachmentReplyTo;
 };
 
+export type ClientDeclaredRegime = {
+  readonly endToEnd: boolean;
+  readonly onWithheld?: (field: 'location') => void;
+};
+
 /** Ne pose une clé que pour un bloc VALIDE : un bloc refusé n'existe pas. */
-export function clientDeclaredMetadata(input: ClientDeclaredMetadataInput): ClientDeclaredMetadata {
-  const location = parseSharedPlace(input.location);
+export function clientDeclaredMetadata(input: ClientDeclaredMetadataInput, regime: ClientDeclaredRegime): ClientDeclaredMetadata {
+  const { place: location, withheld } = admitSharedPlace(input.location, regime);
+  if (withheld) regime.onWithheld?.('location');
   const sticker = parseMessageSticker(input.sticker);
   // #6164 — la pièce NOMMÉE d'une réponse. Le transport ne dépose ici que ce
   // qu'`admitAttachmentReply` a déjà ADMIS : l'appartenance au message cité se

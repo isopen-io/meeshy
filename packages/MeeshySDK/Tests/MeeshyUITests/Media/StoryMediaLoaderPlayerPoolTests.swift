@@ -71,7 +71,7 @@ final class StoryMediaLoaderPlayerPoolTests: XCTestCase {
         let source = StoryMediaLoader.prerollSource(remote: url, localFile: localFile)
 
         XCTAssertEqual(localFile?.isFileURL, true, "le registre partagé doit rendre le fichier déjà sur disque")
-        XCTAssertEqual(source.isFileURL, true,
+        XCTAssertEqual(source?.isFileURL, true,
                        "le lecteur préparé doit lire le fichier local, pas l'URL distante")
     }
 
@@ -79,7 +79,60 @@ final class StoryMediaLoaderPlayerPoolTests: XCTestCase {
         let remote = remoteURL()
         let local = URL(fileURLWithPath: "/tmp/reel.mp4")
         XCTAssertEqual(StoryMediaLoader.prerollSource(remote: remote, localFile: local), local)
-        XCTAssertEqual(StoryMediaLoader.prerollSource(remote: remote, localFile: nil), remote)
+    }
+
+    // MARK: - (e) Seuls les fichiers sur le disque deviennent des lecteurs préparés (#9882)
+
+    /// Un lecteur préparé sur l'URL distante jouait en streaming, puis le
+    /// moteur le jetait dès que le fichier arrivait : réseau et décodeur
+    /// dépensés pour rien. Aucun producteur — conversation, fil, stories,
+    /// réels — ne prépare plus depuis le réseau.
+    func test_prerollSource_withoutTheFileOnDisk_isNothing() {
+        XCTAssertNil(StoryMediaLoader.prerollSource(remote: remoteURL(), localFile: nil))
+    }
+
+    func test_prerollSource_aLocalAsset_isItsOwnSource() {
+        let local = URL(fileURLWithPath: "/tmp/draft.mov")
+        XCTAssertEqual(StoryMediaLoader.prerollSource(remote: local, localFile: nil), local)
+    }
+
+    /// Un appareil brûlant n'ouvre plus aucune session de décodage pour un
+    /// préchauffage, quel que soit l'écran qui le demande.
+    func test_prerollSource_onACriticallyHotDevice_isNothing() {
+        let local = URL(fileURLWithPath: "/tmp/reel.mp4")
+        XCTAssertNil(StoryMediaLoader.prerollSource(remote: remoteURL(), localFile: local, thermalState: .critical))
+        XCTAssertEqual(StoryMediaLoader.prerollSource(remote: remoteURL(), localFile: local, thermalState: .serious), local)
+    }
+
+    func test_preloadVideoPlayer_withoutTheFileOnDisk_buildsNoPlayer() async {
+        let player = await StoryMediaLoader.shared.preloadVideoPlayer(url: remoteURL())
+        XCTAssertNil(player, "aucun AVPlayer ne se construit sur une URL distante")
+    }
+
+    // MARK: - (f) Le pool garde en priorité les voisins du réel affiché (#9882)
+
+    /// Les trois places tiennent N−1, N+1 et N+2 : une vidéo de conversation
+    /// ne se prépare pas pour être chassée à l'insertion — elle n'évince aucun
+    /// voisin, et ne dépense aucun décodeur.
+    func test_admitsPreparation_aConversationVideo_yieldsToTheReelNeighbours() {
+        withPoolCapacity(3) { loader in
+            let previous = remoteURL(), next = remoteURL(), nextNext = remoteURL(), conversation = remoteURL()
+            loader.setRetentionDistances([
+                previous.absoluteString: -1, next.absoluteString: 1, nextNext.absoluteString: 2,
+            ])
+            defer { loader.setRetentionDistances([:]) }
+            [previous, next, nextNext].forEach { loader.returnPlayer(AVPlayer(), for: $0) }
+
+            XCTAssertFalse(loader.admitsPreparation(for: conversation))
+            XCTAssertNotNil(loader.peekCachedPlayer(for: next), "le voisin du réel affiché garde son lecteur")
+        }
+    }
+
+    func test_admitsPreparation_withRoomLeft_acceptsAnyProducer() {
+        withPoolCapacity(3) { loader in
+            loader.returnPlayer(AVPlayer(), for: remoteURL())
+            XCTAssertTrue(loader.admitsPreparation(for: remoteURL()))
+        }
     }
 
     // MARK: - (b) Le lecteur sortant revient au pool

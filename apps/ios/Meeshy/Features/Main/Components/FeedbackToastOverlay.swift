@@ -40,7 +40,11 @@ import MeeshyUI
 /// a pas besoin : l'hôte du dessous la sert déjà.
 struct FeedbackToastOverlay: ViewModifier {
 
-    @ObservedObject private var toastManager = FeedbackToastManager.shared
+    @ObservedObject private var toastManager: FeedbackToastManager
+
+    init(toastManager: FeedbackToastManager = .shared) {
+        self.toastManager = toastManager
+    }
 
     func body(content: Content) -> some View {
         content

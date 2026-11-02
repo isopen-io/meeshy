@@ -1,0 +1,4 @@
+.build/
+.swiftpm/
+SignalFfi.xcframework/
+SignalFfi.xcframework.zip
