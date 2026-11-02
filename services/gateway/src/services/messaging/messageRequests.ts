@@ -293,10 +293,11 @@ export async function acceptMessageRequest(
   const outcome = requester
     ? await recordLevel(prisma as unknown as UserRelationDb, { userA: params.userId, userB: requester.userId, level: 'ACQUAINTANCE', origin: 'request', at: now })
     : null;
+  // Les médias se rouvrent AVANT l'effacement (audit 4, F-e) : une panne entre les
+  // deux laisse la demande en attente, et le rejeu termine — jamais l'inverse.
+  if (requester?.direct) await reopenMedia(prisma, requester.id);
   const cleared = await prisma.participant.updateMany({ where: { id: own.id, ...NOT_YET_ACCEPTED }, data: CLEARED_REQUEST });
   if (cleared.count === 0) return NOT_PENDING;
-
-  if (requester?.direct) await reopenMedia(prisma, requester.id);
   // La ligne de liste change de boîte : la synchronisation delta (`updatedSince`) doit la revoir.
   await prisma.conversation.updateMany({ where: { id: params.conversationId }, data: { updatedAt: now } });
   return {

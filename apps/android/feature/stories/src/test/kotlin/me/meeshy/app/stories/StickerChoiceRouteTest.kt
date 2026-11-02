@@ -53,4 +53,12 @@ class StickerChoiceRouteTest {
     fun `une vignette de Mes stickers se pose depuis la bibliotheque`() {
         assertThat(route(StickerSheetChoice.Library("s1"))).isEqualTo(StickerChoiceRoute.LibraryImage("s1"))
     }
+
+    @Test
+    fun `un Instant se pose en image fixe avec ses emplacements, un Instant inconnu ne se pose pas`() {
+        val slots = mapOf("message" to "Coucou")
+        assertThat(route(StickerSheetChoice.Instant("instant-bonjour", slots)))
+            .isEqualTo(StickerChoiceRoute.InstantImage("instant-bonjour", slots))
+        assertThat(route(StickerSheetChoice.Instant("instant-inconnu"))).isNull()
+    }
 }
