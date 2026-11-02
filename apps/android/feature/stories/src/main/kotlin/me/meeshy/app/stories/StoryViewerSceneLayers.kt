@@ -191,6 +191,7 @@ internal fun StoryForegroundLayer(
                 sourceEndMs = media.sourceWindow?.endMs,
                 onAudioFocusLost = onAudioFocusLost,
                 holdsAudioFocus = holdsAudioFocus,
+                textured = true,
             )
         } else {
             Box(layerModifier) {
