@@ -285,8 +285,24 @@ jobs:
       - name: Room schema export matches the committed JSON
         run: ./scripts/check-room-schema.sh --built
 
+      # Un test FIGÉ ne laisse aucune trace : Gradle n'écrit le résultat d'une classe qu'à sa fin, et le délai du job
+      # annule tout d'un « The operation was canceled » sans nom (vu le 2026-11-02, #14650, quand les tests de
+      # :sdk-core ont recompilé). Passé 15 min — une passe normale en prend 10 à 12 —, le chien de garde vide deux
+      # fois les piles des exécuteurs de test, à 2 min d'écart : le cadre qui ne bouge pas nomme le test figé.
       - name: Unit tests (./apps/android/meeshy.sh test)
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: |
+          (
+            sleep 900
+            for pass in 1 2; do
+              for pid in $(pgrep -f 'Gradle Test Executor' || true); do
+                echo "::group::Piles de l'exécuteur de test $pid (passe $pass)"
+                "$JAVA_HOME/bin/jstack" "$pid" || true
+                echo "::endgroup::"
+              done
+              sleep 120
+            done
+          ) &
+          ./gradlew testDebugUnitTest --no-daemon
 
       # Gradle only says "There were failing tests. See the report at ..." and
       # points at an HTML file. The agents this gate exists for cannot download
