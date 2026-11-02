@@ -38,7 +38,8 @@ function db(options: Options = {}) {
     : { id: 'c1', type: 'direct', ...(options.directMode === 'absent' ? {} : { encryptionMode: options.directMode }) };
   const participants = conversation ? [MOI, AUTRE].map((userId) => ({ id: `p-${userId}`, userId, isActive: true, conversationId: 'c1', conversation })) : [];
   const participantFindMany = jest.fn(async (args: { where: Record<string, unknown> }) =>
-    participants.filter((p) => matchesMongoWhere(p as never, args.where as never)).map((p) => ({ conversationId: p.conversationId })));
+    participants.filter((p) => matchesMongoWhere(p as never, args.where as never)).map((p) => ({ id: p.id, conversationId: p.conversationId })));
+  const accountParticipants = jest.fn(async (args: { where: { userId: string } }) => [{ id: `p-${args.where.userId}` }]);
   return {
     user: {
       findUnique: async (args: { where: { id: string } }) => users.get(args.where.id) ?? null,
@@ -50,18 +51,22 @@ function db(options: Options = {}) {
     relationFeatureSetting: { findUnique: async () => (options.talkieBlocked ? { talkieBlockedAt: NOW } : null) },
     userPreferences: { findUnique: async () => (options.notification ? { notification: options.notification } : null) },
     participant: {
-      findMany: participantFindMany,
+      findMany: (args: { where: Record<string, unknown> }) =>
+        ('conversation' in args.where ? participantFindMany(args) : accountParticipants(args as { where: { userId: string } })),
       findFirst: async (args: { where: { userId: string; conversationId: { in: string[] } } }) =>
         participants.find((p) => p.userId === args.where.userId && args.where.conversationId.in.includes(p.conversationId)) ?? null,
     },
-    callParticipant: { findFirst: async () => (options.inCall ? { id: 'cp' } : null) },
+    callParticipant: {
+      findFirst: async (args: { where: { participantId: { in: string[] } } }) =>
+        (options.inCall && args.where.participantId.in.includes(`p-${AUTRE}`) ? { id: 'cp' } : null),
+    },
     participantFindMany,
   };
 }
 
 const juger = async (options: Options = {}) => {
   const prisma = db(options);
-  const presenceServed = jest.fn(async () => options.presenceServed ?? true);
+  const presenceServed = jest.fn(async (_viewer: { userId: string; role: string }, _targetId: string) => options.presenceServed ?? true);
   const recipientConnected = jest.fn(async () => options.connected ?? true);
   const verdict = await judgeTalkie({ prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed }, MOI, AUTRE);
   return { verdict, prisma, presenceServed, recipientConnected };

@@ -137,9 +137,8 @@ export async function bloquer(
   // Le Bring (#13936) : un Bring qui sonne entre les deux s'arrête, sans rien apprendre au bloqué.
   stopBringsAfterUserBlock(fastify, moi, cibleId);
   // Le talkie (#13935) : une voix qui passe entre les deux est coupée, sans rien apprendre au bloqué.
-  cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: moi, blockedId: cibleId, scope: 'user' }).catch((error: unknown) =>
-    logError(fastify.log, '[BLOCKS] Talkie not cut after block', error),
-  );
+  const couper = async () => cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: moi, blockedId: cibleId, scope: 'user' });
+  couper().catch((error: unknown) => logError(fastify.log, '[BLOCKS] Talkie not cut after block', error));
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une

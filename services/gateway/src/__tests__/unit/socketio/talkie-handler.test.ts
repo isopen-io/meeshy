@@ -28,7 +28,7 @@ jest.mock('../../../utils/rate-limiter.js', () => ({
   },
 }));
 
-const resolveForTarget = jest.fn(async () => ({ showOnline: true, showLastSeenTimestamp: true }));
+const resolveForTarget = jest.fn(async (_viewer: unknown, _target: unknown) => ({ showOnline: true, showLastSeenTimestamp: true }));
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({ resolveForTarget }),
 }));

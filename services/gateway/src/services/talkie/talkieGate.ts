@@ -35,6 +35,7 @@ import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { isBlockedBetween } from '../../utils/blocking';
 import { niveauEffectif } from '../friendship';
 import { SERVER_BLIND_REGIME_FILTER } from '../conversations/encryptionRegime';
+import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from '../calls/liveCallParticipations';
 
 export type TalkieGateDb = Pick<
   PrismaClient,
@@ -82,10 +83,12 @@ export async function pairHasE2eeDirectConversation(prisma: Pick<PrismaClient, '
   return shared !== null;
 }
 
-/** Le destinataire est-il dans un appel en cours ? */
-async function inActiveCall(prisma: Pick<PrismaClient, 'callParticipant'>, userId: string): Promise<boolean> {
+/** Le destinataire est-il dans un appel en cours ? Lu par ses `Participant.id` (clé indexée, #10831). */
+async function inActiveCall(prisma: Pick<PrismaClient, 'participant' | 'callParticipant'>, userId: string): Promise<boolean> {
+  const participantIds = await accountParticipantIds(prisma, userId);
+  if (participantIds.length === 0) return false;
   const live = await prisma.callParticipant.findFirst({
-    where: { leftAt: null, participant: { is: { userId } }, callSession: { is: { status: 'active' } } },
+    where: { participantId: { in: participantIds }, ...LIVE_CALL_PARTICIPATION, callSession: { is: { status: 'active' } } },
     select: { id: true },
   });
   return live !== null;
