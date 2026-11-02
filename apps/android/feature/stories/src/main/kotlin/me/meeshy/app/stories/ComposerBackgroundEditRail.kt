@@ -53,7 +53,6 @@ internal const val BACKGROUND_LOOP_TAG = "composer-background-loop"
 internal const val BACKGROUND_DESCRIPTION_TAG = "composer-background-description"
 
 private val OPTION_WIDTH = 68.dp
-private val OPTION_DISC = 40.dp
 
 internal fun ComposerBackgroundTool.glyph(): ImageVector = composerEditIcon(ComposerBackgroundEditLevel.entryOf(this).material) ?: MeeshyIcons.Edit
 
@@ -125,13 +124,14 @@ private fun LoopSwitch(on: Boolean, onToggle: () -> Unit) {
     Column(
         modifier = Modifier
             .width(OPTION_WIDTH)
+            .heightIn(min = SCENE_TARGET)
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .toggleable(value = on, role = Role.Switch, onValueChange = { onToggle() })
             .testTag(BACKGROUND_LOOP_TAG),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val disc = if (on) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.38f)
-        Box(Modifier.size(OPTION_DISC).background(disc, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(LocalComposerRailSize.current.optionDiscDp.dp).background(disc, CircleShape), contentAlignment = Alignment.Center) {
             Icon(ComposerBackgroundTool.LOOP.glyph(), contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
         OptionWord(stringResource(ComposerBackgroundTool.LOOP.labelRes()))
@@ -162,7 +162,7 @@ internal fun SceneLevelTitle(icon: ImageVector, label: String) {
         modifier = Modifier.width(OPTION_WIDTH).semantics(mergeDescendants = true) { heading() },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(OPTION_DISC).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(LocalComposerRailSize.current.optionDiscDp.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
         OptionWord(label)

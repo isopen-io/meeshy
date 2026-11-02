@@ -125,7 +125,7 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
     /// fait pas corriger — elle se fait ignorer, emportant les fois où elle
     /// avait raison.
     func test_surUnePorteeQueLeClientIgnore_onSeTait() {
-        for mode in [PostVisibility.public, .community, .friends] {
+        for mode in [PostVisibility.public, .community, .acquaintances, .friends, .close, .blood] {
             XCTAssertEqual(
                 ComposerAudienceReach.resolve(mentionUserId: "u1", visibility: mode,
                                               audienceUserIds: []),
@@ -150,6 +150,14 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
         let publique = ComposerAudienceSubtitle.subtitle(for: .public, selectedCount: 0)
         XCTAssertFalse(publique.contains("0"))
         XCTAssertTrue(ComposerAudienceSubtitle.subtitle(for: .only, selectedCount: 3).contains("3"))
+    }
+
+    /// Chaque cercle DIT qui il sert (#13939) : quatre sous-titres distincts, aucun ne recopie un autre.
+    func test_chaqueCercle_aSonSousTitre() {
+        let circles = [PostVisibility.acquaintances, .friends, .close, .blood]
+            .map { ComposerAudienceSubtitle.subtitle(for: $0, selectedCount: 0) }
+        XCTAssertEqual(Set(circles).count, circles.count)
+        XCTAssertFalse(circles.contains(where: \.isEmpty))
     }
 
     // MARK: - La porte, et la feuille

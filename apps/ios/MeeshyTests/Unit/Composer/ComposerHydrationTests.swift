@@ -33,15 +33,15 @@ final class ComposerHydrationTests: XCTestCase {
         let hydratation = ComposerHydration.repostingStory(story(visibility: "PUBLIC"),
                                                           authorHandle: "@alice")
         XCTAssertEqual(hydratation.allowedVisibilities,
-                       [.public, .community, .friends, .except, .only, .private],
+                       [.public, .community, .acquaintances, .friends, .close, .blood, .except, .only, .private],
                        "Une source publique ne restreint rien.")
     }
 
-    func test_republierUneStoryAmis_neLaisseQueAmisEtPrive() {
+    func test_republierUneStoryAmis_neLaisseQueAmisLesCerclesPlusEtroitsEtPrive() {
         let hydratation = ComposerHydration.repostingStory(story(visibility: "FRIENDS"),
                                                            authorHandle: "@alice")
-        XCTAssertEqual(hydratation.allowedVisibilities, [.friends, .private],
-                       "Même audience ou plus restreinte, jamais plus large (loi 10).")
+        XCTAssertEqual(hydratation.allowedVisibilities, [.friends, .close, .blood, .private],
+                       "Même audience ou plus restreinte, jamais plus large (loi 10, #13931).")
     }
 
     /// **Le cas qui prouve que le plafond n'est pas décoratif.** Une story

@@ -17,9 +17,14 @@ data class CardSubject(
     val quotedAtMillis: Long? = null,
     /** Les médias que la carte peint sous la réponse (#14330). */
     val media: List<CardMedia> = emptyList(),
+    /** Le visuel du support d'un commentaire, qui ouvre la carte en grand (#13922, iOS `MessageCardHero`). */
+    val hero: CardMedia? = null,
 ) {
     /** Les pseudos sont-ils connus ? « pseudo au lieu du nom » n'existe qu'alors. */
     val hasHandles: Boolean get() = reply.handle != null || quoted?.handle != null
+
+    /** Tout ce que la carte peint d'une image, le visuel du support d'abord : ce que l'atelier charge à l'ouverture. */
+    val pictured: List<CardMedia> get() = listOfNotNull(hero) + media
 }
 
 data class CardViewer(val id: String?, val displayName: String?, val username: String?)

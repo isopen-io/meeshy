@@ -320,6 +320,9 @@ services:
       #   3. `prisma db push` (index unique, @@index([fileUrl]), coverUrl…).
       # Ouvrir sans le 2 écrirait les sons dans un répertoire éphémère.
       - SOUND_LIBRARY_ENABLED=true
+      # Le Bring (#13936) : ÉTEINT en production (audit #14441, B2). Il ne s'allume qu'une fois
+      # les sous-lots clients, #14421 et #14409 livrés, sur feu vert du porteur.
+      - BRING_ENABLED=false
       - PUBLIC_URL=${PUBLIC_URL:-https://gate.${DOMAIN:-meeshy.me}}
       - MAX_TRANSLATION_LENGTH=10000
       # Lecture exacte (#7356) : un message créé après cette date n'est servi
