@@ -263,7 +263,7 @@
     <string name="export_card_part_reply">Réponse</string>
     <string name="export_card_random">Au hasard</string>
     <string name="export_card_rendering">Préparation de l’image…</string>
-    <string name="export_card_save">Sauvegarder</string>
+    <string name="export_card_save">Enregistrer</string>
     <string name="export_card_share">Partager</string>
     <string name="export_card_tab_details">Détails</string>
     <string name="export_card_tab_format">Format</string>
@@ -276,7 +276,7 @@
     <string name="export_card_tilt_left">Penché à gauche</string>
     <string name="export_card_tilt_none">Droit</string>
     <string name="export_card_tilt_right">Penché à droite</string>
-    <string name="export_card_title">Imagine</string>
+    <string name="export_card_title">Imager</string>
     <string name="export_card_tone_all">Tous</string>
     <string name="export_card_tone_dark">Sombre</string>
     <string name="export_card_tone_light">Clair</string>
