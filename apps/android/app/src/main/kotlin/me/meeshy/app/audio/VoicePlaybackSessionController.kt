@@ -56,8 +56,12 @@ internal class VoicePlaybackSessionController(
     private val foreground: VoicePlaybackForeground,
     private val scope: CoroutineScope,
     private val loadArtwork: suspend (String) -> Bitmap?,
+    private val appInForeground: () -> Boolean = ::processInForeground,
+    private val sdkInt: Int = Build.VERSION.SDK_INT,
+    private val targetSdk: Int = context.applicationInfo.targetSdkVersion,
 ) {
     private val session = MediaSession(context, TAG)
+    private var inForeground = false
     private val artwork = HashMap<String, Bitmap>()
     private var observing: Job? = null
     private var artworkJob: Job? = null
