@@ -181,32 +181,49 @@ export const requesterPermissionsFor = (opening: DirectOpening, base: Readonly<P
  * ligne remise telle quelle à quelqu'un d'autre (réponse de création, socket)
  * porterait la date et le score, et le score dit l'âge.
  */
-export const withoutRequestColumns = <T extends object>(
-  rows: readonly T[],
-): Array<Omit<T, 'messageRequestAt' | 'messageRequestRisk' | 'messageRequestFromId'>> =>
-  rows.map((row) => {
-    const { messageRequestAt: _at, messageRequestRisk: _risk, messageRequestFromId: _from, ...rest } = row as T & {
-      messageRequestAt?: unknown;
-      messageRequestRisk?: unknown;
-      messageRequestFromId?: unknown;
-    };
-    return rest;
-  });
-
-export type ServedMessageRequest = {
-  readonly since: string;
-  readonly filtered: boolean;
-  readonly mediaBlurred: true;
+export const withoutRequestFields = <T extends object>(row: T): Omit<T, 'messageRequestAt' | 'messageRequestRisk' | 'messageRequestFromId'> => {
+  const { messageRequestAt: _at, messageRequestRisk: _risk, messageRequestFromId: _from, ...rest } = row as T & {
+    messageRequestAt?: unknown;
+    messageRequestRisk?: unknown;
+    messageRequestFromId?: unknown;
+  };
+  return rest;
 };
 
-/** La demande telle que le destinataire la reçoit ; `null` pour une conversation ordinaire. */
-export function servedMessageRequest(row: { readonly messageRequestAt?: Date | null; readonly messageRequestRisk?: number | null }): ServedMessageRequest | null {
-  if (!(row.messageRequestAt instanceof Date)) return null;
-  return {
-    since: row.messageRequestAt.toISOString(),
-    filtered: (row.messageRequestRisk ?? 0) >= MESSAGE_REQUEST_FILTER_THRESHOLD,
-    mediaBlurred: true,
-  };
+export const withoutRequestColumns = <T extends object>(
+  rows: readonly T[],
+): Array<Omit<T, 'messageRequestAt' | 'messageRequestRisk' | 'messageRequestFromId'>> => rows.map(withoutRequestFields);
+
+export type ServedMessageRequest = {
+  /** Date d'arrivée dans la boîte ; `null` une fois qu'on y a répondu (la conversation a quitté la boîte). */
+  readonly since: string | null;
+  readonly filtered: boolean;
+  readonly mediaBlurred: true;
+  /** Le destinataire a répondu sans accepter : hors de la boîte, « Accepter » reste à faire (audit 3, H1). */
+  readonly answered: boolean;
+};
+
+type ServedRequestRow = {
+  readonly messageRequestAt?: Date | null;
+  readonly messageRequestRisk?: number | null;
+  readonly messageRequestFromId?: string | null;
+};
+
+/**
+ * La demande telle que le destinataire la reçoit ; `null` pour une conversation
+ * ordinaire ou une demande ACCEPTÉE. Tant qu'elle n'est pas acceptée, elle se
+ * sert — dans la boîte (`answered: false`) ou après une réponse (`answered: true`).
+ */
+export function servedMessageRequest(row: ServedRequestRow): ServedMessageRequest | null {
+  if (row.messageRequestAt instanceof Date) {
+    return {
+      since: row.messageRequestAt.toISOString(),
+      filtered: (row.messageRequestRisk ?? 0) >= MESSAGE_REQUEST_FILTER_THRESHOLD,
+      mediaBlurred: true,
+      answered: false,
+    };
+  }
+  return row.messageRequestFromId ? { since: null, filtered: false, mediaBlurred: true, answered: true } : null;
 }
 
 export type MessageRequestListMode = 'exclude' | 'only' | 'filtered';
@@ -230,9 +247,10 @@ export function viewerRequestClause(mode: MessageRequestListMode): Prisma.Partic
 export type MessageRequestAcceptance =
   | {
       readonly kind: 'accepted';
-      readonly requesterId: string;
+      /** `null` : celui qui a fait entrer est parti ou bloqué — la demande se lève sans lien (audit 3, M-a). */
+      readonly requesterId: string | null;
       /** La ligne dont les droits viennent d'être rouverts : son cache de lecture s'invalide. */
-      readonly requesterParticipantId: string;
+      readonly requesterParticipantId: string | null;
       readonly levelRaised: boolean;
     }
   | { readonly kind: 'not-pending' };
@@ -240,10 +258,24 @@ export type MessageRequestAcceptance =
 const NOT_PENDING: MessageRequestAcceptance = { kind: 'not-pending' };
 
 /**
- * Le DESTINATAIRE accepte : le lien monte d'abord (au moins Connaissance des deux
- * côtés), puis la demande s'efface et l'expéditeur retrouve ses droits fondateurs.
- * Un lien qui échoue laisse la demande en attente, rejouable. Un blocage, une
- * demande déjà traitée ou l'expéditeur lui-même : `not-pending`, sans rien écrire.
+ * Une demande N'EST PAS ACCEPTÉE tant que sa ligne porte sa date (dans la boîte)
+ * ou sa provenance (on y a répondu). Seul « Accepter » efface la provenance :
+ * c'est elle qui tient les médias de l'expéditeur fermés (audit 3, H1).
+ */
+const NOT_YET_ACCEPTED: Prisma.ParticipantWhereInput = {
+  OR: [{ messageRequestAt: { not: null } }, { messageRequestFromId: { not: null } }],
+};
+
+const CLEARED_REQUEST = { messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null } as const;
+
+/**
+ * Le DESTINATAIRE accepte — dans la boîte comme après y avoir répondu. Le lien
+ * monte d'abord (au moins Connaissance des deux côtés) avec celui qui l'a fait
+ * entrer, puis la demande s'efface et, dans un tête-à-tête, l'expéditeur
+ * retrouve ses médias. Un lien qui échoue laisse la demande en attente,
+ * rejouable. Celui qui a fait entrer est PARTI ou BLOQUÉ : la demande se lève
+ * quand même, sans lien ni média (audit 3, M-a). Déjà acceptée, ou l'expéditeur
+ * lui-même : `not-pending`, sans rien écrire.
  */
 export async function acceptMessageRequest(
   prisma: MessageRequestDb,
@@ -251,48 +283,47 @@ export async function acceptMessageRequest(
 ): Promise<MessageRequestAcceptance> {
   const now = params.now ?? new Date();
   const own = await prisma.participant.findFirst({
-    where: { conversationId: params.conversationId, userId: params.userId, isActive: true, messageRequestAt: { not: null } },
+    where: { conversationId: params.conversationId, userId: params.userId, isActive: true, ...NOT_YET_ACCEPTED },
     select: { id: true, messageRequestFromId: true },
   });
   if (!own) return NOT_PENDING;
-  const requester = await requesterOf(prisma, { conversationId: params.conversationId, userId: params.userId, fromId: own.messageRequestFromId ?? null });
-  if (!requester || (await isBlockedBetween(prisma, params.userId, requester.userId))) return NOT_PENDING;
+  const found = await requesterOf(prisma, { conversationId: params.conversationId, userId: params.userId, fromId: own.messageRequestFromId ?? null });
+  const requester = found && !(await isBlockedBetween(prisma, params.userId, found.userId)) ? found : null;
 
-  const outcome = await recordLevel(prisma as unknown as UserRelationDb, {
-    userA: params.userId,
-    userB: requester.userId,
-    level: 'ACQUAINTANCE',
-    origin: 'request',
-    at: now,
-  });
-  const cleared = await prisma.participant.updateMany({
-    where: { id: own.id, messageRequestAt: { not: null } },
-    data: { messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null },
-  });
+  const outcome = requester
+    ? await recordLevel(prisma as unknown as UserRelationDb, { userA: params.userId, userB: requester.userId, level: 'ACQUAINTANCE', origin: 'request', at: now })
+    : null;
+  const cleared = await prisma.participant.updateMany({ where: { id: own.id, ...NOT_YET_ACCEPTED }, data: CLEARED_REQUEST });
   if (cleared.count === 0) return NOT_PENDING;
 
-  if (requester.direct) {
-    await prisma.participant.updateMany({
-      where: { id: requester.id },
-      data: { permissions: { ...requester.permissions, ...Object.fromEntries(MEDIA_RIGHTS.map((right) => [right, true])) } },
-    });
-  }
+  if (requester?.direct) await reopenMedia(prisma, requester.id);
   // La ligne de liste change de boîte : la synchronisation delta (`updatedSince`) doit la revoir.
   await prisma.conversation.updateMany({ where: { id: params.conversationId }, data: { updatedAt: now } });
   return {
     kind: 'accepted',
-    requesterId: requester.userId,
-    requesterParticipantId: requester.id,
+    requesterId: requester?.userId ?? null,
+    requesterParticipantId: requester?.direct ? requester.id : null,
     levelRaised: outcome === 'created' || outcome === 'raised',
   };
 }
 
-type Requester = { readonly id: string; readonly userId: string; readonly direct: boolean; readonly permissions: Record<string, unknown> };
+/** Relit les droits JUSTE avant de les réécrire : seules les quatre clés de média changent (audit 3, F-c). */
+async function reopenMedia(prisma: MessageRequestDb, participantId: string): Promise<void> {
+  const fresh = await prisma.participant.findUnique({ where: { id: participantId }, select: { permissions: true } });
+  const permissions = { ...((fresh?.permissions ?? {}) as Record<string, unknown>) };
+  await prisma.participant.updateMany({
+    where: { id: participantId },
+    data: { permissions: { ...permissions, ...Object.fromEntries(MEDIA_RIGHTS.map((right) => [right, true])) } },
+  });
+}
+
+type Requester = { readonly id: string; readonly userId: string; readonly direct: boolean };
 
 /**
  * QUI a fait entrer le lecteur (audit E1) : le compte gravé à l'ouverture, et lui
- * seul. Une ligne antérieure à cette colonne ne vaut que dans un tête-à-tête,
- * où l'autre membre est forcément l'expéditeur ; dans un groupe, personne.
+ * seul, s'il est encore là. Une ligne antérieure à cette colonne ne vaut que dans
+ * un tête-à-tête, où l'autre membre est forcément l'expéditeur ; dans un groupe,
+ * personne.
  */
 async function requesterOf(
   prisma: MessageRequestDb,
@@ -303,20 +334,21 @@ async function requesterOf(
   if (!params.fromId && !direct) return null;
   const row = await prisma.participant.findFirst({
     where: { conversationId: params.conversationId, isActive: true, userId: params.fromId ?? { not: params.userId } },
-    select: { id: true, userId: true, permissions: true },
+    select: { id: true, userId: true },
   });
   if (!row?.userId || row.userId === params.userId) return null;
-  return { id: row.id, userId: row.userId, direct, permissions: { ...((row.permissions ?? {}) as Record<string, unknown>) } };
+  return { id: row.id, userId: row.userId, direct };
 }
 
 /**
  * Le destinataire RÉPOND à une demande sans l'accepter d'un geste (audit #14107,
  * M3, contre-audit M1 et M2) : un ancien client, qui ne connaît pas la boîte,
- * reste fonctionnel — la demande s'efface et la conversation retrouve son son,
- * dans un tête-à-tête comme dans un groupe. Une réponse n'est pas un
- * consentement : elle ne relève AUCUN lien et ne rouvre AUCUN média, pour
- * personne, quel que soit l'âge — seul « Accepter » le fait. La même règle pour
- * tous : rien d'observable ne distingue la réponse d'un mineur.
+ * reste fonctionnel — la conversation quitte la boîte et retrouve son son, dans
+ * un tête-à-tête comme dans un groupe. Une réponse n'est pas un consentement :
+ * elle ne relève AUCUN lien et ne rouvre AUCUN média, pour personne, quel que
+ * soit l'âge. Elle ne CONSOMME pas non plus la demande (audit 3, H1) : la
+ * provenance reste, « Accepter » reste possible, et lui seul rouvre les médias.
+ * Une réponse et un « Accepter » simultanés aboutissent donc à « accepté ».
  * L'expéditeur qui relance n'efface rien (sa ligne ne porte pas de demande).
  */
 export async function answerMessageRequest(
@@ -326,7 +358,7 @@ export async function answerMessageRequest(
   const now = params.now ?? new Date();
   const cleared = await prisma.participant.updateMany({
     where: { conversationId: params.conversationId, userId: params.userId, isActive: true, messageRequestAt: { not: null } },
-    data: { messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null },
+    data: { messageRequestAt: null, messageRequestRisk: null },
   });
   if (cleared.count === 0) return { answered: false };
   await prisma.conversation.updateMany({ where: { id: params.conversationId }, data: { updatedAt: now } });

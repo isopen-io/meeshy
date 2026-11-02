@@ -54,7 +54,7 @@ import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
-import { servedMessageRequest, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
+import { servedMessageRequest, withoutRequestFields, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
 import { emptyDirectVisibility, withViewerRequests } from './utils/list-viewer-scope';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
@@ -740,7 +740,7 @@ export function registerConversationListRoute(
             const hideLastSeen = !vis.showLastSeenTimestamp;
             const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
             return {
-              ...m,
+              ...withoutRequestFields(m),
               // #10713 — le contour équipé du pair, dessiné par la ligne de liste.
               ...(profileDecor === undefined ? {} : { profileDecor }),
               // Bannière de profil top-level : le schéma participant (minimal) est

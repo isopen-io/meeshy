@@ -941,19 +941,22 @@ model Participant {
   /// Permanent personal deletion — conversation hidden forever for this user
   deletedForMe DateTime?
 
-  /// LA BOÎTE DE DEMANDES (#14107, cercles, MSG-01/02) — non nul : ce tête-à-tête
-  /// est une DEMANDE de message en attente pour CE participant depuis cette date
-  /// (l'expéditeur n'était ni Connaissance ni plus). Nul ou absent : conversation
-  /// ordinaire. Posé à l'ouverture d'un DM par `services/messaging/messageRequests.ts`,
-  /// effacé quand le participant accepte ou répond. Aucun rattrapage : un DM
-  /// antérieur n'entre jamais dans la boîte.
+  /// LA BOÎTE DE DEMANDES (#14107, cercles, MSG-01/02) — non nul : cette
+  /// conversation (tête-à-tête, groupe, invitation ou lien) est une DEMANDE de
+  /// message dans la boîte de CE participant depuis cette date (celui qui l'a fait
+  /// entrer n'était ni Connaissance ni plus). Nul ou absent : hors de la boîte.
+  /// Posé à l'entrée par `services/messaging/messageRequests.ts`, effacé quand le
+  /// participant accepte ou répond. Aucun rattrapage : une conversation antérieure
+  /// n'entre jamais dans la boîte.
   messageRequestAt DateTime?
   /// Score de risque de la demande (0-100, MIN-03), calculé à l'ouverture ; au-delà
   /// du seuil, la demande est rangée parmi les demandes FILTRÉES. Nul hors demande.
   messageRequestRisk Int?
   /// Qui a fait entrer ce participant par la boîte de demandes (l'expéditeur du
   /// tête-à-tête, l'ajouteur ou l'inviteur d'un groupe). Seul ce compte voit son
-  /// lien relevé et ses médias rouverts à l'acceptation (audit #14107, E1).
+  /// lien relevé et ses médias rouverts à l'acceptation (audit #14107, E1). Non nul
+  /// tant que la demande n'est pas ACCEPTÉE : une réponse le garde, seul
+  /// « Accepter » l'efface (audit 3, H1).
   messageRequestFromId String? @db.ObjectId
 
   /// Per-conversation display name override

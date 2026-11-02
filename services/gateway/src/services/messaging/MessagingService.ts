@@ -59,7 +59,7 @@ const logger = enhancedLogger.child({ module: 'MessagingService' });
 
 /**
  * #14107 (audit B5) — un compte dont un droit de média est explicitement FERMÉ
- * (l'expéditeur d'une demande vers un mineur) voit ses transferts et diffusions
+ * (l'expéditeur d'une demande non acceptée, à tout âge) voit ses transferts et diffusions
  * gardés comme ses rattachements : sinon un transfert recopie l'image fermée.
  */
 const closesSomeMedia = (rights: { readonly [K: string]: boolean | null | undefined } | null): boolean =>

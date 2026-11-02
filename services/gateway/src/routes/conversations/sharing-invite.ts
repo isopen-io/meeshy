@@ -275,7 +275,7 @@ export function registerInviteRoute(
       const newMember = entry.outcome === 'rejoin' && entry.participantId
         ? await fastify.prisma.participant.update({
             where: { id: entry.participantId },
-            data: { ...invitedMemberFields, ...REJOIN_PARTICIPANT_STATE },
+            data: { ...REJOIN_PARTICIPANT_STATE, ...invitedMemberFields },
             include: invitedMemberInclude
           })
         : await fastify.prisma.participant.create({

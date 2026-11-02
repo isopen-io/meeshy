@@ -304,7 +304,7 @@ export function registerParticipantWriteRoutes(
     if (entry.outcome === 'rejoin' && entry.participantId) {
       const rejoined = await prisma.participant.update({
         where: { id: entry.participantId },
-        data: { ...addedMemberFields, ...REJOIN_PARTICIPANT_STATE }
+        data: { ...REJOIN_PARTICIPANT_STATE, ...addedMemberFields }
       });
       joinedParticipantId = rejoined.id;
       invalidateParticipantLookup(entry.participantId, conversationId);
@@ -450,10 +450,10 @@ export function registerParticipantWriteRoutes(
       }
     }
 
-    // #14107 (contre-audit E2) — une entrée par la boîte de demandes ne s'annonce pas.
-    const notificationService = opening.kind === 'direct' ? fastify.notificationService : undefined;
+    // #14107 (E2, audit 3 F-b) — la personne en demande n'est pas prévenue ; les membres présents, si.
+    const notificationService = fastify.notificationService;
     if (notificationService) {
-      notificationService.createAddedToConversationNotification({
+      if (opening.kind === 'direct') notificationService.createAddedToConversationNotification({
         recipientUserId: userId,
         addedByUserId: currentUserId,
         conversationId,
