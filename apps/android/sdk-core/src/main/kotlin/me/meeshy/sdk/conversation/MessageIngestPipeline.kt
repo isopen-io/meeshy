@@ -7,6 +7,7 @@ import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageMergePolicy
 import me.meeshy.sdk.model.PendingMessageMutations
+import me.meeshy.sdk.model.PendingRowEventReplay
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
 
@@ -29,6 +30,8 @@ internal class MessageIngestPipeline(
     private val outboxGuard: PendingOutboxGuard = PendingOutboxGuard(database.outboxDao()),
     /** #13792 — le registre des régimes, nourri par chaque message servi ; absent dans les seuls témoins qui ne le lisent pas. */
     private val regime: EndToEndRegimeKeeper? = null,
+    /** Les événements arrivés avant leur message : rejoués ici, à l'arrivée de la ligne (édition, réactions, suppression). */
+    private val events: MessageEventBuffer? = null,
 ) {
 
     /** Fusionne [messages] dans sa propre transaction ; rend les conversations réellement écrites. */
@@ -56,6 +59,7 @@ internal class MessageIngestPipeline(
         val writes = LinkedHashMap<String, MessageEntity>()
         val replacedLocalIds = mutableSetOf<String>()
         val changed = mutableSetOf<String>()
+        val rowIdOfMessage = HashMap<String, String>()
         val latest = latestPerId(messages)
         for (incoming in latest) {
             val filedUnder = conversationId ?: incoming.conversationId
@@ -66,6 +70,7 @@ internal class MessageIngestPipeline(
                 ?.let { messageDao.find(it) }
             val base = direct ?: optimistic
             val row = if (base == null) fresh else merged(base, incoming, fresh, pending)
+            rowIdOfMessage[incoming.id] = row.id
             listOfNotNull(direct, optimistic).filter { it.id != row.id }.forEach { replacedLocalIds += it.id }
             val unchanged = base != null && base.id == row.id && row.sameStoredContentAs(base)
             if (!unchanged) {
@@ -76,11 +81,40 @@ internal class MessageIngestPipeline(
                 MessageIdReconciliation.recordAck(database, localId, incoming.id, filedUnder, nowMillis)
             }
         }
+        events?.let { replayPendingEvents(it, latest, rowIdOfMessage, writes, replacedLocalIds, nowMillis) }
         replacedLocalIds -= writes.keys
         if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
         if (writes.isNotEmpty()) messageDao.upsertAll(writes.values.toList())
         regime?.learnFromServed(latest, conversationId)
         return changed
+    }
+
+    /**
+     * Rejoue sur les lignes qui viennent d'être fusionnées ce qui leur est arrivé avant elles : la
+     * modification, les réactions, puis la suppression, qui l'emporte (`PendingRowEventReplay`). Une mort
+     * par expiration retire la ligne au lieu de l'écrire.
+     */
+    private fun replayPendingEvents(
+        buffer: MessageEventBuffer,
+        incoming: Collection<ApiMessage>,
+        rowIdOfMessage: Map<String, String>,
+        writes: MutableMap<String, MessageEntity>,
+        removed: MutableSet<String>,
+        nowMillis: Long,
+    ) {
+        for (message in incoming) {
+            val rowId = rowIdOfMessage[message.id] ?: continue
+            val row = writes[rowId] ?: continue
+            val waiting = buffer.take(listOfNotNull(message.id, message.clientMessageId, rowId)) ?: continue
+            val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull() ?: continue
+            val replayed = PendingRowEventReplay.apply(current, waiting).message
+            if (replayed == null) {
+                writes.remove(rowId)
+                removed += rowId
+            } else if (replayed != current) {
+                writes[rowId] = MessageEntityFactory.refreshed(row, replayed).copy(changeVersion = row.changeVersion + 1, cachedAt = nowMillis)
+            }
+        }
     }
 
     /**

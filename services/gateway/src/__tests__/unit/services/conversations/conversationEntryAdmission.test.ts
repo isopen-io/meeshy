@@ -298,6 +298,6 @@ describe('REJOIN_PARTICIPANT_STATE', () => {
    * pouvaient corriger — le rang 2 les court-circuite tous les deux.
    */
   it('rouvre l\'appartenance, efface la date de départ ET l\'octroi d\'historique — `joinedAt` reste celui de la première venue', () => {
-    expect(REJOIN_PARTICIPANT_STATE).toEqual({ isActive: true, leftAt: null, historyVisibleFrom: null });
+    expect(REJOIN_PARTICIPANT_STATE).toEqual({ isActive: true, leftAt: null, historyVisibleFrom: null, messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null });
   });
 });

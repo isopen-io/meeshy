@@ -17,6 +17,7 @@ import { EngagementService } from '../../../services/engagement/EngagementServic
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../../utils/recipient-language';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
 import { implicitConversationRegime } from '../../../services/conversations/creationRegime';
+import { decideOpenings, requestRecipientFields } from '../../../services/messaging/messageRequests';
 
 const engagementLogger = enhancedLogger.child({ module: 'ShareLinkMint' });
 
@@ -112,6 +113,9 @@ type NewParticipantSeed = {
    * la loi écrit force le site d'appel à réécrire la loi.
    */
   readonly permissions: ParticipantPermissions;
+  /** #14107 — la demande posée sur la ligne d'un membre qui n'est pas au moins Connaissance du créateur. */
+  readonly messageRequestAt?: Date;
+  readonly messageRequestRisk?: number;
 };
 
 export type MintedShareLink = {
@@ -263,13 +267,18 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
       });
       const memberMap = new Map(memberUsers.map((u) => [u.id, u]));
       const languageByMemberId = new Map(memberUsers.map((u) => [u.id, recipientLanguage(u, 'fr')]));
+      // #14107 (audit B4, RG-22) — le créateur y met ces membres lui-même : qui
+      // n'est pas au moins sa Connaissance entre par sa boîte de demandes.
+      const openedAt = new Date();
+      const openings = await decideOpenings(prisma, { senderId: userId, recipientIds: uniqueMemberIds, now: openedAt });
       for (const memberId of uniqueMemberIds) {
         const memberUser = memberMap.get(memberId);
         if (memberUser) {
           participantsToCreate.push({
             userId: memberId, type: 'user',
             displayName: memberUser.displayName || memberUser.username || 'User',
-            role: 'member', language: languageByMemberId.get(memberId) ?? 'fr', permissions: defaultPerms
+            role: 'member', language: languageByMemberId.get(memberId) ?? 'fr', permissions: defaultPerms,
+            ...requestRecipientFields(openings.get(memberId) ?? { kind: 'direct' }, openedAt, userId)
           });
         }
       }

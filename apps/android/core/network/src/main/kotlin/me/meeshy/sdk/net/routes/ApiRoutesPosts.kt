@@ -49,6 +49,7 @@ public object ApiRoutesPosts {
     public const val NEARBY: String = "posts/nearby"
     public const val NEARBY_DENSITY: String = "posts/nearby/density"
     public const val ROOT: String = "posts"
+    public const val SEARCH: String = "posts/search"
     public const val STORIES_MINE: String = "posts/stories/mine"
     public const val USER_BY_USER_ID: String = "posts/user/{userId}"
 }

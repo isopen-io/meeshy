@@ -67,7 +67,7 @@ class RoutesContractTest {
             "FEED", "feed",
             "SAVED_POSTS", "feed/saved",
             "NEARBY_DISCOVERY", "feed/nearby",
-            "POST_DETAIL", "feed/post/{postId}",
+            "POST_DETAIL", "feed/post/{postId}?showComments={showComments}&commentId={commentId}&parentCommentId={parentCommentId}",
             "CALLS", "calls",
             "CONTACTS", "contacts",
             "CONTACTS_DISCOVER", "contacts/discover",

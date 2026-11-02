@@ -33,3 +33,15 @@ extension BloodRitualViewModel {
         )
     }
 }
+
+extension ProfileCircleViewModel {
+    convenience init(userId: String) {
+        self.init(
+            userId: userId,
+            relations: RelationsService.shared,
+            friendService: FriendService.shared,
+            offlineQueue: OfflineQueue.shared,
+            networkMonitor: NetworkMonitor.shared
+        )
+    }
+}

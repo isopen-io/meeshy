@@ -74,6 +74,17 @@ describe('ReportService.createReport', () => {
     expect(result.id).toBe(report.id);
   });
 
+  it('écrit la priorité calculée par la passerelle, ordinaire à défaut (#14110)', async () => {
+    const create = jest.fn().mockResolvedValue(makeReport());
+    const svc = makeService(makePrisma({ create }));
+
+    await svc.createReport({ reportedType: 'user', reportedEntityId: 'e', reportType: 'harassment', priority: 1, priorityReasons: ['minor'] });
+    await svc.createReport({ reportedType: 'user', reportedEntityId: 'e', reportType: 'harassment' });
+
+    expect(create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({ priority: 1, priorityReasons: ['minor'] }) });
+    expect(create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ priority: 0, priorityReasons: [] }) });
+  });
+
   it('sets optional reporter fields to null when omitted', async () => {
     const report = makeReport({ reporterId: null, reporterName: null });
     const create = jest.fn().mockResolvedValue(report);
@@ -115,20 +126,17 @@ describe('ReportService.getReportById', () => {
 // ─── listReports ──────────────────────────────────────────────────────────────
 
 describe('ReportService.listReports', () => {
-  it('queries with no filters and default pagination', async () => {
+  it('queries with no filters and default pagination — the priority tier first, oldest first (#14110, MIN-04)', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.AND ? 2 : 5));
     const svc = makeService(makePrisma({ findMany, count }));
 
     const result = await svc.listReports();
 
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: {},
-      skip: 0,
-      take: 20,
-      orderBy: { createdAt: 'desc' },
-    }));
-    expect(result).toEqual({ reports: [], total: 0 });
+    const open = { priority: { gte: 1 }, status: { in: ['pending', 'under_review'] } };
+    expect(findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { AND: [{}, open] }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: 0, take: 20 }));
+    expect(findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { AND: [{}, { NOT: open }] }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], skip: 0, take: 20 }));
+    expect(result).toEqual({ reports: [], total: 5 });
   });
 
   it('applies all filter types to where clause', async () => {
@@ -149,13 +157,13 @@ describe('ReportService.listReports', () => {
     });
 
     const callArg = (findMany.mock.calls[0] as any[])[0];
-    expect(callArg.where.reportedType).toBe('message');
-    expect(callArg.where.reportType).toBe('spam');
-    expect(callArg.where.status).toBe('pending');
-    expect(callArg.where.reporterId).toBe('reporter-1');
-    expect(callArg.where.moderatorId).toBe('mod-1');
-    expect(callArg.where.createdAt.gte).toBe(after);
-    expect(callArg.where.createdAt.lte).toBe(before);
+    expect(callArg.where.AND[0].reportedType).toBe('message');
+    expect(callArg.where.AND[0].reportType).toBe('spam');
+    expect(callArg.where.AND[0].status).toBe('pending');
+    expect(callArg.where.AND[0].reporterId).toBe('reporter-1');
+    expect(callArg.where.AND[0].moderatorId).toBe('mod-1');
+    expect(callArg.where.AND[0].createdAt.gte).toBe(after);
+    expect(callArg.where.AND[0].createdAt.lte).toBe(before);
   });
 
   it('applies only createdAfter when createdBefore is omitted', async () => {
@@ -167,8 +175,8 @@ describe('ReportService.listReports', () => {
     await svc.listReports({ createdAfter: after });
 
     const callArg = (findMany.mock.calls[0] as any[])[0];
-    expect(callArg.where.createdAt.gte).toBe(after);
-    expect(callArg.where.createdAt.lte).toBeUndefined();
+    expect(callArg.where.AND[0].createdAt.gte).toBe(after);
+    expect(callArg.where.AND[0].createdAt.lte).toBeUndefined();
   });
 
   it('applies custom sortBy and sortOrder', async () => {
@@ -179,12 +187,12 @@ describe('ReportService.listReports', () => {
     await svc.listReports({ sortBy: 'updatedAt', sortOrder: 'asc' });
 
     const callArg = (findMany.mock.calls[0] as any[])[0];
-    expect(callArg.orderBy).toEqual({ updatedAt: 'asc' });
+    expect(callArg.orderBy).toEqual([{ updatedAt: 'asc' }, { id: 'asc' }]);
   });
 
   it('applies pagination offset and limit', async () => {
     const findMany = jest.fn().mockResolvedValue([makeReport()]);
-    const count = jest.fn().mockResolvedValue(100);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.AND ? 0 : 100));
     const svc = makeService(makePrisma({ findMany, count }));
 
     const result = await svc.listReports({}, { offset: 20, limit: 10 });
@@ -370,7 +378,7 @@ describe('ReportService.getReportsForEntity', () => {
     await svc.getReportsForEntity('message', 'entity-id');
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { reportedType: 'message', reportedEntityId: 'entity-id' },
+      where: { AND: [{ reportedType: 'message', reportedEntityId: 'entity-id' }, expect.anything()] },
     }));
   });
 
@@ -379,7 +387,7 @@ describe('ReportService.getReportsForEntity', () => {
   // tranchait en memoire : c'est exactement le cout qu'on cherche a supprimer.
   it('borne la lecture dans la requete, jamais apres coup', async () => {
     const findMany = jest.fn().mockResolvedValue([makeReport()]);
-    const count = jest.fn().mockResolvedValue(4_200);
+    const count = jest.fn((a: any) => Promise.resolve(a?.where?.AND ? 0 : 4_200));
     const svc = makeService(makePrisma({ findMany, count }));
 
     const result = await svc.getReportsForEntity('message', 'entity-id', 40, 20);
@@ -444,8 +452,8 @@ describe('ReportService.getRecentReports', () => {
 
     const callArg = (findMany.mock.calls[0] as any[])[0];
     expect(callArg.take).toBe(5);
-    expect(callArg.where.createdAt.gte).toBeInstanceOf(Date);
-    const diff = Date.now() - (callArg.where.createdAt.gte as Date).getTime();
+    expect(callArg.where.AND[0].createdAt.gte).toBeInstanceOf(Date);
+    const diff = Date.now() - (callArg.where.AND[0].createdAt.gte as Date).getTime();
     expect(diff).toBeLessThan(24 * 60 * 60 * 1000 + 1000); // within 24h + 1s tolerance
   });
 
@@ -485,10 +493,7 @@ describe('ReportService.getModeratorReports', () => {
     const results = await svc.getModeratorReports('mod-1');
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        moderatorId: 'mod-1',
-        status: { in: ['under_review', 'pending'] },
-      }),
+      where: { AND: [{ moderatorId: 'mod-1', status: { in: ['under_review', 'pending'] } }, expect.anything()] },
     }));
     expect(results).toHaveLength(1);
   });

@@ -27,6 +27,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { isEndToEndMode } from '../conversations/encryptionRegime.js';
 import { notePairInteraction, type PairInteractionDb } from './pairInteractionRecorder.js';
+import { answerMessageRequest, type MessageRequestDb } from '../messaging/messageRequests.js';
 
 const logger = enhancedLogger.child({ module: 'MessageInteractions' });
 
@@ -47,11 +48,26 @@ export type MessageInteraction = {
   readonly at?: Date;
 };
 
+type InteractionParticipant = { userId: string | null; messageRequestAt?: Date | null };
+
 type MessageInteractionDb = PairInteractionDb & {
   readonly conversation: {
-    findUnique(args: unknown): PromiseLike<{ type: string; participants: ReadonlyArray<{ userId: string | null }> } | null>;
+    findUnique(args: unknown): PromiseLike<{ type: string; participants: ReadonlyArray<InteractionParticipant> } | null>;
   };
 };
+
+/**
+ * #14107 — le destinataire d'une DEMANDE de message qui y répond l'efface
+ * (`answerMessageRequest` : sans consentement implicite, audit M3), dans un
+ * tête-à-tête comme dans un groupe (contre-audit M1). L'expéditeur
+ * qui relance n'efface rien (sa ligne ne porte pas de demande).
+ */
+const answersOwnRequest = (conversation: { type: string; participants: ReadonlyArray<InteractionParticipant> }, sender: string): boolean =>
+  conversation.participants.some((p) => p.userId === sender && p.messageRequestAt instanceof Date);
+
+async function acceptRequestByReply(prisma: unknown, conversationId: string, userId: string, now: Date): Promise<void> {
+  await answerMessageRequest(prisma as MessageRequestDb, { conversationId, userId, now });
+}
 
 const isVoiceMessage = (interaction: MessageInteraction): boolean =>
   interaction.messageType === 'audio' &&
@@ -90,13 +106,14 @@ export function noteMessageInteractions(prisma: MessageInteractionDb | PrismaCli
         where: { id: interaction.conversationId },
         select: {
           type: true,
-          participants: { where: { isActive: true, type: 'user', userId: { not: null } }, select: { userId: true } },
+          participants: { where: { isActive: true, type: 'user', userId: { not: null } }, select: { userId: true, messageRequestAt: true } },
         },
       });
       if (!conversation) return;
       recipients(interaction, conversation, sender).forEach(({ otherId, nature }) =>
         notePairInteraction(db, { actorId: sender, otherId, nature, at }),
       );
+      if (answersOwnRequest(conversation, sender)) await acceptRequestByReply(prisma, interaction.conversationId, sender, at);
     })
     .catch((error: unknown) => logger.warn('message interactions not counted', { conversationId: interaction.conversationId, error }));
 }

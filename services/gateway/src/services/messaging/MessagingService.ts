@@ -57,6 +57,14 @@ import { persistableEncryption } from './e2eeRelayPayload';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
+/**
+ * #14107 (audit B5) — un compte dont un droit de média est explicitement FERMÉ
+ * (l'expéditeur d'une demande non acceptée, à tout âge) voit ses transferts et diffusions
+ * gardés comme ses rattachements : sinon un transfert recopie l'image fermée.
+ */
+const closesSomeMedia = (rights: { readonly [K: string]: boolean | null | undefined } | null): boolean =>
+  rights !== null && ['canSendFiles', 'canSendImages', 'canSendVideos', 'canSendAudios'].some((right) => rights[right] === false);
+
 export class MessagingService {
   private validator: MessageValidator;
   private processor: MessageProcessor;
@@ -333,7 +341,7 @@ export class MessagingService {
       //      la même garde que les pièces rattachées. Un compte n'est pas
       //      concerné (la règle de #5151 ne visait que le rattachement).
       const guestShareLinkId = participant.anonymousSession?.shareLinkId;
-      const carried = guestShareLinkId
+      const carried = guestShareLinkId || closesSomeMedia(senderRights)
         ? request
         : { attachmentIds: request.attachmentIds };
       if ((senderRights || guestShareLinkId) && carriesAttachments(carried)) {

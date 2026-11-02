@@ -44,6 +44,7 @@ import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.app.navigation.WarmDeepLink
 import me.meeshy.app.push.LaunchIntentProof
 import me.meeshy.app.push.MeeshyFcmService
+import me.meeshy.app.push.PushTapConsumer
 import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
@@ -124,6 +125,13 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authRepository: AuthRepository
 
+    /** La suite d'un toucher de push : ouverture sur le bus, puis notification marquée lue. */
+    @Inject
+    lateinit var pushTapConsumer: PushTapConsumer
+
+    /** L'identifiant serveur de la notification dont le toucher a produit [launchRoute]. */
+    private var pendingTapNotificationId: String? = null
+
     @Inject
     lateinit var composerSeedStore: ComposerSeedStore
 
@@ -191,7 +199,10 @@ class MainActivity : ComponentActivity() {
                                 floatingButtonPositions = floatingButtonPositions,
                                 sessionExpiry = sessionExpiry,
                                 launchRoute = launchRoute,
-                                onLaunchRouteConsumed = { launchRoute = null },
+                                onLaunchRouteConsumed = {
+                                    launchRoute = null
+                                    pushTapConsumer.onNavigated(pendingTapNotificationId.also { pendingTapNotificationId = null })
+                                },
                                 warmDeepLink = warmDeepLink,
                                 warmDeepLinkAwaitsAccount = warmDeepLinkAwaitsAccount,
                                 onWarmDeepLinkHandled = {
@@ -221,7 +232,10 @@ class MainActivity : ComponentActivity() {
      * que ni une restauration de l'activite ni une relecture ne rejoue un jeton a usage unique.
      */
     private fun launchRouteOf(intent: Intent): String? {
-        val route = LaunchRouter.route(intent.launchExtras()) ?: LaunchRouter.routeForDeepLink(intent.dataString)
+        val extras = intent.launchExtras()
+        val tapRoute = LaunchRouter.route(extras, sessionRepository.currentUserId)
+        pendingTapNotificationId = extras.tap.notificationId.takeIf { tapRoute != null && extras.callId.isNullOrBlank() }
+        val route = tapRoute ?: LaunchRouter.routeForDeepLink(intent.dataString)
         if (LaunchRouter.opensWithoutSession(route)) intent.data = null
         return route
     }

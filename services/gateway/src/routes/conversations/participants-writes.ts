@@ -1,3 +1,4 @@
+import { decideDirectOpening, requestRecipientFields } from '../../services/messaging/messageRequests';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -252,6 +253,9 @@ export function registerParticipantWriteRoutes(
 
     const userToAdd = await prisma.user.findFirst({ where: { id: userId } });
     if (!userToAdd) return { userId, outcome: 'not-found' };
+    // #14107 (MSG-03, RG-22) — un groupe ne débloque rien : un membre ajouté par
+    // quelqu'un qui n'est pas au moins sa Connaissance entre par sa boîte de demandes.
+    const opening = currentUserId ? await decideDirectOpening(prisma, { senderId: currentUserId, recipientId: userId }) : { kind: 'direct' as const };
 
     // Le `findFirst({ isActive: true })` qui précédait ne pouvait PAS voir la
     // ligne d'un banni (bannir écrit `isActive: false`) : le `create` lui
@@ -286,7 +290,8 @@ export function registerParticipantWriteRoutes(
       // trancher « quelle langue pour un compte sans AUCUNE préférence ? » est
       // un arbitrage produit, pas un correctif de Prisme.
       language: recipientLanguage(userToAdd, 'en'),
-      permissions: { ...NEW_MEMBER_PERMISSIONS }
+      permissions: { ...NEW_MEMBER_PERMISSIONS },
+      ...requestRecipientFields(opening, new Date(), currentUserId ?? '')
     };
 
     // Partagé par l'écriture et l'emit, comme `leftAt` sur le chemin du
@@ -299,7 +304,7 @@ export function registerParticipantWriteRoutes(
     if (entry.outcome === 'rejoin' && entry.participantId) {
       const rejoined = await prisma.participant.update({
         where: { id: entry.participantId },
-        data: { ...addedMemberFields, ...REJOIN_PARTICIPANT_STATE }
+        data: { ...REJOIN_PARTICIPANT_STATE, ...addedMemberFields }
       });
       joinedParticipantId = rejoined.id;
       invalidateParticipantLookup(entry.participantId, conversationId);
@@ -445,9 +450,10 @@ export function registerParticipantWriteRoutes(
       }
     }
 
+    // #14107 (E2, audit 3 F-b) — la personne en demande n'est pas prévenue ; les membres présents, si.
     const notificationService = fastify.notificationService;
     if (notificationService) {
-      notificationService.createAddedToConversationNotification({
+      if (opening.kind === 'direct') notificationService.createAddedToConversationNotification({
         recipientUserId: userId,
         addedByUserId: currentUserId,
         conversationId,

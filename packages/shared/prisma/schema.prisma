@@ -941,6 +941,24 @@ model Participant {
   /// Permanent personal deletion — conversation hidden forever for this user
   deletedForMe DateTime?
 
+  /// LA BOÎTE DE DEMANDES (#14107, cercles, MSG-01/02) — non nul : cette
+  /// conversation (tête-à-tête, groupe, invitation ou lien) est une DEMANDE de
+  /// message dans la boîte de CE participant depuis cette date (celui qui l'a fait
+  /// entrer n'était ni Connaissance ni plus). Nul ou absent : hors de la boîte.
+  /// Posé à l'entrée par `services/messaging/messageRequests.ts`, effacé quand le
+  /// participant accepte ou répond. Aucun rattrapage : une conversation antérieure
+  /// n'entre jamais dans la boîte.
+  messageRequestAt DateTime?
+  /// Score de risque de la demande (0-100, MIN-03), calculé à l'ouverture ; au-delà
+  /// du seuil, la demande est rangée parmi les demandes FILTRÉES. Nul hors demande.
+  messageRequestRisk Int?
+  /// Qui a fait entrer ce participant par la boîte de demandes (l'expéditeur du
+  /// tête-à-tête, l'ajouteur ou l'inviteur d'un groupe). Seul ce compte voit son
+  /// lien relevé et ses médias rouverts à l'acceptation (audit #14107, E1). Non nul
+  /// tant que la demande n'est pas ACCEPTÉE : une réponse le garde, seul
+  /// « Accepter » l'efface (audit 3, H1).
+  messageRequestFromId String? @db.ObjectId
+
   /// Per-conversation display name override
   nickname String?
 
@@ -2008,6 +2026,11 @@ type RelationTransition {
   from    String
   to      String
   at      DateTime
+  /// Ce qui a causé le passage (#14406, contre-audit #14464 N1/N2) :
+  /// "auto-acquaintance" (la Connaissance automatique) | "explicit" (un geste : demande
+  /// acceptée, rituel, baisse, rattrapage d'amitié). Absent sur les passages écrits
+  /// avant ce champ. Optionnel : aucune migration.
+  cause   String?
 }
 
 /// Le lien entre DEUX personnes, une ligne par paire NON orientée (#13926).
@@ -2109,11 +2132,11 @@ model PairInteractionDay {
 ///
 /// Les partages que le rituel présente : titre d'écoute, position en direct,
 /// historique de position, alerte de proximité. Les réglages des autres lots du
-/// chantier (talkie, fantôme) s'y ajouteront avec leur lot.
+/// chantier (fantôme) s'y ajouteront avec leur lot.
 ///
-/// Le Bring (#13936, D-3) est l'exception DÉCLARÉE au « faux par défaut » : il est
-/// DISPONIBLE par défaut et `bringBlockedAt` non nul dit que `ownerId` a bloqué le
-/// Bring de `otherId`. Une ligne née d'un tel blocage ne vaut AUCUN consentement
+/// Le Bring (#13936, D-3) et le talkie (#13935) sont l'exception DÉCLARÉE au « faux
+/// par défaut » : des préférences de RÉCEPTION, actives par défaut ; `bringBlockedAt` /
+/// `talkieBlockedAt` non nul dit que `ownerId` les a coupées pour `otherId`. Une ligne née d'un tel blocage ne vaut AUCUN consentement
 /// du rituel : ses quatre partages restent faux.
 /// Index unique posé par `migrations/2026-10-31-relation-feature-setting-indexes.mongodb.js`.
 model RelationFeatureSetting {
@@ -2124,7 +2147,18 @@ model RelationFeatureSetting {
   locationShared        Boolean  @default(false)
   locationHistoryShared Boolean  @default(false)
   proximityShared       Boolean  @default(false)
+  /// Quand chaque partage a été RETIRÉ par `PUT /relations/:userId/settings` (#14401,
+  /// audit #14535 constat 3) : la trace de ce qui avait été consenti survit au retrait.
+  /// Optionnels, sans migration ; la preuve versionnée complète est #14402.
+  listeningTitleWithdrawnAt  DateTime?
+  locationWithdrawnAt        DateTime?
+  locationHistoryWithdrawnAt DateTime?
+  proximityWithdrawnAt       DateTime?
   bringBlockedAt        DateTime?
+  /// Non nul = `ownerId` a coupé la réception DIRECTE du talkie de `otherId` (#13935) :
+  /// préférence de réception, active par défaut (spec `talkieDirect @default(true)`,
+  /// écrite en date nullable — aucun couple booléen + horodatage).
+  talkieBlockedAt       DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -2695,6 +2729,12 @@ model Report {
   updatedAt        DateTime  @updatedAt
   /// Date de résolution
   resolvedAt       DateTime?
+  /// Priorité de modération (#14110, MIN-04) : 1 = en tête de file — le
+  /// signalement implique un mineur déclaré, une position ou un lien Sang ;
+  /// 0 ou absent = ordinaire. Calculée à la création, jamais servie au signalé.
+  priority         Int       @default(0)
+  /// Pourquoi il est en tête : `minor` | `location` | `blood`.
+  priorityReasons  String[]  @default([])
 
   /// Relations
   reporter  User? @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
@@ -2707,6 +2747,7 @@ model Report {
   @@index([reportType])
   @@index([createdAt])
   @@index([resolvedAt])
+  @@index([status, priority, createdAt])
 }
 
 // ============================================
