@@ -71,6 +71,7 @@ class SessionTeardownTest {
             me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore(),
         perAccountCaches: Set<PerAccountCache> = emptySet(),
         guestSessions: AnonymousSessionStore? = null,
+        feedbackToasts: me.meeshy.sdk.feedback.FeedbackToastCenter? = null,
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -83,6 +84,7 @@ class SessionTeardownTest {
         preferenceSnapshots,
         perAccountCaches,
         guestSessions,
+        feedbackToasts = feedbackToasts,
     )
 
     private class RecordingCache(private val failure: Exception? = null) : PerAccountCache {
@@ -114,6 +116,20 @@ class SessionTeardownTest {
         teardown(guestSessions = guest).wipe()
 
         assertThat(guest.load()).isNull()
+    }
+
+    @Test
+    fun wipe_purgesThePendingToastAndItsTapHandler() = runTest {
+        val toasts = me.meeshy.sdk.feedback.FeedbackToastCenter()
+        var taps = 0
+        toasts.show("de A", onTap = { taps++ })
+        val id = toasts.current.value!!.id
+
+        teardown(feedbackToasts = toasts).wipe()
+        toasts.tap(id)
+
+        assertThat(toasts.current.value).isNull()
+        assertThat(taps).isEqualTo(0)
     }
 
     @Test

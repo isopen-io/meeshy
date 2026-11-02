@@ -75,7 +75,7 @@ data class CardInput(
                 if (format.useHandles && h != null) part.copy(author = "@$h") else part
             }
             val quoted = subject.quoted?.let { if (format.anonymizeQuoted) CardPart(anonymousLabel, it.text) else named(it) }
-            val reply = if (format.anonymizeReply) CardPart(anonymousLabel, subject.reply.text) else named(subject.reply)
+            val reply = if (format.anonymizeReply) CardPart(anonymousLabel, subject.reply.text, thread = subject.reply.thread) else named(subject.reply)
             return CardInput(
                 quoted = quoted,
                 reply = reply,

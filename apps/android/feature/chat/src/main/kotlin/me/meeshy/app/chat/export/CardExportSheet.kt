@@ -1,28 +1,16 @@
 package me.meeshy.app.chat.export
 
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,31 +28,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.PermissionNature
@@ -320,82 +294,14 @@ private fun ActionRow(
     }
 }
 
-/** L'aperçu : la carte et ses zones. Chaque partie se touche et ouvre l'onglet qui la règle. */
 @Composable
 private fun Stage(state: CardExportState, modifier: Modifier, haptic: HapticFeedback) {
-    val tokens = MeeshyTheme.tokens
-    val image = state.rendered
-    val pick: (CardPartId) -> Unit = { part ->
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        state.pick(part)
-    }
-    BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        when {
-            image != null -> {
-                val ratio = (image.layoutWidth / image.layoutHeight).toFloat()
-                val width = minOf(maxWidth, maxHeight * ratio)
-                val scale = with(LocalDensity.current) { width.toPx() } / image.layoutWidth.toFloat()
-                Crossfade(targetState = image, label = "card") { card -> Card(card, width, ratio, scale, state.focus, pick) }
-                AnimatedVisibility(
-                    visible = !state.touched && state.ready, enter = fadeIn(), exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = MeeshySpacing.smPlus),
-                ) {
-                    Text(
-                        stringResource(R.string.export_card_hint),
-                        color = tokens.textPrimary,
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.clip(CircleShape).background(tokens.surfaceFill)
-                            .padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.sm),
-                    )
-                }
-            }
-            state.failed -> Text(stringResource(R.string.export_announce_failed), color = tokens.error, style = MaterialTheme.typography.bodyMedium)
-            else -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
-                Text(stringResource(R.string.export_card_rendering), color = tokens.textSecondary, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Card(card: CardImage, width: androidx.compose.ui.unit.Dp, ratio: Float, scale: Float, focus: CardPartId?, pick: (CardPartId) -> Unit) {
-    Box(
-        Modifier
-            .size(width, width / ratio)
-            .shadow(18.dp, RoundedCornerShape(18.dp))
-            .clip(RoundedCornerShape(18.dp)),
-    ) {
-        Image(
-            BitmapPainter(remember(card) { card.bitmap.asImageBitmap() }),
-            contentDescription = stringResource(R.string.export_card_hint),
-            modifier = Modifier.fillMaxSize().clickable { pick(CardPartId.BACKGROUND) },
-        )
-        card.regions.forEach { region -> Zone(region, scale, region.part == focus, pick) }
-    }
-}
-
-@Composable
-private fun Zone(region: CardRegion, scale: Float, focused: Boolean, onPick: (CardPartId) -> Unit) {
-    val density = LocalDensity.current
-    val slop = 8.dp
-    val label = CardLabels.part(region.part)
-    Box(
-        Modifier
-            .offset { IntOffset((region.x * scale).roundToInt() - slop.roundToPx(), (region.y * scale).roundToInt() - slop.roundToPx()) }
-            .size(
-                with(density) { (region.width * scale).toFloat().toDp() } + slop * 2,
-                with(density) { (region.height * scale).toFloat().toDp() } + slop * 2,
-            )
-            .drawBehind {
-                if (focused) {
-                    drawRoundRect(
-                        Color.White.copy(alpha = 0.9f), cornerRadius = CornerRadius(12.dp.toPx()),
-                        style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 12f))),
-                    )
-                }
-            }
-            .semantics { role = Role.Button; selected = focused; contentDescription = label }
-            .clickable { onPick(region.part) },
+    CardExportStage(
+        image = state.rendered, failed = state.failed, hint = !state.touched && state.ready, focus = state.focus,
+        onPick = { part ->
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            state.pick(part)
+        },
+        modifier = modifier,
     )
 }
