@@ -158,7 +158,43 @@ class MessageAnchoredWindowTest {
             coVerify { api.list(CONVERSATION, any(), any(), "r100") }
         }
 
+    @Test
+    fun `back to the present from an anchored window reads the recent page, even when the cache stops in the past`() =
+        runHarnessTest { harness ->
+            val repo = harness.repository(api())
+            repo.loadAround(CONVERSATION, "o50")
+
+            repo.jumpToPresent(CONVERSATION)
+
+            assertThat(repo.recentMessages(CONVERSATION, 1).map { it.message.id }).containsExactly("r129")
+            assertThat(repo.loadAround(CONVERSATION, "r120")).isEqualTo(MessageLanding.InWindow)
+        }
+
+    @Test
+    fun `a gap sweep that hits its page ceiling still caches the present`() = runHarnessTest { harness ->
+        around.forEach { harness.seedSynced(it) }
+        val present = (5_000 until 5_030).map { message("p$it", it) }
+        val api = mockk<MessageApi> {
+            coEvery { listConditional(CONVERSATION, any()) } returns
+                retrofit2.Response.success(ApiResponse(success = true, data = present))
+            coEvery { listAfter(CONVERSATION, any(), any()) } answers {
+                val first = ((Instant.parse(secondArg<String>()).epochSecond - BASE_SECOND) / 60).toInt() + 1
+                MessagesApiResponse(
+                    success = true,
+                    data = (first until first + 50).map { message("g$it", it) },
+                    cursorPagination = CursorPagination(limit = 50, hasMore = true, nextCursor = null),
+                )
+            }
+        }
+        val repo = harness.repository(api)
+
+        repo.refresh(CONVERSATION)
+
+        assertThat(repo.recentMessages(CONVERSATION, 1).map { it.message.id }).containsExactly("p5029")
+    }
+
     private companion object {
         const val CONVERSATION = "c-global"
+        const val BASE_SECOND = 1_780_000_000L
     }
 }

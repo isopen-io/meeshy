@@ -133,20 +133,34 @@ internal class MessageCacheSource(
         val ticket = fence?.currentTicket()
         val gapAfterMillis = messageDao.newestSyncedCreatedAt(conversationId)
         if (gapAfterMillis != null) {
-            val backfilled = tryAfterSweep(Instant.ofEpochMilli(gapAfterMillis).toString())
-            if (backfilled != null) {
-                if (backfilled.isNotEmpty()) fence.commitOrWrite(ticket) { persistAfterBackfill(backfilled) }
-                return
+            val sweep = tryAfterSweep(Instant.ofEpochMilli(gapAfterMillis).toString())
+            if (sweep != null) {
+                if (sweep.rows.isNotEmpty()) fence.commitOrWrite(ticket) { persistAfterBackfill(sweep.rows) }
+                if (sweep.reachedPresent) return
             }
         }
         revalidateFullWindow(ticket)
     }
 
     /**
+     * #14670 — « back to the present »: the recent window itself, whatever the cache's newest row. After a jump
+     * to an old message the cache's high-water mark is that island's, so a gap sweep would walk from there and
+     * stop [MAX_AFTER_PAGES] later, still in the past.
+     */
+    suspend fun revalidatePresent() {
+        revalidateFullWindow(fence?.currentTicket())
+    }
+
+    /** What a gap sweep brought back, and whether it reached the present or stopped at its page ceiling. */
+    private data class AfterSweep(val rows: List<ApiMessage>, val reachedPresent: Boolean)
+
+    /**
      * Pages `GET .../messages?after=` up to [MAX_AFTER_PAGES] bounded
      * iterations, advancing [after] to the max `createdAt` seen on each page
      * (ascending order + `skip` pinned to 0 server-side means the `after`
      * value itself is the cursor — [MessageApi.listAfter]'s doc-comment).
+     * A sweep that hits the ceiling with more still to come says so (#14670): the caller then reads the
+     * recent window too, so the present is always cached — the gap between is paged by scrolling up.
      * Returns `null` — never a partial, silently-trusted list — on ANY
      * transport failure, a refused envelope (`success = false`), or a
      * response whose `cursorPagination` (or its `hasMore`) is missing: none
@@ -154,7 +168,7 @@ internal class MessageCacheSource(
      * falls back to the full window rather than trusting a doubtful partial
      * result.
      */
-    private suspend fun tryAfterSweep(initialAfter: String): List<ApiMessage>? {
+    private suspend fun tryAfterSweep(initialAfter: String): AfterSweep? {
         val collected = mutableListOf<ApiMessage>()
         var after = initialAfter
         for (page in 0 until MAX_AFTER_PAGES) {
@@ -165,15 +179,15 @@ internal class MessageCacheSource(
                     val rows = body.data
                     collected += rows
                     val hasMore = body.cursorPagination?.hasMore ?: return null
-                    if (!hasMore) return collected
+                    if (!hasMore) return AfterSweep(collected, reachedPresent = true)
                     val maxCreatedAt = rows.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.maxOrNull()
-                        ?: return collected
+                        ?: return AfterSweep(collected, reachedPresent = true)
                     after = Instant.ofEpochMilli(maxCreatedAt).toString()
                 }
                 is NetworkResult.Failure -> return null
             }
         }
-        return collected
+        return AfterSweep(collected, reachedPresent = false)
     }
 
     /**

@@ -125,6 +125,9 @@ class MessageRepository internal constructor(
     /** #14670 — leaves an anchored window for the recent one (« back to the present »). */
     fun returnToPresent(conversationId: String) = history.returnToPresent(conversationId)
 
+    /** #14670 — leaves an anchored window AND reads the recent page: the thread lands on today. Throws on failure. */
+    suspend fun jumpToPresent(conversationId: String) = history.jumpToPresent(conversationId)
+
     /**
      * Optimistic send: the message appears instantly as a `SENDING` bubble and a `SEND_MESSAGE`
      * mutation is queued on the conversation's FIFO outbox lane. Returns the bubble's `cid_`

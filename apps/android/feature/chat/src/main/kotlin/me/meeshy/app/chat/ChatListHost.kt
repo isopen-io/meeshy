@@ -343,8 +343,10 @@ internal fun ChatListHost(
             },
         )
     }
-    LaunchedEffect(affordanceMessages, isNearBottom) {
-        scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isNearBottom)
+    // #14670 — le bas d'une fenêtre ancrée n'est pas le présent : ↓ reste tant que le fil n'y est pas.
+    val isAtPresent = host.landing.isAtPresent(isNearBottom)
+    LaunchedEffect(affordanceMessages, isAtPresent) {
+        scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isAtPresent)
     }
 
     // #13995 — la preuve d'affichage de la flamme-œil : les bulles que le fil MONTRE.

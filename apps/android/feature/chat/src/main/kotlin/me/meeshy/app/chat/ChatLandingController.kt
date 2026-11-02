@@ -22,7 +22,10 @@ internal data class ChatLandingState(
     val hasMoreNewer: Boolean = false,
     val isLoadingNewer: Boolean = false,
     val highlightedMessageId: String? = null,
-)
+) {
+    /** The list is at the present only at the bottom of a window that reaches it: until then, ↓ stays. */
+    fun isAtPresent(isNearBottom: Boolean): Boolean = isNearBottom && !hasMoreNewer
+}
 
 /**
  * #14670 — opening a conversation ON a message (a search hit, a link, a notification), like iOS
@@ -75,11 +78,23 @@ internal class ChatLandingController(
         }
     }
 
+    /**
+     * « Back to the present » quits the anchored window for the recent page, read from the server: the
+     * cache may stop where the anchored walk did, long before today.
+     */
     fun returnToPresent() {
         if (!landing.value.hasMoreNewer) return
-        messages.returnToPresent(conversationId)
-        landing.update { it.copy(hasMoreNewer = false) }
+        landing.update { it.copy(hasMoreNewer = false, isLoadingNewer = false) }
         screen.update { it.copy(hasMoreOlder = true) }
+        scope.launch {
+            try {
+                messages.jumpToPresent(conversationId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                screen.update { it.copy(errorMessage = e.message) }
+            }
+        }
     }
 
     private suspend fun loadAround(messageId: String): MessageLanding? = try {

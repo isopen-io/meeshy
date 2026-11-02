@@ -81,6 +81,16 @@ internal class MessageHistoryReader(
     }
 
     /**
+     * #14670 — « back to the present » from an anchored window: the recent window, and the recent page read
+     * from the server. The cache may end where the anchored walk stopped; showing the newest cached rows would
+     * then stop in the past, with nothing left to page newer.
+     */
+    suspend fun jumpToPresent(conversationId: String) {
+        returnToPresent(conversationId)
+        cacheSource(conversationId).revalidatePresent()
+    }
+
+    /**
      * #14670 — opens the thread ON [messageId] (a search hit, a link). A message already in the observed
      * window moves nothing; otherwise the window centred on it is read (`around`), merged into Room, and
      * the observed window is anchored on it: from its oldest row to its newest when newer messages remain

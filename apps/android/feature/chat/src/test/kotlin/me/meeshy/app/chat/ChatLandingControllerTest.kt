@@ -4,7 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -153,9 +152,38 @@ class ChatLandingControllerTest {
         r.scope.runCurrent()
 
         r.controller.returnToPresent()
+        r.scope.runCurrent()
 
-        verify(exactly = 1) { r.repo.returnToPresent("c1") }
+        coVerify(exactly = 1) { r.repo.jumpToPresent("c1") }
         assertThat(r.landing.hasMoreNewer).isFalse()
         assertThat(r.state.hasMoreOlder).isTrue()
+    }
+
+    @Test
+    fun `the bottom of an anchored window is not the present, so the jump control stays`() {
+        val r = rig(MessageLanding.Anchored(hasNewer = true, hasOlder = true))
+        r.controller.land("o50")
+        r.scope.runCurrent()
+
+        assertThat(r.landing.isAtPresent(isNearBottom = true)).isFalse()
+
+        r.controller.returnToPresent()
+        r.scope.runCurrent()
+
+        assertThat(r.landing.isAtPresent(isNearBottom = true)).isTrue()
+        assertThat(r.landing.isAtPresent(isNearBottom = false)).isFalse()
+    }
+
+    @Test
+    fun `back to the present that fails says so`() {
+        val r = rig(MessageLanding.Anchored(hasNewer = true, hasOlder = true))
+        coEvery { r.repo.jumpToPresent("c1") } throws IllegalStateException("offline")
+        r.controller.land("o50")
+        r.scope.runCurrent()
+
+        r.controller.returnToPresent()
+        r.scope.runCurrent()
+
+        assertThat(r.state.errorMessage).isEqualTo("offline")
     }
 }

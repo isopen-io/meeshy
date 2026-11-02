@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,6 +49,7 @@ fun GlobalSearchScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
     val haptics = rememberMeeshyHaptics()
     var sheetUserId by remember { mutableStateOf<String?>(null) }
 
@@ -107,14 +109,17 @@ fun GlobalSearchScreen(
                             state = state,
                             onOpenConversation = { id ->
                                 viewModel.onResultTapped()
+                                focusManager.clearFocus()
                                 onOpenConversation(id)
                             },
                             onOpenMessage = { conversationId, messageId ->
                                 viewModel.onResultTapped()
+                                focusManager.clearFocus()
                                 onOpenMessage(conversationId, messageId)
                             },
                             onOpenPost = { destination ->
                                 viewModel.onResultTapped()
+                                focusManager.clearFocus()
                                 onOpenPost(destination)
                             },
                             onUserTapped = viewModel::onUserTapped,

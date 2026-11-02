@@ -175,7 +175,11 @@ fun ConversationListScreen(
                     onRefresh = onRefresh,
                     rowNavigation = rowNavigation,
                     messageSearch = messageSearch,
-                    onOpenMessage = { hit -> onOpenMessage(hit.conversationId, hit.messageId) },
+                    // #14670 — le clavier de la recherche ne suit pas l'utilisateur dans la conversation ouverte.
+                    onOpenMessage = { hit ->
+                        focusManager.clearFocus()
+                        onOpenMessage(hit.conversationId, hit.messageId)
+                    },
                     header = {
                         ConversationListHead(
                             rail = header,
