@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
+import kotlinx.coroutines.currentCoroutineContext
+import me.meeshy.sdk.session.AccountTicketContext
 import me.meeshy.sdk.session.SessionRepository
 
 /**
@@ -47,10 +49,11 @@ public class PlaintextErasureLedger internal constructor(
     /** Des messages nommés (événement, geste) : chaque ligne connue, par l'une de ses clés, et chaque id inconnu de Room. */
     public suspend fun recordNamed(messageIds: Collection<String>) {
         if (messageIds.isEmpty()) return
+        val account = stamp()
         database.withTransaction {
             val rows = messageIds.distinct().mapNotNull { id ->
-                val row = MessageIdReconciliation.locate(database, id) ?: return@mapNotNull entry(id, null, null)
-                if (isEndToEnd(row)) entryOf(row) else null
+                val row = MessageIdReconciliation.locate(database, id) ?: return@mapNotNull entry(account, id, null, null)
+                if (isEndToEnd(row)) entryOf(account, row) else null
             }
             dao.recordMessages(rows)
         }
@@ -58,15 +61,17 @@ public class PlaintextErasureLedger internal constructor(
 
     /** Des lignes que Room vient de retirer sans événement (page élaguée) : à appeler dans la transaction du retrait. */
     public suspend fun recordRemovedRows(rows: Collection<MessageEntity>) {
-        val entries = rows.filter(::isEndToEnd).map(::entryOf)
+        val account = stamp()
+        val entries = rows.filter(::isEndToEnd).map { entryOf(account, it) }
         if (entries.isNotEmpty()) dao.recordMessages(entries)
     }
 
     /** Les messages qu'une page ou une trame SERVIE dit partis (supprimés, échus, vue unique ouverte par moi). */
     public suspend fun recordServedGone(messages: Collection<ApiMessage>) {
         val now = clock.nowMillis()
+        val account = stamp()
         val entries = messages.filter { isEndToEnd(it) && isGoneOnServer(it, now) }
-            .map { entry(it.id, it.clientMessageId, authorOf(it)) }
+            .map { entry(account, it.id, it.clientMessageId, authorOf(it)) }
         if (entries.isNotEmpty()) dao.recordMessages(entries)
     }
 
@@ -98,13 +103,13 @@ public class PlaintextErasureLedger internal constructor(
         dao.recorded(account, KIND_MESSAGE, listOf(messageId)).isNotEmpty() ||
             dao.recorded(account, KIND_CONVERSATION, listOf(conversationId)).any { composedAt <= it.recordedAt }
 
-    private fun entryOf(row: MessageEntity): PlaintextErasureEntity {
+    private fun entryOf(account: String, row: MessageEntity): PlaintextErasureEntity {
         val message = runCatching { MeeshyApi.json.decodeFromString(ApiMessage.serializer(), row.payload) }.getOrNull()
-        return entry(row.serverId ?: row.id, message?.clientMessageId ?: row.id.takeIf { it != row.serverId }, message?.let(::authorOf) ?: row.senderId)
+        return entry(account, row.serverId ?: row.id, message?.clientMessageId ?: row.id.takeIf { it != row.serverId }, message?.let(::authorOf) ?: row.senderId)
     }
 
-    private fun entry(id: String, clientMessageId: String?, senderId: String?) = PlaintextErasureEntity(
-        account = stamp(),
+    private fun entry(account: String, id: String, clientMessageId: String?, senderId: String?) = PlaintextErasureEntity(
+        account = account,
         kind = KIND_MESSAGE,
         itemId = id,
         clientMessageId = clientMessageId?.takeIf { it.isNotBlank() && it != id },
@@ -112,7 +117,14 @@ public class PlaintextErasureLedger internal constructor(
         recordedAt = clock.nowMillis(),
     )
 
-    private fun stamp(): String = account()?.takeIf { it.isNotBlank() } ?: SESSION_ACCOUNT
+    /**
+     * Le compte sous lequel l'effacement est ARRIVÉ (#13576 : une trame de A traitée après la connexion de B porte le
+     * ticket de A), sinon celui de la session : jamais celui qui se trouve connecté au moment de l'écriture.
+     */
+    private suspend fun stamp(): String =
+        currentCoroutineContext()[AccountTicketContext]?.ticket?.ownerId?.takeIf { it.isNotBlank() }
+            ?: account()?.takeIf { it.isNotBlank() }
+            ?: SESSION_ACCOUNT
 
     private fun authorOf(message: ApiMessage): String? = message.sender?.resolvedUserId ?: message.senderId
 

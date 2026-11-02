@@ -224,16 +224,15 @@ internal class MessageCacheSource(
 
     /**
      * #14655 — les lignes serveur que l'élagage va retirer : celles de la fenêtre que la page ne sert plus, sous aucune de
-     * leurs clés (id, id serveur, `cid_`). Une bulle remplacée par sa jumelle serveur n'en est pas une.
+     * leurs clés (id, id serveur, `cid_`). Une bulle remplacée par sa jumelle serveur n'en est pas une. Seul l'INTÉRIEUR
+     * de la page témoigne d'une suppression : une ligne plus récente que son dernier message (ou toute ligne, sous une
+     * page vide) a pu arriver par le socket pendant la requête, et le coffre est la seule copie de son clair.
      */
     private suspend fun pruned(messages: List<ApiMessage>, rows: List<me.meeshy.core.database.entity.MessageEntity>): List<me.meeshy.core.database.entity.MessageEntity> {
+        val newestServed = rows.maxOfOrNull { it.createdAt } ?: return emptyList()
         val served = messages.flatMap { listOfNotNull(it.id, it.clientMessageId) }.toSet()
-        val doomed = if (rows.isEmpty()) {
-            messageDao.missing(conversationId, emptyList())
-        } else {
-            messageDao.missingSince(conversationId, rows.minOf { it.createdAt }, rows.map { it.id })
-        }
-        return doomed.filter { row -> row.id !in served && row.serverId !in served }
+        return messageDao.missingSince(conversationId, rows.minOf { it.createdAt }, rows.map { it.id })
+            .filter { row -> row.createdAt <= newestServed && row.id !in served && row.serverId !in served }
     }
 
     /**

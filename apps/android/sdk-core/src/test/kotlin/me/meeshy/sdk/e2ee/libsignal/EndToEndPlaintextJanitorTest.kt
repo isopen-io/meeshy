@@ -10,6 +10,8 @@ import me.meeshy.sdk.conversation.runHarnessTest
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.withAccountTicket
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -130,5 +132,23 @@ class EndToEndPlaintextJanitorTest {
         rig.janitor.reconsider(opened("m2", sentAt = 6_000L))
 
         assertThat(rig.vault.erased).containsExactly("me" to "m1")
+    }
+
+    @Test
+    fun `an event that arrived under alice is stamped for alice even when bob is signed in by the time it is recorded`() = runHarnessTest { harness ->
+        val rig = Rig(harness, account = "bob")
+
+        withAccountTicket(AccountTicket("alice", 0L)) {
+            rig.ledger.recordConversation("c1")
+            rig.ledger.recordNamed(listOf("m1"))
+        }
+
+        assertThat(rig.janitor.drain()).isTrue()
+        assertThat(rig.vault.erased).isEmpty()
+        assertThat(rig.vault.conversations).isEmpty()
+        rig.account = "alice"
+        assertThat(rig.janitor.drain()).isTrue()
+        assertThat(rig.vault.erased).containsExactly("alice" to "m1")
+        assertThat(rig.vault.conversations.map { it.first to it.second }).containsExactly("alice" to "c1")
     }
 }
