@@ -381,6 +381,7 @@ internal fun ChatComposer(
                         onClear = onClearEffects,
                         onDone = { effectsPanelOpen = false },
                         inline = true,
+                        sections = configuration.effectSections,
                         modifier = Modifier
                             .padding(start = MeeshySpacing.sm, end = MeeshySpacing.sm, top = MeeshySpacing.sm)
                             .clip(RoundedCornerShape(MeeshyRadius.lg))

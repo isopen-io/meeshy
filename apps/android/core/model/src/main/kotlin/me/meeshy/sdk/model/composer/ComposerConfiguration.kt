@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.composer
 
 import me.meeshy.sdk.model.ComposerMode
+import me.meeshy.sdk.model.MessageEffectSection
 
 /** Une porte du composeur universel : une bascule, une tuile du « + », ou ce que la rangée de saisie offre. */
 public enum class ComposerCapability {
@@ -38,6 +39,8 @@ public data class ComposerConfiguration(
     val maxLength: Int? = null,
     /** Le ⌄ s'efface pendant qu'on écrit ou qu'on enregistre (conversation, #9955) ; celui d'un commentaire reste (#9122). */
     val foldYieldsToComposing: Boolean = true,
+    /** Les sections que la porte des effets montre : un commentaire n'a que les effets PERMANENTS (iOS `showPermanentEffects`). */
+    val effectSections: Set<MessageEffectSection> = MessageEffectSection.entries.toSet(),
 ) {
     public fun offers(capability: ComposerCapability): Boolean = capability in capabilities
 
@@ -46,12 +49,20 @@ public data class ComposerConfiguration(
         offers(ComposerCapability.FOLD) && !folded && !(foldYieldsToComposing && isComposing)
 
     /** Le réglage qu'une surface sert : une porte qu'elle ne sait pas exécuter ne s'affiche pas (loi 4). */
-    public fun servedBy(receivesAttachments: Boolean, picksLanguage: Boolean, sendsQuickEmoji: Boolean): ComposerConfiguration =
+    public fun servedBy(
+        receivesAttachments: Boolean,
+        picksLanguage: Boolean,
+        sendsQuickEmoji: Boolean,
+        appliesEffects: Boolean = true,
+        picksPlace: Boolean = true,
+    ): ComposerConfiguration =
         copy(
             capabilities = capabilities -
                 (if (receivesAttachments) emptySet() else ComposerCapability.ATTACHMENTS) -
                 (if (picksLanguage) emptySet() else setOf(ComposerCapability.LANGUAGE)) -
-                (if (sendsQuickEmoji) emptySet() else setOf(ComposerCapability.QUICK_EMOJIS)),
+                (if (sendsQuickEmoji) emptySet() else setOf(ComposerCapability.QUICK_EMOJIS)) -
+                (if (appliesEffects) emptySet() else setOf(ComposerCapability.BLUR, ComposerCapability.EFFECTS)) -
+                (if (picksPlace) emptySet() else setOf(ComposerCapability.LOCATION)),
         )
 
     public fun bounded(text: String): String = maxLength?.let(text::take) ?: text
@@ -67,24 +78,29 @@ public data class ComposerConfiguration(
         /**
          * Le commentaire (iOS `ComposerMode.comment` + `voiceDoor: .open` + `forceShowAttachment` + `foldableComment`) :
          * la géométrie de la barre de message (#14384) — pastille de langue, sticker, photothèque, caméra et ⌄ à droite,
-         * emojis rapides dans la zone d'envoi — texte borné à 2 000, emoji et vocal. Ni éphémère, ni vue unique, ni feuille
-         * d'effets, ni carte de contact (iOS les ferme aussi). Le flou et les effets permanents, le fichier et le lieu
-         * qu'iOS offre attendent que le fil Android sache les envoyer et les afficher (#14385, #14386, #14387). Le ⌄ reste
-         * visible clavier levé, comme dans tout espace commentaire d'iOS.
+         * emojis rapides dans la zone d'envoi — texte borné à 2 000, emoji et vocal. Le flou et les effets PERMANENTS
+         * (#14385, iOS `commentBlurEnabled` + `showPermanentEffects`). Ni éphémère, ni vue unique, ni effet d'apparition, ni
+         * carte de contact (iOS les ferme aussi). Le fichier (#14386, iOS `onFilePicker`) et le lieu (#14387, iOS
+         * `onLocationRequest`). Le ⌄ reste visible clavier levé, comme dans tout espace commentaire d'iOS.
          */
         public val COMMENT: ComposerConfiguration = ComposerConfiguration(
             capabilities = setOf(
+                ComposerCapability.BLUR,
+                ComposerCapability.EFFECTS,
                 ComposerCapability.LANGUAGE,
                 ComposerCapability.QUICK_EMOJIS,
                 ComposerCapability.EMOJI,
                 ComposerCapability.VOICE,
                 ComposerCapability.PHOTO_LIBRARY,
                 ComposerCapability.CAMERA,
+                ComposerCapability.FILE,
+                ComposerCapability.LOCATION,
                 ComposerCapability.STICKER,
                 ComposerCapability.FOLD,
             ),
             maxLength = ComposerMode.COMMENT.maxLength,
             foldYieldsToComposing = false,
+            effectSections = setOf(MessageEffectSection.PERMANENT),
         )
     }
 }

@@ -134,6 +134,8 @@ data class CreateCommentRequest(
     val originalLanguage: String? = null,
     /** Les médias téléversés sous le contexte `comment` qui partent avec le commentaire (#12972). */
     val attachmentIds: List<String>? = null,
+    /** Le lieu joint au commentaire (#14387, iOS `location: place`) ; la passerelle le hisse en `location`. */
+    val location: SharedPlace? = null,
 )
 
 /** Repost a post — port of RepostRequest (StoryModels.swift). */
