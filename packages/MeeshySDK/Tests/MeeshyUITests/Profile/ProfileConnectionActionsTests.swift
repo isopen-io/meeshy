@@ -5,6 +5,7 @@ import MeeshySDK
 @MainActor
 final class ProfileConnectionActionsTests: XCTestCase {
 
+    @MainActor
     private struct Fixture {
         let relationships = SpyProfileRelationshipState()
         let social = StubProfileSocialActions()
