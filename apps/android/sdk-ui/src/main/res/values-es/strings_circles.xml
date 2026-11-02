@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. Partagées par « Mes cercles » et le profil. -->
+<resources>
+    <string name="circles_action_request">Pedir %1$s</string>
+    <string name="circles_action_request_a11y">Pedir a %2$s el nivel %1$s</string>
+    <string name="circles_level_acquaintance">Conocido</string>
+    <string name="circles_level_blood">Sangre</string>
+    <string name="circles_level_close">Cercano</string>
+    <string name="circles_level_community">Comunidad</string>
+    <string name="circles_level_friend">Amigo</string>
+    <string name="circles_level_public">Público</string>
+    <string name="circles_missing_audio">un mensaje de audio</string>
+    <string name="circles_missing_message">un mensaje</string>
+    <string name="circles_missing_other">una interacción</string>
+    <string name="circles_missing_post_view">una vista de publicación</string>
+    <string name="circles_missing_reaction">una reacción</string>
+    <string name="circles_pending">Solicitud enviada · %1$s</string>
+    <string name="circles_progress_eligible">Listo para %1$s</string>
+    <string name="circles_progress_missing">Falta: %1$s</string>
+    <string name="circles_progress_weeks">Semanas seguidas: %1$d de %2$d</string>
+</resources>

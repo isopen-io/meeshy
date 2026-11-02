@@ -502,6 +502,7 @@ const ar = {
 
   'media.video.play': 'تشغيل الفيديو',
   'media.video.pause': 'إيقاف مؤقت',
+  'media.video.paused': 'متوقّف مؤقتاً',
   'media.video.position': 'موضع التشغيل',
   'media.audio.position': 'موضع التشغيل',
   'media.audio.speed': 'سرعة التشغيل',

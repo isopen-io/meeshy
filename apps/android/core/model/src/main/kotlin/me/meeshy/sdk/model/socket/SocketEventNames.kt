@@ -167,6 +167,12 @@ object SocketEventNames {
     // read-status
     const val READ_STATUS_UPDATED = "read-status:updated"
 
+    // relation (#13933, #13938) : tous serveur -> client, sur la room `user:<id>` ; aucun événement de baisse (RG-07)
+    const val RELATION_LEVEL_RAISED = "relation:level-raised"
+    const val RELATION_RITUAL_STARTED = "relation:ritual-started"
+    const val RELATION_RITUAL_PROGRESS = "relation:ritual-progress"
+    const val RELATION_RITUAL_COMPLETED = "relation:ritual-completed"
+
     // status
     const val STATUS_CREATED = "status:created"
     const val STATUS_DELETED = "status:deleted"
@@ -351,6 +357,10 @@ object SocketEventNames {
         REACTION_ADDED,
         REACTION_REMOVED,
         READ_STATUS_UPDATED,
+        RELATION_LEVEL_RAISED,
+        RELATION_RITUAL_STARTED,
+        RELATION_RITUAL_PROGRESS,
+        RELATION_RITUAL_COMPLETED,
         STATUS_CREATED,
         STATUS_DELETED,
         STATUS_REACTED,
