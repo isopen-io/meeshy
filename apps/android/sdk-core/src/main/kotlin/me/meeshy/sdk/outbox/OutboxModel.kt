@@ -296,10 +296,12 @@ public data class ConsumeViewOncePayload(val conversationId: String)
 /**
  * Payload of a `SEND_FRIEND_REQUEST` outbox row. The receiver is the row's
  * `targetId` (so a repeated send to the same receiver coalesces per-target); the
- * optional greeting travels here.
+ * optional greeting travels here, and so does the level a circles raise aims at
+ * ([targetLevel], #13938) — a row written before that field reads back without it
+ * (`null` = Friend, the historical meaning).
  */
 @kotlinx.serialization.Serializable
-public data class FriendRequestPayload(val message: String? = null)
+public data class FriendRequestPayload(val message: String? = null, val targetLevel: String? = null)
 
 /**
  * Payload of a `RESPOND_FRIEND_REQUEST` outbox row. The row's `targetId` is the request id

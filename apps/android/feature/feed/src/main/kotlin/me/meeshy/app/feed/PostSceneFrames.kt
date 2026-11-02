@@ -24,7 +24,7 @@ internal object PostSceneFrames {
         documents.map { SceneCardFraming(focus = SceneFraming.cardFocus(it), pageAspect = SceneCarouselLayout.pageAspect(it)) }
 
     /**
-     * La scène v3 de chaque [scenes] : celle du document servi quand le post le garde (deux scènes ou plus), sinon la scène
+     * La scène v3 de chaque [scenes] : celle du document servi quand le post le garde ([me.meeshy.sdk.model.PostReadStoryEffectsSerializer]), sinon la scène
      * reconstruite depuis sa projection plate — le cadrage se juge sur les ancres de la scène, jamais sur le modèle peint.
      */
     fun documents(effects: StoryEffects?, scenes: List<StoryItem>): List<SceneV3> =

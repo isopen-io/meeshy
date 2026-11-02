@@ -92,8 +92,10 @@ class RouteManifestRatchetTest {
          * 201 : plus les trois routes des cercles que la passerelle sert (`GET /relations`,
          * `POST /relations/:userId/level`, `POST /relations/:userId/ritual`, #13933) et que l'écran des cercles d'Android
          * portera (ui-cercles) : à porter, pas hors périmètre.
+         * 199 : moins `GET /relations` et `POST /relations/:userId/ritual` (#13938 : « Mes cercles » et le rituel du
+         * Sang), que porte `RelationsApi`. `POST /relations/:userId/level` (baisser un lien, #14228) reste à porter.
          */
-        const val TO_PORT_CEILING = 201
+        const val TO_PORT_CEILING = 199
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

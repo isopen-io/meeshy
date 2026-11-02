@@ -367,8 +367,9 @@ extension MeeshyComposerHost {
     /// `accessibilityCarryingComposerCaptions` est le site UNIQUE de la greffe : ce
     /// qui change ici est la BASE qu'on lui donne — `.empty`, parce que le meuble
     /// n'a pas de magasin d'atelier à relayer sur ce chemin, et c'est honnête.
-    func publishStoryScene(as format: ComposerFormat, alsoAsReel: Bool = false) {
-        guard canPublishDocument(as: format) else { return }
+    @discardableResult
+    func publishStoryScene(as format: ComposerFormat, alsoAsReel: Bool = false, closing: Bool = true) -> Bool {
+        guard canPublishDocument(as: format) else { return false }
         isPublishingDocument = true
         let accepted = onPublishAllInBackground(
             viewModel.slides,
@@ -388,7 +389,8 @@ extension MeeshyComposerHost {
             format.postType
         )
         isPublishingDocument = false
-        if accepted { discardAutosavedDraft(); onDismiss() }
+        if accepted, closing { discardAutosavedDraft(); onDismiss() }
+        return accepted
     }
 
     /// **Le refus d'un format qu'aucun canal ne sait porter.**
@@ -425,8 +427,11 @@ extension MeeshyComposerHost {
                 // La partie principale NOMME le format qui partira si
                 // l'auteur ne touche pas au chevron ; le mood garde « Publier ».
                 if let titre = armedPublishTitle {
+                    // Plusieurs formats cochés passent sur deux lignes plutôt que
+                    // de se couper (« Publicar historia, publicación y reel »).
                     Text(titre)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
                 } else {
                     Text("composer.socle.publish", bundle: .main)
                         .lineLimit(1)
@@ -770,60 +775,21 @@ extension MeeshyComposerHost {
         return ""
     }
 
-    /// Le meuble TRANSMET : il ne connaît ni service, ni file, ni endpoint.
-    ///
-    /// Il referme le composer sur une ACCEPTATION et le laisse ouvert sur un
-    /// refus. Fermer sur un `false` jetterait ce que l'auteur vient d'écrire, et
-    /// c'est le seul geste de cette méthode qu'aucune garde de source ne pourrait
-    /// rattraper — un composer refermé sur un envoi perdu reste PLAUSIBLE : il se
-    /// ferme exactement comme quand tout va bien.
-    ///
-    /// **Un refus EXISTE depuis le lot 4.10, et il faut lire lequel au mot près.**
-    /// Le `Bool` de `onPublishDocument` a été documenté comme une ACCEPTATION
-    /// pendant deux lots sans qu'aucun écrivain n'émette jamais `false` : un
-    /// commentaire qui annonce ce que le code ne tient pas devient la loi que
-    /// lira la session suivante. Ce n'est plus le cas —
-    /// `DocumentComposerDoor.publish` en émet trois : un plan qui refuse (format
-    /// non-post, brouillon sans matière, chemin non durable), un publieur qui
-    /// refuse la ligne, un publieur MUET. La branche du refus est donc
-    /// atteignable, et `test_lEnvoiDuSocle_neFermeQueSurUneAcceptation_etNeJettePasLaSaisie`
-    /// la garde.
-    ///
-    /// **`MoodComposerDoor` en émet sur UNE de ses deux branches**, et il faut
-    /// lire laquelle : son ANCRAGE remonte le refus (`anchorStatusAsPost` rend
-    /// un `Bool` — 403 `REPOST_AUDIENCE_WIDENING`, coupure, hors-ligne), son
-    /// MIROIR se tait. `StatusViewModel.setStatus` ne rend rien — elle avale
-    /// l'erreur réseau dans un `catch` qui se contente d'un toast —, et sa file
-    /// durable n'est atteinte que si `isOffline()` répond oui. Un gateway qui
-    /// répond 500 referme donc le composer sur cette branche-là et perd l'emoji,
-    /// la phrase, l'audience et les mentions. **Dette CONSIGNÉE, condition de
-    /// levée nommée** : que `setStatus` rende un résultat, comme `createPost` le
-    /// fait déjà par `publishSuccess` / `publishError`.
-    func publishDocument(_ choice: ComposerPublishChoice) {
-        // **Un refus qui SE DIT.**
-        //
-        // Ce `guard` rendrait la main SANS un mot : photo posée, texte tapé par la
-        // porte CONTENU, flèche pressée — **aucun post créé, et le composer reste
-        // ouvert**. L'auteur ne verrait rien qui distingue « ça part » de « ça n'est
-        // pas parti » ; il presserait encore, et composerait peut-être une seconde
-        // fois ce qu'il vient d'écrire.
-        //
-        // > **Un refus muet est PIRE qu'une donnée perdue.** Une publication
-        // > incomplète laisse quelque chose à réparer ; une publication qui
-        // > n'a pas eu lieu et ne le dit pas laisse l'auteur croire qu'elle a
-        // > eu lieu. L'étage du dessous l'applique déjà DEUX fois —
-        // > `ComposerDocumentDurablePublisher.refuse()` et
-        // > `DocumentComposerDoor.refuse()` peignent tous deux un toast — et elle
-        // > vaut aussi pour l'étage qui les APPELLE.
-        //
-        // Les deux branches sont distinctes : `canPublishDocument`
-        // faux est un état NORMAL (rien à publier — pas de texte, pas de
-        // média), que la flèche grisée dit déjà. Un brouillon NUL, lui, est une
-        // anomalie : la flèche est armée et rien n'est parti.
+    /// Le meuble TRANSMET : il ne connaît ni service, ni file, ni endpoint. Il
+    /// referme le composer sur une ACCEPTATION et le laisse ouvert sur un refus :
+    /// fermer sur un `false` jetterait ce que l'auteur vient d'écrire.
+    /// `DocumentComposerDoor.publish` refuse (plan, ligne refusée, publieur muet),
+    /// et `MoodComposerDoor` ne remonte le refus que sur son ancrage. `settled`
+    /// rend l'issue à un geste de plusieurs formats, qui décide seul de fermer.
+    func publishDocument(_ choice: ComposerPublishChoice, settled: (@MainActor (Bool) -> Void)? = nil) {
+        // Rien à publier est un état NORMAL, que la flèche grisée dit déjà ; un
+        // brouillon NUL est une anomalie, et un refus muet est pire qu'une donnée
+        // perdue : il se dit.
         guard canPublishDocument(as: choice.format) else { return }
         guard let draft = documentDraft(for: choice) else {
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishError)
+            settled?(false)
             return
         }
         // Le palier RETENU pour la PROCHAINE publication est écrit ICI, au
@@ -836,6 +802,7 @@ extension MeeshyComposerHost {
         Task {
             let accepted = await onPublishDocument(await ComposerDocumentLookBake.baked(draft))
             isPublishingDocument = false
+            if let settled { return settled(accepted) }
             if accepted { handOverAutosavedDraft(); onDismiss() }
         }
     }

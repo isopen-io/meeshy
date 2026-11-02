@@ -143,7 +143,6 @@ internal fun NavGraphBuilder.feedNavGraph(
     ) {
         StoryViewerScreen(
             onClose = { navController.popBackStack() },
-            onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
             onEditStory = { storyId -> navController.navigate(Routes.storyComposerEdit(storyId)) },
             onComposeStory = { storyId -> navController.navigate(Routes.storyComposerRecompose(storyId)) },

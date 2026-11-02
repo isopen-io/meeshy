@@ -43,6 +43,8 @@ data class FeedRealtimeHead(
     val likes: Map<String, LikeOverlay> = emptyMap(),
     val bookmarks: Map<String, BookmarkOverlay> = emptyMap(),
     val comments: Map<String, Int> = emptyMap(),
+    /** « Republier » au geste (#14456) : il survit au tirer-pour-rafraîchir, une republication ne se défait pas. */
+    val reposts: RepostMarks = RepostMarks(),
 ) {
     val hasNewPosts: Boolean get() = newPostsCount > 0
 }
@@ -275,7 +277,9 @@ object FeedRealtimeReducer {
         )
     }
 
-    /** Pull-to-refresh: reset the whole head (posts + count + tombstones). Mirrors iOS `refresh()`. */
-    fun clear(state: FeedRealtimeHead): FeedRealtimeHead =
-        if (state == FeedRealtimeHead()) state else FeedRealtimeHead()
+    /** Pull-to-refresh: reset the head (posts + count + tombstones), the reader's own reposts kept. Mirrors iOS `refresh()`. */
+    fun clear(state: FeedRealtimeHead): FeedRealtimeHead {
+        val cleared = FeedRealtimeHead(reposts = state.reposts)
+        return if (state == cleared) state else cleared
+    }
 }
