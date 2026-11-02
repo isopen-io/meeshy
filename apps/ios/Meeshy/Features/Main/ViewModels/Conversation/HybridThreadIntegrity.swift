@@ -18,6 +18,10 @@ import os
 /// libsignal ne prétend rien. Une instance par conversation ouverte.
 final class HybridThreadIntegrity {
     @Published private(set) var verdicts: [String: HybridDeviceLayerIntegrity] = [:]
+    /// Les messages déjà lus au coffre : une relecture du magasin ne repasse
+    /// par le coffre (et par une tâche) que pour un message neuf, ou après
+    /// qu'une enveloppe de la conversation s'est ouverte (`reopen`).
+    private var checked: Set<String> = []
 
     init() {}
 
@@ -27,16 +31,26 @@ final class HybridThreadIntegrity {
     nonisolated deinit {}
 
     /// Un message hybride d'un AUTRE membre, vivant, écrit par une personne.
-    static func awaitsVerdict(_ message: MeeshyMessage) -> Bool {
+    nonisolated static func awaitsVerdict(_ message: MeeshyMessage) -> Bool {
         HybridDeviceLayer.isHybrid(message.encryptionMode)
             && !message.isMe
             && message.deletedAt == nil
             && message.messageSource == .user
     }
 
+    /// Ce message doit-il être lu au coffre à cette relecture ?
+    func needsRead(_ message: MeeshyMessage) -> Bool {
+        Self.awaitsVerdict(message) && !checked.contains(message.id)
+    }
+
+    /// Une enveloppe de la conversation vient de s'ouvrir : tout se relit.
+    func reopen() {
+        checked.removeAll()
+    }
+
     /// Le verdict de la couche appareil pour ce message, s'il a un clair au
     /// coffre ET que ce clair est à sa place ; `nil` sinon (aucune prétention).
-    static func verdict(
+    nonisolated static func verdict(
         for message: MeeshyMessage,
         entry: E2EEPlaintextEntry?,
         conversationId: String
@@ -52,21 +66,25 @@ final class HybridThreadIntegrity {
     /// Lit au coffre la couche appareil des messages hybrides du lot (le texte
     /// SERVI, tel que le magasin le rend) et retient chaque verdict.
     func resolve(_ messages: [MeeshyMessage], from endToEnd: any EndToEndMessagingProviding, conversationId: String, account: String) async {
-        let candidates = messages.filter(Self.awaitsVerdict)
+        let candidates = messages.filter { Self.awaitsVerdict($0) }
         guard !candidates.isEmpty else { return }
         let entries = await endToEnd.plaintexts(for: candidates.map(\.id), as: account)
-        let found = candidates.reduce(into: [String: HybridDeviceLayerIntegrity]()) { verdicts, message in
-            verdicts[message.id] = Self.verdict(for: message, entry: entries[message.id], conversationId: conversationId)
+        checked.formUnion(candidates.map(\.id))
+        let found = candidates.reduce(into: [String: HybridDeviceLayerIntegrity]()) { partial, message in
+            partial[message.id] = Self.verdict(for: message, entry: entries[message.id], conversationId: conversationId)
         }
         guard found.contains(where: { verdicts[$0.key] != $0.value }) else { return }
         verdicts.merge(found) { _, fresh in fresh }
     }
 
     /// Pose le verdict sur la ligne que la cellule rend ; un écart y remplace
-    /// le texte servi par celui que l'appareil de l'auteur a scellé.
+    /// le texte servi par celui que l'appareil de l'auteur a scellé. Une ligne
+    /// modifiée depuis le verdict est invérifiable : l'édition ne repasse que
+    /// par la couche serveur, et un sceau resté sur elle mentirait.
     func apply(to message: inout MeeshyMessage) {
         guard Self.awaitsVerdict(message), let verdict = verdicts[message.id] else { return }
-        message.deviceLayerIntegrity = verdict
-        if case .mismatch(let deviceText) = verdict { message.content = deviceText }
+        let current = message.isEdited ? HybridDeviceLayerIntegrity.unverifiable : verdict
+        message.deviceLayerIntegrity = current
+        if case .mismatch(let deviceText) = current { message.content = deviceText }
     }
 }

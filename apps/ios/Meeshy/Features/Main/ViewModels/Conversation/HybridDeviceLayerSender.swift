@@ -99,15 +99,16 @@ struct HybridTextRoute {
         guard sealer.sealsDeviceLayer(for: outgoing) else {
             return try await viewModel.emit(outgoing, payload: plain, context: context)
         }
+        let host = viewModel
         return try await sealer.deliverHybrid(
-            outgoing, context: context, wireEffectFlags: viewModel.wireEffectFlags(context.intent),
-            emitSealed: { [weak viewModel] sealed in
-                guard let viewModel else { throw CancellationError() }
-                return try await viewModel.sendCoordinator.emit(outgoing, payload: sealed, context: context, socketFirst: false)
+            outgoing, context: context, wireEffectFlags: host.wireEffectFlags(context.intent),
+            emitSealed: { [weak host] sealed in
+                guard let host else { throw CancellationError() }
+                return try await host.sendCoordinator.emit(outgoing, payload: sealed, context: context, socketFirst: false)
             },
-            emitPlain: { [weak viewModel] unsealed in
-                guard let viewModel else { throw CancellationError() }
-                return try await viewModel.emit(outgoing, payload: unsealed, context: context)
+            emitPlain: { [weak host] unsealed in
+                guard let host else { throw CancellationError() }
+                return try await host.emit(outgoing, payload: unsealed, context: context)
             }
         )
     }

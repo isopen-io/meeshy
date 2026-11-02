@@ -100,4 +100,29 @@ final class HybridThreadIntegrityTests: XCTestCase {
         XCTAssertNil(message.deviceLayerIntegrity)
         XCTAssertTrue(integrity.verdicts.isEmpty)
     }
+
+    func test_aMessageEditedAfterItsVerdict_losesItsSeal() async {
+        let e2ee = MockEndToEndMessaging()
+        e2ee.store(sealed("Salut"), for: "m1")
+        let integrity = HybridThreadIntegrity()
+        await integrity.resolve([served("Salut")], from: e2ee, conversationId: conversationId, account: "me")
+        var edited = served("Salut, finalement non", isEdited: true)
+
+        integrity.apply(to: &edited)
+
+        XCTAssertEqual(edited.deviceLayerIntegrity, .unverifiable)
+        XCTAssertEqual(edited.content, "Salut, finalement non", "l'édition servie s'affiche, sans sceau")
+    }
+
+    func test_aMessageReadOnce_isNotReadAgain_untilAnEnvelopeOpens() async {
+        let integrity = HybridThreadIntegrity()
+        let message = served("Salut")
+        XCTAssertTrue(integrity.needsRead(message))
+
+        await integrity.resolve([message], from: MockEndToEndMessaging(), conversationId: conversationId, account: "me")
+        XCTAssertFalse(integrity.needsRead(message), "une relecture du magasin ne repasse pas par le coffre")
+
+        integrity.reopen()
+        XCTAssertTrue(integrity.needsRead(message), "une enveloppe ouverte fait tout relire")
+    }
 }

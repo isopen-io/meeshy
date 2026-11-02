@@ -34,9 +34,10 @@ final class EndToEndThreadClear {
     }
 
     /// Une relecture du magasin doit-elle passer par le coffre ? Un message
-    /// chiffré sans son clair, ou un message hybride d'un autre membre (#14369).
-    static func awaitsVaultRead(_ message: MeeshyMessage) -> Bool {
-        EndToEndThreadPlaintexts.awaitsPlaintext(message) || HybridThreadIntegrity.awaitsVerdict(message)
+    /// chiffré sans son clair, ou un message hybride d'un autre membre pas
+    /// encore lu au coffre (#14369).
+    func needsVaultRead(_ message: MeeshyMessage) -> Bool {
+        EndToEndThreadPlaintexts.awaitsPlaintext(message) || hybrid.needsRead(message)
     }
 
     /// Repose sur une ligne du magasin le clair adopté pour elle, rejugé à SA
