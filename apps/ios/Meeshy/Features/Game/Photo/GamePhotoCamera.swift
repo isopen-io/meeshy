@@ -41,6 +41,9 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
     /// Le traitement UNIQUE de toute prise photo de l'app (#8695) : redressée, bornée, améliorée.
     nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
     private let output = AVCapturePhotoOutput()
+    /// L'horizon de la caméra avant : sans lui, la photo sort dans
+    /// l'orientation du capteur — couchée, même l'appareil tenu debout.
+    private let horizon = ComposerCaptureHorizon()
     private var configured = false
     /// Ce que le déroulé VEUT : démarrage et arrêt partent chacun sur leur tâche, sans
     /// ordre garanti ; un arrêt demandé pendant le démarrage est rejoué à son issue.
@@ -70,6 +73,7 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
             session.addInput(input)
             session.addOutput(output)
             session.commitConfiguration()
+            horizon.follow(device)
             configured = true
         }
         wantsRunning = true
@@ -99,6 +103,7 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
         guard pending == nil, session.isRunning else { return nil }
         return await withCheckedContinuation { continuation in
             pending = continuation
+            horizon.level(output.connection(with: .video))
             output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
         }
     }

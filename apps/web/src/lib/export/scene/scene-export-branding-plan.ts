@@ -1,3 +1,4 @@
+import { BRAND_JINGLE } from './brand-jingle';
 import type { ExportSound, SceneExportPlan } from './scene-export-plan';
 
 /**
@@ -7,6 +8,11 @@ import type { ExportSound, SceneExportPlan } from './scene-export-plan';
  * 0,5 s dans la story ; la carte de fin chevauche 1,5 s de la fin de la story
  * (2 s logo seul, ou 3,5 s logo muet puis identité quand l'auteur est peint) ;
  * jamais à l'intérieur du fondu d'ouverture, jamais avant zéro.
+ *
+ * Les jingles s'entendent EN ENTIER, jamais sous la story (miroir de
+ * `StoryExportJingleMix` iOS) : le son de la story monte de 0 à 1 pendant la
+ * queue du jingle d'ouverture, et il est muet quand le jingle de fermeture
+ * entre — sur le fondu de la carte d'auteur, en 0,5 s avant le logo seul.
  */
 
 export const BRANDING_TIMING = {
@@ -18,6 +24,8 @@ export const BRANDING_TIMING = {
   authorIdentityPhaseMs: 2_000,
   authorIdentityFadeInMs: 400,
   authorWatermarkOpacity: 0.22,
+  logoOutroDuckMs: 500,
+  introJingleMs: Math.round(BRAND_JINGLE.durationSeconds * 1_000),
 } as const;
 
 export type TimeWindow = { readonly startMs: number; readonly durationMs: number };
@@ -45,11 +53,15 @@ export type BrandedTimeline = {
   readonly storyStartMs: number;
   readonly introFade: TimeWindow;
   readonly outroStartMs: number;
-  /** La fenêtre où la carte de fin recouvre la fin de la story (et où le son de la story s'éteint). */
+  /** La fenêtre où la carte de fin recouvre la fin de la story. */
   readonly outroFade: TimeWindow;
+  /** La fenêtre où le son de la story monte de 0 à 1 : la queue du jingle d'ouverture. */
+  readonly storyAudioRise: TimeWindow | null;
+  /** La fenêtre où le son de la story s'éteint : il est muet quand le jingle de fermeture entre. */
+  readonly storyAudioFall: TimeWindow;
   readonly outroDurationMs: number;
   readonly totalMs: number;
-  readonly introJingle: { readonly whenMs: number; readonly fadeOut: TimeWindow } | null;
+  readonly introJingle: { readonly whenMs: number } | null;
   readonly outroJingle: { readonly whenMs: number };
 };
 
@@ -58,16 +70,33 @@ export function brandedTimeline(params: { readonly plan: BrandingPlan; readonly 
   const baseEndMs = plan.storyStartMs + params.storyMs;
   const introFadeEndMs = plan.introFade.startMs + plan.introFade.durationMs;
   const outroStartMs = Math.max(baseEndMs - BRANDING_TIMING.outroOverlapMs, 0, introFadeEndMs);
+  const outroJingleMs = outroStartMs + plan.outroJingleOffsetMs;
+  const rise = storyAudioRise({ plan, baseEndMs });
   return {
     storyStartMs: plan.storyStartMs,
     introFade: plan.introFade,
     outroStartMs,
     outroFade: { startMs: outroStartMs, durationMs: Math.max(0, baseEndMs - outroStartMs) },
+    storyAudioRise: rise,
+    storyAudioFall: storyAudioFall({ plan, baseEndMs, floorMs: rise === null ? plan.storyStartMs : rise.startMs + rise.durationMs, outroJingleMs }),
     outroDurationMs: plan.outroDurationMs,
     totalMs: outroStartMs + plan.outroDurationMs,
-    introJingle: plan.hasIntro ? { whenMs: 0, fadeOut: plan.introFade } : null,
-    outroJingle: { whenMs: outroStartMs + plan.outroJingleOffsetMs },
+    introJingle: plan.hasIntro ? { whenMs: 0 } : null,
+    outroJingle: { whenMs: outroJingleMs },
   };
+}
+
+function storyAudioRise(params: { readonly plan: BrandingPlan; readonly baseEndMs: number }): TimeWindow | null {
+  const { plan } = params;
+  const endMs = Math.min(BRANDING_TIMING.introJingleMs, params.baseEndMs);
+  return plan.hasIntro && endMs > plan.storyStartMs ? { startMs: plan.storyStartMs, durationMs: endMs - plan.storyStartMs } : null;
+}
+
+function storyAudioFall(params: { readonly plan: BrandingPlan; readonly baseEndMs: number; readonly floorMs: number; readonly outroJingleMs: number }): TimeWindow {
+  const endMs = Math.min(Math.max(params.outroJingleMs, params.floorMs), params.baseEndMs);
+  const lengthMs = params.plan.outroJingleOffsetMs > 0 ? BRANDING_TIMING.outroOverlapMs : BRANDING_TIMING.logoOutroDuckMs;
+  const startMs = Math.max(endMs - lengthMs, params.floorMs);
+  return { startMs, durationMs: endMs - startMs };
 }
 
 const shiftedSound = (sound: ExportSound, offsetMs: number): ExportSound => ({
