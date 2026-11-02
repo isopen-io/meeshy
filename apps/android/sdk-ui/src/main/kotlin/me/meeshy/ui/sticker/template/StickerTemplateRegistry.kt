@@ -2,6 +2,7 @@ package me.meeshy.ui.sticker.template
 
 import android.graphics.Bitmap
 import android.util.SizeF
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import me.meeshy.sdk.model.sticker.StickerTemplateFamily
@@ -47,11 +48,10 @@ public object StickerTemplateRegistry {
         val smallest = min(measured.width, measured.height)
         if (!smallest.isFinite() || smallest <= 0f || smallest >= MINIMUM_DRAWN_SIDE) return drawnOnce(drawer, slots, metrics, density)
         val big = drawnOnce(drawer, slots, metrics.scaled(MINIMUM_DRAWN_SIDE / smallest), density) ?: return null
-        val reduction = max(big.size.width / measured.width, big.size.height / measured.height)
         val scaled = Bitmap.createScaledBitmap(
             big.bitmap,
-            max(1, (big.bitmap.width / reduction).toInt()),
-            max(1, (big.bitmap.height / reduction).toInt()),
+            max(1, ceil(measured.width * density).toInt()),
+            max(1, ceil(measured.height * density).toInt()),
             true,
         )
         return StickerTemplateRender(scaled, measured)
