@@ -54,6 +54,17 @@ const ar = {
   'conversationEncryption.creation.endToEnd.title': 'تام بين الطرفين',
   'conversationEncryption.creation.unavailable.groupsNotYet': 'قريبًا للمجموعات',
   'conversationEncryption.creation.unavailable.clientNotYet': 'قريبًا على الويب',
+  'conversationEncryption.switch.to': 'التبديل إلى وضع {mode}',
+  'conversationEncryption.switch.busy': 'جارٍ تغيير الوضع…',
+  'conversationEncryption.switch.done': 'وضع التشفير الآن: {mode}.',
+  'conversationEncryption.switch.footer': 'لا يمكن إيقاف التشفير التام بين الطرفين أبدًا، ولا التشفير على خوادمنا. يمكنك دائمًا فتح محادثة أخرى، بدون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.',
+  'conversationEncryption.switch.endToEndOnApps': 'يُفعَّل التشفير التام بين الطرفين من تطبيق Meeshy المثبّت: لا يستطيع هذا المتصفح بعد تشفير الرسائل على الجهاز.',
+  'conversationEncryption.switch.irreversible': 'هذه المحادثة مشفّرة تشفيرًا تامًا بين الطرفين: لا يمكن إيقاف هذا التشفير أبدًا.',
+  'conversationEncryption.switch.regimeChanged': 'غيّر عضو آخر التشفير للتو: تم تحديث الحالة.',
+  'conversationEncryption.switch.restricted': 'خلال مرحلة الاختبار، لا يستطيع تغيير وضع التشفير إلا عضو لديه دور في فريق Meeshy (محلل أو أعلى).',
+  'conversationEncryption.switch.unavailable': 'التشفير على خوادمنا غير متاح مؤقتًا. حاول مرة أخرى لاحقًا.',
+  'conversationEncryption.switch.failed': 'تعذّر تغيير الوضع. حاول مرة أخرى.',
+  'conversationEncryption.switch.offline': 'غير متصل: أعد الاتصال لتغيير وضع التشفير.',
 } satisfies ConversationEncryptionCatalog;
 
 export default ar;

@@ -54,6 +54,17 @@ const pt = {
   'conversationEncryption.creation.endToEnd.title': 'De ponta a ponta',
   'conversationEncryption.creation.unavailable.groupsNotYet': 'Em breve para grupos',
   'conversationEncryption.creation.unavailable.clientNotYet': 'Em breve na web',
+  'conversationEncryption.switch.to': 'Mudar para o modo {mode}',
+  'conversationEncryption.switch.busy': 'Mudando o modo…',
+  'conversationEncryption.switch.done': 'O modo de criptografia agora é: {mode}.',
+  'conversationEncryption.switch.footer': 'A criptografia de ponta a ponta nunca é desativada, nem a criptografia em nossos servidores. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.',
+  'conversationEncryption.switch.endToEndOnApps': 'A criptografia de ponta a ponta é ativada pelo aplicativo Meeshy instalado: este navegador ainda não sabe criptografar as mensagens no dispositivo.',
+  'conversationEncryption.switch.irreversible': 'Esta conversa tem criptografia de ponta a ponta: essa criptografia nunca é desativada.',
+  'conversationEncryption.switch.regimeChanged': 'Outro membro acabou de alterar a criptografia: o estado foi atualizado.',
+  'conversationEncryption.switch.restricted': 'Durante a fase de testes, apenas um membro com uma função da equipe Meeshy (analista ou superior) pode alterar o modo de criptografia.',
+  'conversationEncryption.switch.unavailable': 'A criptografia em nossos servidores está temporariamente indisponível. Tente novamente mais tarde.',
+  'conversationEncryption.switch.failed': 'Não foi possível alterar o modo. Tente novamente.',
+  'conversationEncryption.switch.offline': 'Sem conexão: reconecte-se para alterar o modo de criptografia.',
 } satisfies ConversationEncryptionCatalog;
 
 export default pt;

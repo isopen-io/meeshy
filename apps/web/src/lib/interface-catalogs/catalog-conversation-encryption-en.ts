@@ -54,6 +54,17 @@ const en = {
   'conversationEncryption.creation.endToEnd.title': 'End-to-end',
   'conversationEncryption.creation.unavailable.groupsNotYet': 'Coming soon for groups',
   'conversationEncryption.creation.unavailable.clientNotYet': 'Coming soon on the web',
+  'conversationEncryption.switch.to': 'Switch to {mode} mode',
+  'conversationEncryption.switch.busy': 'Changing mode…',
+  'conversationEncryption.switch.done': 'Encryption mode is now: {mode}.',
+  'conversationEncryption.switch.footer': 'End-to-end encryption can never be turned off, and neither can encryption on our servers. You can always open another conversation, without end-to-end encryption, with the same people.',
+  'conversationEncryption.switch.endToEndOnApps': 'End-to-end encryption is turned on from the installed Meeshy app: this browser cannot encrypt messages on the device yet.',
+  'conversationEncryption.switch.irreversible': 'This conversation is end-to-end encrypted: this encryption can never be turned off.',
+  'conversationEncryption.switch.regimeChanged': 'Encryption was just changed by another member: the status has been refreshed.',
+  'conversationEncryption.switch.restricted': 'During the testing phase, only a member with a Meeshy team role (analyst or above) can change the encryption mode.',
+  'conversationEncryption.switch.unavailable': 'Encryption on our servers is temporarily unavailable. Try again later.',
+  'conversationEncryption.switch.failed': 'The mode could not be changed. Try again.',
+  'conversationEncryption.switch.offline': 'Offline: reconnect to change the encryption mode.',
 } satisfies ConversationEncryptionCatalog;
 
 export default en;

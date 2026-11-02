@@ -54,6 +54,17 @@ const de = {
   'conversationEncryption.creation.endToEnd.title': 'Ende-zu-Ende',
   'conversationEncryption.creation.unavailable.groupsNotYet': 'Bald für Gruppen verfügbar',
   'conversationEncryption.creation.unavailable.clientNotYet': 'Bald im Web verfügbar',
+  'conversationEncryption.switch.to': 'Zum Modus {mode} wechseln',
+  'conversationEncryption.switch.busy': 'Modus wird geändert…',
+  'conversationEncryption.switch.done': 'Der Verschlüsselungsmodus ist jetzt: {mode}.',
+  'conversationEncryption.switch.footer': 'Die Ende-zu-Ende-Verschlüsselung lässt sich nie deaktivieren, die Verschlüsselung auf unseren Servern ebenso wenig. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.',
+  'conversationEncryption.switch.endToEndOnApps': 'Die Ende-zu-Ende-Verschlüsselung wird in der installierten Meeshy-App aktiviert: Dieser Browser kann Nachrichten noch nicht auf dem Gerät verschlüsseln.',
+  'conversationEncryption.switch.irreversible': 'Diese Unterhaltung ist Ende-zu-Ende-verschlüsselt: Diese Verschlüsselung lässt sich nie deaktivieren.',
+  'conversationEncryption.switch.regimeChanged': 'Ein anderes Mitglied hat die Verschlüsselung gerade geändert: Der Status wurde aktualisiert.',
+  'conversationEncryption.switch.restricted': 'Während der Testphase kann nur ein Mitglied mit einer Meeshy-Teamrolle (Analyst oder höher) den Verschlüsselungsmodus ändern.',
+  'conversationEncryption.switch.unavailable': 'Die Verschlüsselung auf unseren Servern ist vorübergehend nicht verfügbar. Versuche es später erneut.',
+  'conversationEncryption.switch.failed': 'Der Modus konnte nicht geändert werden. Versuche es erneut.',
+  'conversationEncryption.switch.offline': 'Offline: Verbinde dich erneut, um den Verschlüsselungsmodus zu ändern.',
 } satisfies ConversationEncryptionCatalog;
 
 export default de;

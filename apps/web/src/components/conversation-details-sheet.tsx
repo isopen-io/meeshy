@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ADMIN_PERMISSIONS_QUERY_KEY, type AdminIdentity } from '@/lib/api/admin';
@@ -23,6 +23,7 @@ import type { PortailPartage } from '@/lib/view/invitation';
 import { canCreateShareLink } from '@/lib/view/share-link-eligibility';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { useConversationManageCatalog } from '@/lib/view/use-conversation-manage-catalog';
+import { encryptionModeSwitchGesture } from '@/lib/view/conversation-encryption-switch-gesture';
 import { plaintextDirectGesture } from '@/lib/view/plaintext-direct-gesture';
 import { href, navigate } from '@/routes/route-table';
 
@@ -179,6 +180,12 @@ export function ConversationDetailsSheet({
     },
   });
 
+  /* #14648 — changer le mode d'un tête-à-tête que le serveur lit ; une identité stable, l'état servi se lit une fois. */
+  const modeSwitch = useMemo(
+    () => encryptionModeSwitchGesture({ deps, queryClient, conversationId: conversation.id, online: () => navigator.onLine }),
+    [deps, queryClient, conversation.id],
+  );
+
   /* RENDRE OBSOLÈTE (#14645) — la loi du menu de la ligne (`deleteForAll`), le mot du catalogue de gestion. */
   const mayObsolete =
     manageReady &&
@@ -265,7 +272,7 @@ export function ConversationDetailsSheet({
         ) : null}
 
         <Suspense fallback={null}>
-          <ConversationEncryptionSection conversation={conversation} plaintextDirect={plaintextDirect} />
+          <ConversationEncryptionSection conversation={conversation} plaintextDirect={plaintextDirect} modeSwitch={modeSwitch} />
         </Suspense>
 
         <ConversationMediaSection

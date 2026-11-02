@@ -63,6 +63,17 @@ const fr = {
   'conversationEncryption.creation.endToEnd.title': 'Bout en bout',
   'conversationEncryption.creation.unavailable.groupsNotYet': 'Bientôt disponible pour les groupes',
   'conversationEncryption.creation.unavailable.clientNotYet': 'Bientôt disponible sur le web',
+  'conversationEncryption.switch.to': 'Passer au mode {mode}',
+  'conversationEncryption.switch.busy': 'Changement du mode…',
+  'conversationEncryption.switch.done': 'Le mode de chiffrement est maintenant : {mode}.',
+  'conversationEncryption.switch.footer': 'Le chiffrement de bout en bout ne se désactive jamais, le chiffrement sur nos serveurs non plus. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.',
+  'conversationEncryption.switch.endToEndOnApps': 'Le chiffrement de bout en bout s’active depuis l’application Meeshy installée : ce navigateur ne sait pas encore chiffrer les messages sur l’appareil.',
+  'conversationEncryption.switch.irreversible': 'Cette conversation est chiffrée de bout en bout : ce chiffrement ne se désactive jamais.',
+  'conversationEncryption.switch.regimeChanged': 'Le chiffrement vient d’être modifié par un autre membre : l’état est actualisé.',
+  'conversationEncryption.switch.restricted': 'Pendant la phase de test, seul un membre ayant un rôle d’équipe Meeshy (analyste ou plus) peut changer le mode de chiffrement.',
+  'conversationEncryption.switch.unavailable': 'Le chiffrement sur nos serveurs est momentanément indisponible. Réessayez plus tard.',
+  'conversationEncryption.switch.failed': 'Le mode n’a pas pu être changé. Réessayez.',
+  'conversationEncryption.switch.offline': 'Hors connexion : reconnectez-vous pour changer le mode de chiffrement.',
 } as const;
 
 export default fr;

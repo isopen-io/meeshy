@@ -1,0 +1,193 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+
+import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
+import type { ApiResult } from '@/lib/api/http';
+
+import { E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
+
+import {
+  SWITCH_REFUSAL_CODES,
+  decodeEncryptionStatus,
+  encryptionSwitchTargets,
+  switchConversationEncryption,
+  type EncryptionSwitchPorts,
+} from './conversation-encryption-switch';
+
+/**
+ * **MONTER LE CHIFFREMENT DEPUIS LE WEB** (#14648) — miroir de
+ * `ConversationEncryptionModeSwitch` et de `ConversationEncryptionDetailContent`
+ * (iOS) : un tête-à-tête que le serveur lit passe à un autre mode au rôle
+ * autorisé ; le bout en bout ne se quitte jamais (#12949) et ne s'active pas
+ * depuis le navigateur tant que #12975 n'est pas tranchée.
+ */
+
+afterEach(() => endToEndRegimeLedger.getState().reset());
+
+const modes = (targets: ReturnType<typeof encryptionSwitchTargets>) => targets.map((target) => target.mode);
+
+describe('les modes proposés', () => {
+  test('serveur : hybride proposé, le bout en bout affiché mais réservé aux applications installées', () => {
+    const targets = encryptionSwitchTargets({ servedMode: 'server', sealed: false, isDirect: true, mayToggle: true });
+    expect(targets).toEqual([
+      { mode: 'hybrid', available: true, unavailability: null },
+      { mode: 'e2ee', available: false, unavailability: 'client-not-yet' },
+    ]);
+  });
+
+  test('hybride : serveur proposé, comme iOS (tous les modes sauf le sien)', () => {
+    expect(modes(encryptionSwitchTargets({ servedMode: 'hybrid', sealed: false, isDirect: true, mayToggle: true }))).toEqual(['server', 'e2ee']);
+  });
+
+  test('créée avant le chiffrement systématique : serveur et hybride s’activent', () => {
+    const targets = encryptionSwitchTargets({ servedMode: null, sealed: false, isDirect: true, mayToggle: true });
+    expect(targets.filter((target) => target.available).map((target) => target.mode)).toEqual(['server', 'hybrid']);
+  });
+
+  test('bout en bout servi : rien ne se propose, aucune rétrogradation', () => {
+    expect(encryptionSwitchTargets({ servedMode: 'e2ee', sealed: false, isDirect: true, mayToggle: true })).toEqual([]);
+  });
+
+  test('vue e2ee par ce compte puis servie en serveur : la rétrogradation servie est ignorée, rien ne se propose', () => {
+    expect(encryptionSwitchTargets({ servedMode: 'server', sealed: true, isDirect: true, mayToggle: true })).toEqual([]);
+  });
+
+  test('un mode inconnu se lit bout en bout : rien ne se propose (fermé par défaut)', () => {
+    expect(encryptionSwitchTargets({ servedMode: 'signal_v9', sealed: false, isDirect: true, mayToggle: true })).toEqual([]);
+  });
+
+  test('sans le droit servi, rien ne se propose', () => {
+    expect(encryptionSwitchTargets({ servedMode: 'server', sealed: false, isDirect: true, mayToggle: false })).toEqual([]);
+  });
+
+  test('un groupe ne change pas de mode depuis le web, comme sur iOS (#12844)', () => {
+    expect(encryptionSwitchTargets({ servedMode: 'server', sealed: false, isDirect: false, mayToggle: true })).toEqual([]);
+  });
+});
+
+describe('les codes de refus', () => {
+  test('sont ceux de la passerelle', () => {
+    expect(SWITCH_REFUSAL_CODES).toEqual({ irreversible: E2EE_ERROR_CODES.IRREVERSIBLE, regimeChanged: E2EE_ERROR_CODES.REGIME_CHANGED });
+  });
+});
+
+describe('l’état servi', () => {
+  test('lit le mode et le droit servis', () => {
+    expect(decodeEncryptionStatus({ isEncrypted: true, mode: 'hybrid', canToggleEncryption: true })).toEqual({ mode: 'hybrid', canToggleEncryption: true });
+  });
+
+  test('une passerelle qui ne sert pas le droit ne l’accorde pas', () => {
+    expect(decodeEncryptionStatus({ isEncrypted: true, mode: 'server' })).toEqual({ mode: 'server', canToggleEncryption: false });
+  });
+
+  test('une charge illisible ne rend rien', () => {
+    expect(decodeEncryptionStatus('nope')).toBeNull();
+    expect(decodeEncryptionStatus({ mode: 42 })).toBeNull();
+  });
+});
+
+type Recorded = { readonly posted: string[]; readonly learned: string[] };
+
+const portsOf = (answer: ApiResult<unknown>, online = true): EncryptionSwitchPorts & Recorded => {
+  const posted: string[] = [];
+  const learned: string[] = [];
+  return {
+    posted,
+    learned,
+    online: () => online,
+    post: (mode) => {
+      posted.push(mode);
+      return Promise.resolve(answer);
+    },
+    learn: (mode) => {
+      learned.push(mode);
+    },
+  };
+};
+
+const ok = (mode: string): ApiResult<unknown> => ({ ok: true, data: { isEncrypted: true, mode, canToggleEncryption: true } });
+const refused = (status: number, code?: string): ApiResult<unknown> => ({ ok: false, status, error: 'refused', ...(code === undefined ? {} : { code }) });
+
+describe('changer de mode', () => {
+  test('serveur → hybride : le POST part, le cache apprend le mode servi', async () => {
+    const ports = portsOf(ok('hybrid'));
+    const outcome = await switchConversationEncryption(ports, { conversationId: 'c1', servedMode: 'server', target: 'hybrid' });
+    expect(outcome).toEqual({ kind: 'switched', mode: 'hybrid' });
+    expect(ports.posted).toEqual(['hybrid']);
+    expect(ports.learned).toEqual(['hybrid']);
+  });
+
+  test('le web ne demande JAMAIS le bout en bout : aucun octet ne part', async () => {
+    const ports = portsOf(ok('e2ee'));
+    const outcome = await switchConversationEncryption(ports, { conversationId: 'c1', servedMode: 'server', target: 'e2ee' });
+    expect(outcome).toEqual({ kind: 'refused' });
+    expect(ports.posted).toEqual([]);
+  });
+
+  test('depuis une conversation vue e2ee : refus local, aucune requête', async () => {
+    endToEndRegimeLedger.getState().learnEndToEnd('c1');
+    const ports = portsOf(ok('server'));
+    const outcome = await switchConversationEncryption(ports, { conversationId: 'c1', servedMode: 'server', target: 'hybrid' });
+    expect(outcome).toEqual({ kind: 'irreversible' });
+    expect(ports.posted).toEqual([]);
+  });
+
+  test('depuis une conversation servie e2ee : refus local, aucune requête', async () => {
+    const ports = portsOf(ok('server'));
+    expect(await switchConversationEncryption(ports, { conversationId: 'c1', servedMode: 'e2ee', target: 'server' })).toEqual({ kind: 'irreversible' });
+    expect(ports.posted).toEqual([]);
+  });
+
+  test('409 E2EE_IRREVERSIBLE : la conversation est scellée et le cache apprend le bout en bout', async () => {
+    const ports = portsOf(refused(409, 'E2EE_IRREVERSIBLE'));
+    const outcome = await switchConversationEncryption(ports, { conversationId: 'c2', servedMode: 'server', target: 'hybrid' });
+    expect(outcome).toEqual({ kind: 'irreversible' });
+    expect(endToEndRegimeLedger.getState().sealed.c2).toBe(true);
+    expect(ports.learned).toEqual(['e2ee']);
+  });
+
+  test('une réponse qui annonce le bout en bout scelle la conversation', async () => {
+    const ports = portsOf(ok('e2ee'));
+    await switchConversationEncryption(ports, { conversationId: 'c3', servedMode: 'server', target: 'hybrid' });
+    expect(endToEndRegimeLedger.getState().sealed.c3).toBe(true);
+    expect(ports.learned).toEqual(['e2ee']);
+  });
+
+  test('une réponse sans mode n’ouvre rien : le mode demandé reste, rien n’est appris vers le clair', async () => {
+    const ports = portsOf({ ok: true, data: { isEncrypted: false, mode: null } });
+    const outcome = await switchConversationEncryption(ports, { conversationId: 'c4', servedMode: 'server', target: 'hybrid' });
+    expect(outcome).toEqual({ kind: 'failed' });
+    expect(ports.learned).toEqual([]);
+  });
+
+  const REFUSALS: ReadonlyArray<readonly [ApiResult<unknown>, string]> = [
+    [refused(409, 'E2EE_REGIME_CHANGED'), 'regime-changed'],
+    [refused(400, 'ENCRYPTION_ALREADY_ENABLED'), 'regime-changed'],
+    [refused(403, 'ENCRYPTION_ACTIVATION_RESTRICTED'), 'restricted'],
+    [refused(503, 'SERVER_AT_REST_UNAVAILABLE'), 'unavailable'],
+    [refused(500), 'failed'],
+  ];
+  REFUSALS.forEach(([answer, kind]) => {
+    test(`refus ${answer.ok ? '' : `${answer.status} ${answer.code ?? ''}`} ⇒ ${kind}`, async () => {
+      const ports = portsOf(answer);
+      expect(await switchConversationEncryption(ports, { conversationId: 'c5', servedMode: 'server', target: 'hybrid' })).toEqual({ kind });
+      expect(ports.learned).toEqual([]);
+    });
+  });
+
+  test('hors connexion : rien ne part', async () => {
+    const ports = portsOf(ok('hybrid'), false);
+    expect(await switchConversationEncryption(ports, { conversationId: 'c6', servedMode: 'server', target: 'hybrid' })).toEqual({ kind: 'offline' });
+    expect(ports.posted).toEqual([]);
+  });
+
+  test('une requête qui lève se dit échouée', async () => {
+    const ports: EncryptionSwitchPorts = { online: () => true, post: () => Promise.reject(new Error('boom')), learn: () => undefined };
+    expect(await switchConversationEncryption(ports, { conversationId: 'c7', servedMode: 'server', target: 'hybrid' })).toEqual({ kind: 'failed' });
+  });
+
+  test('le mode déjà porté ne repart pas', async () => {
+    const ports = portsOf(ok('server'));
+    expect(await switchConversationEncryption(ports, { conversationId: 'c8', servedMode: 'server', target: 'server' })).toEqual({ kind: 'refused' });
+    expect(ports.posted).toEqual([]);
+  });
+});

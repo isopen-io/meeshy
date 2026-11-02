@@ -54,6 +54,17 @@ const it = {
   'conversationEncryption.creation.endToEnd.title': 'End-to-end',
   'conversationEncryption.creation.unavailable.groupsNotYet': 'Presto disponibile per i gruppi',
   'conversationEncryption.creation.unavailable.clientNotYet': 'Presto disponibile sul web',
+  'conversationEncryption.switch.to': 'Passa alla modalità {mode}',
+  'conversationEncryption.switch.busy': 'Cambio della modalità…',
+  'conversationEncryption.switch.done': 'La modalità di crittografia ora è: {mode}.',
+  'conversationEncryption.switch.footer': "La crittografia end-to-end non si disattiva mai, e nemmeno la crittografia sui nostri server. Potrai sempre aprire un'altra conversazione, senza crittografia end-to-end, con le stesse persone.",
+  'conversationEncryption.switch.endToEndOnApps': "La crittografia end-to-end si attiva dall'app Meeshy installata: questo browser non sa ancora cifrare i messaggi sul dispositivo.",
+  'conversationEncryption.switch.irreversible': 'Questa conversazione è crittografata end-to-end: questa crittografia non si disattiva mai.',
+  'conversationEncryption.switch.regimeChanged': 'Un altro membro ha appena modificato la crittografia: lo stato è stato aggiornato.',
+  'conversationEncryption.switch.restricted': 'Durante la fase di test, solo un membro con un ruolo del team Meeshy (analista o superiore) può cambiare la modalità di crittografia.',
+  'conversationEncryption.switch.unavailable': 'La crittografia sui nostri server è momentaneamente non disponibile. Riprova più tardi.',
+  'conversationEncryption.switch.failed': 'Non è stato possibile cambiare la modalità. Riprova.',
+  'conversationEncryption.switch.offline': 'Offline: riconnettiti per cambiare la modalità di crittografia.',
 } satisfies ConversationEncryptionCatalog;
 
 export default it;
