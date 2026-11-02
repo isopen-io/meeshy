@@ -1,9 +1,5 @@
 package me.meeshy.sdk.session
 
-import dagger.Binds
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,11 +85,4 @@ public class DiskSignedInIdentityStore(
     private companion object {
         const val NAMESPACE = "session:identity"
     }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-public interface SignedInIdentityStoreModule {
-    @Binds
-    public fun signedInIdentityStore(impl: DiskSignedInIdentityStore): SignedInIdentityStore
 }
