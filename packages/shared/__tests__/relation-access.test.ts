@@ -103,6 +103,10 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['relay.commentersOnMyPosts', 'CLOSE'],
     ['relay.myCommentsElsewhere', 'BLOOD'],
     ['dm.direct', 'ACQUAINTANCE'],
+    ['dm.request', 'PUBLIC'],
+    ['dm.readReceipts', 'ACQUAINTANCE'],
+    ['dm.typing', 'ACQUAINTANCE'],
+    ['presence.dnd', 'ACQUAINTANCE'],
     ['audience.acquaintances', 'ACQUAINTANCE'],
     ['audience.close', 'CLOSE'],
     ['audience.blood', 'BLOOD'],
@@ -248,6 +252,47 @@ describe('resolveRelationAccess — les mineurs (décision porteur 2026-10-31)',
     allowed.forEach((ages) => {
       expect(access({ feature: 'acquaintance.auto', ...ages }).allowed).toBe(true);
     });
+  });
+});
+
+describe('resolveRelationAccess — le bouclier des mineurs (RG-21)', () => {
+  it('un message privé du Public vers un mineur déclaré est refusé, sans dire pourquoi', () => {
+    const refused = [
+      { viewerMinor: 'adult', targetMinor: 'minor' },
+      { viewerMinor: 'unknown', targetMinor: 'minor' },
+    ] as const;
+    refused.forEach((ages) => {
+      expect(access({ feature: 'dm.request', ...ages })).toEqual({
+        allowed: false,
+        effectiveLevel: 'PUBLIC',
+        reason: 'level',
+        requiresConsent: false,
+      });
+    });
+  });
+
+  it('dès la Communauté, un majeur peut adresser une demande de message à un mineur', () => {
+    expect(access({ feature: 'dm.request', viewerMinor: 'adult', targetMinor: 'minor', sharesCommunity: true }).allowed).toBe(true);
+  });
+
+  it('le bouclier ne vise ni deux mineurs, ni une cible majeure, ni un âge inconnu', () => {
+    const open = [
+      { viewerMinor: 'minor', targetMinor: 'minor' },
+      { viewerMinor: 'minor', targetMinor: 'adult' },
+      { viewerMinor: 'adult', targetMinor: 'unknown' },
+      { viewerMinor: 'adult', targetMinor: 'adult' },
+    ] as const;
+    open.forEach((ages) => {
+      expect(access({ feature: 'dm.request', ...ages }).allowed).toBe(true);
+    });
+  });
+
+  it('le bouclier ne relève que les features qu\'il nomme', () => {
+    expect(access({ ...both('ACQUAINTANCE'), feature: 'dm.typing', viewerMinor: 'adult', targetMinor: 'minor' }).allowed).toBe(true);
+  });
+
+  it('une demande de message à soi-même n\'a pas de sens', () => {
+    expect(access({ targetId: USER_A, feature: 'dm.request' })).toMatchObject({ allowed: false, reason: 'self' });
   });
 });
 
