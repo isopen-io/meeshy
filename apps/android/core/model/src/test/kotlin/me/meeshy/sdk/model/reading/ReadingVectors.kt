@@ -6,16 +6,13 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.meeshy.sdk.testutil.SharedFixtures
 
-/** Une entrée de `reading-modes/*.vectors.json` : `{ _label, input, expected, ... }`. */
+/** Une entrée de les fichiers vectors du dossier reading-modes : `{ _label, input, expected, ... }`. */
 class ReadingVector(val label: String, val body: JsonObject) {
     val input: JsonObject get() = body.getValue("input").jsonObject
     val expected: JsonElement get() = body.getValue("expected")
@@ -30,23 +27,6 @@ object ReadingVectors {
             val obj = case.jsonObject
             ReadingVector(obj["_label"]?.jsonPrimitive?.contentOrNull ?: "#$index", obj)
         }
-    }
-
-    fun capabilities(json: JsonObject): ReadingModeCapabilities {
-        val reason = json.getValue("riverEligibilityReason").jsonObject
-        return ReadingModeCapabilities(
-            availableModes = json.getValue("availableModes").jsonArray.map {
-                requireNotNull(ConversationReadingMode.fromWire(it.jsonPrimitive.content))
-            },
-            riverEligible = json.getValue("riverEligible").jsonPrimitive.boolean,
-            riverEligibilityReason = RiverEligibilityReason(
-                threshold = reason.getValue("threshold").jsonPrimitive.int,
-                current = reason["current"]?.jsonPrimitive?.intOrNull,
-                riverReason = requireNotNull(
-                    RiverEligibilityReasonKind.fromWire(reason.getValue("riverReason").jsonPrimitive.content),
-                ),
-            ),
-        )
     }
 
     /** Égalité JSON structurelle, les nombres comparés en valeur (`1` == `1.0`). */
