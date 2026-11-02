@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -35,11 +36,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.composer.ComposerMediaSource
 import me.meeshy.sdk.model.composer.ComposerSceneTool
 import me.meeshy.sdk.model.composer.ComposerSceneTools
@@ -63,6 +66,7 @@ internal val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
 /**
  * Un bouton rond posé sur la scène (#13834) : un disque translucide de 40 dp dans une cible de 48 dp, nommé pour TalkBack.
  * Il consomme ses propres touchers et rien d'autre : hors du disque, la scène garde ses gestes. [press] : son appui long.
+ * [value] : ce que l'option porte déjà (le texte du post, #14457) — un point discret le montre, TalkBack le lit.
  */
 @Composable
 internal fun SceneRoundButton(
@@ -73,7 +77,9 @@ internal fun SceneRoundButton(
     enabled: Boolean = true,
     active: Boolean = false,
     press: ToolLongPress? = null,
+    value: String? = null,
 ) {
+    val carried = value?.takeIf { it.isNotBlank() }
     Box(
         modifier = modifier
             .size(SCENE_TARGET)
@@ -83,6 +89,7 @@ internal fun SceneRoundButton(
                 contentDescription = label
                 selected = active
                 if (!enabled) disabled()
+                if (carried != null) stateDescription = carried
             },
         contentAlignment = Alignment.Center,
     ) {
@@ -94,6 +101,7 @@ internal fun SceneRoundButton(
         ) {
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.alpha(if (enabled) 1f else 0.4f))
         }
+        if (carried != null) CarriedDot(Modifier.align(Alignment.TopEnd).offset(x = -CARRIED_DOT_INSET, y = CARRIED_DOT_INSET))
     }
 }
 
@@ -133,7 +141,7 @@ internal fun SceneHistoryButtons(history: SceneHistory, onUndo: () -> Unit, onRe
 /**
  * La colonne des outils, posée à droite de la scène : chaque outil un bouton rond, le « ⋯ » rendu par [more], et l'appui
  * long de Média qui propose ses sources ([onMediaSource], #13845), la caméra de la scène en tête quand elle est servie ([cameraServed], #13849). Quand un panneau monte et lui laisse moins de place, elle
- * défile au lieu d'écraser ses cibles de 48 dp.
+ * défile au lieu d'écraser ses cibles de 48 dp. « Texte du post » y porte [postText] (#14457).
  */
 @Composable
 internal fun SceneToolColumn(
@@ -143,10 +151,21 @@ internal fun SceneToolColumn(
     active: ComposerSceneTool? = null,
     onMediaSource: (ComposerMediaSource) -> Unit = {},
     cameraServed: Boolean = false,
+    postText: String = "",
 ) {
-    // Le « ⋯ » reste TOUJOURS posé au pied de la colonne (#14282, recette S8) : en post, « Texte du post » prend une rangée
-    // au socle, la colonne n'a plus la place de tout montrer, et le dernier bouton passait hors champ sans que rien ne dise
-    // qu'on pouvait défiler. Ce sont les outils au-dessus de lui qui défilent.
+    // Le « ⋯ » reste TOUJOURS posé au pied de la colonne (#14282, recette S8) : quand la colonne n'a plus la place de tout
+    // montrer, le dernier bouton passait hors champ sans que rien ne dise qu'on pouvait défiler. Ce sont les outils au-dessus
+    // de lui qui défilent. « Texte du post » se pose avec lui (#14457) : l'option propre au format ne se cache jamais
+    // derrière un défilement.
+    val foot = tools.filter { it == ComposerSceneTool.POST_TEXT }
+    val button: @Composable (ComposerSceneTool) -> Unit = { tool ->
+        MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, cameraServed), onMediaSource) { press ->
+            SceneRoundButton(
+                tool.glyph(), tool.label(), { onTool(tool) }, active = tool == active, press = press,
+                value = postText.takeIf { tool == ComposerSceneTool.POST_TEXT },
+            )
+        }
+    }
     Column(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -156,12 +175,9 @@ internal fun SceneToolColumn(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            tools.filterNot { it == ComposerSceneTool.MORE }.forEach { tool ->
-                MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, cameraServed), onMediaSource) { press ->
-                    SceneRoundButton(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == active, press = press)
-                }
-            }
+            (tools - foot - ComposerSceneTool.MORE).forEach { button(it) }
         }
+        foot.forEach { button(it) }
         if (ComposerSceneTool.MORE in tools) more()
     }
 }
@@ -247,10 +263,11 @@ internal fun ComposerSceneTool.glyph(): ImageVector = when (this) {
     ComposerSceneTool.BACKGROUND -> MeeshyIcons.Palette
     ComposerSceneTool.MENTION -> MeeshyIcons.Mention
     ComposerSceneTool.PLACE -> MeeshyIcons.Location
+    ComposerSceneTool.POST_TEXT -> MeeshyIcons.Notes
     ComposerSceneTool.MORE -> MeeshyIcons.MoreHorizontal
 }
 
-internal fun ComposerSceneTool.labelRes(): Int = when (this) {
+private fun ComposerSceneTool.labelRes(): Int? = when (this) {
     ComposerSceneTool.TEXT -> R.string.story_tool_text
     ComposerSceneTool.MEDIA -> R.string.story_tool_media
     ComposerSceneTool.STICKER -> R.string.stories_composer_add_sticker
@@ -259,5 +276,22 @@ internal fun ComposerSceneTool.labelRes(): Int = when (this) {
     ComposerSceneTool.BACKGROUND -> R.string.story_tool_texture
     ComposerSceneTool.MENTION -> R.string.composer_more_mention
     ComposerSceneTool.PLACE -> R.string.story_place_title
+    ComposerSceneTool.POST_TEXT -> null
     ComposerSceneTool.MORE -> R.string.stories_scene_overflow_menu
 }
+
+/** Le nom d'un outil ; « Texte du post » se dit « Texte du réel » sur la scène d'un réel (#13913). */
+@Composable
+internal fun ComposerSceneTool.label(): String =
+    labelRes()?.let { stringResource(it) } ?: formatLabel(ComposerFormatLabel.POST_TEXT)
+
+/** Le point discret d'une option qui porte déjà quelque chose (#14457) : la couleur de la marque, 8 dp. */
+@Composable
+internal fun CarriedDot(modifier: Modifier = Modifier) {
+    Box(modifier.size(CARRIED_DOT).background(ComposerPlateauInk.accent, CircleShape))
+}
+
+private val CARRIED_DOT = 8.dp
+
+/** Le point reste dans le cercle de la cible, qui rogne ses coins. */
+private val CARRIED_DOT_INSET = 6.dp

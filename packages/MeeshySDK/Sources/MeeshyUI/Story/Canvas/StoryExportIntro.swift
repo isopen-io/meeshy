@@ -546,13 +546,13 @@ public enum StoryExportIntro {
         videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
-        // Audio — la signature sonore s'estompe sur le fondu (pas de bascule
-        // sonore brutale) ; le son PROPRE de la story démarre plein à `holdDuration`
-        // (jamais atténué — c'est le contenu de l'auteur).
+        // Audio — la signature sonore joue EN ENTIER ; le son de la story lui
+        // fait place et monte sous sa queue (`StoryExportJingleMix`).
         let audioMix = AVMutableAudioMix()
-        let jingleParams = AVMutableAudioMixInputParameters(track: jingleAudio)
-        jingleParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fadeRange)
-        audioMix.inputParameters = [jingleParams]
+        let storyParams = AVMutableAudioMixInputParameters(track: storyAudio)
+        StoryExportBranding.applyStoryEnvelope(to: storyParams, story: CMTimeRange(start: storyStart, duration: storyDuration),
+                                               introJingleEnd: jingleDuration)
+        audioMix.inputParameters = [storyParams]
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")

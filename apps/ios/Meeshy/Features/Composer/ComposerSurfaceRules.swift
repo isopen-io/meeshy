@@ -490,7 +490,7 @@ nonisolated enum ComposerSoundCredit {
 ///   emporte aussi le texte, le fond, le lieu et la transcription.
 nonisolated enum ComposerOverflowEntry: Equatable, CaseIterable {
     /// **Voir la scène COMME ELLE SERA LUE** — l'aperçu, servi ici et non au
-    /// socle : le socle ne porte que ce qui décide de l'envoi et le texte du post.
+    /// socle : le socle ne porte que ce qui décide de l'envoi.
     case preview
     case pickBackground
     case removeBackground

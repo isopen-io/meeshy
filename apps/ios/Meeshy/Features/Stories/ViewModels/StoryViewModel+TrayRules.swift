@@ -190,6 +190,75 @@ enum StoryTrayRules {
     }
 }
 
+extension StoryTrayRules {
+    /// Les groupes qu'une story lue À L'UNITÉ (lien, notification, cache) ouvre
+    /// dans le tray. Exception AUTEUR (cohérente avec `purgeDeadStories`) : mes
+    /// propres stories expirées restent chargeables. Une story expirée dont le
+    /// lecteur détient un droit de référence ACCORDÉ reste ouvrable : le droit se
+    /// DÉCLARE (`referenceAccess`), il ne se déduit jamais de `expiresAt`.
+    static func openableGroups(of post: APIPost, myId: String?) -> [StoryGroup] {
+        [post].toStoryGroups(currentUserId: myId).compactMap { group in
+            let alive = group.id == myId
+                ? group.stories
+                : group.stories.filter { !$0.isExpired() || $0.referenceAccess == .granted }
+            return alive.isEmpty ? nil : group.with(stories: alive)
+        }
+    }
+}
+
+/// Les stories que la barre a reçues EN DIRECT (`story:created`, et
+/// `post:reposted` d'une republication en story — #14484).
+///
+/// Une passe complète REMPLACE le tray par sa page ; une page partie avant
+/// l'annonce ne la porte pas, et le remplacement l'effaçait jusqu'à la passe
+/// suivante. La passe relève `mark` à son départ et `joining` lui rend ce qui a
+/// été annoncé depuis : la version servie l'emporte, l'annonce comble le
+/// manque. Une story retirée entre-temps est oubliée (`forget`) — sans quoi la
+/// passe la ressusciterait. Borné à `capacity` annonces.
+struct StoryTrayAnnouncements {
+    static let capacity = 50
+
+    private struct Entry {
+        let sequence: Int
+        let post: APIPost
+    }
+
+    private var entries: [Entry] = []
+    private(set) var mark = 0
+
+    /// Une republication n'entre dans la barre que servie EN STORY ; dans le fil
+    /// (POST, REEL) ou en statut, elle vit ailleurs.
+    static func story(announcedBy event: SocketPostRepostedData) -> APIPost? {
+        event.repost.type?.uppercased() == PostType.story.rawValue ? event.repost : nil
+    }
+
+    mutating func record(_ post: APIPost) {
+        entries = Array((entries + [Entry(sequence: mark, post: post)]).suffix(Self.capacity))
+        mark += 1
+    }
+
+    mutating func forget(_ storyId: String) {
+        entries.removeAll { $0.post.id == storyId }
+    }
+
+    func joining(since passMark: Int, _ served: [APIPost]) -> [APIPost] {
+        let announced = entries.filter { $0.sequence >= passMark }.map(\.post)
+        return (served + announced).reduce(into: (seen: Set<String>(), posts: [APIPost]())) { acc, post in
+            guard acc.seen.insert(post.id).inserted else { return }
+            acc.posts.append(post)
+        }.posts
+    }
+}
+
+extension StoryViewModel {
+    /// Une story annoncée en direct entre dans la barre sans doublon ni perte de
+    /// l'état « vu » (`insertOrMergeStoryGroups`, `replacingExisting: false`).
+    func adoptAnnounced(_ post: APIPost) {
+        trayAnnouncements.record(post)
+        insertOrMergeStoryGroups([post].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id))
+    }
+}
+
 /// Lecture paginée du tray : suit `pagination.nextCursor` tant que le serveur
 /// annonce `hasMore`, dans la limite de `StoryViewModel.maxTrayPagesPerPass`.
 ///

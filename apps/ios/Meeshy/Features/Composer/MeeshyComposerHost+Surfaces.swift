@@ -457,7 +457,7 @@ extension MeeshyComposerHost {
             // **Le repos posé sur la scène** (#13839, #14050) : ⋯ porte la diapo,
             // l'Animation (éclair et Temps fondus), la Durée ; Fond, Mention, Lieu sont au rail.
             slideCount: viewModel.slides.count,
-            restTools: sceneRestTools, restBackgroundIsMedia: sceneBackgroundMedia != nil,
+            restTools: sceneRestTools, restBackgroundIsMedia: sceneBackgroundMedia != nil, restPostText: documentText,
             onRestTool: { handleRestTool($0) },
             moreMenu: sceneMoreMenu,
             drawingBar: sceneDrawingBar,

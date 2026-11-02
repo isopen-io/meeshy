@@ -29,7 +29,7 @@ nonisolated struct ComposerFormatVariant: Equatable, Sendable {
     let composesOnScene: Bool
 
     /// « Texte du post » : le texte du post ou du réel, hors de la scène, posé
-    /// depuis le socle et plafonné par `ComposerPostTextPolicy`.
+    /// depuis une option du rail et plafonné par `ComposerPostTextPolicy`.
     let writesPostText: Bool
 
     static func of(_ format: ComposerFormat) -> ComposerFormatVariant {
