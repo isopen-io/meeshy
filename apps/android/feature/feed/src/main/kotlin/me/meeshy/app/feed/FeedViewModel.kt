@@ -29,6 +29,7 @@ import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.post.writeMediaCaptionTranslationsTo
 import me.meeshy.sdk.post.writePostTranslationsTo
+import me.meeshy.sdk.post.writePostReactionsTo
 import me.meeshy.sdk.post.writePostUpdatesTo
 import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.report.ReportRepository
@@ -298,6 +299,15 @@ class FeedViewModel @Inject constructor(
             // (the broadcast is unpersonalized). Mirror of iOS FeedViewModel's post:updated
             // sink, and the content-edit sibling of post:translation-updated above.
             socialSocket.writePostUpdatesTo(postRepository)
+        }
+        viewModelScope.launch {
+            // post:reaction-added / -removed — le compte ABSOLU d'un emoji s'ecrit dans le fil (iOS handlePostReaction).
+            socialSocket.writePostReactionsTo(postRepository)
+        }
+        viewModelScope.launch {
+            // Reconnexion de la socket : les evenements emis pendant la coupure sont perdus, la tete se relit en silence
+            // (la fusion garde les pages defilees et la tete temps reel) — iOS `didReconnect`.
+            socialSocket.reconnected.collect { postRepository.refresh() }
         }
     }
 
