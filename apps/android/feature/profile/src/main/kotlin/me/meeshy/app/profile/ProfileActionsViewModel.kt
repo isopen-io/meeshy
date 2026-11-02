@@ -156,7 +156,6 @@ class ProfileActionsViewModel @Inject constructor(
                 rollbackRaise(id)
             } else {
                 raiseCmids[cmid] = id
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
                 _events.emit(ProfileActionEvent.Toast(ProfileActionFeedback.RaiseSent))
             }
         }
