@@ -1,5 +1,7 @@
 package me.meeshy.sdk.post
 
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.socket.collectArrived
 
@@ -18,4 +20,12 @@ suspend fun SocialSocketManager.writeMediaCaptionTranslationsTo(posts: PostRepos
     mediaCaptionTranslationUpdated.collectArrived {
         posts.applyMediaCaptionTranslationUpdate(it.postId, it.mediaId, it.commentId, it.language, it.translation)
     }
+}
+
+/** Le compte absolu d'un emoji (`post:reaction-added` / `-removed`) s'ecrit dans le fil : une ecriture idempotente couvre les deux sens. */
+suspend fun SocialSocketManager.writePostReactionsTo(posts: PostRepository) {
+    coroutineScope {
+        launch { postReactionAdded.collectArrived { it.aggregation?.let { a -> posts.applyReactionCount(it.postId, a.emoji, a.count) } } }
+        launch { postReactionRemoved.collectArrived { it.aggregation?.let { a -> posts.applyReactionCount(it.postId, a.emoji, a.count) } } }
+}
 }

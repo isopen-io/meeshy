@@ -235,6 +235,10 @@ class OutboxRepository @Inject constructor(
     suspend fun hasUnsentRow(kind: OutboxKind, anchor: String): Boolean =
         outboxDao.hasUnsentRow(kind.name, anchor)
 
+    /** One-shot twin of [observePendingTargets] : les ancres qui doivent encore une ecriture de l'un des [kinds], maintenant. */
+    suspend fun pendingTargets(vararg kinds: OutboxKind): Set<String> =
+        outboxDao.pendingTargets(kinds.map { it.name }).toSet()
+
     /**
      * The anchors (`targetId`) that still owe the server a write of one of [kinds], live. A row
      * leaves the set the instant it is delivered (the row is deleted) or gives up (exhausted).
