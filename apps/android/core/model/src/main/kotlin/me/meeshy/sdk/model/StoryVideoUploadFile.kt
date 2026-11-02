@@ -4,7 +4,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Le fichier vidéo qui part réellement — miroir de `StoryVideoUploadFile` (iOS). La compression est un MIEUX, jamais une
- * condition : si elle échoue ou ne produit rien, la source part telle quelle, avec un mime `video/*`.
+ * condition : si elle échoue ou ne produit rien, la source part telle quelle, avec un mime de type vidéo.
  *
  * @property isDerived vrai quand [path] est une copie produite ici, que l'appelant supprime après l'envoi.
  */
