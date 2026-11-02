@@ -10,6 +10,7 @@ import androidx.media3.muxer.Muxer
 import com.google.common.collect.ImmutableList
 import com.google.common.truth.Truth.assertThat
 import java.nio.ByteBuffer
+import me.meeshy.sdk.model.media.ExportContainerPolicy
 import org.junit.Test
 
 @OptIn(UnstableApi::class)
@@ -73,6 +74,21 @@ class MetadataFreeMuxerTest {
     fun `la liste de montage du muxeur d origine reste la sienne`() {
         assertThat(MetadataFreeMuxerFactory(RecordingFactory(RecordingMuxer(), negativeTimestamps = true)).supportsWritingNegativeTimestampsInEditList()).isTrue()
         assertThat(MetadataFreeMuxerFactory(RecordingFactory(RecordingMuxer())).supportsWritingNegativeTimestampsInEditList()).isFalse()
+    }
+
+    @Test
+    fun `aucun export ne recopie les metadonnees de sa source, video publiee ou non`() {
+        listOf(true, false).forEach { publishes ->
+            val streamable = RecordingFactory(RecordingMuxer())
+            val framework = RecordingFactory(RecordingMuxer())
+            val policy = ExportContainerPolicy.of(hasVideo = true, publishes = publishes)
+
+            exportMuxerFactory(policy, streamable, framework).create("/out.mp4").addMetadataEntry(LocationEntry)
+
+            val written = if (publishes) streamable else framework
+            assertThat(written.path).isEqualTo("/out.mp4")
+            assertThat(written.muxer.entries).isEmpty()
+        }
     }
 
     private companion object {

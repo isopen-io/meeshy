@@ -46,7 +46,7 @@ internal class Media3AudioTransformRunner(
             val finished = CompletableDeferred<Unit>()
             val transformer = Transformer.Builder(context)
                 .setAudioMimeType(MimeTypes.AUDIO_AAC)
-                .writingContainer(ExportContainerPolicy.of(hasVideo = false, publishes = true), keepsSourceMetadata = false)
+                .writingContainer(ExportContainerPolicy.of(hasVideo = false, publishes = true))
                 .addListener(
                     object : Transformer.Listener {
                         override fun onCompleted(composition: Composition, exportResult: ExportResult) {

@@ -37,13 +37,19 @@ private class MetadataFreeMuxer(private val delegate: Muxer) : Muxer by delegate
 /**
  * **Le fichier qu'un export écrit, selon [ExportContainerPolicy]** (#14567) : un fichier publié passe par le muxeur
  * MP4 de Media3, qui tente de placer son index en tête ; sinon par `MediaMuxer`. Une vidéo commence sur une image, et
- * aucun diagnostic ne part vers la plateforme. [keepsSourceMetadata] faux : le fichier ne garde rien de sa source
- * ([MetadataFreeMuxerFactory]).
+ * aucun diagnostic ne part vers la plateforme. Quel que soit le conteneur, le fichier ne garde rien de sa source
+ * ([MetadataFreeMuxerFactory]) : le muxeur MP4 de Media3 recopierait le lieu, l'horodatage, le XMP et les entrées
+ * `mdta` de la vidéo d'origine, là où `MediaMuxer` ne gardait que le lieu.
  */
 @OptIn(UnstableApi::class)
-internal fun Transformer.Builder.writingContainer(policy: ExportContainerPolicy, keepsSourceMetadata: Boolean): Transformer.Builder {
-    val container: Muxer.Factory = if (policy.streamable) InAppMp4Muxer.Factory() else FrameworkMuxer.Factory()
-    return setMuxerFactory(if (keepsSourceMetadata) container else MetadataFreeMuxerFactory(container))
+internal fun Transformer.Builder.writingContainer(policy: ExportContainerPolicy): Transformer.Builder =
+    setMuxerFactory(exportMuxerFactory(policy))
         .setEnsureFileStartsOnVideoFrameEnabled(policy.ensureStartsOnVideoFrame)
         .setUsePlatformDiagnostics(policy.platformDiagnostics)
-}
+
+@OptIn(UnstableApi::class)
+internal fun exportMuxerFactory(
+    policy: ExportContainerPolicy,
+    streamable: Muxer.Factory = InAppMp4Muxer.Factory(),
+    framework: Muxer.Factory = FrameworkMuxer.Factory(),
+): Muxer.Factory = MetadataFreeMuxerFactory(if (policy.streamable) streamable else framework)

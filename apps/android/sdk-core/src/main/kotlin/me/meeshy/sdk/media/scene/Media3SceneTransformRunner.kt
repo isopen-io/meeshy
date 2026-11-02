@@ -71,7 +71,7 @@ internal class Media3SceneTransformRunner(
         Transformer.Builder(context)
             .setVideoMimeType(MimeTypes.VIDEO_H264)
             .setAudioMimeType(MimeTypes.AUDIO_AAC)
-            .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true), keepsSourceMetadata = false)
+            .writingContainer(ExportContainerPolicy.of(hasVideo = true, publishes = true))
             .setEncoderFactory(
                 DefaultEncoderFactory.Builder(context)
                     .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(job.format.bitRate).build())
