@@ -178,7 +178,7 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">La crittografia end-to-end non si disattiva mai: questa chat individuale resta crittografata. Potrai sempre aprire accanto un’altra conversazione, senza crittografia end-to-end, con questa persona: entrambe sono nell’elenco, questa segnata da un lucchetto.</string>
     <string name="encryption_fact_every_server_feature">Tutte le funzioni sono disponibili: traduzione automatica, trascrizione dei vocali, anteprima delle notifiche, ricerca.</string>
     <string name="encryption_fact_group_sending_unavailable">In questo gruppo l’app non può ancora inviare messaggi crittografati.</string>
-    <string name="encryption_fact_hybrid_is_server_today">La modalità ibrida oggi crittografa come Server. La doppia crittografia dai tuoi dispositivi arriva presto.</string>
+    <string name="encryption_fact_hybrid_is_server_today">La modalità ibrida crittografa i tuoi messaggi sui nostri server, che possono leggerli per la traduzione e la ricerca: non è la crittografia end-to-end. Tra due dispositivi compatibili, un secondo livello permette inoltre di verificare che un messaggio di testo non sia stato modificato lungo il percorso; quando manca, nulla viene presentato come verificato.</string>
     <string name="encryption_fact_no_edit">Un messaggio inviato non può essere modificato.</string>
     <string name="encryption_fact_no_forward">Un messaggio non può essere inoltrato.</string>
     <string name="encryption_fact_no_notification_preview">Le notifiche non mostrano il testo del messaggio: il server non lo conosce.</string>
@@ -203,12 +203,12 @@
     <string name="encryption_legacy_title">Crittografia end-to-end</string>
     <string name="encryption_mode_e2ee_description">Solo i tuoi dispositivi e quelli dei partecipanti leggono i messaggi. La traduzione avviene sul tuo dispositivo.</string>
     <string name="encryption_mode_e2ee_label">End-to-end</string>
-    <string name="encryption_mode_hybrid_description">Crittografato sui nostri server, come Server. La doppia crittografia dai tuoi dispositivi arriva presto.</string>
+    <string name="encryption_mode_hybrid_description">Crittografato sui nostri server; tra dispositivi compatibili, un secondo livello permette di verificare che un messaggio di testo non sia stato modificato lungo il percorso.</string>
     <string name="encryption_mode_hybrid_label">Ibrido</string>
     <string name="encryption_mode_server_description">I tuoi messaggi sono crittografati sui nostri server. Traduzione, trascrizione e ricerca funzionano.</string>
     <string name="encryption_mode_server_label">Server</string>
     <string name="encryption_summary_end_to_end">Crittografata end-to-end: solo i dispositivi dei partecipanti leggono i messaggi</string>
-    <string name="encryption_summary_hybrid">Crittografata sui nostri server (modalità ibrida)</string>
+    <string name="encryption_summary_hybrid">Crittografata sui nostri server, con verifica tra dispositivi compatibili</string>
     <string name="encryption_summary_none">Conversazione creata prima della crittografia sistematica: i suoi messaggi non sono crittografati</string>
     <string name="encryption_summary_server">Crittografata sui nostri server</string>
     <string name="encryption_topic_absent">Non disponibile in questa modalità</string>
