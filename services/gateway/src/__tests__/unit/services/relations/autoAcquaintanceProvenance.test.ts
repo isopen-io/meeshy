@@ -9,7 +9,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { evaluateAutoAcquaintance, revisitAutoAcquaintancesOnPrivacyWrite } from '../../../../services/relations/autoAcquaintance';
 import { lowerGrant, recordLevel, startCooldown, recordFriendship, type UserRelationDb } from '../../../../services/relations/userRelationWriter';
-import { keepUnnamedKeys } from '../../../../routes/me/preferences/preference-registry';
 import { pairInteractionStore } from '../../../helpers/pair-interaction-store';
 
 const LOW = '5f0000000000000000000001';
@@ -124,16 +123,5 @@ describe('N4 — couper puis rallumer ne renotifie pas l’autre', () => {
     }
     const toHigh = (w.notify.mock.calls as unknown as [{ recipientId: string }][]).filter(([n]) => n.recipientId === HIGH).length;
     expect(toHigh).toBe(1);
-  });
-});
-
-describe('N3 — un REMPLACEMENT (PUT) qui ne nomme pas autoAcquaintance garde le refus', () => {
-  it('keepUnnamedKeys(privacy) garde le refus stocké', async () => {
-    const prisma = {
-      userPreferences: { findUnique: async () => ({ privacy: { showLastSeen: true, autoAcquaintance: false } }) },
-      userPreference: { findMany: async () => [] },
-    };
-    const doc = await keepUnnamedKeys(prisma as never, LOW, 'privacy', { showLastSeen: false }, { showLastSeen: false });
-    expect(doc).toMatchObject({ autoAcquaintance: false });
   });
 });

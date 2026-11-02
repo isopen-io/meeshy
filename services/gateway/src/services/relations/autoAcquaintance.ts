@@ -44,6 +44,8 @@ import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { relationThresholdsFor, type RelationThresholds } from '@meeshy/shared/utils/relation-levels';
 import { acquaintanceProgress, pairDayFromRow } from '@meeshy/shared/utils/relation-interactions';
 import { isBlockedBetween } from '../../utils/blocking.js';
+import { getCacheStore } from '../CacheStore.js';
+import { invalidateFeedFriends } from '../posts/feedFriends.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import {
   isAutomaticAcquaintance,
@@ -80,7 +82,15 @@ export type AutoAcquaintanceDeps = {
   readonly notify?: AcquaintanceNotifier;
   readonly now?: () => Date;
   readonly thresholds?: RelationThresholds;
+  /**
+   * Oublie le cercle mis en cache des deux personnes quand un lien est retiré
+   * (contre-audit #14464 N10) : sans lui, l'audience « Connaissances » du fil
+   * garderait l'autre jusqu'à 5 minutes. Par défaut, le cache du fil.
+   */
+  readonly forgetCircles?: (userIds: ReadonlyArray<string>) => Promise<void>;
 };
+
+const forgetFeedCircles = (userIds: ReadonlyArray<string>): Promise<void> => invalidateFeedFriends(getCacheStore(), userIds);
 
 /** Le dernier jour de la fenêtre glissante, aujourd'hui compris : six jours en arrière. */
 export const ACQUAINTANCE_WINDOW_LOOKBACK_DAYS = 6;
@@ -109,7 +119,7 @@ async function cancelIfAutomatic<R extends 'blocked' | 'minor'>(
 ): Promise<R | 'cancelled'> {
   const row = await deps.prisma.userRelation.findUnique({ where: { userLowId_userHighId: pair } });
   if (!isOwnAcquaintance(row)) return refusal;
-  await resetFriendship(deps.prisma as unknown as UserRelationDb, { userA: pair.userLowId, userB: pair.userHighId, at: now });
+  await resetFriendship(deps.prisma as unknown as UserRelationDb, { userA: pair.userLowId, userB: pair.userHighId, at: now, cause: 'system' });
   return 'cancelled' as const;
 }
 
@@ -137,7 +147,11 @@ async function stanceOf(deps: AutoAcquaintanceDeps, people: ReadonlyArray<Person
 
 async function withdrawIfAutomatic(deps: AutoAcquaintanceDeps, pair: ReturnType<typeof relationPairKey>, now: Date) {
   const outcome = await withdrawAutoAcquaintance(deps.prisma as unknown as UserRelationDb, { userA: pair.userLowId, userB: pair.userHighId, at: now });
-  return outcome === 'reset' ? ('cancelled' as const) : ('opted-out' as const);
+  if (outcome !== 'reset') return 'opted-out' as const;
+  await (deps.forgetCircles ?? forgetFeedCircles)([pair.userLowId, pair.userHighId]).catch((error: unknown) =>
+    logger.warn('circles cache not forgotten after withdrawal', { error }),
+  );
+  return 'cancelled' as const;
 }
 
 async function announce(notify: AcquaintanceNotifier | undefined, userA: string, userB: string): Promise<void> {

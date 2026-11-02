@@ -64,6 +64,9 @@ import {
   type PreferenceCategory,
 } from '../../../services/preferences/preferences-broadcast';
 import { submittedKeysOnly } from '../../../utils/partial-update';
+import { enhancedLogger } from '../../../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'PreferenceRegistry' });
 
 export { PREFERENCE_CATEGORIES };
 export type { PreferenceCategory };
@@ -146,7 +149,9 @@ export const PREFERENCE_REGISTRY: Readonly<Record<PreferenceCategory, Preference
       // #14406 — un refus de la Connaissance automatique vaut tout de suite.
       afterWrite: async (prisma, userId) => {
         await retireLegacyPrivacyRows(prisma, userId);
-        void revisitAutoAcquaintancesOnPrivacyWrite(prisma, { userId });
+        revisitAutoAcquaintancesOnPrivacyWrite(prisma, { userId }).catch((error: unknown) =>
+          logger.warn('auto acquaintances not revisited after privacy write', { userId, error })
+        );
       },
     },
     // #14406 (contre-audit #14464 N3) — ni un remplacement qui ne la nomme pas, ni une

@@ -284,6 +284,38 @@ describe('evaluateAutoAcquaintance — une annulation par la préférence est R�
   });
 });
 
+describe('evaluateAutoAcquaintance — ce que le retrait laisse derrière lui (contre-audit #14464 N10, N11)', () => {
+  it('N10 — un retrait par refus oublie le cercle mis en cache des DEUX personnes', async () => {
+    const { store } = setup({ relations: [autoRow()], preferences: [choice(LOW, false)] });
+    const forgotten: string[][] = [];
+    const outcome = await evaluateAutoAcquaintance(
+      { prisma: store.prisma, now: () => NOW, forgetCircles: async (ids) => { forgotten.push([...ids]); } },
+      { userA: HIGH, userB: LOW },
+    );
+
+    expect(outcome).toBe('cancelled');
+    expect(forgotten).toEqual([[LOW, HIGH]]);
+  });
+
+  it('N10 — une panne du cache ne fait pas échouer le retrait', async () => {
+    const { store } = setup({ relations: [autoRow()], preferences: [choice(LOW, false)] });
+    const outcome = await evaluateAutoAcquaintance(
+      { prisma: store.prisma, now: () => NOW, forgetCircles: async () => { throw new Error('redis down'); } },
+      { userA: HIGH, userB: LOW },
+    );
+
+    expect(outcome).toBe('cancelled');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
+
+  it('N11 — une annulation pour blocage grave une cause « system », jamais « explicit »', async () => {
+    const { store, evaluate } = setup({ relations: [autoRow()], users: [user(LOW, { blockedUserIds: [HIGH] }), user(HIGH)] });
+
+    expect(await evaluate()).toBe('cancelled');
+    expect((store.relations()[0].transitions as Array<{ cause?: string }>).map((t) => t.cause)).toEqual(['system', 'system']);
+  });
+});
+
 describe('evaluateAutoAcquaintance — la préférence est relue juste avant l’écriture (audit #14464 C3)', () => {
   it('un refus posé pendant l’évaluation empêche la naissance, et personne n’est prévenu', async () => {
     const { store, notify, evaluate } = setup();

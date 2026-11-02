@@ -50,10 +50,11 @@ export type RelationOrigin = 'request' | 'backfill-friend' | 'auto-acquaintance'
 
 /**
  * Ce qui a causé un passage (#14406, contre-audit #14464 N1/N2) : la Connaissance
- * AUTOMATIQUE, ou un geste (`explicit`). C'est elle, et jamais l'`origin` de la ligne
+ * AUTOMATIQUE, un geste (`explicit`), ou une annulation du système — blocage, âge
+ * déclaré (`system`, contre-audit #14464 N11). C'est elle, et jamais l'`origin` de la ligne
  * (posée à la création, jamais changée), qui dit si une Connaissance est automatique.
  */
-export type RelationTransitionCause = 'auto-acquaintance' | 'explicit';
+export type RelationTransitionCause = 'auto-acquaintance' | 'explicit' | 'system';
 
 type WrittenTransition = RelationTransition & { readonly cause: RelationTransitionCause };
 
@@ -137,23 +138,29 @@ const passagesBetween = (
     .filter(({ side }) => from[side] !== to[side])
     .map(({ side, actorId }) => ({ actorId, from: from[side], to: to[side], at, cause }));
 
-type Passage = NonNullable<UserRelationRow['transitions']>[number];
-
-const lastPassageOf = (row: UserRelationRow, actorId: string): Passage | undefined =>
-  [...(row.transitions ?? [])].reverse().find((t) => t.actorId === actorId);
+const lastPassageIndexOf = (row: UserRelationRow, actorId: string): number =>
+  (row.transitions ?? []).map((t) => t.actorId).lastIndexOf(actorId);
 
 /**
  * Un passage de la Connaissance automatique. Un passage écrit AVANT que la cause
  * existe (sans `cause`) l'est s'il entre en Connaissance depuis PUBLIC sur une ligne
  * née automatique : c'est ce qu'écrivait la création automatique, et tout passage
  * postérieur porte sa cause. Une ligne née automatique sans aucun passage d'un côté
- * (antérieure à l'historique) se lit de même.
+ * (antérieure à l'historique) se lit de même. Un passage hérité qui SUIT une baisse
+ * n'est jamais automatique (contre-audit #14464 N8) : l'ancienne création
+ * automatique ne montait jamais après une baisse (`refuseAfterAnyDrop`), c'est donc
+ * un geste — une Connaissance redemandée et acceptée.
  */
-const isAutomaticPassage = (row: UserRelationRow, passage: Passage | undefined): boolean => {
-  if (!passage) return row.origin === 'auto-acquaintance';
+const isAutomaticPassage = (row: UserRelationRow, index: number): boolean => {
+  const transitions = row.transitions ?? [];
+  if (index < 0) return row.origin === 'auto-acquaintance';
+  const passage = transitions[index];
   if (passage.to !== 'ACQUAINTANCE') return false;
   if (typeof passage.cause === 'string') return passage.cause === 'auto-acquaintance';
-  return row.origin === 'auto-acquaintance' && passage.from === 'PUBLIC';
+  const followsADrop = transitions
+    .slice(0, index)
+    .some((t) => isRelationDrop({ from: parseRelationLevel(t.from), to: parseRelationLevel(t.to) }));
+  return row.origin === 'auto-acquaintance' && passage.from === 'PUBLIC' && !followsADrop;
 };
 
 /**
@@ -166,11 +173,11 @@ export const isAutomaticAcquaintance = (row: UserRelationRow | null): boolean =>
   row !== null &&
   row.grantedByLow === 'ACQUAINTANCE' &&
   row.grantedByHigh === 'ACQUAINTANCE' &&
-  [row.userLowId, row.userHighId].every((actorId) => isAutomaticPassage(row, lastPassageOf(row, actorId)));
+  [row.userLowId, row.userHighId].every((actorId) => isAutomaticPassage(row, lastPassageIndexOf(row, actorId)));
 
 /** La paire a-t-elle déjà été Connaissance automatique ? Sa renaissance ne se réannonce pas (contre-audit #14464 N4). */
 export const wasEverAutomatic = (row: UserRelationRow | null): boolean =>
-  row !== null && (row.transitions ?? []).some((passage) => isAutomaticPassage(row, passage));
+  row !== null && (row.transitions ?? []).some((_, index) => isAutomaticPassage(row, index));
 
 const isUniqueViolation = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';
@@ -382,7 +389,7 @@ export async function recordAcquaintance(
  */
 export async function lowerPair(
   db: UserRelationDb,
-  params: { userA: string; userB: string; level: RelationLevel; at: Date; cooldownFor?: CooldownWrite },
+  params: { userA: string; userB: string; level: RelationLevel; at: Date; cooldownFor?: CooldownWrite; cause?: RelationTransitionCause },
 ): Promise<RelationResetOutcome> {
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
@@ -393,7 +400,7 @@ export async function lowerPair(
     const current = grantsOf(row);
     const target: Grants = { low: minRelationLevel(current.low, params.level), high: minRelationLevel(current.high, params.level) };
     if (target.low === current.low && target.high === current.high) return 'unchanged';
-    if (await moveTo(db, row, pair, target, params.at, params.cooldownFor ?? null)) return 'reset';
+    if (await moveTo(db, row, pair, target, params.at, params.cooldownFor ?? null, params.cause ?? 'explicit')) return 'reset';
   }
   throw new Error('lowerPair: la paire change sans cesse, abandon après plusieurs reprises');
 }
@@ -403,7 +410,7 @@ export async function lowerPair(
  */
 export async function resetFriendship(
   db: UserRelationDb,
-  params: { userA: string; userB: string; at: Date },
+  params: { userA: string; userB: string; at: Date; cause?: RelationTransitionCause },
 ): Promise<RelationResetOutcome> {
   return lowerPair(db, { ...params, level: 'PUBLIC' });
 }
