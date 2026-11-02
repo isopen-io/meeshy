@@ -210,6 +210,22 @@ export const conversationStatsSchema = {
  * Full conversation schema for API responses
  * Aligned with schema.prisma Conversation model
  */
+/**
+ * La demande de message en attente du LECTEUR (#14107) — `null` pour une
+ * conversation ordinaire. `filtered` : le score de risque l'a rangée parmi les
+ * demandes filtrées ; `mediaBlurred` : ses médias s'affichent floutés.
+ */
+export const messageRequestSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    since: { type: 'string', format: 'date-time', description: 'Date à laquelle la demande est arrivée' },
+    filtered: { type: 'boolean', description: 'Rangée parmi les demandes filtrées (score de risque, MIN-03)' },
+    mediaBlurred: { type: 'boolean', description: 'Les médias de la demande se montrent floutés' }
+  },
+  description: "Demande de message en attente du lecteur ; null = conversation ordinaire"
+} as const;
+
 export const conversationSchema = {
   type: 'object',
   description: 'Conversation with participants, messages, and metadata',
@@ -366,6 +382,9 @@ export const conversationSchema = {
       nullable: true,
       description: "Restriction d'écriture du lecteur : 'minor-global' = mineur (13-17 ans) dans Meeshy Global, en lecture seule jusqu'à ses 18 ans ; null = aucune"
     },
+    // #14107 — la DEMANDE de message en attente du LECTEUR (boîte de demandes,
+    // MSG-01/02). Non déclaré, `fast-json-stringify` le retirerait du fil.
+    messageRequest: messageRequestSchema,
     currentUserRole: {
       type: 'string',
       nullable: true,
@@ -591,6 +610,9 @@ export const conversationMinimalSchema = {
       nullable: true,
       description: "Restriction d'écriture du lecteur : 'minor-global' = mineur (13-17 ans) dans Meeshy Global, en lecture seule jusqu'à ses 18 ans ; null = aucune"
     },
+    // #14107 — la DEMANDE de message en attente du LECTEUR (boîte de demandes,
+    // MSG-01/02). Non déclaré, `fast-json-stringify` le retirerait du fil.
+    messageRequest: messageRequestSchema,
     currentUserRole: {
       type: 'string',
       nullable: true,

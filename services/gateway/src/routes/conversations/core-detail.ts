@@ -24,6 +24,7 @@ import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOr
 import { conversationDetailInclude, conversationUserPreferencesSelect } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
+import { loadViewerMessageRequests } from '../../services/messaging/messageRequests';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
@@ -210,6 +211,8 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
   // Ce que le lecteur n'a pas le droit d'écrire ici (#9927) — composé depuis
   // le type de la conversation et sa date de naissance déclarée.
   'viewerWriteRestriction',
+  // La demande de message en attente du lecteur (#14107) — composée, aucune colonne.
+  'messageRequest',
   // Le fond et l'accent PERSONNELS du lecteur (#10736) — un fil ouvert par son
   // adresse (`/c/:id`) n'a que cette route : sans eux il se peint en Signature.
   'userPreferences',
@@ -246,6 +249,7 @@ export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns
     lastReadMessageCreatedAt: [],
     viewerEngagement: [],
     viewerWriteRestriction: ['type'],
+    messageRequest: [],
     userPreferences: [],
   },
 };
@@ -607,6 +611,14 @@ export function registerConversationDetailRoute(
           birthDate,
           now: new Date()
         });
+      }
+
+      // #14107 — la demande de message en attente du lecteur ; `null` hors demande.
+      if (isFieldServed(champs, 'messageRequest')) {
+        const requests = authRequest.authContext.isAnonymous
+          ? new Map()
+          : await loadViewerMessageRequests(prisma, userId, [conversationId]);
+        charge.messageRequest = requests.get(conversationId) ?? null;
       }
 
       return sendSuccess(reply, restrictFields(charge, champs, CONVERSATION_DETAIL_PINNED));

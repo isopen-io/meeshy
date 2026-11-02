@@ -54,6 +54,7 @@ import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
+import { loadViewerMessageRequests, viewerRequestClause, type MessageRequestListMode } from '../../services/messaging/messageRequests';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
@@ -76,7 +77,7 @@ export function registerConversationListRoute(
   optionalAuth: any
 ) {
   // Route pour obtenir toutes les conversations de l'utilisateur
-  fastify.get<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string } }>('/conversations', {
+  fastify.get<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string; requests?: MessageRequestListMode } }>('/conversations', {
     schema: {
       description: 'Get all conversations for the authenticated user with pagination support',
       tags: ['conversations'],
@@ -103,7 +104,7 @@ export function registerConversationListRoute(
       }
     },
     preValidation: [optionalAuth]
-  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string } }>, reply) => {
+  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string; updatedSince?: string; requests?: MessageRequestListMode } }>, reply) => {
     try {
       const authRequest = request as UnifiedAuthRequest;
 
@@ -244,6 +245,16 @@ export function registerConversationListRoute(
         { participants: { some: { userId, role: 'creator' } } },
         { participants: { none: { role: 'creator' } } } // aucun créateur identifiable ⇒ comportement actuel
       ];
+
+      // #14107 — la boîte de demandes : `exclude` = la liste principale, `only` /
+      // `filtered` = les demandes du lecteur. Absent = tout, comme avant le lot.
+      const requestsMode = request.query.requests;
+      if (requestsMode) {
+        whereClause.AND = [
+          ...(Array.isArray(whereClause.AND) ? whereClause.AND : whereClause.AND ? [whereClause.AND] : []),
+          { participants: { some: { userId, isActive: true, ...viewerRequestClause(requestsMode) } } }
+        ];
+      }
 
       // Pagination par curseur — résolue DANS LE SCOPE DU LECTEUR (#6991).
       //
@@ -463,7 +474,7 @@ export function registerConversationListRoute(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation] = await Promise.all([
+      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation, viewerMessageRequests] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -486,6 +497,9 @@ export function registerConversationListRoute(
         // « N (M) 🔥 » du lecteur (#8906) — UNE lecture groupée pour la page.
         // Un invité anonyme n'a pas de compte, donc pas d'état d'engagement.
         loadViewerEngagementsOrEmpty(prisma, isAnonymousViewer ? undefined : userId, conversationIds),
+
+        // #14107 — les demandes de message EN ATTENTE du lecteur, une lecture pour la page.
+        isAnonymousViewer ? Promise.resolve(new Map()) : loadViewerMessageRequests(prisma, userId, conversationIds),
       ]);
 
       // Par CONVERSATION plutôt que par participant — c'est la clé que la
@@ -923,6 +937,7 @@ export function registerConversationListRoute(
           ...projectReadCursorBoundary(readCursorByConversation.get(conversation.id)),
           currentUserRole: currentUserRoleMap.get(conversation.id) || null,
           currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null,
+          messageRequest: viewerMessageRequests.get(conversation.id) ?? null,
           // ABSENT tant que le lecteur n'a rien crédité ici (#8906).
           ...(viewerEngagementByConversation.has(conversation.id)
             ? { viewerEngagement: viewerEngagementByConversation.get(conversation.id) }

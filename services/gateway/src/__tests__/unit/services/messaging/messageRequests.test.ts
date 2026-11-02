@@ -164,6 +164,7 @@ describe('acceptMessageRequest — accepter fait passer l\'expéditeur au moins 
     expect(bob?.messageRequestAt).toBeNull();
     expect(bob?.messageRequestRisk).toBeNull();
     expect(alice?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+    expect(world.conversation.rows.find((c) => c.id === DM)?.updatedAt).toEqual(NOW);
     expect(world.relations.relations()).toEqual(
       expect.arrayContaining([expect.objectContaining({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' })]),
     );

@@ -26,7 +26,7 @@
  *   des deux côtés (`recordLevel`), jamais plus bas qu'un lien existant.
  * - **Ignorer** = masquer pour soi (`delete-for-me`), silencieux.
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -34,7 +34,7 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
 import { recordLevel, type UserRelationDb } from '../relations/userRelationWriter';
 
-export type MessageRequestDb = PairAccessDb & Pick<PrismaClient, 'participant'>;
+export type MessageRequestDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'conversation'>;
 
 /** Au-delà de ce score, une demande est rangée parmi les demandes filtrées. */
 export const MESSAGE_REQUEST_FILTER_THRESHOLD = 50;
@@ -184,7 +184,7 @@ export const MESSAGE_REQUEST_LIST_MODES: readonly MessageRequestListMode[] = ['e
  * `exclude` = la liste principale, `only` = la boîte de demandes, `filtered` = les demandes filtrées.
  * Le champ ABSENT (document antérieur) vaut « pas une demande ».
  */
-export function viewerRequestClause(mode: MessageRequestListMode): Record<string, unknown> {
+export function viewerRequestClause(mode: MessageRequestListMode): Prisma.ParticipantWhereInput {
   if (mode === 'exclude') return { OR: [{ messageRequestAt: null }, { messageRequestAt: { isSet: false } }] };
   if (mode === 'filtered') return { messageRequestAt: { not: null }, messageRequestRisk: { gte: MESSAGE_REQUEST_FILTER_THRESHOLD } };
   return {
@@ -246,6 +246,8 @@ export async function acceptMessageRequest(
     where: { id: requester.id },
     data: { permissions: { ...FOUNDING_MEMBER_PERMISSIONS } },
   });
+  // La ligne de liste change de boîte : la synchronisation delta (`updatedSince`) doit la revoir.
+  await prisma.conversation.updateMany({ where: { id: params.conversationId }, data: { updatedAt: now } });
   return {
     kind: 'accepted',
     requesterId: requester.userId,

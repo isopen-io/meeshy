@@ -404,7 +404,6 @@ export async function notifyMessageRecipients(params: {
     // consommée, éphémère échu, transitivement) est morte pour lui dès sa
     // naissance : aucune bannière ne lui annonce son texte.
     const deadFor = await loadQuoteCascadeAudience(prisma, message.replyToId);
-    const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !deadFor.has(id));
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
@@ -414,11 +413,23 @@ export async function notifyMessageRecipients(params: {
         encryptionMode: true,
         participants: {
           where: { isActive: true, type: 'user' },
-          select: { userId: true },
+          select: { userId: true, messageRequestAt: true },
         },
       },
     });
     if (!conversation) return;
+
+    // #14107 (MSG-02, MIN-03) — une DEMANDE de message en attente ne sonne pas :
+    // son destinataire la découvre dans sa boîte de demandes, ni bannière, ni
+    // mention, ni réponse ne la lui annoncent.
+    const silenced = new Set<string>([
+      ...deadFor.keys(),
+      ...conversation.participants
+        .filter((p) => p.messageRequestAt instanceof Date)
+        .map((p) => p.userId)
+        .filter((id): id is string => Boolean(id)),
+    ]);
+    const validatedMentionUserIds = (params.validatedMentionUserIds ?? []).filter((id) => !silenced.has(id));
 
     // Le contenu qu'un message PROTÉGÉ (éphémère, vue unique, flouté, chiffré)
     // est autorisé à montrer sur un écran verrouillé — jamais le contenu lui-même.
@@ -452,7 +463,7 @@ export async function notifyMessageRecipients(params: {
 
     const memberIds = conversation.participants
       .map(p => p.userId)
-      .filter((id): id is string => id !== null && !deadFor.has(id));
+      .filter((id): id is string => id !== null && !silenced.has(id));
 
     // L'auteur du message auquel celui-ci répond, en `User.id`. Un auteur
     // anonyme n'a pas de ligne `Notification` possible : il reste `null`.
@@ -649,6 +660,7 @@ export async function notifyMessageRecipients(params: {
 
     const owesReplyNotification =
       !!originalMessageAuthorUserId &&
+      !silenced.has(originalMessageAuthorUserId) &&
       originalMessageAuthorUserId !== sender.actorId &&
       !validatedMentionUserIds.includes(originalMessageAuthorUserId);
 
