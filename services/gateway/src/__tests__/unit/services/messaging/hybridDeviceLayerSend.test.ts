@@ -14,7 +14,7 @@
 import { describe, it, expect, jest, beforeEach, afterAll, afterEach } from '@jest/globals';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { E2EEDeviceLayerRequest, E2EEServedEnvelope } from '@meeshy/shared/types/e2ee-directory';
+import { HYBRID_DEVICE_LAYER_METADATA_KEY, type E2EEDeviceLayerRequest, type E2EEServedEnvelope } from '@meeshy/shared/types/e2ee-directory';
 
 const logged: unknown[][] = [];
 const record = (level: string) => (...args: unknown[]) => { logged.push([level, ...args]); };
@@ -55,6 +55,7 @@ jest.mock('../../../../services/attachments', () => ({
 }));
 
 import { MessageProcessor } from '../../../../services/messaging/MessageProcessor';
+import { clientDeclaredMetadata } from '../../../../services/messaging/clientDeclaredMetadata';
 import { EncryptionService } from '../../../../services/EncryptionService';
 import { revealAtRest } from '../../../../services/messaging/serverAtRest';
 import { E2EE_PLAINTEXT_REFUSED } from '../../../../services/messaging/e2eePlaintextAdmission';
@@ -252,6 +253,27 @@ describe('hybride sans couche appareil : la couche serveur seule reste admise', 
     await h.processor.saveMessage(send());
     const metadata = (h.created[0].data.metadata ?? {}) as Record<string, unknown>;
     expect(metadata.deviceLayer).toBeUndefined();
+  });
+
+  it('un marqueur deviceLayer FORGÉ par le client (metadata brut, lieu, sticker) ne se range jamais sur la ligne', async () => {
+    const h = harness({ regime: regimeOf('hybrid') });
+    await h.processor.saveMessage(send({
+      metadata: { deviceLayer: 'libsignal-v1' },
+      deviceLayer: 'libsignal-v1',
+      location: { deviceLayer: 'libsignal-v1' },
+      sticker: { deviceLayer: 'libsignal-v1' },
+    }));
+    const metadata = (h.created[0].data.metadata ?? {}) as Record<string, unknown>;
+    expect(metadata.deviceLayer).toBeUndefined();
+  });
+});
+
+describe('le marqueur deviceLayer n’est pas une métadonnée déclarable par le client', () => {
+  it('clientDeclaredMetadata ignore une clé deviceLayer et ne rend que ses blocs parsés', () => {
+    const forged: Record<string, unknown> = { deviceLayer: 'libsignal-v1', metadata: { deviceLayer: 'libsignal-v1' } };
+    const declared = clientDeclaredMetadata(forged, { endToEnd: false }) as Record<string, unknown>;
+    expect(declared).toEqual({});
+    expect(Object.keys(declared)).not.toContain(HYBRID_DEVICE_LAYER_METADATA_KEY);
   });
 });
 
