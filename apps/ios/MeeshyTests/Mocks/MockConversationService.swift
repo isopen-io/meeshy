@@ -36,6 +36,15 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     var findDirectsWithResult: Result<[APIConversation], Error>?
     var lastFindDirectWithUserId: String?
     var deleteResult: Result<Void, Error> = .success(())
+    var obsoleteResult: Result<ConversationObsoleteResult, Error> = .success(
+        ConversationObsoleteResult(
+            conversationId: "000000000000000000000001",
+            obsoletedAt: "2026-11-02T10:00:00.000Z",
+            purgeAfter: "2026-11-04T10:00:00.000Z"
+        )
+    )
+    var obsoleteCallCount = 0
+    var lastObsoleteConversationId: String?
     var markReadResult: Result<Void, Error> = .success(())
     var markAsReceivedResult: Result<Void, Error> = .success(())
     var markUnreadResult: Result<Void, Error> = .success(())
@@ -206,6 +215,14 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
             lastDeleteConversationId = conversationId
         }
         try deleteResult.get()
+    }
+
+    nonisolated func obsolete(conversationId: String) async throws -> ConversationObsoleteResult {
+        await MainActor.run {
+            obsoleteCallCount += 1
+            lastObsoleteConversationId = conversationId
+        }
+        return try obsoleteResult.get()
     }
 
     nonisolated func markRead(conversationId: String) async throws {
