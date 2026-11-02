@@ -180,6 +180,27 @@ final class APIRequestPipelineCharacterizationTests: XCTestCase {
         XCTAssertEqual(PipelineStubProtocol.requests.count, 1)
     }
 
+    /// #14169 — trop de personnes choisies sans lien aujourd'hui : un refus du
+    /// jour, jamais une cadence. Le transport ne le rejoue pas.
+    func test_request_onlyUnlinkedRecipients429_isSentOnce_andRejected() async throws {
+        let client = makeClient()
+        PipelineStubProtocol.script = [.http(429, ["Retry-After": "3600"],
+                                             #"{"code":"ONLY_UNLINKED_RECIPIENTS_LIMIT","limit":50,"unlinked":7,"error":"Trop"}"#)]
+
+        do {
+            let _: Pong = try await client.stringRequest(endpoint: "/posts")
+            XCTFail("le refus des personnes sans lien doit lever")
+        } catch MeeshyError.rejected(let rejection) {
+            XCTAssertEqual(rejection.statusCode, 429)
+            XCTAssertEqual(rejection.code, "ONLY_UNLINKED_RECIPIENTS_LIMIT")
+            XCTAssertEqual(rejection.limit, 50)
+            XCTAssertEqual(DailyGestureLimit.from(MeeshyError.rejected(rejection))?.gesture, .unlinkedRecipients)
+            XCTAssertTrue(StoryPublishRetryPolicy.isPermanent(MeeshyError.rejected(rejection)),
+                          "la file de publication ne le rejoue pas non plus")
+        }
+        XCTAssertEqual(PipelineStubProtocol.requests.count, 1)
+    }
+
     // MARK: - (e) (f) (g) Les refus locaux et les normalisations
 
     func test_request_emptyPathSegment_throwsInvalidURL_withoutAnyRequest() async throws {

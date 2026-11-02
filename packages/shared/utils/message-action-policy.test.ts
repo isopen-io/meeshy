@@ -76,10 +76,18 @@ describe('messageActionsFor — les verdicts alignés sur la passerelle (#11205)
     expect(actions({ message: { content: '', attachments: [{ mimeType: 'audio/m4a' }] }, conversation: { encryptionMode: 'e2ee' } }).verdicts.transcribe).toBeNull();
   });
 
-  it.each(['server', 'hybrid', 'Server'])('chiffré au repos (%s) : « Modifier » n’est pas offert — la passerelle le refuse (#11381)', (encryptionMode) => {
-    expect(actions({ message: mine, conversation: { encryptionMode } }).verdicts.edit).toBeNull();
-    expect(actions({ message: { ...mine, encryptionMode }, conversation: { encryptionMode: null } }).verdicts.edit).toBeNull();
-    expect(actions({ message: {}, conversation: { encryptionMode }, viewer: { platformRole: 'MODERATOR' } }).verdicts.edit).toBeNull();
+  it.each(['server', 'hybrid', 'Server'])('chiffré au repos (%s) : « Modifier » est offert — la passerelle rescelle le texte modifié (décision 2026-11-01)', (encryptionMode) => {
+    expect(actions({ message: mine, conversation: { encryptionMode } }).verdicts.edit).toEqual({ asModerator: false, windowEndsAt: expect.any(Number) });
+    expect(actions({ message: { ...mine, isEncrypted: true, encryptionMode }, conversation: { encryptionMode: null } }).verdicts.edit).not.toBeNull();
+    expect(actions({ message: {}, conversation: { encryptionMode }, viewer: { platformRole: 'MODERATOR' } }).verdicts.edit).toEqual({ asModerator: true, windowEndsAt: null });
+  });
+
+  it('chiffré au repos mais SCELLÉ à la lecture (aucune clé n’a ouvert la ligne) : rien à modifier', () => {
+    expect(actions({ message: { ...mine, content: '', isEncrypted: true, encryptionMode: 'server' }, conversation: { encryptionMode: 'server' } }).verdicts.edit).toBeNull();
+  });
+
+  it('un message scellé en e2ee reste non modifiable dans une conversation passée au repos', () => {
+    expect(actions({ message: { ...mine, isEncrypted: true, encryptionMode: 'e2ee' }, conversation: { encryptionMode: 'server' } }).verdicts.edit).toBeNull();
   });
 
   it('chiffré au repos : les services serveur restent offerts, la traduction servie aussi', () => {

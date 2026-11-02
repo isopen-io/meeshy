@@ -7,6 +7,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,8 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SharedPlace
@@ -498,6 +501,52 @@ class ChatComposerControllerTest {
         assertThat(state.isEndToEnd).isFalse()
         assertThat(state.composerAffordances.canSendText).isTrue()
         assertThat(state.viewerMayWrite).isTrue()
+    }
+
+    // --- sticker (#14334) -----------------------------------------------------------------------
+
+    private fun stickerFile(): java.io.File =
+        java.io.File.createTempFile("sticker", ".png").apply { writeBytes(byteArrayOf(1, 2, 3)); deleteOnExit() }
+
+    @Test
+    fun `#14334 a sticker leaves at once, its image queued and its recipe on the optimistic bubble`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", replyingToMessageId = "r1"))
+        val file = stickerFile()
+        val sticker = MessageSticker(templateId = "mee.mee-coucou", emoji = "👋")
+        val item = slot<MediaUploadItem>()
+        coEvery { r.uploads.enqueue(capture(item), any(), any()) } returns "upload-cmid"
+        val attachments = slot<List<ApiMessageAttachment>>()
+
+        r.controller.sendSticker(file, "image/png", sticker, 512, 512)
+        advanceUntilIdle()
+
+        assertThat(item.captured.mimeType).isEqualTo("image/png")
+        assertThat(item.captured.bytes.toList()).containsExactly(1.toByte(), 2.toByte(), 3.toByte()).inOrder()
+        coVerify(exactly = 1) {
+            r.repo.sendOptimistic(
+                conversationId = "c1", content = "", originalLanguage = "fr", sender = me, replyToId = "r1",
+                storyReplyToId = any(), forwardedFromId = any(), forwardedFromConversationId = any(), effects = any(),
+                messageType = "image", attachmentUploadCmids = listOf("upload-cmid"), attachments = capture(attachments),
+                location = any(), forwardedAttachmentIds = any(), sticker = sticker,
+            )
+        }
+        val bubble = attachments.captured.single()
+        assertThat(bubble.id).isEqualTo("upload-cmid")
+        assertThat(bubble.fileUrl).isEqualTo("file://" + file.absolutePath)
+        assertThat(bubble.width).isEqualTo(512)
+        assertThat(r.state.replyingToMessageId).isNull()
+        verify(exactly = 1) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `#14334 an end-to-end conversation sends no sticker`() = runTest {
+        val r = rig(initial = ChatUiState(conversationId = "c1", encryptionMode = "e2ee"))
+
+        r.controller.sendSticker(stickerFile(), "image/png", MessageSticker(emoji = "🔥"), 512, 512)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
+        verify(exactly = 0) { r.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
     // --- shared place (#13316) -----------------------------------------------------------------

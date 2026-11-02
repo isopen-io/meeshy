@@ -1699,7 +1699,7 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.mention.suggestions.map { it.username })
             .containsExactly("bob", "bobby", "bobo").inOrder()
         assertThat(remote.queries).containsExactly("bob")
-        assertThat(remote.contexts).containsExactly(MentionContext.conversation("c1", "group"))
+        assertThat(remote.contexts).containsExactly(MentionContext.conversation("c1", "group", isMember = true))
     }
 
     @Test
@@ -1718,6 +1718,23 @@ class ChatViewModelTest {
 
         assertThat(remote.queries).containsExactly("zo")
         assertThat(h.vm.state.value.mention.suggestions.map { it.username }).containsExactly("zoe")
+    }
+
+    @Test
+    fun a_reader_who_is_not_a_member_of_a_public_conversation_is_offered_nobody_and_asks_nothing() = runTest(dispatcher) {
+        val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "bobo")))
+        val outsider = conversationWithRoster().copy(
+            type = "public",
+            participants = conversationWithRoster().participants.filterNot { it.userId == "me" },
+        )
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = outsider, mentionSearch = remote)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @bob")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.mention.suggestions).isEmpty()
+        assertThat(remote.queries).isEmpty()
     }
 
     @Test

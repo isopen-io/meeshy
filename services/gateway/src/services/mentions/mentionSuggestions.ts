@@ -18,7 +18,8 @@
  *
  * La PORTÉE vient de `mentionableScope` (partagée avec la validation à
  * l'envoi) : la recherche ne propose jamais quelqu'un que l'envoi refuserait,
- * et propose tous ceux qu'il accepterait (#7852).
+ * et propose tous ceux qu'il accepterait (#7852). Seul un membre ACTIF reçoit
+ * une liste, quelle que soit la portée (#14066).
  *
  * L'annuaire se lit comme `/users/search` : par jeton (`searchTokens`, indexé),
  * à partir de deux caractères, et `deletedAt` apparié dans ses DEUX états
@@ -33,11 +34,12 @@ import type { CacheStore } from '../CacheStore';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { jetonRecherche } from '../../utils/search-tokens';
-import { mentionableScope, scopeRequiresMembership, type MentionableScope } from './mentionableScope';
+import { mentionableScope, scopeIsClosed, type MentionableScope } from './mentionableScope';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { keepDiscoverable } from '../profile-discoverability';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { comptesLies, niveauxParmi, plusProchesDabord, type CompteLie } from '../friendship';
-import { resolveConsumptionTarget } from '../posts/postVisibility';
+import { resolveConsumptionTarget, type PostRedirectRecord } from '../posts/postVisibility';
 import { commentThreadOf } from '../posts/commentHome';
 import { viewerListAccess } from '../posts/viewerListAccess';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
@@ -81,8 +83,10 @@ export const POST_ACCESS_DENIED = 'Post non trouvé ou accès refusé';
 const KNOWN_FLOOR: RelationLevel = 'ACQUAINTANCE';
 const FRIEND_FLOOR: RelationLevel = 'FRIEND';
 const ADDRESS_BOOK_CAP = 500;
-/** Les intervenants lus par post : assez pour dix suggestions filtrées, jamais tout un post viral. */
+/** Les intervenants lus par post : 200 PERSONNES distinctes, assez pour dix suggestions filtrées. */
 const THREAD_READ_CAP = 200;
+/** Borne de lignes lues pour les trouver : un fil viral ne se lit jamais en entier. */
+const THREAD_ROW_BUDGET = 1000;
 
 const isKnownLevel = (level: RelationLevel | undefined): boolean =>
   level !== undefined && relationLevelIfAtLeast(level, KNOWN_FLOOR) !== null;
@@ -232,6 +236,10 @@ export class MentionSuggestionFinder {
     return `${CACHE_PREFIX}:${conversationId}:${currentUserId}:${query.toLowerCase().trim()}`;
   }
 
+  private postCacheKey(postId: string, currentUserId: string, query: string): string {
+    return `${CACHE_PREFIX}:post:${postId}:${currentUserId}:${query.toLowerCase().trim()}`;
+  }
+
   private async readCache(key: string): Promise<MentionSuggestion[] | null> {
     try {
       const cached = await this.cache.get(key);
@@ -271,25 +279,29 @@ export class MentionSuggestionFinder {
   }
 
   private async resolveScope(conversationId: string, currentUserId: string): Promise<MentionableScope> {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { id: true, type: true }
-    });
+    // #14066 — quelle que soit la portée, un non-membre ne cite personne : une
+    // conversation ouverte n'énumère pas ses membres (ni l'annuaire) à un tiers.
+    // L'appartenance est une participation VIVANTE (active ET non bannie). Les
+    // deux lectures partent ensemble : « absente » et « non membre » coûtent la
+    // même attente et rendent le même refus.
+    const [conversation, membership] = await Promise.all([
+      this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { id: true, type: true }
+      }),
+      this.prisma.participant.findFirst({
+        where: { conversationId, userId: currentUserId, ...PARTICIPATION_VIVANTE },
+        select: { id: true }
+      })
+    ]);
     const scope = conversation ? mentionableScope(conversation.type) : null;
-    if (!scope) throw new Error(ACCESS_DENIED);
-    if (!scopeRequiresMembership(scope)) return scope;
-
-    const membership = await this.prisma.participant.findFirst({
-      where: { conversationId, userId: currentUserId, isActive: true },
-      select: { id: true }
-    });
-    if (!membership) throw new Error(ACCESS_DENIED);
+    if (!scope || !membership) throw new Error(ACCESS_DENIED);
     return scope;
   }
 
   private async rankedMembers(conversationId: string, currentUserId: string): Promise<SuggestedUser[]> {
     const members = await this.prisma.participant.findMany({
-      where: { conversationId, isActive: true, userId: { not: currentUserId } },
+      where: { conversationId, ...PARTICIPATION_VIVANTE, userId: { not: currentUserId } },
       include: { user: { select: USER_SELECT } }
     });
     const activity = await this.loadConversationActivity(conversationId);
@@ -466,7 +478,7 @@ export class MentionSuggestionFinder {
     if (cached) return cached.filter(s => !blocked.has(s.id));
 
     const matches = (user: SuggestedUser): boolean => !blocked.has(user.id) && queryMatcher(query)(user);
-    const suggestions = scopeRequiresMembership(scope)
+    const suggestions = scopeIsClosed(scope)
       ? await this.closedConversation(conversationId, currentUserId, matches)
       : await this.openConversation(conversationId, currentUserId, query, blocked, matches);
 
@@ -485,13 +497,8 @@ export class MentionSuggestionFinder {
     currentUserId: string,
     withReactors: boolean
   ): Promise<SuggestedUser[]> {
-    const [comments, reactions] = await Promise.all([
-      this.prisma.postComment.findMany({
-        where: { postId: threadId, authorId: { not: currentUserId }, ...unsetOrNull('deletedAt') },
-        select: { authorId: true },
-        orderBy: { createdAt: 'asc' },
-        take: THREAD_READ_CAP
-      }),
+    const [commenterIds, reactions] = await Promise.all([
+      this.distinctCommenters(threadId, currentUserId),
       withReactors
         ? this.prisma.postReaction.findMany({
             where: { postId: threadId, userId: { not: currentUserId } },
@@ -503,10 +510,35 @@ export class MentionSuggestionFinder {
     ]);
     const ordered = [
       ...authorIds,
-      ...comments.map(comment => comment.authorId),
+      ...commenterIds,
       ...reactions.map(reaction => reaction.userId)
     ].filter(userId => userId && userId !== currentUserId);
     return this.usersInOrder([...new Set(ordered)]);
+  }
+
+  /**
+   * Les commentateurs d'un fil, dans l'ordre de leur premier commentaire : on lit
+   * par pages jusqu'à THREAD_READ_CAP personnes distinctes, sans dépasser
+   * THREAD_ROW_BUDGET lignes. Un compte qui commente en rafale ne cache donc pas
+   * ceux qui écrivent après lui, et un fil viral reste borné.
+   */
+  private async distinctCommenters(threadId: string, currentUserId: string): Promise<string[]> {
+    const where = { postId: threadId, authorId: { not: currentUserId }, ...unsetOrNull('deletedAt') };
+    const seen = new Set<string>();
+    for (let skip = 0; skip < THREAD_ROW_BUDGET && seen.size < THREAD_READ_CAP; skip += THREAD_READ_CAP) {
+      const page = await this.prisma.postComment.findMany({
+        where,
+        select: { authorId: true },
+        orderBy: { createdAt: 'asc' },
+        skip,
+        take: THREAD_READ_CAP
+      });
+      page.forEach(comment => {
+        if (seen.size < THREAD_READ_CAP) seen.add(comment.authorId);
+      });
+      if (page.length < THREAD_READ_CAP) break;
+    }
+    return [...seen];
   }
 
   /**
@@ -533,6 +565,29 @@ export class MentionSuggestionFinder {
       'author';
 
     const blocked = await getBlockRelatedUserIds(this.prisma, currentUserId);
+    const key = this.postCacheKey(postId, currentUserId, query);
+    const cached = await this.readCache(key);
+    if (cached) return cached.filter(s => !blocked.has(s.id));
+
+    const suggestions = await this.postSuggestions({ target, withReactors, currentUserId, query, blocked });
+    await this.writeCache(key, suggestions);
+    return suggestions;
+  }
+
+  private async postSuggestions({
+    target,
+    withReactors,
+    currentUserId,
+    query,
+    blocked
+  }: {
+    readonly target: PostRedirectRecord;
+    readonly withReactors: boolean;
+    readonly currentUserId: string;
+    readonly query: string;
+    readonly blocked: ReadonlySet<string>;
+  }): Promise<MentionSuggestion[]> {
+    const thread = target.redirectedFrom ?? target;
     const matches = (user: SuggestedUser): boolean => !blocked.has(user.id) && queryMatcher(query)(user);
     const [ties, participants] = await Promise.all([
       this.tiesOf(currentUserId),

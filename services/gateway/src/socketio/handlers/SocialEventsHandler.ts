@@ -13,6 +13,8 @@ import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { amisAcceptes } from '../../services/friendship';
+import { circleAudienceIds } from '../../services/posts/postAudience';
+import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 import type {
   Post,
   PostLikedEventData,
@@ -114,13 +116,33 @@ export class SocialEventsHandler {
   // ==============================================
 
   private async getFriendIds(userId: string): Promise<string[]> {
-    const cached = this.friendsCache.get(userId);
+    return this.cachedAudience(userId, () => amisAcceptes(this.prisma, userId), 'friend IDs');
+  }
+
+  /**
+   * L'audience d'un CERCLE de l'auteur (`ACQUAINTANCES`, `CLOSE`, `BLOOD`, #13931) :
+   * les comptes de niveau effectif au moins égal, lus par la loi des cercles.
+   * `null` pour toute autre visibilité. Le même cache de 30 s que les amis, sous
+   * une clé par cran : un like sur un post `CLOSE` ne relit pas le graphe à chaque
+   * événement.
+   */
+  private async getCircleAudience(authorId: string, visibility: string | null | undefined): Promise<string[] | null> {
+    if (postCircleAudienceFloor(visibility) === null) return null;
+    return this.cachedAudience(
+      `${visibility}:${authorId}`,
+      async () => (await circleAudienceIds(this.prisma, authorId, visibility)) ?? [],
+      'circle audience'
+    );
+  }
+
+  private async cachedAudience(key: string, load: () => Promise<string[]>, what: string): Promise<string[]> {
+    const cached = this.friendsCache.get(key);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.ids;
     }
 
     try {
-      const ids = await amisAcceptes(this.prisma, userId);
+      const ids = await load();
 
       if (this.friendsCache.size >= 500) {
         const now = Date.now();
@@ -132,10 +154,10 @@ export class SocialEventsHandler {
           if (oldest !== undefined) this.friendsCache.delete(oldest);
         }
       }
-      this.friendsCache.set(userId, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
+      this.friendsCache.set(key, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
       return ids;
     } catch (error) {
-      logger.error('social events — error fetching friend IDs', { userId, error });
+      logger.error(`social events — error fetching ${what}`, { key, error });
       return [];
     }
   }
@@ -349,6 +371,11 @@ export class SocialEventsHandler {
     if (visibility === 'COMMUNITY') {
       return getCommunityCoMemberIds(this.prisma, authorId);
     }
+
+    // Un cercle n'est JAMAIS replié sur « les amis » : ni Proches ni Sang ne
+    // doivent recevoir la diffusion d'un Ami qui n'a pas le niveau (#13931).
+    const circleAudience = await this.getCircleAudience(authorId, visibility);
+    if (circleAudience) return circleAudience;
 
     const friendIds = await this.getFriendIds(authorId);
 
@@ -752,9 +779,12 @@ export class SocialEventsHandler {
   // ==============================================
 
   /**
-   * Invalide le cache des amis (par ex. après un nouvel ami accepté)
+   * Invalide les audiences en cache de `userId` après un changement de lien : ses
+   * amis ET chacun de ses cercles (`<visibilité>:<id>`). Un Proche baissé en Ami ne
+   * doit plus recevoir, même 30 s, la diffusion d'un post `CLOSE` (#13931).
    */
   invalidateFriendsCache(userId: string): void {
     this.friendsCache.delete(userId);
+    POST_CIRCLE_VISIBILITIES.forEach((visibility) => this.friendsCache.delete(`${visibility}:${userId}`));
   }
 }

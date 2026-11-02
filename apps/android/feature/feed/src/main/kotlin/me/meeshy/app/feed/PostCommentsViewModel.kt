@@ -25,6 +25,8 @@ import me.meeshy.sdk.model.card.PostCommentCardLabels
 import me.meeshy.sdk.model.card.PostCommentCardPost
 import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.sdk.model.ApiAuthor
+import me.meeshy.sdk.model.ComposerLanguage
+import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MeeshyUser
@@ -72,6 +74,8 @@ data class PostCommentsUiState(
     val translatingLanguages: Set<String> = emptySet(),
     /** Les pièces jointes au commentaire en cours (#12972). */
     val attachments: CommentAttachmentTray = CommentAttachmentTray(),
+    /** La langue que montre la pastille du composeur (#14384) : choisie, sinon détectée, sinon celle du lecteur. */
+    val composerLanguageCode: String = ComposerLanguage.DEFAULT,
 ) {
     /** Envoyer : du texte ou une pièce, rien qui se téléverse encore, aucun envoi en vol. */
     val canSubmit: Boolean get() = (draft.isNotBlank() || attachments.hasMedia) && !attachments.isUploading && !isSubmitting
@@ -374,8 +378,20 @@ class PostCommentsViewModel @Inject constructor(
      * realtime re-projection never drops the half-typed draft.
      */
     fun onDraftChange(value: String) {
-        composerDraft.update { it.copy(text = value) }
+        composerDraft.update { it.copy(text = value, language = it.language.onDraftChanged(value)) }
         mentions.onTextChange(value)
+    }
+
+    /** La pastille DÉCLARE la langue du commentaire (iOS `composerLanguage`, #6587) : elle gagne sur la détection. */
+    fun onComposerLanguagePicked(code: String) {
+        composerDraft.update { it.copy(language = it.language.withManualPick(code)) }
+    }
+
+    /** Un emoji rapide part aussitôt comme commentaire (iOS `sendQuickEmoji`) — jamais par-dessus un brouillon. */
+    fun sendQuickEmoji(emoji: String) {
+        if (composerDraft.value.text.isNotBlank() || attachments.value.hasMedia) return
+        composerDraft.update { it.copy(text = emoji) }
+        submit()
     }
 
     /**
@@ -400,11 +416,12 @@ class PostCommentsViewModel @Inject constructor(
         val tray = attachments.value
         if ((content.isEmpty() && !tray.hasMedia) || tray.isUploading || postId.isBlank() || status.value.isSubmitting) return
         val attachmentIds = tray.attachmentIds.takeIf { it.isNotEmpty() }
+        val declaredLanguage = composerDraft.value.language.manualOverride
         attachments.value = CommentAttachmentTray()
         tray.pieces.forEach { MediaIntake.release(it.item) }
         composer.value?.let { target ->
             clearDraft()
-            sendReply(target.parentId, content, attachmentIds)
+            sendReply(target.parentId, content, attachmentIds, declaredLanguage)
             return
         }
         val tempId = "pending-${pendingSeq++}"
@@ -413,7 +430,7 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
+                val language = declaredLanguage ?: ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
                 when (val result = postRepository.addComment(postId, content, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         thread.update { it.confirmed(tempId, result.data) }
@@ -575,7 +592,7 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
-    private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?) {
+    private fun sendReply(parentId: String, content: String, attachmentIds: List<String>?, declaredLanguage: String?) {
         val tempId = "pending-${pendingSeq++}"
         val row = optimisticRow(tempId, content).copy(parentId = parentId)
         replies.update { it.optimisticReply(parentId, row) }
@@ -584,7 +601,7 @@ class PostCommentsViewModel @Inject constructor(
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
-                val language = ComposeLanguageDetector.authoredLanguage(content, sessionRepository.currentUser.value, languageIdentifier)
+                val language = declaredLanguage ?: ComposeLanguageDetector.authoredLanguage(content, languageIdentifier)
                 when (val result = postRepository.addComment(postId, content, parentId, originalLanguage = language, attachmentIds = attachmentIds)) {
                     is NetworkResult.Success -> {
                         replies.update { it.confirmedReply(parentId, tempId, result.data) }
@@ -842,6 +859,7 @@ class PostCommentsViewModel @Inject constructor(
             loadFailed = st.error != null && !st.isLoading && !thread.hasLoaded && thread.comments.isEmpty(),
             notice = st.notice,
             translatingLanguages = translatingLanguages,
+            composerLanguageCode = draft.language.display(inputs.user?.let(LanguageResolver::resolveUserLanguage) ?: ComposerLanguage.DEFAULT),
         )
     }
 
@@ -879,6 +897,7 @@ private data class Status(
 private data class ComposerDraft(
     val text: String = "",
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
+    val language: ComposerLanguageState = ComposerLanguageState(),
 )
 
 /** The projection inputs accumulated before the final [translatingLanguages] fold, threaded

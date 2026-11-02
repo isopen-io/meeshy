@@ -56,7 +56,7 @@ final class ShareSheetViewModel: ObservableObject {
     /// message à publier.
     private let composableAttachment: (Message) -> MessageAttachment?
     private var searchToken = 0
-    /// La frappe du lien suivi d'une story, une seule par feuille (#12644).
+    /// La frappe du lien suivi de la carte, une seule par feuille (#12644, #14310).
     private var cardLinkMint: Task<URL?, Never>?
 
     static let recentsCount = 8
@@ -117,6 +117,12 @@ final class ShareSheetViewModel: ObservableObject {
     /// La story que les pastilles de publication REPUBLIENT (#12644).
     var republishableStory: ShareCard? {
         guard case .card(let card) = subject, card.kind == .story else { return nil }
+        return card
+    }
+
+    /// La carte dont la feuille frappe le lien suivi de l'utilisateur (#14310).
+    var linkableCard: ShareCard? {
+        guard case .card(let card) = subject, card.mintsTrackedLink else { return nil }
         return card
     }
 
@@ -191,7 +197,15 @@ final class ShareSheetViewModel: ObservableObject {
 
     // MARK: - Chargement, cache d'abord
 
+    /// Le lien suivi se frappe EN MÊME TEMPS que les destinataires se chargent
+    /// (#14310) : ni l'un ni l'autre n'attend l'autre.
     func load() async {
+        let link = Task { () -> URL? in linkableCard == nil ? nil : await ensureCardLink() }
+        await loadRecipients()
+        _ = await link.value
+    }
+
+    private func loadRecipients() async {
         let userId = currentUserId()
         async let cachedConversations = directory.cachedConversations()
         async let cachedPeople = directory.cachedPeople(currentUserId: userId)
@@ -212,25 +226,26 @@ final class ShareSheetViewModel: ObservableObject {
         }
     }
 
-    /// **Le lien suivi d'une story n'est frappé qu'au moment où elle PART**
-    /// (#12644) — un envoi, une copie, un partage hors de Meeshy — jamais à
-    /// l'ouverture de la feuille : un lien frappé pour rien compterait un
-    /// partage qui n'a pas eu lieu. Une seule frappe réussie par feuille, que
-    /// les gestes suivants réutilisent ; un échec se retente au geste suivant.
-    /// Une story qui n'est pas publique garde son adresse directe, qui exige
-    /// un compte et l'audience de la story.
+    /// **Le lien suivi de l'utilisateur se crée dès l'OUVERTURE de la feuille**
+    /// (décision porteur, #14310, qui remplace « au moment où elle
+    /// PART » de #12644) : « Envoyer » crée le lien de l'utilisateur pour ce
+    /// contenu s'il n'existe pas encore — la passerelle le retrouve s'il existe
+    /// (un lien par contenu et par partageur, compteur compris). Une seule
+    /// frappe réussie par feuille, que les gestes suivants réutilisent ; un
+    /// échec se retente au geste suivant. Une story non publique garde son
+    /// adresse directe (`ShareCard.mintsTrackedLink`).
     func ensureCardLink() async -> URL? {
-        guard let story = republishableStory, story.isPublicStory else {
+        guard let linkable = linkableCard else {
             guard case .card(let card) = subject else { return nil }
             return card.url
         }
-        let mint = cardLinkMint ?? mintLink(for: story)
+        let mint = cardLinkMint ?? mintLink(for: linkable)
         cardLinkMint = mint
         guard let link = await mint.value else {
             cardLinkMint = nil
-            return republishableStory?.url
+            return linkableCard?.url
         }
-        if var card = republishableStory, card.url != link {
+        if var card = linkableCard, card.url != link {
             card.url = link
             subject = .card(card)
         }

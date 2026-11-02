@@ -14,6 +14,7 @@ import me.meeshy.sdk.net.NetworkResult
 @Immutable
 data class CommentPendingPiece(val id: String, val item: MediaUploadItem, val uploaded: UploadedMedia? = null) {
     val isVideo: Boolean get() = item.mimeType.startsWith("video")
+    val isAudio: Boolean get() = item.mimeType.startsWith("audio")
 }
 
 /**

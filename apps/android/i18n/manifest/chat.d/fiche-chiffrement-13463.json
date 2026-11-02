@@ -144,30 +144,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversation.encryption.detail.deactivate",
-          "androidName": "encryption_detail_deactivate",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.deactivateAtRestConfirmTitle",
-          "androidName": "encryption_detail_deactivate_at_rest_confirm_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.deactivateAtRestConfirmMessage",
-          "androidName": "encryption_detail_deactivate_at_rest_confirm_message",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.deactivateAtRestFooter",
-          "androidName": "encryption_detail_deactivate_at_rest_footer",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "conversation.encryption.detail.regimeChanged",
           "androidName": "encryption_detail_regime_changed",
           "status": "adopted"
@@ -472,6 +448,10 @@
         },
         {
           "androidName": "encryption_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encryption_detail_switch_mode",
           "status": "android-only"
         }
       ]

@@ -15,6 +15,8 @@ import {
   StoryEffectsSchema,
   CreateCommentSchema,
   TranslatePostSchema,
+  RepostSchema,
+  PublishAttachmentSchema,
 } from '../../../../routes/posts/types';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 
@@ -591,5 +593,30 @@ describe('StoryEffectsSchema — plafond de volume', () => {
       audioPlayerObjects: [{ id: 'a1', postMediaId: 'm1', volume: -0.1 }],
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('les audiences de cercle — un seul schéma d\'audience pour les quatre entrées (#13931)', () => {
+  const CIRCLES = ['ACQUAINTANCES', 'CLOSE', 'BLOOD'] as const;
+  const HISTORIC = ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE'] as const;
+  const SOURCE_ID = '507f1f77bcf86cd799439011';
+
+  const entrances: ReadonlyArray<readonly [string, (visibility: string) => { success: boolean }]> = [
+    ['CreatePostSchema', (visibility) => CreatePostSchema.safeParse({ type: 'POST', content: 'Bonjour', visibility })],
+    ['UpdatePostSchema', (visibility) => UpdatePostSchema.safeParse({ visibility })],
+    ['RepostSchema', (visibility) => RepostSchema.safeParse({ visibility })],
+    ['PublishAttachmentSchema', (visibility) => PublishAttachmentSchema.safeParse({ attachmentId: SOURCE_ID, visibility })],
+  ];
+
+  it.each(entrances)('%s accepte les trois audiences de cercle et garde les valeurs historiques', (_name, parse) => {
+    [...CIRCLES, ...HISTORIC].forEach((visibility) => expect(parse(visibility).success).toBe(true));
+  });
+
+  it.each(entrances)('%s refuse une audience inconnue, y compris Atome (hors MVP) et la casse approchante', (_name, parse) => {
+    ['ATOM', 'close', 'Blood', 'ACQUAINTANCE', ''].forEach((visibility) => expect(parse(visibility).success).toBe(false));
+  });
+
+  it('une story STATUS (humeur) accepte aussi une audience de cercle', () => {
+    expect(CreatePostSchema.safeParse({ type: 'STATUS', moodEmoji: '🙂', visibility: 'CLOSE' }).success).toBe(true);
   });
 });

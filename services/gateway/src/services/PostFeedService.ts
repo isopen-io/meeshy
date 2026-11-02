@@ -135,7 +135,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     // Phase 1 — Fetch candidates
     const where: any = {
@@ -287,7 +287,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     // Archive de l'AUTEUR : mes propres stories restent renvoyées après leur
     // expiration, pour que « Mes stories » puisse les lister (vignette voilée).
@@ -534,7 +534,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
 
     const whereClause: any = {
       deletedAt: NOT_DELETED,
@@ -650,7 +650,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const contactIds = new Set([...friendIds, ...dmContactIds]);
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, [...contactIds], communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, [...contactIds], communityCoMemberIds, this.cache);
 
     const andClauses: any[] = [
       visibilityFilter,
@@ -868,7 +868,7 @@ export class PostFeedService {
         getCommunityCoMemberIds(this.prisma, viewerUserId, this.cache),
       ]);
       const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-      andClauses.push(await buildFeedVisibilityFilter(this.prisma, viewerUserId, allContactIds, communityCoMemberIds));
+      andClauses.push(await buildFeedVisibilityFilter(this.prisma, viewerUserId, allContactIds, communityCoMemberIds, this.cache));
     }
 
     if (cursorData) {

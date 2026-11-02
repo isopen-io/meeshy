@@ -77,27 +77,39 @@ public nonisolated enum MentionSuggestionRule {
 
     /// Les correspondances LOCALES d'une requête — contacts puis participants,
     /// filtrés, sans doublon, sans soi. Leur nombre décide de l'étape.
+    ///
+    /// `reach` (une conversation, #14071) : un local qui n'y aurait aucun effet
+    /// n'est pas une correspondance — ni affiché, ni compté pour l'étape.
     public static func localMatches<Person>(
         contacts: [Person],
         participants: [Person],
         query: String,
         excludingUserId: String?,
+        reach: MentionReach? = nil,
         identity: (Person) -> MentionIdentity
     ) -> [Person] {
-        merged([(people: contacts, filtered: true), (people: participants, filtered: true)], query: query,
-               excludingUserId: excludingUserId, identity: identity)
+        let found = merged([(people: contacts, filtered: true), (people: participants, filtered: true)], query: query,
+                           excludingUserId: excludingUserId, identity: identity)
+        guard let reach else { return found }
+        return found.filter { reach.admits(identity($0).id, selfId: excludingUserId) }
     }
 
     public static func localMatches(
         contacts: [MentionCandidate],
         participants: [MentionCandidate],
         query: String,
-        excludingUserId: String?
+        excludingUserId: String?,
+        reach: MentionReach? = nil
     ) -> [MentionCandidate] {
         localMatches(contacts: contacts, participants: participants, query: query,
-                     excludingUserId: excludingUserId, identity: MentionIdentity.init(candidate:))
+                     excludingUserId: excludingUserId, reach: reach, identity: MentionIdentity.init(candidate:))
     }
 
+    /// Avec une `reach` (#14071), une suggestion SANS EFFET n'est pas affichée :
+    /// les locaux hors portée sont retirés ; la liste du serveur, déjà bornée à la
+    /// même portée et qui connaît tous les membres, reste — sauf sans portée du
+    /// tout (type inconnu, non-membre) : alors rien. Miroir de
+    /// `mergeMentionSuggestions({ reach })`.
     public static func ordered<Person>(
         contacts: [Person],
         participants: [Person],
@@ -105,10 +117,12 @@ public nonisolated enum MentionSuggestionRule {
         othersQuery: String? = nil,
         query: String,
         excludingUserId: String?,
+        reach: MentionReach? = nil,
         identity: (Person) -> MentionIdentity
     ) -> [Person] {
+        if let reach, reach.scope == nil { return [] }
         let locals = localMatches(contacts: contacts, participants: participants, query: query,
-                                  excludingUserId: excludingUserId, identity: identity)
+                                  excludingUserId: excludingUserId, reach: reach, identity: identity)
         guard MentionLookupRule.stage(for: query, localMatchCount: locals.count) == .remote else {
             return locals
         }
@@ -123,11 +137,12 @@ public nonisolated enum MentionSuggestionRule {
         others: [MentionCandidate],
         othersQuery: String? = nil,
         query: String,
-        excludingUserId: String?
+        excludingUserId: String?,
+        reach: MentionReach? = nil
     ) -> [MentionCandidate] {
         ordered(contacts: contacts, participants: participants, others: others,
                 othersQuery: othersQuery, query: query, excludingUserId: excludingUserId,
-                identity: MentionIdentity.init(candidate:))
+                reach: reach, identity: MentionIdentity.init(candidate:))
     }
 
     private static func normalized(_ query: String) -> String {

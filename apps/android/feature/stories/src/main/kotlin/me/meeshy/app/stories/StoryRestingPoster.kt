@@ -26,7 +26,7 @@ internal fun restingPosterKind(posterUrl: String?, thumbHash: String?): RestingP
 /**
  * L'affiche d'une vidéo dans une scène au repos : aucun lecteur n'existe, mais le cadre de la vidéo (fond ou pièce posée)
  * garde son image — la vignette, derrière son ThumbHash qui s'affiche tant qu'elle charge. Sans l'une ni l'autre, rien
- * n'est peint ici.
+ * n'est peint ici. Une vidéo AJUSTÉE ([fits]) garde son affiche entière, comme elle joue.
  */
 @Composable
 internal fun StoryRestingPoster(
@@ -34,13 +34,15 @@ internal fun StoryRestingPoster(
     thumbHash: String?,
     lookRecipe: SceneLookRecipe,
     modifier: Modifier = Modifier,
+    fits: Boolean = false,
 ) {
     val blur = rememberThumbHashPainter(thumbHash)
+    val scale = if (fits) ContentScale.Fit else ContentScale.Crop
     when (restingPosterKind(posterUrl, thumbHash)) {
         RestingPosterKind.POSTER -> AsyncImage(
             model = posterUrl,
             contentDescription = null,
-            contentScale = ContentScale.Crop,
+            contentScale = scale,
             colorFilter = SceneLookChain.colorFilter(lookRecipe),
             placeholder = blur,
             error = blur,
@@ -50,7 +52,7 @@ internal fun StoryRestingPoster(
             Image(
                 painter = it,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = scale,
                 colorFilter = SceneLookChain.colorFilter(lookRecipe),
                 modifier = modifier.testTag(STORY_RESTING_THUMBHASH_TAG),
             )

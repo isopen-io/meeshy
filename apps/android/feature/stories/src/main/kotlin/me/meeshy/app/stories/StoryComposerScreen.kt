@@ -7,7 +7,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -104,7 +106,9 @@ fun StoryComposerScreen(
 
     var sheet by rememberSaveable { mutableStateOf<StoryComposerSheet?>(null) }
     // La scène joue en continu ses vidéos et ses sons, fond compris (#13863, loi 6) ; l'étagère des sons, qui fait écouter les siens, la tait.
-    val live = rememberComposerLive(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND)
+    // La frise ouverte, chaque lecteur suit sa tête de lecture (#13481).
+    val transport = remember { FriseTransport() }
+    val live = rememberComposerLive(state, viewModel, shelfOpen = sheet == StoryComposerSheet.SOUND, transport = transport)
 
     val close = rememberConfirmedComposerClose(
         hasContent = state.hasDraftContent,
@@ -131,7 +135,8 @@ fun StoryComposerScreen(
         }.takeIf { !capture.armed },
         onCloseSheet = if (sheet?.let(state::serves) == true && !capture.armed) ({ sheet = null }) else null,
     )
-    CompositionLocalProvider(LocalComposerLive provides live) {
+    CompositionLocalProvider(LocalComposerLive provides live, LocalFriseTransport provides transport) {
+    Box(Modifier.closesGestureOnLift(viewModel::onGestureLifted)) {
     StoryComposerSceneFirst(
         state = state,
         viewModel = viewModel,
@@ -154,6 +159,7 @@ fun StoryComposerScreen(
         },
         capture = capture,
     )
+    }
     }
 }
 

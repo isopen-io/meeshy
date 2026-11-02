@@ -7,6 +7,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -17,6 +18,7 @@ import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -44,7 +46,10 @@ class NewConversationContactsTest {
         FriendRequest(id = "r$i", senderId = "me", receiverId = f.id, status = "accepted", sender = friend("me"), receiver = f)
     }
 
-    private fun session() = mockk<SessionRepository>(relaxed = true) { every { currentUserId } returns "me" }
+    private fun session() = mockk<SessionRepository>(relaxed = true) {
+        every { currentUserId } returns "me"
+        every { currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+    }
 
     private fun viewModel(cache: FriendListRepository, network: FriendRepository) =
         NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session(), cache, network, mockk(relaxed = true), mockk(relaxed = true))

@@ -62,18 +62,21 @@ object MentionLookupLaw {
 
     /**
      * Ce que le cache local sert, instantanément, pour [query] : les [contacts] (amis acceptés)
-     * d'abord, puis les personnes du [context] (membres, intervenants). Un contexte
-     * [membersOnly] (conversation directe ou groupe) ne propose que ses membres, les contacts
-     * parmi eux en tête : la passerelle refuserait à l'envoi la mention de quelqu'un d'autre.
+     * d'abord, puis les personnes du [context] (membres, intervenants). Une portée fermée
+     * ([MentionableScope.INTERLOCUTOR], [MentionableScope.MEMBERS]) ne propose que les personnes
+     * du contexte, les contacts parmi eux en tête : la passerelle ignorerait à l'envoi la mention
+     * de quelqu'un d'autre, et une suggestion sans effet n'est pas affichée (#14071). Sans portée
+     * (`null` : type inconnu), personne.
      */
     fun localMatches(
         contacts: List<MentionCandidate>,
         context: List<MentionCandidate>,
         query: String,
         selfId: String?,
-        membersOnly: Boolean,
+        scope: MentionableScope?,
     ): List<MentionCandidate> {
-        val pool = if (membersOnly) {
+        if (scope == null) return emptyList()
+        val pool = if (scope != MentionableScope.DIRECTORY) {
             val contactIds = contacts.map { it.id }.toSet()
             val (known, others) = context.partition { it.id in contactIds }
             known + others
@@ -82,6 +85,19 @@ object MentionLookupLaw {
         }
         return mergeCandidates(filter(pool, query), emptyList(), selfId)
     }
+
+    /**
+     * Les personnes du contexte que la liste peut proposer (#14183) : le roster SERVI (participants
+     * actifs), jamais les auteurs du fil — partis peut-être, ils seraient proposés puis ignorés.
+     * Sauf pour un INVITÉ de lien : la passerelle ne lui sert que sa propre ligne (#10205), et les
+     * auteurs du fil qu'elle lui a servis sont alors ses membres connus — miroir de web et iOS.
+     */
+    fun knownRoster(
+        roster: List<MentionCandidate>,
+        threadAuthors: List<MentionCandidate>,
+        isGuest: Boolean,
+    ): List<MentionCandidate> =
+        if (isGuest) merge(roster, threadAuthors, selfId = null) { it.id } else roster
 
     private fun MentionCandidate.handleKey(): String = username.trim().lowercase()
 }

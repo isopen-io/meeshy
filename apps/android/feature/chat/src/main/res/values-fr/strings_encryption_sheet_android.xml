@@ -8,4 +8,5 @@
     <string name="encryption_read_failed">L’état du chiffrement n’a pas pu être lu. Réessayez.</string>
     <string name="encryption_retry">Réessayer</string>
     <string name="security_verify_description">Les messages avec %1$s sont chiffrés de bout en bout.</string>
+    <string name="encryption_detail_switch_mode">Changer de mode</string>
 </resources>

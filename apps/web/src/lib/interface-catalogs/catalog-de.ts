@@ -778,6 +778,7 @@ const de = {
   'story.studio.failure.tooLarge': 'Datei zu groß.',
   'story.studio.failure.fileRefused': 'Datei abgelehnt: Ihr Typ entspricht nicht ihrem Inhalt.',
   'story.studio.failure.rateLimited': 'Zu viele Beiträge auf einmal — versuche es gleich noch einmal.',
+  'story.studio.failure.onlyUnlinked': 'Zu viele der ausgewählten Personen haben heute noch keine Verbindung zu dir. Entferne sie aus der Liste oder versuche es morgen erneut.',
   'story.studio.failure.refused': 'Veröffentlichung abgelehnt.',
   'story.studio.failure.unavailable': 'Der Server ist nicht verfügbar.',
   'story.studio.text.add': 'Text hinzufügen',

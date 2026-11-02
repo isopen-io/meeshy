@@ -45,13 +45,13 @@ class PostScenesSoundIndicatorComposeTest {
 
     private fun showFeed(scenes: FeedPostScenes, live: Boolean) {
         compose.setContent {
-            CompositionLocalProvider(LocalReelSceneRenderer provides card) { PostScenesView(scenes = scenes, live = live) }
+            CompositionLocalProvider(LocalPostSceneCardRenderer provides card) { PostScenesView(scenes = scenes, live = live) }
         }
     }
 
     private fun showDetail(scenes: FeedPostScenes) {
         compose.setContent {
-            CompositionLocalProvider(LocalReelSceneRenderer provides card) { PostDetailScenes(scenes) }
+            CompositionLocalProvider(LocalPostSceneCardRenderer provides card) { PostDetailScenes(scenes) }
         }
     }
 

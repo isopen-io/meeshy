@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_unsent_only_unlinked">Too many of the people you chose have no link with you yet today. Remove them from the list, or try again tomorrow.</string>
+    <string name="feed_unsent_only_unlinked_counted">%1$d people you chose have no link with you yet, and the daily limit is %2$d. Remove them from the list, or try again tomorrow.</string>
+</resources>

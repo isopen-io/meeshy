@@ -42,7 +42,6 @@ import coil.size.Size
 import kotlin.math.min
 import kotlin.math.roundToInt
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaLook
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookRecipe
@@ -92,8 +91,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                 PlacedMediaFrame(
                     placed = placed,
                     model = ComposerPicture.of(uploaded, mediaBaseUrl, atMs = placed.posterAtMs(uploaded)),
-                    aspectRatio = ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height)
-                        ?.let { measured -> StoryMediaCrop.effectiveRatio(measured, placed.crop.takeUnless { isVideo }) },
+                    aspectRatio = placedAspectRatio(placed),
                     isVideo = isVideo,
                     mediaLook = look,
                 )
@@ -126,8 +124,8 @@ internal class PlacedMediaGestures(
  * Un média de premier plan sur la scène : posé à sa position normalisée (centré sur ce point), glissé, pincé et
  * pivoté d'un seul geste, comme un sticker. Son cadre de base est celui que peignent les lecteurs iOS et Android
  * ([ForegroundMediaFrame], projeté sur la largeur du canevas), rempli comme eux. L'image est décodée hors du fil
- * principal par Coil, à la taille de ce cadre — jamais pleine résolution. Touché, il est sélectionné et porte le cadre de
- * la sélection ([selected], #13836).
+ * principal par Coil, à la taille de ce cadre — jamais pleine résolution. Touché, il est sélectionné ([selected], #13836),
+ * sans cadre dessiné (#14207).
  */
 @Composable
 internal fun PlacedMediaLayer(
@@ -185,7 +183,7 @@ internal fun PlacedMediaLayer(
                 rotationZ = placed.rotationDeg
             }
             .testTag("placed-media")
-            .sceneSelectionFrame(selected, placed.scale)
+            .sceneSelection(selected)
             .pointerInput(frame.key) { detectTapGestures(onTap = { currentTap(frame.key) }) }
             .semantics {
                 contentDescription = label

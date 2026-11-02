@@ -943,38 +943,7 @@ struct SettingsView: View {
         color: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: icon)
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
-                    /* L'ICÔNE EST DÉCORATIVE — relevé au passage en revue
-                       accessibilité du 2026-09-13 : sans ce masque, VoiceOver
-                       annonce le NOM DU SYMBOLE avant le titre, « waveform and
-                       mic, PROFIL VOCAL », « externaldrive fill, DONNÉES ».
-                       Une `Image(systemName:)` sans libellé prend le nom de
-                       l'asset comme libellé par défaut ; le titre à côté dit
-                       déjà tout ce que l'icône illustre. */
-                    .accessibilityHidden(true)
-                Text(title.uppercased())
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: color))
-                    .tracking(1.2)
-            }
-            .padding(.leading, MeeshySpacing.xs)
-
-            VStack(spacing: 0) {
-                content()
-            }
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(theme.surfaceGradient(tint: color))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(theme.border(tint: color), lineWidth: 1)
-                    )
-            )
-        }
+        SettingsSectionCard(title: title, icon: icon, color: color, content: content())
     }
 
     private func settingsRow<Trailing: View>(
@@ -983,29 +952,7 @@ struct SettingsView: View {
         color: String,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                .foregroundColor(Color(hex: color))
-                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
-                )
-                .accessibilityHidden(true)
-
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
-
-            Spacer()
-
-            trailing()
-        }
-        .padding(.horizontal, MeeshySpacing.md + 2)
-        .padding(.vertical, MeeshySpacing.sm + 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+        SettingsRowLabel(icon: icon, title: title, color: color, trailing: trailing())
     }
 }
 

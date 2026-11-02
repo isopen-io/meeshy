@@ -65,16 +65,18 @@ public class SceneExportCoordinator(
         var job: SceneExportJob? = null
         try {
             job = prepare(output, workDirectory)
+            val target = job.destination ?: destination
+            mutableState.update { SceneExportReducer.retarget(it, target) }
             val still = job.still
             kept = if (still != null) {
-                deliverStill(destination, still, image)
+                deliverStill(target, still, image)
             } else {
                 runner.run(job) { fraction -> mutableState.update { SceneExportReducer.progress(it, fraction) } }
                 mutableState.update(SceneExportReducer::verifying)
                 val checking = nowMillis()
                 proof.verify(job)
                 SceneExportLog.info("vérification du rendu : ${nowMillis() - checking} ms")
-                deliver(destination, output)
+                deliver(target, output)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled

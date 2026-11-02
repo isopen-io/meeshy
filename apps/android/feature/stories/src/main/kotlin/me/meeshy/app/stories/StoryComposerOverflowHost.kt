@@ -64,8 +64,8 @@ internal fun rememberStoryOverflowDialogs(state: StoryComposerUiState, viewModel
 private fun StoryComposerPreviewDialog(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDismiss: () -> Unit) {
     val slides = remember(state.deck, state.attachments, state.draft) {
         val projector = StorySlideProjector(viewModel.mediaBaseUrl)
-        StoryComposerPreview.items(state, viewModel.resolvePublishLanguage())
-            .map { projector.project(it, viewModel.authorAccentHex, NoContentPreferences) }
+        StoryComposerPreview.items(state, viewModel.resolvePublishLanguage(), viewModel.authorFloor)
+            .map { projector.project(it, viewModel.authorAccentHex.orEmpty(), NoContentPreferences) }
     }
     if (slides.isEmpty()) return
     var page by remember { mutableIntStateOf(0) }

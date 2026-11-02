@@ -166,7 +166,7 @@ extension CallManager {
         lastKnownStats = nil
         CallQualityStatsFeed.shared.reset()
         webRTCService.close()
-        deactivateAudioSession()
+        audio.deactivateAudioSession()
         callState = .ended(reason: reason)
         connectionQuality = .new
         liveVideoQualityLevel = nil
@@ -184,8 +184,7 @@ extension CallManager {
 
     /// Every task, timer and observer scoped to the call, in teardown order.
     fileprivate func cancelCallScopedWork() {
-        durationTask?.cancel()
-        durationTask = nil
+        liveClock.stopDurationClock()
         reliabilityMonitor.stopReliabilityMonitor()
         localMediaTask?.cancel()
         localMediaTask = nil
@@ -194,16 +193,13 @@ extension CallManager {
         // L'appel se termine avant la connexion : échouer l'answer action encore
         // pendante pour que CallKit démonte proprement (no-op si déjà settled).
         settlePendingAnswerAction(fulfilled: false, reason: "teardown before connect")
-        outgoingRingTimeoutTask?.cancel()
-        outgoingRingTimeoutTask = nil
-        incomingRingTimeoutTask?.cancel()
-        incomingRingTimeoutTask = nil
+        ringTimeouts.cancelAll()
         // Le setup sortant (force-leave, ACK, média) ne doit pas réarmer un
         // appel déjà clos.
         setupCallTask?.cancel()
         setupCallTask = nil
         turnCredentials.cancelAll()
-        stopHeartbeat()
+        liveClock.stopHeartbeat()
         appStateObserver.stopScreenCaptureMonitoring()
         appStateObserver.stopBackgroundMonitoring()
         transcriptionService.resetForCallEnd(
@@ -233,8 +229,7 @@ extension CallManager {
         signalOfferAnswerTask = nil
         cameraSwitchTask?.cancel()
         cameraSwitchTask = nil
-        audioActivationFallbackTask?.cancel()
-        audioActivationFallbackTask = nil
+        audio.cancelStuckMutedFallback()
         CallManager.callKitDidActivateFired = false
         incomingRing.cancelFreshnessCheck()
         analyticsSnapshotTask?.cancel()

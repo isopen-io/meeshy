@@ -210,7 +210,10 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     public func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
                                        configurationForMenuAtLocation location: CGPoint)
     -> UIContextMenuConfiguration? {
-        guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
+        // **L'hôte qui peint son menu le reçoit de l'appui long, jamais d'ici**
+        // (#14206) : le système demande cette configuration dès que le doigt se
+        // pose, quand il peut encore glisser.
+        guard mode == .edit, onItemMenuRequested == nil, let id = hitTestItem(at: location) else { return nil }
         guard onBackgroundMediaLongPressed == nil || hitTestForegroundItem(at: location) != nil else { return nil }
         // Le menu n'est jamais la fin d'un glissé (#13839, L5).
         guard StoryCanvasContextMenuGate.admits(isManipulating: isGestureActive,
@@ -228,19 +231,22 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // sur autre chose.
         guard let kind = itemKind(forId: id) else { return nil }
 
-        // **L'hôte qui peint son propre menu le reçoit ici** (#8717) — l'appui
-        // long est reconnu, le système ne présente rien.
-        if let onItemMenuRequested {
-            onItemMenuRequested(id, kind, Self.normalized(location, in: bounds.size))
-            return nil
-        }
-
         return UIContextMenuConfiguration(
             identifier: id as NSString,
             previewProvider: nil
         ) { [weak self] _ in
             self?.contextMenu(for: id, kind: kind)
         }
+    }
+
+    /// **Le menu peint par l'hôte** (#8717), remis au `.began` d'un appui long
+    /// immobile (#14206) — jamais pendant ni juste après un glissé (L5).
+    func requestItemMenu(id: String, at location: CGPoint) {
+        guard let onItemMenuRequested, let kind = itemKind(forId: id),
+              StoryCanvasContextMenuGate.admits(isManipulating: isGestureActive,
+                                                lastManipulationEnd: lastManipulationEndedAt,
+                                                now: Date()) else { return }
+        onItemMenuRequested(id, kind, Self.normalized(location, in: bounds.size))
     }
 
     /// Le point du doigt rapporté à la carte (0…1) — indépendant de l'échelle

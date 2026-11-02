@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Une entrée du menu ⋯ de la scène** (#13839).
 ///
@@ -165,7 +166,7 @@ nonisolated enum ComposerMoreMenuCopy {
     }
 
     static func seconds(_ value: TimeInterval) -> String {
-        Duration.seconds(value).formatted(.units(allowed: [.seconds], width: .abbreviated))
+        MediaFormat.duration(value, style: .approximateAbbreviated)
     }
 
     static var clearAllConfirm: String {

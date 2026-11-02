@@ -27,6 +27,9 @@ struct ReelActionRail: View {
     @ObservedObject var viewModel: ReelsViewModel
     let reel: FeedPost
     var onComment: () -> Void
+    /// « Envoyer » (#14310) : la feuille de partage MEESHY, avec le lien de
+    /// l'utilisateur. « Partager » (hors de Meeshy) vit dans le menu « … ».
+    var onSend: () -> Void
 
     @State private var showsReactionPalette = false
     @State private var stripRoom: CGFloat = 0
@@ -73,21 +76,7 @@ struct ReelActionRail: View {
                 action: { viewModel.toggleBookmark(reel) }
             )
 
-            // Icône principale : Republier (Partager reste disponible dans le
-            // menu « … », parité avec `ReelFeedCard.actionsRow`). Repost
-            // append-only (pas d'un-repost) — `participated` reste vrai une
-            // fois posé, comme le feed.
-            let isReposted = viewModel.isReposted(reel.id)
-            ReelRailAction(
-                systemImage: FullscreenChromeSymbol.repost,
-                outline: FullscreenChromeSymbol.repost,
-                label: String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main),
-                count: viewModel.repostCount(reel),
-                isActive: isReposted,
-                activeTint: MeeshyColors.success,
-                accentHex: reel.authorColor,
-                action: { viewModel.repost(reel) }
-            )
+            spreadActions
         }
         .background(
             GeometryReader { proxy in
@@ -118,6 +107,33 @@ struct ReelActionRail: View {
                 .transition(.scale(scale: 0.85, anchor: .trailing).combined(with: .opacity))
             }
         }
+    }
+
+    /// Ce qui fait CIRCULER le réel : le republier, l'envoyer dans Meeshy.
+    @ViewBuilder
+    private var spreadActions: some View {
+        // Icône principale : Republier (Partager reste disponible dans le
+        // menu « … », parité avec `ReelFeedCard.actionsRow`). Repost
+        // append-only (pas d'un-repost) — `participated` reste vrai une
+        // fois posé, comme le feed.
+        let isReposted = viewModel.isReposted(reel.id)
+        ReelRailAction(
+            systemImage: FullscreenChromeSymbol.repost,
+            outline: FullscreenChromeSymbol.repost,
+            label: String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main),
+            count: viewModel.repostCount(reel),
+            isActive: isReposted,
+            activeTint: MeeshyColors.success,
+            accentHex: reel.authorColor,
+            action: { viewModel.repost(reel) }
+        )
+
+        ReelRailAction(
+            systemImage: "paperplane.fill",
+            label: String(localized: "reels.action.send", defaultValue: "Envoyer", bundle: .main),
+            count: reel.shareCount,
+            action: onSend
+        )
     }
 
     private func closeReactionPalette() {
@@ -253,9 +269,7 @@ private struct ReelRailAction: View {
     var accentHex: String = ""
     let action: () -> Void
 
-    private var caption: String? {
-        count > 0 ? CompactCountLabel.text(count) : nil
-    }
+    private var caption: String { ReelRailCaption.text(count: count, label: label) }
 
     var body: some View {
         FullscreenActionButton(
@@ -281,18 +295,24 @@ private struct ReelRailAction: View {
                 Image(systemName: outline)
                     .font(.system(size: FullscreenChromeMetrics.floatingGlyphSize, weight: .semibold))
                     .foregroundStyle(Color(hex: accentHex))
-                if let caption {
-                    Text(caption)
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .hidden()
-                }
+                Text(caption)
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .hidden()
             }
             .frame(width: FullscreenChromeMetrics.floatingCellWidth)
             .frame(minHeight: FullscreenChromeMetrics.tapTarget)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
+    }
+}
+
+/// Sous chaque bouton du rail des réels : le compte quand il y en a un, sinon
+/// le nom de l'action — comme le rail de la story (#14323).
+enum ReelRailCaption {
+    static func text(count: Int, label: String) -> String {
+        count > 0 ? CompactCountLabel.text(count) : label
     }
 }

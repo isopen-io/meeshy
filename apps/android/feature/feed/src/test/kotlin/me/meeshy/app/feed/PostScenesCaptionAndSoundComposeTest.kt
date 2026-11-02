@@ -42,7 +42,7 @@ class PostScenesCaptionAndSoundComposeTest {
 
     private fun showCard(scenes: FeedPostScenes) {
         compose.setContent {
-            CompositionLocalProvider(LocalReelSceneRenderer provides card) {
+            CompositionLocalProvider(LocalPostSceneCardRenderer provides card) {
                 FeedPostCardMediaSlot(post = feedPostPresentation(id = "p1").copy(scenes = scenes), onImageTap = {}, onOpenPost = {})
             }
         }
@@ -50,7 +50,7 @@ class PostScenesCaptionAndSoundComposeTest {
 
     private fun showDetail(scenes: FeedPostScenes) {
         compose.setContent {
-            CompositionLocalProvider(LocalReelSceneRenderer provides card) { PostDetailScenes(scenes) }
+            CompositionLocalProvider(LocalPostSceneCardRenderer provides card) { PostDetailScenes(scenes) }
         }
     }
 

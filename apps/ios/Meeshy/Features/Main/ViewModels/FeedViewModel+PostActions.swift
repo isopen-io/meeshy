@@ -230,7 +230,7 @@ extension FeedViewModel {
                 posts[rollbackIdx] = snapshot
                 debouncedCacheSave()
             }
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Erreur lors de la modification", bundle: .main))
+            DailyGestureLimitNotice.showError(error, otherwise: String(localized: "feed.post.editError", defaultValue: "Erreur lors de la modification", bundle: .main))
         }
     }
 

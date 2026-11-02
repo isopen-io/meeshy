@@ -45,7 +45,7 @@ class ContextualMentionSearchTest {
     fun `a conversation context speaks contextType conversation`() = runTest {
         coEvery { api.suggestions(any(), any(), any()) } returns ApiResponse(success = true, data = emptyList())
 
-        search.suggest("bob", MentionContext.conversation("c1", "group"))
+        search.suggest("bob", MentionContext.conversation("c1", "group", isMember = true))
 
         coVerify(exactly = 1) { api.suggestions("c1", "conversation", "bob") }
     }
@@ -66,7 +66,7 @@ class ContextualMentionSearchTest {
         coEvery { api.suggestions(any(), any(), any()) } throws IOException("offline")
         coEvery { users.searchUsers(any(), any(), any()) } returns NetworkResult.Failure(ApiError("unused"))
 
-        val found = search.suggest("bob", MentionContext.conversation("c1", "group"))
+        val found = search.suggest("bob", MentionContext.conversation("c1", "group", isMember = true))
 
         assertThat(found).isEmpty()
         coVerify(exactly = 0) { users.searchUsers(any(), any(), any()) }

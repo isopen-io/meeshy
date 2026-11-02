@@ -76,15 +76,15 @@ extension PostDetailView {
     /// un autre, et qu'une trace qui ne paraîtrait que sur l'un des deux serait
     /// pire qu'absente : elle ferait croire que l'autre ne joue rien.
     ///
-    /// L'existence est celle du badge (`backgroundTrace(of:)`) : pas de piste
-    /// ⇒ rien, et la scène reprend toute la hauteur. Montée AUSSI au-dessus
+    /// L'existence est celle de `creditedTrace(of:)` (le fond, sinon le son de
+    /// la bibliothèque posé, #14245) : pas de piste ⇒ rien. Montée AUSSI au-dessus
     /// de l'embed d'une story republiée (#9677), sur les effets que CET embed
     /// joue — ceux de la source.
     @ViewBuilder
     func sceneSoundHeader(_ playedEffects: StoryEffects?) -> some View {
         PostSceneSoundHeader(
-            trace: BackgroundSoundBadge.backgroundTrace(of: playedEffects),
-            announcement: BackgroundSoundBadge.announcement(for: playedEffects),
+            trace: BackgroundSoundBadge.creditedTrace(of: playedEffects),
+            announcement: BackgroundSoundBadge.creditAnnouncement(for: playedEffects),
             isMuted: isCanvasMuted,
             isPaused: isCanvasPaused,
             accentHex: accentColor,
@@ -148,7 +148,7 @@ extension PostDetailView {
             storyCanvasOrPlaceholder(renderedItem: renderedItem,
                                      onOpen: { openDetailScene(at: 0) }) {
                 StoryReaderRepresentable(
-                    story: renderedItem,
+                    story: renderedItem, sceneFloorHex: post.storyAccentHex,
                     preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                     mute: isCanvasMuted,
                     isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,

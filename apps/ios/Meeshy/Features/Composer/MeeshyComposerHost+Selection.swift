@@ -204,6 +204,22 @@ struct ComposerSceneSelectionRelay {
             source: id, before: avant, after: host.viewModel.currentSlide))
     }
 
+    /// **Dupliquer depuis la frise = dupliquer dans la scène** (#14215) : les
+    /// réglages de la frise rejoignent la slide, la scène duplique (son pas
+    /// d'annulation, sa copie sélectionnée), puis la frise relit la slide et
+    /// choisit la copie.
+    func duplicateFromSceneFrise(_ id: String) {
+        host.viewModel.commitTimelineToCurrentSlide()
+        let avant = host.viewModel.currentSlide
+        host.selectedSceneItemId = id
+        duplicateSceneItem(id)
+        let copie = ComposerSelectionActions.selectionAfterDuplicate(
+            source: id, before: avant, after: host.viewModel.currentSlide)
+        host.viewModel.loadCurrentSlideIntoTimeline()
+        host.viewModel.timelineViewModel.selectClip(id: copie)
+        host.viewModel.canvasTimelineBridge.scrub(seconds: Double(host.viewModel.timelineViewModel.currentTime))
+    }
+
     /// **Le menu d'appui long, raccourci de la barre** : Modifier et Dupliquer
     /// y prennent le MÊME chemin qu'à la barre.
     func applyMenuShortcut(_ action: StoryCanvasContextAction, on id: String,

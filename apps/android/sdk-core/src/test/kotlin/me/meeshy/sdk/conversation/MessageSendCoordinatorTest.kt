@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.MeeshyApi
@@ -93,6 +94,28 @@ class MessageSendCoordinatorTest {
         harness.outbox.discard(cid)
         coordinator.retrySend(cid)
         assertThat(harness.queuedRequest().location).isEqualTo(place)
+    }
+
+    @Test
+    fun `#14334 a sticker travels on the bubble and on the request, and survives a retry`() = runHarnessTest { harness ->
+        val sticker = MessageSticker(templateId = "mee.mee-coucou", emoji = "👋")
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", sticker = sticker)
+
+        assertThat(harness.cachedMessage(cid).sticker).isEqualTo(sticker)
+        assertThat(harness.queuedRequest().sticker).isEqualTo(sticker)
+        assertThat(harness.outbox.deliverable("message:c1").single().payload).contains("\"sticker\":{\"templateId\":\"mee.mee-coucou\",\"emoji\":\"👋\"}")
+
+        coordinator.markSendFailed(cid)
+        harness.outbox.discard(cid)
+        coordinator.retrySend(cid)
+        assertThat(harness.queuedRequest().sticker).isEqualTo(sticker)
+    }
+
+    @Test
+    fun `#14334 a message without sticker sends no sticker key`() = runHarnessTest { harness ->
+        coordinator(harness).sendOptimistic("c1", "salut", "fr", sender)
+        assertThat(harness.outbox.deliverable("message:c1").single().payload).doesNotContain("sticker")
     }
 
     @Test

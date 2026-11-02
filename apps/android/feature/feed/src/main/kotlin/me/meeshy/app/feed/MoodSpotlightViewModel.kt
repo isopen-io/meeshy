@@ -101,7 +101,7 @@ class MoodSpotlightViewModel internal constructor(
     val state: StateFlow<MoodSpotlightUiState> = _state.asStateFlow()
     private var viewRecorded = false
 
-    /** The « @ » list of the reply (#14053): cached contacts at once, the mood's suggestions (`contextType=post`) by the law. */
+    /** The « @ » list of the reply (#14053, #14071): the reply lands in the author's DM, so the list offers the author alone and never asks the network. */
     private val mentions = MentionAutocomplete(
         scope = viewModelScope,
         search = mentionSearch,
@@ -111,7 +111,6 @@ class MoodSpotlightViewModel internal constructor(
     val mention: StateFlow<MentionAutocompleteState> = mentions.state
 
     init {
-        mentions.bind(MentionContext.post(statusId))
         viewModelScope.launch { load() }
     }
 
@@ -153,6 +152,13 @@ class MoodSpotlightViewModel internal constructor(
         _state.update {
             it.copy(content = MoodSpotlightContent.Mood(entry), canReply = MoodSpotlightRules.canReply(entry, me))
         }
+        mentions.updateRoster(
+            listOfNotNull(
+                entry.username.trim().takeIf { it.isNotEmpty() }
+                    ?.let { MentionCandidate(id = entry.userId, username = it, displayName = it) },
+            ),
+        )
+        mentions.bind(MentionContext.interlocutor(entry.userId))
         if (!viewRecorded && entry.userId != me) {
             viewRecorded = true
             postRepository.viewPost(entry.id)

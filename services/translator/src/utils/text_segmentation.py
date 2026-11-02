@@ -4,6 +4,7 @@ Préserve les paragraphes, sauts de ligne et emojis dans les traductions
 """
 
 import re
+from collections import Counter
 from typing import List, Tuple, Dict
 import logging
 
@@ -99,7 +100,10 @@ _PLACEHOLDER_PATTERN = re.compile(r"🔹EMOJI_(\d+)🔹")
 #   <url>              chevrons compris
 #   url brute          http(s):// ou www., sans la ponctuation finale de phrase
 #   m+<token>          lien court suivi
+#   e-mail             entière, sans le point final de phrase (#14327)
 #   @pseudo, #hashtag  (une adresse e-mail n'est pas une mention)
+#   pseudo nu          un mot à souligné, ou lettres puis chiffres (`recretrait_b`,
+#                      `user42`) : un identifiant, jamais un mot à traduire (#14327)
 PROTECTED_ENTITY_PATTERN = re.compile(
     r"(?P<placeholder>🔹EMOJI_\d+🔹)"
     r"|(?P<raw_block>\[\[[^\[\]\n]+\]\])"
@@ -107,10 +111,28 @@ PROTECTED_ENTITY_PATTERN = re.compile(
     r"|(?P<angle><(?:https?://|www\.)[^\s<>]+>)"
     r"|(?P<url>(?:https?://|(?<![\w/.@])www\.)[^\s<>]*[^\s<>.,;:!?'\"»)\]])"
     r"|(?P<short_link>(?<![\w+])m\+[A-Za-z0-9_-]{2,50})"
+    r"|(?P<email>(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+)"
     r"|(?P<mention>(?<![\w@])@[\w-]{1,30})"
     r"|(?P<hashtag>(?<![\w#&])#\w+)"
+    r"|(?P<handle>(?<![\w@#&])(?=\w*[^\W\d_])(?:\w*_\w*|[^\W\d_]+\d\w*)(?!\w))"
     rf"|(?P<emoji>{_EMOJI_RUN_OUTSIDE_PLACEHOLDERS})",
     flags=re.UNICODE,
+)
+
+
+# La phrase qu'iOS et Android composent au partage d'un contenu (#14327) :
+# « 🔗 <Story|Réel|Publication…> [de|by|von|di] <auteur> : <lien> ». Le nom de
+# l'auteur n'y porte aucune marque (ni @, ni souligné obligé) : il est masqué
+# par sa POSITION, le genre du contenu restant à traduire. Les genres sont ceux
+# des catalogues clients (`Localizable.xcstrings`, `strings_generated.xml`).
+_SHARE_KINDS = (
+    "story|stories|reel|réel|post|publication|publicación|publicação|beitrag|"
+    "historia|história|storia|قصة|مقطع|منشور"
+)
+SHARE_PHRASE_PATTERN = re.compile(
+    r"^\s*🔗\s*(?:" + _SHARE_KINDS + r")\s+(?:(?:de|by|von|di|da|do|of)\s+)?"
+    r"(?P<author>[^\s:][^\n:]*?)\s*:\s*(?:https?://|www\.)\S+\s*$",
+    flags=re.IGNORECASE | re.UNICODE,
 )
 
 
@@ -140,6 +162,9 @@ def protect_entities(text: str) -> Tuple[str, Dict[int, str]]:
             return f"[{label}]{_mask(match.group('md_target'))}"
         return _mask(match.group(0))
 
+    share = SHARE_PHRASE_PATTERN.match(text)
+    if share:
+        text = text[:share.start("author")] + _mask(share.group("author")) + text[share.end("author"):]
     masked = PROTECTED_ENTITY_PATTERN.sub(_replace, text)
     if entities:
         # #12822 — un compte, jamais les entités : une adresse ou une mention
@@ -180,6 +205,26 @@ def strip_entities(text: str) -> str:
         return f" {match.group('md_label')} " if match.group("md_target") else " "
 
     return PROTECTED_ENTITY_PATTERN.sub(_replace, text)
+
+
+_LOOSE_PLACEHOLDER_PATTERN = re.compile(r"🔹\s*EMOJI_\s*(\d+)\s*🔹")
+_PLACEHOLDER_SPLIT = re.compile(r"(🔹EMOJI_\d+🔹)")
+
+
+def placeholders_kept(masked: str, translated: str) -> bool:
+    """La sortie du modèle porte chaque marqueur de l'entrée, une fois, intact (#14327)."""
+    return Counter(_PLACEHOLDER_PATTERN.findall(masked)) == Counter(
+        _LOOSE_PLACEHOLDER_PATTERN.findall(translated)
+    )
+
+
+def split_on_placeholders(masked: str) -> List[str]:
+    """Le texte masqué en morceaux alternés : texte libre, marqueur, texte libre…"""
+    return [part for part in _PLACEHOLDER_SPLIT.split(masked) if part]
+
+
+def is_placeholder(part: str) -> bool:
+    return _PLACEHOLDER_PATTERN.fullmatch(part) is not None
 
 
 def has_translatable_text(masked: str) -> bool:

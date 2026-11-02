@@ -209,6 +209,8 @@ const makePrisma = (): any => ({
   participant: {
     findFirst: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),
+    // #14066 — l'auteur de l'édition est un membre ACTIF : sinon il ne cite personne.
+    findUnique: jest.fn().mockResolvedValue({ userId: USER_ID, isActive: true, conversationId: CONV_ID }),
   },
   // Lues par `MessageReadStatusService`, à qui `GET /conversations/:id/status`
   // délègue désormais son résumé d'accusés et son filtre d'opt-out.

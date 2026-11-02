@@ -155,7 +155,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             reactableMedia: { catalog.snapshot.carrier(ofAttachment: $0.id) != nil },
             forwardableMedia: offersForward
         )
-        .onAppear(perform: openCatalog)
+        .onAppear(perform: openCatalog).environment(\.conversationMentionTarget, viewModel.mentionController.target)
         .onReceive(viewModel.$messages) { messages in
             catalog.syncLive(messages, serverId: viewModel.serverId(for:))
         }

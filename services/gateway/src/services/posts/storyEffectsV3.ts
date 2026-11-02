@@ -1,4 +1,5 @@
 import type { CanvasV3, SceneV3, ObjectV3, AudioVariantV3 } from '@meeshy/shared/types/canvas-v3';
+import { mappedMediaUrl } from './mediaUrlLookup';
 
 /**
  * ÉCRITURE / VALIDATION — « ce blob est-il EXACTEMENT la v3 que je sais
@@ -568,8 +569,9 @@ export function remapCanvasV3MediaIds(
         }
       }
       const url = payload.mediaURL;
-      if (typeof url === 'string' && urlMap[url] !== undefined && urlMap[url] !== url) {
-        nextPayload.mediaURL = urlMap[url];
+      const mappedUrl = typeof url === 'string' ? mappedMediaUrl(urlMap, url) : undefined;
+      if (mappedUrl !== undefined && mappedUrl !== url) {
+        nextPayload.mediaURL = mappedUrl;
         objectChanged = true;
       }
       if (!objectChanged) return object;

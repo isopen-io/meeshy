@@ -9,6 +9,7 @@
     <string name="feed_action_quote">Citar</string>
     <string name="feed_action_report">Denunciar</string>
     <string name="feed_action_repost">Republicar</string>
+    <string name="feed_action_send">Enviar</string>
     <string name="feed_action_share">Compartir</string>
     <string name="feed_action_view_profile">Ver el perfil</string>
     <string name="feed_comment_card_folded">+%1$d respuestas</string>
@@ -87,6 +88,11 @@
     <string name="feed_translations_badge_hint">Muestra los idiomas disponibles</string>
     <string name="feed_unknown_author">Desconocido</string>
     <string name="feed_unlike">Ya no me gusta</string>
+    <plurals name="feed_view_comments">
+        <item quantity="one">Ver el comentario</item>
+        <item quantity="many">Ver los %1$d comentarios</item>
+        <item quantity="other">Ver los %1$d comentarios</item>
+    </plurals>
     <string name="hashtag_results_empty">Sin publicaciones con #%1$s</string>
     <string name="mood_bubble_react">Reacción %1$s</string>
     <string name="mood_bubble_reply">Responder</string>
@@ -101,6 +107,8 @@
     <string name="nearby_retry">Reintentar</string>
     <string name="nearby_title">Cerca</string>
     <string name="post_comments_cancel_reply">Cancelar respuesta</string>
+    <string name="post_comments_composer_hint">Comentar…</string>
+    <string name="post_comments_composer_reply_hint">Responder…</string>
     <string name="post_comments_copy_text">Copiar texto</string>
     <string name="post_comments_delete_error">No se pudo eliminar el comentario</string>
     <string name="post_comments_deleted">Comentario eliminado</string>
@@ -112,9 +120,12 @@
         <item quantity="other">Ver %1$d respuestas más</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">Muestra las respuestas restantes de este hilo</string>
+    <string name="post_comments_media_audio">Audio</string>
     <string name="post_comments_media_image">Imagen del comentario</string>
     <string name="post_comments_media_open">Toca para ampliar</string>
+    <string name="post_comments_media_pause_audio">Pausar</string>
     <string name="post_comments_media_play">Reproducir vídeo</string>
+    <string name="post_comments_media_play_audio">Reproducir audio</string>
     <string name="post_comments_media_video">Vídeo</string>
     <string name="post_comments_more_options">Más opciones</string>
     <string name="post_comments_reply_a11y_label">%1$s, respuesta. %2$s. %3$s</string>

@@ -191,6 +191,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
             onCancelReply = actions.cancelReply,
             onRemoveClipboard = actions.removeClipboardContent,
             onPickFile = actions.pickFile,
+            onSendSticker = actions.sendSticker,
         )
     }
     if (pickerOpen) {

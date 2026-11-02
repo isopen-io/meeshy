@@ -109,25 +109,64 @@ final class ConversationEncryptionActivationPolicyTests: XCTestCase {
         )
     }
 
-    /// #12949 — le bout en bout ne se désactive jamais ; le chiffrement au repos
-    /// (`server`, `hybrid`) se désactive encore, au seul rôle autorisé.
-    func test_detailSheet_offersDeactivation_onlyForAtRestEncryption_toTheAllowedRole() {
+    /// Directive porteur du 2026-11-01 — le chiffrement au repos ne se désactive
+    /// plus : une conversation `server` / `hybrid` propose de CHANGER de mode au
+    /// rôle autorisé ; le bout en bout ne propose rien (#12949).
+    func test_detailSheet_offersModeSwitch_onlyForAtRestEncryption_toTheAllowedRole() {
         XCTAssertEqual(
             ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, isEndToEnd: true, mayToggle: true),
-            .active(offersDeactivation: false)
+            .active(offersModeSwitch: false)
         )
         XCTAssertEqual(
             ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, isEndToEnd: false, mayToggle: true),
-            .active(offersDeactivation: true)
+            .active(offersModeSwitch: true)
         )
         XCTAssertEqual(
             ConversationEncryptionDetailContent.resolve(isLoading: false, isEncrypted: true, isEndToEnd: false, mayToggle: false),
-            .active(offersDeactivation: false)
+            .active(offersModeSwitch: false)
         )
         XCTAssertEqual(
             ConversationEncryptionDetailContent.resolve(isLoading: true, isEncrypted: false, isEndToEnd: false, mayToggle: true),
             .loading
         )
+    }
+
+    func test_modeSwitch_fromServer_offersHybridAndEndToEnd() {
+        XCTAssertEqual(ConversationEncryptionModeSwitch.targets(from: .server), [.hybrid, .e2ee])
+    }
+
+    func test_modeSwitch_fromHybrid_offersServerAndEndToEnd() {
+        XCTAssertEqual(ConversationEncryptionModeSwitch.targets(from: .hybrid), [.server, .e2ee])
+    }
+
+    func test_modeSwitch_fromEndToEnd_offersNothing() {
+        XCTAssertTrue(ConversationEncryptionModeSwitch.targets(from: .e2ee).isEmpty, "le bout en bout ne se quitte jamais (#12949)")
+    }
+
+    func test_modeSwitch_onlyEndToEnd_requiresConfirmation() {
+        XCTAssertTrue(ConversationEncryptionModeSwitch.requiresConfirmation(.e2ee))
+        XCTAssertFalse(ConversationEncryptionModeSwitch.requiresConfirmation(.server))
+        XCTAssertFalse(ConversationEncryptionModeSwitch.requiresConfirmation(.hybrid))
+    }
+
+    /// Une seule règle choisit le bout en bout à la création ET l'active : le SDK.
+    func test_mayActivate_readsTheCreationRule() {
+        for role in ["USER", "ANALYST", "analyst", "ADMIN", "AGENT", "", "nonsense"] {
+            XCTAssertEqual(
+                ConversationEncryptionActivationPolicy.mayActivate(platformRole: role),
+                ConversationCreationEncryption.mayChooseEndToEnd(platformRole: role), role
+            )
+        }
+    }
+
+    /// La fiche ne porte plus aucune désactivation du chiffrement au repos.
+    func test_detailSheet_noLongerCallsDisable() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(source.contains("service.disable("), "409 ENCRYPTION_AT_REST_PERMANENT : la fiche ne désactive plus")
+        XCTAssertFalse(source.contains("encryption-deactivate"))
     }
 
     /// La passerelle sert `canToggleEncryption` (#12522, spec § 5.3) : il fait

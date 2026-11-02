@@ -1,8 +1,5 @@
 package me.meeshy.ui.component.viewer
 
-import android.os.Build
-import android.view.ViewGroup
-import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +12,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -224,24 +220,11 @@ private const val STAGE_FADE_ON_DRAG = 0.6f
  */
 @Composable
 private fun SystemBarsForViewer(immersive: Boolean) {
+    FullScreenDialogWindow()
     val view = LocalView.current
     val window = (view.parent as? DialogWindowProvider)?.window ?: return
-    DisposableEffect(window) {
-        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
-        window.setDimAmount(0f)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes = window.attributes.apply {
-                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
-        }
-        onDispose { }
-    }
     LaunchedEffect(window, immersive) {
         val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = false
-        controller.isAppearanceLightNavigationBars = false
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         if (immersive) {
             controller.hide(WindowInsetsCompat.Type.systemBars())

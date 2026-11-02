@@ -25,8 +25,8 @@ internal fun rememberSceneExportHost(state: StoryComposerUiState, viewModel: Sto
     val current by rememberUpdatedState(state)
     val export = rememberSceneVideoExport(key = COMPOSER_EXPORT_KEY) {
         val projector = StorySlideProjector(viewModel.mediaBaseUrl)
-        ComposerSceneExport.scenes(current, viewModel.resolvePublishLanguage()) { item ->
-            projector.project(item, viewModel.authorAccentHex, NoContentPreferences)
+        ComposerSceneExport.scenes(current, viewModel.resolvePublishLanguage(), viewModel.authorFloor) { item ->
+            projector.project(item, viewModel.authorAccentHex.orEmpty(), NoContentPreferences)
         }
     }
     return SceneExportHost(

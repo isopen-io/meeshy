@@ -124,8 +124,7 @@ internal fun ColumnScope.StoryTrailingRail(
     Spacer(Modifier.weight(1f))
     history?.let {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = it.canUndo)
-            SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = it.canRedo)
+            SceneHistoryButtons(it, onUndo, onRedo)
         }
     }
 }

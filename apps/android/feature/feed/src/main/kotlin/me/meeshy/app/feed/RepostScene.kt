@@ -35,6 +35,13 @@ typealias ReelSceneRenderer = @Composable (item: StoryItem, accentHex: String?, 
 val LocalReelSceneRenderer = staticCompositionLocalOf<ReelSceneRenderer?> { null }
 
 /**
+ * Comment la scène d'un POST se dessine sur sa carte du fil et dans sa fiche (#14223) : le cadre d'un réel, mais le sol d'une
+ * story — une scène qui ne déclare aucun fond se lit sur le dégradé de son auteur, comme la story publiée du même geste, jamais
+ * sur le noir d'un réel. Mêmes arguments que [ReelSceneRenderer] ; `null` hors de l'application : la tuile reste vide.
+ */
+val LocalPostSceneCardRenderer = staticCompositionLocalOf<ReelSceneRenderer?> { null }
+
+/**
  * Comment une scène de POST se lit en plein écran (iOS `PostSceneCardContainer`) : la scène entière, au centre, et son son joue.
  * Arguments : la scène, la couleur de son auteur, [playing] (la page que le lecteur montre : elle seule joue), le cadre.
  */

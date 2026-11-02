@@ -50,7 +50,7 @@ class StoryVideoExportPreparerBrandingTest {
         },
         probeMillis = { null },
         blankPicture = { it.writeText("noir") },
-        chooseLength = { null },
+        decideImager = { null },
         paint = { request -> request.frames.mapIndexed { i, _ -> File(request.directory, "calque-$i.png").also { it.writeText("png") } } },
         paintBrand = if (!brand) null else { request ->
             recorder.requests += request

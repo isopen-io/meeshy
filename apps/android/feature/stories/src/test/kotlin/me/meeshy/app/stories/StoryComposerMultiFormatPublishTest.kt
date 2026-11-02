@@ -86,6 +86,21 @@ class StoryComposerMultiFormatPublishTest {
     }
 
     @Test
+    fun `a repost checked as a story and a post carries its source on the post too, never an empty post`() = runTest {
+        val posted = mutableListOf<CreatePostRequest>()
+        coEvery { publications.enqueuePost(any(), any()) } answers { posted += firstArg<CreatePostRequest>(); "cmid_post" }
+        coEvery { repo.enqueuePublish(any(), any()) } returns "cmid_story"
+        val vm = viewModel()
+        vm.onRepostSource("story_source")
+        vm.onFormats(listOf(STORY, POST), layout = null)
+        vm.onAddSticker("🔁")
+
+        vm.publish()
+
+        assertThat(posted.map { it.repostOfId }).containsExactly("story_source")
+    }
+
+    @Test
     fun `a post and a reel checked together leave as two publications of their own type`() = runTest {
         val types = postedTypes()
         val vm = viewModel()

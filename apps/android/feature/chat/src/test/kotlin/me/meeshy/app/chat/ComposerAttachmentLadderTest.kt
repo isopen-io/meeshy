@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.ComposerAttachmentPolicy
+import me.meeshy.sdk.model.composer.ComposerConfiguration
 import org.junit.Test
 
 /**
@@ -212,5 +213,35 @@ class ComposerAttachmentLadderTest {
         val state = ChatUiState(encryptionMode = "e2ee")
 
         assertThat(kinds(ComposerAttachmentLadder.tiles(state.composerAffordances))).doesNotContain(AttachmentTileKind.Contact)
+    }
+
+    @Test
+    fun `le réglage commentaire n'offre que la caméra, le vocal et l'emoji, la photothèque restant à la barre`() {
+        val tiles = ComposerAttachmentLadder.tiles(affordances(), hasRecentMediaStrip = true, configuration = ComposerConfiguration.COMMENT)
+
+        assertThat(kinds(tiles)).containsExactly(
+            AttachmentTileKind.Camera,
+            AttachmentTileKind.Voice,
+            AttachmentTileKind.Emoji,
+        ).inOrder()
+    }
+
+    @Test
+    fun `un commentaire dont l'hôte ne sait pas joindre ne garde que l'emoji`() {
+        val tiles = ComposerAttachmentLadder.tiles(
+            affordances(),
+            hasRecentMediaStrip = true,
+            configuration = ComposerConfiguration.COMMENT.withoutAttachments(),
+        )
+
+        assertThat(kinds(tiles)).containsExactly(AttachmentTileKind.Emoji)
+    }
+
+    @Test
+    fun `le réglage conversation ne change rien à l'échelle`() {
+        val sans = ComposerAttachmentLadder.tiles(affordances(), hasRecentMediaStrip = true)
+        val avec = ComposerAttachmentLadder.tiles(affordances(), hasRecentMediaStrip = true, configuration = ComposerConfiguration.CONVERSATION)
+
+        assertThat(avec).isEqualTo(sans)
     }
 }

@@ -9,10 +9,7 @@ import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
-import {
-  reconcileEditedLinks,
-  mergeTrackingLinksIntoMetadata,
-} from '../services/messaging/messageLinks';
+import { mergeTrackingLinksIntoMetadata } from '../services/messaging/messageLinks';
 import {
   admitMessageEdit,
   isEditRefused,
@@ -37,7 +34,8 @@ import {
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { loadPrivacyPreferencesCached } from '../services/preferences/privacy-cache';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
-import { queuedEventSealsAtRest } from '../services/messaging/serverAtRest';
+import { isServerAtRestUnavailable, queuedEventSealsAtRest } from '../services/messaging/serverAtRest';
+import { editedLinksFor, editSealsAtRest, gatewayEditCrypto, prepareEditedText, servedEditedRow } from '../services/messaging/atRestEdit';
 import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
 import type { Message } from '@meeshy/shared/types/index';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
@@ -166,7 +164,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
               sender: { select: { userId: true } },
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
+              conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true, serverEncryptionKeyId: true } },
               // #12792 — la protection PROPRE de chaque pièce : une pièce à vue
               // unique refuse l'édition de son message (`admitMessageEdit`).
               attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect }, orderBy: MESSAGE_ATTACHMENT_ORDER }
@@ -255,7 +253,12 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // l'écriture, exactement comme à l'envoi et comme sur les deux autres
       // transports d'édition. Le contenu traité est ensuite le SEUL en
       // circulation : base, mentions, retraduction, payload diffusé.
-      const reconciledLinks = await reconcileEditedLinks({
+      //
+      // Décision 2026-11-01 — au repos (`server`/`hybrid`), aucune adresse ne se
+      // range en clair à côté du chiffré (`editedLinksFor`), et le texte modifié
+      // se SCELLE avant l'écriture (`prepareEditedText`) : une clé absente
+      // échoue ici, sans qu'aucune colonne n'ait été touchée.
+      const reconciledLinks = await editedLinksFor(editSealsAtRest(message), {
         linkService: trackingLinkService,
         message: { id: messageId, conversationId: message.conversationId, sender: message.sender },
         content: trimmedContent,
@@ -263,6 +266,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         onError: (err) => logger.error('Error processing tracking links in edit', err as Error),
       });
       const editedContent = reconciledLinks.processedContent;
+      const editCrypto = gatewayEditCrypto(prisma);
+      const preparedText = await prepareEditedText({ crypto: editCrypto, row: message, text: editedContent });
 
       // Le mapping des URLs BRUTES n'était recomposé par aucun transport
       // d'édition : il n'existait qu'à la création. Écrit seulement s'il a été
@@ -294,7 +299,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       const editResult = await prisma.message.updateMany({
         where: { id: messageId, deletedAt: null },
         data: {
-          content: editedContent,
+          ...preparedText.columns,
           isEdited: true,
           editedAt,
           // #11375 — le tiers modérateur est enregistré ; l'auteur efface la mention.
@@ -317,7 +322,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         conversationId: message.conversationId,
         senderId: message.senderId,
         senderUserId: message.sender?.userId ?? null,
-        previousContent: message.content,
+        previousContent: preparedText.previousContent,
         content: editedContent,
         editedAt,
       });
@@ -362,7 +367,9 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         onError: (err) => logger.error('Edit - mention:created fanout failed', err as Error),
       });
 
-      const updatedMessage = await prisma.message.findUniqueOrThrow({
+      // La ligne relue porte le chiffré au repos : elle part avec le texte
+      // modifié en clair, et sans chiffré sur le fil (`servedEditedRow`).
+      const updatedMessage = await servedEditedRow(await prisma.message.findUniqueOrThrow({
         where: { id: messageId },
         include: {
           sender: {
@@ -375,7 +382,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
             }
           }
         }
-      });
+      }), { prepared: preparedText, text: editedContent }, editCrypto);
 
       // Déclencher la retraduction automatique du message modifié.
       // L'invalidation de `translations` n'est plus faite ici : elle appartient
@@ -460,6 +467,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       });
 
     } catch (error) {
+      // Décision 2026-11-01 — sans clé maîtresse, un texte au repos ne se rescelle pas : refusé, jamais écrit en clair.
+      if (isServerAtRestUnavailable(error)) {
+        return sendError(reply, 503, error.message, { code: error.code });
+      }
       logger.error('Error updating message', error as Error);
       return sendInternalError(reply, 'Erreur lors de la modification du message');
     }

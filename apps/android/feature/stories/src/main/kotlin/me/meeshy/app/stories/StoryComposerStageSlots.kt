@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.composer.ComposerSelectionAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,13 +58,14 @@ internal fun StoryComposerScene(
     captureOffered: Boolean = false,
 ) {
     val armsCapture = capture?.takeIf { captureOffered }
+    val accentHex = viewModel.observedAuthorAccentHex()
     CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
                 transform = state.selectedSlideTransform,
                 backgroundModel = rememberStoryMediaLookModel(rememberComposerPicture(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl)), state.backgroundMediaLook(comparison.mediaId)),
-                sceneBrush = remember(state.selectedSlideBackground, viewModel.authorAccentHex) {
-                    StorySceneFill.resolve(state.selectedSlideBackground, viewModel.authorAccentHex).brush()
+                sceneBrush = remember(state.selectedSlideBackground, accentHex) {
+                    StorySceneFill.resolve(state.selectedSlideBackground, accentHex).brush()
                 },
                 look = state.selectedSlideLook(comparison.mediaId),
                 textElements = state.selectedSlideTextElements,
@@ -341,6 +343,10 @@ private val WAITING_BADGE_TOP = 112.dp
  * de la bande et la section « plan » de la colonne droite d'un texte. Le même plan, les mêmes gestes ; l'empilement,
  * lui, reste aux actions de l'objet.
  */
+/** L'objet posé qu'une piste de la frise désigne. */
+private fun StoryComposerUiState.friseRef(id: String): SceneObjectRef? =
+    StorySceneStack.order(deck.selectedSlide).firstOrNull { it.id == id }
+
 @Composable
 internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     val names = state.sceneTrackNames
@@ -358,5 +364,18 @@ internal fun StoryPlanFrise(state: StoryComposerUiState, viewModel: StoryCompose
         },
         onScrub = viewModel::onPlayheadMoved,
         onWindow = viewModel::onSceneObjectWindow,
+        splittableIds = StoryComposerSplitReducer.splittableIds(state),
+        // « Couper » à la tête (#14221, #14224) : une réduction, donc un seul pas d'annulation.
+        onSplit = { id ->
+            val newId = java.util.UUID.randomUUID().toString()
+            viewModel.onSceneReduce { s -> StoryComposerSplitReducer.split(s, id, newId) }
+        },
+        visuals = state.friseBarVisuals(),
+        onDuplicate = { id -> state.friseRef(id)?.let { viewModel.onSelectionAction(it, ComposerSelectionAction.DUPLICATE) {} } },
+        onRemove = { id -> state.friseRef(id)?.let { viewModel.onSelectionAction(it, ComposerSelectionAction.REMOVE) {} } },
+        // L'image clé à la tête (#14271) : une réduction, donc un seul pas d'annulation.
+        keyframableIds = StoryComposerKeyframeReducer.keyframableIds(state),
+        keyframeHeld = state.selectedSceneObject?.id?.let { StoryComposerKeyframeReducer.keyframeAtPlayhead(state, it) } != null,
+        onKeyframe = { id -> viewModel.onSceneReduce { s -> StoryComposerKeyframeReducer.toggled(s, id) } },
     )
 }

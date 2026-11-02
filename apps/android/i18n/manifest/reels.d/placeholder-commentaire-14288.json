@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:reels": {
+      "resDir": "feature/reels/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "notifications.action.commentPlaceholder", "androidName": "reels_comments_composer_hint", "status": "adopted" }
+      ]
+    }
+  }
+}

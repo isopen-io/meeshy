@@ -14,7 +14,11 @@ final class RootScopeOwnershipGuardTests: XCTestCase {
             for forbidden in ["StoryViewModel()", "StatusViewModel()", "ConversationListVMOwner()", "RootNotificationSource()", "UpgradeGateController()"] {
                 XCTAssertFalse(source.contains(forbidden), "\(file) construit \(forbidden) : la portée racine est tenue par RootScopeModels.")
             }
-            XCTAssertTrue(source.contains("init(scope: RootScopeModels)"), file)
+            // La portée arrive en PREMIER argument ; les singletons qui suivent
+            // (`reelsPresenter`, `onboardingPresence`) sont injectés avec leur
+            // `.shared` par défaut, comme le veut la règle d'injection de l'app.
+            XCTAssertTrue(source.contains("init(scope: RootScopeModels)")
+                          || source.contains("init(scope: RootScopeModels,"), file)
         }
         let adaptive = try code("AdaptiveRootView.swift")
         XCTAssertTrue(adaptive.contains("RootScopeSwitch("))

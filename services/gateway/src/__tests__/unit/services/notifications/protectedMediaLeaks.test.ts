@@ -180,16 +180,34 @@ describe('éventail — le FICHIER ne franchit pas une protection du MESSAGE', (
     expect(JSON.stringify(params)).not.toContain('resultats-analyses');
   });
 
-  it('un média ORDINAIRE voyage toujours — son URL et son type', async () => {
-    // Mode d'échec du CORRECTIF : refermer la fuite ne doit pas supprimer le
-    // rich-push du cas nominal, qui est la raison d'être de ces champs.
+  it('un média ORDINAIRE garde son type et ses dimensions, jamais son image HD (#14309)', async () => {
     const params = await servedParams({});
 
-    expect(params.firstAttachmentUrl).toBe(SECRET_URL);
+    expect(params.firstAttachmentUrl).toBeUndefined();
+    expect(JSON.stringify(params)).not.toContain(SECRET_URL);
     expect(params.firstAttachmentMimeType).toBe('image/jpeg');
     expect(params.firstAttachmentId).toBe(ATTACHMENT_ID);
     expect(params.hasAttachments).toBe(true);
     expect(params.firstAttachmentWidth).toBe(1024);
+  });
+
+  it('une image ORDINAIRE avec vignette ne voyage que par sa vignette (#14309)', async () => {
+    const THUMB = 'https://cdn.example/private/polaroid_thumb.jpg';
+    const params = await servedParams({ attachments: [photoAttachment({ thumbnailUrl: THUMB })] });
+
+    expect(params.firstAttachmentUrl).toBe(THUMB);
+    expect(params.firstAttachmentIsThumbnail).toBe(true);
+    expect(JSON.stringify(params)).not.toContain(SECRET_URL);
+  });
+
+  it('une image PROTÉGÉE avec vignette ne voyage pas même par sa vignette', async () => {
+    const THUMB = 'https://cdn.example/private/polaroid_thumb.jpg';
+    const params = await servedParams({
+      attachments: [photoAttachment({ thumbnailUrl: THUMB })],
+      message: { isViewOnce: true },
+    });
+
+    expect(JSON.stringify(params)).not.toContain(THUMB);
   });
 });
 

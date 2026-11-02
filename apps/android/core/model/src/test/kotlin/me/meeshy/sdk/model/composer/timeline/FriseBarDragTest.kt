@@ -93,4 +93,33 @@ class FriseBarDragTest {
         val stored = FriseBarDrag.stored(ClipWindowResolver.Window(2f, 3f), slideDuration = 10f)
         assertThat(stored).isEqualTo(FriseBarDrag.Stored(2f, 3f))
     }
+
+    @Test
+    fun `un bord accroche se dit accroche, un bord libre non`() {
+        val head = SnapCandidate(SnapCandidate.Kind.PLAYHEAD, 3.05f)
+        val accroche = FriseBarDrag.resolveSnapped(FriseBarDrag.Handle.START, bar, 50f * 1.02f, geometry, listOf(head))
+        assertThat(accroche.snapped).isTrue()
+        assertThat(accroche.window.start).isEqualTo(3.05f)
+        val libre = FriseBarDrag.resolveSnapped(FriseBarDrag.Handle.START, bar, 50f * 0.5f, geometry, listOf(head))
+        assertThat(libre.snapped).isFalse()
+    }
+
+    @Test
+    fun `l'aimant coupe ne dit jamais accroche`() {
+        val head = SnapCandidate(SnapCandidate.Kind.PLAYHEAD, 3.05f)
+        val drag = FriseBarDrag.resolveSnapped(
+            FriseBarDrag.Handle.BODY, bar, 50f * 1.02f, geometry, listOf(head), snapDisabled = true,
+        )
+        assertThat(drag.snapped).isFalse()
+    }
+
+    @Test
+    fun `une piste se coupe seulement quand la tete est dedans, loin des bords`() {
+        val w = ClipWindowResolver.Window(start = 1f, duration = 3f)
+        assertThat(FriseBarDrag.canSplit(w, 2f)).isTrue()
+        assertThat(FriseBarDrag.canSplit(w, 1f)).isFalse()
+        assertThat(FriseBarDrag.canSplit(w, 4f)).isFalse()
+        assertThat(FriseBarDrag.canSplit(w, 5f)).isFalse()
+        assertThat(FriseBarDrag.canSplit(w, Float.NaN)).isFalse()
+    }
 }

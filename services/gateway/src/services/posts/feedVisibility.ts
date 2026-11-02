@@ -1,6 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
+import type { CacheStore } from '../CacheStore';
 import { blockedIdsAroundViewer } from '../ContactDirectoryService';
+import { loadFeedCircles } from './feedFriends';
 import { buildPostVisibilityOrFilter } from './postVisibility';
 
 /**
@@ -22,15 +24,28 @@ import { buildPostVisibilityOrFilter } from './postVisibility';
  * oublier une — et c'est précisément l'oubli que #7184 corrige. La fonction
  * est `async` pour que la garde voyage AVEC le filtre, jamais à côté.
  *
+ * ## Les cercles de la même façon (#13931)
+ *
+ * Les audiences `ACQUAINTANCES`, `CLOSE` et `BLOOD` se lisent au niveau effectif
+ * de l'auteur avec le lecteur : le filtre lit lui-même les cercles du lecteur
+ * (`loadFeedCircles`, cache-first), comme il lit le blocage. Les cinq sites de
+ * `PostFeedService` n'ont donc qu'un argument de plus (`cache`) et aucun ne peut
+ * oublier la carte par niveau. Sans `cache`, la lecture se fait en direct.
+ *
  * G5 — audience feed = friends ∪ contacts DM (divergence assumée vs
- * `PostService`, décision produit en attente — story-sota §4).
+ * `PostService`, décision produit en attente — story-sota §4) : elle ne porte que
+ * `FRIENDS` et `EXCEPT`, jamais les cercles, qui n'admettent aucun contact DM.
  */
 export async function buildFeedVisibilityFilter(
   prisma: PrismaClient,
   viewerId: string,
   friendIds: string[],
-  communityCoMemberIds: string[] = []
+  communityCoMemberIds: string[] = [],
+  cache?: CacheStore
 ) {
-  const blockedAuthorIds = await blockedIdsAroundViewer(prisma, viewerId);
-  return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds, blockedAuthorIds);
+  const [blockedAuthorIds, circles] = await Promise.all([
+    blockedIdsAroundViewer(prisma, viewerId),
+    loadFeedCircles({ prisma, cache, userId: viewerId }),
+  ]);
+  return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds, blockedAuthorIds, circles);
 }

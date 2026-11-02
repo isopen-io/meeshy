@@ -32,11 +32,12 @@ internal class ReelRailActions(
     val onComments: (String) -> Unit,
     val onBookmark: (String) -> Unit,
     val onRepost: (String) -> Unit,
+    val onSend: (String) -> Unit = {},
 )
 
 /**
  * Le rail d'actions d'un réel (iOS `ReelActionRail`) : j'aime — appui bref ❤️, appui long la
- * palette —, commentaires, favori, republier. Le kit plein écran donne à chaque cellule son saut
+ * palette —, commentaires, favori, republier, envoyer (la feuille Meeshy ; « Partager » vit dans le menu « ⋯ »). Le kit plein écran donne à chaque cellule son saut
  * (échelle, ressort rebondissant), son halo coloré à l'état posé et son haptique ; les compteurs
  * sont abrégés comme sur iOS.
  */
@@ -59,7 +60,7 @@ internal fun ReelRail(
                 icon = (if (reel.isLiked) FullscreenChromeSymbol.LikeActive else FullscreenChromeSymbol.Like).icon,
                 label = stringResource(if (reel.isLiked) R.string.reels_unlike else R.string.reels_like),
                 onClick = { actions.onLike(reel.id) },
-                caption = count(reel.likeCount, locale),
+                caption = ReelRailCaption.of(reel.likeCount, stringResource(R.string.reels_like), locale),
                 accessibilityValue = reel.likeCount.takeIf { it > 0 }?.toString(),
                 isActive = reel.isLiked,
                 activeTint = MeeshyPalette.Error,
@@ -82,14 +83,14 @@ internal fun ReelRail(
             icon = FullscreenChromeSymbol.Comments.icon,
             label = stringResource(R.string.reels_comments),
             onClick = { actions.onComments(reel.id) },
-            caption = count(reel.commentCount, locale),
+            caption = ReelRailCaption.of(reel.commentCount, stringResource(R.string.reels_comments), locale),
             accessibilityValue = reel.commentCount.takeIf { it > 0 }?.toString(),
         )
         FullscreenActionButton(
             icon = if (reel.isBookmarked) MeeshyIcons.BookmarkFilled else MeeshyIcons.Bookmark,
             label = stringResource(if (reel.isBookmarked) R.string.reels_unbookmark else R.string.reels_bookmark),
             onClick = { actions.onBookmark(reel.id) },
-            caption = count(reel.bookmarkCount, locale),
+            caption = ReelRailCaption.of(reel.bookmarkCount, stringResource(R.string.reels_bookmark), locale),
             accessibilityValue = reel.bookmarkCount.takeIf { it > 0 }?.toString(),
             isActive = reel.isBookmarked,
             activeTint = MeeshyPalette.Warning,
@@ -99,11 +100,21 @@ internal fun ReelRail(
             icon = FullscreenChromeSymbol.Repost.icon,
             label = stringResource(R.string.reels_repost),
             onClick = { actions.onRepost(reel.id) },
-            caption = count(reel.repostCount, locale),
+            caption = ReelRailCaption.of(reel.repostCount, stringResource(R.string.reels_repost), locale),
             accessibilityValue = reel.repostCount.takeIf { it > 0 }?.toString(),
+        )
+        FullscreenActionButton(
+            icon = MeeshyIcons.Send,
+            label = stringResource(R.string.reels_action_send),
+            onClick = { actions.onSend(reel.id) },
+            caption = ReelRailCaption.of(reel.shareCount, stringResource(R.string.reels_action_send), locale),
+            accessibilityValue = reel.shareCount.takeIf { it > 0 }?.toString(),
         )
     }
 }
 
-private fun count(value: Int, locale: Locale): String? =
-    value.takeIf { it > 0 }?.let { CompactCountFormat.text(it, locale) }
+/** Sous chaque bouton du rail, comme au rail de la story : le compte abrégé quand il y en a un, sinon le nom de l'action. */
+internal object ReelRailCaption {
+    fun of(count: Int, label: String, locale: Locale): String =
+        count.takeIf { it > 0 }?.let { CompactCountFormat.text(it, locale) } ?: label
+}

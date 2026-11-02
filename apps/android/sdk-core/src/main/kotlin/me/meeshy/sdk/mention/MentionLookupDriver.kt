@@ -23,6 +23,9 @@ import me.meeshy.sdk.model.mention.MentionLookupStage
  * merged below the local matches, in the gateway's order, without duplicates or the caller; an
  * answer for a fragment the user has since left is dropped.
  *
+ * Until a context is bound — or when it is `null` — nothing is offered and nothing is asked
+ * (#14071): a list whose scope is unknown would offer mentions the gateway ignores at send.
+ *
  * The host keeps its state where it wants it: [read] and [write] are its accessors.
  */
 public class MentionLookupDriver(
@@ -62,7 +65,8 @@ public class MentionLookupDriver(
         }
         val local = localMatches(query)
         write { it.copy(activeQuery = query, suggestions = local) }
-        if (MentionLookupLaw.stage(query, localMatchCount = local.size) == MentionLookupStage.REMOTE) {
+        val asksNetwork = context?.searchesRemotely == true
+        if (asksNetwork && MentionLookupLaw.stage(query, localMatchCount = local.size) == MentionLookupStage.REMOTE) {
             lookUpRemote(query)
         }
     }
@@ -86,7 +90,7 @@ public class MentionLookupDriver(
             context = roster,
             query = query,
             selfId = selfId(),
-            membersOnly = context?.membersOnly == true,
+            scope = context?.scope,
         )
 
     private fun lookUpRemote(query: String) {
@@ -159,6 +163,9 @@ public class MentionAutocomplete(
     )
 
     public fun bind(context: MentionContext?): Unit = driver.bind(context)
+
+    /** The people of the context known locally — for a reply into a DM, the author alone (#14071). */
+    public fun updateRoster(roster: List<MentionCandidate>): Unit = driver.updateRoster(roster)
 
     public fun onTextChange(text: String): Unit = driver.onTextChange(text)
 

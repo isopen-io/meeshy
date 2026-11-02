@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.composer.live
 
+import kotlin.math.abs
 import kotlin.math.roundToLong
 import me.meeshy.sdk.model.media.MediaTrimBounds
 
@@ -15,6 +16,12 @@ data class ComposerLiveWindow(val startMs: Long, val endMs: Long?) {
         val WHOLE = ComposerLiveWindow(0, null)
     }
 }
+
+/**
+ * Ce que la frise ouverte impose à un lecteur (#13481) : la tête de sa source ([targetMs], `null` : il se tait) et si la
+ * frise lit.
+ */
+data class ComposerLiveFollow(val targetMs: Long?, val playing: Boolean)
 
 /**
  * La lecture en direct du compositeur (#13863, loi 6 du modèle de lecture : le player est l'aperçu ; grammaire d'édition,
@@ -88,6 +95,27 @@ object ComposerLivePlayback {
      * fermée — quoi qu'on ait sélectionné.
      */
     fun plays(screenResumed: Boolean, shelfOpen: Boolean): Boolean = screenResumed && !shelfOpen
+
+    /** L'écart toléré entre un lecteur qui JOUE et la tête de la frise avant de le recaler (#13481). */
+    const val FOLLOW_SLACK_MS = 250L
+
+    /** L'écart toléré à l'arrêt : la frise qu'on fait glisser montre l'image de l'instant. */
+    const val SCRUB_SLACK_MS = 40L
+
+    /**
+     * Où la tête de la SOURCE doit être quand la frise est à [at] (#13481) : le début de [window] à l'entrée de l'objet
+     * ([sceneStart]), puis la durée écoulée depuis ; `null` hors de sa fenêtre de scène ou au-delà de sa source — le
+     * lecteur se tait. [sceneEnd] `null` : jusqu'à la fin de la diapo.
+     */
+    fun followed(window: ComposerLiveWindow, sceneStart: Float, sceneEnd: Float?, at: Float): Long? {
+        if (at < sceneStart || (sceneEnd != null && at >= sceneEnd)) return null
+        val target = window.startMs + ((at - sceneStart) * MILLIS).roundToLong()
+        return target.takeUnless { end -> window.endMs?.let { end >= it } == true }
+    }
+
+    /** Le lecteur à [positionMs] s'est-il assez éloigné de [targetMs] pour être recalé ? */
+    fun drifts(positionMs: Long, targetMs: Long, playing: Boolean): Boolean =
+        abs(positionMs - targetMs) > if (playing) FOLLOW_SLACK_MS else SCRUB_SLACK_MS
 
     private const val MILLIS = 1_000.0
 }

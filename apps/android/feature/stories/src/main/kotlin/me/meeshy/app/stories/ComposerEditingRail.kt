@@ -105,7 +105,6 @@ internal fun StoryComposerUiState.editingChrome(
     viewfinderArmed: Boolean,
     gestureOpen: Boolean,
     sceneReduced: Boolean = false,
-    laneCleared: Boolean = false,
 ): ComposerEditingChrome =
     ComposerEditingChrome.resolve(
         ComposerEditingChrome.Input(
@@ -114,7 +113,6 @@ internal fun StoryComposerUiState.editingChrome(
             viewfinderArmed = viewfinderArmed,
             gestureOpen = gestureOpen,
             sceneReduced = sceneReduced,
-            laneCleared = laneCleared,
         ),
     )
 

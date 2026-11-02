@@ -12,16 +12,32 @@ public protocol LocationServiceProviding: Sendable {
     func stopLiveLocation(conversationId: String)
 }
 
-public final class LocationService: LocationServiceProviding, @unchecked Sendable {
+public final class LocationService: LocationServiceProviding, Sendable {
     public static let shared = LocationService()
     private init() {}
     private let socketManager = MessageSocketManager.shared
 
     // MARK: - Combine Publishers
 
-    public let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
-    public let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
-    public let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
+    private struct LiveLocationSubjects {
+        let started = PassthroughSubject<LiveLocationStartedEvent, Never>()
+        let updated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
+        let stopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
+    }
+
+    private let subjects = Locked(uncheckedState: LiveLocationSubjects())
+
+    public var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> {
+        subjects.mutateUnchecked { $0.started }
+    }
+
+    public var liveLocationUpdated: PassthroughSubject<LiveLocationUpdatedEvent, Never> {
+        subjects.mutateUnchecked { $0.updated }
+    }
+
+    public var liveLocationStopped: PassthroughSubject<LiveLocationStoppedEvent, Never> {
+        subjects.mutateUnchecked { $0.stopped }
+    }
 
     // MARK: - Start Live Location
 

@@ -127,7 +127,7 @@ internal fun ComposerPlaceLayer(
                 contentDescription = spoken
                 onClick { currentTap(); true }
             }
-            .sceneSelectionFrame(selected, place.scale.toFloat()),
+            .sceneSelection(selected),
     ) {
         PlacePastille(place.label, unit.coerceAtLeast(MIN_UNIT))
     }

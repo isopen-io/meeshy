@@ -106,9 +106,13 @@ export function readMasterKey(encoded: string | undefined): MasterKeyState {
 
 const SERVER_AT_REST_MODES: ReadonlySet<string> = new Set(['server', 'hybrid']);
 
-/** Le mode arrive avec la casse de son émetteur, comme `isEndToEndMode`. */
+/**
+ * Le mode arrive avec la casse — et parfois les espaces — de son émetteur :
+ * normalisé comme la loi partagée qui décide si le serveur LIT, sans quoi un
+ * régime lu (« server ») échapperait au scellement.
+ */
 export const isServerAtRestMode = (mode: string | null | undefined): boolean =>
-  typeof mode === 'string' && SERVER_AT_REST_MODES.has(mode.toLowerCase());
+  typeof mode === 'string' && SERVER_AT_REST_MODES.has(mode.trim().toLowerCase());
 
 /**
  * #12822 — la file hors ligne scelle-t-elle l'événement de CE message ? Oui si

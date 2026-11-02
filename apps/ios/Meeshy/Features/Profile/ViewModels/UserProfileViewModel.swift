@@ -40,6 +40,7 @@ final class UserProfileViewModel: ObservableObject {
     private let authManager: AuthManaging
     private let blockService: BlockServiceProviding
     private let userService: UserServiceProviding
+    private let profileLoading: any ProfileLoading
 
     var isCurrentUser: Bool {
         guard let currentId = authManager.currentUser?.id else { return false }
@@ -54,11 +55,13 @@ final class UserProfileViewModel: ObservableObject {
         user: ProfileSheetUser,
         authManager: AuthManaging = AuthManager.shared,
         blockService: BlockServiceProviding = BlockService.shared,
-        userService: UserServiceProviding = UserService.shared
+        userService: UserServiceProviding = UserService.shared,
+        profileLoading: (any ProfileLoading)? = nil
     ) {
         self.authManager = authManager
         self.blockService = blockService
         self.userService = userService
+        self.profileLoading = profileLoading ?? LiveProfileLoading()
         self.profileUser = user
         self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager, blockService: blockService)
     }
@@ -70,7 +73,7 @@ final class UserProfileViewModel: ObservableObject {
     func loadFullProfile() async {
         guard let identifier = resolvedIdentifier, !isCurrentUser else { return }
 
-        let cached = await CacheCoordinator.shared.profiles.load(for: identifier)
+        let cached = await profileLoading.cachedProfile(for: identifier)
         switch cached {
         case .fresh(let data, _):
             fullUser = data.first
@@ -102,11 +105,7 @@ final class UserProfileViewModel: ObservableObject {
                 userStats = stats
                 await bestEffort("userProfileViewModel.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([stats], for: user.id) }
             }
-            await bestEffort("userProfileViewModel.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([user], for: user.id) }
-            if idOrUsername != user.id {
-                await bestEffort("userProfileViewModel.profiles.save.2", category: .cache) { try await CacheCoordinator.shared.profiles.save([user], for: idOrUsername) }
-            }
-            await SearchIndex.shared.indexUsers([user])
+            await profileLoading.storeProfile(user, lookupKey: idOrUsername)
             fullUser = user
             hydrateProfileUserIfNeeded(from: user)
             if profileError != nil { profileError = nil }

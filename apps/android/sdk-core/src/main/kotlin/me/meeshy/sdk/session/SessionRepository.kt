@@ -32,6 +32,7 @@ class SessionRepository @Inject constructor(
     private val tokenStore: TokenStore,
     private val transition: SessionTransitionFlags,
     private val pendingProfileEdits: PendingProfileEdits = PendingProfileEdits.NONE,
+    private val identities: SignedInIdentityStore = SignedInIdentityStore.NONE,
 ) {
     constructor(authApi: AuthApi, tokenStore: TokenStore) : this(authApi, tokenStore, SessionTransitionFlags())
 
@@ -72,6 +73,7 @@ class SessionRepository @Inject constructor(
         if (tokenStore.userId != user.id) transition.bumpGeneration()
         _currentUser.value = user
         tokenStore.userId = user.id
+        identities.remember(user)
         _sessionOrigin.value = origin
         _hasResolvedStoredSession.value = true
     }
@@ -84,7 +86,7 @@ class SessionRepository @Inject constructor(
      */
     fun applyProfileEdit(request: UpdateProfileRequest) {
         val current = _currentUser.value ?: return
-        _currentUser.value = ProfileEditApply.apply(current, request)
+        publish(ProfileEditApply.apply(current, request))
     }
 
     /**
@@ -94,7 +96,7 @@ class SessionRepository @Inject constructor(
     fun restoreProfileSnapshot(snapshot: MeeshyUser) {
         val current = _currentUser.value ?: return
         if (current.id != snapshot.id) return
-        _currentUser.value = snapshot
+        publish(snapshot)
     }
 
     /**
@@ -111,10 +113,7 @@ class SessionRepository @Inject constructor(
         if (generation != transition.generation) return
         val current = _currentUser.value ?: return
         if (current.id != server.id) return
-        _currentUser.value = ProfileSnapshot.resolveServerUserWithOptimistic(
-            ProfileSnapshot.mergingServerUser(server, current),
-            pending,
-        )
+        publish(ProfileSnapshot.resolveServerUserWithOptimistic(ProfileSnapshot.mergingServerUser(server, current), pending))
     }
 
     private suspend fun pendingEditsFor(userId: String, excludingCmid: String? = null): List<UpdateProfileRequest> = try {
@@ -131,7 +130,7 @@ class SessionRepository @Inject constructor(
      */
     fun applyProfileDecor(decor: ServedProfileDecor) {
         val current = _currentUser.value ?: return
-        _currentUser.value = current.copy(profileDecor = decor)
+        publish(current.copy(profileDecor = decor))
     }
 
     /**
@@ -148,6 +147,7 @@ class SessionRepository @Inject constructor(
                 clear()
                 return
             }
+            restoreRemembered(generation)
             lastRevalidatedAtMillis = nowMillis()
             val result = apiCall { authApi.me() }
             if (generation != transition.generation) return
@@ -160,6 +160,7 @@ class SessionRepository @Inject constructor(
                     pending,
                 )
                 tokenStore.userId = server.id
+                _currentUser.value?.let(identities::remember)
                 if (_sessionOrigin.value == null) _sessionOrigin.value = SessionOrigin.RESTORED
             }
         } finally {
@@ -175,6 +176,24 @@ class SessionRepository @Inject constructor(
         val last = lastRevalidatedAtMillis
         if (last != null && nowMillis() - last < REVALIDATION_WINDOW_MILLIS) return
         refresh()
+    }
+
+    private fun publish(user: MeeshyUser) {
+        _currentUser.value = user
+        identities.remember(user)
+    }
+
+    /**
+     * Démarrage à froid : l'identité gardée du compte des jetons se sert avant la relecture du serveur, qui la remplace
+     * si elle aboutit — hors ligne, l'app garde le nom, l'avatar et les langues du compte au lieu d'un compte sans nom.
+     */
+    private suspend fun restoreRemembered(generation: Long) {
+        if (_currentUser.value != null) return
+        val userId = tokenStore.userId?.takeIf { it.isNotBlank() } ?: return
+        val remembered = identities.recall(userId) ?: return
+        if (generation != transition.generation || _currentUser.value != null || remembered.id != userId) return
+        _currentUser.value = remembered
+        _hasResolvedStoredSession.value = true
     }
 
     /** Drop the identity on logout / account switch. */

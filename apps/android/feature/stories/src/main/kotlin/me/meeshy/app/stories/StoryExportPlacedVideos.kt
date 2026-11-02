@@ -5,6 +5,7 @@ import me.meeshy.sdk.media.scene.SceneExportPlacedVideo
 import me.meeshy.sdk.media.scene.SceneExportPlacement
 import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.SceneLookMatrix
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 import me.meeshy.sdk.model.scene.StoryColorMatrix
 import me.meeshy.sdk.model.scene.export.StoryExportPlacedVideoClock
 import me.meeshy.sdk.model.scene.export.StoryExportVideoFormat
@@ -69,7 +70,7 @@ internal object StoryExportPlacedVideos {
     fun placement(view: StoryForegroundMediaView, seconds: Float, format: StoryExportVideoFormat): SceneExportPlacement? {
         if (!view.isVisible(seconds)) return null
         val animated = view.animated(seconds)
-        val size = ForegroundMediaFrame.renderedSize(animated.aspectRatio, animated.scale.coerceIn(MIN_SCALE, MAX_SCALE), format.width.toDouble())
+        val size = ForegroundMediaFrame.renderedSize(animated.aspectRatio, SceneObjectScalePolicy.served(animated.scale), format.width.toDouble())
         val width = size.width.toFloat()
         val height = size.height.toFloat()
         return SceneExportPlacement(
@@ -99,6 +100,4 @@ internal object StoryExportPlacedVideos {
     )
 
     private const val MILLIS_PER_SECOND = 1000f
-    private const val MIN_SCALE = 0.2
-    private const val MAX_SCALE = 3.0
 }

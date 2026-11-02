@@ -220,14 +220,7 @@ data class StoryComposerUiState(
      * aussi celui que « Retirer le fond de la scène » retire : on retire ce que l'on voit.
      */
     val selectedSlideBackdropMediaId: String?
-        get() {
-            val designated = deck.selectedSlideBackgroundMediaId
-            val served = selectedSlideAttachments.any { it.id == designated } || selectedSlidePending.any { it.cmid == designated }
-            val posed = deck.selectedSlide.placedMedia.mapTo(mutableSetOf()) { it.mediaId }
-            return designated?.takeIf { served }
-                ?: selectedSlideAttachments.firstOrNull { it.id !in posed }?.id
-                ?: selectedSlidePending.firstOrNull { it.cmid !in posed }?.cmid
-        }
+        get() = StoryPublishBackground.paintedId(deck.selectedSlide, this)
 
     /** Le fond peint attend encore sa file d'envoi (hors ligne, R5 de #13863) : la scène le dit « en attente ». */
     val selectedSlideBackdropIsPending: Boolean
@@ -328,7 +321,7 @@ data class StoryComposerUiState(
      * pure [StorySlideDeck.selectedSlideDurationSeconds] so the duration control shows a
      * live value and the screen stays glue.
      */
-    val selectedSlideDurationSeconds: Double get() = deck.selectedSlideDurationSeconds
+    val selectedSlideDurationSeconds: Double get() = deck.slideDurationSeconds(deck.selectedSlide, selectedSlideBackdropMediaId, ::videoSourceSeconds)
 
     /**
      * The **selected** slide's author-chosen backdrop (`null` when none), projected from

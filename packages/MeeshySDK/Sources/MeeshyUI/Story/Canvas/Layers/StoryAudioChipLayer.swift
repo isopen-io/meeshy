@@ -135,7 +135,7 @@ public final class StoryAudioChipLayer: CALayer {
         let peintre = painter ?? StoryAudioChipPainter()
         painter = peintre
         let format = UIGraphicsImageRendererFormat()
-        format.scale = contentsScale
+        format.scale = SceneRasterBudget.scale(for: bounds.size, preferred: contentsScale)
         format.opaque = false
         let image = UIGraphicsImageRenderer(size: bounds.size, format: format).image { context in
             peintre.paint(local, in: context.cgContext, samplesBackdrop: false)

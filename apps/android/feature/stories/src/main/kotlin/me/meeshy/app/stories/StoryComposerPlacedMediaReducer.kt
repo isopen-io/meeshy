@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.StoryMediaReframe
 import me.meeshy.sdk.model.StoryMediaRotation
+import me.meeshy.sdk.model.scene.ForegroundMediaFrame
 import me.meeshy.sdk.model.scene.StoryVolumeCarryingLaw
 import me.meeshy.sdk.model.scene.StoryVolumeState
 import me.meeshy.sdk.model.composer.look.ComposerCropPreset
@@ -59,8 +60,9 @@ internal object StoryComposerPlacedMediaReducer {
     fun moved(state: StoryComposerUiState, mediaId: String, dx: Float, dy: Float): StoryComposerUiState =
         rewritten(state, mediaId) { it.nudged(dx, dy) }
 
+    /** Pincer / tourner, le plancher d'échelle pris sur le cadre que la scène peint pour CE média (#14298). */
     fun transformed(state: StoryComposerUiState, mediaId: String, scaleBy: Float, rotateByDeg: Float): StoryComposerUiState =
-        rewritten(state, mediaId) { it.transformed(scaleBy, rotateByDeg) }
+        rewritten(state, mediaId) { it.transformed(scaleBy, rotateByDeg, state.placedAspectRatio(it)) }
 
     /** Règle le filtre propre de CE média posé, et de lui seul : la scène garde le sien ; inerte si le média n'est pas posé ou le filtre inchangé. */
     fun filtered(state: StoryComposerUiState, mediaId: String, filter: StoryFilter?): StoryComposerUiState {
@@ -159,4 +161,15 @@ internal object StoryComposerPlacedMediaReducer {
             },
         )
     }
+}
+
+/**
+ * Le ratio du cadre que la scène peint pour [placed] : celui du fichier téléversé, recadré pour une image ; `null` tant
+ * qu'il n'est pas téléversé (le cadre est alors le carré des lecteurs). Le plateau et le plancher d'échelle le lisent ici.
+ */
+internal fun StoryComposerUiState.placedAspectRatio(placed: StoryPlacedMedia): Double? {
+    val uploaded = attachments.firstOrNull { it.id == placed.mediaId } ?: return null
+    val isVideo = uploaded.mimeType.startsWith("video", ignoreCase = true)
+    return ForegroundMediaFrame.measuredAspectRatio(uploaded.width, uploaded.height)
+        ?.let { measured -> StoryMediaCrop.effectiveRatio(measured, placed.crop.takeUnless { isVideo }) }
 }

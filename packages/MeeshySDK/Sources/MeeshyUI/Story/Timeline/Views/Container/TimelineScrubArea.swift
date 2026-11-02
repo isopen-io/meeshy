@@ -160,6 +160,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
                         .padding(.leading, Self.laneLabelWidth)
                         tracks(laneWidth)
                     }
+                    .timelineVisibleWindow(scrollX: max(0, scrollX - Self.horizontalPadding), viewportWidth: viewportWidth)
                     .padding(.horizontal, Self.horizontalPadding)
                     .overlay(alignment: .topLeading) { snapGuideOverlay }
                     .overlay(alignment: .topLeading) { playheadOverlay }

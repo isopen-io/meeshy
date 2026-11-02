@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.BackgroundSoundV3
 import me.meeshy.sdk.model.StoryAudioAvailability
+import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.composer.sound.SoundCredit
 import me.meeshy.sdk.model.resolvedBackgroundAudio
@@ -152,20 +153,25 @@ internal object PostSceneSound {
     /**
      * Le son que la fiche nomme, dans l'ordre d'iOS (`BackgroundSoundBadge.backgroundSound`) : le son du DOCUMENT quand le post le
      * garde, puis la piste de fond de la première scène (empruntée si elle porte un `soundId`, sinon originale), puis l'identifiant
-     * de fond hérité, toujours un emprunt. Titre et auteur viennent de la piste ; la durée, de la piste résolue.
+     * de fond hérité, toujours un emprunt. Titre et auteur viennent de la piste ; la durée, de la piste résolue. Sans aucun son de
+     * fond, la barre nomme le son de la bibliothèque POSÉ sur la scène (#14201) : c'est lui qu'elle fait entendre.
      */
     fun credit(scenes: List<StoryItem>, documentSound: BackgroundSoundV3?): SceneSoundCredit {
         val effects = scenes.firstOrNull()?.storyEffects
         val trace = effects?.audioPlayerObjects?.firstOrNull { it.isBackground == true }
-        val borrowed = SceneSoundCredit.Library(
-            title = trace?.name?.trim()?.takeIf(String::isNotEmpty),
-            author = trace?.soundAuthorUsername?.trim()?.takeIf(String::isNotEmpty),
-            duration = (trace ?: effects?.resolvedBackgroundAudio)?.let(SoundCredit::durationLabel),
-        )
+        val borrowed = library(trace, (trace ?: effects?.resolvedBackgroundAudio)?.let(SoundCredit::durationLabel))
         if (documentSound != null) return if (documentSound.source.t == ORIGINAL_SOURCE) SceneSoundCredit.Original else borrowed
         if (trace != null) return if (trace.soundId.isNullOrBlank()) SceneSoundCredit.Original else borrowed
-        return if (effects?.backgroundAudioId.isNullOrBlank()) SceneSoundCredit.None else borrowed
+        if (!effects?.backgroundAudioId.isNullOrBlank()) return borrowed
+        val posed = effects?.audioPlayerObjects?.firstOrNull { !it.soundId.isNullOrBlank() } ?: return SceneSoundCredit.None
+        return library(posed, SoundCredit.durationLabel(posed))
     }
+
+    private fun library(track: StoryAudioPlayerObject?, duration: String?): SceneSoundCredit.Library = SceneSoundCredit.Library(
+        title = track?.name?.trim()?.takeIf(String::isNotEmpty),
+        author = track?.soundAuthorUsername?.trim()?.takeIf(String::isNotEmpty),
+        duration = duration,
+    )
 
     private const val ORIGINAL_SOURCE = "original"
 }

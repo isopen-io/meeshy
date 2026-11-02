@@ -305,6 +305,7 @@ struct NewConversationView: View {
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: MeeshySpacing.xs) {
+                if !selectedUsers.isEmpty { encryptionSection }
                 if isSearchActive {
                     searchResultsSection
                 } else {
@@ -314,6 +315,19 @@ struct NewConversationView: View {
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, MeeshySpacing.xs)
         }
+    }
+
+    // MARK: - Encryption
+
+    /// Le mode se choisit à la création : l'offre suit le rôle et la forme
+    /// (tête-à-tête ou groupe) que la sélection dessine.
+    private var encryptionSection: some View {
+        NewConversationEncryptionSection(
+            offer: viewModel.encryptionOffer(isGroup: isGroupMode),
+            selectedMode: viewModel.encryptionMode(isGroup: isGroupMode),
+            accentColor: accentColor,
+            onSelect: { viewModel.chooseEncryptionMode($0, isGroup: isGroupMode) }
+        )
     }
 
     // MARK: - Search Results Section

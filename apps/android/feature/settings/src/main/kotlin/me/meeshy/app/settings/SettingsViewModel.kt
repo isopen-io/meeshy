@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.NotificationType
 import me.meeshy.sdk.model.NotificationTypeCatalog
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UserNotificationPreferences
+import me.meeshy.sdk.model.relation.CircleNotify
+import me.meeshy.sdk.model.relation.RelationAudienceChoice
 import me.meeshy.sdk.model.next
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationPreferencesSyncRepository
@@ -208,6 +210,16 @@ class SettingsViewModel @Inject constructor(
     /** Sets a single per-event notification type on/off, preserving every other toggle. */
     fun setNotificationTypeEnabled(type: NotificationType, enabled: Boolean) {
         updateNotifications { NotificationTypeCatalog.toggle(it, type, enabled) }
+    }
+
+    /**
+     * « Qui est prévenu » (#14064) : règle le cran d'entourage d'UNE action. Peint aussitôt (le bloc local est la
+     * source de l'écran) puis mis en file vers la passerelle, hors ligne compris ; un envoi refusé jusqu'au bout rend
+     * le bloc à la vérité du serveur (`UpdateSettingsHandler.onExhausted`). Une clé inconnue est ignorée.
+     */
+    fun setCircleAudience(key: String, choice: RelationAudienceChoice) {
+        if (key !in CircleNotify.KEYS) return
+        updateNotifications { it.copy(circleAudience = it.circleAudience + (key to choice)) }
     }
 
     /** Updates the search query that filters the per-event notification-type list. */

@@ -298,7 +298,7 @@ extension CallView {
                 hint: String(localized: "call.control.flipCamera.hint", defaultValue: "Bascule entre la caméra avant et arrière", bundle: .main),
                 diameter: diameter
             ) {
-                callManager.switchCamera()
+                callManager.cameraActuator.switchCamera()
                 HapticFeedback.light()
             }
         case .cameraPicker:
@@ -368,7 +368,7 @@ extension CallView {
             toggleState: isEnabled,
             diameter: diameter
         ) {
-            callManager.toggleVideo()
+            callManager.cameraActuator.toggleVideo()
         }
         // Le partage d'écran remplace la piste caméra : la bascule attend.
         .disabled(callManager.screenShare.isSharing)
@@ -379,7 +379,7 @@ extension CallView {
     private func cameraPickerActionButton(captioned: Bool, diameter: CGFloat) -> some View {
         let choices = callManager.availableCameras.map { camera in
             AsyncRenderRow(id: camera.id, content: Button {
-                callManager.selectCamera(id: camera.id)
+                callManager.cameraActuator.selectCamera(id: camera.id)
             } label: {
                 Label(camera.displayName, systemImage: callManager.selectedCameraId == camera.id ? "checkmark" : "camera")
             })

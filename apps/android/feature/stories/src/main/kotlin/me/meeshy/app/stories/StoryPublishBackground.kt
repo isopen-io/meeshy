@@ -5,6 +5,24 @@ package me.meeshy.app.stories
 internal object StoryPublishBackground {
 
     /**
+     * Le média que le plateau peint en fond de [slide] : le désigné s'il est envoyé ou en attente, sinon le premier média
+     * de la slide qui n'est pas posé (envoyé d'abord, puis en attente). C'est le fond que la scène MONTRE, celui que la
+     * publication porte dès qu'elle part en scène (#14302).
+     */
+    fun paintedId(slide: StorySlide, state: StoryComposerUiState): String? {
+        val uploaded = slide.mediaIds.filter { id -> state.attachments.any { it.id == id } }
+        val pending = slide.mediaIds.filter { id -> state.pendingUploads.any { it.cmid == id } }
+        val posed = slide.placedMedia.mapTo(mutableSetOf()) { it.mediaId }
+        return slide.backgroundMediaId?.takeIf { it in uploaded || it in pending }
+            ?: uploaded.firstOrNull { it !in posed }
+            ?: pending.firstOrNull { it !in posed }
+    }
+
+    /** [slide] dont le fond peint ([paintedId]) est désigné : ce que la scène montre en fond part comme son fond. */
+    fun designated(slide: StorySlide, state: StoryComposerUiState): StorySlide =
+        paintedId(slide, state)?.takeIf { it != slide.backgroundMediaId }?.let { slide.copy(backgroundMediaId = it) } ?: slide
+
+    /**
      * Resolves a [slide]'s designated background media to the [StoryBackgroundMedia] the
      * wire mapping needs, from the already-uploaded [attachments]. Returns `null` when
      * nothing is designated or the id names no media of the slide. A designated media still waiting on its

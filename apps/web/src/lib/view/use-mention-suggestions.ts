@@ -18,6 +18,9 @@ const REMOTE_CACHE_LIMIT = 32;
 
 const NO_CANDIDATES: readonly MentionCandidate[] = [];
 
+/** La portée de la conversation, quand la source en porte une (#14071). */
+const reachOf = (source: MentionSource) => (source.reach === undefined ? {} : { reach: source.reach });
+
 export type MentionSuggestions = {
   /** La requête `@` sous le curseur — `null` quand aucune n'est ouverte. */
   readonly query: MentionQuery | null;
@@ -103,7 +106,7 @@ export function useMentionSuggestions(input: {
     () =>
       query === null || source === null
         ? 0
-        : localMentionMatches({ contacts, participants: source.locals, query: query.query, selfId: source.selfId }).length,
+        : localMentionMatches({ contacts, participants: source.locals, query: query.query, selfId: source.selfId, ...reachOf(source) }).length,
     [query, source, contacts],
   );
   const stage = query === null ? 'local' : mentionLookupStage({ query: query.query, localMatchCount });
@@ -149,7 +152,7 @@ export function useMentionSuggestions(input: {
        réponse PROLONGÉE (`al` servie pendant que `ali` est en vol) est
        filtrée localement, faute de mieux. */
     const served = !usable ? NO_CANDIDATES : remote.key === needle ? remote.items : filterMentionCandidates(remote.items, query.query);
-    return composeMentionList({ contacts, participants: source.locals, remote: served, query: query.query, selfId: source.selfId });
+    return composeMentionList({ contacts, participants: source.locals, remote: served, query: query.query, selfId: source.selfId, ...reachOf(source) });
   }, [active, source, query, remote, needle, contacts]);
 
   const open = active && source !== null && (items.length > 0 || !resolving);

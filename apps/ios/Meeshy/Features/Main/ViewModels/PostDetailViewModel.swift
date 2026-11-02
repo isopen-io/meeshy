@@ -437,7 +437,9 @@ class PostDetailViewModel: ObservableObject {
             FeedbackToastManager.shared.showSuccess(String(localized: "post.detail.edit.success", defaultValue: "Post modifié"))
         } catch {
             self.post = snapshot
-            FeedbackToastManager.shared.showError(String(localized: "post.detail.edit.error", defaultValue: "Erreur lors de la modification"))
+            if !DailyGestureLimitNotice.surface(error) {
+                FeedbackToastManager.shared.showError(String(localized: "post.detail.edit.error", defaultValue: "Erreur lors de la modification"))
+            }
         }
     }
 

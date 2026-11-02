@@ -1,12 +1,6 @@
 package me.meeshy.app.feed
 
-import me.meeshy.sdk.media.readMediaUploadItem
 import android.content.Context
-import android.graphics.BitmapFactory
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -49,9 +42,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
-import me.meeshy.sdk.media.MediaUploadSource
+import me.meeshy.ui.component.retouch.RetouchSourceDecoder
 import me.meeshy.ui.component.retouch.RetouchVideoProbe
-import me.meeshy.ui.component.message.MessageComposerGlassAction
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -60,7 +52,12 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val PieceShape = RoundedCornerShape(MeeshyRadius.md)
 private val PieceSize = 56.dp
+private val PieceRemoveDisc = 20.dp
+private val PieceRemoveTouch = 32.dp
 private val MediaSize = 120.dp
+
+/** Assez pour une vignette de 56 dp nette, l'orientation EXIF cuite : une prise de l'objectif n'y arrive pas couchée. */
+private const val PIECE_THUMBNAIL_LONG_SIDE = 256
 
 /**
  * Les médias d'un commentaire, sous son texte : une vignette par pièce, une vidéo marquée comme telle. Toucher une pièce
@@ -69,6 +66,14 @@ private val MediaSize = 120.dp
 @Composable
 internal fun CommentMediaStrip(media: List<CommentMediaPreview>) {
     if (media.isEmpty()) return
+    media.filter { it.isAudio }.forEach { CommentAudioChip(it) }
+    val visual = media.filterNot { it.isAudio }
+    if (visual.isEmpty()) return
+    CommentVisualStrip(visual)
+}
+
+@Composable
+private fun CommentVisualStrip(media: List<CommentMediaPreview>) {
     val open = LocalCommentMediaOpener.current
     val photoLabel = stringResource(R.string.post_comments_media_image)
     val videoLabel = stringResource(R.string.post_comments_media_video)
@@ -106,7 +111,7 @@ internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentP
     if (!tray.hasMedia) return
     val removeLabel = stringResource(R.string.feed_composer_remove_media)
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = MeeshySpacing.xs),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         tray.pieces.forEach { piece ->
@@ -120,51 +125,44 @@ internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentP
                     PieceThumbnail(piece)
                     if (piece.uploaded == null) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                 }
-                IconButton(
-                    onClick = { onRemove(piece.id) },
-                    modifier = Modifier.size(20.dp).align(Alignment.TopEnd).background(Color.Black.copy(alpha = 0.6f), CircleShape),
-                ) {
-                    Icon(MeeshyIcons.Close, contentDescription = removeLabel, tint = MeeshyPalette.White, modifier = Modifier.size(12.dp))
-                }
+                PieceRemoveButton(label = removeLabel, onClick = { onRemove(piece.id) }, modifier = Modifier.align(Alignment.TopEnd))
             }
+        }
+    }
+}
+
+/**
+ * Le ✕ d'une pièce (#14287) : un rond net de 20 dp dans le coin de la vignette. La zone touchée, plus large, reste
+ * transparente ; un `IconButton` l'aurait portée à 48 dp et peinte en gris, débordant en demi-disque derrière le ✕.
+ */
+@Composable
+private fun PieceRemoveButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(PieceRemoveTouch)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        Box(
+            Modifier.size(PieceRemoveDisc).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MeeshyIcons.Close, contentDescription = null, tint = MeeshyPalette.White, modifier = Modifier.size(12.dp))
         }
     }
 }
 
 @Composable
 private fun PieceThumbnail(piece: CommentPendingPiece) {
-    if (piece.isVideo) {
-        Icon(MeeshyIcons.Video, contentDescription = null, tint = MeeshyPalette.Indigo500)
+    if (piece.isVideo || piece.isAudio) {
+        Icon(if (piece.isAudio) MeeshyIcons.Mic else MeeshyIcons.Video, contentDescription = null, tint = MeeshyPalette.Indigo500)
         return
     }
     val bitmap = remember(piece.item) {
-        val options = BitmapFactory.Options().apply { inSampleSize = 8 }
-        runCatching {
-            when (val source = piece.item.source) {
-                is MediaUploadSource.OnDisk -> BitmapFactory.decodeFile(source.file.path, options)
-                else -> piece.item.bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size, options) }
-            }
-        }.getOrNull()
+        runCatching { RetouchSourceDecoder.decode(piece.item.bytes, longSide = PIECE_THUMBNAIL_LONG_SIDE) }.getOrNull()
     }
     bitmap?.let { Image(it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-}
-
-/** Le bouton « joindre » du composeur : la galerie, photo ou vidéo ; ce qui se lit part au bandeau. */
-@Composable
-internal fun CommentAttachButton(enabled: Boolean, onPicked: (MediaUploadItem) -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
-        scope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let(onPicked) }
-    }
-    MessageComposerGlassAction(
-        icon = MeeshyIcons.PhotoFilled,
-        contentDescription = stringResource(R.string.feed_composer_attach_media),
-        onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-        enabled = enabled,
-        tint = MeeshyPalette.Indigo500,
-    )
 }
 
 /**

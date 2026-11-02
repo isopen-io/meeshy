@@ -312,8 +312,9 @@ class ConversationRepository @Inject constructor(
         type: String,
         title: String?,
         participantIds: List<String>,
+        encryptionMode: String? = null,
     ): NetworkResult<ApiConversation> =
-        apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds)) }
+        apiCall { conversationApi.create(CreateConversationRequest(type, title, participantIds, encryptionMode)) }
             .also { if (it is NetworkResult.Success) noteCreated(it.data.id) }
 
     /**

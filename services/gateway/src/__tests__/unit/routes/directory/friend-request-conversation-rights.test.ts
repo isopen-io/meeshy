@@ -22,6 +22,12 @@ import Fastify from 'fastify';
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
 }));
+
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 jest.mock('../../../../utils/rate-limiter.js', () => ({
   createCustomRateLimiter: () => ({ middleware: () => async () => undefined }),
@@ -98,6 +104,10 @@ function prismaDouble() {
 }
 
 async function accepter() {
+  return (await accepterEtLire()).participants;
+}
+
+async function accepterEtLire() {
   const prisma = prismaDouble();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma as never);
@@ -121,8 +131,19 @@ async function accepter() {
   expect(res.statusCode).toBe(200);
   expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
   const data = (prisma.conversation.create.mock.calls[0] as any[])[0].data;
-  return data.participants.create as Array<{ userId: string; language?: string; permissions: Record<string, boolean> }>;
+  return {
+    data: data as Record<string, unknown>,
+    participants: data.participants.create as Array<{ userId: string; language?: string; permissions: Record<string, boolean> }>,
+  };
 }
+
+describe("la conversation directe d'une amitié acceptée naît chiffrée au repos (2026-11-01)", () => {
+  it('pose le régime `server` et la clé obtenue pour SON identifiant, jamais un mode nul', async () => {
+    const { data } = await accepterEtLire();
+    expect(data).toMatchObject({ encryptionMode: 'server', encryptionProtocol: 'aes-256-gcm', serverEncryptionKeyId: 'server-key', encryptionEpoch: 1 });
+    expect(typeof data.id).toBe('string');
+  });
+});
 
 describe("#6080 — la conversation directe d'une amitié acceptée naît OUVERTE", () => {
   it('écrit la table du site unique, champ par champ, pour les DEUX participants', async () => {

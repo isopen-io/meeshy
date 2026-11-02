@@ -140,7 +140,7 @@ public final class StoryAudioChipPainter {
             center: CGPoint(x: max(0, min(size.width, audio.x * size.width)),
                             y: max(0, min(size.height, audio.y * size.height))),
             unit: size.width / referenceCanvasWidth
-                * CGFloat(SceneObjectScalePolicy.clamped(audio.scale ?? 1)),
+                * CGFloat(SceneObjectScalePolicy.sanitized(audio.scale ?? 1)),
             display: AudioChipDisplay.display(for: AudioChipDisplay.backgroundAnnouncement(
                 sound: AudioChipDisplay.borrowedSound(soundId: audio.soundId),
                 libraryTitle: audio.name,

@@ -174,7 +174,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
         // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
         // aucune et sort de la liste, comme la règle 4 l'exige.
-        "Features/Composer/MeeshyComposerHost+Overflow.swift",
+        // #14056 — `+Overflow` a perdu à son tour sa dernière taille figée :
+        // le `⋯` de la scène est servi par `ComposerMoreMenuPolicy` (#13839),
+        // et le fichier sort de la liste (règle 4).
         "Features/Profile/Views/AchievementBadgeView.swift",
         "Features/Settings/Views/ActiveSessionsView.swift",
         "Features/Links/Views/AffiliateView.swift",
@@ -465,7 +467,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // 178 → 173 (#12568) : les mêmes cinq initiales d'avatar.
     // 173 → 172 (#13907) : la barre haute quitte le projet avec le glyphe figé
     // de sa croix ; `ComposerTopBar.swift` sort de `bearingFiles` (règle 4).
-    private static let totalCeiling = 172
+    // 172 → 171 (#14056) : le glyphe figé du `⋯` quitte
+    // `MeeshyComposerHost+Overflow.swift` ; le fichier sort de `bearingFiles`
+    // (règle 4).
+    private static let totalCeiling = 171
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

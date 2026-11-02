@@ -34,6 +34,12 @@ export type ConversationEncryptionMode = 'e2ee' | 'server' | 'hybrid';
 export const ENCRYPTION_ALREADY_ENABLED_CODE = 'ENCRYPTION_ALREADY_ENABLED' as const;
 export const ENCRYPTION_NOT_ENABLED_CODE = 'ENCRYPTION_NOT_ENABLED' as const;
 
+/** Directive porteur du 2026-11-01 : le serveur chiffre toujours au repos, `server`/`hybrid` ne se désactivent plus. */
+export const ENCRYPTION_AT_REST_PERMANENT_CODE = 'ENCRYPTION_AT_REST_PERMANENT' as const;
+
+export const ENCRYPTION_AT_REST_PERMANENT_MESSAGE =
+  'Messages are always encrypted on the server: change the encryption mode instead, or start a new conversation';
+
 export type RegimeFields = {
   readonly encryptionMode: string | null;
   readonly encryptionEnabledAt: Date | null;
@@ -122,6 +128,15 @@ function switchData(change: RegimeSwitch): Record<string, unknown> {
 }
 
 /**
+ * Les champs de régime d'une conversation NAISSANTE (directive porteur du
+ * 2026-11-01), posés par son `create` : la même forme qu'une première
+ * activation, époque 1. Le seul autre écrivain du régime que la bascule.
+ */
+export function creationRegimeData(activation: RegimeActivation, at: Date): Record<string, unknown> {
+  return switchData({ conversationId: '', observedEpoch: 0, target: activation, at });
+}
+
+/**
  * Le filtre de ce qu'une bascule a le droit de réécrire : le clair (mode
  * absent ou nul) ou le chiffrement au repos. Une liste POSITIVE — une négation
  * (`not: 'e2ee'`) écarterait le document sans le champ et laisserait passer
@@ -190,8 +205,8 @@ export type EncryptionStatusView = {
  * Ce que `encryption-status` et les deux bascules servent : un ancien client
  * n'en lit que les cinq premiers champs. `mayToggle` est la politique de rôle
  * (#12588) ; le régime la borne : une conversation `e2ee` ne se bascule ni ne
- * se désactive, pour personne (#12949), et seul `server` ou `hybrid` se
- * désactive.
+ * se désactive, pour personne (#12949) ; `server` et `hybrid` changent de
+ * mode sans jamais repasser en clair (2026-11-01).
  */
 export function encryptionStatusView(
   regime: RegimeFields,
@@ -199,7 +214,10 @@ export function encryptionStatusView(
 ): EncryptionStatusView {
   const mode = regime.encryptionMode;
   const active = regimeIsActive(regime);
-  const mayDisable = options.mayToggle && regimeMayBeLeft(regime);
+  // Directive porteur du 2026-11-01 — rien ne se désactive : un régime au
+  // repos se quitte vers un autre mode (`canToggleEncryption`), jamais vers le clair.
+  const mayDisable = false;
+  const mayLeave = options.mayToggle && regimeMayBeLeft(regime);
   const pairEndToEndConversationId = options.pairEndToEndConversationId ?? null;
   const mayEnable = options.mayToggle && pairEndToEndConversationId === null;
   return {
@@ -209,7 +227,7 @@ export function encryptionStatusView(
     enabledBy: regime.encryptionEnabledBy ?? null,
     canTranslate: mode === 'server' || mode === 'hybrid',
     epoch: regimeEpochOf(regime),
-    canToggleEncryption: active ? mayDisable : mayEnable,
+    canToggleEncryption: active ? mayLeave : mayEnable,
     canDisableEncryption: mayDisable,
     pairEndToEndConversationId,
   };

@@ -1,5 +1,6 @@
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { NOTIFICATION_LANGUAGES } from '@meeshy/shared/utils/notification-strings';
+import { textSynthesis } from '../../../services/notifications/content-synthesis';
 
 /**
  * #9049 — une réaction se lit « a réagi 🔥 à votre message : « … » » : l'émoji
@@ -83,14 +84,15 @@ describe('#9049 — une réaction dit son émoji une seule fois', () => {
   });
 
   it.each(NOTIFICATION_LANGUAGES.map((language) => [language]))(
-    'message_reaction (%s) : le corps cite le message et ne nomme pas l’acteur — le titre de la bannière le porte',
+    'message_reaction (%s) : le corps décrit le message par sa synthèse et ne nomme pas l’acteur — le titre de la bannière le porte',
     async (language) => {
       const { svc, created } = makeHarness(language);
       await svc.createReactionNotification({
         messageAuthorId: 'r', reactorUserId: 'a', messageId: 'm', conversationId: 'cv', reactionEmoji: EMOJI,
       });
       expect(created[0].content).toContain(EMOJI);
-      expect(created[0].content).toContain('J’attends!');
+      expect(created[0].content).toContain(textSynthesis(language, 'J’attends!'));
+      expect(created[0].content).not.toContain('J’attends!');
       expect(created[0].content).not.toContain(ACTOR);
     },
   );

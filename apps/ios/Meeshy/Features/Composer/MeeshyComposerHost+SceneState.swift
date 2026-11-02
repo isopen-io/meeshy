@@ -71,11 +71,10 @@ extension MeeshyComposerHost {
                                              editsInline: activeInlineEdit != nil)
     }
 
-    /// **L'indication grise de la capture rapide** (#8653) — la MÊME question
-    /// que celle que le toucher pose (`handleSceneQuickTap`) : l'indication ne
-    /// promet jamais un geste que la scène refuserait.
+    /// **L'indication grise de la capture rapide** (#8653) — la question du
+    /// toucher (`handleSceneQuickTap`), après la relecture de l'ouverture (#13899).
     var sceneQuickCaptureHint: ComposerSceneQuickCapture.Hint? {
-        guard ComposerSceneQuickCapture.offers(
+        guard autosave.didBind, ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,

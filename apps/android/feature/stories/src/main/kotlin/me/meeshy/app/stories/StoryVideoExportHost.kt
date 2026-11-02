@@ -2,16 +2,9 @@ package me.meeshy.app.stories
 
 import android.content.Context
 import android.content.Intent
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -21,10 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,19 +24,16 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import me.meeshy.sdk.model.composer.scene.SceneExportPlan
 import me.meeshy.sdk.model.composer.scene.SceneExportState
-import me.meeshy.sdk.model.scene.export.ImagerLengthChoice
-import me.meeshy.sdk.model.scene.export.ImagerQuarter
 import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
 import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyPalette
-import me.meeshy.ui.theme.MeeshySpacing
 
-/** L'export vidéo vu du lecteur : [start] lance Enregistrer, Partager ou Imager ; [busy] fige la lecture tant qu'il dure. */
+/** L'export vidéo vu du lecteur : [start] lance Enregistrer, Partager, ou ouvre la vue Imager ; [busy] fige la lecture tant qu'il dure. */
 @Stable
 class StoryVideoExport internal constructor(
     val busy: Boolean,
@@ -60,7 +48,7 @@ class StoryVideoExport internal constructor(
 
 /**
  * [item] rend la story telle que la passerelle l'a servie (ses objets sonores, ses fenêtres), [slide] sa projection —
- * celle que le lecteur peint. Le choix de longueur, la peinture des calques et le voile du bake vivent ici.
+ * celle que le lecteur peint. La vue Imager, la peinture des calques et le voile du bake vivent ici.
  */
 @Composable
 internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideView?, author: () -> StoryExportAuthorFacts? = { null }): StoryVideoExport {
@@ -70,7 +58,7 @@ internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideV
 
 /**
  * L'export d'une ou plusieurs scènes ([scenes], lues au moment du geste) : un post à scène ou un réel s'exporte entier, ses
- * scènes bout à bout, par le même moteur que la story (#13896). Le choix de longueur, la peinture et le voile vivent ici.
+ * scènes bout à bout, par le même moteur que la story (#13896). La vue Imager, la peinture et le voile vivent ici.
  * [key] sépare la course de cet hôte de celle d'un autre hôte du même écran : chacun remet ce qu'il a lancé, une fois.
  */
 @Composable
@@ -93,14 +81,21 @@ fun rememberSceneVideoExport(
     fun run(mode: StoryExportMode, shown: List<Pair<StoryItem, StorySlideView>>, storyAuthor: StoryExportAuthorFacts?) {
         scope.launch {
             // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
-            if (mode != StoryExportMode.SHARE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
+            if (mode == StoryExportMode.SAVE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
             lastRun = SceneExportRun(mode, shown, storyAuthor)
             viewModel.export(mode, shown, storyAuthor)
         }
     }
 
     when (val current = stage) {
-        is StoryVideoExportStage.ChoosingLength -> ImagerLengthDialog(current.choices, onChoose = viewModel::chooseLength)
+        // « Imager » ouvre SA VUE (#14326) : Enregistrer et Partager partent d'elle, jamais du menu.
+        is StoryVideoExportStage.Imagining -> ImagerSheet(current.offer, lastRun?.scenes?.firstOrNull()?.second) { decision ->
+            scope.launch {
+                val toGallery = decision?.destination == SceneExportDestination.GALLERY
+                if (toGallery && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
+                viewModel.decideImager(decision)
+            }
+        }
         else -> {
             val painting = (current as? StoryVideoExportStage.Painting)?.request
             SceneExportStatus(
@@ -163,45 +158,6 @@ internal fun SceneExportStatus(
 /** Le dernier export lancé, que « Réessayer » relance tel quel : même sortie, mêmes scènes. */
 private class SceneExportRun(val mode: StoryExportMode, val scenes: List<Pair<StoryItem, StorySlideView>>, val author: StoryExportAuthorFacts?)
 
-/** Au-delà d'une minute, Imager propose la longueur rendue depuis le début : chaque quart avec sa durée. */
-@Composable
-internal fun ImagerLengthDialog(choices: List<ImagerLengthChoice>, onChoose: (ImagerQuarter?) -> Unit) {
-    AlertDialog(
-        onDismissRequest = { onChoose(null) },
-        title = { Text(stringResource(R.string.stories_export_length_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.stories_export_length_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MeeshyPalette.White.copy(alpha = SUBTITLE_ALPHA),
-                )
-                choices.forEach { choice ->
-                    Text(
-                        text = stringResource(
-                            R.string.stories_export_length_option,
-                            choice.quarter.numerator,
-                            StoryVideoExportStages.clock(choice.durationMillis),
-                        ),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MeeshyPalette.White,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(role = Role.Button) { onChoose(choice.quarter) }
-                            .padding(vertical = MeeshySpacing.md),
-                    )
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = { onChoose(null) }) { Text(stringResource(R.string.stories_cancel)) }
-        },
-    )
-}
-
-private const val SUBTITLE_ALPHA = 0.7f
-
 /** Remet la vidéo, ou l'image d'une scène fixe, à la feuille de partage système, par le `FileProvider` de l'application. */
 private fun shareVideo(context: Context, file: File, chooserTitle: String) {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -230,7 +186,7 @@ fun StoryVideoExportMenuEntries(onPick: (StoryExportMode) -> Unit) {
     )
     DropdownMenuItem(
         text = { Text(stringResource(R.string.stories_viewer_export_imager)) },
-        leadingIcon = { Icon(MeeshyIcons.Movie, contentDescription = null) },
+        leadingIcon = { Icon(MeeshyIcons.PhotoFilled, contentDescription = null) },
         onClick = { onPick(StoryExportMode.IMAGER) },
     )
 }

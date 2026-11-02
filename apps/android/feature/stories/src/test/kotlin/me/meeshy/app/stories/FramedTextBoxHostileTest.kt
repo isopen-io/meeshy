@@ -119,7 +119,8 @@ class FramedTextBoxHostileTest {
         val sticker = StorySceneObjectsProjection.stickers(effects) { null }.single()
         listOf(sticker.x, sticker.y, sticker.rotation, sticker.sideFraction, sticker.startTime, sticker.duration, sticker.fadeIn)
             .forEach { assertThat(it.isFinite()).isTrue() }
-        assertThat(sticker.sideFraction).isAtMost(4.0)
+        assertThat(sticker.drawnSide.layout).isAtMost(4.0)
+        assertThat(sticker.drawnSide.layerFloat.isFinite()).isTrue()
     }
 
     private fun textWidthDp(scale: Double, frame: String?): Float {

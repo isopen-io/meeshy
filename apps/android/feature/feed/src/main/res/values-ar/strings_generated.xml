@@ -9,6 +9,7 @@
     <string name="feed_action_quote">اقتباس</string>
     <string name="feed_action_report">إبلاغ</string>
     <string name="feed_action_repost">إعادة نشر</string>
+    <string name="feed_action_send">إرسال</string>
     <string name="feed_action_share">مشاركة</string>
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
     <string name="feed_comment_card_folded">+%1$d ردود</string>
@@ -93,6 +94,14 @@
     <string name="feed_translations_badge_hint">يعرض اللغات المتاحة</string>
     <string name="feed_unknown_author">غير معروف</string>
     <string name="feed_unlike">إلغاء الإعجاب</string>
+    <plurals name="feed_view_comments">
+        <item quantity="zero">لا توجد تعليقات</item>
+        <item quantity="one">عرض التعليق</item>
+        <item quantity="two">عرض التعليقين</item>
+        <item quantity="few">عرض %1$d تعليقات</item>
+        <item quantity="many">عرض %1$d تعليقًا</item>
+        <item quantity="other">عرض %1$d تعليق</item>
+    </plurals>
     <string name="hashtag_results_empty">لا توجد منشورات بالوسم #%1$s</string>
     <string name="mood_bubble_react">تفاعل %1$s</string>
     <string name="mood_bubble_reply">رد</string>
@@ -107,6 +116,8 @@
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
     <string name="post_comments_cancel_reply">إلغاء الرد</string>
+    <string name="post_comments_composer_hint">تعليق…</string>
+    <string name="post_comments_composer_reply_hint">رد…</string>
     <string name="post_comments_copy_text">نسخ النص</string>
     <string name="post_comments_delete_error">تعذّر حذف التعليق</string>
     <string name="post_comments_deleted">تم حذف التعليق</string>
@@ -121,9 +132,12 @@
         <item quantity="other">عرض %1$d ردّ إضافي</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">يعرض بقية الردود في هذا النقاش</string>
+    <string name="post_comments_media_audio">صوت</string>
     <string name="post_comments_media_image">صورة التعليق</string>
     <string name="post_comments_media_open">اضغط للتكبير</string>
+    <string name="post_comments_media_pause_audio">إيقاف مؤقت</string>
     <string name="post_comments_media_play">تشغيل الفيديو</string>
+    <string name="post_comments_media_play_audio">تشغيل الصوت</string>
     <string name="post_comments_media_video">الفيديو</string>
     <string name="post_comments_more_options">المزيد من الخيارات</string>
     <string name="post_comments_reply_a11y_label">%1$s، ردّ. %2$s. %3$s</string>

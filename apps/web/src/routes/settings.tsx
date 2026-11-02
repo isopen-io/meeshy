@@ -28,6 +28,7 @@ import { useDevicePushRow } from '@/lib/push/use-device-push';
 import { currentThemePreference, setThemePreference, type ThemePreference } from '@/lib/scheme';
 import { href, navigate } from '@/routes/route-table';
 import { AccountSwitcherSheet, SwitchAccountButton } from '@/routes/settings-accounts';
+import { CircleNotifySection } from '@/routes/settings-circle-notify';
 import {
   AboutSection,
   AccountSection,
@@ -273,6 +274,14 @@ function SettingsHome() {
             disabled={!online}
             onToggle={toggle}
             onRetry={() => void query.refetch()}
+          />
+          <CircleNotifySection
+            language={language}
+            enabled={enabled}
+            online={online}
+            onOutcome={(outcome) => {
+              if (outcome.status !== 'saved') setNotice(translate(language, notices[outcome.status]));
+            }}
           />
           <DataSection language={language} {...(gallery === undefined ? {} : { gallery })} deviceTranslation={deviceTranslation} />
           <PacksSection language={language} />

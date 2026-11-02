@@ -120,7 +120,7 @@ struct RootNotificationToastOverlay: View {
     private static func presentLaunchPreviewIfRequested(on manager: NotificationToastManager) async {
         let arguments = ProcessInfo.processInfo.arguments
         guard arguments.contains("-MeeshyBannerPreview") else { return }
-        try? await Task.sleep(for: .seconds(2))
+        guard await cancellableSleep(for: .seconds(2)) else { return }
         let conversationId = arguments.firstIndex(of: "-MeeshyBannerConversation")
             .flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
             .flatMap { $0.allSatisfy(\.isHexDigit) ? $0 : nil } ?? ""

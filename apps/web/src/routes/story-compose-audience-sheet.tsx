@@ -1,5 +1,3 @@
-import type { PostVisibility } from '@meeshy/shared/types/post';
-
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { STORY_AUDIENCE_PEOPLE_GLYPHS } from '@/components/glyphs-story-audience-people';
 import { Sheet } from '@/components/sheet';
@@ -12,6 +10,7 @@ import {
   type AudienceAvailability,
   type AudienceRefusalKey,
   type ChoosableAudience,
+  type StudioAudience,
 } from '@/lib/stories/publication-audience';
 import { CHOOSABLE_AUDIENCE_GLYPH, type AudienceSource } from '@/routes/story-compose-audience';
 
@@ -52,7 +51,7 @@ const SUBTITLE_KEY: Readonly<Record<ChoosableAudience, AudienceSubtitleKey>> = {
 
 /** La table de la pastille, ÉTENDUE des deux modes nominatifs — que la
  * feuille seule peint, grisés avec leur raison. */
-const AUDIENCE_GLYPH: Readonly<Record<PostVisibility, GlyphShape>> = {
+const AUDIENCE_GLYPH: Readonly<Record<StudioAudience, GlyphShape>> = {
   ...CHOOSABLE_AUDIENCE_GLYPH,
   EXCEPT: STORY_AUDIENCE_PEOPLE_GLYPHS.userMinus,
   ONLY: STORY_AUDIENCE_PEOPLE_GLYPHS.userCheck,

@@ -15,6 +15,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
+import me.meeshy.sdk.model.net.OnlyUnlinkedRefusal
 
 public enum class UnsentPublicationKind { POST, REEL, STORY }
 
@@ -40,6 +41,9 @@ public data class UnsentPublication(
     /** Whether the composer draft this publication was made from is still on the device — a story reopens only from it. */
     val draftKept: Boolean = true,
 ) {
+    /** Le refus du plafond des choisis sans lien qui a arrêté cette publication, à dire à l'auteur (#14169). */
+    val onlyUnlinkedRefusal: OnlyUnlinkedRefusal? get() = OnlyUnlinkedRefusal.parse(failureReason)
+
     /** A failed post or reel reopens in the composer; so does a failed story whose draft is still kept (#13500). */
     val canReopen: Boolean get() = status == UnsentPublicationStatus.FAILED && (kind != UnsentPublicationKind.STORY || draftKept)
 

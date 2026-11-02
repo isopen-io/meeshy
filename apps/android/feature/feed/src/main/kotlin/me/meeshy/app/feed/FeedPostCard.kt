@@ -23,6 +23,7 @@ internal fun PostCard(
     onImageTap: (Int) -> Unit,
     isOwn: Boolean = false,
     onShare: () -> Unit = {},
+    onSend: (() -> Unit)? = null,
     onCopyLink: () -> Unit = {},
     onCopyText: () -> Unit = {},
     onOpenProfile: ((String) -> Unit)? = null,
@@ -51,6 +52,7 @@ internal fun PostCard(
             onRepost = onRepost,
             onQuote = onQuote,
             onShare = onShare,
+            onSend = onSend,
             onCopyLink = onCopyLink,
             onCopyText = onCopyText,
             onPin = onPin,
@@ -96,7 +98,9 @@ internal fun PostCard(
                 onComments = onComments,
                 onRepost = onRepost,
                 onQuote = onQuote,
+                onSend = onSend,
             )
+            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments) }
         }
     }
 }

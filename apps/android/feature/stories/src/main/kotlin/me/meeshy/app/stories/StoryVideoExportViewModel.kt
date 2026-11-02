@@ -19,8 +19,8 @@ import me.meeshy.sdk.media.scene.SceneMediaProbe
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.composer.scene.SceneExportState
+import me.meeshy.sdk.model.scene.export.ImagerDecision
 import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
-import me.meeshy.sdk.model.scene.export.ImagerQuarter
 import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.sdk.model.scene.export.StoryExportMood
 import me.meeshy.sdk.net.MeeshyConfig
@@ -53,7 +53,7 @@ class StoryVideoExportViewModel @Inject constructor(
         probeMillis = SceneMediaProbe::durationMillis,
         blankPicture = ::writeBlankPicture,
         lastFrame = ::writeLastFrame,
-        chooseLength = stages::askLength,
+        decideImager = stages::askImager,
         paint = stages::askPaint,
         paintBrand = ::paintBrand,
     )
@@ -80,7 +80,8 @@ class StoryVideoExportViewModel @Inject constructor(
      * ferme sur sa carte, avec les jingles ; `null` rend l'œuvre seule.
      */
     fun export(mode: StoryExportMode, scenes: List<Pair<StoryItem, StorySlideView>>, author: StoryExportAuthorFacts? = null) {
-        if (scenes.isEmpty()) return
+        if (scenes.isEmpty() || state.value.isExporting) return
+        if (mode.opensImagerView) stages.openImager()
         val exported = scenes.map { (item, slide) -> StoryExportScene.of(item, slide, config.apiBaseUrl) }
         coordinator.export(mode.destination) { output, work ->
             preparer.prepare(mode, exported, output, work, author?.let { brandResolver.identity(it) })
@@ -95,9 +96,9 @@ class StoryVideoExportViewModel @Inject constructor(
         null
     }
 
-    /** `null` : l'auteur renonce au choix de longueur, l'export s'arrête. */
-    fun chooseLength(quarter: ImagerQuarter?) {
-        if (quarter == null) cancel() else stages.answerLength(quarter)
+    /** `null` : l'auteur ferme la vue Imager, l'export s'arrête. */
+    fun decideImager(decision: ImagerDecision?) {
+        if (decision == null) cancel() else stages.answerImager(decision)
     }
 
     fun painted(files: List<File>?) = stages.answerPaint(files)

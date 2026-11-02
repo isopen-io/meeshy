@@ -363,7 +363,7 @@ struct StoryCardView: View {
                               sceneIndex: .constant(0),
                               isPlaying: .constant(false),
                               accentColorHex: composerAccentColor,
-                              carrier: outgoing,
+                              carrier: outgoing, sceneFloorHex: composerAccentColor,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isOutgoing: true,
                               servesLetterboxFill: false, stagesSoundChips: false,
@@ -371,7 +371,7 @@ struct StoryCardView: View {
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs)
         } else {
-            StoryReaderRepresentable(story: outgoing,
+            StoryReaderRepresentable(story: outgoing, sceneFloorHex: composerAccentColor,
                                      preferredLanguage: resolvedViewerLanguage,
                                      preferredContentLanguages: resolvedViewerLanguageChain,
                                      preloadedImages: preloadedImages,
@@ -421,7 +421,7 @@ struct StoryCardView: View {
                               sceneIndex: .constant(0),
                               isPlaying: .constant(!isCanvasPlaybackPaused),
                               accentColorHex: composerAccentColor,
-                              carrier: story,
+                              carrier: story, sceneFloorHex: composerAccentColor,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isMuted: isGlobalMuted,
                               servesLetterboxFill: false,
@@ -436,7 +436,7 @@ struct StoryCardView: View {
                                   handleStallIndicatorSignal(progressing: progressing)
                               })
         } else {
-            StoryReaderRepresentable(story: story,
+            StoryReaderRepresentable(story: story, sceneFloorHex: composerAccentColor,
                                      preferredLanguage: resolvedViewerLanguage,
                                      preferredContentLanguages: resolvedViewerLanguageChain,
                                      preloadedImages: preloadedImages,

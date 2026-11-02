@@ -39,6 +39,10 @@ import me.meeshy.sdk.model.playback.VideoPresentation
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.fullscreen.FullscreenChromeDimens
 import me.meeshy.ui.component.fullscreen.FullscreenChromeVisibility
+import me.meeshy.ui.component.fullscreen.FullscreenScrims
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import me.meeshy.ui.component.fullscreen.FullscreenPlayPauseButton
 import me.meeshy.ui.component.fullscreen.rememberFullscreenPlayPauseFade
 import me.meeshy.ui.component.video.ReelPlayerHandle
@@ -199,6 +203,12 @@ internal fun ReelPage(
             )
         }
 
+        // Les voiles passent SOUS le chrome : posés au-dessus de la page, ils assombrissaient le bas du rail (Envoyer, le nom
+        // de Republier) comme une action désactivée (recette S8 2026-11-01).
+        FullscreenScrims(
+            topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+            chromeVisible = !chromeHidden,
+        )
         FullscreenChromeVisibility(visible = !chromeHidden, modifier = Modifier.fillMaxSize()) {
             if (showsCarousel) {
                 ReelImageCounter(

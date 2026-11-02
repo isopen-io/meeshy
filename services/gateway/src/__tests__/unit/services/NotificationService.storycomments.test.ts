@@ -107,6 +107,7 @@ import { NotificationService } from '../../../services/notifications/Notificatio
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
 import { sharedFriendships } from '../../helpers/shared-friendships';
+import { aliveAndUnblocked, everyoneLinkedInThisBlock } from '../../helpers/linked-to-everyone';
 
 /** Entourage de l'AUTEUR réglé à « Ami » (#13929) ; les défauts : `notifs-cercles-13929.test.ts`. */
 const AUTHOR_ENTOURAGE_FRIEND = { notification: Object.fromEntries(CIRCLE_NOTIFY_KEYS.map((key) => [key, 'FRIEND'])) };
@@ -152,8 +153,8 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
     prisma.userPreferences.findUnique.mockImplementation(authorEntourageFriend);
     friendships = sharedFriendships(prisma.friendRequest.findMany, AUTHOR_ID, COMMENTER_ID);
-    // By default no reactors (override in individual tests)
-    prisma.postReaction.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockImplementation(aliveAndUnblocked()); // #14234 : tout candidat est un compte vivant
+    prisma.postReaction.findMany.mockResolvedValue([]); // aucun réacteur par défaut
   });
 
   afterEach(() => {
@@ -273,14 +274,16 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       );
     });
 
-    it('caps friendRequest query at the fan-out row cap plus its witness row', async () => {
+    // L'entourage LIT deux fois la borne plus le témoin (#14252) : la vivacité filtre
+    // avant la troncature, la diffusion reste plafonnée à 500.
+    it('caps friendRequest query at twice the fan-out row cap plus its witness row', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       friendships([]);
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 501 })
+        expect.objectContaining({ take: 1001 })
       );
     });
 
@@ -768,7 +771,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
     });
 
-    it('uses the comment excerpt as content when present', async () => {
+    it('uses the comment synthesis as content when present (#14318)', async () => {
       prisma.postComment.findMany.mockResolvedValue([]);
       friendships([]);
       prisma.notification.create.mockResolvedValue(makeNotif('story_new_comment'));
@@ -777,7 +780,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; content: string } }]>;
       const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
-      expect(authorCall![0].data.content).toBe('Great story!');
+      expect(authorCall![0].data.content).toBe('Petit message texte');
     });
 
     it('falls back to a per-bucket phrase when the comment has no text excerpt', async () => {
@@ -831,12 +834,9 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
     };
 
     beforeEach(() => {
-      prisma.user.findUnique.mockResolvedValue({
-        username: 'commenter_user',
-        displayName: 'Commenter',
-        avatar: null,
-      });
+      prisma.user.findUnique.mockResolvedValue({ username: 'commenter_user', displayName: 'Commenter', avatar: null });
     });
+    everyoneLinkedInThisBlock(() => prisma);
 
     it('both @alice and @bob receive user_mentioned notification', async () => {
       prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
@@ -1111,7 +1111,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         expect.objectContaining({ take: 501 })
       );
       expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 501 })
+        expect.objectContaining({ take: 1001 })
       );
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ take: 501 })
@@ -1291,12 +1291,9 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
     const P2_POST_ID = 'eeeeeeeeeeeeeeeeeeeeeeee';
 
     beforeEach(() => {
-      prisma.user.findUnique.mockResolvedValue({
-        username: 'poster_user',
-        displayName: 'Poster',
-        avatar: null,
-      });
+      prisma.user.findUnique.mockResolvedValue({ username: 'poster_user', displayName: 'Poster', avatar: null });
     });
+    everyoneLinkedInThisBlock(() => prisma);
 
     it('test_createPostMentionNotificationsBatch_aliceAndBob_bothReceiveUserMentioned', async () => {
       prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
@@ -1363,7 +1360,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         [{ data: { userId: string; content: string } }]
       >;
       const aliceCall = calls.find((c) => c[0].data.userId === ALICE_ID);
-      expect(aliceCall![0].data.content).toBe('Check this out @alice');
+      expect(aliceCall![0].data.content).toBe('Petit message texte');
     });
 
     it('test_createPostMentionNotificationsBatch_noExcerpt_usesFallbackPhrase', async () => {

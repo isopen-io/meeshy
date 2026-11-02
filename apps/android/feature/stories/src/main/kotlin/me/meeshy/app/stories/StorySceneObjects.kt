@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StorySticker
+import me.meeshy.sdk.model.scene.LayeredScale
 import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
@@ -11,7 +12,7 @@ import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 /**
  * Un sticker posé sur une story, projeté pour le lecteur. [sideFraction] est le côté du
  * sticker en fraction de la LARGEUR de la scène — iOS `CanvasGeometry.stickerFontSize`
- * (`baseSize × scale` sur une scène de 1080) —, [x]/[y] son centre normalisé.
+ * (`baseSize × scale` sur une scène de 1080), sans plafond ni plancher (#14298) —, [x]/[y] son centre normalisé.
  */
 @Immutable
 data class StoryStickerView(
@@ -33,6 +34,9 @@ data class StoryStickerView(
 ) {
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
+
+    /** [sideFraction] coupé entre la mise en page (au plus quatre largeurs de scène) et le calque qui agrandit au-delà. */
+    val drawnSide: LayeredScale get() = LayeredScale.of(sideFraction, SceneObjectNumbers.MAX_STICKER_LAYOUT_FRACTION)
 
     fun opacity(atSeconds: Float): Double = StoryMediaFadeResolver.fadeOpacity(
         fadeIn = fadeIn.takeIf { it > 0.0 },

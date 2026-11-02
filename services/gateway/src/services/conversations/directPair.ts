@@ -15,6 +15,8 @@
  *   clair : écrire dans le fil lisible n'y attire pas l'autre, et un ancien
  *   client qui ne distingue pas les deux fils retombe dans le chiffré.
  * - `plaintext: true` : le tête-à-tête lisible, ou rien (l'appelant le crée).
+ * - `endToEnd: true` (mode `e2ee` choisi à la création, 2026-11-01) : le
+ *   tête-à-tête chiffré, ou rien — jamais un lisible rendu pour chiffré.
  *
  * Une paire, ce sont deux participations ACTIVES : un tête-à-tête que l'un a
  * quitté n'est plus celui de la paire.
@@ -50,7 +52,11 @@ const lookup = (pair: DirectPair, regime: Readonly<Record<string, unknown>> | nu
  * chiffré, puis n'importe lequel — le prix d'un tri que MongoDB ne sait pas
  * faire sur le régime, jusqu'à une clé de paire en base (#13010).
  */
-export function directLookupWheres(pair: DirectPair, request: { readonly plaintext: boolean }): readonly Record<string, unknown>[] {
+export function directLookupWheres(
+  pair: DirectPair,
+  request: { readonly plaintext: boolean; readonly endToEnd?: boolean },
+): readonly Record<string, unknown>[] {
+  if (request.endToEnd) return [lookup(pair, SERVER_BLIND_REGIME_FILTER)];
   return request.plaintext
     ? [lookup(pair, SERVER_READABLE_REGIME_FILTER)]
     : [lookup(pair, SERVER_BLIND_REGIME_FILTER), lookup(pair, null)];

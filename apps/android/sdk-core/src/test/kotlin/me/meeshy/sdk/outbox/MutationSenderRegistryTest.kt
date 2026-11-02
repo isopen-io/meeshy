@@ -151,12 +151,52 @@ class MutationSenderRegistryTest {
             ),
         )
 
-        val firstPass = registry.drainAll(outbox)
-        val secondPass = registry.drainAll(outbox)
+        val reports = registry.drainAll(outbox)
 
-        assertThat(firstPass.any { it.stoppedOnBlockedDependency }).isTrue()
-        assertThat(secondPass.sumOf { it.delivered }).isEqualTo(1)
+        assertThat(reports.sumOf { it.delivered }).isEqualTo(2)
+        assertThat(OutboxFlushPlan.outcome(reports)).isEqualTo(FlushOutcome.SUCCESS)
         assertThat(message.sent.single().payload).isEqualTo("""{"attachmentIds":["media-1"]}""")
+    }
+
+    @Test
+    fun `a message whose upload is still failing stays held and owes a retry without being re-sent in the same pass`() =
+        withOutbox { outbox ->
+            val upload = RecordingHandler(result = SendResult.TransientFailure)
+            val message = RecordingHandler()
+            val registry = MutationSenderRegistry(
+                mapOf(OutboxKind.UPLOAD_MEDIA to upload, OutboxKind.SEND_MESSAGE to message),
+            )
+            outbox.enqueue(mutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "up", cmid = "up-1"))
+            outbox.enqueue(
+                mutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "m1", cmid = "m-1", dependsOn = setOf("up-1")),
+            )
+
+            val reports = registry.drainAll(outbox)
+
+            assertThat(upload.sent).hasSize(1)
+            assertThat(message.sent).isEmpty()
+            assertThat(OutboxFlushPlan.outcome(reports)).isEqualTo(FlushOutcome.RETRY)
+        }
+
+    @Test
+    fun `a message waiting on two uploads leaves in the pass that delivers them`() = withOutbox { outbox ->
+        val upload = RecordingHandler(result = SendResult.SuccessWithId("media-x"))
+        val message = RecordingHandler()
+        val registry = MutationSenderRegistry(
+            mapOf(OutboxKind.UPLOAD_MEDIA to upload, OutboxKind.SEND_MESSAGE to message),
+        )
+        outbox.enqueue(mutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "a", cmid = "up-a"))
+        outbox.enqueue(mutation(OutboxKind.UPLOAD_MEDIA, OutboxLanes.MEDIA, "b", cmid = "up-b"))
+        outbox.enqueue(
+            mutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "m1", cmid = "m-1", dependsOn = setOf("up-a", "up-b")),
+        )
+        outbox.enqueue(mutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "m2", cmid = "m-2"))
+
+        val reports = registry.drainAll(outbox)
+
+        assertThat(message.sent.map { it.targetId }).containsExactly("m1", "m2").inOrder()
+        assertThat(reports.sumOf { it.delivered }).isEqualTo(4)
+        assertThat(OutboxFlushPlan.outcome(reports)).isEqualTo(FlushOutcome.SUCCESS)
     }
 
     @Test

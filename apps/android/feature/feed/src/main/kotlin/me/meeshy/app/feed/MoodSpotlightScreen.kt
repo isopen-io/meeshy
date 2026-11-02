@@ -1,10 +1,11 @@
 package me.meeshy.app.feed
 
 import me.meeshy.ui.theme.MeeshyTheme
-import androidx.compose.foundation.layout.PaddingValues
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
-import me.meeshy.ui.component.message.MeeshyCommentComposer
+import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.ui.component.composer.LocalUniversalComposer
+import me.meeshy.ui.component.composer.UniversalComposerSpec
 import me.meeshy.ui.component.message.MeeshyMentionSuggestions
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -130,10 +130,11 @@ fun MoodSpotlightScreen(
             Icon(MeeshyIcons.Close, stringResource(R.string.mood_spotlight_close), tint = Color.White)
         }
 
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().imePadding()) {
+        // Le composeur universel tient lui-même le clavier et la barre système ; sans lui, la colonne s'en écarte.
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(if (state.canReply) Modifier else Modifier.navigationBarsPadding())) {
             SnackbarHost(snackbar)
             if (state.canReply) {
-                ReplyBar(
+                MoodReplyComposer(
                     text = state.replyText,
                     authorName = entry?.username.orEmpty(),
                     isSending = state.replyState == MoodReplyState.SENDING,
@@ -215,11 +216,12 @@ private fun MoodCard(entry: StatusEntry, avatarUrl: String?) {
 }
 
 /**
- * La réponse privée à l'humeur, par la barre de commentaire du composer (#13988) — capsule de verre,
- * emoji, envoi en dégradé —, toujours en sombre au-dessus de la bannière (iOS force `.dark` ici).
+ * La réponse privée à l'humeur, par le composeur universel en réglage commentaire (#14320) — le même que les fils de
+ * commentaires —, toujours en sombre au-dessus de la bannière (iOS force `.dark` ici). Texte seul : la réponse part en
+ * message privé, sans pièce, donc sans porte de pièce.
  */
 @Composable
-private fun ReplyBar(
+internal fun MoodReplyComposer(
     text: String,
     authorName: String,
     isSending: Boolean,
@@ -229,19 +231,19 @@ private fun ReplyBar(
     onMentionSelected: (MentionCandidate) -> Unit,
     onSend: () -> Unit,
 ) {
+    val composer = LocalUniversalComposer.current ?: return
     MeeshyTheme(darkTheme = true) {
-        MeeshyCommentComposer(
-            text = text,
-            onTextChange = onChange,
-            placeholder = stringResource(R.string.mood_spotlight_reply_placeholder, authorName),
-            onSend = onSend,
-            isSending = isSending,
-            sendEnabled = canSend,
-            sendLabel = stringResource(R.string.mood_spotlight_reply_send),
-            accentColor = MeeshyPalette.Indigo500,
-            secondaryColor = Color(0xFF8B5CF6),
-            contentPadding = PaddingValues(horizontal = MeeshySpacing.lg, vertical = 10.dp),
-            topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected) },
+        composer(
+            UniversalComposerSpec(
+                configuration = ComposerConfiguration.COMMENT,
+                draft = text,
+                placeholder = stringResource(R.string.mood_spotlight_reply_placeholder, authorName),
+                canSend = canSend && !isSending,
+                onDraftChange = onChange,
+                onSend = onSend,
+                topSlot = { MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected) },
+            ),
+            Modifier,
         )
     }
 }

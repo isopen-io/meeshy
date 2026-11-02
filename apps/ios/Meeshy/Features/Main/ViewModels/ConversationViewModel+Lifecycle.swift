@@ -344,7 +344,7 @@ extension ConversationViewModel {
     func prefetchRecentMedia() {
         mediaPrefetchDebounce?.cancel()
         mediaPrefetchDebounce = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            guard await cancellableSleep(for: .milliseconds(300)) else { return }
             guard let self, !Task.isCancelled else { return }
             self.mediaHandler.prefetchRecentMedia()
         }

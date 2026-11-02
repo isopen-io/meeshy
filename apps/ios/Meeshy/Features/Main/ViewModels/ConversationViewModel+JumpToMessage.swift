@@ -193,7 +193,7 @@ extension ConversationViewModel {
             // Small delay to let the diffable datasource apply the new snapshot
             // before the caller triggers scroll — otherwise the index path
             // won't exist yet.
-            try? await Task.sleep(for: .milliseconds(150))
+            _ = await cancellableSleep(for: .milliseconds(150))
 
             return .loadedFromServer
         } catch {

@@ -435,11 +435,6 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
-    /** Comptabilise un partage — l'intent systeme est parti sans attendre le reseau. */
-    fun recordShare(reelId: String) {
-        viewModelScope.launch { postRepository.share(reelId) }
-    }
-
     private fun updateReel(reelId: String, transform: (ReelPresentation) -> ReelPresentation) {
         _state.update { state ->
             state.copy(reels = state.reels.map { if (it.id == reelId) transform(it) else it })

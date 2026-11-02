@@ -52,7 +52,7 @@ class ReelCoverScreensTest {
             post = p, isReposted = false, secondaryTranslation = null, detailLanguageStrip = emptyList(), translatingCodes = emptySet(),
             onFlagTap = {}, onSelectLanguage = {}, onOpenPost = { t.posts += it }, onOpenReel = { t.reels += it }, onOpenProfile = null,
             onOpenHashtag = {}, onOpenViewers = null, onRepost = {}, onQuote = {}, onLike = {}, quickEmojis = emptyList(),
-            onReact = {}, onBookmark = {}, onCommentNotice = {}, commentsSection = {},
+            onReact = {}, onBookmark = {}, onCommentNotice = {}, commentsSection = {}, commentComposer = {},
         )
     }
 

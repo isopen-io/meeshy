@@ -122,6 +122,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+jest.mock('../../../services/EncryptionService', () => jest.requireActual<typeof import('../../helpers/server-key-stub')>('../../helpers/server-key-stub').serverKeyStub());
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
     getUnreadCountsForUser: jest.fn().mockResolvedValue(new Map()),
@@ -2485,7 +2486,9 @@ describe('registerCoreRoutes', () => {
 
       await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
 
-      expect(prisma.conversation.updateMany).not.toHaveBeenCalled();
+      const flips = (prisma.conversation.updateMany.mock.calls as Array<[{ data: Record<string, unknown> }]>)
+        .filter(([args]) => 'firstMessageSentAt' in args.data);
+      expect(flips).toEqual([]);
     });
 
     it('happy path: creates conversation and broadcasts CONVERSATION_NEW', async () => {

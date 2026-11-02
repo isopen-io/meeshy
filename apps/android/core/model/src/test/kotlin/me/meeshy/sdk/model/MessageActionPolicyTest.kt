@@ -66,17 +66,25 @@ class MessageActionPolicyTest {
     }
 
     @Test
-    fun `at rest on the server, edit is never offered, to the author or to a platform moderator`() {
+    fun `at rest on the server, edit is offered to the author and to a platform moderator, the gateway reseals it`() {
         listOf("server", "hybrid", "Server").forEach { mode ->
             val result = actions(mine = true, encryptionMode = mode)
-            assertThat(result.verdicts.edit).isNull()
-            assertThat(result.groups.primary + result.groups.more).doesNotContain(Action.EDIT)
+            assertThat(result.verdicts.edit).isNotNull()
+            assertThat(result.groups.primary + result.groups.more).contains(Action.EDIT)
         }
-        val sealedMessage = MessageContentKind.Subject(id = "65f000000000000000000001", content = "Bonjour", encryptionMode = "hybrid")
-        assertThat(actions(mine = true, subject = sealedMessage).verdicts.edit).isNull()
+        val atRestRow = MessageContentKind.Subject(id = "65f000000000000000000001", content = "Bonjour", isEncrypted = true, encryptionMode = "hybrid")
+        assertThat(actions(mine = true, subject = atRestRow).verdicts.edit).isNotNull()
         val moderator = viewer(platformRole = "MODERATOR")
-        assertThat(actions(mine = false, viewer = moderator, encryptionMode = "server").verdicts.edit).isNull()
-        assertThat(actions(mine = true).verdicts.edit).isNotNull()
+        assertThat(actions(mine = false, viewer = moderator, encryptionMode = "server").verdicts.edit)
+            .isEqualTo(MessageActionPolicy.EditVerdict(asModerator = true, windowEndsAtMillis = null))
+    }
+
+    @Test
+    fun `a row served sealed or sealed end to end is never editable, even in an at rest conversation`() {
+        val servedSealed = MessageContentKind.Subject(id = "65f000000000000000000001", content = "", isEncrypted = true, encryptionMode = "server")
+        assertThat(actions(mine = true, encryptionMode = "server", subject = servedSealed).verdicts.edit).isNull()
+        val e2eeRow = MessageContentKind.Subject(id = "65f000000000000000000001", content = "Bonjour", isEncrypted = true, encryptionMode = "e2ee")
+        assertThat(actions(mine = true, encryptionMode = "server", subject = e2eeRow).verdicts.edit).isNull()
     }
 
     @Test

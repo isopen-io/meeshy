@@ -6,6 +6,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.story.toStoryGroups
 import org.junit.Test
 
 /** #13863 R7 — le fil projette les scènes d'un post composé sur la scène ; un post sans scène garde son rendu. */
@@ -107,5 +108,14 @@ class FeedPostScenesBuilderTest {
         val reel = build("""{ "id": "r1", "type": "REEL", "storyEffects": ${fixture("v1-legacy-rich.v3")} }""")
 
         assertThat(reel.scenes).isNull()
+    }
+
+    @Test
+    fun `a post scene without a background reads on the author gradient the story reader gives the same author`() {
+        val author = """{ "id": "64b0000000000000000000aa", "username": "recmod_m", "displayName": "Recette Mod" }"""
+        val post = build("""{ "id": "p1", "type": "POST", "author": $author, "storyEffects": ${fixture("minimal-text")} }""")
+        val story = MeeshyApi.json.decodeFromString(ApiPost.serializer(), """{ "id": "s1", "type": "STORY", "author": $author }""")
+
+        assertThat(requireNotNull(post.scenes).accentHex).isEqualTo(listOf(story).toStoryGroups().single().avatarColor)
     }
 }

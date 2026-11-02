@@ -8,18 +8,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import me.meeshy.sdk.model.composer.scene.SceneExportDestination
-import me.meeshy.sdk.model.scene.export.ImagerLengthChoice
-import me.meeshy.sdk.model.scene.export.ImagerQuarter
+import me.meeshy.sdk.model.scene.export.ImagerDecision
+import me.meeshy.sdk.model.scene.export.ImagerOffer
 import me.meeshy.sdk.model.scene.export.StoryExportMode
 
-/** Ce que l'export attend de l'écran : rien, le choix de la longueur rendue, ou la peinture des calques. */
+/**
+ * Ce que l'export attend de l'écran : rien, la vue Imager (ouverte dès le geste, son [Imagining.offer] arrivant une fois la
+ * composition mesurée — `null` : elle se prépare), ou la peinture des calques.
+ */
 sealed interface StoryVideoExportStage {
     data object Idle : StoryVideoExportStage
-    data class ChoosingLength(val choices: List<ImagerLengthChoice>) : StoryVideoExportStage
+    data class Imagining(val offer: ImagerOffer?) : StoryVideoExportStage
     data class Painting(val request: StoryExportPaintRequest) : StoryVideoExportStage
 }
 
-/** Enregistrer et Imager déposent la vidéo dans la photothèque ; Partager la remet à la feuille de partage. */
+/** Enregistrer dépose le rendu dans la photothèque, Partager le remet à la feuille de partage ; Imager part vers la photothèque jusqu'à ce que sa vue décide. */
 val StoryExportMode.destination: SceneExportDestination
     get() = if (this == StoryExportMode.SHARE) SceneExportDestination.SHARE else SceneExportDestination.GALLERY
 
@@ -32,17 +35,30 @@ class StoryVideoExportStages {
     private val mutableStage = MutableStateFlow<StoryVideoExportStage>(StoryVideoExportStage.Idle)
     val stage: StateFlow<StoryVideoExportStage> = mutableStage.asStateFlow()
 
-    private var length: CompletableDeferred<ImagerQuarter?>? = null
+    private var imager: CompletableDeferred<ImagerDecision?>? = null
     private var painting: CompletableDeferred<List<File>?>? = null
 
-    suspend fun askLength(choices: List<ImagerLengthChoice>): ImagerQuarter? =
-        ask(StoryVideoExportStage.ChoosingLength(choices), CompletableDeferred<ImagerQuarter?>().also { length = it })
+    /** La vue Imager s'ouvre au GESTE, avant toute mesure : rien ne se rend tant qu'elle n'a pas décidé. */
+    fun openImager() {
+        imager = CompletableDeferred()
+        mutableStage.value = StoryVideoExportStage.Imagining(offer = null)
+    }
+
+    /** La composition est mesurée : la vue montre son [offer] et l'export attend sa décision, qui ne sert qu'une fois. */
+    suspend fun askImager(offer: ImagerOffer): ImagerDecision? {
+        val answer = imager ?: CompletableDeferred<ImagerDecision?>().also { imager = it }
+        return try {
+            ask(StoryVideoExportStage.Imagining(offer), answer)
+        } finally {
+            if (imager === answer) imager = null
+        }
+    }
 
     suspend fun askPaint(request: StoryExportPaintRequest): List<File>? =
         ask(StoryVideoExportStage.Painting(request), CompletableDeferred<List<File>?>().also { painting = it })
 
-    fun answerLength(quarter: ImagerQuarter?) {
-        length?.complete(quarter)
+    fun answerImager(decision: ImagerDecision?) {
+        imager?.complete(decision)
     }
 
     fun answerPaint(files: List<File>?) {
@@ -50,9 +66,9 @@ class StoryVideoExportStages {
     }
 
     fun reset() {
-        length?.cancel()
+        imager?.cancel()
         painting?.cancel()
-        length = null
+        imager = null
         painting = null
         mutableStage.value = StoryVideoExportStage.Idle
     }

@@ -71,4 +71,31 @@ final class ComposerSceneFitTests: XCTestCase {
         XCTAssertEqual(lift.scale, 1)
         XCTAssertEqual(lift.offsetY, 0)
     }
+
+    // MARK: - Le souffle du haut (#13899, point 7)
+
+    /// **Sur iPhone SE, la scène ne touche plus le bord haut.** Sa zone
+    /// (375 × 647 sous la barre d'état) est trop basse pour un 9:16 pleine
+    /// largeur : la scène prend toute la hauteur, et son bord haut collait à la
+    /// barre d'état. La zone garde un souffle en haut, et la scène reste le plus
+    /// grand 9:16 de ce qui reste.
+    func test_zone_iPhoneSE_laSceneGardeUnSouffleEnHaut() {
+        let taille = CGSize(width: 375, height: 647)
+        let zone = ComposerSceneFit.zone(in: taille, aspectRatio: ratio)
+        let scene = ComposerSceneFit.frame(in: zone, aspectRatio: ratio)
+
+        XCTAssertGreaterThanOrEqual(scene.minY, ComposerSceneFit.topBreathing - 0.5,
+                                    "la scène touche le bord haut : \(scene)")
+        XCTAssertGreaterThan(ComposerSceneFit.topBreathing, 0)
+        XCTAssertEqual(scene.maxY, taille.height, accuracy: 0.5, "le bas reste au bas de la zone")
+        XCTAssertEqual(scene.width / scene.height, ratio, accuracy: 0.001)
+    }
+
+    /// Un écran assez haut ne perd rien : la scène y est déjà centrée avec de
+    /// l'air au-dessus, et la zone reste entière.
+    func test_zone_iPhoneHaut_laZoneResteEntiere() {
+        let taille = CGSize(width: 393, height: 793)
+        XCTAssertEqual(ComposerSceneFit.zone(in: taille, aspectRatio: ratio),
+                       CGRect(origin: .zero, size: taille))
+    }
 }

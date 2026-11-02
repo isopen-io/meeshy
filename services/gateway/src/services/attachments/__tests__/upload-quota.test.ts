@@ -107,3 +107,46 @@ describe('createUploadQuota — sans Redis', () => {
     expect((await quota.check({ userId: 'u1', role: 'registered', incomingBytes: 1, now: NOON })).allowed).toBe(false);
   });
 });
+
+describe('createUploadQuota — la réservation (#14305) : réserver AVANT d’écrire, d’un seul geste', () => {
+  it('dix réservations concurrentes de 4 Gio sous un quota de 10 Gio n’en admettent que deux', async () => {
+    const redis = fakeRedis();
+    const quota = createUploadQuota({ redis, quotas: QUOTAS });
+
+    const verdicts = await Promise.all(Array.from({ length: 10 }, () =>
+      quota.reserve({ userId: 'u1', role: 'registered', bytes: 4 * GIB, now: NOON })));
+
+    expect(verdicts.filter((v) => v.allowed)).toHaveLength(2);
+    expect(redis.store.get('uploads:bytes:u1:2026-11-01')).toBe(8 * GIB);
+  });
+
+  it('une réservation refusée ne laisse rien au compteur et dit quand réessayer', async () => {
+    const redis = fakeRedis();
+    const quota = createUploadQuota({ redis, quotas: QUOTAS });
+    await quota.record({ userId: 'u1', bytes: 9 * GIB, now: NOON });
+
+    const verdict = await quota.reserve({ userId: 'u1', role: 'registered', bytes: 2 * GIB, now: NOON });
+
+    expect(verdict).toMatchObject({ allowed: false, usedBytes: 9 * GIB, quotaBytes: 10 * GIB });
+    expect(redis.store.get('uploads:bytes:u1:2026-11-01')).toBe(9 * GIB);
+  });
+
+  it('rendre une réservation la retire du compteur', async () => {
+    const redis = fakeRedis();
+    const quota = createUploadQuota({ redis, quotas: QUOTAS });
+    await quota.reserve({ userId: 'u1', role: 'registered', bytes: 3 * GIB, now: NOON });
+
+    await quota.release({ userId: 'u1', bytes: 3 * GIB, now: NOON });
+
+    expect(redis.store.get('uploads:bytes:u1:2026-11-01')).toBe(0);
+  });
+
+  it('Redis en panne : la réservation se replie en mémoire et borne encore', async () => {
+    const quota = createUploadQuota({ redis: brokenRedis(), quotas: QUOTAS });
+
+    const verdicts = await Promise.all(Array.from({ length: 4 }, () =>
+      quota.reserve({ userId: 'u1', role: 'registered', bytes: 4 * GIB, now: NOON })));
+
+    expect(verdicts.filter((v) => v.allowed)).toHaveLength(2);
+  });
+});

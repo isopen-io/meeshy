@@ -46,6 +46,7 @@ jest.mock('../../../utils/logger', () => ({
   logError: jest.fn(),
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
+jest.mock('../../../services/EncryptionService', () => jest.requireActual<typeof import('../../helpers/server-key-stub')>('../../helpers/server-key-stub').serverKeyStub());
 
 jest.mock('../../../middleware/auth', () => ({ UnifiedAuthRequest: {} }));
 

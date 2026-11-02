@@ -32,14 +32,11 @@ nonisolated enum StoryVideoPoster {
         guard let duree = try? await asset.load(.duration) else { return nil }
         let secondes = CMTimeGetSeconds(duree)
         guard secondes.isFinite, secondes > 0 else { return nil }
-        let debut = start(secondes)
-        let generateur = AVAssetImageGenerator(asset: asset)
-        generateur.appliesPreferredTrackTransform = true
-        generateur.maximumSize = maximumSize
-        generateur.requestedTimeToleranceBefore = .zero
-        generateur.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
-        guard let image = try? await generateur.image(at: CMTime(seconds: debut, preferredTimescale: 600)).image
-        else { return nil }
+        let requete = VideoThumbnailRequest(url: url,
+                                            instants: .start(atMost: start(secondes)),
+                                            maximumSize: maximumSize,
+                                            tolerance: .seconds(0.1))
+        guard let image = await VideoThumbnailGenerator.shared.image(for: requete)?.cgImage else { return nil }
         return StoryVideoAdjustmentsProcessor.apply(look: look, adjustments: adjustments, to: image)
     }
 

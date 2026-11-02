@@ -75,6 +75,7 @@ fun ReelCardScene(
     live: Boolean,
     modifier: Modifier = Modifier,
     muted: Boolean = true,
+    floor: SceneFloor = SceneFloor.BLACK,
     viewModel: RepostSceneViewModel = hiltViewModel(),
 ) {
     val slide = remember(item, accentHex) { viewModel.slideOf(item, accentHex = accentHex ?: SCENE_FALLBACK_ACCENT) }
@@ -86,9 +87,26 @@ fun ReelCardScene(
             loads = true,
             rewindWhenIdle = false,
             resting = !live,
-            floor = SceneFloor.BLACK,
+            floor = floor,
         )
     }
+}
+
+/**
+ * La scène d'un post, sur sa carte du fil et dans sa fiche (#14223) : le cadre d'un réel, le sol d'une story. Une scène qui ne
+ * déclare aucun fond se lit sur le dégradé de son auteur — celui que le compositeur montrait, et que la story publiée du même
+ * geste montre — jamais sur le noir d'un réel.
+ */
+@Composable
+fun PostSceneCard(
+    item: StoryItem,
+    accentHex: String?,
+    live: Boolean,
+    modifier: Modifier = Modifier,
+    muted: Boolean = true,
+    viewModel: RepostSceneViewModel = hiltViewModel(),
+) {
+    ReelCardScene(item, accentHex, live, modifier, muted = muted, floor = SceneFloor.AUTHOR_GRADIENT, viewModel = viewModel)
 }
 
 private const val SCENE_FALLBACK_ACCENT = "6366F1"

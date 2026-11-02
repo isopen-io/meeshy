@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.model.net.OnlyUnlinkedRefusal
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateCommentRequest
@@ -62,7 +63,7 @@ public class CreatePostHandler @Inject constructor(
                     runCatching { draftStore.release(row.cmid) }
                     SendResult.Success
                 }
-                is NetworkResult.Failure -> result.error.httpStatus.toPostFailure()
+                is NetworkResult.Failure -> result.error.onlyUnlinkedRefusal() ?: result.error.httpStatus.toPostFailure()
             }
         }
 
@@ -78,6 +79,20 @@ public class CreatePostHandler @Inject constructor(
         val HTTP_CLIENT_ERRORS = 400..499
     }
 }
+
+/**
+ * Le plafond des personnes choisies sans lien (#14105, #14169) : la même publication le rencontrerait de nouveau aujourd'hui,
+ * elle renonce donc tout de suite, sans réessai, et sa ligne garde le refus avec ses nombres
+ * ([OnlyUnlinkedRefusal.reason]) pour que « Publications non envoyées » le dise à l'auteur.
+ */
+internal fun ApiError.onlyUnlinkedRefusal(): SendResult? =
+    if (httpStatus == HTTP_TOO_MANY_REQUESTS && code == OnlyUnlinkedRefusal.CODE) {
+        SendResult.PermanentFailure(OnlyUnlinkedRefusal(limit = limit, unlinked = unlinked).reason)
+    } else {
+        null
+    }
+
+private const val HTTP_TOO_MANY_REQUESTS = 429
 
 /**
  * `CREATE_COMMENT` (#13679): posts the comment the device queued — typed in a notification banner, with no screen open —

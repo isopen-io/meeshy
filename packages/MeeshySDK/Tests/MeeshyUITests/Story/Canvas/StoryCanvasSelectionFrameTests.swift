@@ -3,14 +3,11 @@ import UIKit
 @testable import MeeshyUI
 @testable import MeeshySDK
 
-/// **La sélection se VOIT, sur la scène, et nulle part ailleurs** (#13839, L5).
+/// **Le marqueur de sélection et le menu d'appui long** (#13839, L5).
 ///
-/// La maquette du 2026-10-30 dessine l'élément sélectionné dans un cadre de
-/// 2 pt, décalé de 3 pt, aux bornes réelles de son calque — rotation et échelle
-/// comprises. Le porteur l'a voulu PLEIN et blanc (#14043) : le pointillé reste
-/// aux guides (zone sûre, magnétiques, alignement), jamais à la sélection. Le cadre est un chrome d'ÉDITION : il vit dans
-/// `editOverlayLayer`, jamais parmi les objets (qui sont ce que l'export, la
-/// vignette et le lecteur reconstruisent).
+/// Le cadre blanc est parti (#14206) : `StoryCanvasThreeGesturesTests` en porte
+/// le témoin. Reste ici ce qui ne laisse rien à l'écran et le menu qui n'est
+/// jamais la fin d'un glissé.
 @MainActor
 final class StoryCanvasSelectionFrameTests: XCTestCase {
 
@@ -21,66 +18,6 @@ final class StoryCanvasSelectionFrameTests: XCTestCase {
         vue.frame = CGRect(x: 0, y: 0, width: 360, height: 640)
         vue.layoutIfNeeded()
         return vue
-    }
-
-    // MARK: - La géométrie
-
-    func test_selectionFramePath_unrotatedLayer_outlinesBoundsThreePointsOut() {
-        let chemin = StorySelectionFrame.path(bounds: CGRect(x: 0, y: 0, width: 100, height: 50),
-                                                position: CGPoint(x: 200, y: 300),
-                                                anchorPoint: CGPoint(x: 0.5, y: 0.5),
-                                                transform: .identity,
-                                                offset: 3)
-        let boite = chemin.boundingBoxOfPath
-        XCTAssertEqual(boite.minX, 147, accuracy: 0.01)
-        XCTAssertEqual(boite.minY, 272, accuracy: 0.01)
-        XCTAssertEqual(boite.width, 106, accuracy: 0.01)
-        XCTAssertEqual(boite.height, 56, accuracy: 0.01)
-    }
-
-    func test_selectionFramePath_rotatedLayer_followsTheRotation() {
-        let chemin = StorySelectionFrame.path(bounds: CGRect(x: 0, y: 0, width: 100, height: 50),
-                                                position: CGPoint(x: 200, y: 300),
-                                                anchorPoint: CGPoint(x: 0.5, y: 0.5),
-                                                transform: CGAffineTransform(rotationAngle: .pi / 2),
-                                                offset: 3)
-        let boite = chemin.boundingBoxOfPath
-        XCTAssertEqual(boite.width, 56, accuracy: 0.01, "un quart de tour échange les côtés du cadre")
-        XCTAssertEqual(boite.height, 106, accuracy: 0.01)
-        XCTAssertEqual(boite.midX, 200, accuracy: 0.01)
-        XCTAssertEqual(boite.midY, 300, accuracy: 0.01)
-    }
-
-    func test_selectionFramePath_scaledLayer_keepsTheOffsetInScreenPoints() {
-        let chemin = StorySelectionFrame.path(bounds: CGRect(x: 0, y: 0, width: 100, height: 50),
-                                                position: CGPoint(x: 200, y: 300),
-                                                anchorPoint: CGPoint(x: 0.5, y: 0.5),
-                                                transform: CGAffineTransform(scaleX: 2, y: 2),
-                                                offset: 3)
-        let boite = chemin.boundingBoxOfPath
-        XCTAssertEqual(boite.width, 206, accuracy: 0.01, "le décalage reste de 3 pt à l'écran, quelle que soit l'échelle")
-        XCTAssertEqual(boite.height, 106, accuracy: 0.01)
-    }
-
-    // MARK: - Le calque
-
-    func test_setSelectionMarker_selectedText_paintsSolidWhiteTwoPointFrameInTheEditOverlay() throws {
-        let vue = canvas()
-        vue.setSelectionMarker(id: "t")
-        let cadre = try XCTUnwrap(vue.selectionMarkerLayers.compactMap { $0 as? CAShapeLayer }.first,
-                                  "le cadre doit être un tracé, pas une bordure de boîte")
-        XCTAssertEqual(cadre.lineWidth, 2)
-        XCTAssertNil(cadre.lineDashPattern, "le cadre est un trait PLEIN, jamais un pointillé")
-        XCTAssertEqual(cadre.strokeColor, UIColor.white.cgColor)
-        XCTAssertNil(cadre.fillColor)
-        XCTAssertTrue(cadre.superlayer === vue.editOverlayLayer, "chrome d'édition, hors des objets")
-        XCTAssertFalse(vue.itemsContainer.sublayers?.contains(cadre) ?? false)
-    }
-
-    func test_setSelectionMarker_selectedText_drawsNoCornerHandles() {
-        let vue = canvas()
-        vue.setSelectionMarker(id: "t")
-        XCTAssertEqual(vue.selectionMarkerLayers.count, 1, "un seul cadre, ni poignées ni badge sans libellé")
     }
 
     func test_setSelectionMarker_nil_leavesNothingOnScreen() {

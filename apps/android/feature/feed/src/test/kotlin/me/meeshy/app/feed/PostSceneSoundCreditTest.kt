@@ -85,4 +85,33 @@ class PostSceneSoundCreditTest {
         assertThat(photos.moving).containsExactly(false, false).inOrder()
         assertThat(moving.moving).containsExactly(true)
     }
+
+    /**
+     * Recette S8 (post « Recette 14200 texte du post », staging) : un son de la bibliothèque posé SUR la scène, sans aucun son de
+     * fond. La barre de la fiche offrait 🔊 ⏸ sans dire ce qu'elle jouait : elle nomme le son posé quand la scène n'a pas de fond.
+     */
+    @Test
+    fun `a library sound posed on the scene, with no background sound, is the one the detail names`() {
+        val recette = requireNotNull(
+            build(
+                """{ "id": "p1", "type": "POST", "content": "Recette 14200 texte du post", "storyEffects": {"v":3,"scenes":[{"id":"s1","objects":[
+                    {"id":"k1","kind":"sticker","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":2,"payload":{"emoji":"😀"}},
+                    {"id":"borrowed-6ada52e99bc6c72f73df09c4","kind":"audio","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"content","z":1,
+                     "payload":{"duration":5.023,"soundId":"6ada52e99bc6c72f73df09c4","soundAuthorUsername":"recretrait_b","postMediaId":null,
+                                "mediaURL":"/api/v1/static/3b5f3f05-b205-4cb4-91a1-966e2be3ca21.m4a","placement":null}}]}]} }""",
+            ).scenes,
+        )
+
+        assertThat(recette.offersSound).isTrue()
+        assertThat(recette.soundCredit).isEqualTo(SceneSoundCredit.Library(title = null, author = "recretrait_b", duration = "0:05"))
+        assertThat((recette.soundCredit as SceneSoundCredit.Library).line).isEqualTo("@recretrait_b")
+    }
+
+    @Test
+    fun `a background sound keeps its precedence over a library sound posed on the scene`() {
+        val posed = StoryAudioPlayerObject(id = "fg", soundId = "snd_9", soundAuthorUsername = "autre", duration = 3f)
+        val credit = PostSceneSound.credit(scene(StoryEffects(audioPlayerObjects = listOf(posed, trace("snd_1", "Nuits d'été", "@belva")))), null)
+
+        assertThat(credit).isEqualTo(SceneSoundCredit.Library(title = "Nuits d'été", author = "@belva", duration = "0:12"))
+    }
 }

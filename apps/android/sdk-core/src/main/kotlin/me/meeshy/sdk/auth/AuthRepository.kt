@@ -23,11 +23,14 @@ import me.meeshy.sdk.model.guest.GuestSessionEnd
 import me.meeshy.sdk.model.auth.VerificationStatusRequest
 import me.meeshy.sdk.model.auth.VerifyPhoneData
 import me.meeshy.sdk.model.auth.VerifyPhoneRequest
+import me.meeshy.sdk.net.AccountShelf
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.NoAccountShelf
 import me.meeshy.sdk.net.NoSessionBackup
 import me.meeshy.sdk.net.SessionBackup
+import me.meeshy.sdk.net.SessionRefresher
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
@@ -49,6 +52,7 @@ class AuthRepository @Inject constructor(
     private val fence: AccountFence? = null,
     private val sessionBackup: SessionBackup = NoSessionBackup,
     private val keepSignedIn: KeepSignedInConsent? = null,
+    private val accountShelf: AccountShelf = NoAccountShelf,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -380,9 +384,10 @@ class AuthRepository @Inject constructor(
     /**
      * Réinstaller l'app garde la connexion (#14058) : au démarrage SANS session locale, la session sauvegardée
      * hors de l'app ([SessionBackup], Block Store) est renouvelée auprès de la passerelle puis adoptée — l'identité
-     * ouverte, `null` quand l'app reste sur la connexion. Un refus de la passerelle (session révoquée, échue, compte fermé) efface la
-     * sauvegarde : l'écran de connexion s'affiche, sans message. Hors ligne ou en panne serveur, elle est gardée
-     * pour le lancement suivant. Une connexion faite pendant l'appel n'est jamais écrasée.
+     * ouverte, `null` quand l'app reste sur la connexion. Un refus de la passerelle (session révoquée, échue, compte fermé,
+     * âge : [SessionRefresher.refuses]) efface la sauvegarde et l'entrée du compte au coffre des comptes gardés
+     * ([AccountShelf], #14079) : l'écran de connexion s'affiche, sans message. Hors ligne, en panne serveur ou derrière un
+     * proxy qui répond à sa place, elle est gardée pour le lancement suivant. Une connexion faite pendant l'appel n'est jamais écrasée.
      */
     suspend fun restoreBackedUpSession(): MeeshyUser? {
         if (tokenStore.isAuthenticated) return null
@@ -396,14 +401,16 @@ class AuthRepository @Inject constructor(
                 renewed.user
             }
             is NetworkResult.Failure -> {
-                if (result.error.refusesTheSession()) sessionBackup.erase()
+                if (result.error.refusesTheSession()) {
+                    sessionBackup.erase()
+                    accountShelf.erase(saved.userId)
+                }
                 null
             }
         }
     }
 
-    private fun ApiError.refusesTheSession(): Boolean =
-        httpStatus?.let { it in CLIENT_ERRORS && it !in TRANSIENT_CLIENT_ERRORS } ?: false
+    private fun ApiError.refusesTheSession(): Boolean = SessionRefresher.refuses(httpStatus, code)
 
     /** Re-hydrates the session on app start when a token is already present. */
     suspend fun restoreSession() {
@@ -513,12 +520,6 @@ class AuthRepository @Inject constructor(
 
         /** Ce que la deconnexion attend la passerelle : au-dela, l'appareil est deja propre et rend la main. */
         const val SERVER_LOGOUT_TIMEOUT_MILLIS: Long = 3_000L
-
-        /** Un refus de la passerelle : la session sauvegardée ne s'ouvrira plus. */
-        val CLIENT_ERRORS: IntRange = 400..499
-
-        /** Délai dépassé, trop de requêtes : un refus passager, la sauvegarde est gardée. */
-        val TRANSIENT_CLIENT_ERRORS: Set<Int> = setOf(408, 429)
     }
 }
 

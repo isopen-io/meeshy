@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerSelectionSubject
 import me.meeshy.sdk.model.composer.ComposerObjectEditorSection
@@ -80,20 +78,25 @@ internal fun StoryComposerUiState.serves(sheet: StoryComposerSheet): Boolean = w
 @Composable
 private fun ObjectTimeSheet(state: StoryComposerUiState, viewModel: StoryComposerViewModel, onDone: () -> Unit) {
     SelectionSheetColumn(stringResource(R.string.composer_scene_more_timing), onDone) {
-        val ref = state.selectedSceneObject
-        val window = state.selectedObjectWindow
-        val family = state.selectedObjectFamily
-        if (ref != null && window != null && family != null) {
-            ObjectTimeControls(window, family, state.selectedSlideDurationSeconds) { next ->
-                viewModel.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, ref, next) }
+        // La frise D'ABORD (#14255) : la feuille plafonne à 55 % de l'écran, et sous les glissières la règle et la barre
+        // tombaient hors champ — une scène sans média ne montrait plus ni sa durée ni son objet. Le reste défile dessous.
+        StoryPlanFrise(state, viewModel)
+        Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            val ref = state.selectedSceneObject
+            val window = state.selectedObjectWindow
+            val family = state.selectedObjectFamily
+            if (ref != null && window != null && family != null) {
+                ObjectTimeControls(window, family, state.selectedSlideDurationSeconds) { next ->
+                    viewModel.onSceneReduce { StoryComposerObjectTimeReducer.windowed(it, ref, next) }
+                }
             }
-        }
-        state.selectedSound?.takeIf { state.trimSourceOf(it) != null }?.let { sound ->
-            Text(stringResource(R.string.composer_column_media_trim), style = MaterialTheme.typography.labelLarge)
-            SoundTrimSection(state, sound, viewModel)
-        }
-        Column(Modifier.heightIn(max = FRISE_MAX_HEIGHT).verticalScroll(rememberScrollState())) {
-            StoryPlanFrise(state, viewModel)
+            state.selectedSound?.takeIf { state.trimSourceOf(it) != null }?.let { sound ->
+                Text(stringResource(R.string.composer_column_media_trim), style = MaterialTheme.typography.labelLarge)
+                SoundTrimSection(state, sound, viewModel)
+            }
         }
     }
 }
@@ -114,8 +117,6 @@ private fun SelectionSheetColumn(title: String, onDone: () -> Unit, content: @Co
         content()
     }
 }
-
-private val FRISE_MAX_HEIGHT = 220.dp
 
 internal fun ComposerObjectEditorSection.glyph(): ImageVector = when (this) {
     is ComposerObjectEditorSection.Tool -> when (tool) {

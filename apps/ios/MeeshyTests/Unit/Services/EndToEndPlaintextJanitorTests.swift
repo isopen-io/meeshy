@@ -38,11 +38,24 @@ final class EndToEndPlaintextJanitorTests: XCTestCase {
         EndToEndPlaintextJanitor(endToEnd: endToEnd, queue: { await queue.plaintextErasures })
     }
 
-    func test_aMessageDeletedByTheServer_leavesTheVault_andTheQueue() async throws {
+    /// #13060 — la passerelle qui annonce une suppression MASQUE la ligne ; le
+    /// clair ne quitte le coffre que pour un effacement authentifié.
+    func test_aDeletionAnnouncedByTheServer_keepsItsClearInTheVault() async throws {
+        let queue = try await persistence(with: [("cid_1", "srv_1")])
+        let endToEnd = MockEndToEndMessaging()
+        await endToEnd.remember(content(), from: me, as: ["cid_1", "srv_1"])
+        try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
+
+        await janitor(endToEnd, queue).drain()
+
+        XCTAssertEqual(endToEnd.storedIds, ["cid_1", "srv_1"])
+    }
+
+    func test_anAuthenticatedDeletion_leavesTheVault_andTheQueue() async throws {
         let queue = try await persistence(with: [("cid_1", "srv_1"), ("cid_2", "srv_2")])
         let endToEnd = MockEndToEndMessaging()
         await endToEnd.remember(content(), from: me, as: ["cid_1", "srv_1", "srv_2"])
-        try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
+        try await queue.markDeleted(localId: "srv_1", deletedAt: Date(), origin: .authenticated)
 
         await janitor(endToEnd, queue).drain()
 
@@ -82,7 +95,7 @@ final class EndToEndPlaintextJanitorTests: XCTestCase {
         let queue = try await persistence(with: [("cid_1", "srv_1")])
         let endToEnd = MockEndToEndMessaging()
         endToEnd.erasureAccepted = false
-        try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
+        try await queue.markDeleted(localId: "srv_1", deletedAt: Date(), origin: .authenticated)
 
         await janitor(endToEnd, queue).drain()
 
@@ -94,7 +107,7 @@ final class EndToEndPlaintextJanitorTests: XCTestCase {
         let queue = try await persistence(with: [("cid_1", "srv_1")])
         let endToEnd = MockEndToEndMessaging()
         endToEnd.vaultAccount = "00000000000000000000cc33"
-        try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
+        try await queue.markDeleted(localId: "srv_1", deletedAt: Date(), origin: .authenticated)
 
         await janitor(endToEnd, queue).drain()
 
@@ -108,7 +121,7 @@ final class EndToEndPlaintextJanitorTests: XCTestCase {
     func test_anEnvelopeOpenedAfterTheErasure_leavesTheVaultAgain() async throws {
         let queue = try await persistence(with: [("srv_1", "srv_1")])
         let endToEnd = MockEndToEndMessaging()
-        try await queue.markDeleted(localId: "srv_1", deletedAt: Date())
+        try await queue.markDeleted(localId: "srv_1", deletedAt: Date(), origin: .authenticated)
         await janitor(endToEnd, queue).drain()
         await endToEnd.remember(content(), from: me, as: ["srv_1"])
 

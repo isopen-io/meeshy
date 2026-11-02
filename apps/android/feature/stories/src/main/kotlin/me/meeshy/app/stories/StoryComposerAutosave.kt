@@ -335,6 +335,7 @@ private fun StoryTextElement.toDraftSnapshot(): StoryDraftTextElementSnapshot =
         rotationDeg = rotationDeg,
         referenceUserId = referenceUserId,
         zIndex = zIndex,
+        keyframes = keyframes,
     )
 
 /**
@@ -372,6 +373,7 @@ private fun StoryDraftTextElementSnapshot.toTextElement(): StoryTextElement =
         rotationDeg = rotationDeg,
         referenceUserId = referenceUserId,
         zIndex = zIndex,
+        keyframes = keyframes,
     )
 
 /**

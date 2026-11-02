@@ -44,6 +44,16 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
 
     override fun accountsWithTokens(candidates: Collection<String>): Set<String> = vault.accountsWithTokens(candidates)
 
+    override fun tokensOf(userId: String): AccountTokens? {
+        adoption.value
+        return vault.tokens(userId)
+    }
+
+    override fun keepDormant(userId: String, tokens: AccountTokens) {
+        if (userId == store.get(KEY_USER_ID) || tokens.isEmpty) return
+        vault.save(userId, tokens)
+    }
+
     /** Signs the active account out: its tokens and the active pointer go; dormant accounts stay. */
     override fun clear() {
         store.get(KEY_USER_ID)?.let(vault::remove)

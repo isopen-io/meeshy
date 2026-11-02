@@ -6,7 +6,7 @@ Contient les dataclasses et modèles utilisés par le serveur de traduction.
 
 import time
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 # Import des optimisations de performance
 PERFORMANCE_MODULE_AVAILABLE = False
@@ -31,6 +31,9 @@ class TranslationTask:
     priority: int = 2  # 1=HIGH (short), 2=MEDIUM, 3=LOW (long), 4=BULK
     # #12822 — texte chiffré au repos par la passerelle : ni cache, ni journal du texte.
     at_rest: bool = False
+    # Codes d'erreur terminaux que la passerelle a annoncé savoir lire
+    # (`acceptsErrorCodes`). Absent ⇒ passerelle ancienne ⇒ aucun refus publié.
+    accepted_error_codes: Tuple[str, ...] = ()
 
     def __post_init__(self):
         if self.created_at is None:

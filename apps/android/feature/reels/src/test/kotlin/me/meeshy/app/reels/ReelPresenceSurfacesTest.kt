@@ -9,7 +9,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * L'auteur d'un réel et les auteurs de ses commentaires portent le point de présence vivant, comme iOS
+ * L'auteur d'un réel porte le point de présence vivant, comme iOS
  * (#13745). Rien servi, aucun point ; mon propre réel n'en a jamais.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -35,14 +35,6 @@ class ReelPresenceSurfacesTest {
         bookmarkCount = 0,
     )
 
-    private fun comment(authorId: String?) = ReelCommentPresentation(
-        id = "c1",
-        authorName = "Ana",
-        content = "Beau",
-        createdAt = null,
-        authorId = authorId,
-    )
-
     @Test
     fun `l'auteur d'un reel a le point que la carte vivante sert`() {
         compose.showWithPresence(presenceStore(live = mapOf("u1" to PresenceState.ONLINE))) {
@@ -63,24 +55,6 @@ class ReelPresenceSurfacesTest {
     fun `mon propre reel n'a jamais de point`() {
         compose.showWithPresence(presenceStore(live = mapOf("me" to PresenceState.ONLINE))) {
             ReelAuthorRow(reel("me"), isOwn = true, onOpenAuthor = null)
-        }
-
-        compose.assertNoDot()
-    }
-
-    @Test
-    fun `l'auteur d'un commentaire de reel a le point que la carte vivante sert`() {
-        compose.showWithPresence(presenceStore(live = mapOf("u1" to PresenceState.AWAY))) {
-            ReelCommentRow(comment("u1"), onRetry = {})
-        }
-
-        compose.assertDot(PresenceState.AWAY)
-    }
-
-    @Test
-    fun `un commentaire optimiste sans compte d'auteur n'a aucun point`() {
-        compose.showWithPresence(presenceStore(live = mapOf("u1" to PresenceState.ONLINE))) {
-            ReelCommentRow(comment(authorId = null), onRetry = {})
         }
 
         compose.assertNoDot()

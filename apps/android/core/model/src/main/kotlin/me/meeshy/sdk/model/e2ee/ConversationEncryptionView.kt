@@ -15,6 +15,23 @@ enum class ConversationEncryptionModeChoice(val wire: String, val isOfferedOnThi
 
     companion object {
         val offeredOnThisPhone: List<ConversationEncryptionModeChoice> get() = values().filter { it.isOfferedOnThisPhone }
+
+        /** Le mode d'un régime servi ; `null` pour une ancienne conversation sans mode. */
+        fun of(regime: ConversationEncryptionRegime): ConversationEncryptionModeChoice? = when (regime) {
+            ConversationEncryptionRegime.NONE -> null
+            ConversationEncryptionRegime.SERVER -> SERVER
+            ConversationEncryptionRegime.HYBRID -> HYBRID
+            ConversationEncryptionRegime.END_TO_END -> E2EE
+        }
+
+        /**
+         * Les modes vers lesquels un régime AU REPOS passe directement (décision du 2026-11-01) :
+         * tous sauf le sien, dans l'ordre de l'écran. Le bout en bout ne passe à rien (#12949).
+         */
+        fun switchTargets(regime: ConversationEncryptionRegime): List<ConversationEncryptionModeChoice> = when (regime) {
+            ConversationEncryptionRegime.END_TO_END -> emptyList()
+            else -> values().filter { it != of(regime) }
+        }
     }
 }
 
@@ -28,10 +45,16 @@ object ConversationSecurityRow {
         !isDirect && regime == ConversationEncryptionRegime.END_TO_END
 }
 
-/** Ce que la feuille Chiffrement rend ; seul le chiffrement AU REPOS se désactive, jamais le bout en bout (#12949). */
+/**
+ * Ce que la feuille Chiffrement rend. Le chiffrement au repos ne se désactive plus
+ * (`409 ENCRYPTION_AT_REST_PERMANENT`, décision du 2026-11-01) : Serveur et Hybride passent
+ * directement à un autre mode, et le bout en bout ne se quitte jamais (#12949).
+ */
 sealed interface ConversationEncryptionContent {
     data object Loading : ConversationEncryptionContent
-    data class Active(val offersDeactivation: Boolean) : ConversationEncryptionContent
+
+    /** @param offersModeChange le rôle autorisé peut faire passer ce régime au repos à un autre mode. */
+    data class Active(val offersModeChange: Boolean) : ConversationEncryptionContent
     data object Activation : ConversationEncryptionContent
     data object InactiveReadOnly : ConversationEncryptionContent
 }
@@ -70,7 +93,7 @@ data class ConversationEncryptionView(
             val content = when {
                 loading -> ConversationEncryptionContent.Loading
                 isEncrypted -> ConversationEncryptionContent.Active(
-                    offersDeactivation = mayToggle && regime != ConversationEncryptionRegime.END_TO_END,
+                    offersModeChange = mayToggle && regime != ConversationEncryptionRegime.END_TO_END,
                 )
                 mayToggle -> ConversationEncryptionContent.Activation
                 else -> ConversationEncryptionContent.InactiveReadOnly

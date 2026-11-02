@@ -32,10 +32,21 @@ data class ConversationEncryptionUiState(
     val isSwitching: Boolean = false,
     val selected: ConversationEncryptionModeChoice = ConversationEncryptionModeChoice.SERVER,
     val notice: ConversationEncryptionNotice? = null,
-    val confirmsDeactivation: Boolean = false,
 ) {
     /** Ni statut servi ni conversation retenue chiffrée : rien ne permet de dire le régime, la feuille ne devine pas. */
     val readFailed: Boolean get() = !isLoading && status == null && !sealed
+
+    /**
+     * Le passage à un autre mode est prêt : le rôle autorisé, un régime AU REPOS, et un mode choisi
+     * qui n'est pas celui en place et que ce téléphone sait servir (le bout en bout, non : #13015).
+     */
+    val canSwitchMode: Boolean
+        get() {
+            val shown = view()
+            val offered = (shown.content as? ConversationEncryptionContent.Active)?.offersModeChange == true
+            return offered && !isSwitching && selected.isOfferedOnThisPhone &&
+                selected in ConversationEncryptionModeChoice.switchTargets(shown.regime)
+        }
 
     fun view(): ConversationEncryptionView = ConversationEncryptionView.resolve(
         status = status,
@@ -49,7 +60,8 @@ data class ConversationEncryptionUiState(
  * La fiche Chiffrement d'une conversation (#12880, #13463). La passerelle fait foi ; l'écran ne
  * promet que ce qu'elle a dit. Une bascule concurrente (409 `E2EE_REGIME_CHANGED`) ou un refus
  * `E2EE_IRREVERSIBLE` relit l'état au lieu d'échouer en silence ; le bout en bout, une fois vu,
- * ne se quitte jamais et ne s'active pas depuis ce téléphone (#13015).
+ * ne se quitte jamais et ne s'active pas depuis ce téléphone (#13015). Le chiffrement au repos ne
+ * se désactive plus (décision du 2026-11-01) : Serveur et Hybride passent à un autre mode.
  */
 @HiltViewModel
 class ConversationEncryptionViewModel @Inject constructor(
@@ -63,12 +75,12 @@ class ConversationEncryptionViewModel @Inject constructor(
     /**
      * Chaque ouverture relit le régime : le ViewModel vit avec l'écran de conversation, et une
      * conversation devenue chiffrée de bout en bout entre deux ouvertures ne doit jamais rouvrir
-     * sur un « Désactiver » périmé. Le registre est relu AVANT le réseau ; la lecture se fait sans
+     * sur un changement de mode périmé. Le registre est relu AVANT le réseau ; la lecture se fait sans
      * revenir au chargement quand un régime est déjà connu.
      */
     fun load(conversationId: String, isDirect: Boolean) {
         if (_state.value.conversationId == conversationId) {
-            _state.update { it.copy(isDirect = isDirect, sealed = sealedOf(it, conversationId), confirmsDeactivation = false) }
+            _state.update { it.copy(isDirect = isDirect, sealed = sealedOf(it, conversationId)) }
             read()
             return
         }
@@ -95,20 +107,11 @@ class ConversationEncryptionViewModel @Inject constructor(
         switch { id -> encryption.enable(id, current.selected) }
     }
 
-    fun requestDeactivation() {
-        val offered = (_state.value.view().content as? ConversationEncryptionContent.Active)?.offersDeactivation == true
-        if (offered) _state.update { it.copy(confirmsDeactivation = true) }
-    }
-
-    fun cancelDeactivation() {
-        _state.update { it.copy(confirmsDeactivation = false) }
-    }
-
-    fun confirmDeactivation() {
+    /** Fait passer un régime au repos au mode choisi (`POST /conversations/:id/encryption`). */
+    fun switchMode() {
         val current = _state.value
-        val offered = (current.view().content as? ConversationEncryptionContent.Active)?.offersDeactivation == true
-        _state.update { it.copy(confirmsDeactivation = false) }
-        if (offered && !current.isSwitching) switch { id -> encryption.disable(id) }
+        if (!current.canSwitchMode) return
+        switch { id -> encryption.enable(id, current.selected) }
     }
 
     fun dismissNotice() {

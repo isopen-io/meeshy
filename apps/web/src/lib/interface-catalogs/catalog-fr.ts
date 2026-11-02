@@ -789,6 +789,7 @@ const fr = {
   'story.studio.failure.tooLarge': 'Fichier trop lourd.',
   'story.studio.failure.fileRefused': 'Fichier refusé : son type ne correspond pas à son contenu.',
   'story.studio.failure.rateLimited': 'Trop de publications d’un coup — réessayez dans un instant.',
+  'story.studio.failure.onlyUnlinked': 'Trop de personnes choisies n’ont encore aucun lien avec vous aujourd’hui. Retirez-les de la liste, ou réessayez demain.',
   'story.studio.failure.refused': 'Publication refusée.',
   'story.studio.failure.unavailable': 'La passerelle est indisponible.',
   'story.studio.text.add': 'Ajouter un texte',

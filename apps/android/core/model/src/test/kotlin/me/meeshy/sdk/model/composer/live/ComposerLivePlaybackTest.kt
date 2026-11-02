@@ -2,6 +2,10 @@ package me.meeshy.sdk.model.composer.live
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.media.MediaTrimBounds
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -116,5 +120,31 @@ class ComposerLivePlaybackTest {
         assertThat(ComposerLivePlayback.plays(screenResumed = true, shelfOpen = false)).isTrue()
         assertThat(ComposerLivePlayback.plays(screenResumed = false, shelfOpen = false)).isFalse()
         assertThat(ComposerLivePlayback.plays(screenResumed = true, shelfOpen = true)).isFalse()
+    }
+
+    // #13481 — la frise ouverte, chaque lecteur suit la tête de lecture.
+
+    @Test
+    fun `la frise ouverte place la tete de la source a l'instant de la scene`() {
+        val window = ComposerLiveWindow(2_000, 8_000)
+        assertEquals(2_000L, ComposerLivePlayback.followed(window, sceneStart = 1f, sceneEnd = 5f, at = 1f))
+        assertEquals(4_500L, ComposerLivePlayback.followed(window, sceneStart = 1f, sceneEnd = 5f, at = 3.5f))
+    }
+
+    @Test
+    fun `hors de sa fenetre de scene ou au-dela de sa source le lecteur se tait`() {
+        val window = ComposerLiveWindow(2_000, 3_000)
+        assertNull(ComposerLivePlayback.followed(window, sceneStart = 1f, sceneEnd = 5f, at = 0.5f))
+        assertNull(ComposerLivePlayback.followed(window, sceneStart = 1f, sceneEnd = 5f, at = 5f))
+        assertNull(ComposerLivePlayback.followed(window, sceneStart = 1f, sceneEnd = 5f, at = 2.5f))
+        assertEquals(500L, ComposerLivePlayback.followed(ComposerLiveWindow.WHOLE, sceneStart = 0f, sceneEnd = null, at = 0.5f))
+    }
+
+    @Test
+    fun `le lecteur ne se recale que si sa derive depasse la tolerance`() {
+        assertFalse(ComposerLivePlayback.drifts(positionMs = 4_100, targetMs = 4_000, playing = true))
+        assertTrue(ComposerLivePlayback.drifts(positionMs = 4_400, targetMs = 4_000, playing = true))
+        assertTrue(ComposerLivePlayback.drifts(positionMs = 4_100, targetMs = 4_000, playing = false))
+        assertFalse(ComposerLivePlayback.drifts(positionMs = 4_020, targetMs = 4_000, playing = false))
     }
 }

@@ -162,6 +162,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
+        // #14056 — les règles pures de l'éditeur (refus d'identité compris) ont
+        // quitté `ProfileView.swift` pour la taille : leurs clés suivent.
+        "apps/ios/Meeshy/Features/Profile/Views/MeeshyUser+ProfileEdits.swift",
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",  // 32
         // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour
@@ -231,7 +234,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         // ont suivi leur code, la liste suit les hôtes (leçon 578).
         "apps/ios/Meeshy/Features/Call/Services/CallManager+Answer.swift",
         "apps/ios/Meeshy/Features/Call/Services/CallManager+Connection.swift",
-        "apps/ios/Meeshy/Features/Call/Services/CallManager+Hold.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallCollaborators/CallVideoSuspension.swift",
+        "apps/ios/Meeshy/Features/Call/Services/CallCollaborators/CallCameraActuator.swift",
         "apps/ios/Meeshy/Features/Call/Services/CallManager+IncomingSignal.swift",
         "apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift",
         "apps/ios/Meeshy/Features/Call/Services/CallManager+Outgoing.swift",
@@ -475,6 +479,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Cells/LoadMoreRepliesCell.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift",  // 1
+        // 2026-11-01 — le mode se choisit à la création : les mots d'un mode,
+        // partagés par la fiche et l'écran de création, et la section de choix.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionModeText.swift",
+        "apps/ios/Meeshy/Features/Main/Views/NewConversationEncryptionSection.swift",
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",  // 1
         // Cohésion de `MessageViewsDetailView` : les cartes et le badge ont quitté l'hôte avec leurs clés ; le cliquet suit le code (leçon 578).
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsConsumptionCard.swift",

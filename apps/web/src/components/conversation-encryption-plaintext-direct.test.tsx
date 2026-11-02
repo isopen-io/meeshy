@@ -69,10 +69,10 @@ const mount = async (conversation: Conversation, outcome: PlaintextDirectOutcome
 const button = () => document.querySelector<HTMLButtonElement>('[data-conversation-encryption-open-plaintext]');
 const status = () => document.querySelector<HTMLElement>('[data-conversation-encryption-open-plaintext-status]')?.textContent ?? '';
 
-describe('la fiche d’un tête-à-tête chiffré de bout en bout ouvre la conversation non chiffrée (#12966)', () => {
+describe('la fiche d’un tête-à-tête chiffré de bout en bout ouvre la conversation sans chiffrement de bout en bout (#12966)', () => {
   test('le geste est nommé par la personne, visible sans déplier, et l’ouvre', async () => {
     const calls = await mount({ id: 'c-sealed', type: 'direct', encryptionMode: 'e2ee' });
-    expect(button()?.textContent).toBe('Ouvrir une conversation non chiffrée avec Amina');
+    expect(button()?.textContent).toBe('Ouvrir une conversation sans chiffrement de bout en bout avec Amina');
     expect(button()?.closest('details')).toBeNull();
     await act(async () => {
       button()?.click();
@@ -81,10 +81,10 @@ describe('la fiche d’un tête-à-tête chiffré de bout en bout ouvre la conve
     expect(calls).toEqual(['open']);
   });
 
-  test('la fiche dit que le tête-à-tête reste chiffré et qu’un second, non chiffré, existe à côté', async () => {
+  test('la fiche dit que le tête-à-tête reste chiffré et qu’un second, sans chiffrement de bout en bout, existe à côté', async () => {
     await mount({ id: 'c-sealed', type: 'direct', encryptionMode: 'e2ee' });
     expect(document.querySelector('[data-conversation-encryption-fact="endToEndNeverTurnedOffDirect"]')?.textContent).toBe(
-      'Le chiffrement de bout en bout ne se désactive pas : ce tête-à-tête reste chiffré. Pour échanger en clair avec cette personne, ouvrez une conversation non chiffrée à côté : les deux sont dans la liste, celle-ci marquée d’un cadenas.',
+      'Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Vous pouvez toujours ouvrir, à côté, une conversation sans chiffrement de bout en bout avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas.',
     );
   });
 
@@ -95,8 +95,8 @@ describe('la fiche d’un tête-à-tête chiffré de bout en bout ouvre la conve
   });
 
   const REFUSALS: ReadonlyArray<readonly [string, PlaintextDirectOutcome, string]> = [
-    ['un échec', 'failed', 'La conversation non chiffrée n’a pas pu être ouverte. Réessayez.'],
-    ['hors connexion', 'offline', 'Hors connexion : reconnectez-vous pour ouvrir la conversation non chiffrée.'],
+    ['un échec', 'failed', 'La conversation sans chiffrement de bout en bout n’a pas pu être ouverte. Réessayez.'],
+    ['hors connexion', 'offline', 'Hors connexion : reconnectez-vous pour ouvrir la conversation sans chiffrement de bout en bout.'],
   ];
   for (const [label, outcome, message] of REFUSALS) test(`${label} se dit sous le geste, qui reste disponible`, async () => {
     await mount({ id: 'c-sealed', type: 'direct', encryptionMode: 'e2ee' }, outcome);

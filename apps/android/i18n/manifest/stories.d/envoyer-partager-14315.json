@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.post.share", "androidName": "stories_action_share", "status": "adopted" }
+      ]
+    }
+  }
+}

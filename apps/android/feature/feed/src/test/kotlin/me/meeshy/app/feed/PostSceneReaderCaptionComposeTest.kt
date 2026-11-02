@@ -39,7 +39,7 @@ class PostSceneReaderCaptionComposeTest {
 
     private fun open(scenes: FeedPostScenes, label: String) {
         compose.setContent {
-            CompositionLocalProvider(LocalReelSceneRenderer provides card, LocalPostSceneReaderRenderer provides reader) {
+            CompositionLocalProvider(LocalPostSceneCardRenderer provides card, LocalPostSceneReaderRenderer provides reader) {
                 FeedPostCardMediaSlot(post = feedPostPresentation(id = "p1").copy(scenes = scenes), onImageTap = {}, onOpenPost = {})
             }
         }

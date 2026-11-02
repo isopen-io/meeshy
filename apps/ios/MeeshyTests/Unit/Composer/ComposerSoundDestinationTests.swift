@@ -1,4 +1,7 @@
 import XCTest
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// **Où atterrit un son de PREMIER PLAN** (#4722, directive porteur
@@ -180,5 +183,64 @@ final class ComposerSoundDestinationWiringGuardTests: XCTestCase {
         let code = try source
         let poses = code.components(separatedBy: "attachPastedAudio(url: destination, role: .foreground)").count - 1
         XCTAssertEqual(poses, 1, "un seul site, et il est dans la branche `.sceneChip`")
+    }
+
+    // MARK: - La feuille Son du compositeur est sombre (#13899, point 3)
+
+    /// **Dans le compositeur, la feuille Son se peint en sombre, comme toutes
+    /// ses feuilles** — sans toucher au thème de l'app. Elle lisait le thème
+    /// global : sur un téléphone en clair, elle montait claire au-dessus d'une
+    /// scène sombre.
+    @MainActor
+    func test_laFeuilleSon_duCompositeur_estSombre_dansUneAppClaire() throws {
+        let modeAvant = ThemeManager.shared.mode
+        let ecran = RenderedScreen(
+            AudioPostComposerView(onPublish: { _, _, _, _ in }, onPublishBorrowed: { _, _ in },
+                                  appearance: .dark)
+                .environment(\.colorScheme, .light)
+                .environment(\.themePalette, ThemePalette(mode: .light)),
+            size: CGSize(width: 390, height: 600))
+        defer { ecran.dismount() }
+
+        let image = try XCTUnwrap(ecran.snapshotPNG().flatMap(UIImage.init(data:))?.cgImage)
+        let luminance = try XCTUnwrap(Self.luminance(of: image, atX: 0.5, y: 0.97))
+        XCTAssertLessThan(luminance, 0.3, "la feuille Son est claire (luminance \(luminance))")
+        XCTAssertEqual(ThemeManager.shared.mode, modeAvant, "la feuille a basculé le thème de l'app")
+    }
+
+    func test_leCompositeur_ouvreLaFeuilleSon_enSombre() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/MeeshyComposerHost+Sound.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(code.contains("appearance:.dark"), "le compositeur ne force pas le sombre sur sa feuille Son")
+    }
+
+    func test_laBibliothequeDeSons_ouverteDepuisLaFeuille_prendLeMemeSchema() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/AudioPostComposerView.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        let feuille = try XCTUnwrap(code.range(of: ".sheet(isPresented:$showSoundLibrary)"),
+                                    "la bibliothèque de sons n'est plus présentée par la feuille")
+        let suite = String(code[feuille.upperBound...].prefix(400))
+        XCTAssertTrue(suite.contains(".preferredColorScheme(appearance)"),
+                      "la bibliothèque hérite d'un texte sombre sur un fond de présentation clair : elle doit prendre le schéma imposé")
+    }
+
+    private static func luminance(of image: CGImage, atX fx: CGFloat, y fy: CGFloat) -> CGFloat? {
+        let x = Int(CGFloat(image.width - 1) * fx), y = Int(CGFloat(image.height - 1) * fy)
+        guard let cropped = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        context.draw(cropped, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return (0.2126 * CGFloat(pixel[0]) + 0.7152 * CGFloat(pixel[1]) + 0.0722 * CGFloat(pixel[2])) / 255
     }
 }

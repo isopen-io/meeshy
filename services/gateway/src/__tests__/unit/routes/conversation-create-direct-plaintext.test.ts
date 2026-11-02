@@ -37,6 +37,12 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })) },
 }));
 
+// Directive porteur du 2026-11-01 : le serveur chiffre toujours au repos — un
+// tête-à-tête lisible naît `server`, sous une clé obtenue avant sa création.
+jest.mock('../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
+
 const member = (userId: string, role = 'member', isActive = true) => ({
   userId,
   role,
@@ -61,6 +67,7 @@ const LATER = new Date('2026-10-24T10:00:00Z');
 function world(docs: DirectDoc[]) {
   const directs = findConversationsIn(docs);
   const conversationCreate = jest.fn(async (args: { data: Record<string, unknown> }) => ({
+    ...args.data,
     id: CREATED_DM,
     identifier: 'mshy_new',
     type: args.data.type,
@@ -169,14 +176,13 @@ describe('sans précision, on rouvre le tête-à-tête chiffré s’il existe, s
 });
 
 describe('`plaintext: true` rend ou crée le tête-à-tête que le serveur lit (#12966)', () => {
-  it('crée un tête-à-tête sans chiffrement quand le seul existant est chiffré de bout en bout', async () => {
+  it('crée un tête-à-tête que le serveur lit — chiffré au repos — quand le seul existant est chiffré de bout en bout', async () => {
     const opened = await openDirect([direct(SEALED_DM, { encryptionMode: 'e2ee', lastMessageAt: LATER })], { plaintext: true });
     expect(opened).toMatchObject({ status: 201, id: CREATED_DM });
     expect(opened.conversationCreate).toHaveBeenCalledTimes(1);
     const data = (opened.conversationCreate.mock.calls[0] as [{ data: Record<string, unknown> }])[0].data;
     expect(data.type).toBe('direct');
-    expect(data).not.toHaveProperty('encryptionMode');
-    expect(data).not.toHaveProperty('encryptionEnabledAt');
+    expect(data).toMatchObject({ encryptionMode: 'server', serverEncryptionKeyId: 'server-key' });
   });
 
   it('rend le lisible existant, même moins récent que le chiffré : jamais un second lisible', async () => {

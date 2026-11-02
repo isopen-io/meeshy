@@ -79,7 +79,7 @@ final class ComposerSelectionMarkerWiringGuardTests: XCTestCase {
     func test_leMeuble_descendLaSelectionJusquALaSurface() throws {
         let source = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(source.contains("selectedItemId:sceneTypesInline?nil:selectedSceneItemId,selectionBadge:ComposerSceneIntakeCopy.sendingBadge(for:selectedSceneItemPreUpload),"),
-                      "la scène plein écran encadre l'élément choisi, sans badge de configuration")
+                      "la scène désigne l'élément choisi au canvas pour son seul badge d'envoi")
     }
 
     /// **La surface fait suivre, elle ne re-décide pas.** Même contrat que pour

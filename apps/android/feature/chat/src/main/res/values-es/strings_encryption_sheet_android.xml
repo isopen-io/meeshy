@@ -8,4 +8,5 @@
     <string name="encryption_read_failed">No se pudo leer el estado del cifrado. Inténtalo de nuevo.</string>
     <string name="encryption_retry">Reintentar</string>
     <string name="security_verify_description">Los mensajes con %1$s están cifrados de extremo a extremo.</string>
+    <string name="encryption_detail_switch_mode">Cambiar de modo</string>
 </resources>

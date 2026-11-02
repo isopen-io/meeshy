@@ -237,11 +237,16 @@ final class PresenceManager: ObservableObject {
     /// conversation) : elle date l'activité, rien de plus (#11412). Le pair est
     /// vert (≤ 60 s) puis décroît orange → gris → rien ; `isOnline` reste ce que
     /// le serveur a dit — le poser à `true` donnait 5 min de vert puis plus rien.
-    /// Sa propre activité n'écrit jamais la carte.
+    /// Sa propre activité n'écrit jamais la carte. Un « en ligne » servi sans
+    /// date (l'Ami, #13928) est tenu par le serveur jusqu'à son `user:status` :
+    /// le dater le livrait à la garde anti-stale, qui l'éteignait 5 min plus
+    /// tard alors que le serveur le servait toujours en ligne.
     func noteActivity(userId: String) {
         guard !userId.isEmpty, userId != AuthManager.shared.currentUser?.id else { return }
+        let known = presenceMap[userId]
+        guard !(known?.isOnline == true && known?.lastActiveAt == nil) else { return }
         presenceMap[userId] = UserPresence(
-            isOnline: presenceMap[userId]?.isOnline ?? false,
+            isOnline: known?.isOnline ?? false,
             lastActiveAt: Date()
         )
     }

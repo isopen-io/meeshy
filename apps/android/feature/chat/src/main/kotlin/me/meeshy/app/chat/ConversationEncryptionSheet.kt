@@ -1,6 +1,5 @@
 package me.meeshy.app.chat
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,7 +58,8 @@ import java.time.format.FormatStyle
 /**
  * La fiche Chiffrement d'une conversation (iOS `ConversationEncryptionDetailSheet`, #13463) : le
  * régime dit sans jargon, qui peut lire, ce qui manque et pourquoi. Feuille : croix + glissé bas.
- * Le bout en bout ne se désactive jamais, et ne s'active pas depuis ce téléphone.
+ * Le chiffrement au repos ne se désactive plus : Serveur et Hybride passent à un autre mode. Le
+ * bout en bout ne se quitte jamais, et ne s'active pas depuis ce téléphone (#13015).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,7 +97,7 @@ internal fun ConversationEncryptionSheet(
                     ConversationEncryptionExplanationSections(ConversationEncryptionExplanation.of(view.regime.wireMode(), isDirect))
                     when (val content = view.content) {
                         ConversationEncryptionContent.Activation -> ActivationBlock(state, accentColor, viewModel)
-                        is ConversationEncryptionContent.Active -> if (content.offersDeactivation) DeactivationBlock(state.isSwitching, viewModel)
+                        is ConversationEncryptionContent.Active -> if (content.offersModeChange) ModeChangeBlock(state, view.regime, accentColor, viewModel)
                         else -> Unit
                     }
                 }
@@ -104,7 +105,6 @@ internal fun ConversationEncryptionSheet(
             state.notice?.takeIf { !state.readFailed }?.let { NoticeText(it.textRes(), error = true) }
         }
     }
-    if (state.confirmsDeactivation) DeactivationDialog(viewModel::confirmDeactivation, viewModel::cancelDeactivation)
 }
 
 private fun ConversationEncryptionRegime.wireMode(): String? = when (this) {
@@ -186,11 +186,8 @@ private fun StateBlock(view: ConversationEncryptionView, status: ConversationEnc
     )
 }
 
-private fun ConversationEncryptionRegime.modeChoice(): ConversationEncryptionModeChoice = when (this) {
-    ConversationEncryptionRegime.HYBRID -> ConversationEncryptionModeChoice.HYBRID
-    ConversationEncryptionRegime.END_TO_END -> ConversationEncryptionModeChoice.E2EE
-    else -> ConversationEncryptionModeChoice.SERVER
-}
+private fun ConversationEncryptionRegime.modeChoice(): ConversationEncryptionModeChoice =
+    ConversationEncryptionModeChoice.of(this) ?: ConversationEncryptionModeChoice.SERVER
 
 @Composable
 private fun ActivationBlock(state: ConversationEncryptionUiState, accent: Color, viewModel: ConversationEncryptionViewModel) {
@@ -220,7 +217,7 @@ private fun ModeRow(mode: ConversationEncryptionModeChoice, selected: Boolean, e
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(enabled = enabled, role = Role.RadioButton, onClick = onSelect),
+            .selectable(selected = selected && enabled, enabled = enabled, role = Role.RadioButton, onClick = onSelect),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(selected = selected && enabled, onClick = null, enabled = enabled)
@@ -232,21 +229,42 @@ private fun ModeRow(mode: ConversationEncryptionModeChoice, selected: Boolean, e
     }
 }
 
+/**
+ * Le passage d'un régime au repos à un autre mode (décision du 2026-11-01) : les autres modes en
+ * rangées radio, le bout en bout retenu sur ce téléphone (#13015), puis un geste explicite.
+ */
 @Composable
-private fun DeactivationBlock(isSwitching: Boolean, viewModel: ConversationEncryptionViewModel) {
-    TextButton(onClick = viewModel::requestDeactivation, enabled = !isSwitching, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text(stringResource(R.string.encryption_detail_deactivate), color = MeeshyPalette.Error)
-    }
-    Text(stringResource(R.string.encryption_detail_deactivate_at_rest_footer), style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
-}
-
-@Composable
-private fun DeactivationDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text(stringResource(R.string.encryption_detail_deactivate_at_rest_confirm_title)) },
-        text = { Text(stringResource(R.string.encryption_detail_deactivate_at_rest_confirm_message)) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.encryption_detail_deactivate), color = MeeshyPalette.Error) } },
-        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.common_cancel)) } },
+private fun ModeChangeBlock(
+    state: ConversationEncryptionUiState,
+    regime: ConversationEncryptionRegime,
+    accent: Color,
+    viewModel: ConversationEncryptionViewModel,
+) {
+    val targets = ConversationEncryptionModeChoice.switchTargets(regime)
+    Text(
+        stringResource(R.string.encryption_detail_mode_header),
+        style = MaterialTheme.typography.titleSmall,
+        color = MeeshyTheme.tokens.textPrimary,
+        modifier = Modifier.semantics { heading() },
     )
+    Column(modifier = Modifier.selectableGroup()) {
+        targets.forEach { mode ->
+            ModeRow(mode, selected = mode == state.selected, enabled = mode.isOfferedOnThisPhone && !state.isSwitching) { viewModel.select(mode) }
+        }
+    }
+    if (targets.any { !it.isOfferedOnThisPhone }) {
+        Text(
+            stringResource(R.string.encryption_e2ee_unavailable_here),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textMuted,
+        )
+    }
+    Button(
+        onClick = viewModel::switchMode,
+        enabled = state.canSwitchMode,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+    ) {
+        if (state.isSwitching) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = accent)
+        else Text(stringResource(R.string.encryption_detail_switch_mode))
+    }
 }

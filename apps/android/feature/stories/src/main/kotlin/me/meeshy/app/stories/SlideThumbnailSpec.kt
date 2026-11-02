@@ -65,7 +65,7 @@ internal data class SlideThumbnailSpec(
         fun of(
             slide: StorySlide,
             backgroundKey: String?,
-            accentHex: String,
+            accentHex: String?,
             widthPx: Int,
             heightPx: Int,
             canvasWidthPx: Float = 0f,

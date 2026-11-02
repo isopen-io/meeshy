@@ -21,6 +21,13 @@ class ShareCardsTest {
     }
 
     @Test
+    fun `a post leaves as its sentence like a story, and its tracked link replaces the address inside it`() {
+        val card = ShareCards.post("p1", "Mon post", messageText = "🔗 Publication de Léa : https://meeshy.me/feeds/post/p1")
+        assertThat(card.messageText).isEqualTo("🔗 Publication de Léa : https://meeshy.me/feeds/post/p1")
+        assertThat(TrackedShareCard.withLink(card, "https://meeshy.me/l/abc").messageText).isEqualTo("🔗 Publication de Léa : https://meeshy.me/l/abc")
+    }
+
+    @Test
     fun `an identifier is encoded in the story address`() {
         assertThat(ShareCards.storyUrl("a b/c")).isEqualTo("https://meeshy.me/story/a+b%2Fc")
     }

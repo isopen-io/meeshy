@@ -238,6 +238,51 @@ class ComposeLanguageDetectorTest {
         )
         assertThat(result).isEqualTo("en")
     }
+
+    private fun identifies(code: String, confidence: Double) = LanguageIdentifying { LanguageIdentification(code, confidence) }
+
+    @Test
+    fun authoredLanguage_confidentDetection_isClaimed() = runTest {
+        assertThat(ComposeLanguageDetector.authoredLanguage("Bonjour à toutes et à tous", identifies("fr", 0.98))).isEqualTo("fr")
+    }
+
+    @Test
+    fun authoredLanguage_weakDetection_isLeftToTheServer_neverTheAuthorsLanguage() = runTest {
+        // #14284 — un compte dont la langue primaire est l'espagnol écrit « Recette commentaire photo S8 » :
+        // l'identifieur hésite, et le commentaire partait badgé « Español ».
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette commentaire photo S8", identifies("fr", 0.40))).isNull()
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette commentaire photo S8", LanguageIdentifying.Unavailable)).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_withoutText_isLeftToTheServer() = runTest {
+        // Un vocal sans légende : la langue se lit dans l'audio (transcription), pas dans la langue de l'auteur.
+        assertThat(ComposeLanguageDetector.authoredLanguage("", identifies("es", 0.99))).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_undeterminedIdentification_isLeftToTheServer() = runTest {
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette offline ok", identifies("und", 0.99))).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_shortTextBelowTheShortTextConfidence_isLeftToTheServer() = runTest {
+        // Recette S8 2026-11-01 : « Recette commentaire story S8 » (français, auteur hispanophone) partait étiqueté « en ».
+        // Quatre mots ne départagent pas deux langues : dans le doute, ne rien affirmer.
+        assertThat(ComposeLanguageDetector.authoredLanguage("Recette commentaire story S8", identifies("en", 0.85))).isNull()
+    }
+
+    @Test
+    fun authoredLanguage_shortTextWithNearCertainty_isClaimed() = runTest {
+        assertThat(ComposeLanguageDetector.authoredLanguage("Merci beaucoup mon ami", identifies("fr", 0.97))).isEqualTo("fr")
+    }
+
+    @Test
+    fun authoredLanguage_longerTextAtOrdinaryConfidence_isClaimed() = runTest {
+        assertThat(
+            ComposeLanguageDetector.authoredLanguage("Je trouve cette story vraiment très réussie aujourd'hui", identifies("fr", 0.8)),
+        ).isEqualTo("fr")
+    }
 }
 
 private object LanguageResolverSupport {

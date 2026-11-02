@@ -10,7 +10,7 @@ import me.meeshy.sdk.model.translation.DeviceTranslationEligibility
  *
  * La loi reprend `admitMessageEdit`, `admitMessageDelete` et `admitConversationWriteFor`
  * (passerelle) : elle n'offre jamais ce qu'ils refusent et peut offrir MOINS (E2EE, vue unique,
- * message système). Chiffré au repos (`server`/`hybrid`) : lisible par le serveur, pas d'édition (#11381). Rôle de plateforme comparé EXACTEMENT pour modérer ; rang de conversation
+ * message système). Chiffré au repos (`server`/`hybrid`) : lisible par le serveur, l'édition y est rescellée (décision 2026-11-01). Rôle de plateforme comparé EXACTEMENT pour modérer ; rang de conversation
  * exact, inconnu ⇒ 0. Réagir n'est pas écrire. E2EE au sens de `sharedTranslationServerReadsMessage` :
  * ni édition ni transfert, traduction sur l'appareil, services qui lisent le clair ABSENTS.
  * Transférer, copier, enregistrer : la loi de sortie ([ContentExitLaw]), flou compris.
@@ -188,10 +188,6 @@ object MessageActionPolicy {
     private val MODERATED_TYPES: Set<String> = setOf("group", "public", "global", "broadcast")
     private val WRITE_HIERARCHY_FREE_TYPES: Set<String> = setOf("global", "direct")
 
-    /** `server`/`hybrid` (#11374, #11381) : la passerelle refuse toute édition (`server-encrypted-at-rest`). */
-    private val AT_REST_REGIMES: Set<String> = setOf("server", "hybrid")
-
-    private fun sealedAtRest(mode: String?): Boolean = (mode ?: "").trim().lowercase() in AT_REST_REGIMES
     private val SAVEABLE_KINDS: Set<MessageContentKind> = setOf(
         MessageContentKind.IMAGE, MessageContentKind.VIDEO, MessageContentKind.AUDIO,
         MessageContentKind.FILE, MessageContentKind.MULTI,
@@ -205,13 +201,15 @@ object MessageActionPolicy {
 
     // ── Verdicts ──
 
-    /** `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client. */
+    /**
+     * `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client.
+     * Un régime au repos (`server`/`hybrid`) ne retire plus « Modifier » (décision porteur 2026-11-01) : la
+     * passerelle rescelle le texte modifié. Seul le bout en bout le retire ; une ligne servie scellée n'a pas de texte.
+     */
     private fun editVerdict(context: MessageActionContext): EditVerdict? {
         val flags = context.content.flags
-        val atRest = sealedAtRest(context.conversation.encryptionMode) ||
-            sealedAtRest(context.message.subject.encryptionMode)
         val offered = context.live && context.registered && context.hasText &&
-            context.content.kind in EDITABLE_KINDS && !context.e2ee && !atRest && !flags.viewOnce
+            context.content.kind in EDITABLE_KINDS && !context.e2ee && !flags.viewOnce
         if (!offered || context.conversation.isClosed) return null
         if (context.conversation.isGlobal && context.viewer.isDeclaredMinor) return null
         if (!context.isAuthor) {

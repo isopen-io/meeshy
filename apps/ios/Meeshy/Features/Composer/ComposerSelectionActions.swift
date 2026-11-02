@@ -170,6 +170,7 @@ nonisolated enum ComposerSceneEmptyTap {
         case closeEffect
         case armViewfinder
         case selectBackground(String)
+        case closeBand
         case nothing
     }
 
@@ -183,12 +184,20 @@ nonisolated enum ComposerSceneEmptyTap {
     static func outcome(hadSelection: Bool,
                         effectIsOpen: Bool,
                         quickCaptureOffered: Bool,
-                        backgroundMediaId: String?) -> Outcome {
+                        backgroundMediaId: String?,
+                        bandIsOpen: Bool = false) -> Outcome {
         if hadSelection { return .deselect }
+        if bandIsOpen { return .closeBand }
         if effectIsOpen { return .closeEffect }
         if quickCaptureOffered { return .armViewfinder }
         guard let backgroundMediaId, !backgroundMediaId.isEmpty else { return .nothing }
         return .selectBackground(backgroundMediaId)
+    }
+
+    /// Une bande ouverte se referme AVEC la sélection : le même toucher les
+    /// rend toutes deux, sans quoi la bande survivait à l'objet qu'elle réglait.
+    static func closesBand(_ outcome: Outcome) -> Bool {
+        outcome == .deselect || outcome == .closeBand
     }
 }
 

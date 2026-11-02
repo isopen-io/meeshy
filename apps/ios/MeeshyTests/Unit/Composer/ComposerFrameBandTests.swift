@@ -1,5 +1,7 @@
 import XCTest
+import SwiftUI
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// **Le panneau CADRE** (#8414, maquette plein écran `iPad.dc.html`) : un média
@@ -46,5 +48,88 @@ final class ComposerFrameBandTests: XCTestCase {
         XCTAssertEqual(ComposerBackdropFraming.fitMode(of: StoryBackgroundTransform(videoFitMode: "fit")), "fit")
         XCTAssertEqual(ComposerBackdropFraming.fitMode(of: StoryBackgroundTransform(videoFitMode: "fill")), "fill")
         XCTAssertEqual(ComposerBackdropFraming.backdrop(of: nil), .blur)
+    }
+
+    // MARK: - La bande se referme par un geste visible (#14202)
+
+    /// **Toucher hors de la scène referme la bande** : rien n'était
+    /// sélectionné, le toucher ne choisit pas le fond et n'arme pas le viseur —
+    /// il rend la scène.
+    func test_toucherHorsDeLaScene_bandeOuverte_laReferme_sansChoisirLeFondNiArmerLeViseur() {
+        XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
+                                                     quickCaptureOffered: false, backgroundMediaId: "fond",
+                                                     bandIsOpen: true),
+                       .closeBand)
+        XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
+                                                     quickCaptureOffered: true, backgroundMediaId: nil,
+                                                     bandIsOpen: true),
+                       .closeBand)
+    }
+
+    /// Avec une sélection, le même toucher désélectionne ET referme la bande.
+    func test_toucherHorsDeLaScene_bandeOuverteEtSelection_deselectionne() {
+        XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: true, effectIsOpen: false,
+                                                     quickCaptureOffered: false, backgroundMediaId: "fond",
+                                                     bandIsOpen: true),
+                       .deselect)
+        XCTAssertTrue(ComposerSceneEmptyTap.closesBand(.deselect))
+        XCTAssertTrue(ComposerSceneEmptyTap.closesBand(.closeBand))
+    }
+
+    /// **Le câblage** : le toucher du fond donne l'état de la bande à la règle,
+    /// et la referme quand la règle le dit.
+    func test_leToucherDuFond_refermeLaBandeOuverte() throws {
+        let corps = try Self.compact("MeeshyComposerHost.swift", from: "funchandleSceneBackgroundTap(){",
+                                     to: "varbody:someView{")
+        XCTAssertTrue(corps.contains("bandIsOpen:ComposerSceneBand.opened(requestedSceneBand,served:openableSceneBands)!=nil"),
+                      corps)
+        XCTAssertTrue(corps.contains("ifComposerSceneEmptyTap.closesBand(issue){requestedSceneBand=nil}"), corps)
+    }
+
+    /// **La bande porte sa fermeture** : un titre et OK, comme toute feuille
+    /// basse du compositeur.
+    @MainActor
+    func test_laBandeOuverteDepuisLaScene_porteSonOK() {
+        let ecran = RenderedScreen(ComposerSceneBandView(band: .frame, colors: [], onCloseBand: {}),
+                                   size: CGSize(width: 375, height: 300))
+        defer { ecran.dismount() }
+        XCTAssertNotNil(ecran.frame(of: "composer.selection.sheet.done", borne: 5),
+                        "aucune fermeture visible : \(ecran.identifiers)")
+        XCTAssertTrue(ecran.says(ComposerFrameCopy.title))
+    }
+
+    func test_leMeubleReferme_laBandeParSonOK() throws {
+        let fichier = try Self.compact("MeeshyComposerHost+Surfaces.swift")
+        XCTAssertTrue(fichier.contains("onCloseBand:{requestedSceneBand=nil}"), "le OK de la bande ne la referme pas")
+    }
+
+    /// Le Cadrage ouvert depuis le fond sélectionné porte aussi son OK.
+    @MainActor
+    func test_leCadrageDuFond_porteSonOK() {
+        let ecran = RenderedScreen(
+            ComposerBackgroundModifySheet(
+                viewModel: StoryComposerViewModel(), mediaId: "fond", isBackground: true,
+                path: ComposerBackgroundModifyPath(entry: .framing, adjustment: nil),
+                plateauTint: .clear,
+                header: ComposerPropertiesHeader(title: ComposerFrameCopy.title, onDone: {}),
+                framing: .init(fitMode: StoryBackgroundFraming.fit, backdrop: .black,
+                               onPickFitMode: { _ in }, onPickBackdrop: { _ in })),
+            size: CGSize(width: 375, height: 300))
+        defer { ecran.dismount() }
+        XCTAssertNotNil(ecran.frame(of: "composer.selection.sheet.done", borne: 5),
+                        "aucune fermeture visible : \(ecran.identifiers)")
+    }
+
+    private static func compact(_ fichier: String, from debut: String? = nil, to fin: String? = nil) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/\(fichier)")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let debut else { return code }
+        guard let a = code.range(of: debut), let fin,
+              let b = code.range(of: fin, range: a.upperBound..<code.endIndex) else { return "" }
+        return String(code[a.upperBound..<b.lowerBound])
     }
 }

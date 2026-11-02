@@ -159,6 +159,16 @@ fun ApiConversation.resolvedLastMessagePreview(preferredLanguages: List<String>)
 fun ApiConversation.currentUserRole(currentUserId: String?): MemberRole =
     MemberRole.from(participants.firstOrNull { it.userId == currentUserId }?.role)
 
+/**
+ * Le lecteur est-il un membre ACTIF de cette conversation ? La passerelle ne sert
+ * [ApiConversation.currentUserRole] qu'à un participant actif (`resolveCallerParticipant`) ;
+ * à défaut, sa présence dans le roster servi le prouve aussi. Rien de cela ⇒ `false` :
+ * une appartenance inconnue n'en est pas une (#14066, fail-closed).
+ */
+fun ApiConversation.isActiveMember(currentUserId: String?): Boolean =
+    currentUserRole != null ||
+        (currentUserId != null && participants.any { it.userId == currentUserId || it.id == currentUserId })
+
 @Serializable
 data class ApiParticipant(
     val id: String,
@@ -286,6 +296,13 @@ data class CreateConversationRequest(
     val type: String,
     val title: String? = null,
     val participantIds: List<String>,
+    /**
+     * Le mode de chiffrement choisi sur l'écran de création (`server` | `hybrid` | `e2ee`,
+     * [CreationEncryptionMode.wire]). `null` = aucun choix : le champ part absent (encodeur
+     * `explicitNulls = false`) et la passerelle pose Serveur — c'est le cas de toute création hors
+     * de l'écran de création (profil, partage, transfert, réponse à une story).
+     */
+    val encryptionMode: String? = null,
 )
 
 /**

@@ -48,12 +48,12 @@ final class StoryOptionsMenuPlanTests: XCTestCase {
 
     func test_theMenu_ofSomeoneElsesStory_inTheDecidedOrder() {
         let plan = StoryOptionsMenuPlanFixture.plan(isOwnStory: false, hasAudioTranscript: true)
-        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.compose, .exportVideo, .imager], [.report], [.close]])
+        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.share, .compose, .exportVideo, .imager], [.report], [.close]])
     }
 
     func test_theMenu_ofOnesOwnStory_isTheSame_butDeletes() {
         let plan = StoryOptionsMenuPlanFixture.plan(isOwnStory: true, hasAudioTranscript: true)
-        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.compose, .exportVideo, .imager], [.delete], [.close]])
+        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.share, .compose, .exportVideo, .imager], [.delete], [.close]])
     }
 
     func test_close_isTheLastEntry_forEveryReader() {
@@ -74,9 +74,16 @@ final class StoryOptionsMenuPlanTests: XCTestCase {
     func test_noEntryAppearsTwice_andTheMenuStaysShort() {
         for plan in StoryOptionsMenuPlanFixture.everyReader {
             XCTAssertEqual(Set(plan.entries).count, plan.entries.count, "Doublon : \(plan.entries)")
-            // 7 depuis « Imager » (#13871, décision porteur).
-            XCTAssertLessThanOrEqual(plan.entries.count, 7, "Trop d'entrées : \(plan.entries)")
+            // 8 depuis « Partager » (#14311, décision porteur 2026-11-01).
+            XCTAssertLessThanOrEqual(plan.entries.count, 8, "Trop d'entrées : \(plan.entries)")
             XCTAssertFalse(plan.sections.contains { $0.isEmpty }, "Aucune section vide.")
+        }
+    }
+
+    /// « Partager » (hors Meeshy) est offert sur toute story (#14311).
+    func test_share_isForEveryStory() {
+        for plan in StoryOptionsMenuPlanFixture.everyReader.dropLast() {
+            XCTAssertEqual(plan.entries.first(where: { $0 != .fullscreen && $0 != .transcript }), .share, "\(plan.entries)")
         }
     }
 
@@ -147,6 +154,7 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         let effects: [(String, String)] = [
             ("case .fullscreen:", "isFullscreenStorySession.toggle()"),
             ("case .transcript:", "transcriptMenuContent"),
+            ("case .share:", "shareOutsideButton(story: story, group: group)"),
             ("case .compose:", "demanderComposer(cible)"),
             ("case .exportVideo:", "showExportShareSheet = true"),
             ("case .imager:", "StoryPhotoSaveService.shared.image("),
@@ -158,13 +166,15 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         for (marker, effect) in effects {
             XCTAssertTrue(try entryBlock(marker).contains(effect), "\(marker) doit appeler \(effect)")
         }
+        XCTAssertTrue(try header().contains("await StoryOutsideShare.wrapper(story: story, group: group)"))
         XCTAssertTrue(try entryBlock("case .close:").contains("\"common.close\""))
         XCTAssertTrue(try entryBlock("case .exportVideo:").contains("\"story.export.share.title\""))
     }
 
-    /// **Le menu ne double pas le rail** (porteur, 2026-10-24) : l'envoi, la
-    /// republication en post ou en réel et le partage hors de Meeshy vivent
-    /// dans la feuille Meeshy qu'ouvre « Envoyer ».
+    /// **Le menu ne double pas le rail** (porteur, 2026-10-24) : l'envoi et la
+    /// republication vivent dans la feuille Meeshy qu'ouvre « Envoyer ». Seul
+    /// « Partager » (hors Meeshy) revient au menu (porteur 2026-11-01, #14311),
+    /// par `StoryOutsideShare` — la feuille système est présentée par la racine.
     func test_theMenu_doesNotDuplicateTheRail_orTheMeeshySheet() throws {
         let text = try header()
         for gone in ["story.viewer.share.friend", "mintAndShareStory", "ShareSheet(activityItems:",

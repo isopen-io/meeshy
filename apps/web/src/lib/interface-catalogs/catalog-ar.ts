@@ -775,6 +775,7 @@ const ar = {
   'story.studio.failure.tooLarge': 'الملف كبير جدًا.',
   'story.studio.failure.fileRefused': 'تم رفض الملف: نوعه لا يطابق محتواه.',
   'story.studio.failure.rateLimited': 'منشورات كثيرة دفعة واحدة — أعد المحاولة بعد لحظة.',
+  'story.studio.failure.onlyUnlinked': 'عدد كبير من الأشخاص الذين اخترتهم ليست لهم أي صلة بك بعد اليوم. أزلهم من القائمة، أو أعد المحاولة غدًا.',
   'story.studio.failure.refused': 'تم رفض النشر.',
   'story.studio.failure.unavailable': 'الخادم غير متاح.',
   'story.studio.text.add': 'إضافة نص',

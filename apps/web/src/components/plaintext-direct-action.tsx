@@ -7,9 +7,10 @@ import type { PlaintextDirectGesture, PlaintextDirectOutcome } from '@/lib/view/
 import { useConversationEncryptionCatalog } from '@/lib/view/use-conversation-encryption-catalog';
 
 /**
- * **« OUVRIR UNE CONVERSATION NON CHIFFRÉE AVEC <NOM> »** (#12966) — le seul
- * geste d'un tête-à-tête chiffré de bout en bout : il mène À CÔTÉ, jamais vers
- * le clair dans ce fil (`openPlaintextDirect` refuse le fil d'où l'on part et
+ * **« OUVRIR UNE CONVERSATION SANS CHIFFREMENT DE BOUT EN BOUT AVEC <NOM> »**
+ * (#12966) — le seul geste d'un tête-à-tête chiffré de bout en bout : il mène
+ * À CÔTÉ, vers une conversation que nos serveurs chiffrent (jamais « en clair »
+ * : le chiffrement au repos est permanent), jamais vers ce fil (`openPlaintextDirect` refuse le fil d'où l'on part et
  * tout fil vu chiffré). Posé par la fiche Chiffrement et par le bandeau qui
  * remplace le composeur (#12986) ; `marker` nomme ses attributs de repère.
  * Un échec ou l'absence de réseau se dit sous le bouton, sans alerte.

@@ -7,6 +7,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.work.Configuration
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.launch
 import me.meeshy.app.push.DeclinedCallStore
@@ -18,11 +20,12 @@ import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.ui.component.media.MeeshyImageLoader
 import timber.log.Timber
 import javax.inject.Inject
 
 @HiltAndroidApp
-class MeeshyApplication : Application(), Configuration.Provider {
+class MeeshyApplication : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -55,6 +58,9 @@ class MeeshyApplication : Application(), Configuration.Provider {
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
             .build()
+
+    /** Le chargeur partagé de Coil : il respecte l'orientation EXIF de toute photo (`MeeshyImageLoader`). */
+    override fun newImageLoader(): ImageLoader = MeeshyImageLoader.build(this)
 
     override fun onCreate() {
         super.onCreate()

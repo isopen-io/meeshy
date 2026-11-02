@@ -344,6 +344,29 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
     }
   });
 
+  it('le partage relayé nomme l’auteur tiers, et reste indéfini sur son propre contenu (#14069)', () => {
+    expect(buildNotificationDisplay('fr', { type: 'friend_content_share', actorName: 'E', postType: 'REEL', authorName: 'Awa' }).action).toBe('a partagé un réel de Awa');
+    expect(buildNotificationDisplay('en', { type: 'friend_content_share', actorName: 'E', postType: 'POST', authorName: 'Awa' }).action).toBe('shared Awa’s post');
+    expect(buildNotificationDisplay('fr', { type: 'friend_content_share', actorName: 'E', postType: 'POST' }).action).toBe('a partagé une publication');
+  });
+
+  it('la republication et la citation relayées nomment l’auteur republié (#14070, #14072)', () => {
+    expect(buildNotificationDisplay('fr', { type: 'friend_content_repost', actorName: 'E', postType: 'STORY', authorName: 'Awa' }).action).toBe('a republié une story de Awa');
+    expect(buildNotificationDisplay('en', { type: 'friend_content_quote', actorName: 'E', postType: 'POST', authorName: 'Awa' }).action).toBe('quoted Awa’s post');
+    expect(buildNotificationDisplay('fr', { type: 'friend_content_quote', actorName: 'E', postType: 'POST' }).action).toBe('a cité une publication');
+  });
+
+  it('le relais d’une réaction sans auteur lisible reste indéfini, jamais « votre » (#14068)', () => {
+    for (const authorName of [undefined, '', '   ']) {
+      expect(buildNotificationDisplay('fr', {
+        type: 'friend_content_reaction', actorName: 'E', postType: 'POST', emoji: '❤️', authorName,
+      }).action, String(authorName)).toBe('a réagi ❤️ à une publication');
+    }
+    expect(buildNotificationDisplay('en', {
+      type: 'friend_content_reaction', actorName: 'E', postType: 'STORY', emoji: '❤️',
+    }).action).toBe('reacted ❤️ to a story');
+  });
+
   it('n’injecte JAMAIS l’auteur dans une action déjà possessive', () => {
     // « a commenté votre réel de Windie Nh » n'aurait aucun sens : la cible
     // est le lecteur lui-même.

@@ -13,11 +13,24 @@ struct ComposerFrameBand: View {
     let plateauTint: Color
     let onPickFitMode: (String) -> Void
     let onPickBackdrop: (StoryBackdrop) -> Void
+    var header: ComposerPropertiesHeader?
 
     var body: some View {
         // **Sans libellé** (directive porteur 2026-09-27 : « enlève les captions
         // partout ») : deux icônes de cadrage et cinq pastilles, chacune avec
         // son nom ACCESSIBLE — la vue ne perd rien pour VoiceOver.
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            header
+            choices
+        }
+        .accessibilityElement(children: .contain)
+        .padding(MeeshySpacing.smPlus)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous),
+                       tint: plateauTint.opacity(0.55))
+        .padding(.horizontal, ComposerRailGeometry.outerMargin)
+    }
+
+    private var choices: some View {
         HStack(spacing: MeeshySpacing.md) {
             HStack(spacing: MeeshySpacing.sm) {
                 fitChoice(StoryBackgroundFraming.fit, label: ComposerFrameCopy.fit, symbol: "rectangle.center.inset.filled")
@@ -34,10 +47,6 @@ struct ComposerFrameBand: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(ComposerFrameCopy.title))
-        .padding(MeeshySpacing.smPlus)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous),
-                       tint: plateauTint.opacity(0.55))
-        .padding(.horizontal, ComposerRailGeometry.outerMargin)
     }
 
     private func fitChoice(_ mode: String, label: String, symbol: String) -> some View {

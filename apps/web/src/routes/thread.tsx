@@ -480,7 +480,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   const compose = useThreadCompose({
     store: draftStore,
     scope,
-    conversationId: conversation?.id,
+    conversation,
     messages,
     readerLanguages,
     send,

@@ -40,6 +40,11 @@ data class StoryComposerDraft(
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
     val durationSecondsPin: Double? = null,
     val background: StoryBackgroundValue? = null,
+    /**
+     * Le fond que la scène montre quand l'auteur n'en a choisi aucun — le dégradé de l'auteur (#14244). Il s'écrit seulement
+     * sous une scène qui pose quelque chose : un texte seul reste un texte, jamais une couleur.
+     */
+    val floor: StoryBackgroundValue? = null,
     val backgroundMedia: StoryBackgroundMedia? = null,
     /** Les médias de premier plan posés sur la scène, déjà résolus en objets du fil (#13630). */
     val placedMedia: List<StoryMediaObject> = emptyList(),
@@ -179,8 +184,10 @@ data class StoryComposerDraft(
             filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty() &&
             audio.isEmpty() && frame.isNeutral && places.isEmpty()
         if (hasNothing) return null
+        val posesSomething = textObjects.isNotEmpty() || stickerObjects.isNotEmpty() || strokes.isNotEmpty() ||
+            mediaObjects.isNotEmpty() || audio.isNotEmpty() || places.isNotEmpty()
         return StoryEffects(
-            background = background?.serialized(),
+            background = (background ?: floor?.takeIf { posesSomething })?.serialized(),
             textObjects = textObjects,
             stickerObjects = stickerObjects.takeIf { it.isNotEmpty() },
             mediaObjects = mediaObjects.takeIf { it.isNotEmpty() },

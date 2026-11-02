@@ -116,18 +116,18 @@ internal fun SceneTopBar(
     ) {
         EditingChromeVisibility(showsClose) { SceneRoundButton(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose) }
         Spacer(Modifier.weight(1f))
-        history?.let {
-            SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = it.canUndo)
-            SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = it.canRedo)
-        }
+        history?.let { SceneHistoryButtons(it, onUndo, onRedo) }
     }
 }
 
-/** ↶ ↷ rangés l'un sous l'autre au pied du couloir que la scène réduite cède aux options de l'objet en édition (#14197). */
+/**
+ * ↶ et ↷ (#14209, décision porteur du 2026-11-01) : un bouton sans pas à annuler ou à rétablir est MASQUÉ, jamais grisé,
+ * et réapparaît dès qu'il a un pas à rejouer.
+ */
 @Composable
-internal fun SceneLaneHistory(history: SceneHistory, onUndo: () -> Unit, onRedo: () -> Unit) {
-    SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo, enabled = history.canUndo)
-    SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo, enabled = history.canRedo)
+internal fun SceneHistoryButtons(history: SceneHistory, onUndo: () -> Unit, onRedo: () -> Unit) {
+    if (history.canUndo) SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo)
+    if (history.canRedo) SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo)
 }
 
 /**
@@ -144,20 +144,25 @@ internal fun SceneToolColumn(
     onMediaSource: (ComposerMediaSource) -> Unit = {},
     cameraServed: Boolean = false,
 ) {
+    // Le « ⋯ » reste TOUJOURS posé au pied de la colonne (#14282, recette S8) : en post, « Texte du post » prend une rangée
+    // au socle, la colonne n'a plus la place de tout montrer, et le dernier bouton passait hors champ sans que rien ne dise
+    // qu'on pouvait défiler. Ce sont les outils au-dessus de lui qui défilent.
     Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        tools.forEach { tool ->
-            if (tool == ComposerSceneTool.MORE) {
-                more()
-            } else {
+        Column(
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            tools.filterNot { it == ComposerSceneTool.MORE }.forEach { tool ->
                 MediaSourcesAnchor(ComposerSceneTools.longPressSources(tool, cameraServed), onMediaSource) { press ->
                     SceneRoundButton(tool.glyph(), stringResource(tool.labelRes()), { onTool(tool) }, active = tool == active, press = press)
                 }
             }
         }
+        if (ComposerSceneTool.MORE in tools) more()
     }
 }
 

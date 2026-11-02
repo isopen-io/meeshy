@@ -9,6 +9,7 @@
     <string name="feed_action_quote">Zitieren</string>
     <string name="feed_action_report">Melden</string>
     <string name="feed_action_repost">Erneut teilen</string>
+    <string name="feed_action_send">Senden</string>
     <string name="feed_action_share">Teilen</string>
     <string name="feed_action_view_profile">Profil ansehen</string>
     <string name="feed_comment_card_folded">+%1$d Antworten</string>
@@ -85,6 +86,10 @@
     <string name="feed_translations_badge_hint">Zeigt die verfügbaren Sprachen an</string>
     <string name="feed_unknown_author">Unbekannt</string>
     <string name="feed_unlike">Gefällt mir nicht mehr</string>
+    <plurals name="feed_view_comments">
+        <item quantity="one">Kommentar ansehen</item>
+        <item quantity="other">Alle %1$d Kommentare ansehen</item>
+    </plurals>
     <string name="hashtag_results_empty">Keine Beiträge mit #%1$s</string>
     <string name="mood_bubble_react">Reaktion %1$s</string>
     <string name="mood_bubble_reply">Antworten</string>
@@ -99,6 +104,8 @@
     <string name="nearby_retry">Erneut versuchen</string>
     <string name="nearby_title">In der Nähe</string>
     <string name="post_comments_cancel_reply">Antwort abbrechen</string>
+    <string name="post_comments_composer_hint">Kommentieren…</string>
+    <string name="post_comments_composer_reply_hint">Antworten…</string>
     <string name="post_comments_copy_text">Text kopieren</string>
     <string name="post_comments_delete_error">Kommentar konnte nicht gelöscht werden</string>
     <string name="post_comments_deleted">Kommentar gelöscht</string>
@@ -109,9 +116,12 @@
         <item quantity="other">%1$d weitere Antworten anzeigen</item>
     </plurals>
     <string name="post_comments_load_more_replies_hint">Zeigt die restlichen Antworten in diesem Thread</string>
+    <string name="post_comments_media_audio">Audio</string>
     <string name="post_comments_media_image">Kommentarbild</string>
     <string name="post_comments_media_open">Zum Vergrößern tippen</string>
+    <string name="post_comments_media_pause_audio">Pausieren</string>
     <string name="post_comments_media_play">Video abspielen</string>
+    <string name="post_comments_media_play_audio">Audio abspielen</string>
     <string name="post_comments_media_video">Video</string>
     <string name="post_comments_more_options">Weitere Optionen</string>
     <string name="post_comments_reply_a11y_label">%1$s, Antwort. %2$s. %3$s</string>

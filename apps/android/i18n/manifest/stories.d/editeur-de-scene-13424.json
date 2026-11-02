@@ -106,6 +106,16 @@
         },
         {
           "catalog": "app",
+          "iosKey": "composer.frise.keyframe.add",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.frise.keyframe.remove",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "composer.frise.exit",
           "status": "adopted"
         },

@@ -72,7 +72,7 @@ class SceneExportCoordinatorTest {
             proof = proof,
         )
 
-    private fun job(output: File, still: File? = null, release: () -> Unit = {}) = SceneExportJob(
+    private fun job(output: File, still: File? = null, release: () -> Unit = {}, destination: SceneExportDestination? = null) = SceneExportJob(
         plan = StoryExportTimelinePlan(listOf(StoryExportSlide(0, 0, 3_000)), emptyList(), still = false),
         format = StoryExportVideoFormat.of(),
         fills = emptyList(),
@@ -81,7 +81,30 @@ class SceneExportCoordinatorTest {
         output = output,
         release = release,
         still = still,
+        destination = destination,
     )
+
+    @Test
+    fun `la destination que la vue imager a choisie l emporte sur celle du lancement`() = runTest {
+        val gallery = FakeGallery()
+        val c = coordinator(FakeRunner(), gallery)
+        c.export(SceneExportDestination.GALLERY) { out, _ -> job(out, destination = SceneExportDestination.SHARE) }
+        advanceUntilIdle()
+        val ready = c.state.value as SceneExportState.Ready
+        assertThat(ready.destination).isEqualTo(SceneExportDestination.SHARE)
+        assertThat(File(ready.path).readText()).isEqualTo("complet")
+        assertThat(gallery.videos).isEmpty()
+    }
+
+    @Test
+    fun `la vue imager peut aussi choisir la galerie`() = runTest {
+        val gallery = FakeGallery()
+        val c = coordinator(FakeRunner(), gallery)
+        c.export(SceneExportDestination.SHARE) { out, _ -> job(out, destination = SceneExportDestination.GALLERY) }
+        advanceUntilIdle()
+        assertThat(c.state.value).isEqualTo(SceneExportState.Saved)
+        assertThat(gallery.videos).containsExactly("meeshy-scene-1700000000000.mp4")
+    }
 
     @Test
     fun `la galerie recoit le fichier puis le temporaire est efface`() = runTest {

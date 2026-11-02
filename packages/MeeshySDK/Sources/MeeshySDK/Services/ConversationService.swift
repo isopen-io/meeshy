@@ -193,7 +193,20 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
     }
 
     public func create(type: String, title: String? = nil, participantIds: [String]) async throws -> CreateConversationResponse {
-        let body = CreateConversationRequest(type: type, title: title, participantIds: participantIds)
+        try await create(type: type, title: title, participantIds: participantIds, encryptionMode: nil)
+    }
+
+    /// La création qui porte le mode choisi sur l'écran de création ; `nil`
+    /// n'envoie rien et la passerelle pose `server`.
+    public func create(
+        type: String,
+        title: String? = nil,
+        participantIds: [String],
+        encryptionMode: ConversationCreationEncryption.Mode?
+    ) async throws -> CreateConversationResponse {
+        let body = CreateConversationRequest(
+            type: type, title: title, participantIds: participantIds, encryptionMode: encryptionMode
+        )
         let response: APIResponse<CreateConversationResponse> = try await api.post(ConversationsEndpoint.root, body: body)
         return response.data
     }

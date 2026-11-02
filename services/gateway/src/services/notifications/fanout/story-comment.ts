@@ -7,11 +7,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger } from '../../../utils/logger-enhanced';
 import { filterPostConsumers } from '../../posts/postAudience';
-import { truncateMessage } from '../notification-preview';
+import { textSynthesis } from '../content-synthesis';
 import { FANOUT_ROW_CAP } from './row-cap';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
 import type { FanoutDependencies } from './dependencies';
-import { resolveEntourage, type Entourage } from './entourage';
+import { livingAmong, mentionReceivers, resolveEntourage, thirdPartyEntourage, type Entourage } from './entourage';
 
 /** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
 export type FanoutBucket = 'previousComments' | 'entourage' | 'reactors';
@@ -161,18 +161,38 @@ async function commentEntourage(
   authorId: string,
   commenterId: string
 ): Promise<Entourage> {
-  const [ofAuthor, ofCommenter] = await Promise.all([
-    resolveEntourage(prisma, { ownerId: authorId, key: 'circleOnMyContentComment', excludeUserIds: [commenterId] }),
-    commenterId === authorId
-      ? Promise.resolve<Entourage>({ ids: [], truncated: false })
-      : resolveEntourage(prisma, { ownerId: commenterId, key: 'circleElsewhereComment', excludeUserIds: [authorId] }),
-  ]);
-  if (commenterId === authorId) return ofAuthor;
-  const commenterSide = new Set(ofCommenter.ids);
-  return {
-    ids: ofAuthor.ids.filter((id) => commenterSide.has(id)),
-    truncated: ofAuthor.truncated || ofCommenter.truncated,
-  };
+  return commenterId === authorId
+    ? resolveEntourage(prisma, { ownerId: authorId, key: 'circleOnMyContentComment', excludeUserIds: [commenterId] })
+    : thirdPartyEntourage(prisma, { authorId, actorId: commenterId, onMyContent: 'circleOnMyContentComment', elsewhere: 'circleElsewhereComment' });
+}
+
+type FanoutGates = { readonly blocked: ReadonlySet<string>; readonly alive: ReadonlySet<string> };
+
+/**
+ * Ce qui sort des seaux d'éventail, en DEUX lectures groupées (#13350, #14251) :
+ *  - une personne en relation de blocage avec l'AUTEUR de la story — la garde de
+ *    dernier recours de `createNotification` ne compare le destinataire qu'à
+ *    l'ACTEUR, alors que le nom de l'auteur et l'extrait de son fil voyagent
+ *    dans la charge ;
+ *  - un compte supprimé ou désactivé (`livingAmong`). Un auteur ou un
+ *    commentateur mort ne prévient PERSONNE (`'dead-party'`).
+ * Une lecture qui échoue (`null`) n'envoie rien à ces seaux.
+ */
+async function readFanoutGates(
+  prisma: PrismaClient,
+  params: { readonly postId: string; readonly storyAuthorId: string; readonly commenterId: string; readonly candidates: readonly string[] }
+): Promise<FanoutGates | 'dead-party' | null> {
+  try {
+    const [blocked, alive] = await Promise.all([
+      getBlockedUserIdsAmong(prisma, params.storyAuthorId, [...params.candidates]),
+      livingAmong(prisma, [params.storyAuthorId, params.commenterId, ...params.candidates]),
+    ]);
+    if (!alive.has(params.storyAuthorId) || !alive.has(params.commenterId)) return 'dead-party';
+    return { blocked, alive };
+  } catch (error) {
+    notificationLogger.error('Fan-out de commentaire restreint à l’auteur : blocage ou comptes illisibles', { postId: params.postId, error });
+    return null;
+  }
 }
 
 export type StoryCommentFanoutParams = {
@@ -194,12 +214,17 @@ export type StoryCommentFanoutParams = {
   /** Date d'expiration ISO du contenu commenté (story/status éphémère). */
   postExpiresAt?: string | Date;
   /**
-   * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
-   * Use to pass mentionedUserIds so users who received user_mentioned don't also get
-   * a lower-priority story thread/friend notification.
-   * The story author always gets STORY_NEW_COMMENT regardless of this list.
+   * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment),
+   * unconditionally. The story author always gets STORY_NEW_COMMENT regardless of this list.
    */
   excludeUserIds?: string[];
+  /**
+   * Les personnes que le commentaire NOMME : celles que la mention prévient
+   * réellement (liens du commentateur, ou l'auteur du contenu, #14168) ne
+   * reçoivent que `user_mentioned` ; un nommé sans lien garde son
+   * `story_thread_reply` / `friend_story_comment`.
+   */
+  mentionedUserIds?: readonly string[];
   /**
    * Visibilité du post commenté. Filtre les buckets fan-out (thread + amis)
    * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
@@ -289,27 +314,22 @@ export async function createStoryCommentNotificationsBatch(
     candidateUserIds: previousCommenterIds,
   });
 
-  // #13350 — le blocage ne rompt pas l'amitié en base : une personne en
-  // relation de blocage avec l'AUTEUR de la story sort des deux seaux
-  // d'éventail, en une lecture groupée. La garde de dernier recours de
-  // `createNotification` ne compare le destinataire qu'à l'ACTEUR (le
-  // commentateur) ; le nom de l'auteur et l'extrait de son fil voyagent
-  // pourtant dans la charge. Une lecture qui échoue n'envoie rien à ces seaux.
+  // #13350, #14251 — blocage avec l'auteur et comptes morts : `readFanoutGates`.
   const fanoutCandidates = [...new Set([...engagedAudience, ...friendAudience])];
-  let blockedWithAuthor: Set<string> | null;
-  try {
-    blockedWithAuthor = await getBlockedUserIdsAmong(deps.prisma, params.storyAuthorId, fanoutCandidates);
-  } catch (error) {
-    notificationLogger.error('Fan-out de commentaire restreint à l’auteur : blocage illisible', { postId: params.postId, error });
-    blockedWithAuthor = null;
-  }
-  const notBlockedWithAuthor = (id: string): boolean => blockedWithAuthor !== null && !blockedWithAuthor.has(id);
-  const engagedRecipients = engagedAudience.filter(notBlockedWithAuthor);
-  const friendRecipients = friendAudience.filter(notBlockedWithAuthor);
+  const gates = await readFanoutGates(deps.prisma, {
+    postId: params.postId,
+    storyAuthorId: params.storyAuthorId,
+    commenterId: params.commenterId,
+    candidates: fanoutCandidates,
+  });
+  if (gates === 'dead-party') return;
+  const reachable = (id: string): boolean => gates !== null && gates.alive.has(id) && !gates.blocked.has(id);
+  const engagedRecipients = engagedAudience.filter(reachable);
+  const friendRecipients = friendAudience.filter(reachable);
 
-  const excerpt = params.commentExcerpt
-    ? truncateMessage(params.commentExcerpt)
-    : '';
+  // #14318 — le commentaire se dit par sa SYNTHÈSE, dans la langue de cadrage
+  // de chaque destinataire.
+  const excerptFor = (lang: string): string => textSynthesis(lang, params.commentExcerpt);
 
   // Wording typé : le destinataire doit savoir SUR QUOI porte le commentaire
   // (story / publication / humeur) et, pour les buckets fan-out, la
@@ -335,14 +355,14 @@ export async function createStoryCommentNotificationsBatch(
     ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
     ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
   };
-  const commonMetadata = {
+  const metadataFor = (lang: string) => ({
     action: 'view_post' as const,
     postId: params.postId,
     commentId: params.commentId,
-    commentPreview: excerpt,
+    commentPreview: excerptFor(lang),
     postType,
     ...(authorName ? { contentAuthorName: authorName } : {}),
-  };
+  });
   const actorInfo = {
     id: params.commenterId,
     username: actor.username,
@@ -350,7 +370,12 @@ export async function createStoryCommentNotificationsBatch(
     avatar: actor.avatar,
   };
 
-  const excludeSet = new Set(params.excludeUserIds ?? []);
+  const mentioned = await mentionReceivers(deps.prisma, {
+    mentionerId: params.commenterId,
+    mentionedUserIds: params.mentionedUserIds ?? [],
+    alreadyAddressedUserIds: [params.storyAuthorId],
+  });
+  const excludeSet = new Set([...(params.excludeUserIds ?? []), ...mentioned]);
   const tasks: Array<Promise<unknown>> = [];
 
   // 1. Story author notification — always sent regardless of excludeUserIds
@@ -364,11 +389,11 @@ export async function createStoryCommentNotificationsBatch(
         userId: authorId,
         type: 'story_new_comment',
         priority: 'normal',
-        content: excerpt || notificationString(aLang, 'comment.your', { postType: i18nPostType }),
+        content: excerptFor(aLang) || notificationString(aLang, 'comment.your', { postType: i18nPostType }),
         subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType: i18nPostType }),
         actor: actorInfo,
         context: commonContext,
-        metadata: commonMetadata,
+        metadata: metadataFor(aLang),
         lang: aLang,
       })
     );
@@ -383,14 +408,14 @@ export async function createStoryCommentNotificationsBatch(
         userId: recipientId,
         type: 'story_thread_reply',
         priority: 'low',
-        content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
+        content: excerptFor(rLang) || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
         // Pas de `subtitle` explicite : l'auteur du contenu est désormais
         // DANS l'action (« a répondu dans une story de Alice »), et le
         // répéter en sous-titre écrirait deux fois la même chose.
         ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
         actor: actorInfo,
         context: commonContext,
-        metadata: commonMetadata,
+        metadata: metadataFor(rLang),
         lang: rLang,
       })
     );
@@ -405,11 +430,11 @@ export async function createStoryCommentNotificationsBatch(
         userId: recipientId,
         type: 'friend_story_comment',
         priority: 'low',
-        content: excerpt || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
+        content: excerptFor(rLang) || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
         ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
         actor: actorInfo,
         context: commonContext,
-        metadata: commonMetadata,
+        metadata: metadataFor(rLang),
         lang: rLang,
       })
     );

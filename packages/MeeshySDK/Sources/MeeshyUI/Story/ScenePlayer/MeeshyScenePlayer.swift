@@ -30,6 +30,9 @@ public struct MeeshyScenePlayer: View {
     private let mode: ScenePlayerMode
     /// Le `StoryItem` qui PORTE la scène — son identité et son index de médias.
     private let carrier: StoryItem?
+    /// La couleur d'auteur sur laquelle une scène sans fond se lit (#14258).
+    /// Distincte d'`accentColorHex`, qui teinte la chrome de l'hôte.
+    private let sceneFloorHex: String?
     private var languages: [String]
     /// Le muet DEMANDÉ par l'hôte. `nil` = aucune demande, le mode décide.
     private let requestedMute: Bool?
@@ -80,6 +83,7 @@ public struct MeeshyScenePlayer: View {
                 isPlaying: Binding<Bool>,
                 accentColorHex: String,
                 carrier: StoryItem? = nil,
+                sceneFloorHex: String? = nil,
                 preferredContentLanguages: [String] = [],
                 isMuted: Bool? = nil,
                 isOutgoing: Bool = false,
@@ -99,6 +103,7 @@ public struct MeeshyScenePlayer: View {
         self._isPlaying = isPlaying
         self.accentColorHex = accentColorHex
         self.carrier = carrier
+        self.sceneFloorHex = sceneFloorHex
         self.languages = preferredContentLanguages
         self.requestedMute = isMuted
         self.isOutgoing = isOutgoing
@@ -305,6 +310,7 @@ public struct MeeshyScenePlayer: View {
 
     private var baseHost: StoryReaderRepresentable {
         StoryReaderRepresentable(story: storyItem,
+                                 sceneFloorHex: sceneFloorHex,
                                  preferredLanguages: languages,
                                  preloadedImages: preloadedImages,
                                  preloadedVideoURLs: preloadedVideoURLs,

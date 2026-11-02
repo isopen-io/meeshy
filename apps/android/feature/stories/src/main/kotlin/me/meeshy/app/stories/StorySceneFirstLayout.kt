@@ -444,9 +444,9 @@ private val LANE_GUTTER = 8.dp
 private class SceneFrameTransform(val scale: Float, val offsetX: Float, val offsetY: Float)
 
 /**
- * La scène qui cède au rail son couloir ([lane], en px, à droite) quand un objet sélectionné s'y édite (#14083, comme le
- * couloir d'iOS, `ComposerRailGeometry.lane`) : le 9:16 se réduit à la largeur qui reste et se range contre le bord
- * opposé, son haut là où le cadrage le posait ; un objet posé à droite n'est jamais sous les libellés du rail.
+ * La scène réduite qui cède au rail son couloir ([lane], en px, à droite) quand les options de ce qu'on édite y restent
+ * posées (#14249 : rien ne couvre une scène réduite ; une scène pleine n'en cède jamais) : le 9:16 se réduit à la largeur
+ * qui reste et se range contre le bord opposé, son haut là où le cadrage le posait.
  */
 private fun StoryCanvasFraming.Result.clearingTrailingLane(lane: Float, width: Float, height: Float): SceneFrameTransform {
     if (lane <= 0f || width <= 0f || lane >= width) return SceneFrameTransform(scale, 0f, offsetY)

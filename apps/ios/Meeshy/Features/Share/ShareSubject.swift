@@ -110,11 +110,33 @@ struct ShareCard: Equatable {
     /// PRIVATE. Fermé par défaut.
     var isPublicStory: Bool = false
 
-    /// Le texte qui part dans la conversation : la phrase de la story, sinon le lien.
+    /// **Le lien suivi de l'utilisateur se frappe pour cette carte** (#14310) :
+    /// une publication et un réel toujours (la passerelle vérifie l'audience
+    /// AVANT la frappe), une story seulement PUBLIQUE — `meeshy.me/l/…`
+    /// s'ouvre sans compte. Un profil et une invitation ont leur propre adresse.
+    var mintsTrackedLink: Bool {
+        switch kind {
+        case .post, .reel: return true
+        case .story: return isPublicStory
+        case .profile, .invitation: return false
+        }
+    }
+
+    /// Le texte qui part dans la conversation : la phrase qui nomme l'auteur
+    /// (story, publication, réel — #14323), sinon le lien.
     var messageText: String? {
         guard let link = url?.absoluteString else { return title.isEmpty ? nil : title }
-        guard kind == .story, let authorName else { return link }
-        return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .meeshyShare), authorName, link)
+        guard let authorName, let phrase = sharePhrase else { return link }
+        return String(format: phrase, authorName, link)
+    }
+
+    private var sharePhrase: String? {
+        switch kind {
+        case .story: return String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .meeshyShare)
+        case .post: return String(localized: "share.post.shareText", defaultValue: "🔗 Publication de %1$@ : %2$@", bundle: .meeshyShare)
+        case .reel: return String(localized: "share.reel.shareText", defaultValue: "🔗 Réel de %1$@ : %2$@", bundle: .meeshyShare)
+        case .profile, .invitation: return nil
+        }
     }
 }
 
@@ -129,6 +151,22 @@ extension ShareSubject {
             title: String(format: String(localized: "share.preview.story", defaultValue: "Story de %@", bundle: .meeshyShare), authorName),
             subtitle: nil, url: URL(string: "https://meeshy.me/story/\(id)"), imageURL: imageURL, authorName: authorName,
             authorId: authorId, isPublicStory: isPublic
+        ))
+    }
+}
+
+extension ShareSubject {
+    /// Une publication ou un réel (#14310) : une carte qui part avec le lien
+    /// suivi de l'utilisateur, frappé dès l'ouverture de la feuille ; d'ici là,
+    /// l'adresse directe du post.
+    static func publication(id: String, isReel: Bool, authorName: String, authorId: String? = nil, imageURL: String? = nil) -> ShareSubject {
+        let title = isReel
+            ? String(format: String(localized: "share.preview.reel", defaultValue: "Réel de %@", bundle: .meeshyShare), authorName)
+            : String(format: String(localized: "share.preview.post", defaultValue: "Publication de %@", bundle: .meeshyShare), authorName)
+        return .card(ShareCard(
+            kind: isReel ? .reel : .post, contentId: id, title: title, subtitle: nil,
+            url: URL(string: "https://meeshy.me/feeds/post/\(id)"), imageURL: imageURL,
+            authorName: authorName, authorId: authorId
         ))
     }
 }

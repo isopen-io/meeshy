@@ -111,6 +111,38 @@ Un client qui ne sait pas rendre le mouvement peint la décoration FIXE et ne se
 déclare pas amputé : c'est web et Android aujourd'hui (#4911), et c'est la
 conséquence directe du choix « propriété, pas kind ».
 
+### L'échelle d'une image clé MULTIPLIE celle de l'objet (#14316)
+
+Le contrat (`KeyframeSchema`, `packages/shared/types/canvas-v3.ts`) ne portait
+qu'un nombre positif, sans dire ce qu'il mesure, et trois lecteurs l'avaient lu
+de deux façons. **`keyframe.scale` est un FACTEUR** :
+
+> échelle rendue = `transform.scale` de l'objet × facteur interpolé au temps
+> local (`t − timing.start`) ; un canal sans image clé, ou avant sa première,
+> compte pour **1**.
+
+L'échelle de l'objet reste la seule grandeur absolue. Une image clé à 1 laisse
+l'objet tel qu'il est posé ; à 1,2 sur un objet pincé à 2, il se peint à 2,4.
+
+**Pourquoi ce sens, et pas « l'image clé remplace l'échelle »** : c'est celui
+que les publications existantes ont été vues dans. iOS écrit seul des échelles
+d'image clé depuis 2026-05 (le curseur de `KeyframeInspector` part de 1), et son
+rendu les multiplie, Core Animation et export compris. Le seul auteur qui
+écrivait de l'absolu, le compositeur Android (`StoryComposerKeyframeReducer`),
+n'existait que depuis un jour. Il fige désormais un facteur 1. Le facteur suit aussi
+l'objet : pincer l'objet après coup garde la forme de son animation.
+
+Les sites qui l'appliquent, un par client, et le témoin commun :
+
+| client | où le facteur se multiplie |
+|---|---|
+| iOS | `StoryRenderer.applyKeyframeOverrides`, `StoryKeyframeAnimationPlan+CoreAnimation` (sur la transformation de base), signature de `StoryRendererCache`. Le plancher du curseur (`TimelineScaleSetting.keyframeScale`) se mesure sur le côté rendu, objet compris |
+| Android | `StoryKeyframeResolver.resolve` (`base × facteur`), donc `ScenePoseResolver`, les vues du lecteur et du compositeur, et l'export |
+| web | `objectPose` (`apps/web/src/lib/canvas/pose.ts`), donc la scène et l'export |
+
+Les trois rejouent `packages/shared/fixtures/keyframe-scale.vectors.json` : à
+même entrée, même échelle rendue, sinon un des trois témoins rougit.
+
 ## 3. Les quatre chromes, et l'état MESURÉ de chacun
 
 `ScenePlayerConfig(mode:)` est « la seule chose que le player décide de

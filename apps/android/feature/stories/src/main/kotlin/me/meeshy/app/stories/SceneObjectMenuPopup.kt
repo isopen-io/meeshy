@@ -39,7 +39,8 @@ internal fun Action.labelRes(): Int = when (this) {
     Action.EDIT -> R.string.story_canvas_action_edit
     Action.DUPLICATE -> R.string.story_canvas_action_duplicate
     Action.LEAVE_SCENE -> R.string.story_canvas_action_leaveScene
-    Action.DELETE -> R.string.story_canvas_action_delete
+    // Le mot du rail de sélection et de la frise, celui de l'appui long iOS (#14256) : « Retirer », jamais « Supprimer ».
+    Action.DELETE -> R.string.composer_selection_remove
     Action.TRIM, Action.SET_AS_BACKGROUND, Action.REPLACE_BACKGROUND -> R.string.story_canvas_action_edit
 }
 
