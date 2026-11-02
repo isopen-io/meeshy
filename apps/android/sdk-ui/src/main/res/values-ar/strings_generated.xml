@@ -196,10 +196,12 @@
     <string name="slide_rail_delete_confirm_title">حذف هذا المشهد؟</string>
     <string name="sticker_sheet_close">إغلاق</string>
     <string name="sticker_sheet_favorites_empty">اضغط مطولاً على زخرفة لتثبيتها هنا.</string>
+    <string name="sticker_sheet_instants_hint">ما تكتبه يظهر على الملصق</string>
     <string name="sticker_sheet_instants_lieu">أماكن</string>
     <string name="sticker_sheet_instants_message">رسائل</string>
     <string name="sticker_sheet_instants_meteo">الطقس</string>
     <string name="sticker_sheet_instants_moment">أوقات اليوم</string>
+    <string name="sticker_sheet_instants_title">لحظات</string>
     <string name="sticker_sheet_intent_amour_hint">لكلمة لطيفة أو قبلة أو عناق أو اعتراف بالحب</string>
     <string name="sticker_sheet_intent_amour_title">قل أحبك</string>
     <string name="sticker_sheet_intent_bonjour_hint">للتحية والشكر والموافقة والاعتذار أو لتمنّي ليلة سعيدة</string>
