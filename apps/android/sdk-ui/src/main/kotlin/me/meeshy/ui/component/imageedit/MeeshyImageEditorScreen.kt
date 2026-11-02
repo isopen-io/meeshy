@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -319,10 +321,23 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+/**
+ * Le ViewModel de l'éditeur, tenu dans un magasin PROPRE à cette ouverture : il naît avec la photo
+ * et meurt à la fermeture. Sans cela, `viewModel()` le rangerait dans le magasin de l'hôte (l'écran
+ * de profil) et rouvrirait l'éditeur — pour la bannière après l'avatar — sur la photo précédente.
+ */
 @Composable
 public fun rememberImageEditorViewModel(image: Bitmap, context: ImageEditorContext): ImageEditorViewModel {
     val app = LocalContext.current.applicationContext
+    val store = remember(image) { ViewModelStore() }
+    DisposableEffect(store) { onDispose { store.clear() } }
+    val owner = remember(store) {
+        object : ViewModelStoreOwner {
+            override val viewModelStore: ViewModelStore = store
+        }
+    }
     return viewModel<ImageEditorViewModel>(
+        viewModelStoreOwner = owner,
         factory = viewModelFactory {
             initializer {
                 ImageEditorViewModel(
