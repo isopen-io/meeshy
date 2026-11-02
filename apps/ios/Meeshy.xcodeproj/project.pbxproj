@@ -213,6 +213,7 @@
 		0AD8D985FA6CECA6B4254C09 /* FeedSocketEventOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7E4570D7521E275D5A79580 /* FeedSocketEventOrderTests.swift */; };
 		0AF51F7E89A45DF8FFD7958E /* GameGuideCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29C6040A4EC6E3EBD7743E51 /* GameGuideCardView.swift */; };
 		0AFECFBC9DE9C650E25DC735 /* StoryPlaybackPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D67E2CA11F14AC4BF39E542 /* StoryPlaybackPipeline.swift */; };
+		0AFF7AA7DE1301AA2C9E3E96 /* ComposerScrollEdgeCue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2F8838DF1BB46C1CC82168 /* ComposerScrollEdgeCue.swift */; };
 		0B232A36D029866C108C1BFC /* ShareConversationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E73812F65144FE11128B68 /* ShareConversationStoreTests.swift */; };
 		0B366C7EFD472489E0E2091E /* ComposerSceneShutterWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE4D5707793B7C2A13152ACD /* ComposerSceneShutterWiringTests.swift */; };
 		0B3828CDBE9457D28BCAF122 /* VoiceRecordingActivityLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1135721E61B12BBBF6B369C6 /* VoiceRecordingActivityLaw.swift */; };
@@ -6450,6 +6451,7 @@
 		7B0AFDEED579D2C9085EDDF5 /* SignupPhoneLaterGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignupPhoneLaterGuardTests.swift; sourceTree = "<group>"; };
 		7B174789CED9828D1D4B6377 /* ConversationMediaGalleryView+ReplyComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationMediaGalleryView+ReplyComposer.swift"; sourceTree = "<group>"; };
 		7B268A8F19EA971B262856C7 /* ConversationViewModel+ReplyReference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationViewModel+ReplyReference.swift"; sourceTree = "<group>"; };
+		7B2F8838DF1BB46C1CC82168 /* ComposerScrollEdgeCue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerScrollEdgeCue.swift; sourceTree = "<group>"; };
 		7B3C05CE5128495EA3CA89A6 /* ContactCardAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCardAccessibilityTests.swift; sourceTree = "<group>"; };
 		7B4689B4C1A63FF465B37947 /* MessageForwardServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageForwardServiceTests.swift; sourceTree = "<group>"; };
 		7B4992B1CB510FD9F97E71CC /* VitrineSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineSeeder.swift; sourceTree = "<group>"; };
@@ -12279,6 +12281,7 @@
 				3BEF87241CDC1B07DE6E6F7B /* ComposerSceneSoundHeader.swift */,
 				383B24BDA331B31F878B2C77 /* ComposerSceneSurface.swift */,
 				627E5E0BFE4D68DF0B29C730 /* ComposerSceneSurfaceKeys.swift */,
+				7B2F8838DF1BB46C1CC82168 /* ComposerScrollEdgeCue.swift */,
 				D7CA17371BC1760A6400A342 /* ComposerSeedIngestion.swift */,
 				EED5F153D843BB34E21852DE /* ComposerSelectionActions.swift */,
 				68C388CB85C005CA2E6514F4 /* ComposerSelectionChrome.swift */,
@@ -15335,6 +15338,7 @@
 				E30C4A52E6D29BD88DACC678 /* ComposerSceneSoundHeader.swift in Sources */,
 				C7B2F661486280872C22893B /* ComposerSceneSurface.swift in Sources */,
 				293BCBDD6300BC1227CD77A7 /* ComposerSceneSurfaceKeys.swift in Sources */,
+				0AFF7AA7DE1301AA2C9E3E96 /* ComposerScrollEdgeCue.swift in Sources */,
 				CDFA2285D478E50D4ABEA424 /* ComposerSeedIngestion.swift in Sources */,
 				4FF4C5345F523B0AD9F2A231 /* ComposerSelectionActions.swift in Sources */,
 				1FC89A2B07E45F7D4A815A4E /* ComposerSelectionChrome.swift in Sources */,

@@ -22,7 +22,10 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
 
     private static let iPhoneSE = CGSize(width: 375, height: 667)
     private static let iPhone13mini = CGSize(width: 375, height: 812)
-    private static let smallScreens = [iPhoneSE, iPhone13mini]
+    /// #14622 — une fenêtre d'iPad de 360 pt : la scène 9:16 n'y dépasse pas
+    /// 640 pt, et la colonne du post, l'entrée Coller comprise, y déborde.
+    private static let iPad360 = CGSize(width: 360, height: 640)
+    private static let smallScreens = [iPhoneSE, iPhone13mini, iPad360]
     private static let socleReserve: CGFloat = 46
 
     private struct Harness: View {
@@ -67,12 +70,21 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
             .accessibilityIdentifier("composer.rest.more"))
     }
 
+    private static func pasteEntry() -> AnyView {
+        AnyView(ComposerSceneRoundGlyph(symbol: "doc.on.clipboard")
+            .accessibilityElement()
+            .accessibilityLabel(Text("coller"))
+            .accessibilityIdentifier("composer.rest.paste"))
+    }
+
     private static func postAtTwoSlides(state: ComposerRestChrome.State = rest,
-                                        selection: ComposerSelectionColumn? = nil) -> ComposerSceneOverlayChrome {
+                                        selection: ComposerSelectionColumn? = nil,
+                                        paste: Bool = false) -> ComposerSceneOverlayChrome {
         ComposerSceneOverlayChrome(state: state, slideRow: slides(), slideCount: 2,
                                    onClose: {}, onUndo: {}, onRedo: {},
                                    tools: ComposerRestTool.allCases, onTool: { _ in },
-                                   moreMenu: moreMenu(), selection: selection)
+                                   moreMenu: moreMenu(), pasteEntry: paste ? pasteEntry() : nil,
+                                   selection: selection)
     }
 
     private static let controls = ["composer.close", "composer.history.undo", "composer.history.redo", "test.socle"]
@@ -146,5 +158,103 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
 
             try assertClearOfControls(["composer.selection.column"] + entries, on: screen, size: size)
         }
+    }
+
+    // MARK: - #14622 : le pied de la colonne ne défile jamais
+
+    func test_lePiedDeLaColonne_estTexteDuPostPuisPlus_etLeResteDefile() {
+        XCTAssertEqual(ComposerRestChrome.columnFoot(ComposerRestTool.allCases), [.postText, .more])
+        XCTAssertEqual(ComposerRestChrome.columnBody(ComposerRestTool.allCases),
+                       [.text, .media, .sticker, .sound, .drawing, .background, .mention, .place])
+        let story = ComposerRestChrome.tools(offered: [.text, .media, .sticker, .sound, .drawing, .background])
+        XCTAssertEqual(ComposerRestChrome.columnFoot(story), [.more])
+        XCTAssertEqual(ComposerRestChrome.columnBody(story) + ComposerRestChrome.columnFoot(story), story)
+    }
+
+    func test_quandLaColonneDeborde_plusEtTexteDuPost_restentVisiblesAuPied() throws {
+        let foot = ["composer.rest.postText", "composer.rest.more", "composer.rest.paste"]
+        for size in Self.smallScreens {
+            let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(paste: true), size: size), size: size)
+            defer { screen.dismount() }
+
+            try assertClearOfControls(foot + ["composer.rest.column.body"], on: screen, size: size)
+            let body = try XCTUnwrap(screen.frame(of: "composer.rest.column.body"), "\(size) : corps introuvable")
+            let frames = try foot.map { id in try XCTUnwrap(screen.frame(of: id), "\(size) : \(id) introuvable") }
+            XCTAssertLessThanOrEqual(body.maxY, frames[0].minY + 0.5,
+                                     "\(size) : le corps qui défile \(body) passe sous « Texte du post » \(frames[0]).")
+            XCTAssertLessThanOrEqual(frames[0].maxY, frames[1].minY + 0.5, "\(size) : ⋯ n'est pas sous « Texte du post ».")
+            XCTAssertLessThanOrEqual(frames[1].maxY, frames[2].minY + 0.5, "\(size) : Coller n'est pas sous ⋯.")
+        }
+    }
+
+    func test_laColonneDuPostAvecColler_debordeBienLaFenetreDIPadDe360Points() throws {
+        let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(paste: true), size: Self.iPad360),
+                                    size: Self.iPad360)
+        defer { screen.dismount() }
+
+        let body = try XCTUnwrap(screen.frame(of: "composer.rest.column.body"))
+        let place = try XCTUnwrap(screen.frame(of: "composer.rest.place"))
+        XCTAssertGreaterThan(place.maxY, body.maxY + 0.5,
+                             "Le cas doit déborder, sinon le témoin du pied ne mesure rien : \(place) dans \(body).")
+    }
+
+    // MARK: - #14622 : un rail qui déborde le montre
+
+    func test_leSigneDeDefilement_ditCeQuiResteDeChaqueCote() {
+        let viewport: CGFloat = 400
+        XCTAssertEqual(ComposerScrollEdges.of(content: CGRect(x: 0, y: 0, width: 72, height: 300), viewport: viewport),
+                       ComposerScrollEdges(top: false, bottom: false))
+        XCTAssertEqual(ComposerScrollEdges.of(content: CGRect(x: 0, y: 0, width: 72, height: 900), viewport: viewport),
+                       ComposerScrollEdges(top: false, bottom: true))
+        XCTAssertEqual(ComposerScrollEdges.of(content: CGRect(x: 0, y: -200, width: 72, height: 900), viewport: viewport),
+                       ComposerScrollEdges(top: true, bottom: true))
+        XCTAssertEqual(ComposerScrollEdges.of(content: CGRect(x: 0, y: -500, width: 72, height: 900), viewport: viewport),
+                       ComposerScrollEdges(top: true, bottom: false))
+        XCTAssertEqual(ComposerScrollEdges.of(content: CGRect(x: 0, y: -0.3, width: 72, height: 400.4), viewport: viewport),
+                       ComposerScrollEdges(top: false, bottom: false), "Un demi-point d'arrondi n'est pas un débord.")
+    }
+
+    /// Le fondu se lit au PIXEL : un rail noir, posé sur le fond blanc de
+    /// l'hôte et plus haut que son viewport, laisse voir le blanc au bord qui
+    /// cache encore des entrées, jamais au milieu ni au bord déjà atteint.
+    func test_unRailQuiDeborde_seFondAuBordQuiCacheEncoreDesEntrees() throws {
+        let size = CGSize(width: 60, height: 200)
+        let rail = VStack(spacing: 0) {
+            ForEach(0..<20, id: \.self) { index in
+                Color.black.frame(width: 60, height: 40)
+                    .accessibilityElement()
+                    .accessibilityIdentifier("test.rail.\(index)")
+            }
+        }
+        .modifier(ComposerScrollEdgeCue())
+        .frame(width: size.width, height: size.height)
+        .ignoresSafeArea()
+        let screen = RenderedScreen(rail, size: size)
+        defer { screen.dismount() }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+
+        let format = UIGraphicsImageRendererFormat()
+        format.preferredRange = .standard
+        let image = UIGraphicsImageRenderer(bounds: screen.root.bounds, format: format).image { _ in
+            screen.root.drawHierarchy(in: screen.root.bounds, afterScreenUpdates: true)
+        }
+        let top = try XCTUnwrap(Self.brightness(of: image, at: CGPoint(x: 30, y: 2)))
+        let middle = try XCTUnwrap(Self.brightness(of: image, at: CGPoint(x: 30, y: 100)))
+        let bottom = try XCTUnwrap(Self.brightness(of: image, at: CGPoint(x: 30, y: 198)))
+        XCTAssertLessThan(middle, 0.05, "Le milieu du rail reste plein.")
+        XCTAssertLessThan(top, 0.05, "En haut, rien n'est caché : aucun fondu.")
+        XCTAssertGreaterThan(bottom, 0.5, "En bas, des entrées attendent : le bord s'efface (clarté \(bottom)).")
+    }
+
+    /// La clarté d'un point lu dans les octets d'une image 8 bits, rangée par
+    /// rangée depuis le HAUT : le plus petit canal, qui vaut 0 sur le noir et 1
+    /// sur le blanc quel que soit l'ordre des canaux.
+    private static func brightness(of image: UIImage, at point: CGPoint) -> CGFloat? {
+        guard let cg = image.cgImage, let data = cg.dataProvider?.data,
+              let bytes = CFDataGetBytePtr(data) else { return nil }
+        guard cg.bitsPerComponent == 8 else { return nil }
+        let pixel = cg.bitsPerPixel / 8
+        let offset = Int(point.y * image.scale) * cg.bytesPerRow + Int(point.x * image.scale) * pixel
+        return CGFloat((0..<min(pixel, 3)).map { bytes[offset + $0] }.min() ?? 0) / 255
     }
 }
