@@ -47,9 +47,11 @@ describe('ouvrir', () => {
 });
 
 describe('tenir l’écran ensemble', () => {
-  test('le scellement ne part que si les DEUX tiennent', () => {
-    const mine = play(...opened, { type: 'hold-began' });
-    expect(mine.holding).toBe(true);
+  test('le scellement ne part que si les DEUX tiennent, et que MA tenue est enregistrée', () => {
+    const pressed = play(...opened, { type: 'hold-began' });
+    expect(pressed.holding).toBe(true);
+    expect(shouldSeal(reduceRitual(pressed, { type: 'other-progress', token: 't1', stage: 'held' }))).toBe(false);
+    const mine = reduceRitual(pressed, { type: 'hold-acked' });
     expect(shouldSeal(mine)).toBe(false);
     const both = reduceRitual(mine, { type: 'other-progress', token: 't1', stage: 'held' });
     expect(shouldSeal(both)).toBe(true);
@@ -57,7 +59,7 @@ describe('tenir l’écran ensemble', () => {
   });
 
   test('l’autre tient d’abord, puis moi : même issue', () => {
-    expect(shouldSeal(play(...opened, { type: 'other-progress', token: 't1', stage: 'held' }, { type: 'hold-began' }))).toBe(true);
+    expect(shouldSeal(play(...opened, { type: 'other-progress', token: 't1', stage: 'held' }, { type: 'hold-began' }, { type: 'hold-acked' }))).toBe(true);
   });
 
   test('un événement d’un AUTRE rituel est ignoré', () => {
@@ -66,8 +68,9 @@ describe('tenir l’écran ensemble', () => {
   });
 
   test('lâcher avant le scellement revient à l’attente', () => {
-    const state = play(...opened, { type: 'hold-began' }, { type: 'other-progress', token: 't1', stage: 'held' }, { type: 'seal-started' }, { type: 'hold-ended' });
-    expect(state).toMatchObject({ stage: 'waiting', holding: false });
+    const state = play(...opened, { type: 'hold-began' }, { type: 'hold-acked' }, { type: 'other-progress', token: 't1', stage: 'held' }, { type: 'seal-started' }, { type: 'hold-ended' });
+    expect(state).toMatchObject({ stage: 'waiting', holding: false, holdAcked: false });
+    expect(reduceRitual(state, { type: 'hold-acked' }).holdAcked).toBe(false);
   });
 
   test('une tenue refusée parce que la demande a disparu ferme le rituel', () => {
@@ -77,7 +80,7 @@ describe('tenir l’écran ensemble', () => {
 });
 
 describe('sceller', () => {
-  const sealing: readonly RitualEvent[] = [...opened, { type: 'hold-began' }, { type: 'other-progress', token: 't1', stage: 'held' }, { type: 'seal-started' }];
+  const sealing: readonly RitualEvent[] = [...opened, { type: 'hold-began' }, { type: 'hold-acked' }, { type: 'other-progress', token: 't1', stage: 'held' }, { type: 'seal-started' }];
 
   test('scellé tout de suite, ou en attente de la confirmation de l’autre', () => {
     expect(play(...sealing, { type: 'sealed', completed: true }).stage).toBe('completed');

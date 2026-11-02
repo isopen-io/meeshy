@@ -18,6 +18,7 @@ import {
   type FriendRequestRecord,
   type PersonSummary,
 } from '@/lib/api/friend-requests';
+import { FRIENDS_QUERY_PREFIX } from '@/lib/api/friends-keys';
 import { performEmailInvitation } from '@/lib/api/invitations';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -72,6 +73,14 @@ import {
 } from '@/routes/discover-parts';
 import { PhoneAddPrompt } from '@/components/phone-add-prompt';
 import { usePhoneAddPrompt } from '@/lib/view/use-phone-add-prompt';
+import type { RelationRequestLevel } from '@meeshy/shared/types/relation';
+import { RELATION_LINKS_QUERY_KEY } from '@/lib/api/relations';
+import { translateCircles } from '@/lib/i18n-circles-catalog';
+import { requestedLevelOf } from '@/lib/relations/circles';
+import { relationLevelLabel } from '@/lib/relations/level-labels';
+import { BloodRitualDialog } from '@/routes/blood-ritual-dialog';
+import { CirclesPanel, useCirclesCatalog } from '@/routes/discover-circles';
+import type { CircleRequestHandlers } from '@/routes/discover-circles-parts';
 
 /**
  * **DÉCOUVRIR** (#6363) — quatrième barreau de l'échelle, miroir de
@@ -166,12 +175,28 @@ export default function DiscoverScreen() {
   /* Un geste REMPLACE ce qu'il touche : le second tap d'un double tap
      n'atteint ni la ligne qui remonte, ni le bouton qui a pris la place (#6417). */
   const admitTap = useTapGate();
+  /* LE RITUEL DU SANG (#13938) — une demande de Sang ne s'accepte pas par
+     `PATCH accept` (`RELATION_RITUAL_REQUIRED`) : « Accepter » l'ouvre, depuis
+     « Cercles » comme depuis « Demandes ». */
+  const [ritualTarget, setRitualTarget] = useState<{ readonly userId: string; readonly name: string } | null>(null);
+  const openRitual = useCallback(
+    (userId: string, person: PersonSummary | null) => setRitualTarget({ userId, name: personNameOf(person, translate(language, 'discover.unknown')) }),
+    [language],
+  );
+  const closeRitual = useCallback(() => {
+    setRitualTarget(null);
+    void appQueryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
+  }, []);
   const onAccept = useCallback(
     (request: FriendRequestRecord) => {
+      if (requestedLevelOf(request) === 'BLOOD') {
+        openRitual(request.senderId, request.sender);
+        return;
+      }
       if (!admitTap()) return;
       void performRespondToRequest({ request, action: 'accept', deps }).then((o) => report(o, 'discover.announce.accepted', 'discover.announce.acceptFailed'));
     },
-    [admitTap, deps, report],
+    [admitTap, deps, report, openRitual],
   );
   const onReject = useCallback(
     (request: FriendRequestRecord) => {
@@ -195,6 +220,25 @@ export default function DiscoverScreen() {
     [admitTap, deps, report],
   );
   const handlers: ConnectionHandlers = useMemo(() => ({ onAdd, onCancel, onAccept, onReject }), [onAdd, onCancel, onAccept, onReject]);
+  /* DEMANDER UN CRAN (#13938) — le même geste optimiste qu'« Ajouter », avec le cran visé. */
+  const onRaise = useCallback(
+    (person: PersonSummary, targetLevel: RelationRequestLevel) => {
+      if (!admitTap()) return;
+      void performSendRequest({ person, targetLevel, deps }).then((o) => report(o, 'discover.announce.sent', 'discover.announce.sendFailed'));
+    },
+    [admitTap, deps, report],
+  );
+  const circleHandlers: CircleRequestHandlers = useMemo(
+    () => ({ onAccept, onDecline: onReject, onCancel, onRitual: openRitual }),
+    [onAccept, onReject, onCancel, openRitual],
+  );
+  /* Le cran d'une demande de montée dans « Demandes » (iso `RequestsTab.levelCaption`) — dès que le catalogue des cercles est là. */
+  const circlesCatalog = useCirclesCatalog(language);
+  const levelCaption = (request: FriendRequestRecord, direction: 'incoming' | 'outgoing'): string | null => {
+    const level = requestedLevelOf(request);
+    if (!circlesCatalog || level === 'FRIEND') return null;
+    return translateCircles(language, direction === 'incoming' ? 'circles.requests.incoming' : 'circles.requests.outgoing', { level: relationLevelLabel(language, level) });
+  };
 
   /* Débloquer passe par une confirmation modale : un double tap n'y retire
      personne, il ne peut qu'ouvrir une confirmation — la porte n'y est pas. */
@@ -262,8 +306,15 @@ export default function DiscoverScreen() {
   );
   const selectFilter = useCallback((next: RequestFilter) => replaceParams({ [REQUEST_FILTER_PARAM]: next === 'received' ? null : next }), [replaceParams]);
 
-  const refreshTargets: readonly ListQuery[] = tab === 'blocked' ? [blocked] : tab === 'requests' ? [received, sent] : [received, sent, accepted, blocked];
-  const onRefresh = useCallback(() => Promise.all(refreshTargets.map((target) => target.refetch())).then(() => undefined), [refreshTargets]);
+  const refreshTargets: readonly ListQuery[] = tab === 'blocked' ? [blocked] : tab === 'requests' ? [received, sent] : tab === 'circles' ? [received, sent, accepted] : [received, sent, accepted, blocked];
+  const onRefresh = useCallback(
+    () =>
+      Promise.all([
+        ...refreshTargets.map((target) => target.refetch()),
+        ...(tab === 'circles' ? [appQueryClient.refetchQueries({ queryKey: RELATION_LINKS_QUERY_KEY })] : []),
+      ]).then(() => undefined),
+    [refreshTargets, tab],
+  );
   const pull = usePullToRefresh({ root: frame, onRefresh, threshold: PULL_THRESHOLD });
 
   const activeList = tab === 'blocked' ? blocked : tab === 'requests' ? (filter === 'sent' ? sent : received) : null;
@@ -351,7 +402,7 @@ export default function DiscoverScreen() {
               />,
               <ul data-request-list="received" className="flex flex-col">
                 {receivedRows.map((request) => (
-                  <ReceivedRequestRow key={request.id} language={language} request={request} now={now} onAccept={onAccept} onReject={onReject} />
+                  <ReceivedRequestRow key={request.id} language={language} request={request} now={now} onAccept={onAccept} onReject={onReject} levelCaption={levelCaption(request, 'incoming')} />
                 ))}
                 {listFooter(FRIEND_REQUESTS_PAGE_SIZE)}
               </ul>,
@@ -367,12 +418,26 @@ export default function DiscoverScreen() {
               />,
               <ul data-request-list="sent" className="flex flex-col">
                 {sentRows.map((request) => (
-                  <SentRequestRow key={request.id} language={language} request={request} now={now} onCancel={onCancel} />
+                  <SentRequestRow key={request.id} language={language} request={request} now={now} onCancel={onCancel} levelCaption={levelCaption(request, 'outgoing')} />
                 ))}
                 {listFooter(FRIEND_REQUESTS_PAGE_SIZE)}
               </ul>,
             )}
       </section>
+    ),
+    circles: () => (
+      <CirclesPanel
+        language={language}
+        enabled={enabled}
+        online={online}
+        now={now}
+        received={receivedRows}
+        sent={sentRows}
+        accepted={acceptedRows}
+        requestHandlers={circleHandlers}
+        onRaise={onRaise}
+        onFindContacts={() => selectTab('discover')}
+      />
     ),
     blocked: () => (
       <section data-discover-blocked className="flex flex-1 flex-col">
@@ -425,6 +490,7 @@ export default function DiscoverScreen() {
       {/* **UNE SEULE CONFIRMATION, PARTOUT** (revue-correction #6149, défaut
           majeur 2, issue #7858) — `UnblockConfirm` était la SECONDE des trois
           copies divergentes, blanc sur `--color-warning` mêlé de noir. */}
+      {ritualTarget === null ? null : <BloodRitualDialog language={language} userId={ritualTarget.userId} name={ritualTarget.name} onFinished={closeRitual} />}
       {unblockTarget === null ? null : (
         <ConfirmDialog
           name="unblock"

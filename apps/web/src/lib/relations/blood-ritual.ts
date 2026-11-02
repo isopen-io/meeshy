@@ -36,6 +36,8 @@ export type RitualState = {
   readonly stage: RitualStage;
   readonly consents: RelationRitualConsents;
   readonly holding: boolean;
+  /** Ma tenue a été ENREGISTRÉE par le serveur (`hold` répondu) : sans elle, un `confirm` partirait sur une tenue qu'il ignore. */
+  readonly holdAcked: boolean;
   readonly otherWaiting: boolean;
   readonly otherHolding: boolean;
   readonly token: string | null;
@@ -54,6 +56,7 @@ export const INITIAL_RITUAL: RitualState = {
   stage: 'consent',
   consents: ALL_REFUSED,
   holding: false,
+  holdAcked: false,
   otherWaiting: false,
   otherHolding: false,
   token: null,
@@ -70,6 +73,7 @@ export type RitualEvent =
   | { readonly type: 'opened'; readonly token: string | null; readonly holdWindowMs: number | null }
   | { readonly type: 'open-failed'; readonly refusal: RelationRefusal | null }
   | { readonly type: 'hold-began' }
+  | { readonly type: 'hold-acked' }
   | { readonly type: 'hold-failed'; readonly refusal: RelationRefusal | null }
   | { readonly type: 'hold-ended' }
   | { readonly type: 'other-started' }
@@ -81,7 +85,7 @@ export type RitualEvent =
   | { readonly type: 'retry' }
   | { readonly type: 'notice-shown' };
 
-const released = (state: RitualState): RitualState => ({ ...state, holding: false });
+const released = (state: RitualState): RitualState => ({ ...state, holding: false, holdAcked: false });
 
 const lapse = (state: RitualState): RitualState => ({ ...released(state), otherHolding: false, stage: 'lapsed' });
 
@@ -137,6 +141,8 @@ export function reduceRitual(state: RitualState, event: RitualEvent): RitualStat
       return openFailed(state, event.refusal);
     case 'hold-began':
       return state.stage === 'waiting' && !state.holding && state.token !== null ? { ...state, holding: true } : state;
+    case 'hold-acked':
+      return state.holding ? { ...state, holdAcked: true } : state;
     case 'hold-failed':
       return holdFailed(state, event.refusal);
     case 'hold-ended':
@@ -162,7 +168,8 @@ export function reduceRitual(state: RitualState, event: RitualEvent): RitualStat
 }
 
 /** Les deux tiennent l'écran : le scellement part. */
-export const shouldSeal = (state: RitualState): boolean => state.stage === 'waiting' && state.holding && state.otherHolding && state.token !== null;
+export const shouldSeal = (state: RitualState): boolean =>
+  state.stage === 'waiting' && state.holding && state.holdAcked && state.otherHolding && state.token !== null;
 
 /** L'intervalle de la tenue rejouée : un tiers de la fenêtre servie, jamais moins d'une seconde. */
 export const holdIntervalMs = (state: RitualState): number => Math.max(Math.floor(state.holdWindowMs / 3), 1_000);

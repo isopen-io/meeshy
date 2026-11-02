@@ -591,6 +591,7 @@ const fr = {
   'discover.tab.discover': 'Découvrir',
   'discover.tab.requests': 'Demandes',
   'discover.tab.blocked': 'Bloqués',
+  'discover.tab.circles': 'Cercles',
   'discover.tab.requests.count.one': 'Demandes, {count} reçue',
   'discover.tab.requests.count.other': 'Demandes, {count} reçues',
   'discover.invite.title': 'Inviter par e-mail',

@@ -7,7 +7,8 @@ import type { FriendRequestBucket, FriendRequestRecord, PersonSummary } from '@/
  * pour le lecteur), sans DOM ni requête.
  */
 
-export const DISCOVER_TABS = ['discover', 'requests', 'blocked'] as const;
+/** `circles` (#13938) — « Mes cercles » : iOS l'ajoute au hub People (`PeopleTab.circles`, en dernier) ; le web n'a pas de hub People, Découvrir en est le miroir. */
+export const DISCOVER_TABS = ['discover', 'requests', 'blocked', 'circles'] as const;
 export type DiscoverTab = (typeof DISCOVER_TABS)[number];
 export const DISCOVER_TAB_PARAM = 'onglet';
 
