@@ -746,6 +746,60 @@ final class ComposerSeveralFormatsTests: XCTestCase {
                        "Deux formats cochés ont déjà répondu : rien à demander.")
     }
 
+    // MARK: - L'issue du geste : ce qui est parti, ce qui reste
+
+    func test_outcome_toutEstParti_leCompositeurSeFerme() {
+        XCTAssertEqual(ComposerSeveralFormats.outcome(of: storyEtPost, refused: []), .published)
+    }
+
+    func test_outcome_unFormatRefuse_resteSeulCoche_avecSaDisposition() {
+        let choisi = ComposerPublishMenuRule.choosingLayout(.hero, armed: story)
+        XCTAssertEqual(ComposerSeveralFormats.outcome(of: choisi, refused: [.post]),
+                       .remains(ComposerPublishChoice(format: .post, layout: .hero)),
+                       "La story est partie : seul le post reste coché, avec sa disposition.")
+        XCTAssertEqual(ComposerSeveralFormats.outcome(of: choisi, refused: [.story]),
+                       .remains(story), "Le post est parti : la story reste, sans disposition.")
+    }
+
+    func test_outcome_laStoryEtSonReel_refuses_restentEnsemble() {
+        let trois = ComposerPublishChoice(formats: [.story, .post, .reel], layout: nil)!
+        guard case .remains(let reste) = ComposerSeveralFormats.outcome(of: trois, refused: [.story, .reel]) else {
+            return XCTFail("La story et son réel ne sont pas partis : le compositeur doit rester.")
+        }
+        XCTAssertEqual(reste.formats, [.story, .reel])
+        XCTAssertTrue(reste.alsoAsReel)
+    }
+
+    func test_run_lesDocumentsPartentDAbord_unAUn_puisLeReste_avecCeQuiEstRefuse() async {
+        let journal = FanOutJournal()
+        let plan = ComposerSeveralFormats(atelier: [], scene: [story],
+                                          document: ComposerPublishChoice(formats: [.post, .reel], layout: nil)!.legs,
+                                          refused: [])
+        let refuses = await ComposerSeveralFormats.run(plan, sendDocument: { leg in
+            journal.lignes.append("début \(leg.format)")
+            await Task.yield()
+            journal.lignes.append("fin \(leg.format)")
+            return leg.format != .reel
+        }, sendNow: { dejaRefuses in
+            journal.lignes.append("maintenant \(dejaRefuses.map { "\($0)" })")
+            return []
+        })
+        XCTAssertEqual(journal.lignes, ["début post", "fin post", "début reel", "fin reel", "maintenant [\"reel\"]"],
+                       "Chaque document attend le précédent ; la scène part après, sachant ce qui est refusé.")
+        XCTAssertEqual(refuses, [.reel])
+    }
+
+    func test_run_reunitLesRefusDuPlan_desDocuments_etDeCeQuiPartSurLeChamp() async {
+        let plan = ComposerSeveralFormats(atelier: [], scene: [story],
+                                          document: [ComposerPublishChoice(format: .post, layout: nil)],
+                                          refused: [.reel])
+        let refuses = await ComposerSeveralFormats.run(plan, sendDocument: { _ in false }, sendNow: { _ in [.story] })
+        XCTAssertEqual(Set(refuses), [.reel, .post, .story])
+        XCTAssertEqual(ComposerSeveralFormats.outcome(of: ComposerPublishChoice(formats: [.story, .post, .reel],
+                                                                               layout: nil)!, refused: refuses),
+                       .remains(ComposerPublishChoice(formats: [.story, .post, .reel], layout: nil)!))
+    }
+
     func test_laPartiePrincipale_publieChaqueFormatParSonCanal() throws {
         let code = try AppSourceGuard.composerHostSource()
         let compacte = code.components(separatedBy: .whitespacesAndNewlines).joined()
@@ -755,4 +809,9 @@ final class ComposerSeveralFormatsTests: XCTestCase {
                           && compacte.contains("returnComposerSeveralFormats.relay(remises,"),
                       "Le relais de l'atelier publie chaque format du geste.")
     }
+}
+
+@MainActor
+private final class FanOutJournal {
+    var lignes: [String] = []
 }

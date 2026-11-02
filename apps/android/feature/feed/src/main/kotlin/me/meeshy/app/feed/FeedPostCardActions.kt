@@ -79,7 +79,7 @@ internal fun PostStatsRow(
             countColor = neutral,
             onClick = onComments,
         )
-        RepostStatAction(count = post.repostCount, tint = neutral, onRepost = onRepost, onQuote = onQuote)
+        RepostStatAction(count = post.repostCount, reposted = post.isReposted, tint = neutral, onRepost = onRepost, onQuote = onQuote)
         Spacer(Modifier.weight(1f))
         val bookmarkLabel =
             stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark)
@@ -145,14 +145,15 @@ private val MIN_ACTION_TARGET = 44.dp
  * and the post detail (iOS `FeedPostActionsBar` repost confirmation).
  */
 @Composable
-private fun RepostStatAction(count: Int, tint: Color, onRepost: () -> Unit, onQuote: () -> Unit) {
+private fun RepostStatAction(count: Int, reposted: Boolean, tint: Color, onRepost: () -> Unit, onQuote: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         StatAction(
             icon = Icons.Filled.Repeat,
             count = count,
             contentDescription = stringResource(R.string.feed_reposts),
-            tint = tint,
+            tint = if (reposted) MeeshyPalette.Success else tint,
+            active = reposted,
             countColor = tint,
             onClick = { expanded = true },
         )

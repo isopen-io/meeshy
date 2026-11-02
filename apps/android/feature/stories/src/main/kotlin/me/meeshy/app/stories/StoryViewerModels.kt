@@ -302,6 +302,10 @@ data class StoryViewerUiState(
     val isDismissed: Boolean = false,
     val reactionCount: Int = 0,
     val myReactions: Set<String> = emptySet(),
+    /** Les republications de la story à l'écran : le compte servi, plus celles de ce lecteur dès son geste (#14443). */
+    val repostCount: Int = 0,
+    /** Ce lecteur l'a republiée — la marque tient dès le geste et tombe si le serveur refuse. */
+    val hasReposted: Boolean = false,
     val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
     val isOwnStory: Boolean = false,
     val currentStoryId: String? = null,

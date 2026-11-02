@@ -1,5 +1,6 @@
 package me.meeshy.sdk.story
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
@@ -14,10 +15,12 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryTranslationMerge
 import me.meeshy.sdk.model.StoryUpdateMerge
 import me.meeshy.sdk.model.StoryViewer
+import me.meeshy.sdk.model.postTypeFromWire
 import me.meeshy.sdk.model.toStoryViewer
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
@@ -250,8 +253,31 @@ class StoryRepository @Inject constructor(
     ): NetworkResult<List<ApiPostComment>> =
         apiCall { storyApi.comments(storyId, cursor, limit) }
 
+    /**
+     * Republie la story EN STORY (iOS `StoryDirectRepost`) : sans `targetType`, la passerelle en ferait un post. La story
+     * que la passerelle rend en 201 rejoint aussitôt la barre (#14458) : une republication ne s'annonce que par
+     * `post:reposted`, jamais par `story:created`, et rien d'autre ne l'apporterait avant la revalidation suivante.
+     */
     suspend fun repost(storyId: String): NetworkResult<Unit> =
-        apiCall { storyApi.repost(storyId, RepostPostRequest()) }
+        when (val result = apiCall { storyApi.repost(storyId, RepostPostRequest(targetType = PostType.STORY.name)) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> {
+                adoptRepost(result.data)
+                NetworkResult.Success(Unit)
+            }
+        }
+
+    /** Une republication faite ne devient pas un échec parce que le cache local a refusé l'écriture. */
+    private suspend fun adoptRepost(story: ApiPost) {
+        if (postTypeFromWire(story.type) != PostType.STORY) return
+        try {
+            adoptPublished(story)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "story repost: tray adoption failed")
+        }
+    }
 
     suspend fun fetchPost(id: String): NetworkResult<ApiPost> =
         apiCall { storyApi.fetchPost(id) }
