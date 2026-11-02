@@ -35,6 +35,7 @@ import {
   AppearanceSection,
   DataSection,
   E2EE_DEVICES_PANEL,
+  LICENCES_PANEL,
   LogoutButton,
   NotificationsSection,
   PACKS_PANEL,
@@ -110,6 +111,19 @@ const SettingsPacks = lazy(() =>
   }),
 );
 
+/**
+ * LES LICENCES (#14628) — la licence de Meeshy, l'offre de source au commit du
+ * bundle et le texte de l'AGPL-3.0, chargés à la demande AVEC leurs libellés :
+ * le texte de la licence ne pèse rien tant qu'on n'ouvre pas le volet.
+ */
+const SettingsLicences = lazy(() =>
+  import('@/routes/settings-licences').then(async (module) => {
+    const language = currentInterfaceLanguage();
+    await module.prepareSettingsLicences(language);
+    return { default: () => <module.SettingsLicencesScreen language={language} /> };
+  }),
+);
+
 const THEME_MODE: Readonly<Record<ThemePreference, ThemeMode>> = { system: 'auto', light: 'light', dark: 'dark' };
 
 const actionDeps = (): PreferenceActionDeps => ({
@@ -171,6 +185,13 @@ export default function SettingsScreen() {
     return (
       <Suspense fallback={null}>
         <SettingsPacks />
+      </Suspense>
+    );
+  }
+  if (panel === LICENCES_PANEL) {
+    return (
+      <Suspense fallback={null}>
+        <SettingsLicences />
       </Suspense>
     );
   }
