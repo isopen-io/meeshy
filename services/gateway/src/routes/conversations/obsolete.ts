@@ -4,6 +4,11 @@
  * la conversation, ou rôle de plateforme équivalent) ; l'effet vit dans
  * `services/conversations/obsoleteConversation.ts`.
  *
+ * #14653 (décision porteur du 2026-11-02) — dans un TÊTE-À-TÊTE, l'un OU
+ * l'autre des deux membres la rend obsolète : `mayObsoleteAsDirectMember`.
+ * Seul un membre inscrit, à participation active, ni partie ni bannie ; les
+ * groupes gardent la règle de l'administrateur.
+ *
  * Rétrocompatible : la conversation est AUSSI fermée (`isActive: false`,
  * `closedAt`, `conversation:closed`), donc un ancien client qui ne connaît ni
  * cette route ni `conversation:obsoleted` la retire de sa liste comme avant.
@@ -24,6 +29,25 @@ const logger = enhancedLogger.child({ module: 'ConversationObsoleteRoute' });
 
 type ObsoleteParams = { readonly id: string };
 
+type ObsoleteMembership = {
+  readonly role: string;
+  readonly type: string;
+  readonly leftAt: Date | null;
+  readonly bannedAt: Date | null;
+  readonly conversation: { readonly type: string } | null;
+};
+
+export function mayObsoleteAsDirectMember(
+  membership: ObsoleteMembership | null,
+  caller: { readonly isAnonymous: boolean; readonly hasRegisteredUser: boolean },
+): boolean {
+  if (membership === null) return false;
+  if (caller.isAnonymous || !caller.hasRegisteredUser) return false;
+  if (membership.type !== 'user') return false;
+  if (membership.leftAt !== null || membership.bannedAt !== null) return false;
+  return membership.conversation?.type === 'direct';
+}
+
 export function registerObsoleteConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -31,7 +55,7 @@ export function registerObsoleteConversationRoute(
 ): void {
   fastify.delete<{ Params: ObsoleteParams }>('/conversations/:id/obsolete', {
     schema: {
-      description: 'Make a conversation obsolete (#14643): its content becomes unreadable at once, it leaves every member\'s list (also closed, as DELETE /conversations/:id does), and its data is erased after purgeAfter (48 h). Requires the conversation admin role. Idempotent: a second call returns the first dates.',
+      description: 'Make a conversation obsolete (#14643): its content becomes unreadable at once, it leaves every member\'s list (also closed, as DELETE /conversations/:id does), and its data is erased after purgeAfter (48 h). Requires the conversation admin role, or, in a direct conversation, being one of its two active registered members (#14653). Idempotent: a second call returns the first dates.',
       tags: ['conversations'],
       summary: 'Make conversation obsolete',
       params: {
@@ -77,9 +101,12 @@ export function registerObsoleteConversationRoute(
 
       const membership = await prisma.participant.findFirst({
         where: { conversationId, userId, isActive: true },
-        select: { role: true },
+        select: { role: true, type: true, leftAt: true, bannedAt: true, conversation: { select: { type: true } } },
       });
-      const allowed = actorHasMinimumRole(
+      const allowed = mayObsoleteAsDirectMember(membership, {
+        isAnonymous: authRequest.authContext.isAnonymous,
+        hasRegisteredUser: authRequest.authContext.registeredUser !== undefined,
+      }) || actorHasMinimumRole(
         { conversationRole: membership?.role, platformRole: authRequest.authContext.registeredUser?.role },
         MemberRole.ADMIN,
       );

@@ -43,10 +43,30 @@ function replyDouble() {
   return reply;
 }
 
-async function appeler(options: { id?: string; conversationRole?: string | null; platformRole?: string }) {
+type Appel = {
+  id?: string;
+  conversationRole?: string | null;
+  platformRole?: string;
+  conversationType?: string;
+  participantType?: string;
+  leftAt?: Date | null;
+  bannedAt?: Date | null;
+  anonymous?: boolean;
+};
+
+async function appeler(options: Appel) {
+  const membership = options.conversationRole
+    ? {
+        role: options.conversationRole,
+        type: options.participantType ?? 'user',
+        leftAt: options.leftAt ?? null,
+        bannedAt: options.bannedAt ?? null,
+        conversation: { type: options.conversationType ?? 'group' },
+      }
+    : null;
   const prisma = {
     participant: {
-      findFirst: jest.fn<any>().mockResolvedValue(options.conversationRole ? { role: options.conversationRole } : null),
+      findFirst: jest.fn<any>().mockResolvedValue(membership),
     },
   };
   let path = '';
@@ -60,7 +80,9 @@ async function appeler(options: { id?: string; conversationRole?: string | null;
   await handler(
     {
       params: { id: options.id ?? CONV },
-      authContext: { userId: MOI, registeredUser: { id: MOI, role: options.platformRole ?? 'USER' } },
+      authContext: options.anonymous
+        ? { userId: MOI, type: 'anonymous', isAnonymous: true }
+        : { userId: MOI, type: 'user', isAnonymous: false, registeredUser: { id: MOI, role: options.platformRole ?? 'USER' } },
     },
     reply,
   );
@@ -113,6 +135,67 @@ describe('#14643 — DELETE /conversations/:id/obsolete', () => {
 
   it('une conversation introuvable est refusée sans écriture', async () => {
     const { reply } = await appeler({ id: 'inconnue', conversationRole: 'admin' });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('la membership se lit sur une participation ACTIVE de l\'appelant', async () => {
+    const { prisma } = await appeler({ conversationRole: 'admin' });
+    const where = prisma.participant.findFirst.mock.calls[0][0].where;
+    expect(where).toEqual(expect.objectContaining({ conversationId: CONV, userId: MOI, isActive: true }));
+  });
+});
+
+describe('#14653 — dans un tête-à-tête, l\'un OU l\'autre des deux membres la rend obsolète', () => {
+  it('le membre non créateur d\'une directe la rend obsolète', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct' });
+    expect(reply.statusCode).toBe(200);
+    expect(obsoleteConversation.mock.calls[0][1]).toEqual({ conversationId: CONV, actorId: MOI });
+  });
+
+  it('le créateur d\'une directe aussi, comme avant', async () => {
+    const { reply } = await appeler({ conversationRole: 'creator', conversationType: 'direct' });
+    expect(reply.statusCode).toBe(200);
+  });
+
+  it('un tiers (aucune participation active) est refusé, sans rien écrire', async () => {
+    const { reply } = await appeler({ conversationRole: null, conversationType: 'direct' });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('un ancien membre (participation marquée quittée) est refusé', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct', leftAt: new Date('2026-11-01T00:00:00Z') });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('un membre banni est refusé', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct', bannedAt: new Date('2026-11-01T00:00:00Z') });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('un anonyme est refusé, même s\'il porte une participation', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct', anonymous: true, participantType: 'anonymous' });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('une participation de type anonyme est refusée même sous un contexte enregistré', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct', participantType: 'anonymous' });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('un simple membre d\'un GROUPE reste refusé', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'group' });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('un simple membre d\'une conversation publique reste refusé', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'public' });
     expect(reply.statusCode).toBe(403);
     expect(obsoleteConversation).not.toHaveBeenCalled();
   });
