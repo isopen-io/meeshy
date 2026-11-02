@@ -46,8 +46,10 @@ import javax.inject.Inject
  * language resolution matches the feed exactly, and lets the reader switch the displayed
  * language via the same per-post flag-tap rule the feed uses (SSOT with the chat bubble).
  *
- * There is no per-post cache yet, so a cold open shows a skeleton until the fetch answers;
- * a blank id (a malformed route) is surfaced as not-found rather than an endless spinner.
+ * Cache-first (#14467): the detail paints at once from what the device already knows of the post
+ * ([PostRepository.knownPost] — the feed card, the last detail read, the feed kept on disk), then
+ * revalidates in silence; only an empty cache shows a skeleton, then the absence screen on failure.
+ * A blank id (a malformed route) is surfaced as not-found rather than an endless spinner.
  *
  * The comment thread itself lives in [PostCommentsViewModel]; this VM only owns the header,
  * whose comment-count badge is kept honest by the same realtime room — a live
@@ -286,6 +288,9 @@ class PostDetailViewModel @Inject constructor(
      * First load. Guarded so a re-entrant call while a fetch is in flight or after the post
      * has already loaded is a no-op — [refresh] forces a reload. A blank [postId] (a malformed
      * route) is surfaced as not-found and never hits the network.
+     *
+     * The post the device already knows is shown before the network answers, and that
+     * revalidation stays silent: offline, the reader keeps the known post with no error.
      */
     fun loadInitial() {
         if (postId.isBlank()) {
@@ -294,7 +299,17 @@ class PostDetailViewModel @Inject constructor(
         }
         if (status.value.isLoading || status.value.hasLoaded) return
         status.update { it.copy(isLoading = true, error = null, failure = null) }
-        fetch()
+        viewModelScope.launch {
+            val known = try {
+                postRepository.knownPost(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (known != null && rawPost.value == null) rawPost.value = known
+            load(silentWhenShown = true)
+        }
     }
 
     /** « Reessayer » de l'ecran d'echec : rejoue le chargement initial sans quitter le detail. */
@@ -312,30 +327,36 @@ class PostDetailViewModel @Inject constructor(
     }
 
     private fun fetch() {
-        viewModelScope.launch {
-            try {
-                when (val result = postRepository.getPost(postId)) {
-                    is NetworkResult.Success -> {
-                        rawPost.value = result.data
-                        liveOverlay.value = LiveOverlay()
-                        status.update {
-                            it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null, failure = null)
-                        }
-                    }
-                    is NetworkResult.Failure ->
-                        status.update {
-                            it.copy(
-                                isLoading = false,
-                                isRefreshing = false,
-                                error = result.error.message,
-                                failure = result.error.toContentFetchFailure(),
-                            )
-                        }
+        viewModelScope.launch { load(silentWhenShown = false) }
+    }
+
+    /**
+     * Reads the post from the gateway. With [silentWhenShown], a failure while a post is already
+     * on screen keeps it there and reports nothing — the background revalidation of a cache-first
+     * open; the absence screen stays reserved for an empty cache.
+     */
+    private suspend fun load(silentWhenShown: Boolean) {
+        val outcome: Pair<String?, ContentFetchFailure>? = try {
+            when (val result = postRepository.getPost(postId)) {
+                is NetworkResult.Success -> {
+                    rawPost.value = result.data
+                    liveOverlay.value = LiveOverlay()
+                    null
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                status.update { it.copy(isLoading = false, isRefreshing = false, error = e.message, failure = e.toContentFetchFailure()) }
+                is NetworkResult.Failure -> result.error.message to result.error.toContentFetchFailure()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.message to e.toContentFetchFailure()
+        }
+        val silenced = outcome != null && silentWhenShown && rawPost.value != null
+        status.update {
+            when {
+                outcome == null ->
+                    it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null, failure = null)
+                silenced -> it.copy(isLoading = false, isRefreshing = false)
+                else -> it.copy(isLoading = false, isRefreshing = false, error = outcome.first, failure = outcome.second)
             }
         }
     }

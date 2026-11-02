@@ -15,6 +15,8 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.postTypeFromWire
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.network.InMemoryNetworkMonitor
@@ -229,8 +231,10 @@ class FeedViewModel @Inject constructor(
             // new feed post, so route it through the SAME head-accept path as post:created
             // (dedup against the cache-projected feed and the buffered head, prepend
             // newest-first, bump the banner). Mirror of iOS FeedSocketHandler routing
-            // post:reposted through handlePostUpsert.
+            // post:reposted through handlePostUpsert. A repost served as a story or a status
+            // lives in the tray, never the feed (iOS `belongsToStoryTray`, #14466).
             socialSocket.postReposted.collect { payload ->
+                if (postTypeFromWire(payload.repost.type) in TRAY_TYPES) return@collect
                 val cacheIds = latestCachePosts.mapTo(HashSet()) { it.id }
                 realtimeHead.update { FeedRealtimeReducer.accept(it, payload.repost, cacheIds) }
             }
@@ -636,6 +640,7 @@ class FeedViewModel @Inject constructor(
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
+        val TRAY_TYPES = setOf(PostType.STORY, PostType.STATUS)
     }
 }
 
