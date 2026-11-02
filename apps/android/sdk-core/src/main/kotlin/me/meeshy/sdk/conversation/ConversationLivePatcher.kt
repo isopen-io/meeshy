@@ -142,9 +142,10 @@ class ConversationLivePatcher @Inject constructor(
 
     /** Récupère une conversation inconnue par id (une seule requête en vol par id) et l'insère en tête. */
     suspend fun discover(conversationId: String) {
-        if (conversationId.isBlank() || conversationDao.find(conversationId) != null) return
+        if (conversationId.isBlank()) return
         if (!discoveries.add(conversationId)) return
         try {
+            if (conversationDao.find(conversationId) != null) return
             val fetched = conversationApi.getById(conversationId).data ?: return
             val now = System.currentTimeMillis()
             database.withTransaction {
