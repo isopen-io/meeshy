@@ -233,6 +233,36 @@ final class StoryExportIntroTests: XCTestCase {
                        StoryExportIntro.duration, accuracy: 0.2)
     }
 
+    /// La durée du fichier ne suffit pas : elle vient de la liste d'éditions, qui
+    /// peut annoncer 1,7 s au-dessus d'un échantillon d'un quinzième de seconde.
+    /// Le décodeur doit alors servir des instants où le média n'existe plus, et
+    /// l'export qui compose ce clip échoue par intermittence en
+    /// `AVFoundationErrorDomain -11821` (#14495). L'image fixe doit DURER tout le
+    /// clip, dans le média lui-même.
+    func test_makeClip_theStillFrameCoversTheWholeClip() async throws {
+        let image = try XCTUnwrap(StoryExportIntro.render(makeContent(), size: renderSize))
+        let url = try await StoryExportIntro.makeClip(image: image,
+                                                      duration: StoryExportIntro.clipDuration,
+                                                      size: renderSize)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let asset = AVURLAsset(url: url)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        let track = try XCTUnwrap(tracks.first)
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        reader.add(output)
+        XCTAssertTrue(reader.startReading())
+        var media = CMTime.zero
+        while let sample = output.copyNextSampleBuffer() {
+            media = CMTimeAdd(media, CMSampleBufferGetDuration(sample))
+        }
+
+        XCTAssertEqual(CMTimeGetSeconds(media), StoryExportIntro.clipDuration,
+                       accuracy: CMTimeGetSeconds(StoryExportFrameRate.frameDuration),
+                       "le média de l'image fixe doit couvrir le clip que la liste d'éditions annonce")
+    }
+
     // MARK: - Helper
 
     private struct Pixel { let red: Int; let green: Int; let blue: Int }
