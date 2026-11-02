@@ -150,7 +150,7 @@
     <string name="encryption_create_header">Encryption</string>
     <string name="encryption_mode_e2ee_description">Only your devices and those of the participants read the messages. Translation happens on your device.</string>
     <string name="encryption_mode_e2ee_label">End-to-end</string>
-    <string name="encryption_mode_hybrid_description">Encrypted on our servers, like Server. Double encryption by your devices is coming soon.</string>
+    <string name="encryption_mode_hybrid_description">Encrypted twice: on our servers, for translation and search, and end to end by compatible devices, which check that every message arrives intact.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
     <string name="encryption_mode_server_label">Server</string>

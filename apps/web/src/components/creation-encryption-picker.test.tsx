@@ -90,7 +90,7 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
   test('chaque mode porte sa phrase en description', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
     expect(describedText(radio('server'))).toBe('Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.');
-    expect(describedText(radio('hybrid'))).toBe('Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt.');
+    expect(describedText(radio('hybrid'))).toBe('Chiffré deux fois : sur nos serveurs, pour la traduction et la recherche, et de bout en bout par les appareils compatibles, qui vérifient que chaque message arrive intact.');
   });
 
   test('le pied du choix dit que le bout en bout ne se désactive jamais, et qu’une autre conversation reste possible', async () => {

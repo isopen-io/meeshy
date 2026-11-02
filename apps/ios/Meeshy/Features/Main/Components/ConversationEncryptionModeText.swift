@@ -25,7 +25,7 @@ extension ConversationCreationEncryption.Mode {
                    bundle: .main)
         case .hybrid:
             String(localized: "conversation.encryption.mode.hybrid.description",
-                   defaultValue: "Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt.",
+                   defaultValue: "Chiffré deux fois : sur nos serveurs, pour la traduction et la recherche, et de bout en bout par les appareils compatibles, qui vérifient que chaque message arrive intact.",
                    bundle: .main)
         case .e2ee:
             String(localized: "conversation.encryption.mode.e2ee.description",

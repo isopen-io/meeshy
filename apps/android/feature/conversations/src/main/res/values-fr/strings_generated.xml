@@ -150,7 +150,7 @@
     <string name="encryption_create_header">Chiffrement</string>
     <string name="encryption_mode_e2ee_description">Seuls vos appareils et ceux des participants lisent les messages. La traduction se fait sur votre appareil.</string>
     <string name="encryption_mode_e2ee_label">Bout en bout</string>
-    <string name="encryption_mode_hybrid_description">Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt.</string>
+    <string name="encryption_mode_hybrid_description">Chiffré deux fois : sur nos serveurs, pour la traduction et la recherche, et de bout en bout par les appareils compatibles, qui vérifient que chaque message arrive intact.</string>
     <string name="encryption_mode_hybrid_label">Hybride</string>
     <string name="encryption_mode_server_description">Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.</string>
     <string name="encryption_mode_server_label">Serveur</string>

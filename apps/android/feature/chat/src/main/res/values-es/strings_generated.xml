@@ -178,7 +178,7 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">El cifrado de extremo a extremo nunca se desactiva: este chat individual sigue cifrado. Siempre podrás abrir al lado otra conversación, sin cifrado de extremo a extremo, con esta persona: las dos están en la lista, esta marcada con un candado.</string>
     <string name="encryption_fact_every_server_feature">Todas las funciones están disponibles: traducción automática, transcripción de audios, vista previa de notificaciones, búsqueda.</string>
     <string name="encryption_fact_group_sending_unavailable">En este grupo, la app aún no puede enviar mensajes cifrados.</string>
-    <string name="encryption_fact_hybrid_is_server_today">El modo híbrido cifra hoy como Servidor. El doble cifrado por tus dispositivos llegará pronto.</string>
+    <string name="encryption_fact_hybrid_is_server_today">El modo híbrido cifra dos veces: nuestros servidores guardan una copia cifrada para la traducción y la búsqueda, y los dispositivos compatibles también cifran cada mensaje de extremo a extremo para comprobar que llega intacto. No es cifrado de extremo a extremo: nuestros servidores aún pueden traducir tus mensajes.</string>
     <string name="encryption_fact_no_edit">Un mensaje enviado no se puede editar.</string>
     <string name="encryption_fact_no_forward">Un mensaje no se puede reenviar.</string>
     <string name="encryption_fact_no_notification_preview">Las notificaciones no muestran el texto del mensaje: el servidor no lo conoce.</string>
@@ -203,12 +203,12 @@
     <string name="encryption_legacy_title">Cifrado de extremo a extremo</string>
     <string name="encryption_mode_e2ee_description">Solo tus dispositivos y los de los participantes leen los mensajes. La traducción se hace en tu dispositivo.</string>
     <string name="encryption_mode_e2ee_label">Extremo a extremo</string>
-    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores, como Servidor. El doble cifrado por tus dispositivos llegará pronto.</string>
+    <string name="encryption_mode_hybrid_description">Cifrado dos veces: en nuestros servidores, para la traducción y la búsqueda, y de extremo a extremo por los dispositivos compatibles, que comprueban que cada mensaje llega intacto.</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan.</string>
     <string name="encryption_mode_server_label">Servidor</string>
     <string name="encryption_summary_end_to_end">Cifrada de extremo a extremo: solo los dispositivos de los participantes leen los mensajes</string>
-    <string name="encryption_summary_hybrid">Cifrada en nuestros servidores (modo híbrido)</string>
+    <string name="encryption_summary_hybrid">Cifrada dos veces: en nuestros servidores y por los dispositivos compatibles</string>
     <string name="encryption_summary_none">Conversación creada antes del cifrado sistemático: sus mensajes no están cifrados</string>
     <string name="encryption_summary_server">Cifrada en nuestros servidores</string>
     <string name="encryption_topic_absent">No disponible en este modo</string>

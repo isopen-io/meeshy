@@ -32021,6 +32021,100 @@
         }
       }
     },
+    "message.deviceLayer.mismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يطابق النص الوارد من خوادمنا النص الذي شفّره جهاز صاحب الرسالة: يُعرض الأخير."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der von unseren Servern erhaltene Text stimmte nicht mit dem vom Gerät des Verfassers verschlüsselten überein: Angezeigt wird Letzterer."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text received from our servers did not match the one encrypted by the author’s device: the latter is shown."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El texto recibido de nuestros servidores no coincidía con el cifrado por el dispositivo del autor: se muestra este último."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le texte reçu de nos serveurs ne correspondait pas à celui chiffré par l’appareil de l’auteur : c’est ce dernier qui est affiché."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il testo ricevuto dai nostri server non corrispondeva a quello crittografato dal dispositivo dell’autore: viene mostrato quest’ultimo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O texto recebido dos nossos servidores não correspondia ao criptografado pelo aparelho do autor: este último é exibido."
+          }
+        }
+      }
+    },
+    "message.deviceLayer.verified": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقّق منه جهازك: وصلت هذه الرسالة كما كتبها صاحبها تمامًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von deinem Gerät geprüft: Diese Nachricht ist genau so angekommen, wie sie geschrieben wurde."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verified by your device: this message arrived exactly as its author wrote it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificado por tu dispositivo: este mensaje llegó tal como su autor lo escribió."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifié par votre appareil : ce message est arrivé tel que son auteur l’a écrit."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificato dal tuo dispositivo: questo messaggio è arrivato esattamente come il suo autore l’ha scritto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificado pelo seu aparelho: esta mensagem chegou exatamente como o autor a escreveu."
+          }
+        }
+      }
+    },
     "message.piece.a11y.options": {
       "extractionState": "manual",
       "localizations": {
@@ -105604,43 +105698,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّر على خوادمنا مثل وضع الخادم. التشفير المزدوج عبر أجهزتك قادم قريبًا."
+            "value": "مشفّر مرتين: على خوادمنا من أجل الترجمة والبحث، ومن طرف إلى طرف عبر الأجهزة المتوافقة التي تتحقق من وصول كل رسالة سليمة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf unseren Servern verschlüsselt, wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald."
+            "value": "Doppelt verschlüsselt: auf unseren Servern, für Übersetzung und Suche, und Ende-zu-Ende durch kompatible Geräte, die prüfen, dass jede Nachricht unverändert ankommt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted on our servers, like Server. Double encryption by your devices is coming soon."
+            "value": "Encrypted twice: on our servers, for translation and search, and end to end by compatible devices, which check that every message arrives intact."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrado en nuestros servidores, como Servidor. El doble cifrado por tus dispositivos llegará pronto."
+            "value": "Cifrado dos veces: en nuestros servidores, para la traducción y la búsqueda, y de extremo a extremo por los dispositivos compatibles, que comprueban que cada mensaje llega intacto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt."
+            "value": "Chiffré deux fois : sur nos serveurs, pour la traduction et la recherche, et de bout en bout par les appareils compatibles, qui vérifient que chaque message arrive intact."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografato sui nostri server, come Server. La doppia crittografia dai tuoi dispositivi arriva presto."
+            "value": "Crittografato due volte: sui nostri server, per la traduzione e la ricerca, e end-to-end dai dispositivi compatibili, che verificano che ogni messaggio arrivi intatto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografado em nossos servidores, como Servidor. A criptografia dupla pelos seus aparelhos chega em breve."
+            "value": "Criptografado duas vezes: em nossos servidores, para tradução e busca, e de ponta a ponta pelos aparelhos compatíveis, que verificam se cada mensagem chega intacta."
           }
         }
       }
@@ -320164,43 +320258,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّرة على خوادمنا (الوضع الهجين)"
+            "value": "مشفّرة مرتين: على خوادمنا وعبر الأجهزة المتوافقة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf unseren Servern verschlüsselt (Hybridmodus)"
+            "value": "Doppelt verschlüsselt: auf unseren Servern und durch kompatible Geräte"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted on our servers (hybrid mode)"
+            "value": "Encrypted twice: on our servers and by compatible devices"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrada en nuestros servidores (modo híbrido)"
+            "value": "Cifrada dos veces: en nuestros servidores y por los dispositivos compatibles"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffrée sur nos serveurs (mode hybride)"
+            "value": "Chiffrée deux fois : sur nos serveurs et par les appareils compatibles"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografata sui nostri server (modalità ibrida)"
+            "value": "Crittografata due volte: sui nostri server e dai dispositivi compatibili"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografada em nossos servidores (modo híbrido)"
+            "value": "Criptografada duas vezes: em nossos servidores e pelos aparelhos compatíveis"
           }
         }
       }
@@ -320728,43 +320822,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يشفّر الوضع الهجين حاليًا مثل وضع الخادم. التشفير المزدوج عبر أجهزتك قادم قريبًا."
+            "value": "يشفّر الوضع الهجين مرتين: تحتفظ خوادمنا بنسخة مشفّرة من أجل الترجمة والبحث، وتشفّر الأجهزة المتوافقة أيضًا كل رسالة من طرف إلى طرف للتحقق من وصولها سليمة. هذا ليس تشفيرًا من طرف إلى طرف: لا تزال خوادمنا قادرة على ترجمة رسائلك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Hybridmodus verschlüsselt derzeit wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald."
+            "value": "Der Hybridmodus verschlüsselt doppelt: Unsere Server behalten eine verschlüsselte Kopie für Übersetzung und Suche, und kompatible Geräte verschlüsseln jede Nachricht zusätzlich Ende-zu-Ende, um zu prüfen, dass sie unverändert ankommt. Das ist keine Ende-zu-Ende-Verschlüsselung: Unsere Server können deine Nachrichten weiterhin übersetzen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybrid mode currently encrypts like Server. Double encryption by your devices is coming soon."
+            "value": "Hybrid mode encrypts twice: our servers keep an encrypted copy for translation and search, and compatible devices also encrypt each message end to end to check that it arrives intact. It is not end-to-end encryption: our servers can still translate your messages."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El modo híbrido cifra hoy como Servidor. El doble cifrado por tus dispositivos llegará pronto."
+            "value": "El modo híbrido cifra dos veces: nuestros servidores guardan una copia cifrada para la traducción y la búsqueda, y los dispositivos compatibles también cifran cada mensaje de extremo a extremo para comprobar que llega intacto. No es cifrado de extremo a extremo: nuestros servidores aún pueden traducir tus mensajes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le mode hybride chiffre aujourd’hui comme Serveur. Le double chiffrement par vos appareils arrive bientôt."
+            "value": "Le mode hybride chiffre deux fois : nos serveurs gardent une copie chiffrée pour la traduction et la recherche, et les appareils compatibles chiffrent aussi chaque message de bout en bout pour vérifier qu’il arrive intact. Ce n’est pas le bout en bout : nos serveurs peuvent toujours traduire vos messages."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La modalità ibrida oggi crittografa come Server. La doppia crittografia dai tuoi dispositivi arriva presto."
+            "value": "La modalità ibrida crittografa due volte: i nostri server conservano una copia crittografata per la traduzione e la ricerca, e i dispositivi compatibili crittografano anche ogni messaggio end-to-end per verificare che arrivi intatto. Non è la crittografia end-to-end: i nostri server possono ancora tradurre i tuoi messaggi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O modo híbrido hoje criptografa como Servidor. A criptografia dupla pelos seus aparelhos chega em breve."
+            "value": "O modo híbrido criptografa duas vezes: nossos servidores guardam uma cópia criptografada para tradução e busca, e os aparelhos compatíveis também criptografam cada mensagem de ponta a ponta para verificar se ela chega intacta. Não é criptografia de ponta a ponta: nossos servidores ainda podem traduzir suas mensagens."
           }
         }
       }
