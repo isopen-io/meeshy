@@ -15,9 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -203,8 +201,16 @@ internal fun SearchTabRow(
  */
 @Composable
 private fun TabIconWithCount(icon: ImageVector, tint: Color, count: Int) {
+    // La pastille vit DANS la boîte de l'icône (recette S8) : posée hors flux, elle mordait sur la
+    // première lettre du libellé. La boîte réserve sa portée à droite et sa hauteur en haut, l'icône
+    // reste centrée sur le libellé, et la pastille garde le coin haut-droit de l'icône.
     Box {
-        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.padding(top = BADGE_RISE, bottom = BADGE_RISE, end = BADGE_REACH).size(16.dp),
+        )
         if (count > 0) {
             val badgeSize = with(LocalDensity.current) { 9.dp.toSp() }
             Text(
@@ -218,8 +224,6 @@ private fun TabIconWithCount(icon: ImageVector, tint: Color, count: Int) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .wrapContentSize(unbounded = true)
-                    .offset(x = 10.dp, y = (-8).dp)
                     .testTag(TAB_COUNT_TAG)
                     .defaultMinSize(minWidth = 14.dp)
                     .clip(CircleShape)
@@ -229,6 +233,9 @@ private fun TabIconWithCount(icon: ImageVector, tint: Color, count: Int) {
         }
     }
 }
+
+private val BADGE_REACH = 10.dp
+private val BADGE_RISE = 8.dp
 
 internal const val TAB_COUNT_TAG = "global_search_tab_count"
 

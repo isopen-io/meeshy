@@ -6,6 +6,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryMediaObject
 import org.junit.Test
 import java.time.Instant
 
@@ -20,6 +22,7 @@ class PostSearchTest {
         author: ApiAuthor? = ApiAuthor(id = "u1", username = "ada", displayName = "Ada"),
         translations: Map<String, ApiPostTranslationEntry>? = mapOf("fr" to ApiPostTranslationEntry(text = "Bonjour")),
         media: List<ApiPostMedia>? = null,
+        storyEffects: StoryEffects? = null,
     ) = ApiPost(
         id = id,
         type = type,
@@ -30,6 +33,7 @@ class PostSearchTest {
         author = author,
         translations = translations,
         media = media,
+        storyEffects = storyEffects,
     )
 
     @Test
@@ -64,6 +68,31 @@ class PostSearchTest {
         assertThat(PostSearch.hitOf(post(type = null), emptyList(), now)).isNull()
         assertThat(PostSearch.hitOf(post(type = "STORY", expiresAt = "2026-11-02T11:59:59Z"), emptyList(), now)).isNull()
         assertThat(PostSearch.hitOf(post(author = null), emptyList(), now)).isNull()
+    }
+
+    private fun story(media: List<ApiPostMedia>? = null, effects: StoryEffects) =
+        post(type = "STORY", expiresAt = "2026-11-03T10:00:00Z", media = media, storyEffects = effects)
+
+    @Test
+    fun `a story shows the image of its scene, the background first, by its address or by the media it names`() {
+        val named = ApiPostMedia(id = "m1", fileUrl = "https://x/scene.jpg")
+        val background = StoryMediaObject(id = "o1", postMediaId = "m1", isBackground = true)
+        val sticker = StoryMediaObject(id = "o2", mediaURL = "https://x/sticker.jpg")
+
+        assertThat(PostSearch.hitOf(story(listOf(named), StoryEffects(mediaObjects = listOf(sticker, background))), emptyList(), now)?.thumbnailUrl)
+            .isEqualTo("https://x/scene.jpg")
+        assertThat(PostSearch.hitOf(story(effects = StoryEffects(mediaObjects = listOf(sticker))), emptyList(), now)?.thumbnailUrl)
+            .isEqualTo("https://x/sticker.jpg")
+    }
+
+    @Test
+    fun `a story made from a template shows its background image, never a colour nor a video`() {
+        val video = StoryMediaObject(id = "v1", mediaURL = "https://x/clip.mp4", mediaType = "video", isBackground = true)
+
+        assertThat(PostSearch.hitOf(story(effects = StoryEffects(background = "https://x/template.jpg")), emptyList(), now)?.thumbnailUrl)
+            .isEqualTo("https://x/template.jpg")
+        assertThat(PostSearch.hitOf(story(effects = StoryEffects(background = "#1E1B4B", mediaObjects = listOf(video))), emptyList(), now)?.thumbnailUrl)
+            .isNull()
     }
 
     @Test

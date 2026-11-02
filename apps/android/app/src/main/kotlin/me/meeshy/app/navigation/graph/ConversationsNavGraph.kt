@@ -38,6 +38,7 @@ import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.app.navigation.ProvideConversationMoods
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.navigateClosingSheet
 import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
@@ -108,16 +109,18 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         )
     }
     sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { _, dismiss ->
+        // #14671 — un post, un réel ou une story ouverts depuis les résultats y reviennent (même requête, même
+        // onglet) ; une conversation ouverte ferme la recherche, comme iOS.
         GlobalSearchScreen(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
-                navController.navigate(Routes.chat(conversationId))
+                navController.navigateClosingSheet(Routes.chat(conversationId))
             },
             onOpenMessage = { conversationId, messageId ->
-                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
+                navController.navigateClosingSheet(Routes.chat(conversationId, highlightMessageId = messageId))
             },
             onOpenPost = { destination ->
-                navController.navigate(
+                navController.navigateKeepingSheet(
                     when (destination) {
                         is PostSearchDestination.Post -> Routes.postDetail(destination.postId)
                         is PostSearchDestination.Reel -> Routes.reels(seed = destination.postId)

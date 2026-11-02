@@ -53,7 +53,8 @@ fun GlobalSearchScreen(
     val haptics = rememberMeeshyHaptics()
     var sheetUserId by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // #14671 — revenue d'un résultat, la recherche montre ses résultats, sans relever le clavier.
+    LaunchedEffect(Unit) { if (state.query.isBlank()) focusRequester.requestFocus() }
     LaunchedEffect(viewModel, userSheet) {
         viewModel.effects.collect { effect ->
             when (effect) {

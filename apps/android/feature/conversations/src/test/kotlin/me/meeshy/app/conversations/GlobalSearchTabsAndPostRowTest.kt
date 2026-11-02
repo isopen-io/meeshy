@@ -68,6 +68,19 @@ class GlobalSearchTabsAndPostRowTest {
         listOf("Messages", "Posts", "Utilisateurs").forEach { label -> assertThat(lineCountOf(label)).isEqualTo(1) }
     }
 
+    @Test
+    fun `chaque pastille reste au coin de son icone, sans recouvrir la premiere lettre du libelle`() {
+        showTabs()
+
+        val badges = compose.onAllNodesWithTag(TAB_COUNT_TAG, useUnmergedTree = true).fetchSemanticsNodes()
+            .sortedBy { it.boundsInRoot.left }
+        val labels = listOf("Messages", "Posts", "Utilisateurs")
+            .map { compose.onNodeWithText(it, useUnmergedTree = true).fetchSemanticsNode() }
+        badges.zip(labels).forEach { (badge, label) ->
+            assertThat(badge.boundsInRoot.right).isAtMost(label.boundsInRoot.left)
+        }
+    }
+
     private fun hit(thumbnail: String?) = PostSearchHit(
         postId = "p1",
         kind = PostType.POST,

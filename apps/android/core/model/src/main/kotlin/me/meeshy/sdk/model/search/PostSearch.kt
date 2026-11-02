@@ -5,6 +5,7 @@ import me.meeshy.sdk.lang.PrismTranslationResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.postType
 
@@ -60,7 +61,7 @@ public object PostSearch {
             authorName = author.displayName?.takeIf { it.isNotBlank() } ?: author.username.orEmpty(),
             authorAvatar = author.avatar,
             text = servedText(post, readerPrism),
-            thumbnailUrl = post.media.orEmpty().firstNotNullOfOrNull(::thumbnailOf),
+            thumbnailUrl = thumbnailOf(post),
             createdAtMillis = isoToEpochMillisOrNull(post.createdAt) ?: 0L,
         )
     }
@@ -68,9 +69,33 @@ public object PostSearch {
     public fun hitsOf(posts: List<ApiPost>, readerPrism: List<String>, nowMillis: Long): List<PostSearchHit> =
         posts.mapNotNull { hitOf(it, readerPrism, nowMillis) }.distinctBy { it.postId }
 
+    /**
+     * La vignette d'une publication (#14671) : l'aperçu de son premier média ; à défaut (une story, dont l'image
+     * vit sur la scène), l'image de son fond puis sa première image posée, par l'adresse que la scène porte ou
+     * par le média qu'elle désigne ; enfin un fond de modèle qui est une image. Jamais le fichier d'une vidéo.
+     */
+    private fun thumbnailOf(post: ApiPost): String? {
+        val media = post.media.orEmpty()
+        media.firstNotNullOfOrNull(::thumbnailOf)?.let { return it }
+        val effects = post.storyEffects ?: return null
+        return effects.mediaObjects.orEmpty()
+            .filter { it.mediaType.equals("image", ignoreCase = true) }
+            .sortedByDescending { it.isBackground }
+            .firstNotNullOfOrNull { placed -> sceneImageOf(placed, media) }
+            ?: effects.background?.takeIf(::isImageAddress)
+    }
+
     private fun thumbnailOf(media: ApiPostMedia): String? =
         media.thumbnailUrl?.takeIf { it.isNotBlank() }
             ?: media.fileUrl?.takeIf { media.mimeType.orEmpty().startsWith("image/") }
+
+    private fun sceneImageOf(placed: StoryMediaObject, media: List<ApiPostMedia>): String? =
+        placed.mediaURL?.takeIf { it.isNotBlank() }
+            ?: media.firstOrNull { it.id == placed.postMediaId }
+                ?.let { it.thumbnailUrl?.takeIf(String::isNotBlank) ?: it.fileUrl?.takeIf(String::isNotBlank) }
+
+    private fun isImageAddress(value: String): Boolean =
+        value.startsWith("https://") || value.startsWith("http://") || value.startsWith("/")
 
     private fun servedText(post: ApiPost, readerPrism: List<String>): String =
         PrismTranslationResolver.resolve(
