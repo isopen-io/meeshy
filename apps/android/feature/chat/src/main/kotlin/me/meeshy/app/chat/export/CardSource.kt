@@ -1,7 +1,10 @@
 package me.meeshy.app.chat.export
 
+import me.meeshy.sdk.model.card.PostCommentCardMedia
+import me.meeshy.sdk.model.card.PostCommentCardMediaKind
 import me.meeshy.sdk.model.card.PostCommentCardPart
 import me.meeshy.sdk.model.card.PostCommentCardSubject
+import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.ui.component.bubble.BubbleContent
 
 /**
@@ -37,12 +40,37 @@ internal class ComposedCardSource(override val key: String, private val card: Ca
     override fun stillAllowed(nowMillis: Long): Boolean = true
 }
 
-/** La carte d'un commentaire, composée par `PostCommentCardComposition`, telle que le moteur de carte la peint. */
-internal fun CardSubjects.of(card: PostCommentCardSubject): CardSubject = CardSubject(
-    quoted = card.quoted?.let(::partOf),
-    reply = partOf(card.reply),
-    sentAtMillis = card.sentAtMillis,
-    quotedAtMillis = card.quotedAtMillis,
-)
+/**
+ * La carte d'un commentaire, composée par `PostCommentCardComposition`, telle que le moteur de carte la peint : le visuel
+ * du support en HÉROS, les visuels des commentaires sous la réponse, chacun joint par la passerelle ([mediaBaseUrl]).
+ * Un son, ou une pièce dont le fichier ne se joint pas, ne se peint pas.
+ */
+internal fun CardSubjects.of(card: PostCommentCardSubject, mediaBaseUrl: String? = null): CardSubject {
+    val painted = card.media.mapNotNull { placed -> paintable(placed.media, mediaBaseUrl)?.let { placed.hero to it } }
+    return CardSubject(
+        quoted = card.quoted?.let(::partOf),
+        reply = partOf(card.reply),
+        sentAtMillis = card.sentAtMillis,
+        quotedAtMillis = card.quotedAtMillis,
+        media = painted.filterNot { it.first }.map { it.second },
+        hero = painted.firstOrNull { it.first }?.second,
+    )
+}
+
+private fun paintable(media: PostCommentCardMedia, mediaBaseUrl: String?): CardMedia? {
+    val kind = when (media.kind) {
+        PostCommentCardMediaKind.IMAGE -> CardMediaKind.IMAGE
+        PostCommentCardMediaKind.VIDEO -> CardMediaKind.VIDEO
+        PostCommentCardMediaKind.AUDIO -> return null
+    }
+    val url = reachable(media.url, mediaBaseUrl) ?: return null
+    return CardMedia(media.id, kind, url, reachable(media.posterUrl, mediaBaseUrl), CardMediaPicking.aspectOf(media.width, media.height))
+}
+
+/** Le fichier tel qu'on peut le charger ; un chemin que rien ne raccroche à un hôte n'en est pas un. */
+private fun reachable(url: String?, mediaBaseUrl: String?): String? = url?.let { resolveMediaUrl(it, mediaBaseUrl) }
+    ?.takeIf { resolved -> LOADABLE.any { resolved.startsWith(it, ignoreCase = true) } }
+
+private val LOADABLE = listOf("http", "file:", "content:")
 
 private fun partOf(part: PostCommentCardPart): CardPart = CardPart(author = part.author, text = part.text, handle = part.handle)

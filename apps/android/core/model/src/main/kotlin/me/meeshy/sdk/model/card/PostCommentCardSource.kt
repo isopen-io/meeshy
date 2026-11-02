@@ -17,8 +17,18 @@ public enum class PostCommentCardMediaKind {
     }
 }
 
-/** Un média PEIGNABLE (l'hôte a déjà écarté les pièces masquées), dans son ordre. */
-public data class PostCommentCardMedia(val id: String, val kind: PostCommentCardMediaKind)
+/**
+ * Un média PEIGNABLE (l'hôte a déjà écarté les pièces masquées), dans son ordre : [url] son fichier tel que la passerelle
+ * le sert (`null` : la carte le nomme sans le peindre), [posterUrl] l'image d'attente d'une vidéo, [width] × [height] ses côtés.
+ */
+public data class PostCommentCardMedia(
+    val id: String,
+    val kind: PostCommentCardMediaKind,
+    val url: String? = null,
+    val posterUrl: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+)
 
 public data class PostCommentCardAuthor(val id: String, val displayName: String? = null, val username: String? = null)
 

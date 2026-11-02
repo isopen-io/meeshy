@@ -44,7 +44,7 @@ object CardMediaPicking {
             bubble.files.any { it.isProtected && !it.isSealed && it.attachmentId !in sealed }
     }
 
-    private fun aspectOf(width: Int?, height: Int?): Double? =
+    internal fun aspectOf(width: Int?, height: Int?): Double? =
         if (width == null || height == null || width <= 0 || height <= 0) null else width.toDouble() / height
 }
 
