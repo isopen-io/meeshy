@@ -91,6 +91,11 @@ object CallSignalMapper {
      * lifetime (`ttl`, seconds), which re-arms the next refresh (#13773, iOS `CallTurnCredentials`). `null` on a
      * malformed frame.
      */
+    fun callError(rawJson: String): CallErrorSignal? = runCatching {
+        val payload = json.decodeFromString<CallErrorPayload>(rawJson)
+        CallErrorSignal(payload.code, payload.callId, payload.message)
+    }.getOrNull()
+
     fun iceServersRefreshed(rawJson: String): IceServersRefreshedPayload? = runCatching {
         json.decodeFromString<IceServersRefreshedPayload>(rawJson)
     }.getOrNull()
