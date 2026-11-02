@@ -257,6 +257,11 @@
             android:value="meeshy_messages_v2" />
 
         <!-- Bouton « Refuser » de la notification d'appel (CallStyle) -->
+        <!-- lot: routage-du-tap-notification -->
+        <receiver
+            android:name=".push.PushDismissReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".push.DeclineCallReceiver"
             android:exported="false" />

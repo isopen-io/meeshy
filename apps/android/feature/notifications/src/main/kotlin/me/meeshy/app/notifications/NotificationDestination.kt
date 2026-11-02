@@ -51,8 +51,11 @@ public sealed interface NotificationDestination {
  */
 public object NotificationDestinationResolver {
 
-    public fun resolve(notification: ApiNotification): NotificationDestination =
-        when (val destination = PushTapDestination.resolve(payloadOf(notification))) {
+    public fun resolve(notification: ApiNotification): NotificationDestination = resolve(payloadOf(notification))
+
+    /** Même table pour une charge de push : une notification de l'API et son push mènent au même écran. */
+    public fun resolve(payload: PushPayload): NotificationDestination =
+        when (val destination = PushTapDestination.resolve(payload)) {
             is PushTapDestination.Conversation -> NotificationDestination.Conversation(destination.conversationId)
             is PushTapDestination.Post -> NotificationDestination.Post(destination.postId)
             is PushTapDestination.Reel -> NotificationDestination.Reel(destination.postId)
