@@ -26,6 +26,10 @@ export const RELATION_FEATURES = [
   'relay.commentersOnMyPosts',
   'relay.myCommentsElsewhere',
   'dm.direct',
+  'dm.request',
+  'dm.readReceipts',
+  'dm.typing',
+  'presence.dnd',
   'audience.acquaintances',
   'audience.close',
   'audience.blood',
@@ -55,6 +59,10 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
   'relay.commentersOnMyPosts': 'CLOSE',
   'relay.myCommentsElsewhere': 'BLOOD',
   'dm.direct': 'ACQUAINTANCE',
+  'dm.request': 'PUBLIC',
+  'dm.readReceipts': 'ACQUAINTANCE',
+  'dm.typing': 'ACQUAINTANCE',
+  'presence.dnd': 'ACQUAINTANCE',
   'audience.acquaintances': 'ACQUAINTANCE',
   'audience.close': 'CLOSE',
   'audience.blood': 'BLOOD',
@@ -145,7 +153,29 @@ export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<
   'bring',
   'talkie',
   'acquaintance.auto',
+  'dm.request',
 ]);
+
+/**
+ * LE BOUCLIER DES MINEURS (RG-21, colonne « Règle mineurs » du classeur) — le
+ * niveau EFFECTIF qu'un viewer qui n'est PAS mineur déclaré doit atteindre pour
+ * s'adresser à un mineur DÉCLARÉ (`targetMinor === 'minor'`). Il RELÈVE le
+ * minimum de la matrice, ne l'abaisse jamais. Un âge inconnu n'est pas un
+ * mineur ici : sans date de naissance, personne ne serait joignable.
+ *
+ * - `dm.request` : une demande de message d'un inconnu vers un mineur est
+ *   CONTENUE (MSG-01, RG-21) tant qu'ils ne sont pas Connaissance — la porte
+ *   répond comme pour un majeur (aucune issue ne distingue un mineur), et la
+ *   demande est rangée filtrée, sans média, sans son, sans appel. Une
+ *   communauté commune n'y suffit pas : n'importe quel membre peut en fabriquer
+ *   une (audit #14107, B3).
+ *
+ * Le refus rend `reason: 'level'`, jamais `'minor'` : le dire apprendrait à un
+ * inconnu l'âge de la personne qu'il cherche à joindre.
+ */
+export const RELATION_MINOR_TARGET_MIN_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
+  'dm.request': 'ACQUAINTANCE',
+};
 
 /** Les seules features qu'un ADMIN/BIGBOSS lit sans lien (loi du 2026-08-25). */
 export const RELATION_PRESENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([

@@ -40,6 +40,11 @@ public enum class RelationFeature(
     public val isDirected: Boolean = false,
     /** Les seules features qu'ADMIN/BIGBOSS lit sans lien (`RELATION_PRESENCE_FEATURES`). */
     public val isPresence: Boolean = false,
+    /**
+     * Le bouclier des mineurs (`RELATION_MINOR_TARGET_MIN_LEVEL`, RG-21) : le niveau qu'un viewer non mineur doit atteindre
+     * face à un mineur DÉCLARÉ ; `null` = la feature n'est pas bouclée.
+     */
+    public val minorTargetMinimum: RelationLevel? = null,
 ) {
     PRESENCE_ONLINE("presence.online", RelationLevel.FRIEND, isPresence = true),
     PRESENCE_DETAILED("presence.detailed", RelationLevel.CLOSE, isPresence = true),
@@ -49,6 +54,10 @@ public enum class RelationFeature(
     RELAY_COMMENTERS_ON_MY_POSTS("relay.commentersOnMyPosts", RelationLevel.CLOSE),
     RELAY_MY_COMMENTS_ELSEWHERE("relay.myCommentsElsewhere", RelationLevel.BLOOD),
     DM_DIRECT("dm.direct", RelationLevel.ACQUAINTANCE),
+    DM_REQUEST("dm.request", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.ACQUAINTANCE),
+    DM_READ_RECEIPTS("dm.readReceipts", RelationLevel.ACQUAINTANCE),
+    DM_TYPING("dm.typing", RelationLevel.ACQUAINTANCE),
+    PRESENCE_DND("presence.dnd", RelationLevel.ACQUAINTANCE),
     AUDIENCE_ACQUAINTANCES("audience.acquaintances", RelationLevel.ACQUAINTANCE),
     AUDIENCE_CLOSE("audience.close", RelationLevel.CLOSE),
     AUDIENCE_BLOOD("audience.blood", RelationLevel.BLOOD),
@@ -61,6 +70,13 @@ public enum class RelationFeature(
     LOCATION_PROXIMITY("location.proximity", RelationLevel.BLOOD, requiresConsent = true),
     ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true),
     ;
+
+    /** Le minimum de la matrice, relevé par le bouclier quand un viewer non mineur s'adresse à un mineur déclaré — jamais abaissé. */
+    public fun minimumLevel(viewerMinor: AgeClass, targetMinor: AgeClass): RelationLevel {
+        val shield = minorTargetMinimum ?: return minimumLevel
+        if (targetMinor != AgeClass.MINOR || viewerMinor == AgeClass.MINOR) return minimumLevel
+        return maxOf(minimumLevel, shield)
+    }
 
     public companion object {
         /**
@@ -114,7 +130,7 @@ public data class RelationAccessInput(
  *
  * Le miroir ne décide d'AUCUN accès : le serveur reste l'autorité. Il sert à ne pas PROPOSER une action qu'il refusera.
  * Pur, sans état, sans I/O. Ordre des verdicts : blocage, identité absente, soi, rôle (présence seule), âge (Connaissance
- * automatique seule), niveau, consentement.
+ * automatique seule), niveau (relevé par le bouclier des mineurs, refus dit `level`), consentement.
  */
 public data class RelationAccess(
     val allowed: Boolean,
@@ -156,7 +172,7 @@ public data class RelationAccess(
                 return RelationAccess(false, level, RelationAccessReason.MINOR, false)
             }
 
-            val reached = level >= feature.minimumLevel
+            val reached = level >= feature.minimumLevel(input.viewerMinor, input.targetMinor)
             if (!reached || !feature.requiresConsent) {
                 return RelationAccess(reached, level, RelationAccessReason.LEVEL, false)
             }

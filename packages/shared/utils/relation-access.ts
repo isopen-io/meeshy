@@ -15,7 +15,10 @@
  * 3. soi-même ⇒ tout, sauf les actions adressées à un autre ;
  * 4. ADMIN/BIGBOSS ⇒ la PRÉSENCE seulement (loi du 2026-08-25), sans lien ;
  * 5. Connaissance automatique ⇒ refusée entre un mineur DÉCLARÉ et quiconque
- *    ne l'est pas (majeur ou âge inconnu : fail-closed) ;
+ *    ne l'est pas (majeur ou âge inconnu : fail-closed) ; face à un mineur
+ *    déclaré, le bouclier (`RELATION_MINOR_TARGET_MIN_LEVEL`, RG-21) relève le
+ *    minimum des features qu'il nomme, et son refus se dit `level` — jamais
+ *    `minor`, qui apprendrait l'âge de la cible ;
  * 6. sinon, le niveau effectif atteint-il le minimum de la feature — ou, pour
  *    une feature d'entourage, le cran choisi par le propriétaire du contenu
  *    (`ownerAudience`, #13929 ; `NOBODY` ferme) ?
@@ -42,6 +45,7 @@
 
 import {
   compareRelationLevel,
+  maxRelationLevel,
   minRelationLevel,
   parseRelationLevel,
   type RelationLevel,
@@ -53,6 +57,7 @@ import {
   RELATION_CONSENT_FEATURES,
   RELATION_DIRECTED_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
+  RELATION_MINOR_TARGET_MIN_LEVEL,
   RELATION_PRESENCE_FEATURES,
   RELATION_TUNABLE_FEATURES,
   isRelationAudienceChoice,
@@ -126,6 +131,22 @@ const minimumFor = (feature: RelationFeature, ownerAudience: unknown): RelationL
 const declaresMinorApart = (a: RelationAgeClass, b: RelationAgeClass): boolean =>
   (a === 'minor') !== (b === 'minor');
 
+/**
+ * Le bouclier des mineurs (`RELATION_MINOR_TARGET_MIN_LEVEL`) : un viewer qui
+ * n'est pas mineur déclaré, face à un mineur déclaré, doit atteindre le niveau
+ * de la table. Il relève le minimum, ne l'abaisse jamais, et ne rouvre jamais
+ * une feature fermée par son propriétaire (`NOBODY`).
+ */
+const shieldedMinimum = (
+  feature: RelationFeature,
+  minimum: RelationLevel | null,
+  ages: { readonly viewerMinor: RelationAgeClass; readonly targetMinor: RelationAgeClass },
+): RelationLevel | null => {
+  const shield = RELATION_MINOR_TARGET_MIN_LEVEL[feature];
+  if (minimum === null || !shield || ages.targetMinor !== 'minor' || ages.viewerMinor === 'minor') return minimum;
+  return maxRelationLevel(minimum, shield);
+};
+
 export const resolveRelationAccess = (input: RelationAccessInput): RelationAccess => {
   const level = effectiveRelationLevel(input);
   const { feature } = input;
@@ -146,9 +167,25 @@ export const resolveRelationAccess = (input: RelationAccessInput): RelationAcces
     return verdict(false, level, 'minor');
   }
 
-  const minimum = minimumFor(feature, input.ownerAudience);
+  const minimum = shieldedMinimum(feature, minimumFor(feature, input.ownerAudience), input);
   const reached = minimum !== null && compareRelationLevel(level, minimum) >= 0;
   if (!reached || !RELATION_CONSENT_FEATURES.has(feature)) return verdict(reached, level, 'level');
 
   return input.consent === 'granted' ? verdict(true, level, 'level', true) : verdict(false, level, 'consent', true);
+};
+
+/**
+ * Ce que l'orchestrateur doit LIRE pour que la loi juge `feature` juste : l'âge
+ * déclaré quand la Connaissance automatique ou le bouclier des mineurs la vise,
+ * la communauté quand un plancher possible de la feature (matrice, bouclier,
+ * réglage d'entourage) s'atteint par elle. Ne rien lire d'autre est permis :
+ * une lecture épargnée ne change aucun verdict.
+ */
+export const relationAccessReads = (feature: RelationFeature): { readonly age: boolean; readonly community: boolean } => {
+  const shield = RELATION_MINOR_TARGET_MIN_LEVEL[feature];
+  const floors = [RELATION_FEATURE_MIN_LEVEL[feature], ...(shield ? [shield] : [])];
+  return {
+    age: feature === 'acquaintance.auto' || Boolean(shield),
+    community: RELATION_TUNABLE_FEATURES.has(feature) || floors.some((floor) => compareRelationLevel(floor, 'COMMUNITY') <= 0),
+  };
 };
