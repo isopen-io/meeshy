@@ -30,6 +30,8 @@ export const RELATION_FEATURES = [
   'dm.readReceipts',
   'dm.typing',
   'presence.dnd',
+  'call.ring',
+  'views.identity',
   'audience.acquaintances',
   'audience.close',
   'audience.blood',
@@ -63,6 +65,8 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
   'dm.readReceipts': 'ACQUAINTANCE',
   'dm.typing': 'ACQUAINTANCE',
   'presence.dnd': 'ACQUAINTANCE',
+  'call.ring': 'PUBLIC',
+  'views.identity': 'COMMUNITY',
   'audience.acquaintances': 'ACQUAINTANCE',
   'audience.close': 'CLOSE',
   'audience.blood': 'BLOOD',
@@ -125,6 +129,7 @@ export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<
   'talkie',
   'acquaintance.auto',
   'dm.request',
+  'call.ring',
 ]);
 
 /**
@@ -136,12 +141,15 @@ export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<
  *
  * - `dm.request` : un message privé du Public vers un mineur est BLOQUÉ (MSG-01,
  *   RG-21) — dès la Communauté, il passe par la boîte de demandes.
+ * - `call.ring` : pas d'appel d'un majeur qui n'est pas Ami vers un mineur
+ *   (CAL-01/02, colonne « Règle mineurs ») — l'appel ne sonne pas.
  *
  * Le refus rend `reason: 'level'`, jamais `'minor'` : le dire apprendrait à un
  * inconnu l'âge de la personne qu'il cherche à joindre.
  */
 export const RELATION_MINOR_TARGET_MIN_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
   'dm.request': 'COMMUNITY',
+  'call.ring': 'FRIEND',
 };
 
 /** Les seules features qu'un ADMIN/BIGBOSS lit sans lien (loi du 2026-08-25). */

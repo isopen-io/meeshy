@@ -3,6 +3,9 @@
  * droit de faire SONNER qui.
  *
  * Un destinataire qui a coupé le réglage ne sonne que pour ses amis acceptés.
+ * Un mineur DÉCLARÉ ne sonne pour un majeur que s'il est son Ami (CAL-01/02,
+ * bouclier `call.ring`, #14108), quel que soit son réglage — même code de refus
+ * qu'un non-contact : son âge ne se révèle pas.
  * La doctrine d'échec est l'INVERSE de `socketio/call-recipients.ts` : ici on
  * garde une porte, donc une lecture qui échoue ne fait sonner personne de ceux
  * qu'elle devait garder — fail-closed.
@@ -12,6 +15,7 @@ import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import { PRIVACY_PREFERENCES_DEFAULTS } from '../../config/user-preferences-defaults';
 import { logger } from '../../utils/logger';
 import { amisAcceptesParmi } from '../friendship';
+import { minorShieldedAmong } from '../relations/pairAccess';
 import { loadPrivacyPreferencesCached } from '../preferences/privacy-cache';
 
 export type CallRingPartition = {
@@ -32,8 +36,11 @@ export async function partitionRingableCallees(
   try {
     const stored = await loadPrivacyPreferencesCached(prisma, callees);
     const guarded = callees.filter((id) => !opensToEveryone(stored.get(id)));
-    const friends = await amisAcceptesParmi(prisma, input.callerUserId, guarded);
-    const refused = guarded.filter((id) => !friends.has(id));
+    const [friends, shielded] = await Promise.all([
+      amisAcceptesParmi(prisma, input.callerUserId, guarded),
+      minorShieldedAmong(prisma, { feature: 'call.ring', senderId: input.callerUserId, recipientIds: callees }),
+    ]);
+    const refused = callees.filter((id) => shielded.has(id) || (guarded.includes(id) && !friends.has(id)));
     return { ringable: callees.filter((id) => !refused.includes(id)), refused };
   } catch (error) {
     logger.error('Call ring policy resolution failed — refusing every callee (fail-closed)', {

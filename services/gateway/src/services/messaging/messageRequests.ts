@@ -31,7 +31,7 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { isBlockedBetween } from '../../utils/blocking';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
-import { pairAccess, pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
+import { minorShieldedAmong, pairAccess, type PairAccessDb } from '../relations/pairAccess';
 import { recordLevel, type UserRelationDb } from '../relations/userRelationWriter';
 
 export type MessageRequestDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'conversation'>;
@@ -140,13 +140,7 @@ export async function shieldedRecipients(
   recipientIds: readonly string[],
   now: Date = new Date(),
 ): Promise<ReadonlySet<string>> {
-  const ids = [...new Set(recipientIds)].filter((id) => id && id !== senderId);
-  if (ids.length === 0) return new Set();
-  const declared = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, birthDate: true } });
-  const minors = declared.filter((u) => declaredAgeClass(u.birthDate ?? null, now) === 'minor').map((u) => u.id);
-  if (minors.length === 0) return new Set();
-  const verdicts = await pairAccessAmong(prisma, { feature: 'dm.request', subjectId: senderId, otherIds: minors, subjectIs: 'viewer', now });
-  return new Set([...verdicts].filter(([, verdict]) => !verdict.allowed && verdict.reason === 'level').map(([id]) => id));
+  return minorShieldedAmong(prisma, { feature: 'dm.request', senderId, recipientIds, now });
 }
 
 /** Les colonnes que la ligne `Participant` du DESTINATAIRE reçoit à l'ouverture. */
