@@ -19,6 +19,7 @@ import type { AppPreferences } from '@/lib/api/app-preferences';
 import type { DeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { isDeviceTranslationCatalogLoaded, loadDeviceTranslationCatalog, translateDeviceTranslation } from '@/lib/i18n-device-translation-catalog';
+import { isLicencesCatalogLoaded, loadLicencesCatalog, translateLicences } from '@/lib/i18n-licences-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { appInstitutionalHref } from '@/lib/institutional-href';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -61,6 +62,8 @@ export const SECURITY_PANEL = 'securite';
 export const E2EE_DEVICES_PANEL = 'appareils-chiffres';
 /** Le volet des packs (#10149) — `/settings?volet=packs`, sans route neuve. */
 export const PACKS_PANEL = 'packs';
+/** Le volet des licences (#14628) — `/settings?volet=licences`, chargé à la demande. */
+export const LICENCES_PANEL = 'licences';
 
 type IconSpec = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: SettingsGlyphName };
 
@@ -755,11 +758,43 @@ function DocumentRow({ href, label, glyph }: { readonly href: string; readonly l
   );
 }
 
+/* LES LICENCES (#14628) — l'AGPL-3.0 de libsignal demande que l'app dise sa
+   licence et offre sa source : la ligne mène au volet `?volet=licences`. Son
+   libellé vit dans le catalogue paresseux de l'écran (le catalogue d'interface
+   est à son plafond) : la ligne paraît quand il est chargé. */
+function LicencesRow({ language }: { readonly language: InterfaceLanguage }) {
+  const [, setLoadedLanguage] = useState<InterfaceLanguage | null>(null);
+  useEffect(() => {
+    if (isLicencesCatalogLoaded(language)) return undefined;
+    let live = true;
+    loadLicencesCatalog(language).then(
+      () => {
+        if (live) setLoadedLanguage(language);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [language]);
+  if (!isLicencesCatalogLoaded(language)) return null;
+  return (
+    <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: LICENCES_PANEL }} data-settings-licences className={ROW_CLASS} style={ROW_STYLE}>
+      <RowIcon tint="var(--ios-indigo-400)">
+        <GlyphSvg glyph={SETTINGS_GLYPHS.fileText} size={15} />
+      </RowIcon>
+      <RowText label={translateLicences(language, 'licences.row')} />
+      <Chevron />
+    </Link>
+  );
+}
+
 export function AboutSection({ language, version }: { readonly language: InterfaceLanguage; readonly version: string }) {
   return (
     <GroupedSection id="settings-about" title={upper(language, 'settings.section.about')} icon={SECTION_ICON({ set: 'ecran', name: 'info' })}>
       <DocumentRow href={appInstitutionalHref('terms')} label={translate(language, 'settings.terms')} glyph="fileText" />
       <DocumentRow href={appInstitutionalHref('privacy')} label={translate(language, 'settings.privacy_policy')} glyph="handPalm" />
+      <LicencesRow language={language} />
       <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
         <RowIcon tint="var(--color-warning)">
           <GlyphSvg glyph={SETTINGS_GLYPHS.sparkle} size={15} />

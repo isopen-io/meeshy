@@ -27,7 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +43,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.licenses.GloryFrameFontCredits
+import me.meeshy.sdk.model.licenses.LicenseNotice
+import me.meeshy.sdk.model.licenses.MeeshySourceOffer
 import me.meeshy.sdk.model.licenses.OpenSourceLicense
 import me.meeshy.sdk.model.licenses.OpenSourceLicenseCatalog
 import me.meeshy.sdk.model.licenses.OpenSourceLicenseGroup
@@ -61,8 +66,11 @@ import me.meeshy.ui.component.chrome.leadingNavigationLabel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LicensesScreen(onBack: () -> Unit) {
+fun LicensesScreen(onBack: () -> Unit, sourceCommit: String? = null) {
     val groups = remember { OpenSourceLicenseCatalog.groups() }
+    val offer = remember(sourceCommit) { MeeshySourceOffer.of(sourceCommit) }
+    val libsignalLinked = remember { isLibsignalLinked() }
+    var openedNotice by remember { mutableStateOf<LicenseNotice?>(null) }
 
     MeeshyBackground {
         Scaffold(
@@ -95,6 +103,12 @@ fun LicensesScreen(onBack: () -> Unit) {
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {
+                MeeshyLicenseSection(offer = offer, libsignalLinked = libsignalLinked, onOpenNotice = { openedNotice = it })
+
+                if (libsignalLinked) {
+                    LibsignalNoticesSection(onOpenNotice = { openedNotice = it })
+                }
+
                 Text(
                     text = stringResource(R.string.licenses_intro),
                     style = MaterialTheme.typography.bodyMedium,
@@ -111,6 +125,8 @@ fun LicensesScreen(onBack: () -> Unit) {
             }
         }
     }
+
+    openedNotice?.let { notice -> LicenseTextDialog(notice = notice, onDismiss = { openedNotice = null }) }
 }
 
 @Composable

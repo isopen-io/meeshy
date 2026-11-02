@@ -93,6 +93,17 @@
     <string name="delete_account_warning_conversations">Todas tus conversaciones</string>
     <string name="delete_account_warning_messages">Todos tus mensajes</string>
     <string name="delete_account_warning_preferences">Tus preferencias y ajustes</string>
+    <string name="licenses_agpl_title">Texto de la licencia AGPL-3.0</string>
+    <string name="licenses_libsignal_body">libsignal y las bibliotecas que incluye, con el texto de sus licencias.</string>
+    <string name="licenses_libsignal_title">Avisos de libsignal</string>
+    <string name="licenses_meeshy_body">El código fuente de Meeshy se publica bajo la licencia MIT. Esta aplicación incluye libsignal (Signal Messenger), publicado bajo la licencia GNU AGPL-3.0: la aplicación distribuida es, por tanto, una obra bajo la licencia AGPL-3.0 únicamente.</string>
+    <string name="licenses_meeshy_body_mit">El código fuente de Meeshy se publica bajo la licencia MIT.</string>
+    <string name="licenses_meeshy_title">Licencia de Meeshy</string>
+    <string name="licenses_source_body">El código fuente de esta versión, scripts de compilación incluidos, está disponible de forma gratuita.</string>
+    <string name="licenses_source_commit">Revisión %1$s</string>
+    <string name="licenses_source_open">Abrir el código fuente</string>
+    <string name="licenses_source_title">Código fuente</string>
+    <string name="licenses_text_hint">Muestra el texto completo de la licencia</string>
     <string name="licenses_title">Licencias de código abierto</string>
     <string name="licenses_type_other">Otro</string>
     <string name="location_map_style_hybrid">Híbrido</string>
