@@ -53,6 +53,7 @@ import {
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitArgs, ServerEmitIO } from '../../socketio/serverEmit';
 import { TALKIE_NOT_ALLOWED, TALKIE_UNAVAILABLE, type TalkieRefusal, type TalkieVerdict } from './talkieGate';
+import { guardedTimeout } from '../../utils/guarded-timer';
 
 /** La marge laissée au dernier fragment, en transit quand la minuterie tombe. */
 const DURATION_GRACE_MS = 1_000;
@@ -147,7 +148,12 @@ export class TalkieRelay {
       rejudging: false,
       timer: null,
     };
-    session.timer = setTimeout(() => this.close(session.talkieId, 'limit'), TALKIE_MAX_DURATION_MS + DURATION_GRACE_MS);
+    session.timer = guardedTimeout({
+      name: 'talkie-max-duration',
+      run: () => this.close(session.talkieId, 'limit'),
+      afterMs: TALKIE_MAX_DURATION_MS + DURATION_GRACE_MS,
+      logger: { error: (message, error) => this.deps.report(message, error) },
+    });
     session.timer.unref?.();
     this.sessions.set(session.talkieId, session);
     this.bySocket.set(socketId, session.talkieId);
