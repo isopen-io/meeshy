@@ -23,9 +23,11 @@ import type {
   BinaryFrameInfo,
   CacheForgetRequest
 } from './types';
+import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withTimeout } from '../../utils/with-timeout';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { isServerTranslatableLanguage } from '@meeshy/shared/utils/server-translatable-language';
 import { guardedTimeout } from '../../utils/guarded-timer';
 // Logger dédié pour ZmqRequestSender
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
@@ -38,6 +40,21 @@ const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
  */
 const canonicalLanguage = (language: string): string =>
   normalizeLanguageCode(language) ?? language.toLowerCase();
+
+/**
+ * Rien de servable : la source ou toutes les cibles n'ont pas de code
+ * NLLB-200 (#3659). Rien n'est parti, aucun deadman n'est armé — l'appelant
+ * sert l'original (règle 1 du Prisme), jamais au bout de cinq relances.
+ */
+export class UntranslatableRequestError extends Error {
+  constructor(readonly sourceLanguage: string, readonly targetLanguages: readonly string[]) {
+    super(`no server-translatable pair: ${sourceLanguage} → [${targetLanguages.join(', ')}]`);
+    this.name = 'UntranslatableRequestError';
+  }
+}
+
+const translatableSource = (source: string | undefined): boolean =>
+  !source || source === 'auto' || isServerTranslatableLanguage(canonicalLanguage(source));
 
 
 export interface RequestSenderStats {
@@ -94,6 +111,12 @@ export class ZmqRequestSender {
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
+    const servableTargetLanguages = translatableSource(request.sourceLanguage)
+      ? uniqueTargetLanguages.filter(isServerTranslatableLanguage)
+      : [];
+    if (servableTargetLanguages.length === 0) {
+      throw new UntranslatableRequestError(request.sourceLanguage, uniqueTargetLanguages);
+    }
 
     // Préparer le message de commande
     const requestMessage = {
@@ -101,11 +124,16 @@ export class ZmqRequestSender {
       taskId: taskId,
       messageId: request.messageId,
       text: request.text,
-      sourceLanguage: request.sourceLanguage,
-      targetLanguages: uniqueTargetLanguages,
+      // La forme que `translatableSource` a jugée : le translator la compare
+      // brute à `LANGUAGE_MAPPINGS`, où `fr-FR` refuserait une paire servable.
+      sourceLanguage: request.sourceLanguage ? canonicalLanguage(request.sourceLanguage) : request.sourceLanguage,
+      targetLanguages: servableTargetLanguages,
       conversationId: request.conversationId,
       modelType: request.modelType || 'basic',
       ...(request.atRest === true ? { atRest: true } : {}),
+      // Sans cette annonce, le translator se tait sur une langue refusée : une
+      // passerelle qui ne lit pas `errorCode` compterait le refus à son disjoncteur.
+      acceptsErrorCodes: [UNSUPPORTED_LANGUAGE_ERROR_CODE],
       timestamp: Date.now()
     };
 
@@ -123,12 +151,12 @@ export class ZmqRequestSender {
 
     // Stocker la requête en cours pour traçabilité, avec le jeu des langues
     // qu'elle attend encore (un renvoi avec `existingTaskId` REMPLACE ce jeu :
-    // il ne porte plus que les langues encore manquantes). `uniqueTargetLanguages`
+    // il ne porte plus que les langues encore manquantes). `servableTargetLanguages`
     // est déjà canonique (ci-dessus) — plus besoin de re-canonicaliser ici.
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages)
+      pendingLanguages: new Set(servableTargetLanguages)
     });
 
     this.stats.translationRequests++;
@@ -138,7 +166,7 @@ export class ZmqRequestSender {
       messageId: request.messageId,
       conversationId: request.conversationId,
       sourceLanguage: request.sourceLanguage,
-      targetLanguages: uniqueTargetLanguages,
+      targetLanguages: servableTargetLanguages,
       modelType: requestMessage.modelType,
       textLength: request.text.length
     });

@@ -3,6 +3,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 import { contentExitLaw } from '@meeshy/shared/utils/content-exit-law';
 import { SUPPORTED_LANGUAGE_CODES } from '@meeshy/shared/utils/language-codes';
 import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { isServerTranslatableLanguage } from '@meeshy/shared/utils/server-translatable-language';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, applyHistoryFloor, loadHistoryFloorsFor } from '../historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../personalHistoryFilter';
@@ -42,11 +43,18 @@ const COOLDOWN_MAX_ENTRIES = 1000;
 
 const CATALOG = new Set<string>(SUPPORTED_LANGUAGE_CODES.map((code) => code.toLowerCase()));
 
-/** Une langue du CATALOGUE, canonique — ou rien : un code inconnu ne se rattrape pas. */
+/**
+ * Une langue du CATALOGUE que le translator sait servir, canonique — ou rien :
+ * un code inconnu, ou offert sans code NLLB-200 (`byv`… #3659), ne se rattrape pas.
+ */
 const catalogLanguage = (raw: string | null | undefined): string | null => {
   const code = normalizeLanguageCode(raw);
-  return code && CATALOG.has(code) ? code : null;
+  return code && CATALOG.has(code) && isServerTranslatableLanguage(code) ? code : null;
 };
+
+/** Un message écrit dans une langue que NLLB-200 ne lit pas ne se traduit vers rien. */
+const translatableSource = (originalLanguage: string | null | undefined): boolean =>
+  !originalLanguage || originalLanguage === 'auto' || isServerTranslatableLanguage(normalizeLanguageForDedup(originalLanguage));
 
 const { EPHEMERAL, BLURRED, VIEW_ONCE, EPHEMERAL_AFTER_READ } = MESSAGE_EFFECT_FLAGS;
 const PROTECTION_FLAGS = EPHEMERAL | BLURRED | VIEW_ONCE | EPHEMERAL_AFTER_READ;
@@ -223,7 +231,9 @@ export async function backfillHistoryForArrival(
     select: CANDIDATE_SELECT,
   })) as unknown as readonly Candidate[];
 
-  const due = recent.filter((message) => mayReachNewReader(message) && lacksLanguage(message, language));
+  const due = recent.filter(
+    (message) => mayReachNewReader(message) && translatableSource(message.originalLanguage) && lacksLanguage(message, language)
+  );
 
   const dispatched: string[] = [];
   for (const message of due) {

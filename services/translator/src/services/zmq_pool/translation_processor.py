@@ -16,6 +16,7 @@ from typing import List, Callable, Optional, Any
 # Import local
 from ..zmq_models import TranslationTask
 from services.task_privacy import task_scope
+from config.settings import LANGUAGE_MAPPINGS
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,50 @@ def _is_at_rest(task: Any) -> bool:
 def _structure_kwargs(task: Any) -> dict:
     """Le choix de cache transmis au service ML : absent pour un texte ordinaire (signature d'avant)."""
     return {'use_cache': False} if _is_at_rest(task) else {}
+
+
+UNSUPPORTED_LANGUAGE = 'UNSUPPORTED_LANGUAGE'
+
+
+def unsupported_language(source_language: str, target_language: str) -> Optional[str]:
+    """La langue de la paire que NLLB-200 ne connaît pas, ou None.
+
+    Juge contre `LANGUAGE_MAPPINGS`, la table même que lit `TranslatorEngine`
+    (#3659) : `byv`, `bas`, `dua`, `ewo`, `fan`, `ksf`, `nnh` sont offertes au
+    produit et jamais traduites. `auto` est laissé à la détection.
+    """
+    if source_language != 'auto' and source_language not in LANGUAGE_MAPPINGS:
+        return source_language
+    if target_language not in LANGUAGE_MAPPINGS:
+        return target_language
+    return None
+
+
+def refusal_is_understood(task: Any) -> bool:
+    """La passerelle a-t-elle annoncé lire `UNSUPPORTED_LANGUAGE` ?
+
+    Une passerelle plus ancienne compterait le refus comme une erreur ordinaire
+    — huit en 30 s ouvrent son disjoncteur et coupent TOUTES les traductions —
+    et, sur `[en, byv]`, solderait la tâche entière, deadman `en` compris. Elle
+    garde donc le sort d'avant ce lot : le silence.
+    """
+    return UNSUPPORTED_LANGUAGE in getattr(task, 'accepted_error_codes', ())
+
+
+def _create_unsupported_result(task: Any, target_language: str, language: str) -> dict:
+    """Réponse TERMINALE d'une paire intraduisible : l'original, l'erreur, son code.
+
+    Sans elle, l'échec ressemblait à un modèle pas encore chargé, la publication
+    le jetait comme tout résultat en `error`, et la passerelle relançait cinq
+    fois un travail qui ne pourra jamais se faire (incident 2026-11-01).
+    """
+    return {
+        **_create_error_result(
+            task, target_language, f"Langue '{language}' sans code NLLB-200 (#3659)"
+        ),
+        'errorCode': UNSUPPORTED_LANGUAGE,
+        'conversationId': task.conversation_id,
+    }
 
 
 def inference_timeout_for(text_length: int) -> float:
@@ -86,6 +131,13 @@ async def process_single_translation(
         # CHAQUE langue pendant l'attente des autres — un texte long
         # multi-langues expirait alors toutes ses langues d'un coup.
         for target_language in task.target_languages:
+            refused = unsupported_language(task.source_language, target_language)
+            if refused is not None:
+                if refusal_is_understood(task):
+                    await publish_func(
+                        task.task_id, _create_unsupported_result(task, target_language, refused), target_language
+                    )
+                continue
             try:
                 with task_scope(_is_at_rest(task), task.message_id):
                     result = await _translate_single_language(
@@ -161,6 +213,13 @@ async def process_batch_translation(
 
         # Pour chaque langue cible
         for target_lang in target_langs:
+            refused = unsupported_language(source_lang, target_lang)
+            if refused is not None:
+                for task in filter(refusal_is_understood, tasks):
+                    await publish_func(
+                        task.task_id, _create_unsupported_result(task, target_lang, refused), target_lang
+                    )
+                continue
             try:
                 # Utiliser le batch translation du service ML — budget = somme
                 # des budgets individuels (proportionnels à la longueur).

@@ -170,7 +170,7 @@ describe('MessageTranslationService — source language sent to the translator',
     expect(requests[0].sourceLanguage).toBe('auto');
   });
 
-  it('strips the region of an out-of-catalog region-tagged source (fil-PH → fil)', async () => {
+  it('sends nothing for an out-of-catalog region-tagged source (fil-PH): NLLB-200 cannot read it (#14336)', async () => {
     // Filipino is not in the catalogue, so `normalizeLanguageCode` returns
     // undefined and the dedup fallback decides. The inline
     // `?? originalLanguage.toLowerCase()` sent `'fil-ph'` — which the
@@ -194,11 +194,14 @@ describe('MessageTranslationService — source language sent to the translator',
       'en',
     );
 
-    expect(requests).toHaveLength(1);
-    expect(requests[0].sourceLanguage).toBe('fil');
+    // Since #3659 the translator raises on a code absent from LANGUAGE_MAPPINGS
+    // instead of falling back to English, and `fil` is absent (`tl` is the
+    // mapped Tagalog code). Pushing it bought five retries and a
+    // `translation:failed` (#14336): the gateway now serves the original.
+    expect(requests).toHaveLength(0);
   });
 
-  it('filters a target that equals a region-tagged out-of-catalog source (no self-translation)', () => {
+  it('requests nothing — not even a self-translation — from a region-tagged out-of-catalog source', () => {
     // `_resolveTargetLanguages` removes the source language to avoid an NLLB
     // self-translation (`fil → fil`), which would store a corrupted copy of
     // the user's own message. The comparison must canonicalise BOTH sides with
@@ -214,7 +217,12 @@ describe('MessageTranslationService — source language sent to the translator',
       ): string[];
     })._resolveTargetLanguages('fil-PH', ['fil', 'en']);
 
-    expect(resolved).toEqual(['en']);
+    // `fil` has no NLLB-200 code: neither `fil → fil` nor `fil → en` can be
+    // served (#14336). The region-tagged in-catalog case is kept by `pt-BR`.
+    expect(resolved).toEqual([]);
+    expect((svc as unknown as {
+      _resolveTargetLanguages(originalLanguage: string, targetLanguages: readonly string[]): string[];
+    })._resolveTargetLanguages('pt-BR', ['pt', 'en'])).toEqual(['en']);
   });
 
   it('leaves an already-canonical source language untouched (fr → fr)', async () => {

@@ -11,7 +11,7 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient, TranslationRequest, TranslationResult } from '../zmq-translation';
-import { isMessageTranslationTarget, translationTargetId } from '../zmq-translation/utils/zmq-helpers';
+import { isMessageTranslationTarget } from '../zmq-translation/utils/zmq-helpers';
 import { ZMQSingleton } from '../ZmqSingleton';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { TranslationCache } from './TranslationCache';
@@ -32,12 +32,14 @@ import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { resolveServerTargetLanguages } from './serverTargetLanguages';
+import { translateTextDirectly } from './directTextTranslation';
 import { attachmentAudioRichView, type AttachmentAudioRichView } from '../audio/attachmentAudioRichView';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 import { diffTranslationTargets } from '../../utils/translation-targets';
 import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type VoiceCloneParameters } from '../../types/translation.types';
 import { isEmojiOnly } from '../../utils/emoji-only';
-import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';
+import { guardedInterval } from '../../utils/guarded-timer';
 import { implicitConversationRegime } from '../conversations/creationRegime';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
@@ -454,37 +456,12 @@ export class MessageTranslationService extends EventEmitter {
 
   // ==========================================================
 
-  /**
-   * Résout les langues cibles effectives d'un message : chaque code est ramené à
-   * sa forme canonique via le SSOT `normalizeLanguageForDedup` (le chemin client
-   * passe le code brut — `'EN'`, `'en-US'`), puis la langue source est retirée
-   * pour éviter une auto-traduction NLLB (`fr → fr`) qui altère le texte et stocke
-   * une fausse traduction du message de l'utilisateur.
-   *
-   * La comparaison se fait sur les formes normalisées : `originalLanguage` est
-   * persisté verbatim (les clients envoient `Locale.current`, ex. `'fr-FR'`, `'FR'`)
-   * tandis que les cibles issues de `_extractConversationLanguages` sont déjà
-   * normalisées lowercase — un `===` brut manquait `fr-FR`/`FR` vs `fr`. La SSOT
-   * `normalizeLanguageForDedup` strippe la région des DEUX côtés, même hors
-   * catalogue (`'fil-PH'`/`'fil'` → `'fil'`), sans quoi un tel target échappait au
-   * filtre et un `fil → fil` était demandé. `'auto'` n'est jamais filtré.
-   */
+  /** Cibles effectives d'un message — voir {@link resolveServerTargetLanguages}. */
   private _resolveTargetLanguages(
     originalLanguage: string | null | undefined,
     targetLanguages: readonly string[]
   ): string[] {
-    const source =
-      originalLanguage && originalLanguage !== 'auto'
-        ? normalizeLanguageForDedup(originalLanguage)
-        : undefined;
-
-    const result: string[] = [];
-    for (const raw of targetLanguages) {
-      const code = normalizeLanguageForDedup(raw);
-      if (code === source) continue;
-      result.push(code);
-    }
-    return result;
+    return resolveServerTargetLanguages(originalLanguage, targetLanguages);
   }
 
   /**
@@ -3020,83 +2997,19 @@ export class MessageTranslationService extends EventEmitter {
    * Méthode pour les requêtes REST de traduction directe
    */
   async translateTextDirectly(
-    text: string, 
-    sourceLanguage: string, 
-    targetLanguage: string, 
+    text: string,
+    sourceLanguage: string,
+    targetLanguage: string,
     modelType: string = 'basic'
   ): Promise<TranslationResult> {
-    try {
-      
-      // Créer une requête de traduction
-      const request: TranslationRequest = {
-        messageId: translationTargetId('direct-text', `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`),
-        text: text,
-        sourceLanguage: this._normalizeSourceLanguage(sourceLanguage),
-        targetLanguages: [targetLanguage],
-        conversationId: 'rest-request',
-        modelType: modelType
-      };
-      
-      // Envoyer la requête et attendre la réponse
-      const taskId = await this.zmqClient.sendTranslationRequest(request);
-      this.stats.incrementRequestsSent();
-      
-      
-      // Attendre la réponse via un événement.
-      // `zmqClient` est un singleton partagé : les DEUX listeners doivent être
-      // détachés sur CHAQUE issue (succès, erreur, ET timeout). L'ancien code
-      // ne les retirait que sur une réponse au taskId correspondant — le
-      // branchement timeout rejetait sans nettoyer, fuyant deux listeners par
-      // requête expirée (MaxListenersExceededWarning + closures périmées
-      // rappelées à chaque événement de traduction ultérieur). Un unique
-      // `cleanup()` appelé depuis les trois sorties garantit le détachement.
-      const response = await new Promise<TranslationResult>((resolve, reject) => {
-        const cleanup = () => {
-          clearTimeout(timeout);
-          this.zmqClient.removeListener('translationCompleted', handleResponse);
-          this.zmqClient.removeListener('translationError', handleError);
-        };
-
-        const timeout = guardedTimeout({ name: 'translation-response-timeout', afterMs: 10000, logger, run: () => {
-          cleanup();
-          reject(new Error('Timeout waiting for translation response'));
-        } }); // 10 secondes de timeout
-
-        const handleResponse = (data: any) => {
-          if (data.taskId === taskId) {
-            cleanup();
-            resolve(data.result);
-          }
-        };
-
-        const handleError = (data: any) => {
-          if (data.taskId === taskId) {
-            cleanup();
-            reject(new Error(`Translation error: ${data.error}`));
-          }
-        };
-
-        this.zmqClient.on('translationCompleted', handleResponse);
-        this.zmqClient.on('translationError', handleError);
-      });
-
-      return response;
-      
-    } catch (error) {
-      logger.error(`❌ [REST] Erreur traduction directe: ${error}`);
-      this.stats.incrementErrors();
-      
-      // Fallback en cas d'erreur
-      return {
-        messageId: `fallback_${Date.now()}`,
-        translatedText: `[${targetLanguage.toUpperCase()}] ${text}`,
-        sourceLanguage: sourceLanguage,
-        targetLanguage: targetLanguage,
-        confidenceScore: 0.1,
-        processingTime: 0.001,
-        modelType: 'fallback'
-      };
-    }
+    return translateTextDirectly(
+      {
+        zmqClient: this.zmqClient,
+        stats: this.stats,
+        normalizeSourceLanguage: (language) => this._normalizeSourceLanguage(language),
+      },
+      { text, sourceLanguage, targetLanguage, modelType }
+    );
   }
 
 }

@@ -133,6 +133,15 @@ describe('#9709 — la langue qui arrive reçoit l’historique récent traduit'
     expect(m.ids()).toEqual(['a-faire']);
   });
 
+  it('ne rattrape rien pour une langue sans code NLLB-200 (byv, #3659) ni depuis un message écrit dans l’une d’elles', async () => {
+    const m = monde({ messages: [message('m1'), message('medumba', { originalLanguage: 'byv' })] });
+
+    await rattraper(m.deps, 'byv');
+    await rattraper(m.deps, 'en');
+
+    expect(m.traduits).toEqual([{ id: 'm1', langue: 'en' }]);
+  });
+
   it('laisse au chemin d’envoi les messages écrits APRÈS l’arrivée', async () => {
     const m = monde({ messages: [message('avant'), message('apres', { createdAt: new Date(ARRIVEE.getTime() + 1000) })] });
 
