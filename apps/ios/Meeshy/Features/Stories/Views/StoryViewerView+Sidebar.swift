@@ -82,7 +82,6 @@ nonisolated struct StoryActionRailPlan: Equatable {
         )
     }
 
-    /// La loi d'audience n'offre RIEN à une story de Sang (RG-18) : pas de bouton pour un choix vide.
     static func isRepublishable(visibility: String?) -> Bool {
         !StoryRepostAudience.allowed(fromRawValue: visibility).isEmpty
     }
@@ -584,17 +583,21 @@ struct StoryActionSidebarView: View {
         // qu'apparaître, jamais disparaître.
         .adaptiveOnChange(of: storyCommentCountReconciledPulse) { _, _ in
             guard !railPlan.showsComments else { return }
-            frozenRailPlan = StoryActionRailPlan.resolve(
-                isOwnStory: isOwnStory,
-                canReply: onReplyToStory != nil,
-                isPublicStory: currentStory?.isPublic == true,
-                hasAudibleSound: storyHasAudibleSound,
-                commentCount: storyCommentCount,
-                hasTranslatableContent: storyHasTranslatableContent,
-                canCompose: railPlan.showsCompose,
-                isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility)
-            )
+            frozenRailPlan = railPlanAfterCommentsReconciled
         }
+    }
+
+    private var railPlanAfterCommentsReconciled: StoryActionRailPlan {
+        StoryActionRailPlan.resolve(
+            isOwnStory: isOwnStory,
+            canReply: onReplyToStory != nil,
+            isPublicStory: currentStory?.isPublic == true,
+            hasAudibleSound: storyHasAudibleSound,
+            commentCount: storyCommentCount,
+            hasTranslatableContent: storyHasTranslatableContent,
+            canCompose: railPlan.showsCompose,
+            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility)
+        )
     }
 
     @ViewBuilder
