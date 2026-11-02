@@ -102,6 +102,23 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
   });
 });
 
+describe('replié par défaut, le mode retenu reste dit (#14646)', () => {
+  test('la feuille ne montre que « Chiffrement · Serveur » ; déplier offre les modes', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    const disclosure = document.querySelector<HTMLDetailsElement>('details[data-creation-encryption-disclosure]');
+    expect(disclosure?.open).toBe(false);
+    expect(disclosure?.querySelector('summary')?.textContent).toBe('Chiffrement · Serveur');
+    expect(disclosure?.querySelector('fieldset[data-creation-encryption]')).not.toBeNull();
+  });
+
+  test('le résumé suit le mode choisi', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    act(() => radio('hybrid')?.click());
+    await settle();
+    expect(document.querySelector('[data-creation-encryption-disclosure] summary')?.textContent).toBe('Chiffrement · Hybride');
+  });
+});
+
 describe('ce qui est offert, rôle par rôle', () => {
   test('un utilisateur ordinaire : Serveur et Hybride, Serveur coché', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
