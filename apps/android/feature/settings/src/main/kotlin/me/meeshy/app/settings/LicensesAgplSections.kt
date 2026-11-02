@@ -17,9 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +53,7 @@ import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.leadingNavigationIcon
 import me.meeshy.ui.component.chrome.leadingNavigationLabel
 import me.meeshy.ui.component.link.openExternalLink
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -135,7 +133,7 @@ private fun SourceRow(offer: MeeshySourceOffer, accent: Color) {
                 )
             }
         }
-        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+        Icon(MeeshyIcons.OpenExternal, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -200,7 +198,7 @@ private fun ChevronRow(label: String, accent: Color, onClick: () -> Unit) {
             color = MeeshyTheme.tokens.textPrimary,
             maxLines = 3,
         )
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+        Icon(MeeshyIcons.ChevronForward, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
     }
 }
 
