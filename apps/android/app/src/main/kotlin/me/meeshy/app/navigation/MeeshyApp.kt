@@ -245,6 +245,7 @@ fun MeeshyApp(
                                     callNavGraph(navController, callViewModel)
                                     socialNavGraph(navController)
                                     settingsNavGraph(navController, authViewModel)
+                                    mediaRoutes(navController)
                                     extensions.graphContributors.forEach { it.contribute(this, navController) }
                                 }
                             }
@@ -278,6 +279,7 @@ fun MeeshyApp(
             )
 
             AppOverlayStack(extensions.overlays, navController)
+            MediaOverlayHost(navController)
 
             EngagementRevealHost(navController)
         }

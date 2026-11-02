@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import androidx.activity.compose.BackHandler
+import me.meeshy.sdk.model.media.MediaPresentation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -266,22 +268,25 @@ internal fun ChatListHost(
         }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
-    var openedPlace by remember { mutableStateOf<OpenedPlace?>(null) }
+    val media = rememberChatMediaHost(actions.dismissImageViewer)
+    LaunchedEffect(state.imageViewer == null) { if (state.imageViewer == null) media.onImageViewerClosed() }
+    BackHandler(enabled = media.active != null && media.active !is MediaPresentation.Image) { media.close() }
     var pieceOverlay by remember { mutableStateOf<PieceOverlayModel?>(null) }
-    // Une vidéo du fil se regarde dans le lecteur de Meeshy, avec son PiP (#13822) ; un autre fichier sort par ACTION_VIEW.
-    var threadVideo by remember { mutableStateOf<ThreadPieceOpening.Video?>(null) }
     val currentMessages by rememberUpdatedState(state.messages)
     val haptics = rememberMeeshyHaptics()
     val selectionContext = LocalContext.current
     val capReachedMessage = stringResource(R.string.chat_selection_cap_reached)
-    val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage, host.navigation) {
+    val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage, host.navigation, media) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
             onLongPress = { messageId -> actions.onMessageLongPress(messageId) },
             onReactionClick = { messageId, emoji -> actions.toggleReaction(messageId, emoji) },
             onReactionLongPress = { messageId -> actions.openReactionDetails(messageId) },
-            onImageClick = { messageId, index -> actions.openImageViewer(messageId, index) },
+            onImageClick = { messageId, index ->
+                media.open(MediaPresentation.Image(messageId, index))
+                actions.openImageViewer(messageId, index)
+            },
             onImageLongPress = { messageId, attachmentId ->
                 val overlay = actions.pieceOverlayFor(messageId, attachmentId)
                 // Message protégé : l'appui long vise le message entier, qui rend sa forme protégée.
@@ -292,12 +297,15 @@ internal fun ChatListHost(
                 val file = bubble?.files?.firstOrNull { it.attachmentId == attachmentId }
                 val opening = if (bubble != null && file != null) ThreadPieceOpener.of(bubble, file) else ThreadPieceOpening.ExternalFile
                 when (opening) {
-                    is ThreadPieceOpening.Video -> threadVideo = opening
+                    // Une vidéo du fil se regarde dans le lecteur de Meeshy, avec son PiP (#13822) ; un autre fichier sort par ACTION_VIEW.
+                    is ThreadPieceOpening.Video -> media.open(MediaPresentation.Video(opening.url, opening.secure))
                     ThreadPieceOpening.ExternalFile -> actions.onFileAttachmentTap(messageId, attachmentId)
                     ThreadPieceOpening.Nothing -> Unit
                 }
             },
-            onLocationClick = { messageId, location -> openedPlace = OpenedPlace.of(messageId, location) },
+            onLocationClick = { messageId, location ->
+                OpenedPlace.of(messageId, location)?.let { media.open(MediaPresentation.Place(it.messageId, it.place)) }
+            },
             onReplyPreviewClick = { messageId -> actions.onReplyPreviewTap(messageId) },
             onFlagTap = { messageId, code -> actions.onFlagTap(messageId, code) },
             onReplyCountTap = { messageId -> actions.onReplyCountTap(messageId) },
@@ -391,16 +399,16 @@ internal fun ChatListHost(
             }
         }
     }
-    threadVideo?.let { video ->
-        MeeshyVideoViewer(mediaUrl = video.url, onDismiss = { threadVideo = null }, secure = video.secure)
-    }
-    openedPlace?.let { opened ->
-        LocationFullscreen(
-            place = opened.place,
+    when (val presented = media.active) {
+        is MediaPresentation.Video ->
+            MeeshyVideoViewer(mediaUrl = presented.url, onDismiss = media::close, secure = presented.secure)
+        is MediaPresentation.Place -> LocationFullscreen(
+            place = presented.place,
             accentColor = state.accentColorHex ?: DEFAULT_PLACE_ACCENT,
-            senderName = state.messages.firstOrNull { it.messageId == opened.messageId }?.senderName,
-            onDismiss = { openedPlace = null },
+            senderName = state.messages.firstOrNull { it.messageId == presented.messageId }?.senderName,
+            onDismiss = media::close,
         )
+        else -> Unit
     }
     val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) { bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds) }
     CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers, LocalViewOnceConsumer provides viewOnceConsumer) {
