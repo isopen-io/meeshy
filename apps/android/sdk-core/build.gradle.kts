@@ -55,6 +55,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.androidx.media3.common)
+    // lot: lecture-moteur-audio-media3 — le moteur de lecture des vocaux (ExoPlayer + cache disque).
+    implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.transformer)
     implementation(libs.androidx.media3.muxer)
     implementation(libs.androidx.media3.effect)
