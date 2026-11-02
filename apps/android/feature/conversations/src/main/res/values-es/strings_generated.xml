@@ -150,7 +150,7 @@
     <string name="encryption_create_header">Cifrado</string>
     <string name="encryption_mode_e2ee_description">Solo tus dispositivos y los de los participantes leen los mensajes. La traducción se hace en tu dispositivo.</string>
     <string name="encryption_mode_e2ee_label">Extremo a extremo</string>
-    <string name="encryption_mode_hybrid_description">Cifrado dos veces: en nuestros servidores, para la traducción y la búsqueda, y de extremo a extremo por los dispositivos compatibles, que comprueban que cada mensaje llega intacto.</string>
+    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores; entre dispositivos compatibles, una segunda capa permite comprobar que un mensaje de texto no se modificó por el camino.</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan.</string>
     <string name="encryption_mode_server_label">Servidor</string>

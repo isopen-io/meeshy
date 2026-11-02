@@ -105698,43 +105698,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّر مرتين: على خوادمنا من أجل الترجمة والبحث، ومن طرف إلى طرف عبر الأجهزة المتوافقة التي تتحقق من وصول كل رسالة سليمة."
+            "value": "مشفّر على خوادمنا؛ وبين الأجهزة المتوافقة، تتيح طبقة ثانية التحقق من أن الرسالة النصية لم تُعدَّل في الطريق."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppelt verschlüsselt: auf unseren Servern, für Übersetzung und Suche, und Ende-zu-Ende durch kompatible Geräte, die prüfen, dass jede Nachricht unverändert ankommt."
+            "value": "Auf unseren Servern verschlüsselt; zwischen kompatiblen Geräten lässt sich mit einer zweiten Schicht prüfen, dass eine Textnachricht unterwegs nicht verändert wurde."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted twice: on our servers, for translation and search, and end to end by compatible devices, which check that every message arrives intact."
+            "value": "Encrypted on our servers; between compatible devices, a second layer lets you check that a text message was not altered on the way."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrado dos veces: en nuestros servidores, para la traducción y la búsqueda, y de extremo a extremo por los dispositivos compatibles, que comprueban que cada mensaje llega intacto."
+            "value": "Cifrado en nuestros servidores; entre dispositivos compatibles, una segunda capa permite comprobar que un mensaje de texto no se modificó por el camino."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffré deux fois : sur nos serveurs, pour la traduction et la recherche, et de bout en bout par les appareils compatibles, qui vérifient que chaque message arrive intact."
+            "value": "Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografato due volte: sui nostri server, per la traduzione e la ricerca, e end-to-end dai dispositivi compatibili, che verificano che ogni messaggio arrivi intatto."
+            "value": "Crittografato sui nostri server; tra dispositivi compatibili, un secondo livello permette di verificare che un messaggio di testo non sia stato modificato lungo il percorso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografado duas vezes: em nossos servidores, para tradução e busca, e de ponta a ponta pelos aparelhos compatíveis, que verificam se cada mensagem chega intacta."
+            "value": "Criptografado em nossos servidores; entre aparelhos compatíveis, uma segunda camada permite verificar que uma mensagem de texto não foi alterada no caminho."
           }
         }
       }
@@ -320305,43 +320305,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّرة مرتين: على خوادمنا وعبر الأجهزة المتوافقة"
+            "value": "مشفّرة على خوادمنا، مع التحقق بين الأجهزة المتوافقة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppelt verschlüsselt: auf unseren Servern und durch kompatible Geräte"
+            "value": "Auf unseren Servern verschlüsselt, mit Prüfung zwischen kompatiblen Geräten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted twice: on our servers and by compatible devices"
+            "value": "Encrypted on our servers, with verification between compatible devices"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrada dos veces: en nuestros servidores y por los dispositivos compatibles"
+            "value": "Cifrada en nuestros servidores, con verificación entre dispositivos compatibles"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffrée deux fois : sur nos serveurs et par les appareils compatibles"
+            "value": "Chiffrée sur nos serveurs, avec vérification entre appareils compatibles"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografata due volte: sui nostri server e dai dispositivi compatibili"
+            "value": "Crittografata sui nostri server, con verifica tra dispositivi compatibili"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografada duas vezes: em nossos servidores e pelos aparelhos compatíveis"
+            "value": "Criptografada em nossos servidores, com verificação entre aparelhos compatíveis"
           }
         }
       }
@@ -320869,43 +320869,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يشفّر الوضع الهجين مرتين: تحتفظ خوادمنا بنسخة مشفّرة من أجل الترجمة والبحث، وتشفّر الأجهزة المتوافقة أيضًا كل رسالة من طرف إلى طرف للتحقق من وصولها سليمة. هذا ليس تشفيرًا من طرف إلى طرف: لا تزال خوادمنا قادرة على ترجمة رسائلك."
+            "value": "يشفّر الوضع الهجين رسائلك على خوادمنا، التي يمكنها قراءتها من أجل الترجمة والبحث: هذا ليس تشفيرًا من طرف إلى طرف. وبين جهازين متوافقين، تتيح طبقة ثانية أيضًا التحقق من أن الرسالة النصية لم تُعدَّل في الطريق؛ وعند غيابها، لا يُعرض أي شيء على أنه موثَّق."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Hybridmodus verschlüsselt doppelt: Unsere Server behalten eine verschlüsselte Kopie für Übersetzung und Suche, und kompatible Geräte verschlüsseln jede Nachricht zusätzlich Ende-zu-Ende, um zu prüfen, dass sie unverändert ankommt. Das ist keine Ende-zu-Ende-Verschlüsselung: Unsere Server können deine Nachrichten weiterhin übersetzen."
+            "value": "Der Hybridmodus verschlüsselt deine Nachrichten auf unseren Servern, die sie für Übersetzung und Suche lesen können: Das ist keine Ende-zu-Ende-Verschlüsselung. Zwischen zwei kompatiblen Geräten lässt sich mit einer zweiten Schicht zusätzlich prüfen, dass eine Textnachricht unterwegs nicht verändert wurde; fehlt sie, wird nichts als geprüft dargestellt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybrid mode encrypts twice: our servers keep an encrypted copy for translation and search, and compatible devices also encrypt each message end to end to check that it arrives intact. It is not end-to-end encryption: our servers can still translate your messages."
+            "value": "Hybrid mode encrypts your messages on our servers, which can read them for translation and search: it is not end-to-end encryption. Between two compatible devices, a second layer also lets you check that a text message was not altered on the way; when it is missing, nothing is presented as verified."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El modo híbrido cifra dos veces: nuestros servidores guardan una copia cifrada para la traducción y la búsqueda, y los dispositivos compatibles también cifran cada mensaje de extremo a extremo para comprobar que llega intacto. No es cifrado de extremo a extremo: nuestros servidores aún pueden traducir tus mensajes."
+            "value": "El modo híbrido cifra tus mensajes en nuestros servidores, que pueden leerlos para la traducción y la búsqueda: no es cifrado de extremo a extremo. Entre dos dispositivos compatibles, una segunda capa permite además comprobar que un mensaje de texto no se modificó por el camino; cuando falta, nada se presenta como verificado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le mode hybride chiffre deux fois : nos serveurs gardent une copie chiffrée pour la traduction et la recherche, et les appareils compatibles chiffrent aussi chaque message de bout en bout pour vérifier qu’il arrive intact. Ce n’est pas le bout en bout : nos serveurs peuvent toujours traduire vos messages."
+            "value": "Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La modalità ibrida crittografa due volte: i nostri server conservano una copia crittografata per la traduzione e la ricerca, e i dispositivi compatibili crittografano anche ogni messaggio end-to-end per verificare che arrivi intatto. Non è la crittografia end-to-end: i nostri server possono ancora tradurre i tuoi messaggi."
+            "value": "La modalità ibrida crittografa i tuoi messaggi sui nostri server, che possono leggerli per la traduzione e la ricerca: non è la crittografia end-to-end. Tra due dispositivi compatibili, un secondo livello permette inoltre di verificare che un messaggio di testo non sia stato modificato lungo il percorso; quando manca, nulla viene presentato come verificato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O modo híbrido criptografa duas vezes: nossos servidores guardam uma cópia criptografada para tradução e busca, e os aparelhos compatíveis também criptografam cada mensagem de ponta a ponta para verificar se ela chega intacta. Não é criptografia de ponta a ponta: nossos servidores ainda podem traduzir suas mensagens."
+            "value": "O modo híbrido criptografa suas mensagens em nossos servidores, que podem lê-las para tradução e busca: não é criptografia de ponta a ponta. Entre dois aparelhos compatíveis, uma segunda camada permite ainda verificar que uma mensagem de texto não foi alterada no caminho; quando ela falta, nada é apresentado como verificado."
           }
         }
       }

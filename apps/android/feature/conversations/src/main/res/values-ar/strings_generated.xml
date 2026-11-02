@@ -150,7 +150,7 @@
     <string name="encryption_create_header">التشفير</string>
     <string name="encryption_mode_e2ee_description">أجهزتك وأجهزة المشاركين وحدها تقرأ الرسائل. تتم الترجمة على جهازك.</string>
     <string name="encryption_mode_e2ee_label">تام بين الطرفين</string>
-    <string name="encryption_mode_hybrid_description">مشفّر مرتين: على خوادمنا من أجل الترجمة والبحث، ومن طرف إلى طرف عبر الأجهزة المتوافقة التي تتحقق من وصول كل رسالة سليمة.</string>
+    <string name="encryption_mode_hybrid_description">مشفّر على خوادمنا؛ وبين الأجهزة المتوافقة، تتيح طبقة ثانية التحقق من أن الرسالة النصية لم تُعدَّل في الطريق.</string>
     <string name="encryption_mode_hybrid_label">هجين</string>
     <string name="encryption_mode_server_description">تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث.</string>
     <string name="encryption_mode_server_label">الخادم</string>

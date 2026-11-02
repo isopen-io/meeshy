@@ -69,7 +69,7 @@ extension ConversationEncryptionExplanation.Fact {
         case .encryptedOnServerServerReads:
             String(localized: "conversation.encryption.fact.encryptedOnServerServerReads", defaultValue: "Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.", bundle: .main)
         case .hybridIsServerToday:
-            String(localized: "conversation.encryption.fact.hybridIsServerToday", defaultValue: "Le mode hybride chiffre deux fois : nos serveurs gardent une copie chiffrée pour la traduction et la recherche, et les appareils compatibles chiffrent aussi chaque message de bout en bout pour vérifier qu’il arrive intact. Ce n’est pas le bout en bout : nos serveurs peuvent toujours traduire vos messages.", bundle: .main)
+            String(localized: "conversation.encryption.fact.hybridIsServerToday", defaultValue: "Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié.", bundle: .main)
         case .onlyParticipantsRead:
             String(localized: "conversation.encryption.fact.onlyParticipantsRead", defaultValue: "Seuls vos appareils et ceux des participants lisent les messages.", bundle: .main)
         case .everyServerFeature:

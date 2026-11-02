@@ -101,13 +101,14 @@ describe('la section dit le mode de la conversation ouverte, en mots simples', (
     expect(text('[data-conversation-encryption]')).not.toMatch(/peut (les )?lire|Meeshy peut/u);
   });
 
-  test('hybride : chiffrée deux fois, sans promesse « bientôt » ni prétention au bout en bout (#14369)', async () => {
+  test('hybride : sur le web, aucune promesse de vérification sur cet appareil, ni « chaque message » ni bout en bout (#14369)', async () => {
     await mount({ type: 'direct', encryptionMode: 'hybrid' });
-    expect(text('[data-conversation-encryption-summary]')).toBe('Chiffrée deux fois : sur nos serveurs et par les appareils compatibles');
+    expect(text('[data-conversation-encryption-summary]')).toBe('Chiffrée sur nos serveurs (mode hybride)');
     expect(text('[data-conversation-encryption-fact="hybridIsServerToday"]')).toBe(
-      'Le mode hybride chiffre deux fois : nos serveurs gardent une copie chiffrée pour la traduction et la recherche, et les appareils compatibles chiffrent aussi chaque message de bout en bout pour vérifier qu’il arrive intact. Ce n’est pas le bout en bout : nos serveurs peuvent toujours traduire vos messages.',
+      'Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; cet appareil ne la porte pas encore, et rien n’y est présenté comme vérifié.',
     );
-    expect(text('[data-conversation-encryption]')).not.toMatch(/bientôt/u);
+    expect(text('[data-conversation-encryption-summary]')).not.toMatch(/bout en bout|chaque message|vérifi/u);
+    expect(text('[data-conversation-encryption]')).not.toMatch(/bientôt|chaque message/u);
   });
 
   test('ancienne conversation sans mode : dite d’avant le chiffrement systématique', async () => {
