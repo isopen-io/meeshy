@@ -175,6 +175,21 @@ class ChatLandingControllerTest {
     }
 
     @Test
+    fun `the jump control always goes to the present, even once the landing believes it is there`() {
+        val r = rig(MessageLanding.Anchored(hasNewer = true, hasOlder = true))
+        coEvery { r.repo.loadNewer("c1") } returns false
+        r.controller.land("o50")
+        r.scope.runCurrent()
+        r.controller.loadNewer()
+        r.scope.runCurrent()
+
+        r.controller.returnToPresent()
+        r.scope.runCurrent()
+
+        coVerify(exactly = 1) { r.repo.jumpToPresent("c1") }
+    }
+
+    @Test
     fun `back to the present that fails says so`() {
         val r = rig(MessageLanding.Anchored(hasNewer = true, hasOlder = true))
         coEvery { r.repo.jumpToPresent("c1") } throws IllegalStateException("offline")

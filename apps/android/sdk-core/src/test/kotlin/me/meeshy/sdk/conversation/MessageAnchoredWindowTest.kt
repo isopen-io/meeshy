@@ -5,6 +5,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import java.time.Instant
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import me.meeshy.sdk.cache.CacheResult
@@ -192,6 +193,45 @@ class MessageAnchoredWindowTest {
 
         assertThat(repo.recentMessages(CONVERSATION, 1).map { it.message.id }).containsExactly("p5029")
     }
+
+    @Test
+    fun `a newer page that lands while an older page grew the window still reaches the present`() =
+        runHarnessTest { harness ->
+            recent.forEach { harness.seedSynced(it) }
+            val api = api()
+            val bridge = (61 until 100).map { message("b$it", it) }
+            val older = (10 until 40).map { message("e$it", it) }
+            val newerServed = kotlinx.coroutines.CompletableDeferred<Unit>()
+            coEvery { api.listAfter(CONVERSATION, around.last().createdAt!!, any()) } coAnswers {
+                newerServed.await()
+                MessagesApiResponse(
+                    success = true,
+                    data = bridge + recent,
+                    cursorPagination = CursorPagination(limit = 30, hasMore = false, nextCursor = null),
+                )
+            }
+            coEvery { api.list(CONVERSATION, any(), any(), "o40") } returns
+                ApiResponse(success = true, data = older.reversed(), pagination = Pagination(hasMore = true))
+            coEvery { api.listWindowAround(CONVERSATION, "r129", any()) } returns MessagesApiResponse(
+                success = true,
+                data = recent,
+                cursorPagination = CursorPagination(limit = 30, hasMore = true, nextCursor = "r100"),
+                hasNewer = false,
+            )
+            val repo = harness.repository(api)
+            repo.loadAround(CONVERSATION, "o50")
+
+            val newer = kotlinx.coroutines.coroutineScope {
+                val paging = async { repo.loadNewer(CONVERSATION) }
+                kotlinx.coroutines.yield()
+                repo.loadOlder(CONVERSATION)
+                newerServed.complete(Unit)
+                paging.await()
+            }
+
+            assertThat(newer).isFalse()
+            assertThat(repo.loadAround(CONVERSATION, "r129")).isEqualTo(MessageLanding.InWindow)
+        }
 
     private companion object {
         const val CONVERSATION = "c-global"

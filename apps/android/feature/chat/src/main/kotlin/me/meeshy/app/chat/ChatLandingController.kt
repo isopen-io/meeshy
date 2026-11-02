@@ -83,7 +83,6 @@ internal class ChatLandingController(
      * cache may stop where the anchored walk did, long before today.
      */
     fun returnToPresent() {
-        if (!landing.value.hasMoreNewer) return
         landing.update { it.copy(hasMoreNewer = false, isLoadingNewer = false) }
         screen.update { it.copy(hasMoreOlder = true) }
         scope.launch {

@@ -86,6 +86,7 @@ internal class MessageHistoryReader(
      * then stop in the past, with nothing left to page newer.
      */
     suspend fun jumpToPresent(conversationId: String) {
+        if (historyWindow(conversationId).value !is HistoryWindow.Anchored) return
         returnToPresent(conversationId)
         cacheSource(conversationId).revalidatePresent()
     }
@@ -133,8 +134,11 @@ internal class MessageHistoryReader(
         fence.commitOrWrite(ticket) { ingestion().ingest(page, clock.nowMillis()) } ?: return true
         val newest = page.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.maxOrNull()
         val reachedPresent = response.cursorPagination?.hasMore != true || newest == null || newest <= through
+        // The window may have moved meanwhile (an older page lowered its bound): the newer bound moves on the
+        // CURRENT window, never on the snapshot taken before the request — a stale compare dropped it (recette S8).
         historyWindow(conversationId).update { current ->
-            if (current != window) current else window.copy(throughMillis = if (reachedPresent) null else newest)
+            if (current !is HistoryWindow.Anchored) current
+            else current.copy(throughMillis = if (reachedPresent || current.throughMillis == null) null else maxOf(current.throughMillis, newest ?: through))
         }
         return !reachedPresent
     }
