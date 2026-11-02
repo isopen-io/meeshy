@@ -52,14 +52,17 @@ class MessageRepository internal constructor(
         /** #13792 — chaque message servi (REST, accusé d'envoi) nourrit le registre des régimes : jamais absent. */
         regime: EndToEndRegimeKeeper,
         fence: AccountFence? = null,
+        /** Les événements arrivés avant leur message : gardés par les écrivains, rejoués par l'ingestion. */
+        events: MessageEventBuffer? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
             outboxRepository,
             clock,
             EditRevisionLedger(database.editRevisionDao(), clock, fence),
+            events,
         ),
         enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
         receipts = MessageReceiptWriter(database, messageDao, fence),
@@ -242,6 +245,16 @@ class MessageRepository internal constructor(
      * and a `DELETE_MESSAGE` mutation joins the conversation's FIFO lane.
      */
     suspend fun deleteOptimistic(messageId: String): Boolean = mutations.deleteOptimistic(messageId)
+
+    /** Server-announced deletion (`message:deleted`): tombstone, sealed quotes; held until the row arrives if unknown. */
+    suspend fun markDeleted(messageId: String, deletedAtIso: String, sparingOpenedViewOnce: Boolean = false, expired: Boolean = false) =
+        mutations.markDeleted(messageId, deletedAtIso, sparingOpenedViewOnce, expired)
+
+    /** Rollback of a refused deletion: the tombstone falls, the [snapshot] taken before it gives the content back. */
+    suspend fun markUndeleted(messageId: String, snapshot: ApiMessage? = null) = mutations.markUndeleted(messageId, snapshot)
+
+    /** Removes the named rows (either of their two ids) and their edit history. */
+    suspend fun purgeMessages(messageIds: Collection<String>) = mutations.purgeMessages(messageIds)
 
     /**
      * Optimistic pin/unpin of a server-acked message: the cached `pinnedAt` flips instantly and a
