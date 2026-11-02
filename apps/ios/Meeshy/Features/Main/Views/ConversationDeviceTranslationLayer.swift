@@ -96,7 +96,8 @@ private struct AppleEngineHostBridge: View {
     let engine: any DeviceTranslationEngineProviding
 
     var body: some View {
-        if let apple = engine as? AppleTranslationEngine {
+        let base = (engine as? EntityShieldedDeviceTranslationEngine)?.inner ?? engine
+        if let apple = base as? AppleTranslationEngine {
             AppleTranslationHost(engine: apple)
         }
     }
