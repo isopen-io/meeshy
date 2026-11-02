@@ -7,6 +7,7 @@ import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageMergePolicy
 import me.meeshy.sdk.model.PendingMessageMutations
+import me.meeshy.sdk.model.ReplyReferenceBuilder
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
 
@@ -57,14 +58,16 @@ internal class MessageIngestPipeline(
         val replacedLocalIds = mutableSetOf<String>()
         val changed = mutableSetOf<String>()
         val latest = latestPerId(messages)
-        for (incoming in latest) {
-            val filedUnder = conversationId ?: incoming.conversationId
-            val fresh = MessageEntityFactory.cached(incoming, cachedAt = nowMillis, conversationId = filedUnder)
-            val direct = messageDao.find(incoming.id) ?: messageDao.findByServerId(incoming.id)
-            val optimistic = incoming.clientMessageId
-                ?.takeIf { it != incoming.id }
+        for (served in latest) {
+            val filedUnder = conversationId ?: served.conversationId
+            val direct = messageDao.find(served.id) ?: messageDao.findByServerId(served.id)
+            val optimistic = served.clientMessageId
+                ?.takeIf { it != served.id }
                 ?.let { messageDao.find(it) }
             val base = direct ?: optimistic
+            // La citation se grave à la PREMIÈRE ingestion : un écho allégé ne dégrade jamais une citation riche déjà gravée.
+            val incoming = if (base == null) ReplyReferenceBuilder.engrave(served) else served
+            val fresh = MessageEntityFactory.cached(incoming, cachedAt = nowMillis, conversationId = filedUnder)
             val row = if (base == null) fresh else merged(base, incoming, fresh, pending)
             listOfNotNull(direct, optimistic).filter { it.id != row.id }.forEach { replacedLocalIds += it.id }
             val unchanged = base != null && base.id == row.id && row.sameStoredContentAs(base)

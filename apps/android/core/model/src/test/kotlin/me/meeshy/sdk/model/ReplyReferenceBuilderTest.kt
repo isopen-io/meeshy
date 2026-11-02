@@ -19,7 +19,7 @@ class ReplyReferenceBuilderTest {
             message(postReplyTo = ApiPostReplyTarget(id = "p", moodEmoji = " 😀 ", previewText = " Heureux ", createdAt = "2026-10-01T10:00:00Z")),
             emptyList(),
         )!!
-        assertThat(reference.kind).isEqualTo(ReplyReference.Kind.MOOD)
+        assertThat(reference.kind).isEqualTo(EngravedReply.Kind.MOOD)
         assertThat(reference.moodEmoji).isEqualTo("😀")
         assertThat(reference.previewText).isEqualTo("Heureux")
         assertThat(reference.publishedAtIso).isEqualTo("2026-10-01T10:00:00Z")
@@ -31,7 +31,7 @@ class ReplyReferenceBuilderTest {
             message(postReplyTo = ApiPostReplyTarget(id = "p", previewText = "Plage", reactionCount = 3, commentCount = 2, shareCount = 1, thumbnailUrl = "t.jpg")),
             emptyList(),
         )!!
-        assertThat(reference.kind).isEqualTo(ReplyReference.Kind.STORY)
+        assertThat(reference.kind).isEqualTo(EngravedReply.Kind.STORY)
         assertThat(listOf(reference.reactionCount, reference.commentCount, reference.shareCount)).containsExactly(3, 2, 1).inOrder()
         assertThat(reference.thumbnailUrl).isEqualTo("t.jpg")
     }

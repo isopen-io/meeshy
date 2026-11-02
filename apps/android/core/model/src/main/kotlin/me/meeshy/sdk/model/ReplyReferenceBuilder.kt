@@ -4,10 +4,10 @@ import me.meeshy.sdk.lang.PrismCandidate
 import me.meeshy.sdk.lang.PrismTranslationResolver
 
 /**
- * La citation figée d'un message — ce que sa bulle montre au-dessus de son texte. Miroir de `ReplyReference`
+ * La citation figée d'un message — ce que sa bulle montre au-dessus de son texte. Miroir de `EngravedReply`
  * (iOS), réduit aux faits que l'ingestion grave.
  */
-data class ReplyReference(
+data class EngravedReply(
     val kind: Kind,
     /** L'identifiant cité : message, story ou humeur. */
     val targetId: String,
@@ -43,7 +43,7 @@ data class ReplyReference(
  */
 object ReplyReferenceBuilder {
 
-    fun build(message: ApiMessage, readerPrism: List<String>): ReplyReference? {
+    fun build(message: ApiMessage, readerPrism: List<String>): EngravedReply? {
         message.postReplyTo?.let { return post(it) }
         message.replyTo?.let { return quote(it, readerPrism) }
         return message.storyReplyToId?.takeIf { it.isNotBlank() }?.let { unavailable(it) }
@@ -65,21 +65,21 @@ object ReplyReferenceBuilder {
         return message.copy(postReplyTo = ApiPostReplyTarget(id = storyId, unavailable = true))
     }
 
-    private fun post(target: ApiPostReplyTarget): ReplyReference {
+    private fun post(target: ApiPostReplyTarget): EngravedReply {
         if (target.unavailable) return unavailable(target.id)
         val preview = target.previewText.trim()
         val mood = target.moodEmoji?.trim()?.ifBlank { null }
         if (mood != null) {
-            return ReplyReference(
-                kind = ReplyReference.Kind.MOOD,
+            return EngravedReply(
+                kind = EngravedReply.Kind.MOOD,
                 targetId = target.id,
                 previewText = preview,
                 moodEmoji = mood,
                 publishedAtIso = target.createdAt,
             )
         }
-        return ReplyReference(
-            kind = ReplyReference.Kind.STORY,
+        return EngravedReply(
+            kind = EngravedReply.Kind.STORY,
             targetId = target.id,
             previewText = preview,
             publishedAtIso = target.createdAt,
@@ -90,7 +90,7 @@ object ReplyReferenceBuilder {
         )
     }
 
-    private fun quote(quote: ApiMessageReplyPreview, readerPrism: List<String>): ReplyReference {
+    private fun quote(quote: ApiMessageReplyPreview, readerPrism: List<String>): EngravedReply {
         val served = if (quote.isProtected) null else PrismTranslationResolver.resolve(
             originalLanguage = quote.originalLanguage,
             candidates = quote.translations.orEmpty()
@@ -103,8 +103,8 @@ object ReplyReferenceBuilder {
             quote.content.isBlank() -> ""
             else -> served?.text ?: quote.content
         }
-        return ReplyReference(
-            kind = ReplyReference.Kind.MESSAGE,
+        return EngravedReply(
+            kind = EngravedReply.Kind.MESSAGE,
             targetId = quote.id,
             previewText = text,
             authorName = quote.sender?.name?.takeIf { it.isNotBlank() } ?: quote.senderDisplayName.orEmpty(),
@@ -116,5 +116,5 @@ object ReplyReferenceBuilder {
     }
 
     private fun unavailable(postId: String) =
-        ReplyReference(kind = ReplyReference.Kind.STORY, targetId = postId, previewText = "", isUnavailable = true)
+        EngravedReply(kind = EngravedReply.Kind.STORY, targetId = postId, previewText = "", isUnavailable = true)
 }

@@ -25,6 +25,14 @@ public interface MessageDao {
     public suspend fun mentioning(conversationId: String, postId: String): List<MessageEntity>
 
     /**
+     * Les lignes qui PEUVENT porter [userId] : son propre message (colonne `senderId`) ou une charge qui le nomme
+     * (citation, transfert). Un pré-filtre SQL qui sur-sélectionne — l'id peut figurer dans une URL — ; la loi se
+     * lit sur la charge décodée. [userId] est apparié littéralement : échapper `\`, `%` et `_` par `\` d'abord.
+     */
+    @Query("SELECT * FROM messages WHERE senderId = :rawUserId OR payload LIKE '%' || :userId || '%' ESCAPE '\\'")
+    public suspend fun involving(rawUserId: String, userId: String): List<MessageEntity>
+
+    /**
      * #13792 — parmi les [window] lignes les plus RÉCENTES du fil, celles qui PEUVENT dire le bout en bout (drapeau chiffré,
      * ou « e2ee » dans la charge : mode du message, d'une pièce, avis d'activation, lignes non encore rétro-remplies
      * comprises). Le filtre de texte ne court que sur la fenêtre, jamais sur tout l'historique : la sous-requête ne trie que
