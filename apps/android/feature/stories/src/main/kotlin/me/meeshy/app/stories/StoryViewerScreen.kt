@@ -190,6 +190,8 @@ fun StoryViewerScreen(
     var flightSerial by remember { mutableIntStateOf(0) }
     var heartBouncePulse by remember { mutableIntStateOf(0) }
     var boxOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+    var composerHeightPx by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val meeshyHaptics = rememberMeeshyHaptics()
     // Le doigt déplace la carte en phase de DESSIN (graphicsLayer) : aucune recomposition
@@ -495,13 +497,15 @@ fun StoryViewerScreen(
 
         if (slide != null) StorySceneAudio(slide = slide, playing = playing, muted = state.isMuted)
 
+        val composerPinned = commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed &&
+            (!state.isPaused || cover.composing)
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
             if (slide != null && slide.text.isNotBlank()) {
                 StoryCaptionOverlay(text = slide.text, storyId = slide.id)
             }
             // #14313 — le composeur de commentaire épinglé sous la story d'autrui (iOS `composerLayer`).
-            if (commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed && (!state.isPaused || cover.composing)) {
-                StoryPinnedCommentComposer(thread = commentThread)
+            if (composerPinned && commentThread != null) {
+                StoryPinnedCommentComposer(thread = commentThread, modifier = Modifier.onSizeChanged { composerHeightPx = it.height })
                 StoryCommentSentFeedback(thread = commentThread)
             }
         }
@@ -509,6 +513,7 @@ fun StoryViewerScreen(
         if (!state.isPaused) Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .onSizeChanged { headerHeightPx = it.height }
                 .statusBarsPadding()
                 .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.sm),
         ) {
@@ -635,6 +640,7 @@ fun StoryViewerScreen(
         }
 
         val languageBadge = state.activeLanguageCode
+        val railFrame = StoryRailFrame.of(headerHeightPx, composerHeightPx, composerPinned, with(density) { MeeshySpacing.sm.roundToPx() })
         if (slide != null && !state.isDismissed && !state.isPaused && !keyboardVisible) {
             StoryActionRail(
                 plan = railPlan,
@@ -671,6 +677,7 @@ fun StoryViewerScreen(
                 onLanguageBounds = { languageButtonBounds = it },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
+                    .padding(top = with(density) { railFrame.topPx.toDp() }, bottom = with(density) { railFrame.bottomPx.toDp() })
                     .padding(end = MeeshySpacing.sm),
             )
         }

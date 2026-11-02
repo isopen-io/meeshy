@@ -45,3 +45,17 @@ data class StoryRailPlan(
             )
     }
 }
+
+/**
+ * **Le cadre du rail** (#14394, iOS `sidebarMaxHeight`) : entre le bas de l'en-tête et le haut MESURÉ du composeur
+ * épinglé, à [gapPx] de chacun. Le rail défile s'il ne tient pas ; il ne recouvre jamais le ⌄ ni la pastille de langue.
+ */
+data class StoryRailFrame(val topPx: Int, val bottomPx: Int) {
+    companion object {
+        fun of(headerBottomPx: Int, composerHeightPx: Int, composerPinned: Boolean, gapPx: Int): StoryRailFrame =
+            StoryRailFrame(
+                topPx = headerBottomPx + gapPx,
+                bottomPx = (if (composerPinned) composerHeightPx else 0) + gapPx,
+            )
+    }
+}
