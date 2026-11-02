@@ -13,7 +13,7 @@ object GlobalSearchRows {
 
     fun protection(last: ApiConversationLastMessage?, nowMillis: Long): RowProtection? =
         when (MessageSummaryKind.of(last, nowMillis)) {
-            MessageSummaryKind.HIDDEN -> RowProtection.HIDDEN
+            MessageSummaryKind.HIDDEN, MessageSummaryKind.ENCRYPTED -> RowProtection.HIDDEN
             MessageSummaryKind.VIEW_ONCE -> RowProtection.VIEW_ONCE
             MessageSummaryKind.EXPIRED -> RowProtection.EXPIRED
             MessageSummaryKind.EPHEMERAL_ACTIVE, MessageSummaryKind.STANDARD -> null
