@@ -19,8 +19,8 @@ import os
 /// 2. le mode relu de la passerelle juste avant l'envoi, borné dans le temps :
 ///    seul lui peut dire le clair ;
 /// 3. faute de relecture (hors ligne, délai, erreur), le régime n'est PAS
-///    confirmé : la réponse suit le chemin chiffré — le coffre, ou rien —,
-///    jamais l'outbox ni le réseau.
+///    confirmé : le clair attend au coffre, sans ligne ni outbox ni réseau,
+///    que le régime se relise (`NotificationReplyAwaitingRegime`, #14667).
 ///
 /// Modèle de menace : serveur honnête, appareil en retard sur le régime ;
 /// serveur qui sert sans mode une conversation vue chiffrée (la garde). Hors
@@ -34,7 +34,7 @@ struct NotificationReplyRegime {
         case readableByServer
         /// Une source dit le bout en bout : le clair ne quitte pas le coffre.
         case endToEnd
-        /// Le régime n'a pas pu être relu : traité comme le bout en bout.
+        /// Le régime n'a pas pu être relu : la réponse attend sa confirmation.
         case unconfirmed
     }
 
@@ -85,5 +85,80 @@ struct NotificationReplyRegime {
 
     private struct ServedMode: Sendable {
         let mode: String?
+    }
+}
+
+/// **Une réponse dont le régime n'est pas confirmé ATTEND sa confirmation**
+/// (#14667, suivi de #13165).
+///
+/// Hors ligne, la relecture échoue : la conversation peut être en clair comme
+/// chiffrée de bout en bout. Le clair va au coffre sous l'identifiant client,
+/// et aucune ligne ne s'écrit — une bulle `e2ee` scellerait le fil d'une
+/// conversation en clair (`EndToEndRegimeLedger.seals(trail:)`). Cette fiche
+/// ne garde que ce qui range la réponse, jamais son texte. Au retour du
+/// réseau, le régime relu décide : le clair rejoint l'outbox, ou la bulle
+/// scellée en échec naît, comme pour une conversation connue chiffrée.
+struct NotificationReplyAwaitingRegime: Codable, Equatable, Sendable {
+    let clientMessageId: String
+    let conversationId: String
+    let senderId: String
+    let replyToId: String?
+    let originalLanguage: String?
+
+    init(_ item: OfflineQueueItem, senderId: String) {
+        clientMessageId = item.clientMessageId
+        conversationId = item.conversationId
+        self.senderId = senderId
+        replyToId = item.replyToId
+        originalLanguage = item.originalLanguage
+    }
+
+    /// La réponse telle que le geste l'avait composée, avec le texte relu au coffre.
+    func queueItem(content: String) -> OfflineQueueItem {
+        OfflineQueueItem(
+            conversationId: conversationId, content: content, clientMessageId: clientMessageId,
+            originalLanguage: originalLanguage, replyToId: replyToId
+        )
+    }
+}
+
+/// Les réponses en attente de leur régime, sur cet appareil.
+@MainActor
+protocol NotificationRepliesAwaitingRegimeStoring: AnyObject {
+    var awaiting: [NotificationReplyAwaitingRegime] { get }
+    func add(_ reply: NotificationReplyAwaitingRegime)
+    func remove(_ clientMessageId: String)
+}
+
+/// Les fiches vivent dans les préférences (aucun texte) ; `defaults: nil`
+/// les garde en mémoire seulement.
+@MainActor
+final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegimeStoring {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage
+    // hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
+
+    static let shared = NotificationRepliesAwaitingRegime()
+    private static let key = "meeshy.notificationReply.awaitingRegime"
+    private let defaults: UserDefaults?
+    private(set) var awaiting: [NotificationReplyAwaitingRegime]
+
+    init(defaults: UserDefaults? = .standard) {
+        self.defaults = defaults
+        awaiting = defaults?.data(forKey: Self.key)
+            .flatMap { try? JSONDecoder().decode([NotificationReplyAwaitingRegime].self, from: $0) } ?? []
+    }
+
+    func add(_ reply: NotificationReplyAwaitingRegime) {
+        save(awaiting.filter { $0.clientMessageId != reply.clientMessageId } + [reply])
+    }
+
+    func remove(_ clientMessageId: String) {
+        save(awaiting.filter { $0.clientMessageId != clientMessageId })
+    }
+
+    private func save(_ replies: [NotificationReplyAwaitingRegime]) {
+        awaiting = replies
+        defaults?.set(try? JSONEncoder().encode(replies), forKey: Self.key)
     }
 }

@@ -58,6 +58,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
         let queue: ReplyQueueSpy
         let persistence: PersistenceSpy
         let vault: MockEndToEndMessaging
+        let awaiting: NotificationRepliesAwaitingRegime
         let refusals: () -> [EndToEndSendRefusal]
     }
 
@@ -68,6 +69,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
         let queue = ReplyQueueSpy()
         let persistence = PersistenceSpy()
         let vault = MockEndToEndMessaging()
+        let awaiting = NotificationRepliesAwaitingRegime(defaults: nil)
         var refusals: [EndToEndSendRefusal] = []
         let handler = NotificationActionHandler(
             messageService: messages,
@@ -90,11 +92,12 @@ final class NotificationReplyRegimeTests: XCTestCase {
             conversationLocks: DeclaredConversationLocks(),
             destinationGuard: .isolated(),
             notifyRefusedEndToEndReply: { _, refusal in refusals.append(refusal) },
-            endToEnd: vault
+            endToEnd: vault,
+            repliesAwaitingRegime: awaiting
         )
         return SUT(
             handler: handler, messages: messages, conversations: conversations,
-            queue: queue, persistence: persistence, vault: vault, refusals: { refusals }
+            queue: queue, persistence: persistence, vault: vault, awaiting: awaiting, refusals: { refusals }
         )
     }
 
@@ -196,6 +199,91 @@ final class NotificationReplyRegimeTests: XCTestCase {
 
         assertNoPlaintextLeft(sut)
         XCTAssertEqual(vaultTexts(sut), [Self.secret], "le régime non confirmé garde le clair au coffre")
+    }
+
+    // MARK: - Le régime non confirmé (#14667)
+
+    /// Une réponse hors ligne vers une conversation EN CLAIR ne pose aucune
+    /// ligne qui ferait sceller le fil : la loi du fil ne lit rien de chiffré.
+    func test_handleReply_unconfirmedRegimeTowardPlainConversation_leavesNoRowThatSealsTheThread() async {
+        let sut = makeSUT(served: .failure(Unreachable()))
+
+        await reply(sut, userInfo: replyUserInfo())
+
+        let trail = sut.persistence.insertedRecords.map { $0.toMessage(currentUserId: "user1") }
+        let memory = EndToEndRegimeMemory(defaults: nil)
+        memory.bind(account: "gate.staging.meeshy.me/me-1")
+        let seals = EndToEndRegimeLedger(memory: memory)
+            .seals(for: "conv1", opening: nil, cached: nil, trail: trail, isDirect: false)
+        XCTAssertFalse(seals, "un régime NON CONFIRMÉ ne scelle pas une conversation en clair")
+        assertNoPlaintextLeft(sut)
+        XCTAssertEqual(sut.awaiting.awaiting.map(\.conversationId), ["conv1"], "la réponse attend son régime")
+        XCTAssertTrue(sut.refusals().isEmpty, "aucune phrase de conversation chiffrée pour un régime inconnu")
+    }
+
+    func test_confirmAwaiting_networkBackOnPlainConversation_sendsTheReplyAndEmptiesTheVault() async {
+        let sut = makeSUT(served: .failure(Unreachable()))
+        await reply(sut, userInfo: replyUserInfo())
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.messages.sendCallCount, 1)
+        XCTAssertEqual(sut.messages.lastSendRequest?.content, Self.secret)
+        XCTAssertEqual(sut.messages.lastSendRequest?.replyToId, "msg1")
+        XCTAssertEqual(sut.queue.enqueuedItems.map(\.content), [Self.secret])
+        XCTAssertTrue(sut.vault.storedIds.isEmpty, "le clair quitte le coffre une fois dans l'outbox")
+        XCTAssertTrue(sut.awaiting.awaiting.isEmpty)
+    }
+
+    func test_confirmAwaiting_networkBackOnEndToEndConversation_writesTheSealedBubbleOnly() async {
+        let sut = makeSUT(served: .failure(Unreachable()))
+        await reply(sut, userInfo: replyUserInfo())
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: "e2ee"))
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        assertNoPlaintextLeft(sut)
+        XCTAssertEqual(sut.persistence.insertedRecords.map(\.encryptionMode), [E2EEWire.mode])
+        XCTAssertEqual(vaultTexts(sut), [Self.secret], "le fil le renverra chiffré")
+        XCTAssertEqual(sut.refusals(), [.sealedOnlyInConversation])
+        XCTAssertTrue(sut.awaiting.awaiting.isEmpty)
+    }
+
+    func test_confirmAwaiting_stillOffline_keepsWaitingWithoutTrace() async {
+        let sut = makeSUT(served: .failure(Unreachable()))
+        await reply(sut, userInfo: replyUserInfo())
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        assertNoPlaintextLeft(sut)
+        XCTAssertTrue(sut.persistence.insertedRecords.isEmpty)
+        XCTAssertEqual(sut.awaiting.awaiting.count, 1)
+        XCTAssertEqual(vaultTexts(sut), [Self.secret])
+    }
+
+    func test_handleReply_unconfirmedRegimeAndVaultRefuses_writesNothingAndSaysIt() async {
+        let sut = makeSUT(served: .failure(Unreachable()))
+        sut.vault.rememberAccepted = false
+
+        await reply(sut, userInfo: replyUserInfo())
+
+        assertNoPlaintextLeft(sut)
+        XCTAssertTrue(sut.persistence.insertedRecords.isEmpty)
+        XCTAssertTrue(sut.awaiting.awaiting.isEmpty)
+        XCTAssertEqual(sut.refusals(), [.unkeptOutsideConversation])
+    }
+
+    func test_awaitingStore_survivesARelaunch_withoutTheText() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "awaiting-\(UUID().uuidString)"))
+        let item = OfflineQueueItem(conversationId: "conv1", content: Self.secret, replyToId: "msg1")
+        NotificationRepliesAwaitingRegime(defaults: defaults).add(NotificationReplyAwaitingRegime(item, senderId: "user1"))
+
+        let relaunched = NotificationRepliesAwaitingRegime(defaults: defaults)
+
+        XCTAssertEqual(relaunched.awaiting.map(\.clientMessageId), [item.clientMessageId])
+        let persisted = try XCTUnwrap(defaults.data(forKey: "meeshy.notificationReply.awaitingRegime"))
+        XCTAssertFalse(String(decoding: persisted, as: UTF8.self).contains("4512"), "aucun clair dans les préférences")
     }
 
     func test_handleReply_gatewayServesReadableMode_sendsTheReply() async {

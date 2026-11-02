@@ -118,6 +118,9 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let notifyRefusedEndToEndReply: @MainActor (String, EndToEndSendRefusal) -> Void
     /// Le coffre libsignal, seul lieu du clair d'une réponse chiffrée (#13067).
     private let endToEnd: any EndToEndMessagingProviding
+    /// #14667 — les réponses dont le régime attend d'être relu.
+    private let repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring
+    private var confirmingAwaitingReplies = false
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -218,8 +221,10 @@ final class NotificationActionHandler: NotificationActionHandling {
         notifyRefusedEndToEndReply: @escaping @MainActor (String, EndToEndSendRefusal) -> Void = {
             NotificationReplyFailure.postEndToEndReplyRefused(conversationId: $0, refusal: $1)
         },
-        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
+        repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared
     ) {
+        self.repliesAwaitingRegime = repliesAwaitingRegime
         self.destinationGuard = destinationGuard
         self.notifyRefusedEndToEndReply = notifyRefusedEndToEndReply
         self.endToEnd = endToEnd
@@ -536,8 +541,21 @@ final class NotificationActionHandler: NotificationActionHandling {
         )
 
         if await refusesEndToEndReply(item, senderId: userId, in: conversationId, userInfo: userInfo) { return }
-        await insertReplyBubble(item, senderId: userId, replyToId: payload.messageId)
+        await sendReadableReply(item, senderId: userId)
 
+        localMarkRead(conversationId)
+        do {
+            try await conversationService.markRead(conversationId: conversationId)
+        } catch {
+            logger.error("post-reply markRead failed: \(error.localizedDescription, privacy: .public)")
+        }
+        removeDeliveredForConversation(conversationId)
+    }
+
+    /// La réponse vers un régime où le serveur lit le message : ligne
+    /// optimiste, outbox, puis requête (R2).
+    private func sendReadableReply(_ item: OfflineQueueItem, senderId: String) async {
+        await insertReplyBubble(item, senderId: senderId, replyToId: item.replyToId)
         await prepareReplyQueue()
         var outboxRowLanded = false
         do {
@@ -549,13 +567,13 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         do {
             let request = SendMessageRequest(
-                content: text,
-                originalLanguage: originalLanguage,
-                replyToId: payload.messageId,
+                content: item.content,
+                originalLanguage: item.originalLanguage,
+                replyToId: item.replyToId,
                 clientMessageId: item.clientMessageId
             )
-            _ = try await messageService.send(conversationId: conversationId, request: request)
-            logger.info("notification reply sent for conversation \(conversationId, privacy: .public)")
+            _ = try await messageService.send(conversationId: item.conversationId, request: request)
+            logger.info("notification reply sent for conversation \(item.conversationId, privacy: .public)")
         } catch {
             logger.error("reply REST send failed: \(error.localizedDescription, privacy: .public)")
             if !outboxRowLanded {
@@ -569,14 +587,6 @@ final class NotificationActionHandler: NotificationActionHandling {
                 }
             }
         }
-
-        localMarkRead(conversationId)
-        do {
-            try await conversationService.markRead(conversationId: conversationId)
-        } catch {
-            logger.error("post-reply markRead failed: \(error.localizedDescription, privacy: .public)")
-        }
-        removeDeliveredForConversation(conversationId)
     }
 
     private func insertReplyBubble(_ item: OfflineQueueItem, senderId: String, replyToId: String?) async {
@@ -596,21 +606,87 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// faute de coffre, rien ne s'écrit. Les deux se disent.
     /// #13165 — le régime se CONFIRME (mode du push, puis passerelle relue) :
     /// seul un régime relu où le serveur lit le message laisse partir le clair.
+    /// #14667 — un régime NON confirmé n'écrit aucune ligne : le clair attend
+    /// au coffre que `confirmRepliesAwaitingRegime` relise le régime.
     private func refusesEndToEndReply(
         _ item: OfflineQueueItem, senderId: String, in conversationId: String, userInfo: [AnyHashable: Any]
     ) async -> Bool {
+        switch await replyRegime.destination(of: conversationId, userInfo: userInfo) {
+        case .readableByServer:
+            return false
+        case .endToEnd:
+            logger.warning("notification reply refused before transport: end-to-end regime")
+            let refusal = await offThreadReply.keep(item, senderId: senderId)
+            removeDeliveredForConversation(conversationId)
+            notifyRefusedEndToEndReply(conversationId, refusal)
+        case .unconfirmed:
+            removeDeliveredForConversation(conversationId)
+            await awaitRegime(item, senderId: senderId)
+        }
+        return true
+    }
+
+    private var replyRegime: NotificationReplyRegime {
         let service = conversationService
-        let regime = NotificationReplyRegime(
+        return NotificationReplyRegime(
             destinationGuard: destinationGuard,
             servedMode: { try await service.getById($0).encryptionMode }
         )
-        guard await regime.destination(of: conversationId, userInfo: userInfo) != .readableByServer else { return false }
-        logger.warning("notification reply refused before transport: end-to-end or unconfirmed regime")
-        let refusal = await EndToEndOffThreadReply(endToEnd: endToEnd, persistence: messagePersistence)
-            .keep(item, senderId: senderId)
-        removeDeliveredForConversation(conversationId)
-        notifyRefusedEndToEndReply(conversationId, refusal)
-        return true
+    }
+
+    private var offThreadReply: EndToEndOffThreadReply {
+        EndToEndOffThreadReply(endToEnd: endToEnd, persistence: messagePersistence)
+    }
+
+    private func awaitRegime(_ item: OfflineQueueItem, senderId: String) async {
+        guard await offThreadReply.vault(item, senderId: senderId) else {
+            logger.warning("notification reply: regime not confirmed and the vault did not keep it, nothing written")
+            notifyRefusedEndToEndReply(item.conversationId, .unkeptOutsideConversation)
+            return
+        }
+        repliesAwaitingRegime.add(NotificationReplyAwaitingRegime(item, senderId: senderId))
+    }
+
+    /// #14667 — relit le régime de chaque réponse en attente du compte actif :
+    /// en clair, le texte quitte le coffre pour l'outbox ; chiffré de bout en
+    /// bout, la bulle scellée en échec naît ; toujours non confirmé, rien ne
+    /// bouge. Appelé à chaque réveil de l'outbox (lancement, retour au premier
+    /// plan, réseau ou socket retrouvés).
+    func confirmRepliesAwaitingRegime() async {
+        guard !confirmingAwaitingReplies, let userId = currentUserId() else { return }
+        confirmingAwaitingReplies = true
+        defer { confirmingAwaitingReplies = false }
+        for reply in repliesAwaitingRegime.awaiting where reply.senderId == userId {
+            await confirm(reply)
+        }
+    }
+
+    private func confirm(_ reply: NotificationReplyAwaitingRegime) async {
+        switch await replyRegime.destination(of: reply.conversationId, userInfo: [:]) {
+        case .unconfirmed:
+            return
+        case .endToEnd:
+            let refusal = await offThreadReply.bubble(reply.queueItem(content: ""), senderId: reply.senderId)
+            repliesAwaitingRegime.remove(reply.clientMessageId)
+            notifyRefusedEndToEndReply(reply.conversationId, refusal)
+        case .readableByServer:
+            await sendFromVault(reply)
+        }
+    }
+
+    /// Le coffre fermé fait attendre ; un clair absent du coffre ouvert ne
+    /// reviendra plus, la fiche part.
+    private func sendFromVault(_ reply: NotificationReplyAwaitingRegime) async {
+        let id = reply.clientMessageId
+        guard let stored = await endToEnd.storedMessageIds(as: reply.senderId) else { return }
+        let entry = stored.contains(id) ? await endToEnd.plaintexts(for: [id], as: reply.senderId)[id] : nil
+        guard case .readable(let content, _)? = entry, let text = content.text else {
+            repliesAwaitingRegime.remove(id)
+            return
+        }
+        await sendReadableReply(reply.queueItem(content: text), senderId: reply.senderId)
+        repliesAwaitingRegime.remove(id)
+        _ = await endToEnd.erase([id], as: reply.senderId)
     }
 
     // MARK: - Inline comment on social pushes (R3/R4)
