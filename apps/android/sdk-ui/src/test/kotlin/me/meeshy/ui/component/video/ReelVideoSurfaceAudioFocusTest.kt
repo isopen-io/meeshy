@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.time.Duration
 
 /**
  * #13399 — une seule lecture à la fois : une vidéo AUDIBLE prend le focus audio (un vocal du fil le perd donc et se met
@@ -29,6 +30,17 @@ class ReelVideoSurfaceAudioFocusTest {
 
     private val audioManager get() =
         shadowOf(ApplicationProvider.getApplicationContext<Context>().getSystemService(Context.AUDIO_SERVICE) as AudioManager)
+
+    // Media3 1.10 tient le focus audio sur le fil de LECTURE (ExoPlayerImplInternal) : la perte y transite avant de revenir
+    // à l'écouteur du fil principal. On fait tourner la boucle principale jusqu'à ce retour, comme runMainLooperUntil de Media3.
+    private fun idleUntil(condition: () -> Boolean) {
+        val deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos()
+        while (!condition() && System.nanoTime() < deadline) {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(10))
+            Thread.sleep(1)
+        }
+        compose.waitForIdle()
+    }
 
     private fun show(isActive: Boolean, muted: Boolean, onAudioFocusLost: () -> Unit = {}) {
         compose.setContent {
@@ -80,8 +92,7 @@ class ReelVideoSurfaceAudioFocusTest {
             ?: request.audioFocusRequest.javaClass.getMethod("getOnAudioFocusChangeListener")
                 .invoke(request.audioFocusRequest) as AudioManager.OnAudioFocusChangeListener
         listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
-        shadowOf(Looper.getMainLooper()).idle()
-        compose.waitForIdle()
+        idleUntil { lost > 0 }
         assertThat(lost).isEqualTo(1)
     }
 
@@ -94,8 +105,7 @@ class ReelVideoSurfaceAudioFocusTest {
             ?: request.audioFocusRequest.javaClass.getMethod("getOnAudioFocusChangeListener")
                 .invoke(request.audioFocusRequest) as AudioManager.OnAudioFocusChangeListener
         listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
-        shadowOf(Looper.getMainLooper()).idle()
-        compose.waitForIdle()
+        idleUntil { lost > 0 }
         assertThat(lost).isEqualTo(1)
     }
 }

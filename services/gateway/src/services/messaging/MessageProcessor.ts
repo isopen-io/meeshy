@@ -14,7 +14,7 @@ import { admitSendUnderRegime } from './e2eeSendAdmission';
 import { persistAdmittedEnvelopes } from './e2eeEnvelopePersistence';
 import { atRestModeOf, sealsAtRest, sealTextAtRest } from './atRestWrite';
 import { isSealedAtRest, isServerAtRestMode, revealAtRestWithQuote, servedClearAtRest, ServerAtRestUnavailableError } from './serverAtRest';
-import type { E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
+import { HYBRID_DEVICE_LAYER_METADATA_KEY, LIBSIGNAL_PROTOCOL, type E2EEDeviceLayerRequest, type E2EERelayRequest } from '@meeshy/shared/types/e2ee-directory';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
@@ -294,9 +294,11 @@ export class MessageProcessor {
     attachmentReplyTo?: unknown;
     /** Envoi libsignal par appareil (#3706) : admis par `admitSendUnderRegime`, rangé par `persistAdmittedEnvelopes`. */
     e2eeRelay?: E2EERelayRequest;
+    /** Couche appareil d'un envoi hybride (#14369) : admise comme `e2eeRelay`, à côté du clair scellé au repos. */
+    deviceLayerRelay?: E2EEDeviceLayerRequest;
   }): Promise<Message> {
     // #11216, #12518 — refusé AVANT tout le reste ; `endToEnd` éteint les pipelines serveur.
-    const { regime, carriesCiphertext, endToEnd, relay } = await admitSendUnderRegime(this.prisma, request);
+    const { regime, carriesCiphertext, endToEnd, relay, deviceLayer } = await admitSendUnderRegime(this.prisma, request);
 
     const data = await exitProtectedCopy(this.prisma, await declaredReplyProtection(this.prisma, request));
     const corr: Record<string, any> = {
@@ -387,6 +389,7 @@ export class MessageProcessor {
     // parseurs dédiés — jamais un `metadata` brut, cf. `clientDeclaredMetadata.ts`.
     // #12526 — en e2ee, un lieu en clair est retenu ; le message chiffré passe.
     const messageMetadata: Record<string, unknown> = {
+      ...(deviceLayer ? { [HYBRID_DEVICE_LAYER_METADATA_KEY]: LIBSIGNAL_PROTOCOL } : {}),
       ...(postReplyTo ? { postReplyTo } : {}),
       ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
       ...clientDeclaredMetadata(data, {
@@ -408,7 +411,7 @@ export class MessageProcessor {
     const messageData = {
       conversationId: data.conversationId,
       senderId: data.senderId,
-      content: encryptionContext.isEncrypted ? (relay ? E2EE_CONTENT_PLACEHOLDER : '') : processedContent.trim(),
+      content: encryptionContext.isEncrypted ? (relay && !deviceLayer ? E2EE_CONTENT_PLACEHOLDER : '') : processedContent.trim(),
       originalLanguage: data.originalLanguage,
       messageType: data.messageType || 'text',
       messageSource: data.messageSource || 'user',

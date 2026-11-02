@@ -6,11 +6,19 @@ import org.junit.Test
 class ConversationEncryptionActivationTest {
 
     @Test
-    fun `this phone offers the server modes and withholds end to end until it is an encrypted device`() {
+    fun `this phone is an encrypted device and offers end to end beside the server modes`() {
         assertThat(ConversationEncryptionModeChoice.offeredOnThisPhone)
-            .containsExactly(ConversationEncryptionModeChoice.SERVER, ConversationEncryptionModeChoice.HYBRID)
+            .containsExactly(ConversationEncryptionModeChoice.E2EE, ConversationEncryptionModeChoice.SERVER, ConversationEncryptionModeChoice.HYBRID)
             .inOrder()
-        assertThat(ConversationEncryptionModeChoice.E2EE.isOfferedOnThisPhone).isFalse()
+        assertThat(ConversationEncryptionModeChoice.E2EE.isOfferedOnThisPhone).isTrue()
+    }
+
+    @Test
+    fun `end to end is offered for a direct conversation only, the server modes everywhere`() {
+        assertThat(ConversationEncryptionModeChoice.E2EE.isOfferedFor(isDirect = true)).isTrue()
+        assertThat(ConversationEncryptionModeChoice.E2EE.isOfferedFor(isDirect = false)).isFalse()
+        assertThat(ConversationEncryptionModeChoice.SERVER.isOfferedFor(isDirect = false)).isTrue()
+        assertThat(ConversationEncryptionModeChoice.HYBRID.isOfferedFor(isDirect = false)).isTrue()
     }
 
     @Test

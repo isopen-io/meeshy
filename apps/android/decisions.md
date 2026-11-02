@@ -644,3 +644,61 @@ connecté » ont chacun leur entrée (#14079, `AccountShelf`, clé `<serveur>.ac
 les quinze plus récents — le Block Store porte seize entrées, l'une est la session active. `KeptAccountsBackup`
 accorde le coffre à la liste des comptes ; à l'installation neuve, les comptes que l'appareil ne connaît plus
 reviennent au sélecteur avec leur session dormante. Une déconnexion ou un refus n'efface que l'entrée du compte visé.
+
+
+---
+
+## ADR-030 — L'E2EE Android repose sur libsignal 0.105.4, par appareil, comme iOS
+**Date:** 2026-11-02 · **Status:** accepted (dev/staging) · **Issue:** #14591 (sous #14370) · **Gates:** #11548 (avis AGPL), #3710 (audit externe)
+
+**Context.** Directive porteur du 2026-11-02 : tous les clients chiffrent de bout en bout. La passerelle sert déjà
+l'annuaire par appareil (`/api/v1/e2ee/*`, PQXDH : pré-clé signée, Kyber de dernier recours, pré-clés uniques EC et
+Kyber), le relais d'enveloppes avec l'admission Sesame (409 `E2EE_DEVICES_MISMATCH`), `e2ee:envelope` et le rattrapage
+`GET /e2ee/envelopes` ; iOS s'en sert (`packages/MeeshySDK/Sources/MeeshyE2EE`, spec
+`docs/superpowers/specs/2026-10-23-e2ee-libsignal-ios-macos.md`). L'Android n'avait que le flux hérité `/signal/keys`
+(Tink X25519/Ed25519, publication coupée) : aucun message ne se chiffrait ni ne se lisait.
+
+**Decision.**
+- **Bibliothèque** : `org.signal:libsignal-android` **0.105.4**, la version d'iOS (`packages/LibSignalClient/LIBSIGNAL_VERSION`)
+  et de la passerelle. Signal ne publie plus sur Maven Central depuis la 0.86 : le dépôt
+  `build-artifacts.signal.org/libraries/maven/` est déclaré dans `settings.gradle.kts`, restreint au groupe `org.signal`.
+  Aucune primitive maison : PQXDH, Double Ratchet et XEdDSA sont ceux de la bibliothèque.
+- **Licence** : libsignal est sous **AGPL-3.0**. Le développement et la recette sur staging ne sont pas bloqués ; la
+  **promotion en production** d'un build qui la lie attend l'avis juridique signé (#11548) ET la revue cryptographique
+  externe (#3710).
+- **Chaîne de compilation** : libsignal 0.105 est compilée en Kotlin 2.2 (`kotlin-stdlib` 2.2.20). Un compilateur 2.0 ne
+  lit pas ses métadonnées (vérifié : « binary version of its metadata is 2.2.0, expected version is 2.0.0 ») ; un 2.1 les
+  lit. Kotlin passe donc de 2.0.21 à **2.1.20**, KSP à 2.1.20-1.0.32 (KSP1, comme avant), Hilt à 2.56.2. La version
+  Maven Central la plus récente (0.86.5, Java pur) a été écartée : un an d'écart avec iOS sur un protocole qui a reçu
+  le ratchet post-quantique entre-temps, et l'interopérabilité avec iOS est l'objet même du lot.
+- **Module** : `:core:e2ee`, Kotlin sans import `android.*`, miroir de `MeeshyE2EE` : contenu `E2EEContent` v1 à l'octet
+  près (JSON canonique, clés triées), remplissage, modèles de l'annuaire et du relais, stores libsignal sur un coffre
+  transactionnel, enrôlement, scellement Sesame, ouverture. Il se teste sur une JVM nue (`./meeshy.sh jvm-check`) avec
+  `libsignal-client` et son natif Linux : les allers-retours PQXDH sont de vrais chiffrements. Le stockage (coffre scellé
+  AES-256-GCM sous une clé enveloppée par le Keystore) et le transport vivent dans `:sdk-core`.
+- **Une identité par installation**, comme iOS (spec § 3.1) : pas de transfert de clé privée entre appareils. Les clés
+  privées ne quittent jamais l'appareil et ne sont jamais écrites en clair sur le disque. Android n'a pas d'extension de
+  notification hors processus : un verrou du processus suffit à sérialiser le ratchet (iOS : `flock` app ↔ NSE).
+
+**Rejected.** Corriger le flux hérité `/signal/*` (non ratchetant, une identité par compte) ; libsignal 0.86.5 depuis
+Maven Central ; recompiler libsignal soi-même ; contourner la vérification de métadonnées
+(`-Xskip-metadata-version-check`) — le compilateur 2.0 plante sur ces classes, et un contournement dans un module
+cryptographique n'est pas acceptable.
+
+**Consequences.** Le passage à Kotlin 2.1 touche tous les modules ; seule la CI `android.yml` le prouve. L'APK grossit des
+natifs libsignal (non mesuré ici : la mesure APK/AAB avant/après est un critère de la recette). Le flux hérité
+(`core/crypto/keys`, `E2eeBundlePublisher`, publication coupée) reste en place, inerte, et se retire dans un lot séparé.
+libsignal-android déclare `coreLibraryDesugaringEnabled=true` : l'app active le désucrage (`desugar_jdk_libs`). Seule
+`libsignal_jni.so` part dans l'APK (la bibliothèque de test et les natifs de bureau sont exclus) ; ses symboles ne sont
+retirés que si la CI dispose du NDK.
+
+**Stockage du clair (miroir de `EndToEndDiskPlaintextLaw`, iOS #12999).** La base Room n'est pas chiffrée : le clair d'un
+message e2ee n'y entre jamais, ni dans la file d'envoi. Il vit dans le coffre E2EE (base SQLite dédiée de
+`noBackupFilesDir/e2ee`, chaque ligne AES-256-GCM sous une clé enveloppée par le Keystore), sous l'identifiant servi et
+sous le `cid_` pour mes envois ; Room ne garde que `[Encrypted]` et le fil relit le clair en mémoire. Le coffre survit à
+la déconnexion (même compte, même historique, comme iOS) ; un autre compte le réinitialise à son enrôlement.
+
+**Hors de ce lot (suivis du #14591).** Appairage de mes appareils par QR (sans lui, mes autres appareils sont
+`unapprovedOwnDevices` et ne reçoivent rien), signaux chiffrés (gardés au coffre, pas encore appliqués), pièces jointes
+`client-v1`, groupes (Sender Keys), aperçu déchiffré dans la liste et la notification, numéros de sécurité.
+

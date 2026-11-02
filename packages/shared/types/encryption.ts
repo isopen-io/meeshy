@@ -91,6 +91,11 @@ export interface SignalKeyBundle {
  * This allows:
  * - Full E2EE protection (only sender/recipient can decrypt the E2EE layer)
  * - Server-side translation (server can decrypt the server layer)
+ *
+ * @deprecated Modèle à destinataire UNIQUE qui ne correspond pas au relais
+ * libsignal par appareil : aucun envoi ne le produit. Le mode hybride réel
+ * (#14369) pose un `content` en clair (scellé au repos par la passerelle) et
+ * une couche appareil `MessageRequest.deviceLayer` (`E2EEDeviceLayerRequest`).
  */
 export interface HybridEncryptedPayload {
   /** E2EE layer - only sender/recipient can decrypt (client-side Signal Protocol) */

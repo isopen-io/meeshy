@@ -58,6 +58,8 @@ struct BubbleFooterModel: Equatable, Sendable {
     /// tête de bulle, le crayon tombait dans le coin arrondi et le
     /// `clipShape` le rognait.
     var edit: BubbleEditMark? = nil
+    /// #14369 — le verdict de la couche appareil d'un message hybride.
+    var integrity: HybridDeviceLayerIntegrity? = nil
 
     /// L'icône de traduction ne se montre que si AUCUN drapeau ne la dit déjà
     /// (#7599). Lue par la VUE : un site qui plie ses drapeaux après `make`
@@ -139,7 +141,8 @@ extension BubbleFooterModel {
         showsTranslate: Bool,
         sendStartedAt: Date? = nil,
         retryBandShown: Bool = false,
-        edit: BubbleEditMark? = nil
+        edit: BubbleEditMark? = nil,
+        integrity: HybridDeviceLayerIntegrity? = nil
     ) -> BubbleFooterModel {
         BubbleFooterModel(
             sender: sender,
@@ -150,7 +153,8 @@ extension BubbleFooterModel {
             isOffline: !isOnline,
             isMe: isMe,
             sendStartedAt: (isMe && deliveryStatus == .sending) ? sendStartedAt : nil,
-            edit: edit
+            edit: edit,
+            integrity: integrity
         )
     }
 

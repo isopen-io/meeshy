@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
 import androidx.work.WorkManager
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -81,6 +82,7 @@ internal class ChatComposerController(
     private val recentEmojis: RecentEmojiStore? = null,
     private val languageIdentifier: LanguageIdentifying = LanguageIdentifying.Unavailable,
     mentionContacts: MentionContacts = MentionContacts.None,
+    private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
 ) {
 
     private val mentions = MentionLookupDriver(
@@ -311,8 +313,10 @@ internal class ChatComposerController(
         val tray = pendingTray()
         val hasStaged = tray?.state?.value?.isEmpty == false
         if (!ComposerSendEligibility.canSend(text, hasStaged || clipboard != null, place != null)) return
-        // #13110 — an edit is a send: in an end-to-end conversation nothing leaves the device.
-        if (state.value.isEndToEnd) return
+        // #13110 — an edit is a send: in an end-to-end conversation nothing leaves the device in clear. #14591 — only the
+        // TEXT of a direct end-to-end conversation leaves, sealed by libsignal: no edit, no paste-as-file, no place.
+        if (state.value.isEndToEnd && !state.value.endToEndTextOpen) return
+        if (state.value.isEndToEnd && (state.value.editingMessageId != null || clipboard != null || place != null || hasStaged)) return
         stopTypingEmission()
         val editingId = state.value.editingMessageId
         if (editingId != null) {
@@ -340,6 +344,8 @@ internal class ChatComposerController(
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = state.value.replyingToMessageId
         val effects = state.value.pendingEffects
+        // #14591 — fixé au geste : un fil chiffré de bout en bout n'envoie JAMAIS par le chemin en clair.
+        val endToEndPeer = if (state.value.isEndToEnd) state.value.directPeerUserId ?: return else null
         val batch = tray?.takeForSend()
         // A manual pick is the source language; otherwise the text is identified at send, the
         // sender's own language as the fallback — never a partial detection of the typing (#12484).
@@ -391,6 +397,8 @@ internal class ChatComposerController(
                     )
                 } else if (clipboard != null) {
                     sendClipboardContent(text, clipboard, user, replyToId, effects)
+                } else if (endToEndPeer != null) {
+                    endToEnd.sendText(conversationId, endToEndPeer, text, sentLanguage, user, replyToId)
                 } else {
                     messageRepository.sendOptimistic(
                         conversationId = conversationId,

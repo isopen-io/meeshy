@@ -497,6 +497,7 @@ export class MessagingService {
           senderId: participant!.id,
           mentionedUserIds: request.mentionedUserIds,
           ...persistableEncryption(request.encryptedPayload),
+          deviceLayerRelay: request.deviceLayer,
           clientMessageId: request.clientMessageId
         }),
         { ...corr, conversationId }

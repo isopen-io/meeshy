@@ -103,6 +103,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // libsignal-android 0.105 le déclare dans son aar-metadata (`coreLibraryDesugaringEnabled=true`, #14591) :
+        // sans lui, `checkDebugAarMetadata` refuse la construction.
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -110,6 +113,12 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    // libsignal (#14591, ADR-030) : seule `libsignal_jni.so` part dans l'APK. La bibliothèque de TEST de Signal et les
+    // natifs de bureau que `libsignal-client` porte en ressources Java (Linux, macOS, Windows) n'y ont rien à faire.
+    packaging {
+        jniLibs { excludes += setOf("**/libsignal_jni_testing.so") }
+        resources { excludes += setOf("libsignal_jni_*.so", "libsignal_jni_*.dylib", "signal_jni_*.dll") }
     }
     testOptions {
         unitTests {
@@ -120,6 +129,7 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(project(":sdk-core"))
     implementation(project(":core:datastore"))
     implementation(project(":sdk-ui"))

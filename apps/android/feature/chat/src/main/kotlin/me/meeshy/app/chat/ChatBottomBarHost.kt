@@ -148,7 +148,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
             guestAllowance = state.guestAttachmentAllowance,
             conversationTitle = state.conversationTitle.orEmpty(),
             slowMode = rememberComposerSlowMode(state),
-            isEndToEnd = state.isEndToEnd,
+            isEndToEnd = state.composerClosedForEndToEnd,
             replyBanner = replyBanner,
             editingOriginalText = editingOriginalText,
             onStageVoiceFile = { file -> actions.stageFile(file, "audio/mp4") },
