@@ -47,7 +47,7 @@ class StickerTemplateCatalogTest {
 
     @Test
     fun `un identifiant inconnu ne fabrique rien`() {
-        assertThat(StickerTemplateCatalog.template("time.hourglass")).isNull()
+        assertThat(StickerTemplateCatalog.template("time.futureThing")).isNull()
         assertThat(StickerTemplateCatalog.fallbackEmoji("weather.sun")).isNull()
         assertThat(StickerTemplateCatalog.template("")).isNull()
     }

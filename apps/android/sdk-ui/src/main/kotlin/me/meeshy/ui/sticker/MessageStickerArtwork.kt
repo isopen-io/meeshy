@@ -32,7 +32,7 @@ public fun MessageStickerArtwork(spec: BubbleStickerSpec, modifier: Modifier = M
     val side = StickerBoxLaw.SIDE_DP.dp
     val label = messageStickerLabel(spec)
     val framed = modifier.semantics { contentDescription = label }
-    when (val source = spec.source) {
+    when (val source = spec.sourceWith(StickerTemplateArtwork::knows)) {
         is StickerRenderSource.Mee -> MeeFigure(filmId = source.id, side = side, modifier = framed, animates = animates)
         is StickerRenderSource.MeeInstant -> MeeInstantCatalog.byId(source.id)?.let { instant ->
             MeeInstantArtwork(instant, MeeSlot.slots(spec.sticker.slots), side, framed, animates)
