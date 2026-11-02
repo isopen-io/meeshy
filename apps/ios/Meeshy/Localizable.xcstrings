@@ -326502,6 +326502,288 @@
           }
         }
       }
+    },
+    "circles.ritual.consent.folding.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما الذي يُظهره، ولمن، وإلى متى، وكيف توقفه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was es zeigt, wem, wie lange, wie man es beendet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What it shows, to whom, for how long, how to stop"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qué muestra, a quién, durante cuánto tiempo, cómo detenerlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce que ça montre, à qui, combien de temps, comment arrêter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa mostra, a chi, per quanto tempo, come interromperlo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que mostra, para quem, por quanto tempo, como parar"
+          }
+        }
+      }
+    },
+    "circles.ritual.consent.withdrawal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستتمكن من سحب كل مشاركة في أي وقت من بطاقة هذا الشخص. قريبًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst jede Freigabe jederzeit über die Karte dieser Person zurückziehen. Bald verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You will be able to withdraw each share at any time, from this person's card. Coming soon."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Podrás retirar cada uso compartido en cualquier momento, desde la ficha de esta persona. Muy pronto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu pourras retirer chaque partage à tout moment, depuis la fiche de cette personne. Bientôt disponible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potrai ritirare ogni condivisione in qualsiasi momento, dalla scheda di questa persona. Presto disponibile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você poderá retirar cada compartilhamento a qualquer momento, na ficha desta pessoa. Em breve."
+          }
+        }
+      }
+    },
+    "circles.ritual.consent.listeningTitle.folding": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قد يكشف العنوان الكثير عنك (معتقدات، آراء، أذواق). لا يُحفظ شيء بعد انتهاء الاستماع. يمكنك استثناء تطبيقات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Titel kann viel über dich verraten (Überzeugungen, Meinungen, Vorlieben). Nach dem Hören wird nichts gespeichert. Du kannst Apps ausschließen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A title can say a lot about you (beliefs, opinions, tastes). Nothing is kept once listening ends. You can exclude apps."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un título puede decir mucho de ti (creencias, opiniones, gustos). No se guarda nada al terminar la escucha. Puedes excluir aplicaciones."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un titre peut en dire beaucoup sur toi (croyances, opinions, goûts). Rien n'est gardé après la fin de l'écoute. Tu peux exclure des applications."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un titolo può dire molto di te (convinzioni, opinioni, gusti). Non viene conservato nulla dopo la fine dell'ascolto. Puoi escludere delle app."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um título pode dizer muito sobre você (crenças, opiniões, gostos). Nada é guardado depois que a escuta termina. Você pode excluir aplicativos."
+          }
+        }
+      }
+    },
+    "circles.ritual.consent.locationLive.folding": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حتى عندما يكون التطبيق مغلقًا. تعرف دائمًا متى يكون نشطًا (شريط). وضع الشبح يخفيك دون أن يعلم أحد. ترى من نظر إلى موقعك ومتى (30 يومًا). توقفه بإشارة واحدة. سنسألك مجددًا بعد 30 يومًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auch wenn die App geschlossen ist. Du siehst immer, wann es aktiv ist (Banner). Der Geistmodus verbirgt dich, ohne dass es jemand merkt. Du siehst, wer deinen Standort wann angesehen hat (30 Tage). Du beendest es mit einer Geste. Wir fragen dich in 30 Tagen erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Even when the app is closed. You always know when it is on (banner). Ghost mode hides you without anyone knowing. You see who looked at your location and when (30 days). You stop it in one gesture. We will ask you again in 30 days."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluso con la app cerrada. Siempre sabes cuándo está activo (banner). El modo fantasma te oculta sin que nadie lo sepa. Ves quién miró tu ubicación y cuándo (30 días). Lo detienes con un gesto. Te lo volveremos a preguntar en 30 días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Même quand l'app est fermée. Tu sais toujours quand c'est actif (bandeau). Le mode fantôme te cache, sans qu'on le sache. Tu vois qui a regardé ta position et quand (30 jours). Tu arrêtes en un geste. On te redemandera dans 30 jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anche quando l'app è chiusa. Sai sempre quando è attivo (banner). La modalità fantasma ti nasconde senza che nessuno lo sappia. Vedi chi ha guardato la tua posizione e quando (30 giorni). Lo interrompi con un gesto. Te lo chiederemo di nuovo tra 30 giorni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesmo com o app fechado. Você sempre sabe quando está ativo (faixa). O modo fantasma esconde você sem que ninguém saiba. Você vê quem olhou sua localização e quando (30 dias). Você para com um gesto. Vamos perguntar de novo em 30 dias."
+          }
+        }
+      }
+    },
+    "circles.ritual.consent.locationHistory.folding": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحتفظ Meeshy بمواقعك 30 يومًا مشفّرة على خوادمه ثم يحذفها. لا يُسجَّل شيء في وضع الشبح."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy speichert deine Standorte 30 Tage verschlüsselt auf seinen Servern und löscht sie dann. Im Geistmodus wird nichts aufgezeichnet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy keeps your locations for 30 days, encrypted on its servers, then deletes them. Nothing is recorded in ghost mode."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy guarda tus ubicaciones 30 días, cifradas en sus servidores, y luego las borra. No se registra nada en modo fantasma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy garde tes positions 30 jours, chiffrées sur ses serveurs, puis les efface. Rien n'est enregistré en mode fantôme."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy conserva le tue posizioni per 30 giorni, cifrate sui suoi server, poi le cancella. In modalità fantasma non viene registrato nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Meeshy guarda suas localizações por 30 dias, criptografadas em seus servidores, e depois as apaga. Nada é registrado no modo fantasma."
+          }
+        }
+      }
+    },
+    "circles.ritual.consent.locationProximity.folding": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فقط إذا وافق %@ أيضًا. لا يُحفظ شيء عن المكان."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur wenn %@ ebenfalls zugestimmt hat. Vom Ort wird nichts gespeichert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only if %@ has accepted it too. Nothing about the place is kept."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo si %@ también lo ha aceptado. No se guarda nada del lugar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seulement si %@ l'a accepté aussi. Rien n'est gardé de l'endroit."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo se anche %@ l'ha accettato. Del luogo non viene conservato nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só se %@ também tiver aceitado. Nada sobre o local é guardado."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

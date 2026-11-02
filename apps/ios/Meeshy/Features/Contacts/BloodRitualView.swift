@@ -11,6 +11,7 @@ struct BloodRitualView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
+    @State private var showsPrivacyPolicy = false
     private var theme: ThemeManager { ThemeManager.shared }
 
     init(target: CircleRitualTarget, onFinished: @escaping () -> Void) {
@@ -35,6 +36,7 @@ struct BloodRitualView: View {
                 }
             }
         }
+        .sheet(isPresented: $showsPrivacyPolicy) { PrivacyPolicyView() }
         .adaptiveOnChange(of: viewModel.notice) { _, new in
             guard let new else { return }
             FeedbackToastManager.shared.showError(new)
@@ -62,6 +64,10 @@ struct BloodRitualView: View {
     // MARK: - Consentements
 
     private var consentStep: some View {
+        ScrollView { consentList }
+    }
+
+    private var consentList: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             Text(named(String(localized: "circles.ritual.consent.intro", defaultValue: "Avant de sceller, choisis ce que tu partages avec %@. Chaque partage est refusable, et tu pourras y revenir.", bundle: .main)))
                 .font(.subheadline)
@@ -69,6 +75,7 @@ struct BloodRitualView: View {
             ForEach(RelationRitualConsentKey.allCases, id: \.self) { key in
                 consentRow(key)
             }
+            consentFooter
             Button {
                 viewModel.proceedFromConsents()
             } label: {
@@ -92,8 +99,33 @@ struct BloodRitualView: View {
             Text(consentDetail(key))
                 .font(.footnote)
                 .foregroundStyle(theme.textMuted)
+            DisclosureGroup(BloodRitualConsentCopy.foldingTitle) {
+                Text(BloodRitualConsentCopy.folding(for: key, otherName: viewModel.displayName))
+                    .font(.footnote)
+                    .foregroundStyle(theme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, MeeshySpacing.xxs)
+            }
+            .font(.footnote.weight(.semibold))
+            .tint(theme.textSecondary)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Où retirer, et la politique de confidentialité (#13942, § 6). La route de retrait (#14401) et la version
+    /// enregistrée du texte (#14402) viendront côté serveur : rien n'est simulé ici.
+    private var consentFooter: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            Text(BloodRitualConsentCopy.withdrawal)
+                .font(.footnote)
+                .foregroundStyle(theme.textMuted)
+            Button(String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main)) {
+                showsPrivacyPolicy = true
+            }
+            .font(.footnote.weight(.semibold))
+            .frame(minHeight: MeeshyControlSize.tapTarget)
+        }
     }
 
     private func consentTitle(_ key: RelationRitualConsentKey) -> String {

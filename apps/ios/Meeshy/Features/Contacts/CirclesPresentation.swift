@@ -174,3 +174,33 @@ extension CircleProgressSummary.MissingPiece {
         }
     }
 }
+
+/// Le dépliant de chaque partage du rituel du Sang (#13942, § 6) : ce que ça montre, à qui, combien de temps, où c'est
+/// gardé, comment arrêter. Textes à valider par le juriste (§ 10) ; la version enregistrée du texte (#14402) et la
+/// route de retrait (#14401) viendront côté serveur.
+nonisolated enum BloodRitualConsentCopy {
+
+    static var foldingTitle: String {
+        String(localized: "circles.ritual.consent.folding.title", defaultValue: "Ce que ça montre, à qui, combien de temps, comment arrêter", bundle: .main)
+    }
+
+    /// Où retirer un consentement : la fiche de la personne, à la même place que l'activation (E3). La route de
+    /// retrait n'existe pas encore (#14401) : l'écran le dit.
+    static var withdrawal: String {
+        String(localized: "circles.ritual.consent.withdrawal", defaultValue: "Tu pourras retirer chaque partage à tout moment, depuis la fiche de cette personne. Bientôt disponible.", bundle: .main)
+    }
+
+    static func folding(for key: RelationRitualConsentKey, otherName: String) -> String {
+        switch key {
+        case .listeningTitle:
+            return String(localized: "circles.ritual.consent.listeningTitle.folding", defaultValue: "Un titre peut en dire beaucoup sur toi (croyances, opinions, goûts). Rien n'est gardé après la fin de l'écoute. Tu peux exclure des applications.", bundle: .main)
+        case .locationLive:
+            return String(localized: "circles.ritual.consent.locationLive.folding", defaultValue: "Même quand l'app est fermée. Tu sais toujours quand c'est actif (bandeau). Le mode fantôme te cache, sans qu'on le sache. Tu vois qui a regardé ta position et quand (30 jours). Tu arrêtes en un geste. On te redemandera dans 30 jours.", bundle: .main)
+        case .locationHistory:
+            return String(localized: "circles.ritual.consent.locationHistory.folding", defaultValue: "Meeshy garde tes positions 30 jours, chiffrées sur ses serveurs, puis les efface. Rien n'est enregistré en mode fantôme.", bundle: .main)
+        case .locationProximity:
+            let format = String(localized: "circles.ritual.consent.locationProximity.folding", defaultValue: "Seulement si %@ l'a accepté aussi. Rien n'est gardé de l'endroit.", bundle: .main)
+            return String(format: format, otherName)
+        }
+    }
+}
