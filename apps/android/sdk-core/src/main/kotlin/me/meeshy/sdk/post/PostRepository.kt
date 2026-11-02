@@ -79,6 +79,7 @@ class PostRepository @Inject constructor(
     private val _feedSyncedAt = MutableStateFlow<Long?>(null)
 
     private val diskRestore = FeedDiskRestore(feedDisk)
+    private val detailMemo = PostDetailMemo()
 
     // Cursor pagination state (port of FeedViewModel.nextCursor / hasMore).
     @Volatile
@@ -209,6 +210,7 @@ class PostRepository @Inject constructor(
         diskRestore.reset()
         _feedCache.value = null
         _feedSyncedAt.value = null
+        detailMemo.clear()
         feedCursor = null
         _feedHasMore.value = true
         likeFlips.clear()
@@ -217,6 +219,18 @@ class PostRepository @Inject constructor(
 
     /** The post as the feed cache holds it, or `null` when it is not there. */
     fun cachedPost(postId: String): ApiPost? = _feedCache.value?.firstOrNull { it.id == postId }
+
+    /**
+     * Ce que l'appareil connaît déjà de ce post, sans réseau (#14467) : la carte du fil, sinon le dernier post qu'un détail
+     * a lu, sinon le fil gardé sur le disque. Ne suspend pas quand la mémoire le tient : le détail se peint dès sa première
+     * image.
+     */
+    suspend fun knownPost(postId: String): ApiPost? {
+        cachedPost(postId)?.let { return it }
+        detailMemo.get(postId)?.let { return it }
+        restoreFromDisk()
+        return cachedPost(postId)
+    }
 
     /**
      * The explicit-state twin of [toggleLike], for a surface that owns the post itself (the
@@ -559,8 +573,12 @@ class PostRepository @Inject constructor(
     suspend fun delete(postId: String): NetworkResult<Unit> =
         apiCall { postApi.delete(postId) }
 
-    suspend fun getPost(postId: String): NetworkResult<ApiPost> =
-        apiCall { postApi.getPost(postId) }
+    suspend fun getPost(postId: String): NetworkResult<ApiPost> {
+        val ticket = fence?.currentTicket()
+        return apiCall { postApi.getPost(postId) }.also { result ->
+            if (result is NetworkResult.Success) fence.commitOrWrite(ticket) { detailMemo.keep(result.data) }
+        }
+    }
 
     /**
      * **Non-durable.** Hits the network directly with no outbox row — unlike
