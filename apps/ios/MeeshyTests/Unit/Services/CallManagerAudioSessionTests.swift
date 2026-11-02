@@ -512,7 +512,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
 
         XCTAssertTrue(
-            newDevBody.contains("if !call.applySpeakerRoute()"),
+            newDevBody.contains("if !call.audio.applySpeakerRoute()"),
             ".newDeviceAvailable must check applySpeakerRoute()'s result and revert isSpeaker on " +
             "failure — same discipline as toggleSpeaker(), otherwise a route-priority failure leaves " +
             "isSpeaker desynced from the real audio route."
@@ -3462,7 +3462,7 @@ final class CallManagerHoldTests: XCTestCase {
         }
         let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("!isVideoSuspendedByCaptureInterruption"),
+            body.contains("!call.isVideoSuspendedByCaptureInterruption"),
             "handleHold unhold path must guard on !isVideoSuspendedByCaptureInterruption — " +
             "restoring video while backgrounded would send a false 'camera active' " +
             "signal to the peer because iOS prevents actual camera capture anyway")
@@ -3603,12 +3603,12 @@ final class CallManagerHoldTests: XCTestCase {
         }
         let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
         XCTAssertTrue(
-            body.contains("let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") ||
+            body.contains("let needsRenegotiation = await call.webRTCService.downgradeFromVideo()") ||
             body.contains("let needsRenegotiation = await self?.webRTCService.downgradeFromVideo()"),
             "handleHold's hold path must capture downgradeFromVideo()'s needsRenegotiation " +
             "return value instead of discarding it with `_ =`")
         XCTAssertTrue(
-            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)"),
+            body.contains("call.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)"),
             "handleHold's hold path must follow a needed renegotiation with " +
             "createOffer()+emitCallOffer(isVideo: false) — mirroring toggleVideo/" +
             "applySurvivalVideoSend — so the peer's negotiated SDP direction " +
@@ -3635,18 +3635,18 @@ final class CallManagerHoldTests: XCTestCase {
         // in a do/catch instead (see CallManagerHoldTaskTrackingTests's newer
         // coverage in CallManagerTests.swift for the full catch-branch checks).
         XCTAssertTrue(
-            body.contains("try await self.webRTCService.upgradeToVideo()") ||
+            body.contains("try await call.webRTCService.upgradeToVideo()") ||
             body.contains("try await self?.webRTCService.upgradeToVideo()"),
             "handleHold's unhold path must capture upgradeToVideo()'s needsRenegotiation " +
             "return value inside a do/catch — not discard it with `try?`")
         XCTAssertFalse(
-            body.contains("try? await self.webRTCService.upgradeToVideo()") ||
+            body.contains("try? await call.webRTCService.upgradeToVideo()") ||
             body.contains("try? await self?.webRTCService.upgradeToVideo()"),
             "handleHold's unhold path must not use `try?` here — a camera-permission " +
             "failure must not be silently discarded, leaving isVideoEnabled stuck at true " +
             "with no video track and no user feedback.")
         XCTAssertTrue(
-            body.contains("self.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)"),
+            body.contains("call.emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)"),
             "handleHold's unhold path must follow a needed renegotiation with " +
             "createOffer()+emitCallOffer(isVideo: true) so outbound video is actually " +
             "restored at the negotiated-SDP level, not just the local track/direction")
@@ -4092,7 +4092,7 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
         // The post-backoff guard must pattern-match on `.reconnecting` (not just
         // isActive) to detect a natural recovery during the sleep window.
         XCTAssertTrue(
-            fnBody.contains("case .reconnecting(let current) = self.callState"),
+            fnBody.contains("case .reconnecting(let current) = call.callState"),
             "Post-backoff guard must match .reconnecting(let current) = self.callState, " +
             "not callState.isActive — .connected is also active and would allow a stale " +
             "restart offer to disrupt a naturally recovered connection"
@@ -4134,7 +4134,7 @@ final class CallManagerSurvivalControllerReconnectGuardTests: XCTestCase {
         // restart is in progress.
         XCTAssertTrue(
             fnBody.contains("case .reconnecting = callState"),
-            "applySurvivalVideoSend must guard 'if case .reconnecting = callState { return false }' " +
+            "applySurvivalVideoSend must guard 'if case .reconnecting = call.callState { return false }' " +
             "to prevent SDP glare when the survival controller fires during ICE restart"
         )
     }
@@ -4377,8 +4377,8 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
     /// hors fenêtre alors qu'aucun comportement n'avait changé — exactement le
     /// défaut que `DeclarationBodyScanner` existe pour éliminer (cf. son en-tête).
     private func startNetworkMonitoringBody(_ source: String) throws -> String {
-        guard let body = DeclarationBodyScanner.body(containing: "func startNetworkMonitoring()", in: source) else {
-            XCTFail("startNetworkMonitoring not found"); return ""
+        guard let body = DeclarationBodyScanner.body(containing: "static func evaluate(", in: source) else {
+            XCTFail("CallNetworkPathChange.evaluate not found"); return ""
         }
         return body
     }
@@ -4396,7 +4396,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
             "set a local `interfaceChanged` flag when the active interface type changes."
         )
         XCTAssertTrue(
-            handlerBody.contains("attemptReconnection"),
+            handlerBody.contains(".handoff") && (try callManagerSource()).contains("call.reconnector.attemptReconnection()"),
             "networkMonitor.pathUpdateHandler must call attemptReconnection() on an " +
             "interface change — stale ICE candidates from the old interface require a " +
             "full ICE restart to re-negotiate valid candidates on the new interface."

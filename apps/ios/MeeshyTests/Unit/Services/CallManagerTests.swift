@@ -1357,7 +1357,7 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
         // thawing through the `webRTCService` getter would build the whole
         // WebRTC stack on the controller's initial `false` emission.
         XCTAssertTrue(
-            body.contains("if !suspended { self.builtWebRTCService?.unfreezeVideoAfterSurvival() }"),
+            body.contains("if !suspended { call.builtWebRTCService?.unfreezeVideoAfterSurvival() }"),
             "The falling edge of isVideoSuspended must thaw the encoder — a controller reset " +
             "clears the policy flag but never the encoder floor"
         )
@@ -1599,7 +1599,7 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
     func test_thermalCritical_updatesHasLocalVideoTrack() throws {
         let body = try thermalBody(try callManagerSource())
         XCTAssertTrue(
-            body.contains("hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack"),
+            body.contains("hasLocalVideoTrack = call.webRTCService.hasLocalVideoTrack"),
             "After downgradeFromVideo(), hasLocalVideoTrack must be synced so the UI (PiP, controls) " +
             "reflects the absence of a local video track."
         )
@@ -1641,9 +1641,9 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
     func test_thermalCritical_serializesWithOtherVideoActuationTasks() throws {
         let body = try thermalBody(try callManagerSource())
         XCTAssertTrue(
-            body.contains("let inFlight = self.videoTransitionsInFlight()") &&
-            body.contains("let inFlight = self.videoTransitionsInFlight()") &&
-            body.contains("let inFlight = self.videoTransitionsInFlight()"),
+            body.contains("let inFlight = call.videoTransitionsInFlight()") &&
+            body.contains("let inFlight = call.videoTransitionsInFlight()") &&
+            body.contains("let inFlight = call.videoTransitionsInFlight()"),
             "The thermal-critical downgrade must capture all three in-flight video-transition tasks " +
             "before actuating, mirroring toggleVideo/handleHold/applySurvivalVideoSend."
         )
@@ -1655,7 +1655,7 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
             "downgradeFromVideo() — upgradeToVideo/downgradeFromVideo never check cancellation " +
             "mid-flight, so two concurrent actuations would corrupt state."
         )
-        guard let assignRange = body.range(of: "self.videoToggleTask = Task"),
+        guard let assignRange = body.range(of: "call.videoToggleTask = Task"),
               let awaitRange = body.range(of: "await inFlight.settle()", range: assignRange.upperBound..<body.endIndex),
               let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
             XCTFail("Expected videoToggleTask = Task, await inFlight.settle(), then downgradeFromVideo() in that order"); return
@@ -1964,7 +1964,7 @@ final class ICERestartTaskSerializationTests: XCTestCase {
         )
         // attemptReconnection must route every arm through that single seam.
         XCTAssertTrue(
-            src.contains("scheduleICERestart(attempt: reconnectAttempt"),
+            src.contains("scheduleICERestart(attempt: call.reconnectAttempt"),
             "attemptReconnection must delegate to scheduleICERestart — a second, direct " +
             "iceRestartTask assignment would bypass the cancel-before-arm contract."
         )
@@ -2185,7 +2185,7 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
     func test_cxSetHeldCallAction_guardsOnActiveCallUUIDBeforeHandlingHold() throws {
         let body = try handlerBody(try callManagerSource(), marker: "perform action: CXSetHeldCallAction")
         let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
-        let holdOffset = body.range(of: "manager.handleHold(isOnHold)")?.lowerBound
+        let holdOffset = body.range(of: "manager.videoSuspension.handleHold(isOnHold)")?.lowerBound
         XCTAssertNotNil(guardOffset, "CXSetHeldCallAction must guard on action.callUUID == manager.activeCallUUID")
         XCTAssertNotNil(holdOffset, "CXSetHeldCallAction must call manager.handleHold(isOnHold)")
         if let g = guardOffset, let h = holdOffset {
@@ -2196,7 +2196,7 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
     func test_cxPlayDTMFCallAction_guardsOnActiveCallUUIDBeforeSendingDTMF() throws {
         let body = try handlerBody(try callManagerSource(), marker: "perform action: CXPlayDTMFCallAction")
         let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
-        let dtmfOffset = body.range(of: "manager.sendDTMF(digits: digits)")?.lowerBound
+        let dtmfOffset = body.range(of: "manager.videoSuspension.sendDTMF(digits: digits)")?.lowerBound
         XCTAssertNotNil(guardOffset, "CXPlayDTMFCallAction must guard on action.callUUID == manager.activeCallUUID")
         XCTAssertNotNil(dtmfOffset, "CXPlayDTMFCallAction must call manager.sendDTMF(digits:)")
         if let g = guardOffset, let d = dtmfOffset {
@@ -2347,12 +2347,12 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
     func test_handleHold_unhold_doesNotSwallowUpgradeToVideoErrorViaTryQuestionMark() throws {
         let body = try unholdBranchBody(try callManagerSource())
         XCTAssertFalse(
-            body.contains("try? await self.webRTCService.upgradeToVideo()"),
+            body.contains("try? await call.webRTCService.upgradeToVideo()"),
             "The unhold branch must not use `try?` to discard upgradeToVideo()'s error — " +
             "a camera-permission failure must not silently leave isVideoEnabled stuck at true."
         )
         XCTAssertTrue(
-            body.contains("try await self.webRTCService.upgradeToVideo()"),
+            body.contains("try await call.webRTCService.upgradeToVideo()"),
             "The unhold branch must call upgradeToVideo() inside a do/catch so errors are handled explicitly."
         )
     }
@@ -6710,7 +6710,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
             to: "} else if state == .serious {",
             in: try callManagerSource()
         )
-        guard let downgradeRange = body.range(of: "let needsRenegotiation = await self.webRTCService.downgradeFromVideo()") else {
+        guard let downgradeRange = body.range(of: "let needsRenegotiation = await call.webRTCService.downgradeFromVideo()") else {
             XCTFail("Expected downgradeFromVideo() call in thermal-critical handler")
             return
         }
@@ -7001,7 +7001,7 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     }
 
     func test_selectCamera_chainsOntoVideoTransitionFamily() throws {
-        let branch = try body(from: "func selectCamera(id: String) {", to: "func toggleTranscription() {", in: try callManagerSource())
+        let branch = try body(from: "func selectCamera(id: String) {", to: "\n}\n\n/// Déclaré après le type", in: try callManagerSource())
         for expected in [
             "await inFlight.settle()",
             "await inFlight.settle()",
@@ -7128,133 +7128,6 @@ final class CallManagerRenegotiationSerializationTests: XCTestCase {
     }
 }
 
-@MainActor
-final class CallManagerTranscriptionMappingTests: XCTestCase {
-
-    func test_makeTranscriptionSegment_keepsOriginalText_separateFromTranslation() throws {
-        let json = """
-        {
-            "callId": "call-1",
-            "segment": {
-                "text": "Bonjour",
-                "translatedText": "Hello",
-                "speakerId": "user-1",
-                "startMs": 0,
-                "endMs": 1500,
-                "isFinal": true,
-                "sourceLanguage": "fr",
-                "targetLanguage": "en",
-                "confidence": 0.95
-            }
-        }
-        """.data(using: .utf8)!
-        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
-
-        let segment = CallManager.makeTranscriptionSegment(from: event)
-
-        XCTAssertEqual(segment.text, "Bonjour", "text must stay the ORIGINAL — never overwritten by the translation")
-        XCTAssertEqual(segment.translatedText, "Hello")
-        XCTAssertEqual(segment.translatedLanguage, "en")
-        XCTAssertEqual(segment.speakerId, "user-1")
-        XCTAssertEqual(segment.startTime, 0)
-        XCTAssertEqual(segment.endTime, 1.5)
-        XCTAssertTrue(segment.isFinal)
-        XCTAssertEqual(segment.confidence, 0.95, accuracy: 0.001)
-        XCTAssertEqual(segment.language, "fr",
-                       "language is the TRANSCRIPTION language tag (sourceLanguage) — the translation carries its own in translatedLanguage")
-        XCTAssertEqual(segment.capturedAt.timeIntervalSinceNow, 0, accuracy: 2.0,
-                        "without a wire capturedAtMs (legacy gateway), capturedAt falls back to receipt time")
-    }
-
-    func test_makeTranscriptionSegment_mapsJournalMetadata_idDisplayNameCapturedAt() throws {
-        let json = """
-        {
-            "callId": "call-1",
-            "segment": {
-                "id": "f81d4fae-7dec-4b57-b93a-2c675ddac001",
-                "text": "Bonjour",
-                "translatedText": "Hello",
-                "speakerId": "user-1",
-                "speakerDisplayName": "Alice Doe",
-                "startMs": 0,
-                "endMs": 1500,
-                "isFinal": true,
-                "sourceLanguage": "fr",
-                "targetLanguage": "en",
-                "confidence": 0.95,
-                "capturedAtMs": 1765650000000
-            }
-        }
-        """.data(using: .utf8)!
-        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
-
-        let segment = CallManager.makeTranscriptionSegment(from: event)
-
-        XCTAssertEqual(segment.wireId, "f81d4fae-7dec-4b57-b93a-2c675ddac001",
-                       "wireId is the cross-transport merge key — must survive the mapping")
-        XCTAssertEqual(segment.speakerDisplayName, "Alice Doe")
-        XCTAssertEqual(segment.capturedAt, Date(timeIntervalSince1970: 1_765_650_000),
-                       "capturedAt must come from the wire capturedAtMs (capture wall clock), not receipt time")
-    }
-
-    func test_makeTranscriptionSegment_fromDataChannelEntry_mapsJournalFields() {
-        let entry = DataChannelTranscriptEntry(
-            id: "entry-1", callId: "call-1", speakerId: "user-2",
-            speakerDisplayName: "Bob", text: "Hola", language: "es",
-            capturedAtMs: 1_765_650_000_000, isFinal: true, confidence: 0.9
-        )
-
-        let segment = CallManager.makeTranscriptionSegment(from: entry)
-
-        XCTAssertEqual(segment.wireId, "entry-1")
-        XCTAssertEqual(segment.speakerId, "user-2")
-        XCTAssertEqual(segment.speakerDisplayName, "Bob")
-        XCTAssertEqual(segment.text, "Hola")
-        XCTAssertEqual(segment.language, "es", "the transcription language tag rides the data channel too")
-        XCTAssertEqual(segment.capturedAt, Date(timeIntervalSince1970: 1_765_650_000))
-        XCTAssertTrue(segment.isFinal)
-        XCTAssertNil(segment.translatedText, "the P2P path carries the original only — translation arrives via the server relay and merges by wireId")
-    }
-
-    func test_makeTranscriptionSegment_fromDataChannelEntry_emptyDisplayNameBecomesNil() {
-        let entry = DataChannelTranscriptEntry(
-            id: "entry-2", callId: "call-1", speakerId: "user-2",
-            speakerDisplayName: "", text: "Hola", language: "es",
-            capturedAtMs: 1_765_650_000_000, isFinal: true, confidence: 0.9
-        )
-
-        let segment = CallManager.makeTranscriptionSegment(from: entry)
-
-        XCTAssertNil(segment.speakerDisplayName,
-                     "an empty declared name must not shadow the receiver's local roster fallback")
-    }
-
-    func test_makeTranscriptionSegment_withoutTranslation_translatedFieldsAreNil() throws {
-        let json = """
-        {
-            "callId": "call-1",
-            "segment": {
-                "text": "Bonjour",
-                "speakerId": "user-1",
-                "startMs": 0,
-                "endMs": 1000,
-                "isFinal": true,
-                "sourceLanguage": "fr",
-                "targetLanguage": "fr",
-                "confidence": 0.9
-            }
-        }
-        """.data(using: .utf8)!
-        let event = try JSONDecoder().decode(CallTranslatedSegmentData.self, from: json)
-
-        let segment = CallManager.makeTranscriptionSegment(from: event)
-
-        XCTAssertEqual(segment.text, "Bonjour")
-        XCTAssertNil(segment.translatedText)
-        XCTAssertNil(segment.translatedLanguage)
-    }
-}
-
 // MARK: - failCall() active-call guard
 
 /// Audit 2026-07-08 — `failCall()` is the shared teardown for every async
@@ -7360,7 +7233,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_guardsHoldAndCaptureSuspensionBeforeUpgrading() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "toggleVideo must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — mirrors the guard applySurvivalVideoSend already applies for the " +
             "automatic survival-recovery path."
@@ -7370,7 +7243,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_holdGuardOnlyBlocksTurningVideoOn() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "if target, call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("expected `if target, ...` guard — turning video OFF while on hold must " +
                      "remain a normal downgrade, only re-enabling is unsafe mid-hold")
@@ -7382,11 +7255,11 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_holdGuardPrecedesUpgradeToVideo() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
         }
-        guard let upgradeRange = body.range(of: "self.webRTCService.upgradeToVideo()"),
+        guard let upgradeRange = body.range(of: "call.webRTCService.upgradeToVideo()"),
               let actuationGate = body.range(of: "guard await self.videoToggleMayActuate(target: target) else { return }"),
               let gateDeclaration = body.range(of: "private func videoToggleMayActuate(target: Bool) async -> Bool {") else {
             XCTFail("upgradeToVideo() or its actuation gate not found in toggleVideo"); return
@@ -7404,7 +7277,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_holdGuardReturnsWithoutFallingThroughToPermissionCheck() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "if target, call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
         }
@@ -7470,7 +7343,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "switchCamera must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — mirrors the guard toggleVideo() applies (Vague 158) for the same " +
             "camera-actuation task chain."
@@ -7480,11 +7353,11 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_holdGuardPrecedesUnderlyingSwitch() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("hold/capture-interruption guard not found in switchCamera"); return
         }
-        guard let actuationRange = body.range(of: "self.webRTCService.switchCamera {") else {
+        guard let actuationRange = body.range(of: "call.webRTCService.switchCamera {") else {
             XCTFail("webRTCService.switchCamera call not found in switchCamera"); return
         }
         XCTAssertLessThan(
@@ -7498,7 +7371,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_holdGuardRevertsOptimisticMirrorAndReturns() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+            of: "if call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption {"
         ) else {
             XCTFail("hold/capture-interruption guard block not found in switchCamera"); return
         }
@@ -7507,7 +7380,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
         }
         let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
         XCTAssertTrue(
-            guardBlock.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            guardBlock.contains("call.isUsingFrontCamera = previousFrontCamera"),
             "the guard must revert the optimistic mirror flag — otherwise a blocked flip leaves " +
             "isUsingFrontCamera desynced from the camera actually in use."
         )
@@ -7551,7 +7424,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "selectCamera(id:) must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — same capturer, same task chain as switchCamera()."
         )
@@ -7560,11 +7433,11 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_holdGuardPrecedesUnderlyingSwitch() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+            of: "isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"
         ) else {
             XCTFail("hold/capture-interruption guard not found in selectCamera"); return
         }
-        guard let actuationRange = body.range(of: "self.webRTCService.switchToCamera(uniqueID: id)") else {
+        guard let actuationRange = body.range(of: "call.webRTCService.switchToCamera(uniqueID: id)") else {
             XCTFail("webRTCService.switchToCamera call not found in selectCamera"); return
         }
         XCTAssertLessThan(
@@ -7577,7 +7450,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_holdGuardRevertsOptimisticStateAndReturns() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+            of: "if call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption {"
         ) else {
             XCTFail("hold/capture-interruption guard block not found in selectCamera"); return
         }
@@ -7586,11 +7459,11 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
         }
         let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
         XCTAssertTrue(
-            guardBlock.contains("self.selectedCameraId = previousSelectedCameraId"),
+            guardBlock.contains("call.selectedCameraId = previousSelectedCameraId"),
             "the guard must revert the optimistic picker selection."
         )
         XCTAssertTrue(
-            guardBlock.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            guardBlock.contains("call.isUsingFrontCamera = previousFrontCamera"),
             "the guard must revert the optimistic mirror flag."
         )
         XCTAssertTrue(

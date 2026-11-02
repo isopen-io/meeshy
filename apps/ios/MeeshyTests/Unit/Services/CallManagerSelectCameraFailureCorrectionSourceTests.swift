@@ -52,23 +52,23 @@ final class CallManagerSelectCameraFailureCorrectionSourceTests: XCTestCase {
         guard let fn = body(
             ((try? AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")) ?? ""),
             from: "func selectCamera(id: String) {",
-            to: "var videoFilters: VideoFilterPipeline"
+            to: "\n}\n\n/// Déclaré après le type"
         ) else { return }
         XCTAssertTrue(
-            fn.contains("let previousSelectedCameraId = selectedCameraId"),
+            fn.contains("let previousSelectedCameraId = call.selectedCameraId"),
             "selectCamera must capture the pre-switch selectedCameraId before mutating it optimistically."
         )
         XCTAssertTrue(
-            fn.contains("let previousFrontCamera = isUsingFrontCamera"),
+            fn.contains("let previousFrontCamera = call.isUsingFrontCamera"),
             "selectCamera must capture the pre-switch mirroring state before mutating it optimistically."
         )
         XCTAssertTrue(
-            fn.contains("self.selectedCameraId = previousSelectedCameraId"),
+            fn.contains("call.selectedCameraId = previousSelectedCameraId"),
             "selectCamera must revert selectedCameraId when the underlying camera switch fails — " +
             "otherwise the camera picker points at a camera that never activated for the rest of the call."
         )
         XCTAssertTrue(
-            fn.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            fn.contains("call.isUsingFrontCamera = previousFrontCamera"),
             "selectCamera must revert isUsingFrontCamera when the underlying camera switch fails — " +
             "otherwise the self-preview mirrors the wrong way for the rest of the call with no correction path."
         )

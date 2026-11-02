@@ -160,7 +160,7 @@ extension CallView {
                 label: CallMyImageCopy.flip,
                 hint: CallMyImageCopy.flipHint
             ) {
-                callManager.switchCamera()
+                callManager.cameraActuator.switchCamera()
             }
         case .cameraPicker:
             selfTileCameraPicker
@@ -184,7 +184,7 @@ extension CallView {
             toggleState: isEnabled
         ) {
             HapticFeedback.light()
-            callManager.toggleVideo()
+            callManager.cameraActuator.toggleVideo()
         }
         // Le partage d'écran remplace la piste caméra : la bascule attend.
         .disabled(callManager.screenShare.isSharing)
@@ -196,7 +196,7 @@ extension CallView {
         Menu {
             ForEach(callManager.availableCameras) { camera in
                 Button {
-                    callManager.selectCamera(id: camera.id)
+                    callManager.cameraActuator.selectCamera(id: camera.id)
                 } label: {
                     Label(camera.displayName, systemImage: callManager.selectedCameraId == camera.id ? "checkmark" : "camera")
                 }

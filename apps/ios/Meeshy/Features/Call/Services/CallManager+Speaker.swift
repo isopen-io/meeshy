@@ -49,21 +49,6 @@ nonisolated enum CallSpeakerRoute {
     }
 }
 
-extension CallManager {
-    /// Applique la route du haut-parleur SANS bloquer le fil principal, puis
-    /// rend son issue sur le fil principal. Appel inactif : rien à appliquer,
-    /// rien à annuler — l'issue est un succès.
-    func applySpeakerRouteOffMain(completion: @escaping @MainActor @Sendable (Bool) -> Void) {
-        guard callState.isActive else { return completion(true) }
-        let speaker = isSpeaker
-        let port = CallSpeakerRoute.port(isSpeaker: speaker)
-        audioSessionQueue.async {
-            let applied = CallSpeakerRoute.override(port, isSpeaker: speaker)
-            Task { @MainActor in completion(applied) }
-        }
-    }
-}
-
 fileprivate extension Logger {
     nonisolated static let calls = MeeshyLog.logger(.calls)
 }
