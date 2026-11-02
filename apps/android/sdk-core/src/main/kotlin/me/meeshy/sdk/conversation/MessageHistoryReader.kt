@@ -6,6 +6,10 @@ import me.meeshy.sdk.session.commitOrWrite
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import java.time.Instant
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.SyncMetaDao
@@ -52,10 +56,10 @@ internal class MessageHistoryReader(
      * touches a cache source at all — a per-instance field would reset on
      * every call and never see [loadOlder]'s growth.
      */
-    private val historyWindowSizes = ConcurrentHashMap<String, MutableStateFlow<Int>>()
+    private val historyWindows = ConcurrentHashMap<String, MutableStateFlow<HistoryWindow>>()
 
-    private fun historyWindow(conversationId: String): MutableStateFlow<Int> =
-        historyWindowSizes.getOrPut(conversationId) { MutableStateFlow(INITIAL_HISTORY_WINDOW) }
+    private fun historyWindow(conversationId: String): MutableStateFlow<HistoryWindow> =
+        historyWindows.getOrPut(conversationId) { MutableStateFlow(HistoryWindow.Recent(INITIAL_HISTORY_WINDOW)) }
 
     /**
      * Cache-first message list for a conversation (ARCHITECTURE.md §4): the
@@ -66,8 +70,73 @@ internal class MessageHistoryReader(
         conversationId: String,
         policy: CachePolicy = CachePolicy.Default,
         onSyncError: (Throwable) -> Unit = {},
-    ): Flow<CacheResult<List<LocalMessage>>> =
-        cacheFirstFlow(policy, cacheSource(conversationId), onRevalidateError = onSyncError)
+    ): Flow<CacheResult<List<LocalMessage>>> {
+        returnToPresent(conversationId)
+        return cacheFirstFlow(policy, cacheSource(conversationId), onRevalidateError = onSyncError)
+    }
+
+    /** #14670 — an anchored window gives way to the recent one: a new open, a send, « back to the present ». */
+    fun returnToPresent(conversationId: String) {
+        historyWindow(conversationId).update { if (it is HistoryWindow.Anchored) HistoryWindow.Recent(INITIAL_HISTORY_WINDOW) else it }
+    }
+
+    /**
+     * #14670 — opens the thread ON [messageId] (a search hit, a link). A message already in the observed
+     * window moves nothing; otherwise the window centred on it is read (`around`), merged into Room, and
+     * the observed window is anchored on it: from its oldest row to its newest when newer messages remain
+     * (paged by [loadNewer]), to the present otherwise. Throws on a network failure.
+     */
+    suspend fun loadAround(conversationId: String, messageId: String, limit: Int = OLDER_PAGE_SIZE): MessageLanding {
+        if (isObserved(conversationId, messageId)) return MessageLanding.InWindow
+        val ticket = fence?.currentTicket()
+        val response = when (val result = rawApiCall { messageApi.listWindowAround(conversationId, messageId, limit) }) {
+            is NetworkResult.Success -> result.data
+            is NetworkResult.Failure -> throw MessageSyncException(result.error.message)
+        }
+        if (!response.success) throw MessageSyncException("around window refused")
+        val page = response.data
+        val stamps = page.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }
+        val from = stamps.minOrNull()
+        if (page.none { it.id == messageId } || from == null) return MessageLanding.NotFound
+        val hasNewer = response.hasNewer == true
+        fence.commitOrWrite(ticket) { ingestion().ingest(page, clock.nowMillis()) } ?: return MessageLanding.NotFound
+        historyWindow(conversationId).value = HistoryWindow.Anchored(from, if (hasNewer) stamps.max() else null)
+        return MessageLanding.Anchored(hasNewer = hasNewer, hasOlder = response.cursorPagination?.hasMore ?: true)
+    }
+
+    /**
+     * #14670 — forward pagination of an anchored window: the page after its newest row (`after`), merged
+     * into Room, the window's newer bound moved to it — or released to the present once the server has
+     * nothing newer. Returns whether newer messages remain; inert outside an anchored window.
+     */
+    suspend fun loadNewer(conversationId: String, pageSize: Int = OLDER_PAGE_SIZE): Boolean {
+        val window = historyWindow(conversationId).value as? HistoryWindow.Anchored ?: return false
+        val through = window.throughMillis ?: return false
+        val ticket = fence?.currentTicket()
+        val after = Instant.ofEpochMilli(through).toString()
+        val response = when (val result = rawApiCall { messageApi.listAfter(conversationId, after, pageSize) }) {
+            is NetworkResult.Success -> result.data
+            is NetworkResult.Failure -> throw MessageSyncException(result.error.message)
+        }
+        if (!response.success) throw MessageSyncException("newer page refused")
+        val page = response.data
+        fence.commitOrWrite(ticket) { ingestion().ingest(page, clock.nowMillis()) } ?: return true
+        val newest = page.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.maxOrNull()
+        val reachedPresent = response.cursorPagination?.hasMore != true || newest == null || newest <= through
+        historyWindow(conversationId).update { current ->
+            if (current != window) current else window.copy(throughMillis = if (reachedPresent) null else newest)
+        }
+        return !reachedPresent
+    }
+
+    private suspend fun isObserved(conversationId: String, messageId: String): Boolean =
+        when (val window = historyWindow(conversationId).value) {
+            is HistoryWindow.Recent -> messageDao.recentForConversation(conversationId, window.size).any { it.id == messageId }
+            is HistoryWindow.Anchored -> messageDao.find(messageId)?.takeIf { it.conversationId == conversationId }
+                ?.let { it.createdAt >= window.fromMillis && it.createdAt <= (window.throughMillis ?: Long.MAX_VALUE) } == true
+        }
+
+    private fun ingestion() = MessageIngestPipeline(database, regime = regime, events = events, erasures = erasures)
 
     /** Explicit refresh of a conversation's messages (pull / retry). Throws on failure. */
     suspend fun refresh(conversationId: String) {
@@ -114,7 +183,11 @@ internal class MessageHistoryReader(
      */
     suspend fun loadOlder(conversationId: String, pageSize: Int = OLDER_PAGE_SIZE): Boolean {
         val ticket = fence?.currentTicket()
-        val cursor = messageDao.oldestSynced(conversationId) ?: return true
+        val window = historyWindow(conversationId).value
+        val cursor = when (window) {
+            is HistoryWindow.Recent -> messageDao.oldestSyncedAmongRecent(conversationId, window.size)
+            is HistoryWindow.Anchored -> messageDao.oldestSyncedSince(conversationId, window.fromMillis)
+        } ?: return true
         val response = when (
             val result = rawApiCall { messageApi.list(conversationId, limit = pageSize, before = cursor.id) }
         ) {
@@ -126,15 +199,18 @@ internal class MessageHistoryReader(
             throw MessageSyncException(response.error ?: response.message ?: "Unknown error")
         }
         val now = clock.nowMillis()
-        fence.commitOrWrite(ticket) { MessageIngestPipeline(database, regime = regime, events = events, erasures = erasures).ingest(page, now) } ?: return true
+        fence.commitOrWrite(ticket) { ingestion().ingest(page, now) } ?: return true
         // #5189 — grow the observe window by exactly what was just paged in,
         // so these older rows (now cached) are not immediately hidden again
-        // by messagesStream's bound.
-        if (page.isNotEmpty()) {
-            val window = historyWindow(conversationId)
-            window.value += page.size
-        }
+        // by messagesStream's bound. An anchored window lowers its older bound instead.
+        if (page.isNotEmpty()) historyWindow(conversationId).update { it.grownBy(page) }
         return response.pagination?.hasMore ?: (page.size >= pageSize)
+    }
+
+    private fun HistoryWindow.grownBy(page: List<ApiMessage>): HistoryWindow = when (this) {
+        is HistoryWindow.Recent -> copy(size = size + page.size)
+        is HistoryWindow.Anchored -> page.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.minOrNull()
+            ?.let { oldest -> copy(fromMillis = minOf(fromMillis, oldest)) } ?: this
     }
 
     private fun cacheSource(conversationId: String) = MessageCacheSource(

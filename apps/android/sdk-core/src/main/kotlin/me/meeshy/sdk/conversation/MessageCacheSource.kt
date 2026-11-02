@@ -43,7 +43,7 @@ internal class MessageCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val messageApi: MessageApi,
     private val clock: CacheClock,
-    private val historyWindow: Flow<Int>,
+    private val historyWindow: Flow<HistoryWindow>,
     /** #13558 — a revalidation lands only while the account that asked for it is still the one signed in. */
     private val fence: AccountFence? = null,
     /** #13792 — chaque page servie nourrit le registre des régimes. */
@@ -76,9 +76,9 @@ internal class MessageCacheSource(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observe(): Flow<List<LocalMessage>?> =
-        historyWindow.flatMapLatest { limit ->
+        historyWindow.flatMapLatest { window ->
             combine(
-                messageDao.observeRecentForConversation(conversationId, limit),
+                windowRows(window),
                 syncMetaDao.observe(resourceKey),
             ) { rows, syncedAt ->
                 if (rows.isEmpty() && syncedAt == null) {
@@ -88,6 +88,15 @@ internal class MessageCacheSource(
                 }
             }
         }
+
+    private fun windowRows(window: HistoryWindow) = when (window) {
+        is HistoryWindow.Recent -> messageDao.observeRecentForConversation(conversationId, window.size)
+        is HistoryWindow.Anchored -> messageDao.observeRangeForConversation(
+            conversationId,
+            window.fromMillis,
+            window.throughMillis ?: Long.MAX_VALUE,
+        )
+    }
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(resourceKey)
 

@@ -101,6 +101,18 @@ interface MessageApi {
     ): ApiResponse<List<ApiMessage>>
 
     /**
+     * La fenêtre CENTRÉE sur un message (#14670) : `around=<id>` rend la moitié de [limit] de chaque côté.
+     * Comme [listAfter], rend [MessagesApiResponse] : `cursorPagination.hasMore` dit s'il reste du plus
+     * ancien, `hasNewer` (racine, mode `around` seul) s'il reste du plus récent.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listWindowAround(
+        @Path("cid") conversationId: String,
+        @Query("around") messageId: String,
+        @Query("limit") limit: Int,
+    ): MessagesApiResponse
+
+    /**
      * L'index d'un genre pour l'écran « Médias, liens et documents » : `view=media` (la passerelle ne sert que les
      * messages porteurs du genre demandé), paginé par `before`. [kinds] est absent pour le visuel (défaut serveur,
      * compris aussi d'une passerelle antérieure à #8098) ; [query] n'est envoyé qu'à partir de deux caractères.

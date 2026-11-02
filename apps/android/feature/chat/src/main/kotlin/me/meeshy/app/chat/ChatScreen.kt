@@ -113,6 +113,7 @@ fun ChatScreen(
         )
     }
     val downloadedFileIds by viewModel.downloadedFileIds.collectAsStateWithLifecycle()
+    val landingState by viewModel.landingState.collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -138,6 +139,7 @@ fun ChatScreen(
         engagement = engagement,
         downloadedFileIds = downloadedFileIds,
         takeLandingMessageId = viewModel::takeLandingMessageId,
+        landing = landingState,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()

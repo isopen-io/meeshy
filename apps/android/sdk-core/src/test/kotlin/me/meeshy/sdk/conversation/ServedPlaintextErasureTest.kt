@@ -41,7 +41,7 @@ class ServedPlaintextErasureTest {
     }
 
     private fun source(harness: MessageCollaboratorHarness, api: MessageApi, erasures: PlaintextErasureLedger) = MessageCacheSource(
-        "c1", harness.database, harness.database.messageDao(), harness.database.syncMetaDao(), api, harness.clock, flowOf(50),
+        "c1", harness.database, harness.database.messageDao(), harness.database.syncMetaDao(), api, harness.clock, flowOf(HistoryWindow.Recent(50)),
         erasures = erasures,
     )
 

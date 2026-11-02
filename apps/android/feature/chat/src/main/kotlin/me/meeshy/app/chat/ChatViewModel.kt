@@ -245,6 +245,8 @@ class ChatViewModel @Inject constructor(
 
     private val replyJump = ChatReplyJumpController(screenState)
 
+    private val landing = ChatLandingController(conversationId, screenState, messageRepository, viewModelScope)
+
     private val forward = ChatForwardController(
         scope = viewModelScope,
         state = screenState,
@@ -436,6 +438,7 @@ class ChatViewModel @Inject constructor(
         }
 
         translation.start()
+        landingMessageId?.let(landing::land)
 
         viewModelScope.launch {
             launch {
@@ -771,6 +774,15 @@ class ChatViewModel @Inject constructor(
 
     /** The pending reply-jump scroll has been performed by the screen. */
     fun onScrollHandled() = replyJump.onScrollHandled()
+
+    /** #14670 — the landing state: an anchored window's way to the present, the lit message. */
+    internal val landingState: StateFlow<ChatLandingState> get() = landing.state
+
+    /** #14670 — the page after a window anchored on an old message. */
+    fun loadNewer() = landing.loadNewer()
+
+    /** #14670 — leaves a window anchored on an old message for the recent one. */
+    fun returnToPresent() = landing.returnToPresent()
 
     // --- Media, files ---------------------------------------------------------------------
 

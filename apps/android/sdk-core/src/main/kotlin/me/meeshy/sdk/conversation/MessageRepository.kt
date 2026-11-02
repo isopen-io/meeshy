@@ -113,6 +113,19 @@ class MessageRepository internal constructor(
     ): Boolean = history.loadOlder(conversationId, pageSize)
 
     /**
+     * #14670 — opens the thread ON [messageId]: the window centred on it, when it is not already
+     * observed. See [MessageHistoryReader.loadAround]. Throws on a network failure.
+     */
+    suspend fun loadAround(conversationId: String, messageId: String): MessageLanding =
+        history.loadAround(conversationId, messageId)
+
+    /** #14670 — the page after an anchored window; returns whether newer messages remain. */
+    suspend fun loadNewer(conversationId: String): Boolean = history.loadNewer(conversationId)
+
+    /** #14670 — leaves an anchored window for the recent one (« back to the present »). */
+    fun returnToPresent(conversationId: String) = history.returnToPresent(conversationId)
+
+    /**
      * Optimistic send: the message appears instantly as a `SENDING` bubble and a `SEND_MESSAGE`
      * mutation is queued on the conversation's FIFO outbox lane. Returns the bubble's `cid_`
      * id (never a `cmid_`, #4624 — see [MessageSendCoordinator.sendOptimistic]).
@@ -133,7 +146,7 @@ class MessageRepository internal constructor(
         location: SharedPlace? = null,
         forwardedAttachmentIds: List<String>? = null,
         sticker: MessageSticker? = null,
-    ): String = sends.sendOptimistic(
+    ): String = history.returnToPresent(conversationId).let { sends.sendOptimistic(
         conversationId = conversationId,
         content = content,
         originalLanguage = originalLanguage,
@@ -149,7 +162,7 @@ class MessageRepository internal constructor(
         attachments = attachments,
         location = location,
         sticker = sticker,
-    )
+    ) }
 
     /**
      * Server ACK for an optimistic send: atomically replaces the local `cmid`

@@ -92,6 +92,9 @@ private class FakeMessageApi(
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
 
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int): ApiResponse<List<ApiMessage>> {
         aroundCalls += Triple(conversationId, messageId, limit)
         return aroundResponse
@@ -170,6 +173,9 @@ private class EtagAwareMessageApi(
         before: String?,
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
 
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int) =
         ApiResponse<List<ApiMessage>>(success = false)
@@ -251,6 +257,9 @@ private class GapAwareMessageApi(
         before: String?,
         languages: String?,
     ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
 
     override suspend fun listAround(conversationId: String, messageId: String, limit: Int) =
         ApiResponse<List<ApiMessage>>(success = false)

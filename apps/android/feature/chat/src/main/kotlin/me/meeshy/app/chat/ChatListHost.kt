@@ -177,7 +177,8 @@ internal fun ChatListHost(
     // bottom — or when the message is their own. Reading history must never
     // be yanked down; the scroll-to-bottom control covers that case.
     LaunchedEffect(state.messages.lastOrNull()?.messageId) {
-        if (listItems.isEmpty()) return@LaunchedEffect
+        // A window anchored on an old message does not end at the present: its last row is no arrival.
+        if (listItems.isEmpty() || host.landing.hasMoreNewer) return@LaunchedEffect
         val isOwnMessage = state.messages.lastOrNull()?.isOutgoing == true
         val nearBottom = ChatScrollGeometry.isNearBottom(
             edgeIndex = ChatScrollGeometry.bottomEdgeIndex(
@@ -225,6 +226,10 @@ internal fun ChatListHost(
                 orientation = orientation,
             )
         }
+    }
+    // #14670 — au bas d'une fenêtre ancrée sur un message ancien, la page suivante vers le présent.
+    LaunchedEffect(isNearBottom, host.landing.hasMoreNewer, host.landing.isLoadingNewer) {
+        if (isNearBottom && host.landing.hasMoreNewer && !host.landing.isLoadingNewer) actions.loadNewer()
     }
     // La pastille de jour flottante suit la loi d'iOS `MessageDayStickyLaw` : elle nomme la rangée
     // réellement en haut du fil, sous la bande d'en-tête, et se tait dès qu'un séparateur de jour
@@ -467,6 +472,7 @@ internal fun ChatListHost(
                     typingParticipants = state.typingParticipants,
                     isOffline = state.isOffline,
                     onScrollToBottom = {
+                        actions.returnToPresent()
                         scrollAffordance = ScrollAffordance.next(
                             scrollAffordance,
                             affordanceMessages,
@@ -503,8 +509,11 @@ internal fun ChatListHost(
                         selecting = host.selection.isActive,
                         selectedIds = host.selection.ids,
                     ) }
+                    val landed = item is ChatListItem.Message && item.bubble.messageId == host.landing.highlightedMessageId
                     if (focalMode) {
                         FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> row(elected, focalScene.contentScale) }
+                    } else if (landed) {
+                        LandingHighlight(accentColor) { row(false, 1f) }
                     } else {
                         row(false, 1f)
                     }
