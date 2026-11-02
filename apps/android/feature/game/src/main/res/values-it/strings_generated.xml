@@ -412,6 +412,7 @@
     <string name="game_concept_elans_use">Guarda quali famiglie sono attive, poi fai un gesto in una famiglia che manca. Finché lo slancio regge, ogni gesto fa scaturire più scintille.</string>
     <string name="game_concept_elans_what">Uno slancio è un moltiplicatore di scintille. Si accende quando sei attivo in più famiglie di gesti in questi giorni.</string>
     <string name="game_concept_elans_why">Uno slancio moltiplica le scintille dei tuoi prossimi gesti.</string>
+    <string name="game_concept_fact_after">Dopo</string>
     <string name="game_concept_fact_balance">Hai</string>
     <string name="game_concept_fact_closes">Chiusura</string>
     <string name="game_concept_fact_cost">Serve</string>
@@ -426,6 +427,7 @@
     <string name="game_concept_fact_prism_hour">Ora Prisma</string>
     <string name="game_concept_fact_record">Al più alto</string>
     <string name="game_concept_fact_remaining">Rimanenti</string>
+    <string name="game_concept_fact_required">Richiesto</string>
     <string name="game_concept_fact_seal">Sigillo</string>
     <string name="game_concept_fact_state">Stato</string>
     <string name="game_concept_fact_tier">Stato della tua luce</string>
@@ -1078,9 +1080,11 @@
     <string name="game_sparks_pocket_label">La tua luce</string>
     <string name="game_sparks_record_line">%1$s ricevute da sempre</string>
     <string name="game_spend_missing_freeze">Mancano %1$s per prendere una Lucerna.</string>
+    <string name="game_spend_missing_mint">Alla tua luce mancano %1$s per coniare la Meesh n. %2$s.</string>
     <string name="game_spend_missing_relight">Mancano %1$s per riaccendere la tua Fiamma.</string>
     <string name="game_spend_missing_reroll">Mancano %1$s per cambiare questo atto.</string>
     <string name="game_spend_missing_seal">Mancano %1$s per prendere il Sigillo del viaggio.</string>
+    <string name="game_spend_missing_unlock">Mancano %1$s per aprirlo.</string>
     <string name="game_starFragments_one">%1$s frammento di stella</string>
     <string name="game_starFragments_other">%1$s frammenti di stella</string>
     <string name="game_state_atlas_progress">Lingue timbrate: %1$s su %2$s. Scambi a metà: %3$s.</string>
@@ -1173,6 +1177,9 @@
     <string name="game_treasury_tresor">Tesoro</string>
     <string name="progression_a11y_bar_level">Verso il livello %1$d</string>
     <string name="progression_a11y_bar_meesh">Verso la prossima Meesh</string>
+    <string name="progression_a11y_bar_streak">La tua Fiamma, verso la sua prossima soglia</string>
+    <string name="progression_a11y_tier_pending">Gradino %1$d da raggiungere</string>
+    <string name="progression_a11y_tier_reached">Gradino %1$d raggiunto</string>
     <string name="progression_achievement_a11y_hint">Tocca per vedere questa impresa in grande.</string>
     <string name="progression_achievement_all_content_types_condition">Un messaggio vocale, uno di testo, una pubblicazione, una storia e un reel</string>
     <string name="progression_achievement_all_content_types_title">Tuttofare</string>
