@@ -125,10 +125,19 @@ export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = n
   'location.proximity',
 ]);
 
-/** Les features dont la loi exige `consent: 'granted'` — l'union des deux natures ci-dessus. */
+/**
+ * Les features dont la loi exige `consent: 'granted'` — l'UNION des deux natures
+ * ci-dessus (témoin : `__tests__/bring-contract.test.ts`). Écrite en LITTÉRAL : les
+ * miroirs Swift et Kotlin relisent cette liste dans ce fichier.
+ */
 export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
-  ...RELATION_RECEPTION_PREFERENCE_FEATURES,
-  ...RELATION_EMITTER_CONSENT_FEATURES,
+  'bring',
+  'talkie',
+  'listening.category',
+  'listening.title',
+  'location.live',
+  'location.history',
+  'location.proximity',
 ]);
 
 /** Actions adressées à UNE AUTRE personne : elles n'ont aucun sens envers soi-même. */
