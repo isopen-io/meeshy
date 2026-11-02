@@ -52,6 +52,8 @@ data class CardInput(
     val quotedTime: String? = null,
     val replyTime: String? = null,
     val media: List<CardMedia> = emptyList(),
+    /** Le visuel du support, pleine largeur avant tout texte ([CardHero]). */
+    val hero: CardMedia? = null,
 ) {
     companion object {
         /**
@@ -88,6 +90,7 @@ data class CardInput(
                 quotedTime = if (format.showTimes) subject.quotedAtMillis?.let(formatTime) else null,
                 replyTime = if (format.showTimes) formatTime(subject.sentAtMillis) else null,
                 media = subject.media,
+                hero = subject.hero,
             )
         }
     }

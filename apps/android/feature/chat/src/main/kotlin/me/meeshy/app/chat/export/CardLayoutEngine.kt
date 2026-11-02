@@ -72,6 +72,7 @@ private class Chrome(
     val replyBubble: Double,
     val link: Double,
     val media: Double,
+    val hero: Double,
 )
 
 /** JS `Math.round` — la moitié monte, comme sur le web et iOS. */
@@ -115,6 +116,8 @@ object CardLayoutEngine {
         val hasReplyText = CardText.nonBlank(input.reply.text) != null
         val mediaBlock = CardMediaLayout.plan(input.media, textWidth, budget)
         val mediaGap = if (hasReplyText && mediaBlock.tiles.isNotEmpty()) CardMediaLayout.BLOCK_GAP else 0.0
+        val heroWidth = width - 2 * CardHero.MARGIN
+        val heroHeight = input.hero?.let { CardHero.height(it.aspect, heroWidth, budget) } ?: 0.0
         val chrome = Chrome(
             header = if (title == null && date == null) 0.0 else
                 (if (title == null) 0.0 else CardMetrics.TITLE_LINE) + (if (date == null) 0.0 else CardMetrics.DATE_LINE) + CardMetrics.HEADER_GAP,
@@ -124,6 +127,7 @@ object CardLayoutEngine {
             replyBubble = if (geometry.bubbles && hasReplyText) 2 * CardMetrics.BUBBLE_PAD_Y else 0.0,
             link = geometry.block,
             media = if (mediaBlock.tiles.isEmpty()) 0.0 else mediaBlock.height + mediaGap,
+            hero = if (heroHeight > 0) heroHeight + CardHero.GAP else 0.0,
         )
 
         fun sizeAt(step: Int): Sized {
@@ -142,7 +146,7 @@ object CardLayoutEngine {
         fun contentHeight(sized: Sized): Double {
             val quote = if (hasQuote) chrome.quoteAuthor + sized.quoteLines.size * quoteLineHeight(sized.quoteSize) + chrome.quoteBubble + chrome.link else 0.0
             val reply = chrome.replyAuthor + sized.replyLines.size * replyLineHeight(sized.replySize) + chrome.replyBubble
-            return chrome.header + quote + reply + chrome.media
+            return chrome.header + chrome.hero + quote + reply + chrome.media
         }
 
         fun atFloor(sized: Sized) =
@@ -187,6 +191,7 @@ object CardLayoutEngine {
             var headerOps: List<CardOp> = emptyList()
             if (chrome.header > 0) headerOps = header(painter, ::region)
             val contentTop = painter.y
+            heroOps(painter)
             if (quoted != null) quoteBlock(painter, quoted, sized, ::region)
             val replyStyle = BlockStyle(
                 size = sized.replySize, lineHeight = replyLineHeight(sized.replySize), font = sized.replyFont, ink = palette.replyInk,
@@ -201,6 +206,14 @@ object CardLayoutEngine {
             val contentOps: List<CardOp> = if (tilt == 0.0 || painter.ops.isEmpty()) painter.ops
             else listOf(CardOp.Group(tilt, width / 2, contentTop + (painter.y - contentTop) / 2, painter.ops.toList()))
             return CardLayout(width, height, headerOps + contentOps, regions, CardLayout.watermark(input.handle), truncated)
+        }
+
+        /** Le visuel du support, pleine largeur avant tout texte ([CardHero]). */
+        fun heroOps(painter: Painter) {
+            val hero = input.hero ?: return
+            if (heroHeight <= 0) return
+            painter.ops.add(CardOp.Picture(hero, CardHero.MARGIN, painter.y, heroWidth, heroHeight, CardMediaLayout.RADIUS))
+            painter.y += heroHeight + CardHero.GAP
         }
 
         /** Les médias sous la réponse, dans sa colonne ([CardMediaLayout]). */
