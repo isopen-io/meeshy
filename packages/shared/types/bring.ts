@@ -113,6 +113,14 @@ export type BringStoppedEventData = z.infer<typeof bringStoppedEventSchema>;
 export const RELATION_RITUAL_SHARES = ['listeningTitleShared', 'locationShared', 'locationHistoryShared', 'proximityShared'] as const;
 export type RelationRitualShare = (typeof RELATION_RITUAL_SHARES)[number];
 
+/** La date de retrait de chaque partage (`RelationFeatureSetting`, #14401) : la trace du consentement survit au retrait. */
+export const RELATION_RITUAL_SHARE_WITHDRAWN_AT = {
+  listeningTitleShared: 'listeningTitleWithdrawnAt',
+  locationShared: 'locationWithdrawnAt',
+  locationHistoryShared: 'locationHistoryWithdrawnAt',
+  proximityShared: 'proximityWithdrawnAt',
+} as const satisfies Record<RelationRitualShare, string>;
+
 /** Les réglages par personne que JE pose pour l'autre (`/relations/:userId/settings`). */
 export const relationPersonSettingsSchema = z.object({
   userId: z.string(),

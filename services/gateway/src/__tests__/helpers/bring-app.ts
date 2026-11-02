@@ -35,6 +35,8 @@ export type BringTestApp = {
   readonly store: RelationStore;
   readonly emissions: Emission[];
   readonly reglages: Map<string, Record<string, unknown>>;
+  /** Le double Prisma lui-même, pour compter les écritures. */
+  readonly prisma: any;
   readonly users: Map<string, Record<string, unknown>>;
   readonly call: (
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
@@ -152,7 +154,7 @@ export async function buildBringApp(
   await app.ready();
 
   return {
-    store, emissions, reglages, users,
+    store, emissions, reglages, users, prisma,
     call: async (method, url, body, as) => {
       acting = as ?? MOI;
       const res = await app.inject({

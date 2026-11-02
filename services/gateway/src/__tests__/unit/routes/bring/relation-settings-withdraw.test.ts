@@ -78,7 +78,7 @@ describe('#14401 — chaque partage consenti au rituel se retire en un geste, sa
     expect(res.body.data).toEqual({ userId: AUTRE, bringBlocked: false, ...TOUT_PARTAGE });
   });
 
-  it('retirer UN partage le coupe tout de suite, laisse les autres, le lien et le consentement de l’autre', async () => {
+  it('retirer UN partage écrit tout de suite MA ligne, et laisse les autres partages, le lien et le consentement de l’autre', async () => {
     const app = await appli(sang());
     const res = await regler(app, { locationShared: false });
     await app.close();
@@ -120,5 +120,64 @@ describe('#14401 — chaque partage consenti au rituel se retire en un geste, sa
     expect(rien.status).toBe(200);
     expect(rien.body.data).toEqual({ userId: TIERS, bringBlocked: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
     expect(inconnu.reglages.size).toBe(0);
+  });
+
+  it('audit #14535 (1) — lien tombé, corps mixte { bringBlocked: false, locationShared: false } : le retrait passe', async () => {
+    const app = await appli({ ...sang(), liens: [lien('PUBLIC', 'PUBLIC')] });
+    const res = await regler(app, { bringBlocked: false, locationShared: false });
+    await app.close();
+
+    expect({ status: res.status, locationShared: app.reglages.get(`${MOI}:${AUTRE}`)?.locationShared }).toEqual({ status: 200, locationShared: false });
+  });
+
+  it('audit #14535 (1) — lien tombé, { bringBlocked: true, locationShared: false } : le retrait est écrit, le blocage rend 404', async () => {
+    const app = await appli({ ...sang(), liens: [lien('PUBLIC', 'PUBLIC')] });
+    const res = await regler(app, { bringBlocked: true, locationShared: false });
+    await app.close();
+
+    expect(res.status).toBe(404);
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ locationShared: false, bringBlockedAt: null });
+  });
+
+  it('audit #14535 (1) — lien vivant, corps mixte : blocage et retrait partent en UNE écriture', async () => {
+    const app = await appli(sang());
+    const writes = () => app.prisma.relationFeatureSetting.upsert.mock.calls.length + app.prisma.relationFeatureSetting.updateMany.mock.calls.length;
+    const res = await regler(app, { bringBlocked: true, proximityShared: false });
+    await app.close();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ bringBlocked: true, proximityShared: false, locationShared: true });
+    expect(writes()).toBe(1);
+  });
+
+  it('audit #14535 (8) — retirer sur une ligne déjà bloquée garde le blocage du Bring', async () => {
+    const BLOQUE = new Date('2026-10-15T00:00:00.000Z');
+    const app = await appli(sang({ bringBlockedAt: BLOQUE }));
+    const res = await regler(app, { locationHistoryShared: false });
+    await app.close();
+
+    expect(res.body.data).toMatchObject({ bringBlocked: true, locationHistoryShared: false });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ bringBlockedAt: BLOQUE });
+  });
+
+  it('audit #14535 (3) — le retrait est daté, partage par partage ; un partage déjà éteint garde sa date', async () => {
+    const AVANT = new Date('2026-10-20T00:00:00.000Z');
+    const app = await appli(sang({ proximityShared: false, proximityWithdrawnAt: AVANT }));
+    await regler(app, { locationShared: false, proximityShared: false });
+    await app.close();
+
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({
+      locationShared: false, locationWithdrawnAt: NOW, proximityWithdrawnAt: AVANT, consentedAt: AU_RITUEL,
+    });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.listeningTitleWithdrawnAt ?? null).toBeNull();
+  });
+
+  it.each([['"false"', 'false'], ['null', null], ['0', 0], ['true', true]])('audit #14535 (4) — la route refuse %s pour un partage, comme le contrat partagé', async (_label, value) => {
+    const app = await appli(sang());
+    const res = await regler(app, { proximityShared: value });
+    await app.close();
+
+    expect(res.status).toBe(400);
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ proximityShared: true });
   });
 });

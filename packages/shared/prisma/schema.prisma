@@ -2124,6 +2124,13 @@ model RelationFeatureSetting {
   locationShared        Boolean  @default(false)
   locationHistoryShared Boolean  @default(false)
   proximityShared       Boolean  @default(false)
+  /// Quand chaque partage a été RETIRÉ par `PUT /relations/:userId/settings` (#14401,
+  /// audit #14535 constat 3) : la trace de ce qui avait été consenti survit au retrait.
+  /// Optionnels, sans migration ; la preuve versionnée complète est #14402.
+  listeningTitleWithdrawnAt  DateTime?
+  locationWithdrawnAt        DateTime?
+  locationHistoryWithdrawnAt DateTime?
+  proximityWithdrawnAt       DateTime?
   bringBlockedAt        DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())

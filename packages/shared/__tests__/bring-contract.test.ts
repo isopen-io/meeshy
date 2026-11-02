@@ -106,7 +106,10 @@ describe('le contrat du Bring', () => {
       relationPersonSettingsUpdateSchema.safeParse({ listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false }).success,
     ).toBe(true);
     expect(relationPersonSettingsUpdateSchema.safeParse({ locationShared: true }).success).toBe(false);
-    expect(relationPersonSettingsUpdateSchema.safeParse({ proximityShared: 'false' }).success).toBe(false);
+    // Mêmes refus sur la route, qui déclare `{ enum: [false] }` sans `type` pour qu'AJV ne coerce rien
+    // (`relation-settings-withdraw.test.ts`, audit #14535 constat 4).
+    [null, 0, 'false'].forEach((value) =>
+      expect(relationPersonSettingsUpdateSchema.safeParse({ proximityShared: value }).success).toBe(false));
     expect(relationPersonSettingsUpdateSchema.safeParse({ bringBlocked: true, locationShared: false }).success).toBe(true);
   });
 });
