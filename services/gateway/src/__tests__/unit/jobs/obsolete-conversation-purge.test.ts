@@ -315,7 +315,7 @@ describe('#14676 — un signalement OUVERT gèle la purge (décision porteur 202
     const { prisma } = prismaDouble([candidate()]);
     await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
     expect(prisma.report.findMany).toHaveBeenCalledWith({
-      where: { reportedType: { in: ['conversation', 'message'] }, status: { notIn: ['resolved', 'rejected', 'dismissed'] } },
+      where: { reportedType: { in: ['conversation', 'message', 'user'] }, status: { notIn: ['resolved', 'rejected', 'dismissed'] } },
       select: { reportedType: true, reportedEntityId: true },
     });
   });
@@ -384,5 +384,28 @@ describe('#14676 — un signalement OUVERT gèle la purge (décision porteur 202
 
   it('le gel recule d\'au moins une heure : la file ne bute pas sur une conversation gelée', () => {
     expect(OBSOLETE_PURGE_REPORT_HOLD_MS).toBeGreaterThanOrEqual(60 * 60 * 1000);
+  });
+});
+
+describe('#14676 (audit) — un MEMBRE signalé gèle aussi la purge, comme l\'option a choisie le dit', () => {
+  const REPORTED_USER = '507f1f77bcf86cd799439055';
+
+  function withMembers(double: ReturnType<typeof prismaDouble>, reportedMembers: number) {
+    double.prisma.participant = { ...(double.prisma.participant ?? {}), count: jest.fn<any>().mockResolvedValue(reportedMembers) };
+    return double;
+  }
+
+  it('une conversation dont un membre (parti compris) est signalé n\'est pas effacée', async () => {
+    const { prisma, log } = withMembers(prismaDouble([candidate()], [['m1', 'm2']], [{ reportedType: 'user', reportedEntityId: REPORTED_USER }]), 1);
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report).toMatchObject({ purged: 0, held: 1 });
+    expect(log).toEqual(['conversation.update']);
+    expect(prisma.participant.count).toHaveBeenCalledWith({ where: { conversationId: CONV, userId: { in: [REPORTED_USER] } } });
+  });
+
+  it('un utilisateur signalé qui n\'en est pas membre ne gèle rien', async () => {
+    const { prisma } = withMembers(prismaDouble([candidate()], [['m1', 'm2']], [{ reportedType: 'user', reportedEntityId: REPORTED_USER }]), 0);
+    const report = await purgeObsoleteConversations(prisma, { now: NOW, apply: true, attachmentRemover: remover() });
+    expect(report).toMatchObject({ purged: 1, held: 0 });
   });
 });

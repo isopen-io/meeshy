@@ -15,9 +15,11 @@
  * message n'est pas acceptée, seul son DESTINATAIRE rend la directe obsolète :
  * l'expéditeur — créateur de la directe, donc administrateur, et quel que soit
  * son rôle de plateforme — reçoit 403 sans écriture. « Non acceptée » se lit
- * sur `Participant.messageRequestFromId`, posé sur la ligne du destinataire et
- * effacé par « Accepter » seulement ; la ligne n'est pas filtrée sur
- * `isActive` : un destinataire parti ne rend pas la main à l'expéditeur.
+ * comme `acceptMessageRequest` le lit (`NOT_YET_ACCEPTED` : la date OU la
+ * provenance, posées sur la ligne du destinataire, effacées par « Accepter »
+ * seulement — une ligne antérieure à la provenance n'a que la date) ; la
+ * ligne n'est pas filtrée sur `isActive` : un destinataire parti ne rend pas
+ * la main à l'expéditeur.
  *
  * Rétrocompatible : la conversation est AUSSI fermée (`isActive: false`,
  * `closedAt`, `conversation:closed`), donc un ancien client qui ne connaît ni
@@ -33,6 +35,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendForbidden, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { obsoleteConversation } from '../../services/conversations/obsoleteConversation';
+import { NOT_YET_ACCEPTED } from '../../services/messaging/messageRequests';
 import { getSharedNotificationService } from '../../services/notifications/notification-service-registry';
 
 const logger = enhancedLogger.child({ module: 'ConversationObsoleteRoute' });
@@ -80,7 +83,7 @@ async function sendsPendingDirectRequest(
 ): Promise<boolean> {
   if (membership?.conversation?.type !== 'direct') return false;
   const recipient = await prisma.participant.findFirst({
-    where: { conversationId, userId: { not: userId }, messageRequestFromId: { not: null } },
+    where: { conversationId, userId: { not: userId }, ...NOT_YET_ACCEPTED },
     select: { id: true },
   });
   return recipient !== null;

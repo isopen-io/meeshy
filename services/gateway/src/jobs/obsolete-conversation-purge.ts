@@ -28,7 +28,7 @@
  *
  * LE GEL DE MODÉRATION (#14676, décision porteur du 2026-11-02, option a). Une
  * conversation visée par un signalement NON CLOS — la conversation elle-même,
- * ou l'un de ses messages — n'est pas effacée : l'obsolescence côté membres ne
+ * l'un de ses messages, ou l'un de ses membres — n'est pas effacée : l'obsolescence côté membres ne
  * change pas (contenu masqué, conversation hors des listes), mais sa purge
  * recule de `OBSOLETE_PURGE_REPORT_HOLD_MS`, et la passe qui suit la clôture du
  * dernier signalement la reprend. « Non clos » = tout statut hors `resolved`,
@@ -249,24 +249,36 @@ async function postponePurge(prisma: ObsoletePurgePrisma, conversationId: string
 type OpenReportTargets = {
   readonly conversationIds: ReadonlySet<string>;
   readonly messageIds: readonly string[];
+  readonly userIds: readonly string[];
 };
 
 /** Ce que les signalements non clos désignent, lu UNE fois par passe ; une erreur arrête la passe (fail-closed). */
 async function loadOpenReportTargets(prisma: ObsoletePurgePrisma): Promise<OpenReportTargets> {
   const reports = await prisma.report.findMany({
-    where: { reportedType: { in: ['conversation', 'message'] }, status: { notIn: [...CLOSED_REPORT_STATUSES] } },
+    where: { reportedType: { in: ['conversation', 'message', 'user'] }, status: { notIn: [...CLOSED_REPORT_STATUSES] } },
     select: { reportedType: true, reportedEntityId: true },
   });
   const idsOf = (type: string) => reports.filter((report) => report.reportedType === type).map((report) => report.reportedEntityId);
-  return { conversationIds: new Set(idsOf('conversation')), messageIds: [...new Set(idsOf('message'))] };
+  return {
+    conversationIds: new Set(idsOf('conversation')),
+    messageIds: [...new Set(idsOf('message'))],
+    userIds: [...new Set(idsOf('user'))],
+  };
 }
 
-/** Le message signalé est compté sans regarder `deletedAt` : l'obsolescence l'a masqué, elle ne l'a pas blanchi. */
+/**
+ * Le message signalé est compté sans regarder `deletedAt` : l'obsolescence l'a masqué, elle ne l'a pas blanchi.
+ * Un MEMBRE signalé (`reportedType: 'user'`, option a telle que choisie) gèle aussi, ligne active ou partie.
+ */
 async function heldByOpenReport(prisma: ObsoletePurgePrisma, targets: OpenReportTargets, conversationId: string): Promise<boolean> {
   if (targets.conversationIds.has(conversationId)) return true;
-  if (targets.messageIds.length === 0) return false;
-  const reported = await prisma.message.count({ where: { conversationId, id: { in: [...targets.messageIds] } } });
-  return reported > 0;
+  if (targets.messageIds.length > 0) {
+    const reported = await prisma.message.count({ where: { conversationId, id: { in: [...targets.messageIds] } } });
+    if (reported > 0) return true;
+  }
+  if (targets.userIds.length === 0) return false;
+  const reportedMembers = await prisma.participant.count({ where: { conversationId, userId: { in: [...targets.userIds] } } });
+  return reportedMembers > 0;
 }
 
 export async function purgeObsoleteConversations(

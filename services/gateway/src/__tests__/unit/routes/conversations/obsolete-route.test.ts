@@ -69,7 +69,7 @@ async function appeler(options: Appel) {
   const prisma = {
     participant: {
       findFirst: jest.fn<any>(async (args: any) =>
-        'messageRequestFromId' in (args?.where ?? {}) ? (options.pendingRequestToOther ? { id: 'recipient-row' } : null) : membership),
+        typeof args?.where?.userId === 'object' ? (options.pendingRequestToOther ? { id: 'recipient-row' } : null) : membership),
       count: jest.fn<any>().mockResolvedValue(options.activeParticipants ?? 2),
     },
   };
@@ -250,8 +250,12 @@ describe('#14676 — une demande de message non acceptée : seul son DESTINATAIR
   it('même si le destinataire est parti, l\'expéditeur reste refusé', async () => {
     const { reply, prisma } = await appeler({ conversationRole: 'creator', conversationType: 'direct', activeParticipants: 1, pendingRequestToOther: true });
     expect(reply.statusCode).toBe(403);
-    const pendingQuery = prisma.participant.findFirst.mock.calls.map((call: any) => call[0]).find((args: any) => 'messageRequestFromId' in args.where);
-    expect(pendingQuery.where).toEqual({ conversationId: CONV, userId: { not: MOI }, messageRequestFromId: { not: null } });
+    const pendingQuery = prisma.participant.findFirst.mock.calls.map((call: any) => call[0]).find((args: any) => typeof args.where.userId === 'object');
+    expect(pendingQuery.where).toEqual({
+      conversationId: CONV,
+      userId: { not: MOI },
+      OR: [{ messageRequestAt: { not: null } }, { messageRequestFromId: { not: null } }],
+    });
   });
 
   it('le destinataire (sa propre ligne porte la demande, pas celle de l\'autre) la rend obsolète', async () => {

@@ -262,7 +262,7 @@ const NOT_PENDING: MessageRequestAcceptance = { kind: 'not-pending' };
  * ou sa provenance (on y a répondu). Seul « Accepter » efface la provenance :
  * c'est elle qui tient les médias de l'expéditeur fermés (audit 3, H1).
  */
-const NOT_YET_ACCEPTED: Prisma.ParticipantWhereInput = {
+export const NOT_YET_ACCEPTED: Prisma.ParticipantWhereInput = {
   OR: [{ messageRequestAt: { not: null } }, { messageRequestFromId: { not: null } }],
 };
 
