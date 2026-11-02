@@ -107,6 +107,20 @@ describe('changer de mode depuis la fiche (#14648)', () => {
     expect(target('hybrid')).toBeNull();
   });
 
+  test('passée au bout en bout après la bascule : la fiche ne dit plus « maintenant Hybride »', async () => {
+    await mount({ id: 'c1', type: 'direct', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    await settle();
+    await act(async () => {
+      endToEndRegimeLedger.getState().learnEndToEnd('c1');
+    });
+    await settle();
+    expect(feedback()).toBe('');
+    expect(document.querySelector('[data-conversation-encryption-switch]')).toBeNull();
+  });
+
   test('un clic sur le bout en bout grisé ne part jamais', async () => {
     const calls = await mount({ id: 'c1', type: 'direct', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
     await act(async () => {

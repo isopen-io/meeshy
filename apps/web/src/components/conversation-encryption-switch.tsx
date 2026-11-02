@@ -77,7 +77,8 @@ export function ConversationEncryptionSwitch({
           isDirect,
           mayToggle: status.canToggleEncryption,
         });
-  if (targets.length === 0 && feedback === null) return null;
+  const staleSwitch = feedback?.kind === 'switched' && closed;
+  if (targets.length === 0 && (feedback === null || staleSwitch)) return null;
 
   const switchTo = async (target: CreationEncryptionMode) => {
     setPending(target);

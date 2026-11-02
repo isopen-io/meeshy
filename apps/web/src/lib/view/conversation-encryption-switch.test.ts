@@ -137,6 +137,12 @@ describe('changer de mode', () => {
     expect(ports.posted).toEqual([]);
   });
 
+  test('depuis un mode inconnu : lu comme bout en bout, aucune requête', async () => {
+    const ports = portsOf(ok('hybrid'));
+    expect(await switchConversationEncryption(ports, { conversationId: 'c1', servedMode: 'signal_v9', target: 'hybrid' })).toEqual({ kind: 'irreversible' });
+    expect(ports.posted).toEqual([]);
+  });
+
   test('409 E2EE_IRREVERSIBLE : la conversation est scellée et le cache apprend le bout en bout', async () => {
     const ports = portsOf(refused(409, 'E2EE_IRREVERSIBLE'));
     const outcome = await switchConversationEncryption(ports, { conversationId: 'c2', servedMode: 'server', target: 'hybrid' });

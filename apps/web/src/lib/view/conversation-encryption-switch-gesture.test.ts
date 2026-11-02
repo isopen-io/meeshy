@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
 
-import type { ConversationsDeps } from '@/lib/api/conversations';
+import { conversationQueryKey, type ConversationsDeps } from '@/lib/api/conversations';
 import type { HttpRequest, HttpTransport } from '@/lib/api/http';
 import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
 
@@ -50,5 +50,20 @@ describe('le geste câblé', () => {
     const gesture = encryptionModeSwitchGesture({ deps, queryClient: new QueryClient(), conversationId: 'c1', online: () => true });
     expect(await gesture?.switchTo({ servedMode: 'server', target: 'hybrid' })).toEqual({ kind: 'switched', mode: 'hybrid' });
     expect(requests).toEqual([{ method: 'POST', path: '/api/v1/conversations/c1/encryption', body: { mode: 'hybrid' } }]);
+  });
+
+  test('une réponse forgée « server » ne rouvre pas une conversation que le cache sait e2ee', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(conversationQueryKey('c-forged'), { id: 'c-forged', type: 'direct', encryptionMode: 'e2ee' });
+    const { deps } = depsAnswering(() => ({ isEncrypted: true, mode: 'server', canToggleEncryption: true }));
+    const gesture = encryptionModeSwitchGesture({ deps, queryClient, conversationId: 'c-forged', online: () => true });
+    await gesture?.switchTo({ servedMode: 'hybrid', target: 'server' });
+    expect(queryClient.getQueryData<{ encryptionMode: string }>(conversationQueryKey('c-forged'))?.encryptionMode).toBe('e2ee');
+  });
+
+  test('un mode servi en majuscules et espacé scelle comme e2ee', async () => {
+    const { deps } = depsAnswering(() => ({ mode: ' E2EE ', canToggleEncryption: true }));
+    await encryptionModeSwitchGesture({ deps, queryClient: new QueryClient(), conversationId: 'c-upper', online: () => true })?.readStatus();
+    expect(endToEndRegimeLedger.getState().sealed['c-upper']).toBe(true);
   });
 });
