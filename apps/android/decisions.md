@@ -688,4 +688,17 @@ cryptographique n'est pas acceptable.
 **Consequences.** Le passage à Kotlin 2.1 touche tous les modules ; seule la CI `android.yml` le prouve. L'APK grossit des
 natifs libsignal (non mesuré ici : la mesure APK/AAB avant/après est un critère de la recette). Le flux hérité
 (`core/crypto/keys`, `E2eeBundlePublisher`, publication coupée) reste en place, inerte, et se retire dans un lot séparé.
+libsignal-android déclare `coreLibraryDesugaringEnabled=true` : l'app active le désucrage (`desugar_jdk_libs`). Seule
+`libsignal_jni.so` part dans l'APK (la bibliothèque de test et les natifs de bureau sont exclus) ; ses symboles ne sont
+retirés que si la CI dispose du NDK.
+
+**Stockage du clair (miroir de `EndToEndDiskPlaintextLaw`, iOS #12999).** La base Room n'est pas chiffrée : le clair d'un
+message e2ee n'y entre jamais, ni dans la file d'envoi. Il vit dans le coffre E2EE (base SQLite dédiée de
+`noBackupFilesDir/e2ee`, chaque ligne AES-256-GCM sous une clé enveloppée par le Keystore), sous l'identifiant servi et
+sous le `cid_` pour mes envois ; Room ne garde que `[Encrypted]` et le fil relit le clair en mémoire. Le coffre survit à
+la déconnexion (même compte, même historique, comme iOS) ; un autre compte le réinitialise à son enrôlement.
+
+**Hors de ce lot (suivis du #14591).** Appairage de mes appareils par QR (sans lui, mes autres appareils sont
+`unapprovedOwnDevices` et ne reçoivent rien), signaux chiffrés (gardés au coffre, pas encore appliqués), pièces jointes
+`client-v1`, groupes (Sender Keys), aperçu déchiffré dans la liste et la notification, numéros de sécurité.
 

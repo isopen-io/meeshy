@@ -103,6 +103,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // libsignal-android 0.105 le déclare dans son aar-metadata (`coreLibraryDesugaringEnabled=true`, #14591) :
+        // sans lui, `checkDebugAarMetadata` refuse la construction.
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -126,6 +129,7 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(project(":sdk-core"))
     implementation(project(":core:datastore"))
     implementation(project(":sdk-ui"))
