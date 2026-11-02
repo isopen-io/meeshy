@@ -26,5 +26,6 @@ suspend fun SocialSocketManager.writeMediaCaptionTranslationsTo(posts: PostRepos
 suspend fun SocialSocketManager.writePostReactionsTo(posts: PostRepository) {
     coroutineScope {
         launch { postReactionAdded.collectArrived { it.aggregation?.let { a -> posts.applyReactionCount(it.postId, a.emoji, a.count) } } }
-        launch { postReactionRemoved.collectArrived { it.aggregation?.let { a -> posts.applyReactionCount(it.postId, a.emoji, a.count) } } }    }
+        launch { postReactionRemoved.collectArrived { it.aggregation?.let { a -> posts.applyReactionCount(it.postId, a.emoji, a.count) } } }
+    }
 }
