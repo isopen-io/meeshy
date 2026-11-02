@@ -75,7 +75,7 @@ describe('#14401 — chaque partage consenti au rituel se retire en un geste, sa
     await app.close();
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ userId: AUTRE, bringBlocked: false, ...TOUT_PARTAGE });
+    expect(res.body.data).toEqual({ userId: AUTRE, bringBlocked: false, talkieBlocked: false, ...TOUT_PARTAGE });
   });
 
   it('retirer UN partage écrit tout de suite MA ligne, et laisse les autres partages, le lien et le consentement de l’autre', async () => {
@@ -84,7 +84,7 @@ describe('#14401 — chaque partage consenti au rituel se retire en un geste, sa
     await app.close();
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ userId: AUTRE, bringBlocked: false, ...TOUT_PARTAGE, locationShared: false });
+    expect(res.body.data).toEqual({ userId: AUTRE, bringBlocked: false, talkieBlocked: false, ...TOUT_PARTAGE, locationShared: false });
     expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ ...TOUT_PARTAGE, locationShared: false, consentedAt: AU_RITUEL });
     expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject(TOUT_PARTAGE);
     expect(app.store.relations()[0]).toMatchObject({ grantedByLow: 'BLOOD', grantedByHigh: 'BLOOD' });
