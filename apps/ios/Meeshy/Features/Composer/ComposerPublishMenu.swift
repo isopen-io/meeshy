@@ -282,7 +282,7 @@ nonisolated enum ComposerPublishMenuRule {
     /// **Le texte du post que l'ATELIER doit emporter** (#8473, retour porteur
     /// 2026-09-28).
     ///
-    /// Le bouton du socle écrit le texte du post dans `documentText` dès que
+    /// L'option « Texte du post » écrit dans `documentText` dès que
     /// « Post » est ARMÉ, même sur une scène ouverte en story. L'atelier, lui,
     /// publie le contenu de la SLIDE : sans ce report, le texte tapé dans la
     /// plaque de verre ne partait nulle part. Le canal document le porte déjà ;

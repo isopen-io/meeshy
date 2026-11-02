@@ -83,7 +83,7 @@ struct ComposerHostSocleSlot: View {
     var body: some View { host.socleSlot.frame(maxWidth: ComposerSceneArrangementRelay(host: host).publishWidth) }
 }
 
-/// La rangée du socle — audience · texte du post · publier (`socle`).
+/// La rangée du socle — audience · publier (`socle`).
 struct ComposerHostSocleRow: View {
     let host: MeeshyComposerHost
     var observation: ComposerHostObservation
