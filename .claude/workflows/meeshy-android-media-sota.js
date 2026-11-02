@@ -75,6 +75,7 @@ INTERDITS : pousser sur \`${BASE}\` ou \`main\` ; \`git push --force\` ; \`git r
 retrait GPS/EXIF/atomes MP4, E2EE, médias protégés jamais en cache disque, purge de fin de session ADR-027 de apps/android/decisions.md) ;
 toucher la production ; écrire un secret dans le dépôt ; une migration ou une purge de données de production.
 
+TOUT EST DISTANT : chaque commit est poussé aussitôt (\`git push\` sur la branche du lot) ; aucun travail ne reste seulement en local.
 RÈGLES (CLAUDE.md, injecté) : aucune feature sans issue ; TDD (témoin ROUGE constaté avant le code) ; la décision dans une loi PURE de
 :core:model, l'écran mince ; UNE source de vérité (chercher la loi jumelle avant d'en écrire une) ; budget 1200 lignes par fichier, un
 fichier > 1000 lignes ne reçoit rien sans extraction ; iso iOS (apps/ios + packages/MeeshySDK font référence) ; cache d'abord, jamais de
@@ -282,6 +283,7 @@ Signale tout fichier > 1000 lignes à toucher (\`wc -l\`) dans hors_budget, avec
 MISSION — DÉVELOPPER LE LOT (plan du cadrage : ${JSON.stringify(decisions.get(l.key))}).
 1. \`cd ${REPO} && git fetch origin ${BASE} && git worktree add -b ${br(l)} ${wt(l)} origin/${BASE}\` (si la branche existe déjà, reprends-la).
 2. Pousse un squelette dans les quinze minutes (\`git push -u origin ${br(l)}\`) : le témoin rouge ou la spécification — la branche poussée dit QUI.
+   Ensuite COMMITTE ET POUSSE APRÈS CHAQUE ÉTAPE (témoin rouge, loi verte, chaque fichier de câblage) : rien ne vit plus de 10 minutes en local, un arrêt de session ne doit rien perdre.
 3. TDD : témoins de la loi pure, ROUGE constaté (copie l'extrait), minimum pour le vert, refactor. Puis câblage mince, testé là où c'est possible
    (Robolectric, tests de module). Gates locaux à chaque étape ; \`./meeshy.sh check\` complet vert avant de rendre.
 4. Si le lot touche une loi à miroirs (Prisme, présence, accent, actions) : touche les TROIS (web, iOS, Android) ou ouvre l'issue du miroir manquant.`,
