@@ -34,6 +34,9 @@ public enum class OutboxKind {
     CREATE_COMMENT,
     CONSUME_AFTER_READ,
     CONSUME_VIEW_ONCE,
+
+    /** Un message chiffré de bout en bout (#14591) : la ligne ne porte aucun clair, il attend au coffre E2EE. */
+    SEND_E2EE_MESSAGE,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -115,6 +118,7 @@ public object OutboxLaneMap {
         OutboxKind.SEND_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
         OutboxKind.DELETE_MESSAGE,
+        OutboxKind.SEND_E2EE_MESSAGE,
         -> OutboxLaneAssignment.PerConversation
 
         OutboxKind.ADD_REACTION,

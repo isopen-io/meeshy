@@ -42,6 +42,7 @@ public object ApiRoutesConversations {
     public const val BY_ID_MESSAGES_CAPTURE: String = "conversations/{id}/messages/capture"
     public const val BY_ID_MESSAGES_SEARCH: String = "conversations/{id}/messages/search"
     public const val BY_ID_NEW_LINK: String = "conversations/{id}/new-link"
+    public const val BY_ID_OBSOLETE: String = "conversations/{id}/obsolete"
     public const val BY_ID_PARTICIPANTS: String = "conversations/{id}/participants"
     public const val BY_ID_PARTICIPANTS_BY_PARTICIPANT_ID_PROFILE: String = "conversations/{id}/participants/{participantId}/profile"
     public const val BY_ID_PARTICIPANTS_BY_PARTICIPANT_ID_RIGHTS: String = "conversations/{id}/participants/{participantId}/rights"

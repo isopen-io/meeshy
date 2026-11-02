@@ -155,7 +155,8 @@ enum VideoPosterResolver {
         let policyAllows = MediaDownloadPolicyEngine.shouldAutoDownload(
             kind: .video,
             condition: condition,
-            prefs: MediaDownloadPreferencesStore.shared.preferences
+            prefs: MediaDownloadPreferencesStore.shared.preferences,
+            byteSize: attachment.fileSize
         )
         let steps = VideoPosterPlan.steps(
             localFileURL: localVideoFileURL(for: attachment),

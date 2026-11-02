@@ -7,6 +7,8 @@ import javax.inject.Singleton
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.e2ee.EndToEndPlaintextEraser
+import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentLiveDeltas
@@ -47,6 +49,8 @@ class MessageDeltaApplier internal constructor(
     private val clock: CacheClock,
     /** Les événements arrivés avant leur message (suppression, expiration) : gardés ici, rejoués par l'ingestion. */
     private val events: MessageEventBuffer? = null,
+    /** Le clair E2EE d'un message parti quitte le coffre (#14633). */
+    private val eraser: EndToEndPlaintextEraser = EndToEndPlaintextEraser.None,
 ) {
     @Inject
     constructor(
@@ -55,7 +59,8 @@ class MessageDeltaApplier internal constructor(
         clock: CacheClock,
         fence: me.meeshy.sdk.session.AccountFence?,
         events: MessageEventBuffer,
-    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, events)
+        eraser: EndToEndPlaintextEraser,
+    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, events, eraser)
 
     private val tombstones = MessageTombstoneWriter(updater, null, events)
 
@@ -67,14 +72,16 @@ class MessageDeltaApplier internal constructor(
      */
     suspend fun apply(event: ConversationSocketEvent, viewerId: String?): Boolean {
         when (event) {
-            is MessageRemoved -> remove(event)
+            is MessageRemoved -> erasing(listOf(event.messageId), viewerId) { remove(event) }
             is MessagePinChanged -> transform(event.messageId) { pin(it, event) }
             is MessageCountdownStartedEvent -> transform(event.messageId) { message ->
                 ConversationEventDeltas.servedDeadline(message, event.expiresAt, viewerIsSender = message.isFrom(viewerId))
             }
-            is MessageHiddenForMeEvent -> purge(event.messages.map { it.messageId })
-            is MessageConsumedEvent -> transform(event.messageId) { ConversationEventDeltas.consumed(it, event, viewerId) }
-            is MessageViewOncePurgedEvent -> transform(event.messageId) { ConversationEventDeltas.viewOncePurged(it) }
+            is MessageHiddenForMeEvent -> event.messages.map { it.messageId }.let { ids -> erasing(ids, viewerId) { purge(ids) } }
+            is MessageConsumedEvent -> consumed(event, viewerId)
+            is MessageViewOncePurgedEvent -> erasing(listOf(event.messageId), viewerId) {
+                transform(event.messageId) { ConversationEventDeltas.viewOncePurged(it) }
+            }
             is MessageCitedPostWithdrawnEvent -> withdrawCitedPost(event)
             is AttachmentReactionUpdateEvent -> transform(event.messageId) {
                 ConversationEventDeltas.attachmentReactions(it, event.attachmentId, event.reactionSummary)
@@ -160,7 +167,34 @@ class MessageDeltaApplier internal constructor(
      * La flamme-œil consommée par CE lecteur (#13995) : le même effet local qu'un `message:expired`
      * servi — la ligne quitte le cache, ses révisions avec elle.
      */
-    suspend fun expireLocally(messageIds: List<String>) = purge(messageIds)
+    suspend fun expireLocally(messageIds: List<String>) = erasing(messageIds, viewerId = null) { purge(messageIds) }
+
+    /** La vue unique que CE lecteur vient de refermer : son clair E2EE quitte le coffre sans attendre l'écho (#14633). */
+    suspend fun erasePlaintexts(messageIds: List<String>) = erasing(messageIds, viewerId = null) {}
+
+    /** Une vue unique ouverte par CE lecteur (ici ou sur un autre de ses appareils) : son clair quitte le coffre. */
+    private suspend fun consumed(event: MessageConsumedEvent, viewerId: String?) {
+        val openedByViewer = viewerId != null && (event.userId == viewerId || event.participantId == viewerId)
+        val update: suspend () -> Unit = { transform(event.messageId) { ConversationEventDeltas.consumed(it, event, viewerId) } }
+        if (openedByViewer) erasing(listOf(event.messageId), viewerId, update) else update()
+    }
+
+    /**
+     * Relit les clés du coffre AVANT [change] (une expiration retire la ligne, et avec elle le `cid_` de mon envoi), puis
+     * retire leur clair. Une ligne connue en clair n'a rien au coffre ; une ligne inconnue y a peut-être une enveloppe.
+     */
+    private suspend fun erasing(messageIds: List<String>, viewerId: String?, change: suspend () -> Unit) {
+        val keys = messageIds.flatMap { vaultKeys(it, viewerId) }.distinct()
+        change()
+        if (keys.isNotEmpty()) runCatching { eraser.erase(keys) }
+    }
+
+    private suspend fun vaultKeys(messageId: String, viewerId: String?): List<String> {
+        val row = updater.find(messageId) ?: return listOf(messageId)
+        if (row.isEncrypted != true && !EndToEndRegime.isEndToEnd(row.encryptionMode)) return emptyList()
+        val mine = viewerId != null && (row.sender?.resolvedUserId ?: row.senderId) == viewerId
+        return listOfNotNull(messageId, row.id, row.clientMessageId?.takeIf { mine })
+    }
 
     /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés), en une transaction. */
     private suspend fun purge(messageIds: List<String>) {

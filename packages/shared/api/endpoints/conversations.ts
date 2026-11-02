@@ -102,6 +102,9 @@ export const byIdMessagesSearch = (id: string): string => `/api/v1/conversations
 /** POST /api/v1/conversations/:id/new-link */
 export const byIdNewLink = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/new-link`;
 
+/** DELETE /api/v1/conversations/:id/obsolete */
+export const byIdObsolete = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/obsolete`;
+
 /** GET · POST /api/v1/conversations/:id/participants */
 export const byIdParticipants = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/participants`;
 

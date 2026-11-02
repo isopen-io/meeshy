@@ -73,6 +73,7 @@ class ConversationListRealtimeBinderPatchTest {
             every { conversationDeleted } returns frames.deleted
             every { conversationRestored } returns frames.restored
             every { conversationClosed } returns frames.closed
+            every { conversationObsoleted } returns MutableSharedFlow()
             every { participantLeft } returns frames.left
             every { participantBanned } returns frames.banned
             every { participantJoined } returns frames.joined

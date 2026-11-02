@@ -102,8 +102,9 @@ const SYNCHRO_SCHEMA = { type: 'object', properties: {
   appareils: { type: 'array', items: { type: 'string' } },
   lots_sur_source: { type: 'array', items: { type: 'string' }, description: 'clés des lots dont les commits sont sur la branche source et pas encore dans dev' },
   lots_deja_dans_dev: { type: 'array', items: { type: 'string' } },
+  rouge_du_chantier: { type: 'array', items: { type: 'string' }, description: 'tâches ou tests rouges sur origin/dev dont la cause est un fichier d un lot du chantier (git blame / git log du fichier)' },
   rapport: { type: 'string' },
-}, required: ['dev_head', 'source_head', 'rouge_prealable', 'appareils', 'lots_sur_source', 'lots_deja_dans_dev', 'rapport'] }
+}, required: ['dev_head', 'source_head', 'rouge_prealable', 'appareils', 'lots_sur_source', 'lots_deja_dans_dev', 'rouge_du_chantier', 'rapport'] }
 
 const SOURCE_SCHEMA = { type: 'object', properties: {
   verdict: { type: 'string', enum: ['pr-ouverte', 'deja-fusionnee', 'rien-a-valider', 'bloque'] },
@@ -165,9 +166,9 @@ const BILAN_SCHEMA = { type: 'object', properties: { commentaire: { type: 'strin
 // ---------------------------------------------------------------------------
 // MESURE SUR APPAREIL — partagée par la branche source et les vagues
 // ---------------------------------------------------------------------------
-const mesurerPrompt = (l, branche) => `${socle(l)}
+const mesurerPrompt = (l, branche, avant) => `${socle(l)}
 MISSION — MESURER SUR APPAREIL RÉEL, AVANT / APRÈS (appareils : ${APPAREILS.join(', ')}). C'est ce qu'aucun conteneur n'a pu faire.
-1. Construis deux APK debuggables (ou mieux : variante \`benchmark\` si le module existe) : AVANT = origin/${BASE}, APRÈS = ${branche}.
+1. Construis deux APK debuggables (ou mieux : variante \`benchmark\` si le module existe) : AVANT = ${avant || `origin/${BASE}`}, APRÈS = ${branche}.
 2. Dérive le scénario du critère de fin de l'issue #${l.issue} et de l'issue des mesures #${MESURES_ISSUE}. Outils, selon ce que le lot promet :
    - première image / démarrage : \`adb shell am start -W\`, marqueurs logcat du dépôt (ReelSwitchMeter…), trace Perfetto (\`adb shell perfetto -c - --txt\`) ;
    - images perdues : \`adb shell dumpsys gfxinfo me.meeshy.app reset\` puis le geste rejoué (\`adb shell input swipe …\` × 30) puis \`dumpsys gfxinfo … framestats\` (p50/p90/p95/p99, janky %) ;
@@ -212,7 +213,8 @@ MISSION — SYNCHRONISER ET ÉTABLIR LE ROUGE PRÉALABLE.
    \`git log origin/${BASE} --grep '#<issue>'\`) — est-il sur la branche source seulement, déjà dans ${BASE}, ou nulle part ?
 3. Rouge préalable : dans un worktree DÉTACHÉ temporaire sur origin/${BASE} (\`git worktree add --detach ${WT_ROOT}/v2_meeshy-dev-ref origin/${BASE}\`),
    \`cd ${WT_ROOT}/v2_meeshy-dev-ref/apps/android && ./meeshy.sh check 2>&1 | tail -60\` ; consigne chaque tâche ou test rouge dans
-   ${SCRATCH}/rouge-prealable.json ; puis \`git worktree remove ${WT_ROOT}/v2_meeshy-dev-ref\`.
+   ${SCRATCH}/rouge-prealable.json ; pour chaque rouge, dis si sa cause est un fichier d'un lot du chantier déjà fusionné (\`git log -3 --format='%h %s' -- <fichier>\`
+   cite #<issue> d'un lot) → rouge_du_chantier, sinon il reste préalable ; puis \`git worktree remove ${WT_ROOT}/v2_meeshy-dev-ref\`.
 4. \`adb devices -l\` : liste les appareils joignables parmi ${APPAREILS.join(', ') || '(aucun déclaré)'} avec modèle et version d'Android
    (\`adb -s <s> shell getprop ro.product.model\` / \`ro.build.version.release\`).`,
 { label: 'synchroniser', phase: 'Synchroniser', schema: SYNCHRO_SCHEMA, model: MODELE.cadrer, effort: 'medium' })
@@ -248,6 +250,30 @@ déclenché à la main. Ici tu as tout.
     const regressions = source.mesures.filter((m) => m.regressions.length)
     if (regressions.length) log(`régressions mesurées sur la branche source : ${regressions.map((m) => m.key).join(', ')} — à commenter sur la PR avant sa fusion`)
   }
+}
+
+// ---------------------------------------------------------------------------
+// 3 bis. LOTS DÉJÀ FUSIONNÉS DANS DEV PAR LES CONTENEURS — réparer ce qu'ils cassent, puis les mesurer
+// ---------------------------------------------------------------------------
+let reparation = null
+const fusionnes = TOUS.filter((l) => synchro && synchro.lots_deja_dans_dev.includes(l.key))
+if (synchro && synchro.rouge_du_chantier.length) {
+  phase('Valider la source')
+  reparation = await agent(`${socle(null)}
+MISSION — RÉPARER ${BASE} : ces rouges de origin/${BASE} viennent de lots du chantier déjà fusionnés (sans compilateur Android, prouvés seulement par
+la CI) : ${JSON.stringify(synchro.rouge_du_chantier)}.
+1. Branche \`fix/android-media-sota-${BASE}\` depuis origin/${BASE} dans le worktree ${WT_ROOT}/v2_meeshy-reparation ; reproduis chaque rouge
+   (\`cd ${WT_ROOT}/v2_meeshy-reparation/apps/android && ./gradlew <tâche> 2>&1 | tail -60\`), corrige la CAUSE (jamais un test désactivé), TDD si c'est un comportement.
+2. \`./meeshy.sh check\` complet vert ; commits \`fix(android/media): …\` (Refs #<issue du lot>) ; push ; PR vers ${BASE} (fusion automatique au vert, #9226) ;
+   commentaire sur chaque issue de lot concernée ; \`git worktree remove ${WT_ROOT}/v2_meeshy-reparation\`.`,
+  { label: 'reparer-dev', phase: 'Valider la source', schema: SOURCE_SCHEMA, model: MODELE.relire, effort: 'high' })
+}
+let mesuresFusionnes = []
+if (MESURER && fusionnes.length) {
+  mesuresFusionnes = (await parallel(fusionnes.map((l) => () => agent(mesurerPrompt(l, `origin/${BASE}`, `le PREMIER PARENT du commit de fusion qui a amené le lot #${l.issue} dans ${BASE} (\`git log origin/${BASE} --merges --first-parent --grep '#${l.issue}\\|${SOURCE}' -1\`, puis <merge>^1)`),
+    { label: `mesurer:${l.key}`, phase: 'Mesurer', schema: MESURE_SCHEMA, model: MODELE.mesurer, effort: 'high' })))).filter(Boolean)
+  const reg = mesuresFusionnes.filter((m) => m.regressions.length)
+  if (reg.length) log(`régressions mesurées sur des lots déjà fusionnés : ${reg.map((m) => m.key).join(', ')} — une issue chacune, priorité de la feature dégradée`)
 }
 
 // ---------------------------------------------------------------------------
@@ -329,7 +355,7 @@ ${bloque ? `Le lot est BLOQUÉ (revue, audit ou régression mesurée) : n'ouvre 
 // ---------------------------------------------------------------------------
 phase('Bilan')
 const bilan = await agent(`${socle(null)}
-MISSION — BILAN. Pilotage : ${JSON.stringify(pilotage)}. Source : ${JSON.stringify(source && { verdict: source.verdict, pr: source.pr, lots_valides: source.lots_valides, lots_a_reprendre: source.lots_a_reprendre })}.
+MISSION — BILAN. Pilotage : ${JSON.stringify(pilotage)}. Réparation de ${BASE} : ${JSON.stringify(reparation && { verdict: reparation.verdict, pr: reparation.pr })}. Mesures des lots déjà fusionnés : ${JSON.stringify(mesuresFusionnes.map((m) => ({ key: m.key, mesures: m.mesures, regressions: m.regressions })))}. Source : ${JSON.stringify(source && { verdict: source.verdict, pr: source.pr, lots_valides: source.lots_valides, lots_a_reprendre: source.lots_a_reprendre })}.
 Vagues : ${JSON.stringify(bilans)}.
 Poste UN commentaire sur le parapluie #${PARAPLUIE} (\`gh issue comment ${PARAPLUIE} --repo ${REPO_GH} --body-file <fichier>\`) : tableau lot → PR → état → mesures
 clés (avant/après) → dimensions mûres ; ce qui reste, dans l'ordre ; les régressions et blocages avec leur issue. Termine le commentaire par :
@@ -340,4 +366,4 @@ _Generated by [Claude Code](https://claude.ai/code)_
 Mets à jour le Status des issues dans le projet 1 (Done pour les PR fusionnées, In Progress pour les PR ouvertes, inchangé sinon).`,
 { label: 'bilan', phase: 'Bilan', schema: BILAN_SCHEMA, model: MODELE.bilan, effort: 'low' })
 
-return { pilotage, synchro, source, vagues: bilans, bilan }
+return { pilotage, synchro, source, reparation, mesuresFusionnes, vagues: bilans, bilan }

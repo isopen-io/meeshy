@@ -430,6 +430,27 @@ data class ConversationClosedSocketEvent(
     val closedAt: String? = null,
 )
 
+/**
+ * `conversation:obsoleted` (#14645) — la conversation a été rendue OBSOLÈTE : son contenu n'est plus
+ * lisible et ses données partent après [purgeAfter]. Toujours précédé de [ConversationClosedSocketEvent]
+ * (les anciens clients la retirent par celui-là) ; les deux retirent la ligne et ferment le fil.
+ */
+@Serializable
+data class ConversationObsoletedSocketEvent(
+    val conversationId: String,
+    val obsoletedBy: String? = null,
+    val obsoletedAt: String? = null,
+    val purgeAfter: String? = null,
+)
+
+/** La réponse de `DELETE /conversations/:id/obsolete` (#14645), idempotente : un second appel rend les mêmes dates. */
+@Serializable
+data class ConversationObsoleted(
+    val conversationId: String,
+    val obsoletedAt: String? = null,
+    val purgeAfter: String? = null,
+)
+
 @Serializable
 data class ReadStatusSummary(
     val totalMembers: Int = 0,

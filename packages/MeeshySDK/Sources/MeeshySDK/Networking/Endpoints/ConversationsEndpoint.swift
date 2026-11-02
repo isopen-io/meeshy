@@ -42,6 +42,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byIdMessagesCapture(id: String)
     case byIdMessagesSearch(id: String)
     case byIdNewLink(id: String)
+    case byIdObsolete(id: String)
     case byIdParticipants(id: String)
     case byIdParticipantsByParticipantIdProfile(id: String, participantId: String)
     case byIdParticipantsByParticipantIdRights(id: String, participantId: String)
@@ -93,6 +94,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byIdMessagesCapture(let id): return "/api/v1/conversations/\(id)/messages/capture"
         case .byIdMessagesSearch(let id): return "/api/v1/conversations/\(id)/messages/search"
         case .byIdNewLink(let id): return "/api/v1/conversations/\(id)/new-link"
+        case .byIdObsolete(let id): return "/api/v1/conversations/\(id)/obsolete"
         case .byIdParticipants(let id): return "/api/v1/conversations/\(id)/participants"
         case .byIdParticipantsByParticipantIdProfile(let id, let participantId): return "/api/v1/conversations/\(id)/participants/\(participantId)/profile"
         case .byIdParticipantsByParticipantIdRights(let id, let participantId): return "/api/v1/conversations/\(id)/participants/\(participantId)/rights"

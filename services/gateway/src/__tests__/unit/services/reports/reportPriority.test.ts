@@ -25,8 +25,10 @@ const GROUPE = '6a00000000000000000000c1';
 const MSG_GROUPE = '6a00000000000000000000b3';
 const ANCIEN_SANG = '6a00000000000000000000a5';
 const DAYS = 86_400_000;
+const SALON = '6a00000000000000000000c2';
+const MSG_SALON = '6a00000000000000000000b4';
 
-function monde(extra: { links?: readonly Row[]; signalantBloque?: readonly string[] } = {}): PrismaClient {
+function monde(extra: { links?: readonly Row[]; signalantBloque?: readonly string[]; salonType?: string } = {}): PrismaClient {
   const world = messagingWorld({
     links: [[SIGNALANT, SANG, 'BLOOD']],
     users: [
@@ -42,6 +44,8 @@ function monde(extra: { links?: readonly Row[]; signalantBloque?: readonly strin
       { id: 'g-adulte', userId: ADULTE, conversationId: GROUPE, isActive: true },
       { id: 'g-signalant', userId: SIGNALANT, conversationId: GROUPE, isActive: true },
       { id: 'g-mineur', userId: MINEUR, conversationId: GROUPE, isActive: true },
+      { id: 's-adulte', userId: ADULTE, conversationId: SALON, isActive: true },
+      { id: 's-mineur', userId: MINEUR, conversationId: SALON, isActive: true },
     ],
   });
   for (const link of extra.links ?? []) void world.relations.prisma.userRelation.create({ data: link } as never);
@@ -49,8 +53,9 @@ function monde(extra: { links?: readonly Row[]; signalantBloque?: readonly strin
     { id: MSG_POSITION, senderId: 'p-adulte', messageType: 'location' },
     { id: MSG_TEXTE, senderId: 'p-adulte', messageType: 'text' },
     { id: MSG_GROUPE, senderId: 'g-adulte', messageType: 'text', conversationId: GROUPE },
+    { id: MSG_SALON, senderId: 's-adulte', messageType: 'text', conversationId: SALON },
   ]);
-  const conversation = table([{ id: GROUPE, type: 'group' }]);
+  const conversation = table([{ id: GROUPE, type: 'group' }, { id: SALON, type: extra.salonType ?? 'direct' }]);
   const floorOf = (where: { user?: { is?: { birthDate?: { gte?: Date } } } }) => where.user?.is?.birthDate?.gte ?? new Date(0);
   const participant = {
     ...world.participant,
@@ -114,6 +119,32 @@ describe('assessReportPriority', () => {
     const enPanne = { user: { findMany: async () => { throw new Error('db down'); } } } as unknown as PrismaClient;
     await expect(assess('user', MINEUR, SIGNALANT, enPanne)).resolves.toEqual({ priority: 0, priorityReasons: [] });
     expect(warn).toHaveBeenCalledWith(expect.any(String), { reportedType: 'user' });
+  });
+
+  it.each(['global', 'public', 'broadcast'])('l\'audience d\'un salon %s ne se compte pas, ni par son message ni par le salon lui-même (#14627, audit 3 M2)', async (salonType) => {
+    const prisma = monde({ salonType });
+    await expect(assess('message', MSG_SALON, SIGNALANT, prisma)).resolves.toEqual({ priority: 0, priorityReasons: [] });
+    await expect(assess('conversation', SALON, SIGNALANT, prisma)).resolves.toEqual({ priority: 0, priorityReasons: [] });
+  });
+
+  it('dans un salon global, un signalant mineur garde la priorité (#14627)', async () => {
+    await expect(assess('message', MSG_SALON, MINEUR, monde({ salonType: 'global' }))).resolves.toEqual({ priority: 1, priorityReasons: ['minor'] });
+  });
+
+  it.each(['direct', 'group'])('l\'audience d\'une conversation %s se compte toujours (#14627)', async (salonType) => {
+    await expect(assess('message', MSG_SALON, SIGNALANT, monde({ salonType }))).resolves.toEqual({ priority: 1, priorityReasons: ['minor'] });
+  });
+
+  it('la frontière du count d\'audience est celle de declaredAgeClass, chaque jour de quatre ans, 29 février compris (#14627, audit 3 m1)', () => {
+    const start = Date.UTC(2023, 0, 1);
+    const days = Array.from({ length: 4 * 366 }, (_, i) => new Date(start + i * DAYS + 12 * 3_600_000));
+    const disagreements = days.flatMap((now) => {
+      const floor = minorBirthDateFloor(now).getTime();
+      return [-2, -1, 0, 1, 2].map((offset) => new Date(floor + offset * DAYS))
+        .filter((birth) => (birth.getTime() >= floor) !== (declaredAgeClass(birth, now) === 'minor'))
+        .map((birth) => `${now.toISOString().slice(0, 10)} / ${birth.toISOString().slice(0, 10)}`);
+    });
+    expect(disagreements).toEqual([]);
   });
 
   it('la frontière du count d\'audience est celle de declaredAgeClass : 18 ans le jour même (contre-audit N4)', () => {

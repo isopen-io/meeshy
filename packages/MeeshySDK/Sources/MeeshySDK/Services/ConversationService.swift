@@ -68,6 +68,19 @@ private struct HistoryGrantBody: Encodable {
     }
 }
 
+/// La réponse de `DELETE /conversations/:id/obsolete` (#14643) : dates ISO 8601.
+public struct ConversationObsoleteResult: Decodable, Sendable, Equatable {
+    public let conversationId: String
+    public let obsoletedAt: String
+    public let purgeAfter: String
+
+    public init(conversationId: String, obsoletedAt: String, purgeAfter: String) {
+        self.conversationId = conversationId
+        self.obsoletedAt = obsoletedAt
+        self.purgeAfter = purgeAfter
+    }
+}
+
 // MARK: - Protocol
 
 public protocol ConversationServiceProviding: Sendable {
@@ -81,6 +94,10 @@ public protocol ConversationServiceProviding: Sendable {
     func getById(_ conversationId: String) async throws -> APIConversation
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse
     func delete(conversationId: String) async throws
+    /// `DELETE /conversations/:id/obsolete` (#14643) — rend la conversation
+    /// OBSOLÈTE : son contenu est effacé pour tous. Idempotent ; la passerelle
+    /// refuse en 403 un lecteur qui n'en est pas administrateur.
+    func obsolete(conversationId: String) async throws -> ConversationObsoleteResult
     func markRead(conversationId: String) async throws
     func markAsReceived(conversationId: String) async throws
     func markUnread(conversationId: String) async throws
@@ -213,6 +230,13 @@ public final class ConversationService: ConversationServiceProviding, Sendable {
 
     public func delete(conversationId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(ConversationsEndpoint.byId(id: conversationId))
+    }
+
+    public func obsolete(conversationId: String) async throws -> ConversationObsoleteResult {
+        let response: APIResponse<ConversationObsoleteResult> = try await api.request(
+            ConversationsEndpoint.byIdObsolete(id: conversationId), method: "DELETE", body: nil, queryItems: nil
+        )
+        return response.data
     }
 
     // Endpoints fire-and-forget : la reponse est ignoree (`let _`). Les trois

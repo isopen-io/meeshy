@@ -34,6 +34,12 @@ data class ConversationRowMenuCapabilities(
      * de plateforme privilégié vaut créateur une fois DANS (#11217).
      */
     val manageMembers: Boolean,
+    /**
+     * « Rendre obsolète » (#14645) : la même loi que la suppression pour tous, car la passerelle
+     * (`DELETE /conversations/:id/obsolete`) exige la même permission — administrateur d'un groupe,
+     * d'une conversation publique ou d'une chaîne encore ouverts ; jamais Global ni un direct.
+     */
+    val obsolete: Boolean = false,
 ) {
 
     /**
@@ -77,6 +83,7 @@ data class ConversationRowMenuCapabilities(
                 removal = if (!actions.hide) null else if (direct) Removal.DELETE else Removal.HIDE,
                 canToggleArchive = !conversation.isArchiveImposed,
                 manageMembers = actions.manageMembers,
+                obsolete = actions.deleteForAll,
             )
         }
 

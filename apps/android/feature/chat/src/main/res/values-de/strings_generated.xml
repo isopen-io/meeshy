@@ -177,7 +177,7 @@
     <string name="encryption_fact_end_to_end_never_turned_off_direct">Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten: Dieser Einzelchat bleibt verschlüsselt. Du kannst daneben jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit dieser Person öffnen: Beide stehen in der Liste, diese mit einem Schloss markiert.</string>
     <string name="encryption_fact_every_server_feature">Alle Funktionen sind verfügbar: automatische Übersetzung, Transkription von Sprachnachrichten, Benachrichtigungsvorschau, Suche.</string>
     <string name="encryption_fact_group_sending_unavailable">In dieser Gruppe kann die App noch keine verschlüsselten Nachrichten senden.</string>
-    <string name="encryption_fact_hybrid_is_server_today">Der Hybridmodus verschlüsselt derzeit wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald.</string>
+    <string name="encryption_fact_hybrid_is_server_today">Der Hybridmodus verschlüsselt deine Nachrichten auf unseren Servern, die sie für Übersetzung und Suche lesen können: Das ist keine Ende-zu-Ende-Verschlüsselung. Zwischen zwei kompatiblen Geräten lässt sich mit einer zweiten Schicht zusätzlich prüfen, dass eine Textnachricht unterwegs nicht verändert wurde; fehlt sie, wird nichts als geprüft dargestellt.</string>
     <string name="encryption_fact_no_edit">Eine gesendete Nachricht kann nicht bearbeitet werden.</string>
     <string name="encryption_fact_no_forward">Eine Nachricht kann nicht weitergeleitet werden.</string>
     <string name="encryption_fact_no_notification_preview">Benachrichtigungen zeigen den Nachrichtentext nicht an: Der Server kennt ihn nicht.</string>
@@ -202,12 +202,12 @@
     <string name="encryption_legacy_title">Ende-zu-Ende-Verschlüsselung</string>
     <string name="encryption_mode_e2ee_description">Nur deine Geräte und die der Teilnehmenden lesen die Nachrichten. Die Übersetzung erfolgt auf deinem Gerät.</string>
     <string name="encryption_mode_e2ee_label">Ende-zu-Ende</string>
-    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt, wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald.</string>
+    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt; zwischen kompatiblen Geräten lässt sich mit einer zweiten Schicht prüfen, dass eine Textnachricht unterwegs nicht verändert wurde.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren.</string>
     <string name="encryption_mode_server_label">Server</string>
     <string name="encryption_summary_end_to_end">Ende-zu-Ende-verschlüsselt: Nur die Geräte der Teilnehmenden können die Nachrichten lesen</string>
-    <string name="encryption_summary_hybrid">Auf unseren Servern verschlüsselt (Hybridmodus)</string>
+    <string name="encryption_summary_hybrid">Auf unseren Servern verschlüsselt, mit Prüfung zwischen kompatiblen Geräten</string>
     <string name="encryption_summary_none">Unterhaltung vor der systematischen Verschlüsselung erstellt: Ihre Nachrichten sind nicht verschlüsselt</string>
     <string name="encryption_summary_server">Auf unseren Servern verschlüsselt</string>
     <string name="encryption_topic_absent">In diesem Modus nicht verfügbar</string>

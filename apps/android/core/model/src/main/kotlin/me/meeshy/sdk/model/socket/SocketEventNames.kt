@@ -97,6 +97,7 @@ object SocketEventNames {
     const val CONVERSATION_DELETED = "conversation:deleted"
     const val CONVERSATION_ENCRYPTION_CHANGED = "conversation:encryption-changed"
     const val CONVERSATION_NEW = "conversation:new"
+    const val CONVERSATION_OBSOLETED = "conversation:obsoleted"
     const val CONVERSATION_PARTICIPANT_BANNED = "conversation:participant-banned"
     const val CONVERSATION_PARTICIPANT_JOINED = "conversation:participant-joined"
     const val CONVERSATION_PARTICIPANT_LEFT = "conversation:participant-left"
@@ -104,6 +105,9 @@ object SocketEventNames {
     const val CONVERSATION_RESTORED = "conversation:restored"
     const val CONVERSATION_UNREAD_UPDATED = "conversation:unread-updated"
     const val CONVERSATION_UPDATED = "conversation:updated"
+
+    // e2ee (#14591) — vers la room de la GÉNÉRATION de l'appareil, jamais de l'utilisateur
+    const val E2EE_ENVELOPE = "e2ee:envelope"
 
     // location
     const val LOCATION_LIVE_START = "location:live-start"
@@ -312,6 +316,7 @@ object SocketEventNames {
         CONVERSATION_DELETED,
         CONVERSATION_ENCRYPTION_CHANGED,
         CONVERSATION_NEW,
+        CONVERSATION_OBSOLETED,
         CONVERSATION_PARTICIPANT_BANNED,
         CONVERSATION_PARTICIPANT_JOINED,
         CONVERSATION_PARTICIPANT_LEFT,
@@ -319,6 +324,7 @@ object SocketEventNames {
         CONVERSATION_RESTORED,
         CONVERSATION_UNREAD_UPDATED,
         CONVERSATION_UPDATED,
+        E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,

@@ -150,7 +150,7 @@
     <string name="encryption_create_header">Cifrado</string>
     <string name="encryption_mode_e2ee_description">Solo tus dispositivos y los de los participantes leen los mensajes. La traducción se hace en tu dispositivo.</string>
     <string name="encryption_mode_e2ee_label">Extremo a extremo</string>
-    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores, como Servidor. El doble cifrado por tus dispositivos llegará pronto.</string>
+    <string name="encryption_mode_hybrid_description">Cifrado en nuestros servidores; entre dispositivos compatibles, una segunda capa permite comprobar que un mensaje de texto no se modificó por el camino.</string>
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan.</string>
     <string name="encryption_mode_server_label">Servidor</string>
@@ -317,7 +317,7 @@
     <string name="my_share_links_status_inactive">Inactivo</string>
     <string name="my_share_links_title">Enlaces para compartir</string>
     <string name="my_share_links_toggle">Activos</string>
-    <string name="new_conversation_back">Atrás</string>
+    <string name="new_conversation_close">Cerrar</string>
     <string name="new_conversation_contacts_empty_subtitle">Busca un usuario para iniciar una conversación.</string>
     <string name="new_conversation_contacts_empty_title">Sin contactos</string>
     <string name="new_conversation_contacts_loading">Cargando los contactos</string>

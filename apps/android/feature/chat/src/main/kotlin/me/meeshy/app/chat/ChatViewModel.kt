@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
@@ -49,8 +50,6 @@ import me.meeshy.sdk.model.mention.MentionLookupLaw
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
-import me.meeshy.sdk.model.StarredAttachmentKind
-import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.app.chat.piece.PieceCapabilities
@@ -119,6 +118,8 @@ class ChatViewModel @Inject constructor(
     ownReactionWithdrawals: OwnReactionWithdrawals,
     outOfThreadSendGate: OutOfThreadSendGate,
     mentionContacts: MentionContacts = MentionContacts.None,
+    /** #14591 — le texte d'un tête-à-tête chiffré de bout en bout part scellé, et le fil relit son clair au coffre. */
+    private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -143,7 +144,9 @@ class ChatViewModel @Inject constructor(
     /** The message this conversation was opened ON (route arg `messageId`), handed out ONCE: a later open or recomposition never replays the jump. */
     fun takeLandingMessageId(): String? = landingMessageId.also { landingMessageId = null }
 
-    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
+    private val _state = MutableStateFlow(
+        ChatUiState(conversationId = conversationId, endToEndAvailable = endToEnd !== EndToEndThreadAccess.None),
+    )
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val composerTextHolder = ComposerTextHolder(initialDraft.orEmpty())
@@ -214,6 +217,7 @@ class ChatViewModel @Inject constructor(
         recentEmojis = recentEmojiStore,
         languageIdentifier = languageIdentifier,
         mentionContacts = mentionContacts,
+        endToEnd = endToEnd,
     )
 
     private val reactions = ChatReactionController(
@@ -363,6 +367,7 @@ class ChatViewModel @Inject constructor(
                             ?: it.composerLanguageSeed,
                     )
                 }
+                if (_state.value.isEndToEnd) composer.forgetEndToEndDraftOnDisk()
             }
         }
 
@@ -375,14 +380,17 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             combine(
-                messageRepository.messagesStream(
+                endToEnd.overlay(
                     conversationId,
-                    onSyncError = { error ->
-                        windowAnswered.value = true
-                        _state.update {
-                            it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
-                        }
-                    },
+                    messageRepository.messagesStream(
+                        conversationId,
+                        onSyncError = { error ->
+                            windowAnswered.value = true
+                            _state.update {
+                                it.copy(errorMessage = error.message, showSkeleton = false, isSyncing = false)
+                            }
+                        },
+                    ),
                 ),
                 sessionRepository.currentUser,
                 reactions.ownReactions,
@@ -1051,25 +1059,18 @@ class ChatViewModel @Inject constructor(
         val bubble = _state.value.messages.firstOrNull { it.messageId == messageId }
         _state.update { it.copy(actionMessageId = null) }
         if (bubble == null || bubble.isDeleted) return
-        starredStore.toggle(bubble.toStarSnapshot())
+        starredStore.toggle(
+            ChatStarSnapshot.of(
+                bubble = bubble,
+                conversationId = conversationId,
+                conversationName = _state.value.conversationTitle,
+                accentColorHex = _state.value.accentColorHex,
+                senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
+                conversationIsEndToEnd = _state.value.isEndToEnd,
+                nowMillis = clock.nowMillis(),
+            ),
+        )
     }
-
-    private fun BubbleContent.toStarSnapshot(): StarredMessage = StarredMessage(
-        messageId = messageId,
-        conversationId = conversationId,
-        conversationName = _state.value.conversationTitle,
-        conversationAccentColor = _state.value.accentColorHex,
-        senderName = senderName,
-        senderAvatarUrl = latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.sender?.resolvedAvatar,
-        contentPreview = text,
-        attachmentKind = when {
-            images.isNotEmpty() -> StarredAttachmentKind.IMAGE
-            files.isNotEmpty() -> StarredAttachmentKind.FILE
-            else -> null
-        },
-        starredAtMillis = clock.nowMillis(),
-        sentAtIso = createdAtIso,
-    )
 
     fun retryMessage(messageId: String) {
         viewModelScope.launch {

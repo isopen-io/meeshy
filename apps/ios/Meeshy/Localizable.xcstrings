@@ -32021,6 +32021,241 @@
         }
       }
     },
+    "message.deviceLayer.deviceText.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النص الذي شفّره جهاز المرسل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vom Gerät des Absenders verschlüsselter Text"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text encrypted by the sender’s device"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto cifrado por el dispositivo del remitente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texte chiffré par l’appareil de l’expéditeur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testo crittografato dal dispositivo del mittente"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto criptografado pelo aparelho do remetente"
+          }
+        }
+      }
+    },
+    "message.deviceLayer.editedUnproven": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معدَّلة — النص الأصلي الذي شفّره جهاز المرسل متاح."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeitet – der vom Gerät des Absenders verschlüsselte Originaltext ist verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edited — the original text encrypted by the sender’s device is available."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modificado: el texto original cifrado por el dispositivo del remitente está disponible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifié — le texte d’origine chiffré par l’appareil de l’expéditeur est disponible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modificato — il testo originale crittografato dal dispositivo del mittente è disponibile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editada — o texto original criptografado pelo aparelho do remetente está disponível."
+          }
+        }
+      }
+    },
+    "message.deviceLayer.mismatchServed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النص المستلَم لا يطابق النص الذي شفّره جهاز المرسل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der empfangene Text stimmt nicht mit dem überein, den das Gerät des Absenders verschlüsselt hat."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text received does not match the one encrypted by the sender’s device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El texto recibido no coincide con el que cifró el dispositivo del remitente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le texte reçu ne correspond pas à celui chiffré par l’appareil de l’expéditeur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il testo ricevuto non corrisponde a quello crittografato dal dispositivo del mittente."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O texto recebido não corresponde ao que o aparelho do remetente criptografou."
+          }
+        }
+      }
+    },
+    "message.deviceLayer.reveal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض نص الجهاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text des Geräts anzeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the device text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver el texto del dispositivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir le texte de l’appareil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi il testo del dispositivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver o texto do aparelho"
+          }
+        }
+      }
+    },
+    "message.deviceLayer.verifiedOriginal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النص الأصلي موثَّق بواسطة جهازك: إنه مطابق للنص الذي شفّره جهاز المرسل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Originaltext von deinem Gerät geprüft: Er ist identisch mit dem, den das Gerät des Absenders verschlüsselt hat."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original text verified by your device: it is identical to the one the sender’s device encrypted."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto original verificado por tu dispositivo: es idéntico al que cifró el dispositivo del remitente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texte original vérifié par votre appareil : il est identique à celui que l’appareil de l’expéditeur a chiffré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testo originale verificato dal tuo dispositivo: è identico a quello crittografato dal dispositivo del mittente."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto original verificado pelo seu aparelho: é idêntico ao que o aparelho do remetente criptografou."
+          }
+        }
+      }
+    },
     "message.piece.a11y.options": {
       "extractionState": "manual",
       "localizations": {
@@ -50561,53 +50796,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "em"
-          }
-        }
-      }
-    },
-    "accessibility.last_message": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "آخر رسالة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "letzte Nachricht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "last message"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "último mensaje"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "dernier message"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ultimo messaggio"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "última mensagem"
           }
         }
       }
@@ -106121,43 +106309,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّر على خوادمنا مثل وضع الخادم. التشفير المزدوج عبر أجهزتك قادم قريبًا."
+            "value": "مشفّر على خوادمنا؛ وبين الأجهزة المتوافقة، تتيح طبقة ثانية التحقق من أن الرسالة النصية لم تُعدَّل في الطريق."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf unseren Servern verschlüsselt, wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald."
+            "value": "Auf unseren Servern verschlüsselt; zwischen kompatiblen Geräten lässt sich mit einer zweiten Schicht prüfen, dass eine Textnachricht unterwegs nicht verändert wurde."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted on our servers, like Server. Double encryption by your devices is coming soon."
+            "value": "Encrypted on our servers; between compatible devices, a second layer lets you check that a text message was not altered on the way."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrado en nuestros servidores, como Servidor. El doble cifrado por tus dispositivos llegará pronto."
+            "value": "Cifrado en nuestros servidores; entre dispositivos compatibles, una segunda capa permite comprobar que un mensaje de texto no se modificó por el camino."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffré sur nos serveurs, comme Serveur. Le double chiffrement par vos appareils arrive bientôt."
+            "value": "Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografato sui nostri server, come Server. La doppia crittografia dai tuoi dispositivi arriva presto."
+            "value": "Crittografato sui nostri server; tra dispositivi compatibili, un secondo livello permette di verificare che un messaggio di testo non sia stato modificato lungo il percorso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografado em nossos servidores, como Servidor. A criptografia dupla pelos seus aparelhos chega em breve."
+            "value": "Criptografado em nossos servidores; entre aparelhos compatíveis, uma segunda camada permite verificar que uma mensagem de texto não foi alterada no caminho."
           }
         }
       }
@@ -109462,6 +109650,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Digite seu PIN mestre para permitir o desbloqueio biométrico"
+          }
+        }
+      }
+    },
+    "search.posts.opens": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح المحتوى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet den Inhalt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the content"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el contenido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre le contenu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apre il contenuto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre o conteúdo"
           }
         }
       }
@@ -113612,100 +113847,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Este story não está mais disponível"
-          }
-        }
-      }
-    },
-    "conversation.summary.hidden": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رسالة واحدة مخفية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 ausgeblendete Nachricht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 hidden message"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensaje oculto"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 message caché"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 messaggio nascosto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensagem oculta"
-          }
-        }
-      }
-    },
-    "conversation.summary.view_once": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رسالة واحدة تُعرض مرة واحدة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 Einmalansicht-Nachricht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 view-once message"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensaje de vista única"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 message vue unique"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 messaggio visualizzabile una volta"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensagem de visualização única"
           }
         }
       }
@@ -170930,43 +171071,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الرسائل والمحادثات والمستخدمون"
+            "value": "الرسائل والمنشورات والمستخدمون"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nachrichten, Unterhaltungen, Benutzer"
+            "value": "Nachrichten, Beiträge, Benutzer"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messages, conversations, users"
+            "value": "Messages, posts, users"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mensajes, conversaciones, usuarios"
+            "value": "Mensajes, publicaciones, usuarios"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messages, conversations, utilisateurs"
+            "value": "Messages, posts, utilisateurs"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messaggi, conversazioni, utenti"
+            "value": "Messaggi, post, utenti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mensagens, conversas, usuários"
+            "value": "Mensagens, posts, usuários"
           }
         }
       }
@@ -199398,6 +199539,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Visualizações"
+          }
+        }
+      }
+    },
+    "tab.posts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المنشورات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beiträge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posts"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posts"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posts"
           }
         }
       }
@@ -320728,43 +320916,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّرة على خوادمنا (الوضع الهجين)"
+            "value": "مشفّرة على خوادمنا، مع التحقق بين الأجهزة المتوافقة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf unseren Servern verschlüsselt (Hybridmodus)"
+            "value": "Auf unseren Servern verschlüsselt, mit Prüfung zwischen kompatiblen Geräten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted on our servers (hybrid mode)"
+            "value": "Encrypted on our servers, with verification between compatible devices"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrada en nuestros servidores (modo híbrido)"
+            "value": "Cifrada en nuestros servidores, con verificación entre dispositivos compatibles"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffrée sur nos serveurs (mode hybride)"
+            "value": "Chiffrée sur nos serveurs, avec vérification entre appareils compatibles"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografata sui nostri server (modalità ibrida)"
+            "value": "Crittografata sui nostri server, con verifica tra dispositivi compatibili"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografada em nossos servidores (modo híbrido)"
+            "value": "Criptografada em nossos servidores, com verificação entre aparelhos compatíveis"
           }
         }
       }
@@ -321292,43 +321480,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يشفّر الوضع الهجين حاليًا مثل وضع الخادم. التشفير المزدوج عبر أجهزتك قادم قريبًا."
+            "value": "يشفّر الوضع الهجين رسائلك على خوادمنا، التي يمكنها قراءتها من أجل الترجمة والبحث: هذا ليس تشفيرًا من طرف إلى طرف. وبين جهازين متوافقين، تتيح طبقة ثانية أيضًا التحقق من أن الرسالة النصية لم تُعدَّل في الطريق؛ وعند غيابها، لا يُعرض أي شيء على أنه موثَّق."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Hybridmodus verschlüsselt derzeit wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald."
+            "value": "Der Hybridmodus verschlüsselt deine Nachrichten auf unseren Servern, die sie für Übersetzung und Suche lesen können: Das ist keine Ende-zu-Ende-Verschlüsselung. Zwischen zwei kompatiblen Geräten lässt sich mit einer zweiten Schicht zusätzlich prüfen, dass eine Textnachricht unterwegs nicht verändert wurde; fehlt sie, wird nichts als geprüft dargestellt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybrid mode currently encrypts like Server. Double encryption by your devices is coming soon."
+            "value": "Hybrid mode encrypts your messages on our servers, which can read them for translation and search: it is not end-to-end encryption. Between two compatible devices, a second layer also lets you check that a text message was not altered on the way; when it is missing, nothing is presented as verified."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El modo híbrido cifra hoy como Servidor. El doble cifrado por tus dispositivos llegará pronto."
+            "value": "El modo híbrido cifra tus mensajes en nuestros servidores, que pueden leerlos para la traducción y la búsqueda: no es cifrado de extremo a extremo. Entre dos dispositivos compatibles, una segunda capa permite además comprobar que un mensaje de texto no se modificó por el camino; cuando falta, nada se presenta como verificado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le mode hybride chiffre aujourd’hui comme Serveur. Le double chiffrement par vos appareils arrive bientôt."
+            "value": "Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La modalità ibrida oggi crittografa come Server. La doppia crittografia dai tuoi dispositivi arriva presto."
+            "value": "La modalità ibrida crittografa i tuoi messaggi sui nostri server, che possono leggerli per la traduzione e la ricerca: non è la crittografia end-to-end. Tra due dispositivi compatibili, un secondo livello permette inoltre di verificare che un messaggio di testo non sia stato modificato lungo il percorso; quando manca, nulla viene presentato come verificato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O modo híbrido hoje criptografa como Servidor. A criptografia dupla pelos seus aparelhos chega em breve."
+            "value": "O modo híbrido criptografa suas mensagens em nossos servidores, que podem lê-las para tradução e busca: não é criptografia de ponta a ponta. Entre dois aparelhos compatíveis, uma segunda camada permite ainda verificar que uma mensagem de texto não foi alterada no caminho; quando ela falta, nada é apresentado como verificado."
           }
         }
       }
@@ -327486,6 +327674,382 @@
           "stringUnit": {
             "state": "translated",
             "value": "Só seu Sangue — nunca recompartilhado"
+          }
+        }
+      }
+    },
+    "context.make_obsolete": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جعلها متقادمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als veraltet markieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make obsolete"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver obsoleta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendre obsolète"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendi obsoleta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tornar obsoleta"
+          }
+        }
+      }
+    },
+    "conversation.obsolete.confirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هل تريد جعل المحادثة متقادمة؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltung als veraltet markieren?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make this conversation obsolete?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Volver obsoleta la conversación?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendre la conversation obsolète ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendere obsoleta la conversazione?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tornar a conversa obsoleta?"
+          }
+        }
+      }
+    },
+    "conversation.obsolete.confirm.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيُمحى كل محتوى «%@» لدى جميع الأعضاء، وستختفي المحادثة من قوائمهم. هذا نهائي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Inhalte von „%@“ werden für alle Mitglieder gelöscht, und die Unterhaltung verschwindet aus ihren Listen. Das ist endgültig."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All content in “%@” will be erased for every member, and the conversation will disappear from their lists. This cannot be undone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo el contenido de «%@» se borrará para todos los miembros y la conversación desaparecerá de sus listas. Es definitivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout le contenu de « %@ » sera effacé pour tous les membres, et la conversation disparaîtra de leurs listes. C'est définitif."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutto il contenuto di «%@» sarà cancellato per tutti i membri e la conversazione scomparirà dai loro elenchi. È definitivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo o conteúdo de “%@” será apagado para todos os membros, e a conversa desaparecerá das listas deles. É definitivo."
+          }
+        }
+      }
+    },
+    "conversation.obsolete.error": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر جعل المحادثة متقادمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Unterhaltung konnte nicht als veraltet markiert werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't make the conversation obsolete."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo volver obsoleta la conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de rendre la conversation obsolète."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile rendere obsoleta la conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível tornar a conversa obsoleta."
+          }
+        }
+      }
+    },
+    "conversation.obsoleted.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أصبحت هذه المحادثة متقادمة: مُحي محتواها لدى الجميع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Unterhaltung wurde als veraltet markiert: Ihr Inhalt wurde für alle gelöscht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation was made obsolete: its content was erased for everyone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación se volvió obsoleta: su contenido se borró para todos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette conversation a été rendue obsolète : son contenu a été effacé pour tous."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa conversazione è stata resa obsoleta: il suo contenuto è stato cancellato per tutti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversa foi tornada obsoleta: seu conteúdo foi apagado para todos."
+          }
+        }
+      }
+    },
+    "conversation.new.group-name.required": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسم المجموعة (إلزامي)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gruppenname (erforderlich)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group name (required)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre del grupo (obligatorio)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom du groupe (obligatoire)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nome del gruppo (obbligatorio)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nome do grupo (obrigatório)"
+          }
+        }
+      }
+    },
+    "conversation.new.group.toggle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مجموعة جديدة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Gruppe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New group"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuevo grupo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouveau groupe"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuovo gruppo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Novo grupo"
+          }
+        }
+      }
+    },
+    "conversation.new.group.solo-hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكنك إنشاؤها بمفردك، لتدقيق أو لجمع الآراء، ثم دعوة الآخرين لاحقًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst sie allein erstellen, für ein Audit oder um Meinungen zu sammeln, und später einladen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can create it on your own, for an audit or to gather feedback, and invite people later."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes crearlo solo, para una auditoría o para recoger opiniones, e invitar más tarde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pouvez le créer seul, pour un audit ou pour recueillir des avis, et inviter plus tard."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puoi crearlo da solo, per un audit o per raccogliere pareri, e invitare più tardi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você pode criá-lo sozinho, para uma auditoria ou para coletar opiniões, e convidar depois."
           }
         }
       }

@@ -15,6 +15,10 @@ struct NewConversationView: View {
     @State private var searchQuery = ""
     @State private var selectedUsers: [SearchedUser] = []
     @State private var groupTitle = ""
+    /// « Nouveau groupe » touché : un groupe, même sans invité (#14646).
+    @State private var groupRequested = false
+    /// Le chiffrement, secondaire, se replie derrière une rangée qui dit le mode retenu.
+    @State private var showsEncryptionOptions = false
 
     /// Default initializer used by production callers. The `wrappedValue:`
     /// argument of `StateObject` is `@autoclosure @escaping`, so the
@@ -39,7 +43,15 @@ struct NewConversationView: View {
 
     private let accentColor = "818CF8"
 
-    var isGroupMode: Bool { selectedUsers.count > 1 }
+    private var shape: NewConversationShape {
+        .resolve(selectedCount: selectedUsers.count, groupRequested: groupRequested)
+    }
+
+    var isGroupMode: Bool { shape == .group }
+
+    private var canCreate: Bool {
+        NewConversationShape.canCreate(selectedCount: selectedUsers.count, groupRequested: groupRequested, groupTitle: groupTitle)
+    }
 
     var body: some View {
         ZStack {
@@ -47,11 +59,13 @@ struct NewConversationView: View {
 
             VStack(spacing: 0) {
                 header
+                searchField
+                groupToggleRow
                 if isGroupMode { groupTitleField }
                 selectedUsersBar
-                searchField
                 resultsList
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isGroupMode)
         }
         // Contact-first: load the user's contacts as soon as the picker opens,
         // before any search is typed. Cache-First inside the VM keeps this
@@ -114,17 +128,21 @@ struct NewConversationView: View {
 
     private var header: some View {
         HStack {
+            // Une feuille se ferme par (X), jamais par un retour « < » (#14646).
             Button {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                // Chrome nav glyph: fixed 16pt tap target (doctrine 82i/87i/90i —
-                // header/toolbar chevrons stay fixed, not Dynamic-Type-scaled).
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo400)
+                Image(systemName: "xmark")
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(theme.textPrimary.opacity(MeeshyOpacity.faint)))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
-            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+            .accessibilityIdentifier("new-conversation-close")
 
             Spacer()
 
@@ -134,10 +152,14 @@ struct NewConversationView: View {
 
             Spacer()
 
-            if !selectedUsers.isEmpty {
+            if shape != .none {
                 Button {
                     HapticFeedback.medium()
-                    Task { await viewModel.createConversation(selectedUsers: selectedUsers, groupTitle: groupTitle) }
+                    Task {
+                        await viewModel.createConversation(
+                            selectedUsers: selectedUsers, groupTitle: groupTitle, groupRequested: groupRequested
+                        )
+                    }
                 } label: {
                     if viewModel.isCreating {
                         ProgressView()
@@ -148,9 +170,10 @@ struct NewConversationView: View {
                             .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
-                .disabled(viewModel.isCreating || (isGroupMode && groupTitle.trimmingCharacters(in: .whitespaces).isEmpty))
+                .disabled(viewModel.isCreating || !canCreate)
+                .accessibilityIdentifier("new-conversation-create")
             } else {
-                Color.clear.frame(width: 40, height: 24)
+                Color.clear.frame(width: 44, height: 24)
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -166,9 +189,10 @@ struct NewConversationView: View {
                 .foregroundColor(MeeshyColors.indigo600)
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "conversation.new.group-name", defaultValue: "Nom du groupe"), text: $groupTitle)
+            TextField(String(localized: "conversation.new.group-name.required", defaultValue: "Nom du groupe (obligatoire)", bundle: .main), text: $groupTitle)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityIdentifier("new-conversation-group-title")
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
@@ -183,7 +207,53 @@ struct NewConversationView: View {
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.sm)
         .transition(.opacity.combined(with: .move(edge: .top)))
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isGroupMode)
+    }
+
+    // MARK: - Group Toggle
+
+    /// « Nouveau groupe » : un groupe se crée aussi sans invité — seul, pour un
+    /// audit ou une récolte d'avis — et son titre devient alors obligatoire.
+    private var groupToggleRow: some View {
+        Button {
+            HapticFeedback.light()
+            groupRequested.toggle()
+        } label: {
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "person.3.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                    .foregroundColor(MeeshyColors.indigo400)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.12)))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(String(localized: "conversation.new.group.toggle", defaultValue: "Nouveau groupe", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                    if groupRequested && selectedUsers.isEmpty {
+                        Text(String(localized: "conversation.new.group.solo-hint", defaultValue: "Vous pouvez le créer seul, pour un audit ou pour recueillir des avis, et inviter plus tard.", bundle: .main))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: MeeshySpacing.sm)
+                Image(systemName: isGroupMode ? "checkmark.circle.fill" : "circle")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xl))
+                    .foregroundColor(isGroupMode ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Deux invités et plus font déjà un groupe : la rangée le dit sans se décocher.
+        .disabled(selectedUsers.count > 1)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isGroupMode ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("new-conversation-group-toggle")
     }
 
     // MARK: - Selected Users Bar
@@ -305,7 +375,7 @@ struct NewConversationView: View {
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: MeeshySpacing.xs) {
-                if !selectedUsers.isEmpty { encryptionSection }
+                if shape != .none { encryptionSection }
                 if isSearchActive {
                     searchResultsSection
                 } else {
@@ -320,14 +390,54 @@ struct NewConversationView: View {
     // MARK: - Encryption
 
     /// Le mode se choisit à la création : l'offre suit le rôle et la forme
-    /// (tête-à-tête ou groupe) que la sélection dessine.
+    /// (tête-à-tête ou groupe) que la sélection dessine. Secondaire, il se
+    /// replie derrière UNE rangée qui dit le mode retenu (#14646).
+    @ViewBuilder
     private var encryptionSection: some View {
-        NewConversationEncryptionSection(
-            offer: viewModel.encryptionOffer(isGroup: isGroupMode),
-            selectedMode: viewModel.encryptionMode(isGroup: isGroupMode),
-            accentColor: accentColor,
-            onSelect: { viewModel.chooseEncryptionMode($0, isGroup: isGroupMode) }
-        )
+        let selectedMode = viewModel.encryptionMode(isGroup: isGroupMode)
+        Button {
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showsEncryptionOptions.toggle() }
+        } label: {
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "lock.fill")
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
+                Text(String(localized: "conversation.encryption.create.header", defaultValue: "Chiffrement", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                Spacer(minLength: MeeshySpacing.sm)
+                Text(selectedMode.label)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .rotationEffect(.degrees(showsEncryptionOptions ? 180 : 0))
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(showsEncryptionOptions
+            ? String(localized: "accessibility.section_expanded", defaultValue: "Développée", bundle: .main)
+            : String(localized: "accessibility.section_collapsed", defaultValue: "Réduite", bundle: .main))
+        .accessibilityIdentifier("new-conversation-encryption-toggle")
+
+        if showsEncryptionOptions {
+            NewConversationEncryptionSection(
+                offer: viewModel.encryptionOffer(isGroup: isGroupMode),
+                selectedMode: selectedMode,
+                accentColor: accentColor,
+                onSelect: { viewModel.chooseEncryptionMode($0, isGroup: isGroupMode) }
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
     }
 
     // MARK: - Search Results Section

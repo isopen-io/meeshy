@@ -67,6 +67,7 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.conversationoptions.ConversationTagsEditor
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -117,8 +118,11 @@ internal fun ConversationContextMenu(
     onViewProfile: (() -> Unit)? = null,
     onCreateShareLink: (() -> Unit)? = null,
     onManageMembers: (() -> Unit)? = null,
+    /** « Rendre obsolète » (#14645) : `null` quand la loi ne l'accorde pas — l'entrée est masquée. */
+    onMakeObsolete: (() -> Unit)? = null,
 ) {
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
+    var showObsoleteConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForAllConfirm by remember(expanded) { mutableStateOf(false) }
     var showRenameDialog by remember(expanded) { mutableStateOf(false) }
@@ -413,6 +417,37 @@ internal fun ConversationContextMenu(
                 onClick = { showDeleteForAllConfirm = true },
             )
         }
+        if (onMakeObsolete != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_make_obsolete), color = MeeshyPalette.Error) },
+                leadingIcon = { Icon(Icons.Filled.DeleteForever, contentDescription = null, tint = MeeshyPalette.Error) },
+                onClick = { showObsoleteConfirm = true },
+            )
+        }
+    }
+
+    if (showObsoleteConfirm && onMakeObsolete != null) {
+        AlertDialog(
+            onDismissRequest = { showObsoleteConfirm = false },
+            title = { Text(stringResource(R.string.conversations_obsolete_confirm_title)) },
+            text = { Text(stringResource(R.string.conversations_obsolete_confirm_message, title)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showObsoleteConfirm = false
+                        onMakeObsolete()
+                        onDismiss()
+                    },
+                ) {
+                    Text(stringResource(R.string.conversations_obsolete_confirm_button), color = MeeshyPalette.Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showObsoleteConfirm = false }) {
+                    Text(stringResource(R.string.conversations_leave_cancel_button))
+                }
+            },
+        )
     }
 
     if (showLeaveConfirm) {

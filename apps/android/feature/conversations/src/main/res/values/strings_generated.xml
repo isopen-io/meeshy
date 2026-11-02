@@ -150,7 +150,7 @@
     <string name="encryption_create_header">Encryption</string>
     <string name="encryption_mode_e2ee_description">Only your devices and those of the participants read the messages. Translation happens on your device.</string>
     <string name="encryption_mode_e2ee_label">End-to-end</string>
-    <string name="encryption_mode_hybrid_description">Encrypted on our servers, like Server. Double encryption by your devices is coming soon.</string>
+    <string name="encryption_mode_hybrid_description">Encrypted on our servers; between compatible devices, a second layer lets you check that a text message was not altered on the way.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Your messages are encrypted on our servers. Translation, transcription and search work.</string>
     <string name="encryption_mode_server_label">Server</string>
@@ -310,7 +310,7 @@
     <string name="my_share_links_status_inactive">Inactive</string>
     <string name="my_share_links_title">Share links</string>
     <string name="my_share_links_toggle">Active</string>
-    <string name="new_conversation_back">Back</string>
+    <string name="new_conversation_close">Close</string>
     <string name="new_conversation_contacts_empty_subtitle">Search for a user to start a conversation.</string>
     <string name="new_conversation_contacts_empty_title">No contacts</string>
     <string name="new_conversation_contacts_loading">Loading contacts</string>

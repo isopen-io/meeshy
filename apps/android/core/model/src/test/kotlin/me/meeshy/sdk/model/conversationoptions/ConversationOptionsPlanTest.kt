@@ -109,4 +109,12 @@ class ConversationOptionsPlanTest {
         assertThat(plan.leaveGroup).isFalse()
         assertThat(plan.deleteForMe).isFalse()
     }
+
+    @Test
+    fun `making the conversation obsolete is offered to its admin only (#14645)`() {
+        assertThat(plan(conversation(type = "group", currentUserRole = "creator")).obsolete).isTrue()
+        assertThat(plan(conversation(type = "group", currentUserRole = "admin")).obsolete).isTrue()
+        assertThat(plan(conversation(type = "group", currentUserRole = "member")).obsolete).isFalse()
+        assertThat(plan(conversation(type = "group", currentUserRole = "creator"), user = null).obsolete).isFalse()
+    }
 }

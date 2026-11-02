@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.model.EndToEndRegime
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.JoinNoticePresentation
@@ -176,6 +177,7 @@ public object BubbleContentBuilder {
             isEdited = message.isEdited,
             isDeleted = isDeleted,
             isEndToEndSealed = isEndToEndSealed,
+            isEndToEndOpened = !isDeleted && !isEndToEndSealed && EndToEndRegime.isEndToEnd(message.encryptionMode),
             isReadByServer = PlainSignalAdmission.rowReadByServer(message),
             sealedPieceIds = if (isEndToEndSealed && !isDeleted) message.attachments.map { it.id } else emptyList(),
             holdsEndToEndSend = isEndToEndSealed || EndToEndRegimeMemory.messageHoldsSend(message),

@@ -38,6 +38,8 @@ class Media3AudioPlaybackEngineTest {
         port.prepare(durationMs)
     }
 
+    private fun Rig.playWhenReady(value: Boolean) = port.playWhenReady(value)
+
     @Test fun `jouer un vocal le charge, puis la preparation lance la lecture`() = runTest {
         val rig = rig(this)
 

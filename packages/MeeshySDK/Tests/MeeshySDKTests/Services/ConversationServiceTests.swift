@@ -125,6 +125,31 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    // MARK: - obsolete (#14645)
+
+    func test_obsolete_validId_callsDeleteObsoleteAndReturnsTheDates() async throws {
+        let expected = ConversationObsoleteResult(
+            conversationId: "conv789", obsoletedAt: "2026-11-02T10:00:00.000Z", purgeAfter: "2026-11-04T10:00:00.000Z"
+        )
+        mock.stub("/conversations/conv789/obsolete", result: APIResponse(success: true, data: expected, error: nil))
+
+        let result = try await service.obsolete(conversationId: "conv789")
+
+        XCTAssertEqual(result, expected)
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/conv789/obsolete")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+    }
+
+    func test_obsolete_forbidden_throws() async {
+        mock.stubError("/conversations/conv789/obsolete", error: MeeshyError.forbidden(reason: nil, body: nil))
+
+        do {
+            _ = try await service.obsolete(conversationId: "conv789")
+            XCTFail("un refus de la passerelle doit remonter")
+        } catch {}
+    }
+
     // MARK: - markRead
 
     func testMarkReadCallsCorrectEndpoint() async throws {

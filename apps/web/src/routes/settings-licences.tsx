@@ -103,7 +103,7 @@ function SourceRow({ language, offer }: { readonly language: InterfaceLanguage; 
       data-licences-source
       aria-description={t('licences.source.open')}
       className="flex items-center gap-3 px-3.5 py-2.5 text-start focus-visible:outline-2"
-      style={{ minHeight: 52, outlineColor: 'var(--color-ios-brand)', borderTop: '1px solid var(--color-ios-separator)' }}
+      style={{ minHeight: 52, outlineColor: 'var(--color-ios-brand)', borderTop: '1px solid var(--color-ios-hairline)' }}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-body font-medium" style={{ color: SECTION_INK }}>

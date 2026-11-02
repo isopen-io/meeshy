@@ -109,4 +109,21 @@ class RiverRenderingTest {
         assertThat(rendering.contentByMessageId["a"]?.identity?.storyRing).isEqualTo(StoryRingState.Unread)
         assertThat(rendering.contentByMessageId["b"]?.identity?.storyRing).isEqualTo(StoryRingState.None)
     }
+
+    @Test
+    fun `un sticker voyage jusqu'a la bulle de la Riviere, sauf scelle, brule ou supprime`() {
+        val mee = me.meeshy.sdk.model.BubbleStickerSpec(me.meeshy.sdk.model.MessageSticker(templateId = "mee.mee-coucou"), null)
+        val rendering = render(
+            riverBubble("a", "alice", 0, sticker = mee, text = ""),
+            riverBubble("b", "bob", 1, sticker = mee, endToEnd = true),
+            riverBubble("c", "alice", 2, sticker = mee, viewOnce = true, viewOnceOpened = true),
+            riverBubble("d", "bob", 3, sticker = mee, deleted = true),
+            riverBubble("e", "alice", 4),
+        )
+        assertThat(rendering.contentByMessageId["a"]?.sticker).isEqualTo(mee)
+        assertThat(rendering.contentByMessageId["b"]?.sticker).isNull()
+        assertThat(rendering.contentByMessageId["c"]?.sticker).isNull()
+        assertThat(rendering.contentByMessageId["d"]?.sticker).isNull()
+        assertThat(rendering.contentByMessageId["e"]?.sticker).isNull()
+    }
 }

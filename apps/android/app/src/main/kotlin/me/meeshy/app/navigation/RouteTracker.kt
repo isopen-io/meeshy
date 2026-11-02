@@ -36,7 +36,7 @@ internal class RouteTracker(private val onTrack: (route: String) -> Unit = {}) {
     }
 
     companion object {
-        private val placeholder = Regex("\\{([^}]+)}")
+        private val placeholder = Regex("\\{([^}]+)\\}")
 
         /**
          * Remplace chaque `{argument}` du motif par sa valeur ; un couple `clé={argument}` de la requête dont la valeur

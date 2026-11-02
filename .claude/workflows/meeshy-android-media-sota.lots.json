@@ -41,7 +41,9 @@
     9,
     11
    ],
-   "etat": "à-faire"
+   "etat": "livré",
+   "pr": 14610,
+   "note": "Fusionné dans dev le 2026-11-02 (PR #14610) sans compilateur Android local ; preuve de compilation = android.yml sur dev ; mesure sur appareil à faire (phase Mesurer, lots déjà fusionnés)."
   },
   {
    "key": "vocaux-qualite-cache-reprise",
@@ -74,7 +76,9 @@
     9,
     13
    ],
-   "etat": "à-faire"
+   "etat": "livré",
+   "pr": 14610,
+   "note": "Fusionné dans dev le 2026-11-02 (PR #14610) sans compilateur Android local ; preuve de compilation = android.yml sur dev ; mesure sur appareil à faire (phase Mesurer, lots déjà fusionnés)."
   },
   {
    "key": "video-envoyee-allegee",
@@ -315,6 +319,17 @@
   }
  ],
  "reports": [
+  {
+   "key": "suivi-14613",
+   "issue": 14613,
+   "title": "Le client HTTP des médias ne renvoie aucun jeton de session à un autre hôte, ne retombe jamais en silence sur la pile intégrée, et son comportement est prouvé par un témoin",
+   "wave": 5,
+   "depends_on": [],
+   "modele": "sonnet",
+   "sensible": true,
+   "files_owned": [],
+   "raison_du_report": "Suites non bloquantes de l'audit adversarial du socle Media3 (#14567)."
+  },
   {
    "key": "report-01",
    "issue": 14573,
