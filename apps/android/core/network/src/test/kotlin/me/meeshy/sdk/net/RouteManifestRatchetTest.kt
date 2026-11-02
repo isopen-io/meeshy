@@ -97,8 +97,9 @@ class RouteManifestRatchetTest {
          * 204 : plus les cinq routes du Bring et du réglage par personne (`GET|POST /bring/:userId`,
          * `DELETE /bring/:bringId`, `GET|PUT /relations/:userId/settings`, #13936), servies par la passerelle et
          * que le sous-lot `proche-bring@android` portera.
+         * 203 : moins `GET /sync` (#14512 : la synchro rapatrie le delta par la route unifiée), que porte `SyncApi`.
          */
-        const val TO_PORT_CEILING = 204
+        const val TO_PORT_CEILING = 203
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
