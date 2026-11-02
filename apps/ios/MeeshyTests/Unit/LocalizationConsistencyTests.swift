@@ -275,6 +275,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
         "apps/ios/Meeshy/Features/Settings/Views/LicensesView.swift",  // 6
+        // #14628 — l'AGPL-3.0 de libsignal : la licence de Meeshy, l'offre de source, les avis.
+        "apps/ios/Meeshy/Features/Settings/Views/LicensesAGPLSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/LicensesLibsignalSection.swift",
         "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
         "apps/ios/Meeshy/Features/Links/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
