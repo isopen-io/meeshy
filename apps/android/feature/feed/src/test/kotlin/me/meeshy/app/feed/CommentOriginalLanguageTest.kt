@@ -29,7 +29,8 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Un commentaire part avec la langue de son auteur quand rien ne la contredit franchement (#12484) :
+ * Un commentaire part toujours avec une langue (#14502) : la pastille, sinon la détection, sinon ce que la pastille
+ * affiche. Historique (#12484) :
  * « Commentaire test » sans langue déclarée laissait la passerelle le deviner, et il revenait
  * traduit à son propre auteur (« Commence à tester »).
  */
@@ -67,27 +68,54 @@ class CommentOriginalLanguageTest {
     private val doubtfulPortuguese = LanguageIdentifying { LanguageIdentification("pt", 0.4) }
 
     @Test
-    fun `a comment without a clear signal leaves its language to the server, never its author's (#14284)`() = runTest {
+    fun `a comment without a clear signal leaves with the language its pill shows, never without one (#14502)`() = runTest {
         val vm = viewModel(doubtfulPortuguese)
 
         vm.onDraftChange("Commentaire test")
+        val pill = vm.state.value.composerLanguageCode
         vm.submit()
 
         coVerify(exactly = 1) {
-            repository.addComment("p1", "Commentaire test", null, null, null, null)
+            repository.addComment("p1", "Commentaire test", null, null, null, pill)
         }
     }
 
     @Test
-    fun `a reply without a clear signal leaves its language to the server, never its author's (#14284)`() = runTest {
+    fun `a comment the identifier cannot read leaves with the reader's language shown on the pill (#14502)`() = runTest {
+        val vm = viewModel(LanguageIdentifying.Unavailable)
+
+        vm.onDraftChange("ok")
+        vm.submit()
+
+        coVerify(exactly = 1) {
+            repository.addComment("p1", "ok", null, null, null, "fr")
+        }
+    }
+
+    @Test
+    fun `a picked pill language always wins (#14502)`() = runTest {
+        val vm = viewModel(LanguageIdentifying { LanguageIdentification("en", 0.99) })
+
+        vm.onComposerLanguagePicked("es")
+        vm.onDraftChange("Hello there my dear friend")
+        vm.submit()
+
+        coVerify(exactly = 1) {
+            repository.addComment("p1", "Hello there my dear friend", null, null, null, "es")
+        }
+    }
+
+    @Test
+    fun `a reply without a clear signal leaves with the language its pill shows, never without one (#14502)`() = runTest {
         val vm = viewModel(doubtfulPortuguese)
         vm.beginReply("c1")
 
         vm.onDraftChange("Commentaire test")
+        val pill = vm.state.value.composerLanguageCode
         vm.submit()
 
         coVerify(exactly = 1) {
-            repository.addComment("p1", "Commentaire test", "c1", null, null, null)
+            repository.addComment("p1", "Commentaire test", "c1", null, null, pill)
         }
     }
 
