@@ -2,11 +2,14 @@ package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.piece.MessagePieceTarget
 import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.model.BlurRevealLifecycle
+import me.meeshy.sdk.model.BubbleStickerSpec
+import me.meeshy.sdk.model.StickerPicture
 import me.meeshy.sdk.model.DeliveryStatusResolver
 import me.meeshy.sdk.model.ForwardBadgePolicy
 import me.meeshy.sdk.model.ForwardReference
@@ -217,7 +220,21 @@ public object BubbleContentBuilder {
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
             isSlowSend = isOutgoing && isSlowSend,
+            sticker = if (isDeleted || isEndToEndSealed) null else stickerOf(message, visibleAttachments, attachments.images),
         )
+    }
+
+    /** Le sticker et la PREMIÈRE image jointe, à l'adresse servie (iOS `resolveSticker`) ; rien sur un message masqué. */
+    private fun stickerOf(
+        message: ApiMessage,
+        visibleAttachments: List<ApiMessageAttachment>,
+        images: List<BubbleImage>,
+    ): BubbleStickerSpec? {
+        if (message.servedSticker == null) return null
+        val first = visibleAttachments.firstOrNull { it.mimeType?.startsWith("image/") == true }
+        val picture = first?.let { attachment -> images.firstOrNull { it.attachmentId == attachment.id } }
+            ?.let { StickerPicture(fileUrl = it.url, thumbnailUrl = it.thumbnailUrl) }
+        return BubbleStickerSpec.resolve(message.servedSticker, picture)
     }
 
     /** Sender-side delivery tier of an outgoing message; an incoming one always reads `Sent`. */

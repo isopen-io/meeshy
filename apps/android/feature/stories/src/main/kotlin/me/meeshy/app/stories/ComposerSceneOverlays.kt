@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.composer.ComposerMediaSource
+import me.meeshy.sdk.model.composer.ComposerRailSize
+import me.meeshy.sdk.model.composer.ComposerRailSizing
 import me.meeshy.sdk.model.composer.ComposerSceneTool
 import me.meeshy.sdk.model.composer.ComposerSceneTools
 import me.meeshy.ui.icons.MeeshyIcons
@@ -58,8 +61,13 @@ internal data class SceneHistory(val canUndo: Boolean, val canRedo: Boolean)
 /** La pastille d'audience : le libellé du mode (« Public ») et son glyphe. */
 internal data class SceneAudience(val label: String, val icon: ImageVector)
 
-internal val SCENE_TARGET = 48.dp
-private val SCENE_DISC = 40.dp
+internal val SCENE_TARGET = ComposerRailSizing.MIN_TARGET_DP.dp
+
+/** La taille des boutons ronds de l'écran (#14499) : posée par le cadre du compositeur depuis sa largeur et sa hauteur utile. */
+internal val LocalComposerRailSize = compositionLocalOf { ComposerRailSizing.REGULAR }
+
+/** L'espace entre deux cibles d'un rail, selon la taille de l'écran. */
+internal val ComposerRailSize.gap get() = gapDp.dp
 private val SCENE_VEIL = Color.Black.copy(alpha = 0.38f)
 internal val SOCLE_VEIL = Color.Black.copy(alpha = 0.45f)
 
@@ -95,7 +103,7 @@ internal fun SceneRoundButton(
     ) {
         Box(
             modifier = Modifier
-                .size(SCENE_DISC)
+                .size(LocalComposerRailSize.current.discDp.dp)
                 .background(if (active) ComposerPlateauInk.accent.copy(alpha = 0.55f) else SCENE_VEIL, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
@@ -166,13 +174,14 @@ internal fun SceneToolColumn(
             )
         }
     }
+    val gap = LocalComposerRailSize.current.gap
     Column(
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        verticalArrangement = Arrangement.spacedBy(gap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
             modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(gap),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             (tools - foot - ComposerSceneTool.MORE).forEach { button(it) }

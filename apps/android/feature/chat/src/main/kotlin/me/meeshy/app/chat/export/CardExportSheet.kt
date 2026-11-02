@@ -69,6 +69,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.card.PostCommentCardSubject
+import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.permission.PermissionFlow
 import me.meeshy.ui.component.permission.PermissionFlowHost
@@ -108,7 +109,8 @@ fun CommentCardExportSheet(
     onDismiss: () -> Unit,
     viewModel: CardExportViewModel = hiltViewModel(),
 ) {
-    val source = remember(key, card) { ComposedCardSource(key, CardSubjects.of(card)) }
+    val mediaBaseUrl = LocalMediaBaseUrl.current
+    val source = remember(key, card, mediaBaseUrl) { ComposedCardSource(key, CardSubjects.of(card, mediaBaseUrl)) }
     CardExportSheet(source, viewModel.viewer, conversationTitle = null, onDismiss = onDismiss)
 }
 
@@ -156,7 +158,7 @@ private fun CardExportSheet(
     state.anonymousLabel = stringResource(R.string.export_card_anonymous)
     LaunchedEffect(state.renderKey) { state.renderPreview() }
     val context = LocalContext.current
-    LaunchedEffect(source.key) { state.pictures = CardPictureLoader.load(context, subject.media) }
+    LaunchedEffect(source.key) { state.pictures = CardPictureLoader.load(context, subject.pictured) }
     val thumbnails = remember { CardThumbnailStore() }
     DisposableEffect(thumbnails) { onDispose { thumbnails.clear() } }
     val permissions = rememberPermissionFlow()
