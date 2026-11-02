@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { show } from './layers.mjs';
 
 export const W = 540;
 export const H = 960;
@@ -42,10 +43,23 @@ export async function showSvg(handle, svg, { fonts }) {
   const html = '<!doctype html><html><head><meta charset="utf-8">' + cssFor(fonts) + '<style>html,body{margin:0;background:transparent}svg{display:block}</style></head><body>' + svg + '</body></html>';
   fs.writeFileSync(handle.file, html);
   await handle.page.goto('file://' + handle.file);
+  await settle(handle);
+}
+
+// UNE CAPTURE N'ATTEND QUE CE QUI EST PEINT (#12801). `page.screenshot` prend l'image suivante, pas celle où tout est
+// arrivé : une image encore en vol (la photo posée par `show` après le chargement) ou décodée en différé (Chromium peut
+// peindre une grande image d'abord sans elle, puis la décoder sur un fil de rendu) sort absente d'une capture et
+// présente de l'autre — deux rendus diffèrent, et la cible est déclarée instable sans que le cadre ait changé.
+// Avant toute capture : les polices sont chargées, chaque <image> est décodée de façon synchrone (`decoding="sync"`)
+// et a fini de charger (`__loaded`, posé par `show` avant son `href`), son octet est décodé, puis deux images passent.
+export async function settle(handle) {
   await handle.page.evaluate(async () => {
     await Promise.all([...document.fonts].filter((face) => face.status === 'unloaded').map((face) => face.load().catch(() => null)));
     await document.fonts.ready;
-    const hrefs = [...new Set([...document.querySelectorAll('image')].map((im) => im.getAttribute('href') ?? im.getAttribute('xlink:href')).filter(Boolean))];
+    const images = [...document.querySelectorAll('image')];
+    for (const im of images) im.setAttribute('decoding', 'sync');
+    await Promise.all(images.map((im) => im.__loaded ?? null));
+    const hrefs = [...new Set(images.map((im) => im.getAttribute('href') ?? im.getAttribute('xlink:href')).filter(Boolean))];
     await Promise.all(hrefs.map((href) => {
       const img = new Image();
       img.src = href;
@@ -53,6 +67,12 @@ export async function showSvg(handle, svg, { fonts }) {
     }));
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
+}
+
+// La photo FIXTURE posée par `show` (lib/layers.mjs) arrive après le chargement : elle n'est rendue qu'une fois peinte.
+export async function showPhoto(handle, { kinds, photo }) {
+  await handle.page.evaluate(show, { kinds, photo });
+  await settle(handle);
 }
 
 export const shoot = (handle) => handle.page.screenshot({ type: 'png', omitBackground: true, clip: { x: 0, y: 0, width: W, height: H } });

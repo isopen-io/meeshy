@@ -35,6 +35,8 @@ export interface NotificationPreference {
   readonly gameEnabled?: boolean;
   /** « Moments à immortaliser » (#10175, D8) : le push d'une étape franchie app fermée — absent = reçu. */
   readonly gamePhotoEnabled?: boolean;
+  /** « Recevoir des Bring » (#13936, #14407) : coupé, personne ne peut me faire sonner — absent = reçu. */
+  readonly bringEnabled?: boolean;
 
   // === DO NOT DISTURB ===
   readonly dndEnabled: boolean;
@@ -148,6 +150,7 @@ export function isNotificationTypeEnabled(
     case 'friend_request':
     case 'contact_accepted':
     case 'contact_joined':
+    case 'relation_acquaintance':
       return prefs.contactRequestEnabled;
     case 'contact_recently_active':
       return prefs.contactActivityEnabled !== false;

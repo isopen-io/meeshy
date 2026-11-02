@@ -1,6 +1,7 @@
 package me.meeshy.sdk.mention
 
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.mention.MentionLookupLaw
 
 /**
  * Pure state of a composer @-mention autocomplete. [activeQuery] is the trailing
@@ -50,13 +51,7 @@ public object MentionComposer {
     public fun filterCandidates(
         candidates: List<MentionCandidate>,
         query: String,
-    ): List<MentionCandidate> {
-        val needle = query.trim().lowercase()
-        if (needle.isEmpty()) return candidates
-        return candidates.filter {
-            it.username.lowercase().contains(needle) || it.displayName.lowercase().contains(needle)
-        }
-    }
+    ): List<MentionCandidate> = MentionLookupLaw.filter(candidates, query)
 
     /**
      * Replace the trailing `@query` fragment in [text] with `@username ` (with a
@@ -73,35 +68,14 @@ public object MentionComposer {
     }
 
     /**
-     * Whether a remote directory lookup is worth firing for [query]. Mirrors iOS
-     * `MentionComposerController`: the debounced API call only runs once at least two
-     * significant characters are typed — a bare `@` or a single letter matches too
-     * much of the directory to be useful and is served entirely from the local roster.
-     */
-    public fun shouldQueryRemote(query: String): Boolean = query.trim().length >= MIN_REMOTE_QUERY
-
-    /**
-     * Merge remote directory results into the [local] roster suggestions, local-first.
-     * Ports iOS `mergeAPISuggestions`: locals keep their order and win every collision;
-     * a remote candidate is appended only when its handle (trimmed, case-insensitive)
-     * is neither blank, already among the locals, nor a duplicate of an earlier remote
-     * result. A blank handle can never be addressed, so it is dropped.
+     * Merge remote results into the [local] suggestions, local-first — [MentionLookupLaw.mergeCandidates]
+     * without a caller to drop. Locals keep their order and win every collision (by id, or by handle
+     * trimmed and case-insensitive); a blank handle can never be addressed, so it is dropped.
      */
     public fun mergeSuggestions(
         local: List<MentionCandidate>,
         remote: List<MentionCandidate>,
-    ): List<MentionCandidate> {
-        val taken = local.mapTo(mutableSetOf()) { it.username.trim().lowercase() }
-        val merged = local.toMutableList()
-        remote.forEach { candidate ->
-            val handle = candidate.username.trim().lowercase()
-            if (handle.isEmpty() || !taken.add(handle)) return@forEach
-            merged += candidate
-        }
-        return merged
-    }
-
-    private const val MIN_REMOTE_QUERY = 2
+    ): List<MentionCandidate> = MentionLookupLaw.mergeCandidates(local, remote, selfId = null)
 }
 
 /** Recompute the mention state after the composer [text] changed. */

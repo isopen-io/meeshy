@@ -62,6 +62,7 @@ export const notificationTypeEnum = z.enum([
   'friend_accepted',      // Alias pour contact_accepted
   'contact_joined',       // Un contact du carnet a rejoint Meeshy (#8105)
   'contact_recently_active', // Un ami ou contact du carnet est revenu sur Meeshy (#8285)
+  'relation_acquaintance', // La Connaissance est née toute seule entre deux personnes qui échangent (#13932)
 
   // ===== INTERACTION EVENTS =====
   'user_mentioned',       // Mentionné dans un message (@username)

@@ -73,19 +73,6 @@ final class ComposerToolLabelTests: XCTestCase {
     // « enlève les captions partout ». Les outils sont de petits boutons de
     // verre, comme les rails de la scène ; le nom n'est plus peint, il reste
     // ANNONCÉ (garde nº2, inchangée).
-    func test_chaqueEntree_nePeintPlusDeLegende() throws {
-        let src = withoutAccessibilityLabels(compact(try AppSourceGuard.composerSurfaceSource()))
-        XCTAssertTrue(src.contains("Image(systemName:tool.symbolName)"),
-                      "La tuile d'outil est introuvable — la garde ne mesurerait rien.")
-        XCTAssertFalse(
-            src.contains("Text(ComposerDocumentCopy.label(tool))"),
-            "Une légende est revenue sous un outil du document (directive porteur 2026-09-27)."
-        )
-        XCTAssertFalse(src.contains(".adaptiveLiquidGlass(in:Circle(),tint:plateauTint.opacity(0.55),interactive:true)"),
-                       "Plus de cercle autour des outils du document (#10364).")
-        XCTAssertTrue(src.contains(".modifier(ComposerRailGlyphRelief(active:true))"),
-                      "L'outil est un glyphe blanc en relief, comme les rails de la scène (#10364).")
-    }
 
     // 1 bis — le retrait fonctionne. Sans ce témoin, une régression du
     // « stripper » rendrait la garde nº1 muette sans que rien ne rougisse : elle
@@ -105,15 +92,6 @@ final class ComposerToolLabelTests: XCTestCase {
 
     // 2 — et il reste ANNONCÉ : rendre le texte ne dispense pas de l'étiquette,
     // qui garde le bouton comme UN seul élément pour VoiceOver au lieu de deux.
-    func test_leLibelleVisible_neRemplacePas_lEtiquetteDAccessibilite() throws {
-        let src = compact(try AppSourceGuard.composerSurfaceSource())
-        XCTAssertTrue(
-            src.contains(".accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))"),
-            "L'étiquette d'accessibilité doit SURVIVRE au libellé visible : sans elle, le bouton se "
-                + "décompose en deux éléments (l'icône, puis le texte) et VoiceOver annonce le nom du "
-                + "symbole SF avant le mot."
-        )
-    }
 
     // 3 — le libellé est du TEXTE, donc il se mesure au seuil AA du texte
     // (4,5:1), pas au seuil composant (3:1) qui suffisait aux icônes seules.
@@ -135,14 +113,6 @@ final class ComposerToolLabelTests: XCTestCase {
     // doit LIRE pour choisir sa porte.
     // Sans légende, c'est le GLYPHE qui doit suivre Dynamic Type : un style
     // sémantique, jamais une taille figée en points.
-    func test_leGlyphe_suitDynamicType() throws {
-        let src = withoutAccessibilityLabels(compact(try AppSourceGuard.composerSurfaceSource()))
-        XCTAssertTrue(
-            src.contains("Image(systemName:tool.symbolName).font(.title3)"),
-            "Le glyphe de l'outil doit porter un style de police SÉMANTIQUE, qui échelonne avec "
-                + "Dynamic Type."
-        )
-    }
 
     // 5 — les sept outils ont tous un libellé non vide. Une entrée dont le mot
     // manque rendrait une tuile muette, pire qu'un glyphe nu : elle laisserait

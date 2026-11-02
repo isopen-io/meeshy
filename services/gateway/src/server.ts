@@ -17,8 +17,14 @@ import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import sensible from '@fastify/sensible'; // Ajout pour httpErrors
 import multipart from '@fastify/multipart';
+import { MAX_DIRECT_UPLOAD_FILES } from '@meeshy/shared/types/attachment';
+import { largestUploadCeiling, uploadLimitPolicyFromEnv } from './services/attachments/upload-admission';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import { configureAtRestFileAccess } from './services/attachments/atRest/atRestFiles';
+import { atRestFileAccessFor } from './services/attachments/atRest/atRestFileAccessFor';
+import { startTranslatorForget } from './services/translatorForgetBootstrap';
+import { startAtRestFileSweep } from './jobs/at-rest-file-sweep';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 // Extrait dans `./gateway-logger` pour que `route-registration.ts` puisse
 // logger sans importer `server.ts` (effets de bord au chargement du module —
@@ -68,6 +74,7 @@ import { backfillSearchTokens } from './jobs/backfill-search-tokens';
 import { demarrerSondeDeTypage, type SondeDeTypage } from './services/schema-drift.service';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
+import { gatewayDeliveryQueueSealer } from './services/deliveryQueueSealing';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
 import { EphemeralRecipientExpiryService } from './services/EphemeralRecipientExpiryService';
@@ -233,6 +240,7 @@ class MeeshyServer {
     }) as unknown as PrismaClient;
 
     registerEmailRecipientLookup(prismaRecipientAddressLookup(this.prisma)); // #8238 — garde centrale des e-mails
+    configureAtRestFileAccess(atRestFileAccessFor(this.prisma)); // #13100 — les fichiers scellés au repos s'ouvrent par ce processus
     this.statusService = new StatusService(this.prisma); // requis par AuthMiddleware
 
     // Initialiser le cache multi-niveau partagé pour les mappings de jobs (avant MessageTranslationService)
@@ -257,7 +265,7 @@ class MeeshyServer {
     this.callCleanupService = new CallCleanupService(this.prisma);
 
     // Initialiser la delivery queue Redis
-    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore());
+    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma));
 
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
@@ -366,8 +374,9 @@ class MeeshyServer {
     // Register multipart plugin for file uploads
     await this.server.register(multipart, {
       limits: {
-        fileSize: 4294967296, // 4GB max file size
-        files: 30, // Max 30 files per request
+        // #11266 — le plus grand plafond par type ; celui du rôle se juge dans la route.
+        fileSize: largestUploadCeiling(uploadLimitPolicyFromEnv()),
+        files: MAX_DIRECT_UPLOAD_FILES,
       },
     });
 
@@ -537,7 +546,7 @@ class MeeshyServer {
       if (err && err.code === 'FST_FILES_LIMIT') {
         return reply.code(413).send({
           error: 'Too Many Files',
-          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`
+          message: `You can only upload a maximum of ${MAX_DIRECT_UPLOAD_FILES} files at once. Please reduce the number of files.`
         });
       }
 
@@ -545,7 +554,7 @@ class MeeshyServer {
       if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
         return reply.code(413).send({
           error: 'File Too Large',
-          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`
+          message: `File size exceeds the largest allowed upload size. Please reduce the file size.`
         });
       }
 
@@ -897,6 +906,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Initialize translation service
     try {
       await this.translationService.initialize();
+      startTranslatorForget({ zmq: this.translationService.getZmqClient(), redis: getCacheStore().getNativeClient() as never }); // #13102
+      startAtRestFileSweep(this.prisma); // #13100
       const isHealthy = await this.translationService.healthCheck();
       if (isHealthy) {
         logger.info('✓ Translation service initialized successfully');

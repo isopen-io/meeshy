@@ -2,8 +2,11 @@ package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
 import java.time.Instant
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -14,18 +17,36 @@ import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.SwrCacheSource
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.EndToEndRegime
+import me.meeshy.sdk.model.EndToEndRegimeMemory
 import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.keepingParticipantsOf
 import me.meeshy.sdk.model.namesTwoPeople
+import me.meeshy.sdk.model.presence.ServedPresencePage
+import me.meeshy.sdk.model.presence.servedPresence
+import me.meeshy.sdk.model.presence.withoutServedPresence
+import me.meeshy.sdk.socket.ServedPresenceSink
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.listConditionalResult
+import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.pagedApiCall
+import me.meeshy.sdk.model.sync.PageFetchPlan
+import me.meeshy.sdk.model.sync.SyncOwnership
+import me.meeshy.sdk.sync.SyncAccountProvider
+import me.meeshy.sdk.sync.SyncCheckpointStore
+import me.meeshy.sdk.sync.fetchPageWithRetry
+import me.meeshy.sdk.sync.fetchPagesInParallel
+import kotlinx.coroutines.CancellationException
 import me.meeshy.sdk.search.LocalSearchIndex
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a conversation revalidation fails; carries the API error message. */
@@ -43,7 +64,23 @@ internal class ConversationCacheSource(
     private val conversationApi: ConversationApi,
     private val clock: CacheClock,
     private val searchIndex: LocalSearchIndex,
+    private val accountProvider: SyncAccountProvider = SyncAccountProvider.None,
+    private val checkpoints: SyncCheckpointStore = SyncCheckpointStore(syncMetaDao),
+    private val ownership: SyncOwnership<Unit> = SyncOwnership(),
+    /** Conversations created here moments ago: a full sweep that does not serve them yet keeps them. */
+    private val protectedIds: () -> Set<String> = { emptySet() },
+    /** #12956 — the conversations this account has seen end-to-end encrypted: never served back in clear. */
+    private val endToEnd: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    /** #13558 — the sweep's pages land only while the account that asked for them is still the one signed in. */
+    private val fence: AccountFence? = null,
+    /** #13647 — the cached payloads are decoded here, never on the thread of the screen that collects them. */
+    private val decodeOn: CoroutineDispatcher = Dispatchers.Default,
+    /** #13746 — the presence the gateway serves on the page seeds the session's presence map at cold start. */
+    private val presenceSink: ServedPresenceSink = ServedPresenceSink.None,
 ) : SwrCacheSource<List<ApiConversation>> {
+
+    /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
+    private var seededAccount: String? = null
 
     override fun observe(): Flow<List<ApiConversation>?> =
         combine(
@@ -57,7 +94,7 @@ internal class ConversationCacheSource(
             } else {
                 rows.map { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
             }
-        }
+        }.flowOn(decodeOn)
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
 
@@ -69,16 +106,30 @@ internal class ConversationCacheSource(
      * its default/empty); [capturedEtag] is the page-1 response's `ETag`
      * header, captured ONLY when page 1 ALONE proved the sweep complete (see
      * [sweepPages] for why a page-1 ETag is unsafe to store otherwise).
+     * [presence] is #13798: what each page said of presence, under the marks
+     * taken when THAT page was asked for and when ITS response came back.
      */
     private class SweepOutcome(
         val conversations: List<ApiConversation> = emptyList(),
         val isComplete: Boolean = false,
         val notModified: Boolean = false,
         val capturedEtag: String? = null,
+        val presence: List<ServedPresencePage> = emptyList(),
     )
 
+    /** One page as it came back, with what it said of presence ([heardPage]). */
+    private class Fetched(val result: PagedResult<List<ApiConversation>>, val presence: ServedPresencePage)
+
     /**
-     * Pages through `GET /conversations` up to [MAX_PAGES] (`× [CONVERSATIONS_
+     * #13798 — what [rows] said of presence, marked by the presence map when the page was [requested]
+     * and NOW, as its response is in hand: a status the socket delivers between two pages answers to
+     * the page that came before it, never to the sweep's last page.
+     */
+    private fun heardPage(rows: List<ApiConversation>, requested: Long?): ServedPresencePage =
+        rows.servedPresence().copy(requested = requested, receipt = presenceSink.receipt())
+
+    /**
+     * Pages through `GET /conversations` up to [PageFetchPlan.MAX_PAGES] (`× [PageFetchPlan.
      * PAGE_SIZE]` = 10 000, the same hard ceiling as iOS's full-sync —
      * `ConversationSyncEngine+Chargement.swift` — though Android walks more,
      * smaller pages to get there: `validatePagination` (gateway) caps `limit`
@@ -126,69 +177,116 @@ internal class ConversationCacheSource(
      * success" (no body was ever decoded).
      */
     private suspend fun sweepPages(updatedSince: String?, ifNoneMatch: String?): SweepOutcome {
-        val collected = mutableListOf<ApiConversation>()
-        var offset = 0
-        var isComplete = false
-        var capturedEtag: String? = null
-
-        for (page in 0 until MAX_PAGES) {
-            if (page == 0) {
-                when (
-                    val result = conversationApi.listConditionalResult(
-                        offset = offset,
-                        limit = CONVERSATIONS_PAGE_SIZE,
-                        updatedSince = updatedSince,
-                        ifNoneMatch = ifNoneMatch,
+        val requested = presenceSink.receipt()
+        val first = when (
+            val result = conversationApi.listConditionalResult(
+                offset = 0,
+                limit = PageFetchPlan.PAGE_SIZE,
+                updatedSince = updatedSince,
+                ifNoneMatch = ifNoneMatch,
+            )
+        ) {
+            is ConditionalResult.NotModified -> {
+                if (ifNoneMatch == null) {
+                    throw ConversationSyncException(
+                        "Unexpected 304 for conversations without If-None-Match sent",
                     )
-                ) {
-                    is ConditionalResult.NotModified -> {
-                        if (ifNoneMatch == null) {
-                            throw ConversationSyncException(
-                                "Unexpected 304 for conversations without If-None-Match sent",
-                            )
-                        }
-                        return SweepOutcome(notModified = true)
-                    }
-                    is ConditionalResult.Fresh -> {
-                        val rows = result.data
-                        collected += rows
-                        val pagination = result.pagination
-                            ?: break // Unknown completeness — never infer "done" from a missing block.
-                        if (!pagination.hasMore) {
-                            isComplete = true
-                            capturedEtag = result.etag
-                            break
-                        }
-                        offset += rows.size
-                    }
-                    is ConditionalResult.Failure -> throw ConversationSyncException(result.error.message)
                 }
-            } else {
-                when (
-                    val result = pagedApiCall {
-                        conversationApi.list(
-                            offset = offset,
-                            limit = CONVERSATIONS_PAGE_SIZE,
-                            updatedSince = updatedSince,
-                        )
-                    }
-                ) {
-                    is NetworkResult.Success -> {
-                        val rows = result.data.data
-                        collected += rows
-                        val pagination = result.data.pagination ?: break
-                        if (!pagination.hasMore) {
-                            isComplete = true
-                            break
-                        }
-                        offset += rows.size
-                    }
-                    is NetworkResult.Failure -> throw ConversationSyncException(result.error.message)
-                }
+                return SweepOutcome(notModified = true)
             }
+            is ConditionalResult.Fresh -> result
+            is ConditionalResult.Failure -> throw ConversationSyncException(result.error.message)
         }
+        val firstPresence = heardPage(first.data, requested)
+        // Unknown completeness — never infer "done" from a missing block.
+        val pagination = first.pagination ?: return SweepOutcome(first.data, presence = listOf(firstPresence))
+        if (!pagination.hasMore) {
+            return SweepOutcome(first.data, isComplete = true, capturedEtag = first.etag, presence = listOf(firstPresence))
+        }
+        val rest = loadRemainingPages(first.data, pagination.total, updatedSince)
+        return SweepOutcome(first.data + rest.rows, rest.isComplete, presence = listOf(firstPresence) + rest.presence)
+    }
 
-        return SweepOutcome(collected, isComplete, capturedEtag = capturedEtag)
+    private class RemainingPages(
+        val rows: List<ApiConversation>,
+        val isComplete: Boolean,
+        val presence: List<ServedPresencePage> = emptyList(),
+    )
+
+    private suspend fun fetchPage(offset: Int, updatedSince: String?): Fetched {
+        val requested = presenceSink.receipt()
+        return when (
+            val result = pagedApiCall {
+                conversationApi.list(offset = offset, limit = PageFetchPlan.PAGE_SIZE, updatedSince = updatedSince)
+            }
+        ) {
+            is NetworkResult.Success -> Fetched(result.data, heardPage(result.data.data, requested))
+            is NetworkResult.Failure -> throw ConversationSyncException(result.error.message)
+        }
+    }
+
+    /**
+     * Pages 2+ : en parallèle (4 au plus, réessai par page, pages perdues récupérées) quand le
+     * serveur annonce son total ; sinon, ou si la voie parallèle échoue, la boucle séquentielle
+     * d'origine, bornée à [PageFetchPlan.MAX_TAIL_ITERATIONS] itérations.
+     */
+    private suspend fun loadRemainingPages(
+        firstPage: List<ApiConversation>,
+        total: Int?,
+        updatedSince: String?,
+    ): RemainingPages {
+        val planned = PageFetchPlan.remainingPageIndices(total, firstPage.size)
+        if (planned.isNotEmpty()) {
+            val parallel = try {
+                loadInParallel(firstPage.size, planned, updatedSince)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (parallel != null) return parallel
+        }
+        return loadSequentially(firstPage, updatedSince)
+    }
+
+    private suspend fun loadInParallel(firstCount: Int, planned: List<Int>, updatedSince: String?): RemainingPages {
+        val stride = PageFetchPlan.stride(firstCount)
+        val fetch: suspend (Int) -> Fetched =
+            { index -> fetchPage(PageFetchPlan.offsetOf(index, stride), updatedSince) }
+        val pages = fetchPagesInParallel(planned, fetch = fetch).toMutableMap()
+        for (lost in PageFetchPlan.droppedPages(planned, pages.keys)) {
+            pages[lost] = fetchPageWithRetry { fetch(lost) }.getOrNull() ?: break
+        }
+        val fetched = planned.mapNotNull { pages[it] }
+        val rows = fetched.flatMap { it.result.data }
+        val presence = fetched.map { it.presence }
+        if (pages.keys.size < planned.size) return RemainingPages(rows, isComplete = false, presence)
+        val last = pages.getValue(planned.last()).result.pagination ?: return RemainingPages(rows, isComplete = false, presence)
+        if (!last.hasMore) return RemainingPages(rows, isComplete = true, presence)
+        val more = loadSequentially(emptyList(), updatedSince, startOffset = firstCount + rows.size)
+        return RemainingPages(rows + more.rows, more.isComplete, presence + more.presence)
+    }
+
+    private suspend fun loadSequentially(
+        firstPage: List<ApiConversation>,
+        updatedSince: String?,
+        startOffset: Int = firstPage.size,
+    ): RemainingPages {
+        val seen = firstPage.mapTo(HashSet()) { it.id }
+        val rows = mutableListOf<ApiConversation>()
+        val presence = mutableListOf<ServedPresencePage>()
+        var tail = PageFetchPlan.Tail(offset = startOffset, hasMore = true)
+        while (tail.canContinue) {
+            val fetched = fetchPage(tail.offset, updatedSince)
+            val page = fetched.result
+            presence += fetched.presence
+            val pagination = page.pagination ?: return RemainingPages(rows, isComplete = false, presence)
+            val fresh = page.data.count { seen.add(it.id) }
+            rows += page.data
+            if (!pagination.hasMore) return RemainingPages(rows, isComplete = true, presence)
+            tail = PageFetchPlan.advance(tail, returned = page.data.size, newItems = fresh, backendHasMore = true)
+        }
+        return RemainingPages(rows, isComplete = false, presence)
     }
 
     /**
@@ -234,6 +332,17 @@ internal class ConversationCacheSource(
      * "exhaustively confirmed current".
      */
     override suspend fun revalidate() {
+        val ticket = fence?.currentTicket()
+        val account = accountProvider.activeAccountId()
+        if (account != null) ownership.claim(account)
+        try {
+            revalidateOwned(account, ticket)
+        } finally {
+            if (account != null) ownership.release(account)
+        }
+    }
+
+    private suspend fun revalidateOwned(account: String?, ticket: AccountTicket?) {
         val watermark = syncMetaDao.watermark(RESOURCE_KEY)
         val currentEtag = syncMetaDao.etag(RESOURCE_KEY)
         val currentEtagScope = syncMetaDao.etagRequestKey(RESOURCE_KEY)
@@ -245,23 +354,39 @@ internal class ConversationCacheSource(
 
         val outcome = sweepPages(updatedSince, ifNoneMatch)
 
+        // The account left during the sweep: its pages must not land in the next account's cache.
+        if (!ownership.owns(account)) return
+
         if (outcome.notModified) {
             // Confirmed unchanged: zero body decoded, zero Room writes beyond
             // freshness — watermark, etag and its scope all carry over as-is.
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermark, currentEtag, currentEtagScope))
+            fence.commitOrWrite(ticket) {
+                syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermark, currentEtag, currentEtagScope))
+                recordCheckpoint(account, now, pruned = false, fullReconcile = false)
+            }
             return
         }
 
         if (useDelta && outcome.conversations.isEmpty() && outcome.capturedEtag == null) return
 
-        persist(
-            conversations = outcome.conversations,
-            prune = !useDelta && outcome.isComplete,
-            currentWatermark = watermark,
-            advanceWatermark = outcome.isComplete,
-            etag = outcome.capturedEtag ?: currentEtag,
-            etagScope = if (outcome.capturedEtag != null) requestScope else currentEtagScope,
-        )
+        fence.commitOrWrite(ticket) {
+            presenceSink.seedSweep(outcome.presence)
+            persist(
+                conversations = outcome.conversations,
+                prune = !useDelta && outcome.isComplete,
+                currentWatermark = watermark,
+                advanceWatermark = outcome.isComplete,
+                etag = outcome.capturedEtag ?: currentEtag,
+                etagScope = if (outcome.capturedEtag != null) requestScope else currentEtagScope,
+            )
+            val prunedNow = !useDelta && outcome.isComplete
+            recordCheckpoint(account, now, pruned = prunedNow, fullReconcile = prunedNow)
+        }
+    }
+
+    private suspend fun recordCheckpoint(account: String?, now: Long, pruned: Boolean, fullReconcile: Boolean) {
+        if (account == null || !ownership.owns(account)) return
+        checkpoints.write(account, checkpoints.read(account).advanced(now, pruned, fullReconcile))
     }
 
     /**
@@ -270,8 +395,8 @@ internal class ConversationCacheSource(
      *
      * SQLite caps bound variables per statement at `SQLITE_MAX_VARIABLE_NUMBER`
      * — 999 on Android API 26-29 (raised on later releases, but `minSdk = 26`
-     * makes 999 the floor this app must hold under). [MAX_PAGES] ×
-     * [CONVERSATIONS_PAGE_SIZE] deliberately allows sweeping up to 10 000
+     * makes 999 the floor this app must hold under). [PageFetchPlan.MAX_PAGES] ×
+     * [PageFetchPlan.PAGE_SIZE] deliberately allows sweeping up to 10 000
      * conversations — i.e. the very `keptIds` list a `NOT IN` clause would bind
      * one variable per id for — so the fix this method exists to prevent
      * ("too many SQL variables" thrown mid-transaction, ON DEVICE, for exactly
@@ -291,7 +416,7 @@ internal class ConversationCacheSource(
      * from crashing when SQLite actually enforces the limit.
      */
     private suspend fun pruneMissing(keptIds: List<String>) {
-        val kept = keptIds.toHashSet()
+        val kept = keptIds.toHashSet().apply { addAll(protectedIds()) }
         val toDelete = conversationDao.allIds().filterNot { it in kept }
         toDelete.chunked(DELETE_CHUNK_SIZE).forEach { chunk ->
             conversationDao.deleteByIds(chunk)
@@ -316,7 +441,9 @@ internal class ConversationCacheSource(
         }
         val watermarkToStore = receivedMax ?: currentWatermark
         database.withTransaction {
-            val carried = conversations.map { carryingKnownPeers(it) }
+            seedEndToEndFromCache()
+            val carried = conversations.map { keepingEndToEnd(carryingKnownPeers(it)) }
+            confirmServedClear(carried)
             val rows = carried.map { entityOf(it, now) }
             conversationDao.upsertAll(rows)
             carried.forEach(searchIndex::indexConversation)
@@ -330,10 +457,26 @@ internal class ConversationCacheSource(
      * or created for a story/mood reply or a profile's Message button), so the chat screen — which
      * reads the Room row — has it before the next sweep serves it. Same carry rule as a sweep.
      */
-    suspend fun remember(conversation: ApiConversation) {
+    suspend fun remember(conversation: ApiConversation) = rememberAs(conversation, servedByGateway = false)
+
+    /**
+     * #13628 — [remember] for a conversation the gateway has JUST served (a `NetworkResult.Success` body): only such a row
+     * confirms a null mode as clear. A conversation rebuilt from the cache or composed locally goes through [remember] and
+     * confirms nothing — its null mode stays unknown, and the outbox re-reads it before any plaintext.
+     */
+    suspend fun rememberServed(conversation: ApiConversation) = rememberAs(conversation, servedByGateway = true)
+
+    private suspend fun rememberAs(conversation: ApiConversation, servedByGateway: Boolean) {
+        val ticket = fence?.currentTicket()
         val now = clock.nowMillis()
+        fence.commitOrWrite(ticket) { rememberNow(conversation, now, servedByGateway) }
+    }
+
+    private suspend fun rememberNow(conversation: ApiConversation, now: Long, servedByGateway: Boolean) {
         database.withTransaction {
-            val carried = carryingKnownPeers(conversation)
+            seedEndToEndFromCache()
+            val carried = keepingEndToEnd(carryingKnownPeers(conversation))
+            if (servedByGateway) confirmServedClear(listOf(carried))
             conversationDao.upsertAll(listOf(entityOf(carried, now)))
             searchIndex.indexConversation(carried)
         }
@@ -352,9 +495,35 @@ internal class ConversationCacheSource(
         return served.keepingParticipantsOf(known)
     }
 
+    /**
+     * #12956 — a conversation served e2ee is learned; one this account has seen e2ee keeps its
+     * e2ee mode whatever the gateway serves next (#12949): a downgrade is ignored, never applied.
+     */
+    private fun keepingEndToEnd(served: ApiConversation): ApiConversation {
+        if (EndToEndRegime.isEndToEnd(served.encryptionMode)) endToEnd.learn(served.id)
+        return EndToEndRegimeMemory.kept(served, seenEndToEnd = endToEnd.isSealed(served.id))
+    }
+
+    /** #13628 — what the gateway just served without end-to-end has a KNOWN mode, even when it serves none (a clear conversation). */
+    private fun confirmServedClear(served: List<ApiConversation>) =
+        endToEnd.confirmClear(served.filterNot { EndToEndRegime.isEndToEnd(it.encryptionMode) }.map { it.id })
+
+    /** Rows cached e2ee before the ledger existed are learned once per account. Must run inside the write transaction. */
+    private suspend fun seedEndToEndFromCache() {
+        val account = accountProvider.activeAccountId() ?: return
+        if (seededAccount == account) return
+        conversationDao.payloadsContaining(E2EE_PAYLOAD_NEEDLE)
+            .filter { row ->
+                runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(row.payload) }.getOrNull()
+                    ?.let { EndToEndRegime.isEndToEnd(it.encryptionMode) } == true
+            }
+            .forEach { endToEnd.learn(it.id) }
+        seededAccount = account
+    }
+
     private fun entityOf(conversation: ApiConversation, cachedAtMillis: Long) = ConversationEntity(
         id = conversation.id,
-        payload = MeeshyApi.json.encodeToString(conversation),
+        payload = MeeshyApi.json.encodeToString(conversation.withoutServedPresence()),
         updatedAt = isoToEpochMillis(
             conversation.updatedAt
                 ?: conversation.lastMessage?.createdAt
@@ -366,8 +535,9 @@ internal class ConversationCacheSource(
 
     internal companion object {
         const val RESOURCE_KEY: String = "conversations"
-        private const val CONVERSATIONS_PAGE_SIZE = 100
-        private const val MAX_PAGES = 100
+
+        /** How a cached e2ee row reads in its serialized payload (`MeeshyApi.json`, compact). */
+        private const val E2EE_PAYLOAD_NEEDLE = "\"encryptionMode\":\"e2ee\""
 
         /**
          * Bound-variable budget per [ConversationDao.deleteByIds] call — under

@@ -10,6 +10,8 @@ const enShellLabels = {
   'thread.header.back.unread.one': 'Back — {count} unread message elsewhere',
   'thread.header.back.unread.other': 'Back — {count} unread messages elsewhere',
   'thread.header.details': 'Conversation details',
+  'thread.header.encryption.endToEnd': 'End-to-end encrypted',
+  'thread.header.encryption.server': 'Encrypted on the server',
   'thread.scrollToBottom': 'Scroll to bottom',
   'thread.scrollToBottom.unread.one': '{count} unread message, Scroll to bottom',
   'thread.scrollToBottom.unread.other': '{count} unread messages, Scroll to bottom',

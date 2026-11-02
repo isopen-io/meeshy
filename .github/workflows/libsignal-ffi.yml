@@ -1,0 +1,89 @@
+name: libsignal FFI
+
+# #12536 — construit SignalFfi.xcframework depuis libsignal au tag épinglé de
+# packages/LibSignalClient/LIBSIGNAL_VERSION, avec la chaîne Rust que ce tag
+# déclare et le MÊME Xcode que les builds de l'app (une archive construite par
+# un Xcode plus récent porte du bitcode LTO que l'éditeur de liens plus ancien
+# ne lit pas). Publie l'archive en artefact de release du dépôt, puis rejoue la
+# suite de tests de libsignal (vecteurs compris) contre ce binaire.
+#
+# Une release publiée n'est JAMAIS remplacée : Package.swift référence sa somme
+# de contrôle. Changer de tag = un nouveau LIBSIGNAL_VERSION, donc une nouvelle
+# release.
+
+on:
+  push:
+    paths:
+      - 'packages/LibSignalClient/**'
+      - '.github/workflows/libsignal-ffi.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: libsignal-ffi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Construire et publier SignalFfi.xcframework
+    runs-on: macos-15
+    timeout-minutes: 150
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        run: echo "tag=$(tr -d '[:space:]' < packages/LibSignalClient/LIBSIGNAL_VERSION)" >> "$GITHUB_OUTPUT"
+      - id: existing
+        name: La release existe-t-elle déjà ?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "libsignal-ffi-${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Xcode des builds de l'app
+        if: steps.existing.outputs.published == 'false'
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
+      - name: libsignal au tag épinglé
+        if: steps.existing.outputs.published == 'false'
+        run: git clone --depth 1 --branch "${{ steps.version.outputs.tag }}" https://github.com/signalapp/libsignal.git "$RUNNER_TEMP/libsignal"
+      - name: Chaîne Rust du tag
+        if: steps.existing.outputs.published == 'false'
+        run: |
+          rustup toolchain install "$(cat "$RUNNER_TEMP/libsignal/rust-toolchain")" --profile minimal \
+            --target aarch64-apple-ios --target aarch64-apple-ios-sim --target x86_64-apple-ios
+          brew list protobuf >/dev/null 2>&1 || brew install protobuf
+      - name: Construire
+        if: steps.existing.outputs.published == 'false'
+        run: bash packages/LibSignalClient/scripts/build-signal-ffi-xcframework.sh "$RUNNER_TEMP/libsignal" "$RUNNER_TEMP/out" | tee "$RUNNER_TEMP/build.log"
+      - name: Publier la release
+        if: steps.existing.outputs.published == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          checksum=$(grep '^checksum: ' "$RUNNER_TEMP/build.log" | cut -d' ' -f2)
+          gh release create "libsignal-ffi-${{ steps.version.outputs.tag }}" "$RUNNER_TEMP/out/SignalFfi.xcframework.zip" \
+            --target "${{ github.sha }}" \
+            --title "libsignal FFI ${{ steps.version.outputs.tag }}" \
+            --notes "SignalFfi.xcframework construit depuis signalapp/libsignal ${{ steps.version.outputs.tag }} (AGPL-3.0-only) par ce workflow. Somme de contrôle SwiftPM : ${checksum}"
+          echo "Somme de contrôle à reporter dans packages/LibSignalClient/Package.swift : ${checksum}" >> "$GITHUB_STEP_SUMMARY"
+
+  vectors:
+    name: Suite de tests de libsignal au tag épinglé
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: Xcode des builds de l'app
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
+      - name: Rejouer LibSignalClientTests sur simulateur
+        working-directory: packages/LibSignalClient
+        run: |
+          device=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if 'iPhone' in x['name']))")
+          xcodebuild test -scheme LibSignalClient -destination "platform=iOS Simulator,id=${device}" CODE_SIGNING_ALLOWED=NO

@@ -51,6 +51,8 @@ fun ConversationListScreen(
     searchCommunityCount: Int = 0,
     onRefresh: () -> Unit = {},
     rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
+    onOpenSettings: () -> Unit = {},
+    onOpenConversationSearch: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -159,16 +161,24 @@ fun ConversationListScreen(
                 .padding(padding),
         ) {
             ConnectionBannerStrip(state.banner)
-            header()
-            ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter)
+            val content = ConversationListContent.of(state)
+            // iOS : le rail puis les filtres sont les premières lignes de la liste, dans tous les états (#13664).
             Box(modifier = Modifier.weight(1f).nestedScroll(searchScrollConnection)) {
-                ConversationListStateHost(
+                ConversationListBody(
+                    state = state,
+                    listState = listState,
+                    viewModel = viewModel,
                     content = ConversationListContent.of(state),
-                    onRetry = viewModel::refresh,
                     onNewConversation = onNewConversation,
-                ) {
-                    ConversationListBody(state = state, listState = listState, viewModel = viewModel, onRefresh = onRefresh, rowNavigation = rowNavigation)
-                }
+                    onRefresh = onRefresh,
+                    rowNavigation = rowNavigation,
+                    header = {
+                        ConversationListHead(
+                            rail = header,
+                            filters = { ConversationFilterBar(selected = state.selectedFilter, onSelect = viewModel::selectFilter) },
+                        )
+                    },
+                )
             }
         }
     }
@@ -183,5 +193,6 @@ fun ConversationListScreen(
             onDismiss = viewModel::dismissLockPrompt,
         )
     }
+    ConversationListDialogHost(viewModel.dialogs, rowNavigation, onOpenSettings, onOpenConversationSearch)
     }
 }

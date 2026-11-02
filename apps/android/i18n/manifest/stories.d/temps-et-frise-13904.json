@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "composer.frise.video", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.capture.tool.text", "androidName": "composer_family_text", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.object.editor.window", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.object.editor.window.permanent", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.object.editor.start", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.object.editor.end", "status": "adopted" },
+        { "catalog": "app", "iosKey": "composer.object.editor.permanent", "status": "adopted" }
+      ]
+    }
+  }
+}

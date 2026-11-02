@@ -1,5 +1,4 @@
 import Foundation
-import GRDB
 import MeeshySDK
 import os
 
@@ -26,32 +25,12 @@ final class ConversationTranslationSource: ConversationTranslationSourcing {
     }
 
     func persisted(for messageIds: [String]) async -> [String: [TranslationRecord]] {
-        let reader = persistence.reader
-        let grouped: [String: [TranslationRecord]] = (try? await reader.read { db in
-            let records = try TranslationRecord
-                .filter(messageIds.contains(Column("messageLocalId")))
-                .fetchAll(db)
-            return Dictionary(grouping: records, by: \.messageLocalId)
-        }) ?? [:]
-        return grouped
+        (try? await MessageRepository(persistence: persistence).translations(forMessageIds: messageIds)) ?? [:]
     }
 
     func recentPersisted(conversationId: String, limit: Int) async -> [String: [TranslationRecord]] {
-        let reader = persistence.reader
-        let grouped: [String: [TranslationRecord]] = (try? await reader.read { db in
-            let localIds = try MessageRecord
-                .filter(Column("conversationId") == conversationId)
-                .order(Column("createdAt").desc)
-                .limit(limit)
-                .fetchAll(db)
-                .flatMap { [$0.localId, $0.serverId].compactMap { $0 } }
-            guard !localIds.isEmpty else { return [:] }
-            let records = try TranslationRecord
-                .filter(localIds.contains(Column("messageLocalId")))
-                .fetchAll(db)
-            return Dictionary(grouping: records, by: \.messageLocalId)
-        }) ?? [:]
-        return grouped
+        (try? await MessageRepository(persistence: persistence)
+            .recentTranslations(conversationId: conversationId, limit: limit)) ?? [:]
     }
 
     func purge(ids: [String]) async {

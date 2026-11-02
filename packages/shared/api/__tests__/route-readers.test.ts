@@ -53,10 +53,10 @@ describe('filterRoutesReadBy — le catalogue d’un client natif ne garde que c
     expect(filterRoutesReadBy([LENS_CATALOG], 'android', declarations)).toEqual([]);
   });
 
-  it('les onze routes des lens quittent les deux catalogues natifs', () => {
+  it('les douze routes des lens quittent les deux catalogues natifs', () => {
     const manifest = JSON.parse(read('services/gateway/route-manifest.json')) as { routes: { method: string; path: string }[] };
     const lens = manifest.routes.filter((route) => route.path.startsWith('/api/v1/packs/lens'));
-    expect(lens).toHaveLength(11);
+    expect(lens).toHaveLength(12);
     expect(filterRoutesReadBy(lens, 'ios')).toEqual([]);
     expect(filterRoutesReadBy(lens, 'android')).toEqual([]);
   });

@@ -16,6 +16,7 @@ final class A11yLabelComposerTests: XCTestCase {
     // MARK: - Fabrique minimale
 
     private func makeContent(
+        kind: BubbleContent.Kind = .standard,
         isMe: Bool = false,
         senderName: String? = "Ali",
         text: String? = nil,
@@ -30,7 +31,7 @@ final class A11yLabelComposerTests: XCTestCase {
     ) -> BubbleContent {
         BubbleContent(
             messageId: "m1",
-            kind: .standard,
+            kind: kind,
             text: text.map {
                 BubbleContent.Text(
                     raw: $0, isEmojiOnly: false, emojiFontSize: nil,
@@ -228,4 +229,14 @@ final class A11yLabelComposerTests: XCTestCase {
         XCTAssertTrue(textIndex < imagesIndex)
         XCTAssertTrue(imagesIndex < reactionsIndex)
     }
+
+    /// #12917 — un avis système n'est la parole de personne : VoiceOver ne
+    /// l'attribue ni à un auteur ni à « Inconnu », même reçu sans nom.
+    func test_compose_systemNotice_namesNoAuthor() {
+        let label = MessageAccessibilityLabelComposer.compose(makeContent(kind: .system, senderName: nil, text: "Chiffrement de bout en bout activé"))
+
+        XCTAssertFalse(label.contains(String(localized: "a11y.message.unknown_sender", bundle: .main)))
+        XCTAssertTrue(label.hasPrefix("Chiffrement de bout en bout activé"))
+    }
+
 }

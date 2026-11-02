@@ -48,7 +48,7 @@ struct ConversationListEmptyState: View {
             // workshop I-067bis — exception de périmètre
             // accordée par l'orchestrateur, seule ouverture
             // consentie dans ce fichier hors du mux de rang
-            // I-067). `LentilleSkeletonRow` (`Lentille/Row/`,
+            // I-067). `LentilleSkeletonRow` (`Lens/Row/`,
             // I-066, vue pure prête depuis ce lot) ne pouvait
             // pas être montée depuis `ConversationRowItem`
             // (ÉCART CONTRAT↔CODE signalé par I-067,

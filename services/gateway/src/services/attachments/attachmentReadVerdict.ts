@@ -27,7 +27,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sendForbidden, sendNotFound } from '../../utils/response.js';
-import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
+import { CARRIER_LIFECYCLE_SELECT, carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from './readerAttachmentLifecycle';
 import { ADMITTED_FILE_READER_WHERE, withoutExpiredShareLinks } from './fileReaderAdmission';
 
@@ -109,7 +109,7 @@ async function memberReadVerdict(
     where: { id: input.messageId },
     // `deletedAt`/`expiresAt` voyagent avec `conversationId` : la garde de
     // cycle de vie ne coûte aucun aller-retour de plus.
-    select: { conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT }
+    select: { conversationId: true, ...CARRIER_LIFECYCLE_SELECT, ...READER_LIFECYCLE_MESSAGE_SELECT }
   });
   if (!message) return 'forbidden';
 

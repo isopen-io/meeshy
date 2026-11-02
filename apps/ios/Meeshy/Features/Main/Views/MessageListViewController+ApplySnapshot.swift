@@ -60,9 +60,10 @@ extension MessageListViewController {
             lastConversationStartFingerprint = startFingerprint
         }
         reconfigureVisibleItems(itemsToReconfigure, in: &snapshot)
+        arrivalMotion.arm(previous: previousSnapshotCount == 0 ? [] : previousItems, newestFirst: messageItems, store: store)
         let shouldAutoScroll = noteArrival(messageItems: messageItems, previousItems: previousItems, showTyping: showTyping)
         PerfSignpost.signposter.endInterval("snapshot.build", _buildState)
-        // ROULEAU (2026-08-18) : aucune animation d'insertion ni de suppression, jamais ; le seul mouvement est le défilement.
+        // ROULEAU (2026-08-18) : aucune animation d'insertion ni de suppression ; seule l'entrée du dernier arrivé se joue sur SA cellule (#11223).
         noteDeletionCompensation(removing: previousItems.subtracting(Set(items)))
         let _applyState = PerfSignpost.signposter.beginInterval("snapshot.apply", id: PerfSignpost.signposter.makeSignpostID())
         applyToDataSource(snapshot) { [weak self] in

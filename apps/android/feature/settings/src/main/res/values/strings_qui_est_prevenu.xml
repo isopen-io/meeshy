@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_circle_notify_title">Who gets notified</string>
+    <string name="settings_circle_notify_intro">Choose, action by action, which circle of your people receives a notification.</string>
+    <string name="settings_circle_notify_family_publication">My publications</string>
+    <string name="settings_circle_notify_family_on_my_content">Others’ activity on my content</string>
+    <string name="settings_circle_notify_family_elsewhere">My activity elsewhere</string>
+    <string name="settings_circle_notify_summary_mixed">Depends on the action</string>
+    <string name="settings_circle_notify_choice_nobody">Nobody</string>
+    <string name="settings_circle_notify_explain_nobody">No one around you is notified.</string>
+    <string name="settings_circle_notify_explain_community">All your connections, from Blood to Acquaintance, and members of the communities you share.</string>
+    <string name="settings_circle_notify_explain_public">The same people as Community: Meeshy has no followers, so no stranger is notified.</string>
+    <string name="settings_circle_notify_action_post">Post</string>
+    <string name="settings_circle_notify_action_reel">Reel</string>
+    <string name="settings_circle_notify_action_story">Story</string>
+    <string name="settings_circle_notify_action_mood">Mood</string>
+    <string name="settings_circle_notify_action_repost">Repost</string>
+    <string name="settings_circle_notify_action_share">Share</string>
+    <string name="settings_circle_notify_action_comment">Comment</string>
+    <string name="settings_circle_notify_action_reaction">Reaction</string>
+    <string name="settings_circle_notify_action_quote">Quote</string>
+    <string name="settings_circle_notify_action_reference">Reference</string>
+    <string name="settings_circle_notify_action_mention">Mention</string>
+    <string name="settings_circle_notify_choice_blood">Blood</string>
+    <string name="settings_circle_notify_choice_close">Close</string>
+    <string name="settings_circle_notify_choice_friend">Friend</string>
+    <string name="settings_circle_notify_choice_acquaintance">Acquaintance</string>
+    <string name="settings_circle_notify_choice_community">Community</string>
+    <string name="settings_circle_notify_choice_public">Public</string>
+</resources>

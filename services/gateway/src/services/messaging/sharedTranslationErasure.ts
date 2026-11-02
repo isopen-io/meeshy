@@ -1,3 +1,4 @@
+import { forgetAtTranslator } from '../translatorForget';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -84,6 +85,8 @@ export async function eraseSharedTranslations(
   { messageIds, keepSourceVersion }: SharedTranslationErasure
 ): Promise<void> {
   if (messageIds.length === 0) return;
+  // #13102 — et ce que le translator en avait rangé (identifiants seuls, rejoué jusqu'à l'acquittement).
+  await forgetAtTranslator({ messageIds });
 
   try {
     await prisma.sharedTranslation.deleteMany({

@@ -25,7 +25,7 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 

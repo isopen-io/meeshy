@@ -79,6 +79,7 @@ public enum ConversationPreviewStringKey: String, Sendable, CaseIterable {
     case systemConversationImage = "system.conversation.image"
     case systemEncryptionE2EE = "system.encryption.e2ee"
     case systemEncryptionEnabled = "system.encryption.enabled"
+    case systemEncryptionDisabled = "system.encryption.disabled"
     case systemGeneric = "system.generic"
     case unitSecond = "unit.second"
     case unitMinute = "unit.minute"

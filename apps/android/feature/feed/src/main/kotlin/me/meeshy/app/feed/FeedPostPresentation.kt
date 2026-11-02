@@ -2,16 +2,25 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.theme.authorAccentHex
+import me.meeshy.sdk.theme.storyAccentHex
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.PostMediaPresentation
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.SceneMotion
+import me.meeshy.sdk.model.SceneShape
+import me.meeshy.sdk.model.card.PostCommentCardPost
+import me.meeshy.sdk.model.composesScene
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.resolvedLayout
 import me.meeshy.sdk.model.resolvedCaption
 import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
+import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.story.sceneItems
+import me.meeshy.sdk.story.toStoryItem
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.PostLanguageStrip
 
@@ -41,6 +50,30 @@ data class FeedPostImage(
 )
 
 /**
+ * Les scènes d'un post composé sur la scène (#13863 R7, iOS `PostSceneCard` / `PostSceneMosaic`) : elles se peignent à la place
+ * de ses médias, dans la disposition que l'auteur a choisie, sur la couleur de l'auteur. [captions] : la légende propre de chaque
+ * scène, rang pour rang ([PostSceneCaptions]) ; [offersSound] : une scène a quelque chose à faire entendre, que la fiche du post
+ * laisse couper (#13893) ; [frames] : ce que la carte montre de chaque scène, rang pour rang ([PostSceneFrames], #14199) ;
+ * [carrierText] : le texte du post servi par le Prisme, qui légende en plein écran une scène sans légende propre (#14200) ;
+ * [moving] : chaque scène bouge-t-elle, rang pour rang ; [soundCredit] : le son que la fiche nomme (#14201).
+ */
+@Immutable
+data class FeedPostScenes(
+    val items: List<StoryItem>,
+    val layout: MosaicLayoutMode,
+    val accentHex: String?,
+    val captions: List<String?> = emptyList(),
+    val offersSound: Boolean = false,
+    val frames: List<SceneCardFraming> = emptyList(),
+    val carrierText: String? = null,
+    val moving: List<Boolean> = emptyList(),
+    val soundCredit: SceneSoundCredit = SceneSoundCredit.None,
+) {
+    /** Le rapport du carrousel : sa page la plus HAUTE, pour n'en rogner aucune ; le gabarit 9:16 sans cadrage connu. */
+    val carouselAspect: Double get() = frames.mapNotNull(SceneCardFraming::pageAspect).minOrNull() ?: SceneShape.ASPECT
+}
+
+/**
  * A feed post projected for rendering: Prisme-resolved content, the viewer's own
  * like state (never inferred from the public count) and resolved media URLs.
  *
@@ -68,6 +101,8 @@ data class FeedPostPresentation(
     val isBookmarked: Boolean,
     val commentCount: Int,
     val repostCount: Int,
+    /** Le lecteur a republié ce post — servi par la passerelle, ou posé au geste en attendant sa réponse (#14456). */
+    val isReposted: Boolean = false,
     val isPinned: Boolean,
     val isEdited: Boolean,
     val isReel: Boolean,
@@ -82,7 +117,39 @@ data class FeedPostPresentation(
     val distanceMeters: Double? = null,
     /** The author's layout (#6514), already resolved — the carousel when the post declares none. */
     val layout: MosaicLayoutMode = MosaicLayoutMode.FALLBACK,
+    /** L'explorateur de langues du post (iOS `PostTranslationSheet`), `null` sans traduction. */
+    val languageExplorer: PostLanguageExplorer? = null,
+    /** Ce que le réel montre au repos (iOS `ReelFeedCard`) ; `null` pour tout autre post. */
+    val reelCover: ReelCover? = null,
+    /** Rapport largeur / hauteur de la carte du réel (`ReelCoverResolver.cardAspect`). */
+    val reelAspect: Float = ReelCoverResolver.cardAspect(null, null),
+    /** Les scènes d'un post composé sur la scène, peintes à la place de [images] ; `null` pour tout autre post. */
+    val scenes: FeedPostScenes? = null,
+    /** Ce qu'« Imager » rend (#14329) : les scènes d'un post à scène, la scène d'un réel composé ; `null` : aucune entrée. */
+    val imagerScenes: PostImagerScenes? = null,
+    /** Le post tel qu'« Imager » un de ses commentaires le met en tête (#13922) : son texte servi, son audience, ses médias. */
+    val commentCardSupport: PostCommentCardPost? = null,
+    /** Les premiers commentaires que la carte montre sous ses actions (#14314) ; `null` : aucun à montrer. */
+    val commentsPreview: FeedCommentsPreviewState? = null,
 ) {
+    /**
+     * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
+     * réel source, signée de son auteur d'origine et ouvrant ce réel-là (iOS `ReelFeedCard.repostedReel`).
+     */
+    val republishedReel: RepostEmbedPresentation?
+        get() = repostEmbed?.takeIf { isReel && media.isEmpty() && it.isReel && !it.isUnavailable }
+
+    /** Le réel que la carte ouvre : le réel cité d'une republication, sinon ce réel. */
+    val reelOpenId: String get() = republishedReel?.id ?: id
+
+    /** Ce réel se montre en carte plein cadre, légende en surimpression (iOS `ReelFeedCard`). */
+    val showsReelCard: Boolean get() = isReel && reelCover != null
+
+    /** Le pseudo de l'auteur d'origine, pour l'attribution `↻ @pseudo` de l'en-tête ; `null` sans repost servi. */
+    val repostAttribution: String?
+        get() = repostEmbed?.takeUnless { it.isUnavailable }
+            ?.let { it.authorUsername ?: it.authorName }
+
     /** Carrousel pour un post, diaporama horizontal pour un reel (iOS `PostMediaPresentation.default`). */
     val mediaPresentation: PostMediaPresentation
         get() = PostMediaPresentation.defaultFor(if (isReel) PostType.REEL else PostType.POST)
@@ -123,10 +190,29 @@ object FeedPostBuilder {
                     alt = item.alt,
                 )
             }
+        val isReel = post.type.equals("reel", ignoreCase = true)
+        // iOS `FeedPost.reelDisplayMedia` : un réel republié sans média propre montre le réel qu'il republie.
+        val reelMedia = if (isReel) media.ifEmpty { FeedMediaMapper.map(post.repostOf?.media, preferredLanguages, mediaBaseUrl) } else media
         val originalCode = post.originalLanguage.normalizedCode()
         val isTranslated = post.isTranslated(preferences)
         val activeCode = resolveActiveCode(post, preferences, activeLanguageCode)
         val activeIsOriginal = activeCode == null || activeCode == originalCode
+        val content = resolveContent(post, preferences, activeCode, activeIsOriginal)
+        val scenes = if (isReel) null else post.sceneItems()?.let { read ->
+            val documents = PostSceneFrames.documents(post.storyEffects, read.items)
+            FeedPostScenes(
+                items = read.items,
+                layout = read.layout,
+                accentHex = post.author.storyAccentHex(),
+                captions = PostSceneCaptions.of(read.items, media),
+                offersSound = PostSceneSound.offers(read.items),
+                frames = PostSceneFrames.of(documents),
+                carrierText = content.trim().takeIf(String::isNotEmpty),
+                moving = documents.map(SceneMotion::isCinematic),
+                soundCredit = PostSceneSound.credit(read.items, post.storyEffects?.canvas?.sound),
+            )
+        }
+        val composedReel = if (isReel) post.toStoryItem().takeIf { it.storyEffects.composesScene() } else null
         return FeedPostPresentation(
             id = post.id,
             authorId = post.author?.id,
@@ -136,7 +222,7 @@ object FeedPostBuilder {
             authorAvatarUrl = post.author?.avatar
                 ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             createdAtIso = post.createdAt,
-            content = resolveContent(post, preferences, activeCode, activeIsOriginal),
+            content = content,
             isTranslated = isTranslated,
             languageStrip = PostLanguageStrip.build(
                 originalLanguage = post.originalLanguage,
@@ -155,16 +241,24 @@ object FeedPostBuilder {
             isBookmarked = post.isBookmarkedByMe == true,
             commentCount = post.commentCount ?: 0,
             repostCount = post.repostCount ?: 0,
+            isReposted = post.isRepostedByMe == true,
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
-            isReel = post.type.equals("reel", ignoreCase = true),
-            repostEmbed = RepostEmbedBuilder.build(post.repostOf, preferences, mediaBaseUrl),
+            isReel = isReel,
+            repostEmbed = RepostEmbedBuilder.forPost(post, preferences, mediaBaseUrl),
             viewCount = post.viewCount ?: 0,
             impressionCount = post.impressionCount ?: 0,
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
             location = FeedPostLocationBuilder.build(post.location),
             distanceMeters = post.distanceMeters,
             layout = post.storyEffects.resolvedLayout,
+            languageExplorer = PostLanguageExplorerBuilder.build(post, preferences, activeCode),
+            reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia, post.authorAccentHex()) { post.toStoryItem() } else null,
+            reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
+            scenes = scenes,
+            imagerScenes = PostImaging.of(scenes, composedReel, post.authorAccentHex()),
+            commentCardSupport = CommentCardReading.support(post, content),
+            commentsPreview = FeedCommentsPreviewBuilder.build(post.comments, post.commentCount ?: 0, preferences, mediaBaseUrl),
         )
     }
 

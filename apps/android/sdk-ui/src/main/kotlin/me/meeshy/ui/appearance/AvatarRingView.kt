@@ -2,6 +2,9 @@ package me.meeshy.ui.appearance
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -19,11 +22,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.appearance.ArcSlice
+import me.meeshy.sdk.model.appearance.AvatarRingDecor
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.sdk.model.appearance.AvatarRingGeometry
 import me.meeshy.sdk.model.appearance.AvatarRingOrnamentPath
 import me.meeshy.sdk.model.appearance.RingStrokeLayer
+import me.meeshy.sdk.model.pack.PackAssetRef
+import me.meeshy.ui.component.lottie.PackLottieLayer
 
 /**
  * Le plan de dessin d'un contour, calculé UNE fois par modèle : couches du trait de base et chemins d'ornement
@@ -127,6 +134,11 @@ private const val DOT_LENGTH = 0.001f
  * rien ne grandit, rien ne se décale. Le contenu (avatar, anneau de story compris) se ramène au trou du contour et
  * l'anneau de story reste concentrique dedans — le contour et l'anneau restent tous deux visibles. [footprint] est la
  * cote de l'avatar nu, [storyRingSize] l'emprise du contenu quand il porte un anneau de story. `null` ⇒ le contenu tel quel.
+ *
+ * La couche animée du contour (#13952, miroir d'`avatarRingWithin`) se pose PAR-DESSUS, à la cote de l'empreinte :
+ * elle joue en boucle, se fige à sa première image sous « Réduire les animations » ou [animates] faux, et s'arrête hors
+ * écran ([PackLottieLayer]). Une liste en porte des dizaines : le budget des films vivants n'en fait jouer que
+ * quelques-uns à la fois, et un même fichier ne se décode qu'une fois.
  */
 @Composable
 public fun AvatarRingLayer(
@@ -134,6 +146,7 @@ public fun AvatarRingLayer(
     footprint: Dp,
     modifier: Modifier = Modifier,
     storyRingSize: Dp? = null,
+    animates: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (design == null) {
@@ -142,20 +155,41 @@ public fun AvatarRingLayer(
     }
     val plan = remember(design) { AvatarRingPlan(design) }
     val factor = AvatarRingGeometry.footprintScale(footprint.value.toDouble(), storyRingSize?.value?.toDouble()).toFloat()
-    Box(
-        modifier = modifier.drawWithContent {
-            drawContent()
-            drawAvatarRing(plan, footprint.toPx())
-        },
-        contentAlignment = Alignment.Center,
-    ) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Box(
-            modifier = Modifier.graphicsLayer {
-                scaleX = factor
-                scaleY = factor
+            modifier = Modifier.drawWithContent {
+                drawContent()
+                drawAvatarRing(plan, footprint.toPx())
             },
             contentAlignment = Alignment.Center,
-            content = content,
-        )
+        ) {
+            RingDecorFilm(design.decor?.back, design.decor, footprint, animates)
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    scaleX = factor
+                    scaleY = factor
+                },
+                contentAlignment = Alignment.Center,
+                content = content,
+            )
+            design.lottie?.let { PackLottieLayer(it, Modifier.size(footprint), animates = animates) }
+        }
+        RingDecorFilm(design.decor?.front, design.decor, footprint, animates)
     }
+}
+
+/**
+ * Un film d'un cadre illustré (#13960, miroir d'`AvatarRingDecorFilm`) : posé AVANT le contenu pour `back`, AU-DESSUS
+ * du contour pour `front`, carré, centré, de côté `reach ×` l'empreinte — il déborde ([wrapContentSize] sans borne) sans rien
+ * grandir ni décaler. Sans film, rien n'est composé.
+ */
+@Composable
+private fun BoxScope.RingDecorFilm(film: PackAssetRef?, decor: AvatarRingDecor?, footprint: Dp, animates: Boolean) {
+    if (film == null || decor == null) return
+    val side = decor.side(footprint.value).dp
+    PackLottieLayer(
+        film,
+        Modifier.matchParentSize().wrapContentSize(Alignment.Center, unbounded = true).requiredSize(side),
+        animates = animates,
+    )
 }

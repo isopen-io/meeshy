@@ -67,6 +67,7 @@ function makeGraphPrisma(graph: Graph = {}) {
     Array.isArray(value) ? (value as string[]) : [];
 
   return {
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn<any>(async ({ where }: any) => {
         const candidates = new Set([
@@ -379,6 +380,7 @@ describe('filterPostConsumers — une panne du graphe DM ne détruit pas ce qui 
 describe('canUserViewPost — branche référence', () => {
   function makeReferencePrisma(reference: unknown) {
     return {
+      userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
       friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
       participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
       postMention: { findUnique: jest.fn<any>().mockResolvedValue(reference) },

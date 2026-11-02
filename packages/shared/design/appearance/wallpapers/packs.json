@@ -388,79 +388,79 @@
     },
     "preview": null,
     "contract": {
-      "src": "05cbde79f9e17a45.json",
-      "bytes": 885,
-      "sha256": "05cbde79f9e17a45739a51adfe40b9c37d3821cfbe443d2584a9a2913aac3101"
+      "src": "3ddbd1bec7857519.json",
+      "bytes": 2622,
+      "sha256": "3ddbd1bec78575197d068ed55723665ccecb362e14cf2e06d7e3b789eaf68509"
     },
     "strings": {
       "fr": {
-        "src": "719ad4e6f7f32f25.json",
-        "bytes": 38,
-        "sha256": "719ad4e6f7f32f2535eea1001c58b7442c6fc6828ff51e03056949abbc52a20f"
+        "src": "a6df7f8a723130b1.json",
+        "bytes": 119,
+        "sha256": "a6df7f8a723130b16db1a70a1eeb9b639b65a8ff865a0d30784a4565dc6bd892"
       },
       "en": {
-        "src": "7b8b8526b2726c48.json",
-        "bytes": 36,
-        "sha256": "7b8b8526b2726c48c12a8985c62495970d148918ab7ea894e7f04f3fbc257f93"
+        "src": "07b88008a3bd8159.json",
+        "bytes": 107,
+        "sha256": "07b88008a3bd8159168abc42ecacc0cc01d895c39e8757065bc9f54af1c15935"
       },
       "es": {
-        "src": "86a14aa78f6e8226.json",
-        "bytes": 35,
-        "sha256": "86a14aa78f6e822612f0daa3bb4a697b74bf24ced30159ca9acefe78a38a2bd7"
+        "src": "0fade977aca9399a.json",
+        "bytes": 117,
+        "sha256": "0fade977aca9399a2e678a3189f072ca407c690071285529ecdd4f7c070bbce6"
       },
       "pt": {
-        "src": "f18c4ef2b98b4dd2.json",
-        "bytes": 36,
-        "sha256": "f18c4ef2b98b4dd29d463994aa9953feb5de029b6ff29a0555d6cd5de02c0066"
+        "src": "1013fba90d48db96.json",
+        "bytes": 113,
+        "sha256": "1013fba90d48db96303a88113ef8bb8254c951862b9e3e46a8334c64885e52ec"
       },
       "de": {
-        "src": "848abdb881bbc607.json",
-        "bytes": 41,
-        "sha256": "848abdb881bbc607686f58da06d4abd24915d5ba889e7e8f1e7291c7438d548c"
+        "src": "912152fe8f6c289c.json",
+        "bytes": 115,
+        "sha256": "912152fe8f6c289c739efaa54cccbdb6edebbf0b651c16120a8f139e0ca544d9"
       },
       "it": {
-        "src": "7b17dd59671a9292.json",
-        "bytes": 37,
-        "sha256": "7b17dd59671a92924170a2692c251e73daede565aa8476cbcf5b2799e4f8a99c"
+        "src": "d321aec28384e39c.json",
+        "bytes": 115,
+        "sha256": "d321aec28384e39ceb3a80a9662358ede2a615632d59f763e4e891363dabf930"
       },
       "ar": {
-        "src": "35dbf701b03e058c.json",
-        "bytes": 38,
-        "sha256": "35dbf701b03e058c8025856007799028079aeb96b33d4bfd0c7d201f59babaa0"
+        "src": "2e22e037a0dcc555.json",
+        "bytes": 130,
+        "sha256": "2e22e037a0dcc555f2962f6632f2d65b0dc040fe50a4ce6e4b3cb9ae24936b4b"
       }
     },
     "downloadBytes": {
-      "story": 885,
+      "story": 2622,
       "square": null
     },
     "names": {
       "fr": {
         "name": "Animés",
-        "description": "Des fonds qui respirent doucement."
+        "description": "La brume respire, des bulles montent, des pétales tombent."
       },
       "en": {
         "name": "Animated",
-        "description": "Wallpapers that breathe softly."
+        "description": "Mist that breathes, bubbles that rise, petals that fall."
       },
       "es": {
         "name": "Animados",
-        "description": "Fondos que respiran con suavidad."
+        "description": "La bruma respira, las burbujas suben, los pétalos caen."
       },
       "pt": {
         "name": "Animados",
-        "description": "Fundos que respiram suavemente."
+        "description": "A névoa respira, as bolhas sobem, as pétalas caem."
       },
       "de": {
         "name": "Animiert",
-        "description": "Hintergründe, die sanft atmen."
+        "description": "Nebel, der atmet, Blasen, die steigen, Blüten, die fallen."
       },
       "it": {
         "name": "Animati",
-        "description": "Sfondi che respirano piano."
+        "description": "La nebbia respira, le bolle salgono, i petali cadono."
       },
       "ar": {
         "name": "متحركة",
-        "description": "خلفيات تتنفس بهدوء."
+        "description": "ضباب يتنفس، وفقاعات تصعد، وبتلات تتساقط."
       }
     }
   }

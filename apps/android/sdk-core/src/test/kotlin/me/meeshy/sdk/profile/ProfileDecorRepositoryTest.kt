@@ -53,6 +53,40 @@ class ProfileDecorRepositoryTest {
     }
 
     @Test
+    fun `la reponse d un choix du compte quitte n habille pas le compte suivant`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val served = ServedProfileDecor(avatarRing = item("p", "ring-a"))
+        val s = scenario { coEvery { updateProfileDecor(any()) } coAnswers { gate.await(); ApiResponse(success = true, data = served) } }
+
+        val pending = async { s.repository.equip(item("p", "ring-a"), ProfileDecorSide.AVATAR_RING) }
+        advanceUntilIdle()
+        s.session.clear()
+        s.session.adopt(MeeshyUser(id = "b", username = "b", displayName = "B", profileDecor = ServedProfileDecor.EMPTY))
+        gate.complete(Unit)
+
+        assertThat(pending.await()).isEqualTo(ProfileDecorOutcome.Superseded)
+        assertThat(s.decor).isEqualTo(ServedProfileDecor.EMPTY)
+    }
+
+    @Test
+    fun `l echec d un choix du compte quitte ne restaure rien sur le compte suivant`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val bDecor = ServedProfileDecor(avatarRing = item("p", "ring-b"))
+        val s = scenario(ServedProfileDecor(avatarRing = item("p", "old-a"))) {
+            coEvery { updateProfileDecor(any()) } coAnswers { gate.await(); throw IOException("offline") }
+        }
+
+        val pending = async { s.repository.equip(item("p", "new-a"), ProfileDecorSide.AVATAR_RING) }
+        advanceUntilIdle()
+        s.session.clear()
+        s.session.adopt(MeeshyUser(id = "b", username = "b", displayName = "B", profileDecor = bDecor))
+        gate.complete(Unit)
+
+        assertThat(pending.await()).isEqualTo(ProfileDecorOutcome.Superseded)
+        assertThat(s.decor).isEqualTo(bDecor)
+    }
+
+    @Test
     fun `a failure rolls back only the touched side`() = runTest {
         val initial = ServedProfileDecor(avatarRing = item("p", "old"), banner = item("b", "keep"))
         val s = scenario(initial) { coEvery { updateProfileDecor(any()) } throws IOException("offline") }

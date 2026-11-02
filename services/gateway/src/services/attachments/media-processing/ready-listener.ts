@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { QueueEvents } from 'bullmq';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect } from '../attachmentIncludes';
+import { MESSAGE_SIDE_PROTECTION_SELECT } from '../mediaSideContent';
 import { emitAttachmentUpdated } from '../../../socketio/emitAttachmentUpdated';
 import { serializeAttachmentForSocket, type SocketAttachmentRow } from '../../../socketio/serializeAttachmentForSocket';
 import type { ConversationRoomEmitter } from '../../../socketio/emitToConversationParticipants';
@@ -23,6 +24,9 @@ import { MEDIA_QUEUE_NAME, mediaJobRef } from './jobs';
 import { mediaQueueConnection } from './queue';
 import { handleMediaReady, readMediaReadyNotice, type MediaReadyNotice, type MediaReadyPorts } from './ready-notifier';
 import { listenerLease, type LeaseClient } from './listener-lease';
+import { processAtRestFileAccess } from '../atRest/atRestFiles';
+import { sealAttachmentIfAtRest } from '../atRest/sealAttachmentFiles';
+import { gatewaySealDeps } from '../../messaging/sealMessageAttachments';
 
 const logger = enhancedLogger.child({ module: 'media-ready-listener' });
 
@@ -47,7 +51,10 @@ export function mediaReadyPorts(deps: MediaReadyListenerDeps): MediaReadyPorts {
     loadMessageAttachment: async (id) => {
       const row = await deps.prisma.messageAttachment.findUnique({
         where: { id },
-        select: { ...attachmentSocketSelect, processingState: true, message: { select: { conversationId: true } } },
+        // `message` REMPLACE celui d'`attachmentSocketSelect` : il garde donc la
+        // protection du porteur, sans quoi `servedDescription` servirait la
+        // description d'une pièce d'un message protégé (#12333).
+        select: { ...attachmentSocketSelect, processingState: true, message: { select: { conversationId: true, ...MESSAGE_SIDE_PROTECTION_SELECT } } },
       });
       return row as never;
     },
@@ -76,6 +83,15 @@ export function mediaReadyPorts(deps: MediaReadyListenerDeps): MediaReadyPorts {
       deps.io.to(ROOMS.user(userId)).emit(event, payload);
     },
     serialize: (row) => ('uploaderId' in row ? row : serializeAttachmentForSocket(row as unknown as SocketAttachmentRow)),
+    sealAtRest: async (id) => {
+      const access = processAtRestFileAccess();
+      if (!access) return;
+      await sealAttachmentIfAtRest(gatewaySealDeps(deps.prisma, access), id).catch((error: unknown) =>
+        logger.error('pièce jointe non scellée au repos après son rendu : la migration de rattrapage la reprendra', undefined, {
+          code: 'SERVER_AT_REST_FILE_SEAL_FAILED', attachmentId: id, reason: error instanceof Error ? error.name : 'unknown',
+        })
+      );
+    },
   };
 }
 

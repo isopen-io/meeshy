@@ -108,14 +108,12 @@ final class SharePendingSendConsumer {
     }
 
     nonisolated static func decoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = MeeshyCoders.decoder(.persistence)
         return decoder
     }
 
     nonisolated static func encoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let encoder = MeeshyCoders.encoder(.persistence)
         return encoder
     }
 
@@ -244,7 +242,7 @@ final class SharePendingSendConsumer {
     /// l'utilisateur sur Meeshy avant qu'il ait fini. Passé ce délai, ce qui
     /// reste est un VRAI orphelin (extension tuée entre la copie et
     /// l'écriture de la fiche, feuille abandonnée) — l'attendre une heure de
-    /// plus coûte au plus `ShareLimits.maxTotalBytes` (500 Mio) par partage
+    /// plus coûte au plus `ShareLimits.maxTotalBytes` (5 Gio) par partage
     /// abandonné, borné et négligeable face au risque de détruire un envoi
     /// en cours.
     nonisolated static let orphanMediaGracePeriod: TimeInterval = 3_600
@@ -252,8 +250,49 @@ final class SharePendingSendConsumer {
     private let queue: OfflineMessageQueueing
     private let logger = MeeshyLog.logger(.shareConsumer)
 
-    init(queue: OfflineMessageQueueing = OfflineQueue.shared) {
+    /// L'extension n'a pas la mémoire du compte : la cible qu'elle a jugée en
+    /// clair se relit ici par la loi du fil avant d'entrer dans la file (#12985).
+    private let destinationGuard: EndToEndDestinationGuard
+
+    /// Le refus se dit : l'extension avait annoncé « En file ».
+    private let notifyRefused: @MainActor () -> Void
+
+    init(
+        queue: OfflineMessageQueueing = OfflineQueue.shared,
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard(),
+        notifyRefused: @escaping @MainActor () -> Void = {
+            FeedbackToastManager.shared.showError(ForwardRefusalReason.encryptedDestination.explanation)
+        }
+    ) {
         self.queue = queue
+        self.destinationGuard = destinationGuard
+        self.notifyRefused = notifyRefused
+    }
+
+    /// **Une cible vue chiffrée de bout en bout sort de la fiche** (#12985,
+    /// audit M3). L'extension ne lit qu'un reflet de la mémoire du compte : ce
+    /// qu'elle a jugé en clair se relit ici par la loi du fil. La cible refusée
+    /// quitte la fiche — rien n'en part, rien n'entre dans la file — et, si
+    /// c'était l'ORIGINE qui portait les octets, la première cible gardée
+    /// devient l'origine : les suivantes copient d'elle au lieu d'attendre une
+    /// origine qui ne partira jamais, et la fiche se solde.
+    private func withoutEndToEndTargets(_ share: PendingShare, at url: URL) async -> PendingShare {
+        var refused = Set<Int>()
+        for (index, target) in share.targets.enumerated() where target.state != .sent {
+            if await destinationGuard.seals(target.conversationId) { refused.insert(index) }
+        }
+        guard !refused.isEmpty else { return share }
+        logger.warning("Partage différé : \(refused.count, privacy: .public) cible(s) chiffrée(s) de bout en bout retirée(s) avant la file")
+        notifyRefused()
+        var kept = share
+        kept.targets = share.targets.enumerated().filter { !refused.contains($0.offset) }.map(\.element)
+        if let origin = share.originTargetIndex {
+            kept.originTargetIndex = refused.contains(origin)
+                ? kept.targets.indices.first
+                : origin - refused.filter { $0 < origin }.count
+        }
+        if !kept.targets.isEmpty { try? Self.commit(kept, to: url) }
+        return kept
     }
 
     func consumeAll(
@@ -364,7 +403,12 @@ final class SharePendingSendConsumer {
         at url: URL,
         mediaRoot: URL?
     ) async {
-        var current = share
+        var current = await withoutEndToEndTargets(share, at: url)
+        guard !current.targets.isEmpty else {
+            remove(url, reason: "toutes les cibles sont chiffrées de bout en bout")
+            discardMedia(shareId: share.clientMessageId, in: mediaRoot)
+            return
+        }
         let origin = current.originTargetIndex ?? 0
 
         // L'ORIGINE d'abord, explicitement — pas par un tri : un prédicat

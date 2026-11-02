@@ -214,6 +214,16 @@ class MessageRepositoryFacadeTest {
     }
 
     @Test
+    fun `a server edit belongs to the mutation writer and passes its verdict through`() = runTest {
+        val fixture = Fixture()
+        coEvery { fixture.mutations.applyServerEdit(message()) } returns true
+
+        val applied = fixture.repository.applyServerEdit(message())
+
+        assertThat(applied).isTrue()
+    }
+
+    @Test
     fun `inbound translations and transcriptions belong to the enrichment writer`() = runTest {
         val fixture = Fixture()
 

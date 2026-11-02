@@ -2,7 +2,6 @@ package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
 import org.json.JSONObject
@@ -75,7 +74,7 @@ class PreferencesSocketManager @Inject constructor(
 
     /** Conversation-scope preference snapshots, versioned, in broadcast order. */
     val conversationPreferencesUpdated: SharedFlow<UserPreferencesConversationUpdatedSocketData> =
-        _conversationPreferencesUpdated.asSharedFlow()
+        _conversationPreferencesUpdated.exposed()
 
     private val _categoryPreferencesUpdated =
         SocketInboundRoute.subject<String>()
@@ -84,7 +83,7 @@ class PreferencesSocketManager @Inject constructor(
      * User-level preference categories that changed elsewhere — the NAME only
      * (`privacy`, `notification`, …), which is all the broadcast carries.
      */
-    val categoryPreferencesUpdated: SharedFlow<String> = _categoryPreferencesUpdated.asSharedFlow()
+    val categoryPreferencesUpdated: SharedFlow<String> = _categoryPreferencesUpdated.exposed()
 
     fun attach() {
         router.install(listOf(SocketInboundRoute.raw(EVENT, handle = ::route)))
@@ -92,7 +91,7 @@ class PreferencesSocketManager @Inject constructor(
 
     private fun route(raw: JSONObject) {
         if (raw.optString(CONVERSATION_SCOPE_KEY).isNotEmpty()) {
-            _conversationPreferencesUpdated.tryEmit(
+            _conversationPreferencesUpdated.emitArrived(
                 json.decodeFromString<UserPreferencesConversationUpdatedSocketData>(raw.toString()),
             )
             return
@@ -101,7 +100,7 @@ class PreferencesSocketManager @Inject constructor(
         // it straight off the payload keeps the community arm (which has neither key)
         // silently ignored, as it has no Android reader to go stale.
         val category = raw.optString(CATEGORY_SCOPE_KEY)
-        if (category.isNotEmpty()) _categoryPreferencesUpdated.tryEmit(category)
+        if (category.isNotEmpty()) _categoryPreferencesUpdated.emitArrived(category)
     }
 
     private companion object {

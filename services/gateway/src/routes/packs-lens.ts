@@ -10,6 +10,7 @@
  *   - `GET    /packs/lens/pending`          la file de modération (`canModerateContent`) ;
  *   - `POST   /packs/lens/:slug/review`     publier ou refuser, en FIXANT la fenêtre et les communautés ;
  *   - `POST   /packs/lens/:slug/withdraw`   retirer une lens publiée (`canModerateContent`) ;
+ *   - `POST   /packs/lens/:slug/restore`    rétablir une lens retirée (`canModerateContent`, #12321) ;
  *   - `GET    /packs/lens/:slug/document`   le document servi, pour l'auteur, la modération, et à qui la lens est offerte.
  *
  * Chaque geste de modération s'écrit au journal d'audit AVANT d'agir : journal
@@ -134,7 +135,7 @@ export type LensPacksRoutesOptions = {
 /** Le moteur des packs pour le domaine `lens` : aucun registre officiel, le seul magasin des partenaires. */
 export function lensPackCatalog(fastify: FastifyInstance, options: LensPacksRoutesOptions = {}): { readonly catalog: PackCatalog<LensPackDetail, LensPackDetail>; readonly packs: LensPacks } {
   const now = options.now ?? (() => new Date());
-  const packs = options.packs ?? new LensPacks({ prisma: fastify.prisma, now });
+  const packs = options.packs ?? new LensPacks({ prisma: fastify.prisma, now, broadcast: packInstallationBroadcaster(fastify) });
   const audience = options.audience ?? ((userId: string) => readPackAudience(fastify.prisma, userId));
   const catalog = new PackCatalog<LensPackDetail, LensPackDetail>({
     prisma: fastify.prisma,
@@ -284,6 +285,36 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
           return sendSuccess(reply, outcome.pack);
         case 'not-found':
           return sendNotFound(reply, 'No published lens under this name', { code: LENS_PACK_ERROR_CODES.NOT_FOUND });
+        case 'audit-unavailable':
+          return auditUnavailable(reply);
+      }
+    }),
+  );
+
+  fastify.post<{ Params: { slug: string }; Body: unknown }>(
+    '/:slug/restore',
+    {
+      onRequest: [fastify.authenticate, requireModerator],
+      schema: {
+        description:
+          'Rétablit une lens RETIRÉE par erreur (#12321) avec un mot facultatif : elle revient publiée. Ses installations retirées ne reviennent pas — chacun la réinstalle. ' +
+          'Journalisé avant d’agir, puis son issue ; 404 si aucune lens retirée ne porte ce nom.',
+        tags: [...tags, 'admin'],
+        summary: 'Restore a withdrawn lens',
+        params: packSlugParamsJsonSchema,
+        body: { type: 'object', properties: { note: { type: 'string' } } },
+        response: { 200: packEnvelope(lensPackJsonSchema), ...PACK_ERRORS },
+      },
+    },
+    guard(`[POST ${basePath}/:slug/restore]`, async (request: PackSlugRequest, reply, viewer) => {
+      const body = withdrawSchema.safeParse(request.body ?? {});
+      if (!body.success) return sendBadRequest(reply, 'Invalid restoration', { code: 'VALIDATION_ERROR' });
+      const outcome = await packs.restore(viewer.userId, request.params.slug, { note: body.data.note ?? null });
+      switch (outcome.kind) {
+        case 'restored':
+          return sendSuccess(reply, outcome.pack);
+        case 'not-found':
+          return sendNotFound(reply, 'No withdrawn lens under this name', { code: LENS_PACK_ERROR_CODES.NOT_FOUND });
         case 'audit-unavailable':
           return auditUnavailable(reply);
       }

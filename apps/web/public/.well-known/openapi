@@ -1,0 +1,7 @@
+{
+  "openapi": "https://gate.meeshy.me/docs/json",
+  "documentation": "https://gate.meeshy.me/docs",
+  "version": "3.1",
+  "description": "Spécification OpenAPI de l'API Meeshy. Auth : Authorization: Bearer {jwt} (inscrits) ou X-Session-Token (anonymes). Les conversations chiffrées de bout en bout ne sont jamais lisibles côté serveur.",
+  "llms": "https://meeshy.me/llms.txt"
+}

@@ -235,7 +235,7 @@ final class StoryLongPressToggleGuardTests: XCTestCase {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryGestureOverlayView.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryGestureOverlayView.swift"),
             encoding: .utf8
         )
 
@@ -277,7 +277,7 @@ final class StoryReaderFeatureDismissGuardTests: XCTestCase {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/\(file)"),
+                .appendingPathComponent(AppSourceGuard.featureViewPath(file)),
             encoding: .utf8
         )
     }

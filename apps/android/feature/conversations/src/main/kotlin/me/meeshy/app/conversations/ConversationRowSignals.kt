@@ -42,6 +42,14 @@ data class ConversationRowSignals(
     }
 }
 
+/** Le « ici » servi, dans le vocabulaire de l'avatar (les deux énumérations se miroitent, valeur pour valeur). */
+internal fun ConversationHere.toAvatarHere(): me.meeshy.sdk.model.avatar.ConversationHere = when (this) {
+    ConversationHere.ABSENT -> me.meeshy.sdk.model.avatar.ConversationHere.ABSENT
+    ConversationHere.HERE -> me.meeshy.sdk.model.avatar.ConversationHere.HERE
+    ConversationHere.ACTIVE -> me.meeshy.sdk.model.avatar.ConversationHere.ACTIVE
+    ConversationHere.FOCUSED -> me.meeshy.sdk.model.avatar.ConversationHere.FOCUSED
+}
+
 /** Assemble les [ConversationRowSignals] depuis leurs sources ; construit par Hilt, injecté au ViewModel. */
 class ConversationListRowSignals @Inject constructor(
     private val outbox: OutboxRepository,

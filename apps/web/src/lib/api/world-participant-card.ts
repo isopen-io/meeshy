@@ -65,6 +65,8 @@ const WireCard = z.object({
   participantId: z.string().check(z.minLength(1)),
   participantType: z.enum(['anonymous', 'user', 'bot']),
   displayName: z.string(),
+  /* Le visage (#12571) — absent chez une passerelle plus ancienne : `null`, la fiche reste lisible. */
+  avatar: z.optional(nullableText),
   username: nullableText,
   conversationRole: z.string(),
   accountRole: nullableText,
@@ -85,7 +87,7 @@ const WireCard = z.object({
 
 export function decodeWorldParticipantCard(raw: unknown): WorldParticipantCard | null {
   const parsed = WireCard.safeParse(raw);
-  return parsed.success ? parsed.data : null;
+  return parsed.success ? { ...parsed.data, avatar: parsed.data.avatar ?? null } : null;
 }
 
 /** Un REFUS (403) : la porte s'est fermée — l'écran ne montre rien, il ne dit pas pourquoi. */

@@ -66,7 +66,7 @@ struct RootView: View {
     @State private var showMenu = false
     /// Drives the immersive reels overlay. A long-press on the feed button (or a
     /// tap on a reel card in the feed) sets `reelsPresenter.launch`.
-    @ObservedObject private var reelsPresenter = ReelsPresenter.shared
+    @ObservedObject private var reelsPresenter: ReelsPresenter
     /// Liquid "water wave" reveal of the reels overlay. `reelsRevealProgress`
     /// drives the `LiquidRevealShape` mask 0→1 (open) / 1→0 (close) from the
     /// feed button's on-screen position. `reelsRevealCompleted` gates the first
@@ -121,7 +121,7 @@ struct RootView: View {
     @State private var floatingGeometry: FloatingButtonGeometry?
     /// L'onboarding recouvre le chrome ; les boutons flottants, posés au-dessus
     /// du chrome, s'effacent tant qu'il est là.
-    @ObservedObject private var onboardingPresence = OnboardingPresenceSignal.shared
+    @ObservedObject private var onboardingPresence: OnboardingPresenceSignal
 
     // Scroll visibility state (passed from ConversationListView)
     @State private var isScrollingDown = false
@@ -141,12 +141,15 @@ struct RootView: View {
     /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
     @ObservedObject private var upgradeGate: UpgradeGateController
 
-    init(scope: RootScopeModels) {
+    init(scope: RootScopeModels, reelsPresenter: ReelsPresenter = .shared,
+         onboardingPresence: OnboardingPresenceSignal = .shared) {
         _storyViewModel = ObservedObject(wrappedValue: scope.story)
         _statusViewModel = ObservedObject(wrappedValue: scope.status)
         conversationVMOwner = scope.conversations
         _notifications = ObservedObject(wrappedValue: scope.notifications)
         _upgradeGate = ObservedObject(wrappedValue: scope.upgradeGate)
+        _reelsPresenter = ObservedObject(wrappedValue: reelsPresenter)
+        _onboardingPresence = ObservedObject(wrappedValue: onboardingPresence)
     }
 
     var body: some View {
@@ -396,7 +399,7 @@ struct RootView: View {
 
         // Deferred cleanup
         Task.detached(priority: .background) {
-            try? await Task.sleep(for: .seconds(5))
+            guard await cancellableSleep(for: .seconds(5)) else { return }
             await ConversationSyncEngine.shared.cleanupRetentionIfNeeded()
         }
 
@@ -419,6 +422,12 @@ struct RootView: View {
                         content: entry.content, publishedAt: entry.createdAt),
                 conversationList: conversationViewModel
             )
+        }
+
+        // En conversation, la boule de mood ouvre la page plein écran de
+        // l'humeur (#13987) — la même que la notification « nouvelle humeur ».
+        StatusBubbleController.shared.onOpenSpotlight = { entry in
+            router.push(.moodSpotlight(statusId: entry.id))
         }
 
         // Republication d'un mood : câblé ICI (hôte racine de la bulle)
@@ -456,9 +465,7 @@ struct RootView: View {
 
     private func handleSendMessageToUser(_ notification: Notification) {
         guard let targetUserId = notification.object as? String else { return }
-        if let existingConv = conversationViewModel.conversations.first(where: {
-            $0.type == .direct && $0.participantUserId == targetUserId
-        }) {
+        if let existingConv = DirectConversationResolver.loaded(with: targetUserId, in: conversationViewModel.conversations) {
             router.navigateToConversation(existingConv)
             return
         }
@@ -850,7 +857,7 @@ struct RootView: View {
         // over the poster that stays underneath (`ReelVideoView` keeps `ReelPoster`
         // behind the surface) → seamless, no flash and no black gap.
         Task {
-            try? await Task.sleep(for: .seconds(duration))
+            guard await cancellableSleep(for: .seconds(duration)) else { return }
             guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
             reelsRevealMasked = false
             reelsRevealCompleted = true
@@ -883,7 +890,7 @@ struct RootView: View {
             reelsRevealProgress = 0
         }
         Task {
-            try? await Task.sleep(for: .seconds(duration))
+            guard await cancellableSleep(for: .seconds(duration)) else { return }
             reelsPresenter.dismiss()
             reelsRevealClosing = false
         }

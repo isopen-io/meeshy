@@ -8,17 +8,18 @@ import os
 /// Manages mention autocomplete for any text composer (conversation, comments,
 /// story comments, composer draft…).
 ///
-/// **La règle du porteur (#7847, 2026-09-24)**, appliquée à la lettre :
+/// **La règle du porteur (#7847, #14053)**, appliquée
+/// à la lettre :
 ///
 /// | frappe | ce qui répond | réseau |
 /// |---|---|---|
 /// | `@` | contacts (cache) puis participants du contexte | aucun — le cache des contacts se réchauffe s'il est vide ou périmé |
 /// | `@a` | les mêmes, filtrés localement | aucun |
-/// | `@al` | les mêmes filtrés, puis les AUTRES trouvés au réseau | une recherche |
-/// | `@ali…` | affinage local instantané, puis recherche relancée (débounce) | les autres déjà connus restent affichés |
+/// | `@al` | les mêmes filtrés ; s'il n'y en a AUCUN, le serveur | une recherche seulement sans correspondance locale |
+/// | `@ali…` | les mêmes filtrés, puis le SERVEUR dans son ordre | une recherche (débounce) ; les autres déjà connus restent affichés |
 ///
-/// L'ÉTAPE est `MentionLookupRule.stage(for:)` et l'ORDRE (contacts →
-/// participants → autres, sans doublon, jamais soi) est `MentionSuggestionRule`
+/// L'ÉTAPE est `MentionLookupRule.stage(for:localMatchCount:)` et l'ORDRE
+/// (locaux → serveur dans son ordre, sans doublon, jamais soi) est `MentionSuggestionRule`
 /// — deux règles pures du SDK, partagées avec `MentionSuggestionsModel`.
 /// L'orchestration du cache des contacts est `MentionContactsStore` (app).
 @MainActor
@@ -83,10 +84,16 @@ public final class MentionComposerController: ObservableObject {
     private let currentUserId: String?
     private let debounceNanoseconds: UInt64
     private var participants: () -> [MentionCandidate]
+    /// Ce qu'une mention ferait dans la conversation (#14066, #14071), posé par
+    /// l'hôte qui la connaît ; `nil` hors conversation (post, brouillon).
+    private(set) var target: ConversationMentionTarget?
     /// Les « autres » rendus par la DERNIÈRE recherche distante. Ils restent
     /// affichés, refiltrés par la requête courante, pendant que la suivante
     /// est en vol — c'est ce qui affine sans clignoter.
     private var others: [MentionCandidate] = []
+    /// La requête à laquelle `others` RÉPOND : servis tels quels pour elle,
+    /// refiltrés pour une frappe plus récente (cf. `MentionSuggestionRule`).
+    private var othersQuery: String?
     private var debounceTask: Task<Void, Never>?
     private var warmTask: Task<Void, Never>?
 
@@ -136,6 +143,60 @@ public final class MentionComposerController: ObservableObject {
         recompute()
     }
 
+    /// **Borne la liste à ce qu'une mention ferait ICI** (#14071) : le type de
+    /// la conversation (`direct`, `group`, `public`…) et, pour une directe, son
+    /// interlocuteur. Une suggestion sans effet à l'envoi n'est pas affichée ;
+    /// un type inconnu, ou un lecteur qui n'est pas membre, ne propose personne
+    /// et n'interroge pas le réseau.
+    ///
+    /// `servedMembers` lit les participants ACTIFS servis de la conversation
+    /// (cache d'abord), à la première frappe du `@` : ce sont les membres que la
+    /// liste propose en local — et le lecteur parmi eux prouve son appartenance
+    /// quand la ligne ouverte ne portait pas son rang.
+    func scope(to target: ConversationMentionTarget, servedMembers: ServedMembersLoader? = nil) {
+        if target.conversationId != self.target?.conversationId { servedMemberIds = [] }
+        self.target = target
+        self.servedMembersLoader = servedMembers
+        recompute()
+    }
+
+    /// Les participants actifs servis, lus par `servedMembersLoader`.
+    private var servedMemberIds: Set<String> = []
+    private var servedMembersLoader: ServedMembersLoader?
+    private var membersTask: Task<Void, Never>?
+
+    /// Les membres que le fil SAIT actifs : soi, l'interlocuteur et les
+    /// participants servis. Jamais les auteurs de l'historique, dont certains
+    /// sont partis et seraient proposés puis ignorés à l'envoi — sauf pour un
+    /// INVITÉ de lien, à qui la passerelle ne sert que ces auteurs (#10205).
+    private var reach: MentionReach? {
+        guard let target else { return nil }
+        let guestAuthors = target.isGuest ? participants().map(\.id) : []
+        let known = [target.interlocutorId, currentUserId].compactMap { $0 } + guestAuthors
+        let member = target.isMember || currentUserId.map(servedMemberIds.contains) == true
+        return MentionReach(conversationType: target.conversationType, isMember: member,
+                            memberIds: Set(known).union(servedMemberIds))
+    }
+
+    /// Sans portée (type inconnu, non-membre), la passerelle refuserait la
+    /// recherche ; un invité n'y a pas accès (`allowAnonymous: false`).
+    private var mayAskTheNetwork: Bool {
+        guard let reach else { return true }
+        return reach.scope != nil && target?.isGuest != true
+    }
+
+    private func loadServedMembers() {
+        guard let loader = servedMembersLoader, let conversationId = target?.conversationId,
+              target?.isGuest != true else { return }
+        membersTask?.cancel()
+        membersTask = Task { [weak self] in
+            let ids = await loader(conversationId)
+            guard let self, !Task.isCancelled, self.target?.conversationId == conversationId else { return }
+            self.servedMemberIds = Set(ids)
+            self.recompute()
+        }
+    }
+
     /// Change le contexte distant d'un hôte qui SURVIT à son sujet (la barre
     /// du lecteur de story passe d'une story à la suivante sans se démonter).
     /// Une liste ouverte sur l'ancien contexte se referme.
@@ -163,12 +224,12 @@ public final class MentionComposerController: ObservableObject {
         activeQuery = query
         debounceTask?.cancel()
 
-        let stage = MentionLookupRule.stage(for: query)
-        if stage != .remote { others = [] }
+        let stage = MentionLookupRule.stage(for: query, localMatchCount: localMatchCount(for: query))
+        if stage != .remote { dropOthers() }
         recompute()
-        if opening { warmContacts() }
+        if opening { warmContacts(); loadServedMembers() }
 
-        guard stage == .remote else {
+        guard stage == .remote, mayAskTheNetwork else {
             isResolving = false
             return
         }
@@ -181,7 +242,7 @@ public final class MentionComposerController: ObservableObject {
         debounceTask = nil
         warmTask?.cancel()
         warmTask = nil
-        others = []
+        dropOthers()
         activeQuery = nil
         suggestions = []
         isResolving = false
@@ -236,6 +297,7 @@ public final class MentionComposerController: ObservableObject {
                 let found = try await self.remoteCandidates(for: query)
                 guard !Task.isCancelled else { return }
                 self.others = found
+                self.othersQuery = query
                 self.recompute()
                 self.isResolving = false
             } catch is CancellationError {
@@ -266,14 +328,31 @@ public final class MentionComposerController: ObservableObject {
         }
     }
 
+    private func dropOthers() {
+        others = []
+        othersQuery = nil
+    }
+
+    private func localMatchCount(for query: String) -> Int {
+        MentionSuggestionRule.localMatches(
+            contacts: contacts.snapshot,
+            participants: participants(),
+            query: query,
+            excludingUserId: currentUserId,
+            reach: reach
+        ).count
+    }
+
     private func recompute() {
         guard let query = activeQuery else { return }
         suggestions = MentionSuggestionRule.ordered(
             contacts: contacts.snapshot,
             participants: participants(),
             others: others,
+            othersQuery: othersQuery,
             query: query,
-            excludingUserId: currentUserId
+            excludingUserId: currentUserId,
+            reach: reach
         )
     }
 }

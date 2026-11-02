@@ -170,4 +170,40 @@ final class MentionServiceTests: XCTestCase {
         XCTAssertEqual(contextIdItem?.value, "conv-123")
         XCTAssertEqual(contextTypeItem?.value, "conversation")
     }
+
+    // MARK: - group (#14052) — additif et tolérant
+
+    private func decodeSuggestion(_ json: String) throws -> MentionSuggestion {
+        try JSONDecoder().decode(MentionSuggestion.self, from: Data(json.utf8))
+    }
+
+    func test_decode_group_readsEachServedGroup() throws {
+        let groups: [(String, MentionSuggestionGroup)] = [
+            ("known", .known), ("context", .context), ("contact", .contact), ("directory", .directory)
+        ]
+        for (raw, expected) in groups {
+            let suggestion = try decodeSuggestion(#"{"id":"u1","username":"ana","group":"\#(raw)"}"#)
+            XCTAssertEqual(suggestion.group, expected)
+        }
+    }
+
+    func test_decode_withoutGroup_fromAnOlderGateway_decodesWithNilGroup() throws {
+        let suggestion = try decodeSuggestion(#"{"id":"u1","username":"ana","displayName":"Ana","isFriend":true}"#)
+        XCTAssertNil(suggestion.group)
+        XCTAssertEqual(suggestion.displayName, "Ana")
+        XCTAssertEqual(suggestion.isFriend, true)
+    }
+
+    func test_decode_unknownOrUnreadableGroup_neverFailsTheSuggestion() throws {
+        XCTAssertNil(try decodeSuggestion(#"{"id":"u1","username":"ana","group":"futur"}"#).group)
+        XCTAssertNil(try decodeSuggestion(#"{"id":"u1","username":"ana","group":42}"#).group)
+        XCTAssertNil(try decodeSuggestion(#"{"id":"u1","username":"ana","group":null}"#).group)
+    }
+
+    func test_decode_listInServerOrder_keepsEachGroup() throws {
+        let json = #"[{"id":"k","username":"kim","group":"known"},{"id":"d","username":"dan","group":"directory"}]"#
+        let list = try JSONDecoder().decode([MentionSuggestion].self, from: Data(json.utf8))
+        XCTAssertEqual(list.map(\.id), ["k", "d"])
+        XCTAssertEqual(list.map(\.group), [.known, .directory])
+    }
 }

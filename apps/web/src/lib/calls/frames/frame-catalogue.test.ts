@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { captureFrames, RAW_MOOD_FILES } from './frame-catalogue';
-import { bucketOf, expandMotif, framesFor, moodsFor, reconcileFrame } from './frame-filter';
-import { DUO_ONLY_ARRANGEMENTS, FRAME_MOODS, FrameMoodFileSchema, type CaptureFrame, type FrameMotif } from './frame-spec';
+import { bucketOf, expandMotif, framesFor, moodsFor, reconcileFrame, styledFrame, stylesOf } from './frame-filter';
+import { DUO_ONLY_ARRANGEMENTS, FRAME_MOODS, FRAME_NAME_LANGUAGES, FrameMoodFileSchema, frameDisplayName, type CaptureFrame, type FrameMotif } from './frame-spec';
 
 const PRODUCT_PEOPLE = [2, 3, 4, 5, 6] as const;
 
@@ -18,6 +18,22 @@ describe('le catalogue des cadres de capture', () => {
       return parsed.success ? parsed.data.motifs.filter((motif) => motif.mood !== parsed.data.mood || !motif.id.startsWith(`${parsed.data.mood}.`)).map((motif) => motif.id) : [];
     });
     expect(strays).toEqual([]);
+  });
+
+  test('chaque cadre déplié, et chacune de ses déclinaisons, garde son nom dans les sept langues (#13953)', () => {
+    const missing = captureFrames().flatMap((frame) =>
+      [frame, ...stylesOf(frame).map((style) => styledFrame(frame, style))].flatMap((owner) =>
+        FRAME_NAME_LANGUAGES.filter((language) => (owner.localizedNames?.[language] ?? '').length === 0).map((language) => `${owner.id}:${language}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+    const fete = captureFrames().find((frame) => frame.id === 'jovial.fete.duo');
+    if (fete === undefined) throw new Error('jovial.fete.duo absent');
+    expect(frameDisplayName(fete, 'en')).toBe('Party');
+    expect(fete.name).toBe('Fête');
+    const relief = stylesOf(fete)[0];
+    if (relief === undefined) throw new Error('Fête sans déclinaison');
+    expect(frameDisplayName(relief, 'it')).toBe('Rilievo');
   });
 
   test('une centaine de cadres au moins', () => {

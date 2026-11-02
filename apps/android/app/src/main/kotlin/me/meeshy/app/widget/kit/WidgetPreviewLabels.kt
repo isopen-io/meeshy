@@ -18,4 +18,13 @@ internal fun widgetPreviewLabels(context: Context): LastMessagePreviewLabels =
         you = context.getString(ConversationsR.string.conversations_preview_you),
         senderFormat = context.getString(ConversationsR.string.conversations_preview_sender_format),
         draftPrefix = context.getString(ConversationsR.string.conversations_preview_draft_prefix),
+        expired = context.getString(ConversationsR.string.conversations_preview_expired),
+        hidden = context.getString(ConversationsR.string.conversations_preview_hidden),
+        viewOnce = context.getString(ConversationsR.string.conversations_preview_view_once),
+        encrypted = context.getString(ConversationsR.string.conversations_preview_end_to_end),
+        sticker = context.getString(ConversationsR.string.conversations_preview_sticker),
     ).withMediaKinds(ResourceMediaKindStrings(context))
+
+/** Le libellé d'un contenu qui disparaît (flamme à durée ou après lecture) : iOS `exit.preview.ephemeral`. */
+internal fun widgetEphemeralLabel(context: Context): String =
+    context.getString(ConversationsR.string.conversations_preview_ephemeral_content_description)

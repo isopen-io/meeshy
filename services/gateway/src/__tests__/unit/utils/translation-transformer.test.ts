@@ -105,7 +105,7 @@ describe('transformTranslationsToArray', () => {
     expect(result[0].encryptionKeyId).toBeUndefined();
   });
 
-  it('propagates encryption fields when set', () => {
+  it('never serves an entry that is still encrypted at rest as text (#12822)', () => {
     const encrypted: MessageTranslationJSON = {
       ...EN_ENTRY,
       isEncrypted: true,
@@ -113,11 +113,9 @@ describe('transformTranslationsToArray', () => {
       encryptionIv: 'iv-1',
       encryptionAuthTag: 'tag-1',
     };
-    const result = transformTranslationsToArray('msg-9', { en: encrypted });
-    expect(result[0].isEncrypted).toBe(true);
-    expect(result[0].encryptionKeyId).toBe('key-1');
-    expect(result[0].encryptionIv).toBe('iv-1');
-    expect(result[0].encryptionAuthTag).toBe('tag-1');
+    const result = transformTranslationsToArray('msg-9', { en: encrypted, fr: { ...EN_ENTRY, text: 'Bonjour' } });
+    expect(result.map((t) => t.targetLanguage)).toEqual(['fr']);
+    expect(JSON.stringify(result)).not.toContain('key-1');
   });
 });
 

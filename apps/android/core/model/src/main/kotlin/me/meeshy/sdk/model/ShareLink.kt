@@ -159,6 +159,8 @@ data class JoinedConversation(
     val title: String? = null,
     val type: String = "",
     val allowViewHistory: Boolean = false,
+    /** Les familles de pieces jointes que le lien ouvre ; absent = le lien ne restreint rien (#10001). */
+    val allowedAttachmentKinds: List<String>? = null,
 )
 
 @Serializable

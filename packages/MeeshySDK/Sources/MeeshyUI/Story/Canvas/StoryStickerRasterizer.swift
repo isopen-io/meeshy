@@ -96,7 +96,9 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
         ]
         let attributed = NSAttributedString(string: emoji, attributes: attributes)
         let textSize = attributed.size()
-        let renderer = UIGraphicsImageRenderer(size: textSize)
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.scale = SceneRasterBudget.scale(for: textSize, preferred: format.scale)
+        let renderer = UIGraphicsImageRenderer(size: textSize, format: format)
         let image = renderer.image { _ in attributed.draw(at: .zero) }
         guard let cgImage = image.cgImage else { return nil }
 

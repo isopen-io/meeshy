@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: socle-pipeline-push-et-cycle-de-vie — canaux de notification par categorie. -->
+<resources>
+    <string name="push_channel_social_name">Social</string>
+    <string name="push_channel_social_description">Curtidas, comentários, stories e contatos</string>
+    <string name="push_channel_system_name">Conta e segurança</string>
+    <string name="push_channel_system_description">Alertas de segurança, denúncias e mensagens do serviço</string>
+    <string name="push_channel_silent_name">Notificações silenciosas</string>
+    <string name="push_channel_silent_description">Entregues sem som durante as horas de silêncio ou quando uma categoria está desativada</string>
+</resources>

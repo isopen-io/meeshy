@@ -83,6 +83,7 @@ function makePrisma(store: Store) {
         return row ? project(row, args.select) : null;
       }),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: { findMany: query(store.friendRequests ?? []) },
     userPreferences: { findMany: query(store.preferences ?? []) },
     userPreference: { findMany: query([]) },

@@ -10,6 +10,8 @@ const arShellLabels = {
   'thread.header.back.unread.one': 'رجوع — {count} رسالة غير مقروءة في مكان آخر',
   'thread.header.back.unread.other': 'رجوع — {count} رسائل غير مقروءة في أماكن أخرى',
   'thread.header.details': 'تفاصيل المحادثة',
+  'thread.header.encryption.endToEnd': 'مشفّرة من طرف إلى طرف',
+  'thread.header.encryption.server': 'مشفّرة على الخادم',
   'thread.scrollToBottom': 'التمرير إلى الأسفل',
   'thread.scrollToBottom.unread.one': '{count} رسالة غير مقروءة، التمرير إلى الأسفل',
   'thread.scrollToBottom.unread.other': '{count} رسائل غير مقروءة، التمرير إلى الأسفل',

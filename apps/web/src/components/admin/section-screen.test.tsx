@@ -62,7 +62,7 @@ describe('AdminSectionScreen — la garde de tout écran de section', () => {
     expect(host.querySelector('header h1')).toBeNull();
   });
 
-  test('retour par défaut d’une liste : le hub de l’ESPACE COURANT, libellé « Administration »', async () => {
+  test('retour par défaut d’une liste : le hub de l’ESPACE COURANT, libellé « Tableau de bord », le nom que le menu lui donne (#12670)', async () => {
     const host = await mount(
       <AdminSectionScreen section="users" language="fr" title="Comptes">
         {() => <p>c</p>}
@@ -70,7 +70,7 @@ describe('AdminSectionScreen — la garde de tout écran de section', () => {
       BIGBOSS,
     );
     expect(host.querySelector('[data-admin-back]')?.getAttribute('href')).toBe('/admin');
-    expect(host.querySelector('[data-admin-back-label]')?.textContent).toBe('Administration');
+    expect(host.querySelector('[data-admin-back-label]')?.textContent).toBe('Tableau de bord');
   });
 
   test('`back="list"` mène à l’application, libellé « Retour à l’application »', async () => {

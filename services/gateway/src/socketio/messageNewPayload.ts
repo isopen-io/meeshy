@@ -1,4 +1,5 @@
 import type { Message } from '@meeshy/shared/types/index';
+import { e2eeUpgradeRequired } from '../services/e2ee/e2ee-upgrade-required';
 import { hasPerReaderEphemeralDeadline } from '@meeshy/shared/utils/ephemeral-countdown';
 import { servedMessageSender } from '@meeshy/shared/utils/participant-helpers';
 import { resolveWireSenderId } from './messageEditedPayload';
@@ -233,5 +234,6 @@ export function buildMessageNewPayload(
     encryptedContent: message.encryptedContent,
     encryptionMetadata: message.encryptionMetadata,
     encryptedPayload: buildEncryptedPayload(message),
+    e2eeUpgradeRequired: e2eeUpgradeRequired(message),
   };
 }

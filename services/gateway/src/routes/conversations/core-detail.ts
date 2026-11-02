@@ -14,7 +14,7 @@ import {
   validationErrorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation, refuserCommeIntrouvable, resolveCallerParticipant } from './utils/access-control';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
@@ -373,7 +373,7 @@ export function registerConversationDetailRoute(
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier les permissions d'accès
@@ -395,7 +395,7 @@ export function registerConversationDetailRoute(
       }) as Record<string, any> | null;
 
       if (!conversation) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur.
@@ -654,7 +654,7 @@ export function registerConversationAnalysisRoute(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);

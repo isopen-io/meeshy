@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.accent.auto",
+          "androidName": "conversation_appearance_accent_auto",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.entry.title",
+          "androidName": "conversation_appearance_entry_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.error",
+          "androidName": "conversation_appearance_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.photo.blur",
+          "androidName": "conversation_appearance_photo_blur",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.photo.label",
+          "androidName": "conversation_appearance_photo_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.photo.empty",
+          "androidName": "conversation_appearance_photo_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.photo.veil",
+          "androidName": "conversation_appearance_photo_veil",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.reset",
+          "androidName": "conversation_appearance_reset",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.section.accent",
+          "androidName": "conversation_appearance_section_accent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.section.models",
+          "androidName": "conversation_appearance_section_models",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.section.photo",
+          "androidName": "conversation_appearance_section_photo",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.section.solid",
+          "androidName": "conversation_appearance_section_solid",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.sheet.title",
+          "androidName": "conversation_appearance_sheet_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.appearance.signature",
+          "androidName": "conversation_appearance_signature",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.done",
+          "androidName": "common_done",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

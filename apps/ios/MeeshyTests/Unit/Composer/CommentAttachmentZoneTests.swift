@@ -272,7 +272,7 @@ final class CommentAttachmentZoneMountingGuardTests: XCTestCase {
         let hosts = [
             "Views/FeedCommentsSheet+Attachments.swift",
             "Views/PostDetailView+CommentComposer.swift",
-            "Views/StoryViewerView+CanvasComposerBar.swift",
+            "../Stories/Views/StoryViewerView+CanvasComposerBar.swift",
         ]
         for host in hosts {
             let code = try source(host)
@@ -292,7 +292,7 @@ final class CommentAttachmentZoneMountingGuardTests: XCTestCase {
             XCTAssertTrue(code.contains("CommentComposerStaging.pendingMedia(in:"), "\(host) n'envoie pas toute la zone.")
             XCTAssertFalse(code.contains("firstPendingMedia"), "\(host) montre plusieurs pièces et n'en envoie qu'une.")
         }
-        let story = try source("Views/StoryViewerView+CanvasComposerBar.swift")
+        let story = try source("../Stories/Views/StoryViewerView+CanvasComposerBar.swift")
         XCTAssertTrue(story.contains("firstPendingMedia"))
         XCTAssertTrue(story.contains("static let mediaLimit = 1"),
                       "La story n'envoie qu'un média : sa zone ne doit en montrer qu'un.")
@@ -545,15 +545,15 @@ final class CommentCameraDoorMountingGuardTests: XCTestCase {
     func test_everyCommentHost_offersTheCamera() throws {
         for host in ["Views/FeedCommentsSheet.swift",
                      "Views/PostDetailView+CommentComposer.swift",
-                     "Views/StoryViewerView+CanvasComposerBar.swift"] {
-            XCTAssertTrue(try source(host).contains(".commentCamera(attachments: $commentAttachments"),
-                          "\(host) n'offre pas la caméra à son composeur de commentaire.")
+                     "../Stories/Views/StoryViewerView+CanvasComposerBar.swift"] {
+            XCTAssertTrue(try source(host).contains(".commentMediaDoors(attachments: $commentAttachments"),
+                          "\(host) n'offre ni la caméra ni le sticker à son composeur de commentaire.")
         }
     }
 
     func test_theStory_keepsItsSinglePieceCeiling_forACapture() throws {
-        XCTAssertTrue(try source("Views/StoryViewerView+CanvasComposerBar.swift")
-            .contains(".commentCamera(attachments: $commentAttachments, limit: Self.mediaLimit"))
+        XCTAssertTrue(try source("../Stories/Views/StoryViewerView+CanvasComposerBar.swift")
+            .contains(".commentMediaDoors(attachments: $commentAttachments, limit: Self.mediaLimit"))
     }
 
     func test_theDoor_isTheMessageBarsOwn_notACopy() throws {
@@ -572,6 +572,91 @@ final class CommentCameraDoorMountingGuardTests: XCTestCase {
                       "Le viseur est celui du composeur — le même que le message, qui obéit à la politique d'enregistrement.")
         XCTAssertTrue(door.contains("CommentAttachmentIntake.stage(capture:"),
                       "La prise doit entrer par l'entrée commune : aperçu immédiat et plafond des pièces.")
+    }
+}
+
+// MARK: - Le sticker des commentaires (#14335)
+
+/// **Le composeur de commentaire offre le sticker, comme Android** (#14320,
+/// #14335) : la porte de la barre du message ouvre la feuille unique, et le
+/// sticker choisi rejoint la zone comme une IMAGE du commentaire.
+@MainActor
+final class CommentStickerTests: XCTestCase {
+
+    private final class Zone {
+        var pieces: [ComposerAttachment] = []
+        var binding: Binding<[ComposerAttachment]> {
+            Binding(get: { self.pieces }, set: { self.pieces = $0 })
+        }
+    }
+
+    private static let pngSignature: [UInt8] = [0x89, 0x50, 0x4E, 0x47]
+
+    func test_imageData_anEmoji_isATransparentPNG() async throws {
+        let rendered = await CommentStickerPiece.imageData(for: .emoji("🔥"))
+        let data = try XCTUnwrap(rendered)
+        XCTAssertEqual(Array(data.prefix(4)), Self.pngSignature, "Un sticker garde sa transparence : PNG, jamais JPEG.")
+        let image = try XCTUnwrap(UIImage(data: data)?.cgImage)
+        XCTAssertNotEqual(image.alphaInfo, .none)
+        XCTAssertNotEqual(image.alphaInfo, .noneSkipLast)
+    }
+
+    func test_imageData_anEmptyEmoji_givesNothing() async {
+        let data = await CommentStickerPiece.imageData(for: .emoji("  "))
+        XCTAssertNil(data)
+    }
+
+    func test_stageSticker_entersTheZoneAtOnce_asAnImage_thenGetsItsPNGFile() async throws {
+        let zone = Zone()
+        let piece = try XCTUnwrap(CommentAttachmentIntake.stage(sticker: .emoji("😍"), into: zone.binding))
+        XCTAssertEqual(zone.pieces.map(\.id), [piece.id], "La pièce apparaît AVANT que son fichier soit écrit.")
+        XCTAssertEqual(zone.pieces.first?.type, .image, "Le sticker part comme une image du commentaire.")
+
+        for _ in 0..<200 where zone.pieces.first?.url == nil {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let url = try XCTUnwrap(zone.pieces.first?.url)
+        XCTAssertEqual(url.pathExtension, "png")
+        XCTAssertEqual(Array(try Data(contentsOf: url).prefix(4)), Self.pngSignature)
+        XCTAssertEqual(CommentComposerStaging.pendingMedia(in: zone.pieces).map(\.optimistic.type), [.image])
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    func test_stageSticker_aSinglePieceHost_replacesThePieceInPlace() throws {
+        let zone = Zone()
+        zone.pieces = [ComposerAttachment(id: "photo", type: .image, name: "photo")]
+        CommentAttachmentIntake.stage(sticker: .emoji("👍"), into: zone.binding, limit: 1)
+        XCTAssertEqual(zone.pieces.count, 1)
+        XCTAssertNotEqual(zone.pieces.first?.id, "photo")
+    }
+}
+
+/// La porte est celle de la barre du message, confiée par l'environnement :
+/// les trois hôtes la reçoivent avec la caméra, d'un seul modificateur.
+final class CommentStickerDoorMountingGuardTests: XCTestCase {
+
+    private func source(_ relative: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/\(relative)"), encoding: .utf8))
+    }
+
+    func test_theBar_readsTheStickerDoorFromTheEnvironment() throws {
+        XCTAssertTrue(try source("Components/UniversalComposerBar.swift")
+            .contains("onRequestStickerPicker ?? environmentStickerDoor?.open"))
+        XCTAssertTrue(try source("Components/UniversalComposerBar+Toolbar.swift")
+            .contains("if let openStickers = resolvedOnStickerPicker {"))
+    }
+
+    func test_theDoors_poseTheCameraAndTheSticker_andTheStickerLandsInTheZone() throws {
+        let door = try source("Components/CommentCameraDoor.swift")
+        XCTAssertTrue(door.contains("func commentMediaDoors("))
+        XCTAssertTrue(door.contains(".environment(\\.composerStickerDoor"))
+        XCTAssertTrue(door.contains("MeeshyStickerSheet("), "La feuille est celle de tout le produit (#9189).")
+        XCTAssertTrue(door.contains("CommentAttachmentIntake.stage(sticker:"),
+                      "Le sticker entre par l'entrée commune : aperçu immédiat et plafond des pièces.")
     }
 }
 

@@ -136,7 +136,7 @@ class CoreTelecomCallReporterTest {
 
         reporter.requests.test {
             val answered = this@runTest.launch { gateway.handlers!!.onAnswer() }
-            advanceUntilIdle()
+            advanceTimeBy(CallTelecomSession.SETTLE_TIMEOUT_MS - 1)
             assertThat(awaitItem()).isEqualTo(TelecomSystemRequest.Answer)
             assertThat(answered.isCompleted).isFalse()
 

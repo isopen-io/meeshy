@@ -419,7 +419,6 @@ class TwoFactorViewModelTest {
         advanceUntilIdle()
 
         sut.beginSetup()
-        runCurrent()
         assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.LOADING)
         advanceUntilIdle()
         assertThat(sut.state.value.flow.step).isEqualTo(TwoFactorSetupStep.QR)

@@ -53,7 +53,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
-    private let decoder = JSONDecoder()
+    private let decoder = MeeshyCoders.decoder(.socket)
     private var reconnectAttempt: Int = 0
     private var backoff = SocketReconnectBackoff()
     private var reconnectTask: Task<Void, Never>?
@@ -73,28 +73,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let didReconnect = PassthroughSubject<Void, Never>()
     private var lifecycleCancellables = Set<AnyCancellable>()
 
-    /// Factory UNIQUE des décodeurs de payloads socket. La gateway émet ses
-    /// dates en ISO 8601 (avec ou sans fractions) — un `JSONDecoder()` nu
-    /// (stratégie par défaut = Double epoch) fait échouer TOUT payload
-    /// porteur d'un post complet (`story:updated`, `story:created`,
-    /// `post:created`, `status:*`) en `typeMismatch(Double)` : l'événement
-    /// temps réel est silencieusement perdu et l'UI attend le prochain
-    /// refresh REST. Bug prouvé en prod le 2026-07-29 (logs simulateur).
-    /// `internal` (pas `private`) pour être verrouillé par
-    /// `SocialSocketPayloadDecodingTests`.
-    nonisolated static func makeSocketPayloadDecoder() -> JSONDecoder {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = WireDate.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
-        return d
-    }
-
     private init() {
-        decoder.dateDecodingStrategy = Self.makeSocketPayloadDecoder().dateDecodingStrategy
         observeNetworkRecovery()
     }
 
@@ -268,6 +247,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// Whether a backoff retry is currently armed (test seam — mirror of
     /// `MessageSocketManager.hasPendingReconnect`).
     var hasPendingReconnect: Bool { reconnectTask != nil }
+
+    /// Whether a transport object exists (test seam).
+    var hasTransport: Bool { socket != nil }
 
     /// Unconditionally rebuild the socket. Safe to call from any lifecycle
     /// hook — used to bypass the stale `isConnected` flag. R1 — suspends the
@@ -560,14 +542,25 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             self?.handleReconnectAttempt()
         }
 
-        socket.on(clientEvent: .error) { data, _ in
-            // Log but NEVER force a logout from a socket error. Loose string
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            // NEVER force a logout from a socket error. Loose string
             // matching on error payloads produced false positives that kicked
             // the user out on transient failures. Socket.IO's built-in
             // reconnect loop will retry; only APIClient 401 can trigger a
             // silent token refresh, and even that preserves the session.
-            Logger.socket.error("SocialSocket error: \(data)")
+            self?.handleSocketError(data)
         }
+    }
+
+    /// #13954 — sous le plancher de version, le serveur refuse CETTE poignée de
+    /// main comme celle de `MessageSocketManager` : le transport s'arrête et la
+    /// porte « Mettre à jour » se pose. Toute autre erreur n'est que journalisée.
+    func handleSocketError(_ data: [Any], center: NotificationCenter = .default) {
+        let stopped = UpgradeRequirement.stopTransportIfBelowFloor(data, center: center) {
+            Logger.socket.warning("SocialSocket: client below the version floor — reconnection stopped")
+            disconnect()
+        }
+        if !stopped { Logger.socket.error("SocialSocket error: \(data)") }
     }
 
     func handleTransportConnected() {
@@ -660,7 +653,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// queue preserves arrival order; the handler still lands on main. (The small
     /// reaction handlers keep using `decoder` on main — separate instance, no
     /// cross-queue sharing.)
-    private static let offMainDecoder: JSONDecoder = makeSocketPayloadDecoder()
+    private static let offMainDecoder: JSONDecoder = MeeshyCoders.decoder(.socket)
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.social-socket.decode", qos: .userInitiated)
     private static let deliveryLane = MainActorDeliveryLane()
 

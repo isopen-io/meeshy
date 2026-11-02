@@ -13,6 +13,7 @@ class PostActionMenuTest {
         assertThat(actions).containsExactly(
             PostAction.Share,
             PostAction.CopyLink,
+            PostAction.CopyText,
             PostAction.Repost,
             PostAction.Quote,
             PostAction.Bookmark,
@@ -39,6 +40,7 @@ class PostActionMenuTest {
         assertThat(actions).containsExactly(
             PostAction.Share,
             PostAction.CopyLink,
+            PostAction.CopyText,
             PostAction.Repost,
             PostAction.Quote,
             PostAction.Bookmark,
@@ -62,5 +64,35 @@ class PostActionMenuTest {
     fun `someone else's post never offers pin`() {
         val actions = PostActionMenu.actions(PostActionContext(isOwn = false, isBookmarked = false))
         assertThat(actions).doesNotContain(PostAction.Pin)
+    }
+
+    // iOS « Copier le texte » (FeedPostCard+Header) : offert pour tout post qui PORTE du texte —
+    // copier du vide serait un controle inerte.
+    @Test
+    fun `copy text follows copy link when the post has text`() {
+        val actions = PostActionMenu.actions(PostActionContext(isOwn = false, isBookmarked = false, hasText = true))
+        assertThat(actions.indexOf(PostAction.CopyText)).isEqualTo(actions.indexOf(PostAction.CopyLink) + 1)
+    }
+
+    @Test
+    fun `a post without text never offers copy text`() {
+        val actions = PostActionMenu.actions(PostActionContext(isOwn = true, isBookmarked = false, hasText = false))
+        assertThat(actions).doesNotContain(PostAction.CopyText)
+    }
+
+    // iOS `PostSaveMenuItems` : « Imager » suit l'enregistrement, et seulement sur une oeuvre composee (#14329).
+    @Test
+    fun `a composed work offers imager right after the bookmark entry`() {
+        listOf(false, true).forEach { bookmarked ->
+            val actions = PostActionMenu.actions(PostActionContext(isOwn = false, isBookmarked = bookmarked, imageable = true))
+            val save = if (bookmarked) PostAction.Unbookmark else PostAction.Bookmark
+            assertThat(actions.indexOf(PostAction.Imager)).isEqualTo(actions.indexOf(save) + 1)
+        }
+    }
+
+    @Test
+    fun `a post without a composed work never offers imager`() {
+        val actions = PostActionMenu.actions(PostActionContext(isOwn = true, isBookmarked = false))
+        assertThat(actions).doesNotContain(PostAction.Imager)
     }
 }

@@ -4,12 +4,12 @@ import android.content.Context
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -35,12 +35,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import me.meeshy.sdk.model.call.CallAction
+import me.meeshy.sdk.model.call.CallCameraControlsPlacement
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallGroupStageSizing
-import me.meeshy.sdk.model.call.CallScreenMode
+import me.meeshy.sdk.model.call.CallHeaderLaw
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -130,20 +130,24 @@ internal fun CallConnectedColumn(
     overlayContext: CallOverlayContext,
     chrome: CallChromeController,
     videoStage: Boolean,
-    avatarUrl: String?,
+    peer: CallPeerVisual,
+    pill: CallPillActions,
+    cameraPlacement: CallCameraControlsPlacement,
     modifier: Modifier = Modifier,
+    inPip: Boolean = false,
+    /** La scène d'un appel de groupe (#13740), posée à la place du bloc du pair ; `null` en duo. */
+    groupStage: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val extensions = viewModel.extensions
-    val dispatcher = extensions.actions
     val explore = rememberCallTouchExploration()
     val chromeState by chrome.state.collectAsState()
     val visibility = chrome.visibility(callIsVideoStage(state), explore)
-    val controlsVisible = visibility.isVisible(CallChromeElement.Controls)
+    val controlsVisible = visibility.isVisible(CallChromeElement.Controls) && !inPip
     val isVideoStage = callIsVideoStage(state)
 
-    val offered = remember(state) { dispatcher.offered(state) }
-    val items = remember(state, offered) { CallPillModel.items(state, offered) }
-    val available = remember(state, items) { CallPillModel.available(state, items, dispatcher::isRegistered) }
+    val recordingViewModel: CallRecordingViewModel = hiltViewModel()
+    val reactionsViewModel: CallReactionsViewModel = hiltViewModel()
+    val available = pill.available
     LaunchedEffect(available) { chrome.reconcile(available) }
 
     val routeViewModel: CallAudioRouteViewModel = hiltViewModel()
@@ -151,20 +155,10 @@ internal fun CallConnectedColumn(
     var routeSheetOpen by remember { mutableStateOf(false) }
     LaunchedEffect(state.isVideoCall) { routeViewModel.onEvent(CallAudioRouteUiEvent.Start(state.isVideoCall)) }
 
-    val onAction: (CallAction) -> Unit = { action ->
-        CallScreenPanel.entries.firstOrNull { it.action == action }?.let(chrome::open)
-        CallScreenMode.entries.firstOrNull { it.action == action }?.let(chrome::enter)
-        if (action == CallAction.Camera) viewModel.toggleCamera() else dispatcher.dispatch(action)
-    }
-
-    BoxWithConstraints(
-        modifier.pointerInput(isVideoStage, explore) {
-            if (CallChromeVisibility.mayToggleByTap(isVideoStage, explore)) {
-                detectTapGestures(onTap = { chrome.onSceneTap(isVideoStage, explore) })
-            }
-        },
-    ) {
-        val rows = CallPillModel.rows(available, CallGroupStageSizing.isCompactHeight(maxHeight.value))
+    BoxWithConstraints(modifier) {
+        // iOS `CallCameraRail.menuRows` : ma vignette ou le rail du haut portent les commandes de mon image, le (…)
+        // ne les répète pas.
+        val rows = CallPillModel.rows(available, CallGroupStageSizing.isCompactHeight(maxHeight.value), cameraPlacement)
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -172,17 +166,22 @@ internal fun CallConnectedColumn(
         ) {
             Spacer(Modifier.height(MeeshySpacing.xl))
 
-            if (videoStage) {
-                CallPeerBlock(state = state, accent = accent, videoStage = true)
+            if (groupStage != null) {
+                groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md))
+            } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
+                // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
+                // vivent dans la puce de l'en-tête (CallHeaderBar) ; ne reste que ce que le pair fait SUBIR.
+                CallVideoPeerNotices(state = state, modifier = Modifier.weight(1f).fillMaxWidth())
             } else {
-                CallAudioStage(state = state, peerAvatarUrl = avatarUrl)
+                CallAudioStage(state = state, peer = peer)
             }
 
             state.captionText?.let { caption -> CallCaption(caption) }
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
 
-            CallChromeFade(
+            // La vignette à la une en plein écran (#13750) rend toute la place : la pilule sort de la mise en page.
+            if (!chromeState.isStageFullScreen) CallChromeFade(
                 isVisible = controlsVisible,
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                 modifier = Modifier.padding(bottom = MeeshySpacing.xl),
@@ -194,19 +193,44 @@ internal fun CallConnectedColumn(
                         state = state,
                         layer = chromeState.layer,
                         rows = rows,
-                        items = items,
+                        items = pill.items,
                         outputIcon = route.route.active?.kind?.icon() ?: Icons.Filled.VolumeUp,
                         onToggleMenu = chrome::toggleMenu,
                         onToggleMute = viewModel::toggleMute,
                         onOutput = { routeSheetOpen = true },
                         onHangUp = viewModel::hangUp,
-                        onAction = onAction,
+                        onAction = pill.onAction,
                         onBackToMenu = chrome::backToMenu,
                         onClosePanel = chrome::close,
+                        panelContent = { panel ->
+                            when (panel) {
+                                CallScreenPanel.Record -> CallRecordingKindPanel(
+                                    onPick = { kind ->
+                                        recordingViewModel.onEvent(CallRecordingUiEvent.Pick(kind))
+                                        chrome.close()
+                                    },
+                                )
+                                CallScreenPanel.React -> CallReactionsPanel(onReact = reactionsViewModel::react)
+                                else -> Unit
+                            }
+                        },
                     )
                 }
             }
         }
+    }
+
+    val pickerBridge: CallCameraPickerViewModel = hiltViewModel()
+    val pickerOpen by pickerBridge.controller.isOpen.collectAsStateWithLifecycle()
+    if (pickerOpen) {
+        val camera by viewModel.cameraZoom.state.collectAsStateWithLifecycle()
+        CallCameraPickerSheet(
+            cameras = camera.cameras,
+            selectedId = camera.selectedCameraId,
+            accent = accent,
+            onSelect = viewModel::selectCamera,
+            onDismiss = pickerBridge.controller::close,
+        )
     }
 
     if (routeSheetOpen) {

@@ -129,6 +129,7 @@ function createMockPrisma() {
     postComment: {
       findFirst: jest.fn(),
     },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findFirst: jest.fn(),
     },

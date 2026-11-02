@@ -34,6 +34,7 @@
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { revealRow } from './lib/reveal-row.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const served = await startDistServer(DIST, { serviceWorker: false });
@@ -80,6 +81,7 @@ check(folded.badge === null, `repliée sans non-lus : aucune pastille (${folded.
 check(folded.label === 'Épingles, repliée', `le lecteur d'écran lit « Épingles, repliée » (${folded.label})`);
 
 // ------------------------------------------- 2. en temps réel, sans déplier
+check(await revealRow(page, SUBJECT), `la liste amène « ${SUBJECT} » à l'écran`);
 await page.evaluate(
   (row) => document.querySelector(`[data-row="${row}"] button[aria-label="Actions de conversation"]`)?.focus(),
   SUBJECT,

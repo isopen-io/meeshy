@@ -11,7 +11,4 @@
     <string name="call_feedback_send">Envoyer</string>
     <string name="call_feedback_skip">Plus tard</string>
     <string name="call_reaction_from">Réaction %1$s</string>
-    <string name="call_screen_share_notification_title">Partage de votre écran</string>
-    <string name="call_screen_share_notification_text">Votre écran est visible des autres participants.</string>
-    <string name="call_screen_share_channel">Partage d\'écran</string>
 </resources>

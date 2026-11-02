@@ -292,7 +292,7 @@ export default function AdminUsersScreen() {
             language={language}
             title={title}
             subtitle={translateAdmin(language, 'admin.nav.users.hint')}
-            crumbs={[{ label: translateAdmin(language, 'admin.group.people') }, { label: title }]}
+            place={{ section: 'users' }}
             actions={
               /* CRÉER UN COMPTE (#8217) — en haut à droite de l'en-tête (#8289) ; le compte créé
                  s'ouvre aussitôt dans sa fiche. */

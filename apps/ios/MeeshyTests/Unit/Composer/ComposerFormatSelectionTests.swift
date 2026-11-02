@@ -123,7 +123,7 @@ final class ComposerFormatSelectionTests: XCTestCase {
 
     private func menuSource() throws -> String {
         AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerPublishMenu.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerPublishMenu.swift"))
     }
 
     func test_theGuardsReadANonEmptySource() throws {

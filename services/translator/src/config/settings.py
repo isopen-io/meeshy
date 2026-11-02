@@ -91,9 +91,9 @@ class Settings:
         # Clés utilisées pour le cache Redis des transcriptions et traductions
         # ═══════════════════════════════════════════════════════════════
         # Transcription STT originale - indexée par attachmentId (pas messageId)
-        self.redis_key_transcription = "audio:transcription:{attachment_id}"
+        self.redis_key_transcription = "audio:v3:transcription:{attachment_id}"
         # Traduction audio générée
-        self.redis_key_translated_audio = "audio:translation:{attachment_id}:{lang}"
+        self.redis_key_translated_audio = "audio:v3:translation:{attachment_id}:{lang}"
         # Profil vocal utilisateur
         self.redis_key_voice_profile = "voice:profile:{user_id}"
         

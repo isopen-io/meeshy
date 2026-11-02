@@ -29,7 +29,7 @@ import XCTest
 final class MessageTranslationsToleranceTests: XCTestCase {
 
     private func decodeMessage(_ json: String) throws -> APIMessage {
-        try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
     }
 
     private static let tete = """

@@ -17,15 +17,27 @@ import type {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendError, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { createHash } from 'crypto';
 import { signAttachmentsForReader } from '../../services/attachments/signServedAttachments';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
-import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
+import { CARRIER_LIFECYCLE_SELECT, carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
 import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from '../../services/attachments/readerAttachmentLifecycle';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
+import { RECIPIENT_LANG_SELECT, recipientLanguages } from '../../utils/recipient-language';
+import {
+  SUBTITLE_LANG_PATTERN,
+  servedSubtitles,
+  subtitleSourceSelect,
+  type SubtitleCarrier,
+} from '../../services/attachments/servedSubtitles';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { AttachmentDeletedEventData } from '@meeshy/shared/types/socketio-events/attachment';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -113,6 +125,64 @@ const conversationAttachmentListItemSchema = {
   },
 } as const;
 
+/**
+ * #13608 — la suppression d'une pièce se voit chez tous les membres. Charge
+ * minimale (jamais le contenu de la pièce) ; un échec de diffusion ne défait pas
+ * une suppression déjà faite.
+ */
+async function broadcastAttachmentDeleted(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  target: { messageId: string | null; attachmentId: string }
+): Promise<void> {
+  if (!target.messageId) return;
+  try {
+    const io = fastify.socketIOHandler?.getManager()?.getIO();
+    if (!io) return;
+    const message = await prisma.message.findUnique({
+      where: { id: target.messageId },
+      select: { conversationId: true },
+    });
+    if (!message) return;
+    const payload: AttachmentDeletedEventData = {
+      conversationId: message.conversationId,
+      messageId: target.messageId,
+      attachmentId: target.attachmentId,
+    };
+    io.to(ROOMS.conversation(message.conversationId)).emit(SERVER_EVENTS.ATTACHMENT_DELETED, payload);
+  } catch (error: unknown) {
+    logger.warn('attachment:deleted broadcast failed', { error });
+  }
+}
+
+const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
+
+/**
+ * #13608 — un téléversement pose `uploadedBy = User.id`, mais une copie transférée
+ * le pose à `Participant.id` de l'expéditeur. Le propriétaire est donc reconnu
+ * sous les DEUX identifiants, et seulement s'il s'agit de SON participant :
+ * l'identifiant d'un participant d'autrui, anonyme ou inconnu ne donne rien.
+ */
+async function ownsAsUploader(
+  prisma: PrismaClient,
+  uploadedBy: string | null | undefined,
+  userId: string
+): Promise<boolean> {
+  if (!uploadedBy) return false;
+  if (uploadedBy === userId) return true;
+  if (!OBJECT_ID_PATTERN.test(uploadedBy)) return false;
+  try {
+    const participant = await prisma.participant.findUnique({
+      where: { id: uploadedBy },
+      select: { userId: true },
+    });
+    return participant?.userId === userId;
+  } catch (error: unknown) {
+    logger.warn('uploader participant lookup failed', { error });
+    return false;
+  }
+}
+
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,
   authOptional: any,
@@ -137,19 +207,22 @@ export async function registerMetadataRoutes(
   async function attachmentDetailReader(
     request: FastifyRequest,
     attachment: { messageId: string | null; uploadedBy: string | null; isViewOnce?: boolean | null }
-  ): Promise<{ readonly readerParticipantId: string | null } | null> {
+  ): Promise<{ readonly readerParticipantId: string | null; readonly carrier: SubtitleCarrier | null } | null> {
     const authContext = (request as UnifiedAuthRequest).authContext;
 
     if (!attachment.messageId) {
       // Pas encore rattachée à un message (envoi en cours) : seul le
       // déposant y accède. Même repli que `resolveAttachmentReadVerdict`.
       const caller = authContext.isAnonymous ? authContext.participantId : authContext.userId;
-      return Boolean(caller) && caller === attachment.uploadedBy ? { readerParticipantId: null } : null;
+      return Boolean(caller) && caller === attachment.uploadedBy ? { readerParticipantId: null, carrier: null } : null;
     }
 
     const message = await prisma.message.findUnique({
       where: { id: attachment.messageId },
-      select: { id: true, conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT },
+      select: {
+        id: true, conversationId: true, ...CARRIER_LIFECYCLE_SELECT, ...READER_LIFECYCLE_MESSAGE_SELECT,
+        isBlurred: true, isEncrypted: true, encryptionMode: true,
+      },
     });
     if (!message) return null;
 
@@ -201,7 +274,7 @@ export async function registerMetadataRoutes(
       ),
       select: { id: true },
     });
-    return visible !== null ? { readerParticipantId: participant.id } : null;
+    return visible !== null ? { readerParticipantId: participant.id, carrier: message } : null;
   }
 
   /**
@@ -304,6 +377,89 @@ export async function registerMetadataRoutes(
   );
 
   /**
+   * GET /attachments/:attachmentId/subtitles/:lang — #11329
+   *
+   * La transcription d'une vidéo ou d'un vocal, en WebVTT. `auto` descend le
+   * prisme du LECTEUR (`recipientLanguages` pour un inscrit, la langue de sa
+   * participation pour un invité de lien) ; un code nomme une langue précise.
+   * Mêmes bornes que la fiche ci-dessus, et le même 404 pour une pièce
+   * PROTÉGÉE (`subtitlesMayTravel`) que pour une pièce inexistante.
+   */
+  fastify.get(
+    '/attachments/:attachmentId/subtitles/:lang',
+    {
+      onRequest: [authOptional],
+      schema: {
+        description: 'Serve the transcription of a video or voice attachment as WebVTT subtitles. `auto` resolves the reader\'s language through the Prisme (rank by rank, original when no rank is served); a language code asks for that language. Protected attachments (view-once, blurred, ephemeral, encrypted) never serve subtitles.',
+        tags: ['attachments'],
+        summary: 'Get attachment subtitles (WebVTT)',
+        params: {
+          type: 'object',
+          required: ['attachmentId', 'lang'],
+          properties: {
+            attachmentId: { type: 'string', description: 'Unique attachment identifier' },
+            lang: { type: 'string', description: '`auto` or a language code (validated after authentication)' },
+          },
+        },
+        response: {
+          200: { description: 'WebVTT subtitles', type: 'string' },
+          400: { description: 'Malformed language code', ...errorResponseSchema },
+          401: { description: 'Authentication required', ...errorResponseSchema },
+          404: { description: 'No subtitles for this caller and language', ...errorResponseSchema },
+          500: { description: 'Internal server error', ...errorResponseSchema },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const authContext = (request as UnifiedAuthRequest).authContext;
+        if (!authContext || !authContext.isAuthenticated) {
+          return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
+        }
+        const { attachmentId, lang } = request.params as { attachmentId: string; lang: string };
+        if (!new RegExp(SUBTITLE_LANG_PATTERN).test(lang)) {
+          return sendBadRequest(reply, 'INVALID_LANGUAGE', { message: 'lang must be `auto` or a language code' });
+        }
+
+        const source = await prisma.messageAttachment.findUnique({
+          where: { id: attachmentId },
+          select: subtitleSourceSelect,
+        });
+        const reader = source ? await attachmentDetailReader(request, source) : null;
+        const readerLanguages = reader ? await subtitleReaderLanguages(authContext, reader.readerParticipantId) : [];
+        const served = source && reader
+          ? servedSubtitles({ attachment: source, carrier: reader.carrier, requested: lang, readerLanguages })
+          : null;
+        if (!served) {
+          return sendNotFound(reply, 'SUBTITLES_NOT_FOUND', { message: 'Subtitles not found' });
+        }
+
+        reply.header('Cache-Control', 'private, no-cache');
+        reply.header('Content-Language', served.language);
+        reply.header('Vary', 'Authorization, X-Session-Token');
+        return reply.type('text/vtt; charset=utf-8').send(served.vtt);
+      } catch (error: unknown) {
+        logger.error('error serving attachment subtitles', { error });
+        return sendInternalError(reply, 'SUBTITLES_FETCH_FAILED', { message: 'Failed to serve subtitles' });
+      }
+    }
+  );
+
+  async function subtitleReaderLanguages(
+    authContext: UnifiedAuthRequest['authContext'],
+    readerParticipantId: string | null
+  ): Promise<readonly string[]> {
+    if (!authContext.isAnonymous) {
+      const user = await prisma.user.findUnique({ where: { id: authContext.userId }, select: RECIPIENT_LANG_SELECT });
+      return recipientLanguages(user);
+    }
+    const participantId = readerParticipantId ?? authContext.participantId;
+    if (!participantId) return [];
+    const participant = await prisma.participant.findUnique({ where: { id: participantId }, select: { language: true } });
+    return participant?.language ? [participant.language] : [];
+  }
+
+  /**
    * DELETE /attachments/:attachmentId
    * Supprime un attachment (support utilisateurs authentifiés ET anonymes)
    */
@@ -351,6 +507,10 @@ export async function registerMetadataRoutes(
             description: 'Attachment not found',
             ...errorResponseSchema
           },
+          409: {
+            description: 'End-to-end encrypted message: erase it through the encrypted signal channel',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -384,17 +544,31 @@ export async function registerMetadataRoutes(
         if (isAnonymous) {
           hasPermission = attachment.uploadedBy === userId && attachment.isAnonymous;
         } else {
-          const isAdmin = authContext.registeredUser?.role === 'ADMIN' ||
-                         authContext.registeredUser?.role === 'BIGBOSS';
-
-          hasPermission = attachment.uploadedBy === userId || isAdmin;
+          // Retirer le média d'autrui est un geste de modération de contenu :
+          // la table des rôles de plateforme privilégiés le gouverne (#11217).
+          hasPermission = isPrivilegedPlatformRole(authContext.registeredUser?.role) ||
+            await ownsAsUploader(prisma, attachment.uploadedBy, userId);
         }
 
         if (!hasPermission) {
           return sendForbidden(reply, 'Insufficient permissions - You can only delete your own attachments');
         }
 
+        const messageId = attachment.messageId ?? null;
+        // #13802 — la pièce d'un message scellé au serveur s'efface comme lui
+        // (#13142), par signal chiffré ; jugée sur la LIGNE de son message,
+        // après le contrôle du droit.
+        const carrier = messageId
+          ? await prisma.message.findUnique({
+              where: { id: messageId },
+              select: { conversationId: true, isEncrypted: true, encryptionMode: true },
+            })
+          : null;
+        if (carrier && await messageRefusesPlainErasure(prisma, carrier)) {
+          return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
+        }
         await attachmentService.deleteAttachment(attachmentId);
+        await broadcastAttachmentDeleted(fastify, prisma, { messageId, attachmentId });
 
         return sendSuccess(reply, { message: 'Attachment deleted successfully' });
       } catch (error: unknown) {

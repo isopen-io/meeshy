@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest, requireShareLinkGrace } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';

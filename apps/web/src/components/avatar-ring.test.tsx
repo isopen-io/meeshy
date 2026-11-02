@@ -3,10 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS } from '@/lib/profile-decor/catalog';
 
-import { AvatarRing, ringBoxSize, ringedAvatarSize } from './avatar-ring';
+import { AvatarRing, AvatarRingFrame, ringBoxSize, ringedAvatarSize } from './avatar-ring';
 import { bannerSvgMarkup, ProfileBannerDesign } from './profile-banner-design';
 
 const filet = BUILTIN_RING_PACKS[0]!.items[0]!;
+const masque = BUILTIN_RING_PACKS.find((pack) => pack.slug === 'cadres-illustres')!.items.find((item) => item.key === 'masque-felin')!;
 const aurore = BUILTIN_BANNER_PACKS[0]!.items[0]!;
 
 describe('le contour autour de l’avatar', () => {
@@ -30,6 +31,32 @@ describe('le contour autour de l’avatar', () => {
     expect(html).toContain('#6366F1');
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('<i data-avatar="true"></i>');
+  });
+
+  test('un cadre illustré (#13960) pose son film ARRIÈRE sous l’avatar et son film AVANT au-dessus, débordant de la boîte sans la grandir', () => {
+    for (const html of [
+      renderToStaticMarkup(<AvatarRing ring={masque} size={84}><i data-avatar /></AvatarRing>),
+      renderToStaticMarkup(<AvatarRingFrame ring={masque} size={84}><i data-avatar /></AvatarRingFrame>),
+    ]) {
+      const back = html.indexOf('data-ring-decor="back"');
+      const avatar = html.indexOf('data-avatar="true"');
+      const front = html.indexOf('data-ring-decor="front"');
+      expect(back).toBeGreaterThan(-1);
+      expect(back).toBeLessThan(avatar);
+      expect(front).toBeGreaterThan(avatar);
+      expect(html).toContain(`data-lottie-layer="${masque.decor!.back!.src}"`);
+      expect(html).toContain(`data-lottie-layer="${masque.decor!.front!.src}"`);
+      expect(html.match(/inset:-20%/g)).toHaveLength(2);
+      expect(html).toContain('z-index:-1');
+      expect(html).toContain('isolation:isolate');
+    }
+    expect(renderToStaticMarkup(<AvatarRing ring={masque} size={84}><i /></AvatarRing>)).toContain('width:100px');
+  });
+
+  test('un contour sans calques illustrés garde son rendu d’avant, sans enrobage de plus', () => {
+    const html = renderToStaticMarkup(<AvatarRing ring={filet} size={90}><i data-avatar /></AvatarRing>);
+    expect(html).not.toContain('data-ring-decor');
+    expect(html).not.toContain('isolation');
   });
 
   test('l’avatar occupe le cercle de rayon 42 du contour : la boîte est plus grande que lui', () => {

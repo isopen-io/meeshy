@@ -9,6 +9,8 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { E2EEServedEnvelope } from '../e2ee-directory.js';
+import type { E2EESignalAck, E2EESignalSocketPayload } from '../e2ee-signals.js';
 import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
 import type { GameUpdatedEventData } from '../game-sync.js';
@@ -119,7 +121,7 @@ import type { CallPreviewRequestEvent, CallPreviewRequestedEvent } from '../call
 import type { CallLiveFrameSelectEvent, CallLiveFrameSelectedEvent } from '../call-live-frame.js';
 
 import type { AgentAdminEventData } from './agent.js';
-import type { AttachmentReadyEventData, AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
+import type { AttachmentDeletedEventData, AttachmentReadyEventData, AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
 import type {
   AudioTranslationFailedEventData,
   AudioTranslationReadyEventData,
@@ -147,6 +149,7 @@ import type {
   ConversationActionData,
   ConversationClosedEventData,
   ConversationDeletedEventData,
+  ConversationEncryptionChangedEventData,
   ConversationJoinErrorEventData,
   ConversationNewEventData,
   ConversationParticipationEventData,
@@ -163,6 +166,13 @@ import type {
   FriendRequestRejectedEventData,
 } from './friend-request.js';
 import type { LinkMessageNewEventData } from './link.js';
+import type {
+  RelationLevelRaisedEventData,
+  RelationRitualCompletedEventData,
+  RelationRitualProgressEventData,
+  RelationRitualStartedEventData,
+} from './relation.js';
+import type { BringRingEventData, BringStoppedEventData } from '../bring.js';
 import type {
   LocationLiveStartData,
   LocationLiveStartedEventData,
@@ -249,6 +259,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED]: (data: AttachmentUpdatedEventData) => void;
   [SERVER_EVENTS.ATTACHMENT_READY]: (data: AttachmentReadyEventData) => void;
+  [SERVER_EVENTS.ATTACHMENT_DELETED]: (data: AttachmentDeletedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EXPIRED]: (data: MessageExpiredEventData) => void;
@@ -276,6 +287,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
   [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
+  /** L'enveloppe libsignal de CET appareil (#3706), vers `ROOMS.device`. */
+  [SERVER_EVENTS.E2EE_ENVELOPE]: (data: E2EEServedEnvelope) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED]: (data: ConversationUnreadUpdatedEventData) => void;
@@ -317,6 +330,12 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
+  [SERVER_EVENTS.RELATION_LEVEL_RAISED]: (data: RelationLevelRaisedEventData) => void;
+  [SERVER_EVENTS.RELATION_RITUAL_STARTED]: (data: RelationRitualStartedEventData) => void;
+  [SERVER_EVENTS.RELATION_RITUAL_PROGRESS]: (data: RelationRitualProgressEventData) => void;
+  [SERVER_EVENTS.RELATION_RITUAL_COMPLETED]: (data: RelationRitualCompletedEventData) => void;
+  [SERVER_EVENTS.BRING_RING]: (data: BringRingEventData) => void;
+  [SERVER_EVENTS.BRING_STOPPED]: (data: BringStoppedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED]: (data: MessageViewOncePurgedEventData) => void;
@@ -449,6 +468,7 @@ export interface ServerToClientEvents {
 
   // Conversation lifecycle
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED]: (data: ConversationEncryptionChangedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_RESTORED]: (data: ConversationRestoredEventData) => void;
@@ -474,6 +494,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.MESSAGE_EDIT]: (data: MessageEditData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_DELETE]: (data: MessageDeleteData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_CAPTURE_DETECTED]: (data: ContentCaptureReportInput, callback?: (response: ContentCaptureAck) => void) => void;
+  [CLIENT_EVENTS.E2EE_SEND_SIGNAL]: (data: E2EESignalSocketPayload, callback?: (response: E2EESignalAck) => void) => void;
   [CLIENT_EVENTS.CONVERSATION_JOIN]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;
@@ -592,8 +613,13 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_RECONNECTED]: (data: CallReconnectedEvent) => void;
   [CLIENT_EVENTS.CALL_BACKGROUNDED]: (data: { callId: string; participantId: string }) => void;
   [CLIENT_EVENTS.CALL_FOREGROUNDED]: (data: { callId: string; participantId: string }) => void;
-  [CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT]: (data: CallTranscriptionSegmentEvent) => void;
-  [CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]: (data: CallTranscriptionActiveEvent) => void;
+  /**
+   * L'acquittement est FACULTATIF et ne répond qu'au refus d'un appel chiffré de
+   * bout en bout (`E2EE_CAPTIONS_REFUSED`, #13720) : aucun client publié n'en
+   * passe, et le relais nominal ne l'appelle pas.
+   */
+  [CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT]: (data: CallTranscriptionSegmentEvent, ack?: (response: SocketIOResponse) => void) => void;
+  [CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]: (data: CallTranscriptionActiveEvent, ack?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_CAPABILITY]: (data: CallTranscriptionCapabilityEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_ROLE]: (data: CallTranscriptionRoleEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSLATION_REQUEST]: (data: CallTranslationRequestEvent) => void;

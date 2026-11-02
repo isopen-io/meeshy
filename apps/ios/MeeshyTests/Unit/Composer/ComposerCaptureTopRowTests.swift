@@ -89,7 +89,7 @@ final class ComposerCaptureTopRowTests: XCTestCase {
     private static var barPath: String {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift").path
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneCameraBar.swift").path
     }
 
     func test_whileEditing_theRowIsCrossThenSaveAndDone_withoutChronoFlashOrFlip() {
@@ -153,7 +153,7 @@ final class ComposerCaptureTopRowTests: XCTestCase {
     }
 
     func test_theRetouchCross_goesThroughTheRule_andAConfirmedDiscardLeavesTheRetouchOnly() throws {
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertFalse(chrome.contains("guard !session.phase.isEditing else { return session.cancelEditing() }"),
                        "la croix de la retouche ne jette plus rien sans demander")
         XCTAssertTrue(chrome.contains("takeSave: session.takeSaveState"))
@@ -162,7 +162,7 @@ final class ComposerCaptureTopRowTests: XCTestCase {
     }
 
     func test_theCross_goesThroughTheDiscardRule_andTheBarStaysWhileRecording() throws {
-        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCaptureDiscardRule.asksBeforeClosing("),
                       "la croix et le glissé consultent la règle qui connaît l'enregistrement")
         XCTAssertFalse(chrome.contains("if session.stage != .recording {"),
@@ -206,12 +206,12 @@ final class ComposerCaptureTopRowTests: XCTestCase {
     }
 
     func test_theBar_wiresTheTimer_toTheSliderAndTheFlash() throws {
-        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("ComposerFlashSliderTimer"), "la barre tient la minuterie")
         XCTAssertTrue(barre.contains(".task(id: sliderTimer.generation)"), "une seule échéance vit à la fois")
         XCTAssertTrue(barre.contains("ComposerCaptureTopRow.trailing("), "la disposition vient de la loi")
         XCTAssertTrue(barre.contains("ComposerCaptureTopRow.flashSliderTrailingInset("))
-        let curseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerFlashIntensitySlider.swift")
+        let curseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerFlashIntensitySlider.swift")
         XCTAssertTrue(curseur.contains("onInteraction"), "glisser ou régler à la voix est une interaction")
     }
 

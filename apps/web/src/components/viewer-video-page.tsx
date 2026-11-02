@@ -216,7 +216,9 @@ export default function ViewerVideoPage({
         className="media-viewer-media size-full"
       />
       {paused ? (
-        <span className="absolute rounded-full bg-scrim px-3 py-1 text-mini font-medium text-on-media">En pause</span>
+        <span data-viewer-paused-badge="" className="absolute rounded-full bg-scrim px-3 py-1 text-mini font-medium text-on-media">
+          {translate(language, 'media.video.paused')}
+        </span>
       ) : null}
       {isActive ? (
         <button

@@ -5,9 +5,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.ui.component.media.rememberMediaKindStrings
+import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -42,8 +44,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal fun ConversationRowPreviewLine(
     preview: RowPreview,
     primaryAccent: Color,
+    modifier: Modifier = Modifier,
 ) {
-    val bodySmall = MaterialTheme.typography.bodySmall
+    val bodySmall = MaterialTheme.typography.bodySmall.copy(fontSize = LentilleMetrics.Line2.size)
     val textSecondary = MeeshyTheme.tokens.textSecondary
     val textMuted = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.65f)
     val standardColor = if (preview.isAccent) primaryAccent else textSecondary
@@ -67,6 +70,12 @@ internal fun ConversationRowPreviewLine(
             tint = primaryAccent,
             italic = true,
         )
+        MessageSummaryKind.ENCRYPTED -> RowPreviewKindStyle(
+            icon = Icons.Filled.Lock,
+            contentDescriptionRes = null,
+            tint = textSecondary,
+            italic = true,
+        )
         MessageSummaryKind.EPHEMERAL_ACTIVE -> RowPreviewKindStyle(
             icon = Icons.Filled.Timer,
             contentDescriptionRes = R.string.conversations_preview_ephemeral_content_description,
@@ -81,7 +90,7 @@ internal fun ConversationRowPreviewLine(
         )
     }
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         preview.draftLabel?.let { label ->
             Text(
                 text = label,
@@ -135,4 +144,6 @@ internal fun lastMessagePreviewLabels(): LastMessagePreviewLabels =
         expired = stringResource(R.string.conversations_preview_expired),
         hidden = stringResource(R.string.conversations_preview_hidden),
         viewOnce = stringResource(R.string.conversations_preview_view_once),
+        encrypted = stringResource(R.string.conversations_preview_end_to_end),
+        sticker = stringResource(R.string.conversations_preview_sticker),
     ).withMediaKinds(rememberMediaKindStrings())

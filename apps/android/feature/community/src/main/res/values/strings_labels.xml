@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Libellés de communauté que le catalogue iOS laisse en anglais en français (et en partie en es/it) : traduits ici, la source iOS reste à corriger (#13358). -->
+<resources>
+    <string name="community_add_channel_title">Add a channel</string>
+    <string name="community_detail_action_channel">Channel</string>
+    <string name="community_detail_channel_fallback_name">Channel</string>
+    <string name="community_detail_channels_empty_action">Create a Channel</string>
+    <string name="community_detail_channels_empty_subtitle">Conversations will appear here</string>
+    <string name="community_detail_channels_empty_title">No Channels Yet</string>
+    <string name="community_detail_posts_empty_subtitle">Community feed will appear here</string>
+    <string name="community_detail_posts_empty_title">No Posts Yet</string>
+    <string name="community_detail_stats_channels">Channels</string>
+    <string name="community_detail_stats_members">Members</string>
+    <string name="community_detail_tab_channels">Channels</string>
+    <string name="community_detail_tab_feed">Feed</string>
+    <string name="community_invite_button">Invite</string>
+    <string name="community_invite_empty_subtitle">Try a different search term</string>
+    <string name="community_invite_empty_title">No Users Found</string>
+    <string name="community_invite_recently_invited">Recently Invited</string>
+    <string name="community_invite_search_placeholder">Search users...</string>
+    <string name="community_invite_title">Invite Members</string>
+    <string name="community_members_empty_action">Invite</string>
+    <string name="community_members_empty_subtitle">Invite people to join this community</string>
+    <string name="community_members_empty_title">No Members</string>
+    <string name="community_members_remove">Remove</string>
+    <string name="community_members_section_admin">Admins</string>
+    <string name="community_members_title">Members</string>
+    <string name="community_members_unknown_user">Unknown</string>
+</resources>

@@ -15,7 +15,7 @@ struct AudioPostPlacementSection: View {
     let isBorrowed: Bool
     let foregroundDestination: ComposerSoundDestination
 
-    private var theme: ThemeManager { ThemeManager.shared }
+    @ResolvedThemePalette private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {

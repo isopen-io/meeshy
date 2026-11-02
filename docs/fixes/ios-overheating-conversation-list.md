@@ -41,7 +41,7 @@ RootView
 ### SÉVÉRITÉ HAUTE : Animations perpetuelles toujours actives
 
 #### P1 — StoryTrayView.addButtonGlow (CAUSE PRINCIPALE)
-**Fichier :** `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift:111`
+**Fichier :** `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift:111`
 
 ```swift
 .onAppear {
@@ -101,7 +101,7 @@ if effectivePresence == .online {
 ### SÉVÉRITÉ MOYENNE : @ObservedObject provoquant des re-renders
 
 #### O1 — StoryTrayView `@ObservedObject presenceManager`
-**Fichier :** `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift:10`
+**Fichier :** `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift:10`
 
 ```swift
 @ObservedObject private var presenceManager = PresenceManager.shared
@@ -163,7 +163,7 @@ if effectiveStoryState == .unread {
 ---
 
 #### C3 — StoryTrayView shimmerPlaceholder
-**Fichier :** `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift:199`
+**Fichier :** `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift:199`
 
 Utilise `.shimmer()` (ShimmerEffect, repeatForever) UNIQUEMENT pendant le chargement initial.
 S'arrête dès que les données sont disponibles.

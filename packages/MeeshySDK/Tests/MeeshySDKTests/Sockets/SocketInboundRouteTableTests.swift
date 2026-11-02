@@ -22,7 +22,7 @@ private final class FakeRegistrar: SocketEventRegistering {
 final class SocketInboundRouteTableTests: XCTestCase {
 
     private static let messageEventsOfDev: Set<String> = [
-        "attachment-status:updated", "attachment:reaction-added", "attachment:reaction-removed",
+        "attachment-status:updated", "attachment:deleted", "attachment:reaction-added", "attachment:reaction-removed",
         "audio:transcription-failed", "audio:transcription-ready", "audio:translation-failed",
         "audio:translation-ready", "audio:translations-completed", "audio:translations-progressive",
         "auth:session-revoked", "auth:token-expired", "call:already-answered", "call:ended", "call:error",
@@ -33,10 +33,10 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "call:recording-requested", "call:recording-started", "call:recording-stopped", "call:screen-capture-alert",
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
         "category:created", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
-        "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
+        "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
         "conversation:participant-unbanned", "conversation:restored", "conversation:stats",
-        "conversation:unread-updated", "conversation:updated", "engagement:conversation-updated",
+        "conversation:unread-updated", "conversation:updated", "e2ee:envelope", "engagement:conversation-updated",
         "engagement:post-updated", "friend-request:cancelled", "friend-request:rejected", "game:updated",
         "heartbeat:ack", "location:live-started", "location:live-stopped", "location:live-updated",
         "mention:created", "message:attachment-updated", "message:cited-post-withdrawn", "message:consumed",
@@ -46,6 +46,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "notification:counts", "notification:deleted", "notification:deleted-bulk", "notification:new",
         "notification:read", "notification:read-bulk", "participant:rights-updated", "participant:role-updated",
         "presence:snapshot", "profile:decor-updated", "reaction:added", "reaction:removed", "read-status:updated",
+        "relation:level-raised", "relation:ritual-completed", "relation:ritual-progress", "relation:ritual-started",
         "translation:failed", "typing:start", "typing:stop", "user:preferences-reordered",
         "user:preferences-updated", "user:status", "user:updated", "viewing:activity", "viewing:snapshot",
         "viewing:start", "viewing:stop"
@@ -124,6 +125,50 @@ final class SocketInboundRouteTableTests: XCTestCase {
 
         await expectOneValue(from: MessageSocketManager.shared.messageReceived, where: { $0.id == id }) {
             registrar.deliver("message:new", payload)
+        }
+    }
+
+    func test_attachmentDeletedRoute_deliversTheRemovalToItsChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+        let id = "removal-\(UUID().uuidString)"
+
+        await expectOneValue(from: MessageSocketManager.shared.attachmentDeleted, where: { $0.attachmentId == id && $0.messageId == "m1" && $0.conversationId == "c1" }) {
+            registrar.deliver("attachment:deleted", ["conversationId": "c1", "messageId": "m1", "attachmentId": id])
+        }
+    }
+
+    func test_attachmentDeletedRoute_ignoresAnIncompletePayload() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectNoValue(from: MessageSocketManager.shared.attachmentDeleted) {
+            registrar.deliver("attachment:deleted", ["conversationId": "c1", "messageId": "m1"])
+            registrar.deliver("attachment:deleted", ["conversationId": "", "messageId": "m1", "attachmentId": "a1"])
+        }
+    }
+
+    func test_e2eeEnvelopeRoute_deliversTheOpaqueEnvelopeOfThisDevice() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+        let id = "envelope-\(UUID().uuidString)"
+        let payload: [String: Any] = [
+            "id": id, "messageId": "m1", "conversationId": "c1", "recipientRegistrationId": 7,
+            "senderUserId": "u1", "senderDeviceId": 2, "type": 3, "body": "Y2lwaGVy", "createdAt": "2026-10-24T10:00:00.000Z",
+        ]
+
+        await expectOneValue(from: E2EEEnvelopeChannel.shared.received, where: { $0.id == id && $0.senderDeviceId == 2 }) {
+            registrar.deliver("e2ee:envelope", payload)
+        }
+    }
+
+    func test_conversationEncryptionChangedRoute_deliversTheRegimeToItsChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+        let id = "regime-\(UUID().uuidString)"
+        let payload: [String: Any] = [
+            "conversationId": id, "isEncrypted": true, "mode": "e2ee", "epoch": 3,
+            "changedByUserId": "u1", "changedAt": "2026-10-25T10:00:00.000Z",
+        ]
+
+        await expectOneValue(from: ConversationEncryptionChannel.shared.changed, where: { $0.conversationId == id && $0.epoch == 3 }) {
+            registrar.deliver("conversation:encryption-changed", payload)
         }
     }
 

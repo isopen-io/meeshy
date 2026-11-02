@@ -110,4 +110,15 @@ class CallChromeControllerTest {
         assertThat(chrome.state.value.layer).isEqualTo(CallScreenLayer.Idle)
         assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isTrue()
     }
+
+    @Test
+    fun `a full screen spotlight hides the header and the pill, even on audio, and gives them back`() {
+        val chrome = controller()
+        chrome.setStageFullScreen(true)
+        assertThat(chrome.visibility(false, false).isVisible(CallChromeElement.Controls)).isFalse()
+        assertThat(chrome.visibility(true, true).isVisible(CallChromeElement.Header)).isFalse()
+        assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Captions)).isTrue()
+        chrome.setStageFullScreen(false)
+        assertThat(chrome.visibility(false, false).isVisible(CallChromeElement.Controls)).isTrue()
+    }
 }

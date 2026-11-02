@@ -532,13 +532,8 @@ extension ConversationMediaGalleryView {
     /// couleur, même transparente, teste les touches et volerait au pager tous
     /// les gestes du cadre.
     ///
-    /// **La colonne d'actions est le second occupant du cadre.** Elle
-    /// est déclarée ICI, donc à l'INTÉRIEUR du `.frame` et du `.clipShape` qui
-    /// suivent : elle est dimensionnée par `currentStage.frame` comme tout le
-    /// reste du cadre, et les coins arrondis la rognent comme ils rognent la
-    /// légende. Ancrée au-dessus du bloc d'informations, elle MONTE avec lui
-    /// quand la légende se déplie — la pile ancrée en bas fait le travail, il
-    /// n'y a aucune cote à tenir d'accord.
+    /// **Le rail d'actions est le second occupant** : à DROITE du bloc
+    /// d'informations, ancré en bas avec lui (#12420).
     ///
     /// **Le play/pause est le troisième occupant, et le seul qui soit CENTRÉ**
     /// Il ne rejoint pas la pile ancrée en bas : c'est l'affordance
@@ -565,11 +560,15 @@ extension ConversationMediaGalleryView {
                 .frame(width: currentStage.frame.width, height: currentStage.frame.height)
                 .clipShape(RoundedRectangle(cornerRadius: currentStage.cornerRadius, style: .continuous))
 
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                cadreReactionBadge
+            // #12420 — le rail se pose À CÔTÉ du bloc d'informations, comme celui
+            // de la story et du réel : sept disques ne tiennent pas au-dessus de lui.
+            HStack(alignment: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    cadreReactionBadge
+                    cadreOverlay
+                }
                 cadreActionColumn
-                cadreOverlay
             }
             .frame(width: stageChromeWidth)
         }
@@ -643,10 +642,7 @@ extension ConversationMediaGalleryView {
 
     /// **Ce qui se pose sur le cadre part avec lui** (spec § 2.2) : la légende,
     /// l'auteur et sa date, la ligne format / dimensions / poids. Les actions
-    /// réagir · répondre · composer restent sur le cadre elles aussi, mais dans
-    /// leur propre couche — `cadreActionColumn`, montée au-dessus de ce bloc :
-    /// elles sont une COLONNE, et les mettre dans ce `VStack` les
-    /// remettrait en ligne.
+    /// vivent dans le rail (`cadreActionColumn`), à droite de ce bloc.
     ///
     /// **La progression, elle, vit au couloir** : elle
     /// commande le TEMPS, pas le cadrage, et posée ici elle couvrait l'image

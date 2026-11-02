@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.compare",
+          "androidName": "composer_object_editor_adjust_compare",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.compare.hint",
+          "androidName": "composer_object_editor_adjust_compare_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.compare.hint.video",
+          "androidName": "composer_object_editor_adjust_compare_hint_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.original",
+          "androidName": "composer_object_editor_adjust_original",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.adjust.original.video",
+          "androidName": "composer_object_editor_adjust_original_video",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

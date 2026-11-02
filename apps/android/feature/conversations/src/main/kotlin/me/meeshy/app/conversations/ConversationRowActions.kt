@@ -1,13 +1,13 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.presence.ConversationHere
+import me.meeshy.sdk.model.avatar.ConversationHere
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.StoryRingState
 
@@ -33,15 +33,20 @@ internal data class ConversationRowActions(
     val onMarkUnread: () -> Unit = {},
     val onDiscardDraft: () -> Unit = {},
     val onAssignCategory: (String) -> Unit = {},
+    val onRemoveCategory: () -> Unit = {},
     val onCreateCategory: (String) -> Unit = {},
     val onLoadPreview: () -> Unit = {},
     val onLockToggle: () -> Unit = {},
+    /** Glisser « Masquer » / « Supprimer » : ouvre la confirmation de retrait de la rangée. */
+    val onRemove: () -> Unit = {},
     /** « Rejoindre » l'appel en cours ; la ligne ne montre le bouton que si un appel est servi. */
     val onJoinCall: () -> Unit = {},
     /** Entrées de menu dont la destination dépend de l'hôte de navigation : `null` = entrée masquée. */
     val onViewInfo: (() -> Unit)? = null,
     val onViewProfile: (() -> Unit)? = null,
     val onCreateShareLink: (() -> Unit)? = null,
+    /** « Gérer les membres » ; la rangée ne l'offre que si la loi l'accorde (#12865). */
+    val onManageMembers: ((accent: Color) -> Unit)? = null,
 ) {
     /** Ajoute les destinations de navigation de [conversation] (profil du pair pour une directe). */
     fun withNavigation(
@@ -54,6 +59,7 @@ internal data class ConversationRowActions(
             onViewInfo = navigation.onViewInfo?.let { open -> { open(conversation.id) } },
             onViewProfile = peerId?.let { id -> navigation.onViewProfile?.let { open -> { open(id) } } },
             onCreateShareLink = navigation.onCreateShareLink?.let { open -> { open(conversation.id) } },
+            onManageMembers = navigation.onManageMembers?.let { open -> { accent -> open(conversation.id, accent) } },
         )
     }
 
@@ -76,8 +82,10 @@ internal data class ConversationRowActions(
             onDiscardDraft = { viewModel.discardDraft(conversationId) },
             onAssignCategory = { viewModel.reassignCategory(conversationId, it) },
             onCreateCategory = { viewModel.createCategoryAndAssign(conversationId, it) },
+            onRemoveCategory = { viewModel.removeCategory(conversationId) },
             onLoadPreview = { viewModel.loadPreviewMessages(conversationId) },
-            onLockToggle = { viewModel.onLockToggle(conversationId) },
+            onLockToggle = { viewModel.dialogs.requestLock(conversationId) },
+            onRemove = { viewModel.dialogs.requestRemoval(conversationId) },
         )
     }
 }
@@ -88,7 +96,12 @@ internal data class ConversationRowModel(
     val conversation: ApiConversation,
     val currentUserId: String?,
     val currentUserPrefs: MeeshyUser?,
-    val presence: PresenceState?,
+    /**
+     * Le pair d'une conversation directe (`null` : groupe, ou pas de pair). La présence n'est PAS ici : la
+     * cellule d'avatar la lit elle-même (`rememberPresence`), donc un `user:status` ne change pas ce
+     * snapshot et ne recompose pas la liste.
+     */
+    val peerUserId: String?,
     val storyRing: StoryRingState,
     val moodEmoji: String?,
     val draft: ConversationDraft?,
@@ -98,10 +111,16 @@ internal data class ConversationRowModel(
     val isLocked: Boolean,
     /** The list's minute clock: relative time, preview countdowns and heat age with it. */
     val nowMillis: Long,
+    /** Tablette: la rangée ouverte porte une barre d'accent, jamais un fond. */
+    val isSelected: Boolean = false,
+    /** Rangée tenue à la main pour un glisser-déposer. */
+    val isDragging: Boolean = false,
+    /** Le pair d'une directe a l'écran de CETTE conversation ouvert (annonce serveur `viewing:*`, point « ici »). */
+    val here: ConversationHere = ConversationHere.ABSENT,
+    /** La phrase des points d'engagement, déjà localisée, lue par TalkBack. */
+    val spokenPoints: String? = null,
     /** Une mutation de la conversation (épingle, muet, archive, section) n'est pas encore livrée. */
     val hasPendingSync: Boolean = false,
-    /** Le pair d'une directe a l'écran de CETTE conversation ouvert (annonce serveur `viewing:*`). */
-    val peerHere: ConversationHere = ConversationHere.ABSENT,
     /** Un appel est en cours et rejoignable dans cette conversation. */
     val callInProgress: Boolean = false,
 )

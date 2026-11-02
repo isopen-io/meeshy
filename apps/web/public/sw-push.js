@@ -69,6 +69,7 @@ const PUSH_ROUTE_PATTERNS = {
   progression: '/me/progression',
   progressionLigue: '/me/progression/ligue',
   progressionSaison: '/me/progression/saison',
+  progressionCarnet: '/me/progression/carnet',
   settings: '/settings',
   notifications: '/notifications',
 };
@@ -109,6 +110,8 @@ const PROGRESSION_TYPE_SECTIONS = {
 };
 const GAME_LEAGUE_TYPES = ['game_duo_invited', 'game_duo_accepted', 'game_league_result'];
 const GAME_SEASON_TYPES = ['game_season_step'];
+/** JUMEAU de `GAME_PHOTO_TYPES` (#10175) : le résumé des moments à immortaliser ouvre le carnet. */
+const GAME_PHOTO_TYPES = ['game_photo_moment'];
 const GAME_MISSION_TYPES = ['game_mission_window'];
 const SECURITY_TYPES = [
   'security_alert',
@@ -335,6 +338,7 @@ function resolvePushTarget(data) {
 
   if (GAME_LEAGUE_TYPES.indexOf(type) >= 0) return { route: 'progressionLigue', params: {}, search: {} };
   if (GAME_SEASON_TYPES.indexOf(type) >= 0) return { route: 'progressionSaison', params: {}, search: {} };
+  if (GAME_PHOTO_TYPES.indexOf(type) >= 0) return { route: 'progressionCarnet', params: {}, search: {} };
   if (GAME_MISSION_TYPES.indexOf(type) >= 0) return { route: 'progression', params: {}, search: { section: 'missions' } };
   if (PROGRESSION_TYPES.indexOf(type) >= 0 && Object.prototype.hasOwnProperty.call(PROGRESSION_TYPE_SECTIONS, type)) {
     return { route: 'progression', params: {}, search: { section: PROGRESSION_TYPE_SECTIONS[type] } };
@@ -1055,6 +1059,7 @@ self.meeshyPushTarget = {
   PROFILE_TYPES: PROFILE_TYPES,
   GAME_LEAGUE_TYPES: GAME_LEAGUE_TYPES,
   GAME_SEASON_TYPES: GAME_SEASON_TYPES,
+  GAME_PHOTO_TYPES: GAME_PHOTO_TYPES,
   GAME_MISSION_TYPES: GAME_MISSION_TYPES,
   PROGRESSION_TYPES: PROGRESSION_TYPES,
   PROGRESSION_TYPE_SECTIONS: PROGRESSION_TYPE_SECTIONS,

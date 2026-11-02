@@ -17,6 +17,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Registry } from 'prom-client';
+import { logWarn } from '../../utils/logger';
 
 export type MetricsServerConfig = { readonly port: number; readonly host: string };
 
@@ -62,10 +63,11 @@ export async function startMetricsServer(options: MetricsServerConfig & { readon
 /**
  * Accroche le port interne au cycle de vie de la passerelle : il s'ouvre quand
  * elle est prête et se ferme avec elle. Une configuration `null` n'ouvre rien.
- * Un port qui ne s'ouvre pas ne fait jamais tomber la passerelle : il se journalise.
+ * Un port qui ne s'ouvre pas ne fait jamais tomber la passerelle : il se journalise par
+ * `logWarn`, qui écrit même sous `logger: false` (garde `direct-log-warn-forbidden-guard`).
  */
 export function attachMetricsServer(
-  app: { addHook(name: 'onReady' | 'onClose', hook: () => Promise<void>): unknown; readonly log: { warn(object: object, message: string): void } },
+  app: { addHook(name: 'onReady' | 'onClose', hook: () => Promise<void>): unknown; readonly log: unknown },
   config: MetricsServerConfig | null,
   registry: Pick<Registry, 'metrics' | 'contentType'>,
   onListening: (port: number) => void = () => undefined,
@@ -77,7 +79,7 @@ export function attachMetricsServer(
       running = await startMetricsServer({ ...config, registry });
       onListening(running.port);
     } catch (error) {
-      app.log.warn({ error, port: config.port }, 'metrics server did not start');
+      logWarn(app.log, `metrics server did not start on port ${config.port}`, error);
     }
   });
   app.addHook('onClose', async () => {

@@ -135,39 +135,7 @@ public enum BannerFrameRenderer {
     }
 
     private static func fill(_ context: CGContext, _ path: CGPath, paint: FramePaint, opacity: Double, lineWidth: CGFloat?, evenOdd: Bool) {
-        context.saveGState()
-        defer { context.restoreGState() }
-        guard let gradient = paint.gradient,
-              let cg = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                  colors: gradient.stops.map { FramePaint.cgColor(paint.palette[safe: $0.color] ?? "#000000", opacity: $0.opacity ?? 1) } as CFArray,
-                                  locations: gradient.stops.map { CGFloat($0.at) }) else {
-            context.addPath(path)
-            if let lineWidth {
-                context.setStrokeColor(paint.color.withAlphaComponent(opacity).cgColor)
-                context.setLineWidth(lineWidth)
-                context.strokePath()
-            } else {
-                context.setFillColor(paint.color.withAlphaComponent(opacity).cgColor)
-                context.fillPath(using: evenOdd ? .evenOdd : .winding)
-            }
-            return
-        }
-        let box = path.boundingBoxOfPath
-        context.addPath(path)
-        if let lineWidth {
-            context.setLineWidth(lineWidth)
-            context.replacePathWithStrokedPath()
-            context.clip()
-        } else {
-            context.clip(using: evenOdd ? .evenOdd : .winding)
-        }
-        context.setAlpha(CGFloat(opacity))
-        context.drawLinearGradient(
-            cg,
-            start: CGPoint(x: box.minX + gradient.x1 * box.width, y: box.minY + gradient.y1 * box.height),
-            end: CGPoint(x: box.minX + gradient.x2 * box.width, y: box.minY + gradient.y2 * box.height),
-            options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
-        )
+        paint.fill(path, in: context, opacity: opacity, lineWidth: lineWidth, evenOdd: evenOdd)
     }
 
     public static func staticImage(_ design: BannerFrameDesign, size: CGSize, skipping: Set<Int> = [], screenScale: CGFloat) -> UIImage? {

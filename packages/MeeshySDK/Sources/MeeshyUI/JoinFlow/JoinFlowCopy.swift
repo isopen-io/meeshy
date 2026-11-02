@@ -41,7 +41,7 @@ public nonisolated enum JoinFlowCopy {
         case .forbidden(let reason, _):
             return reason ?? meeshy.errorDescription ?? ""
         case .server(429, _):
-            return String(localized: "joinFlow.error.tooManyUsers", defaultValue: "Trop d'utilisateurs connectes", bundle: bundle)
+            return String(localized: "joinFlow.error.tooManyUsers", defaultValue: "Trop d'utilisateurs connectés", bundle: bundle)
         case .auth:
             return meeshy.errorDescription ?? ""
         default:

@@ -9,7 +9,7 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { GameStandingService } from '../GameStandingService';
-import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from './fakeGameDb';
+import { fakeGameDb, relateAt, seedUser, USER, OTHER, type FakeGameDb } from './fakeGameDb';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
@@ -45,18 +45,29 @@ const setup = (profile: Record<string, unknown> = {}, member: Record<string, unk
 
 const befriend = (db: FakeGameDb) => db.friendRequest.rows.push({ id: 'f1', status: 'accepted', senderId: READER, receiverId: MEMBER });
 
+// Points et Gloire s'ouvrent à Proche et au-dessus (#13930) : un simple Ami ne les voit pas.
+const closeLink = (db: FakeGameDb) => relateAt(db, MEMBER, READER, 'CLOSE');
+
 const stranger = { userId: READER, role: 'USER' as const };
 const standing = async (service: GameStandingService, viewer: Parameters<GameStandingService['standingFor']>[0]['viewer'], targetId = MEMBER) =>
   service.standingFor({ viewer, targetId, now: NOW });
 
 beforeEach(() => hidingFromSearch.clear());
 
-describe('la Flamme n’est servie qu’aux AMIS (#9541)', () => {
-  it('un ami la voit', async () => {
+describe('la Flamme n’est servie qu’à Proche et au-dessus (#9541, GAM-01 #13930)', () => {
+  it('un Proche la voit', async () => {
+    const { db, service } = setup();
+    closeLink(db);
+    const result = await standing(service, stranger);
+    expect(result.standing?.flame).not.toBeNull();
+  });
+
+  it('un simple Ami ne la voit pas : du jeu, il ne voit que le niveau, les titres et le rang', async () => {
     const { db, service } = setup();
     befriend(db);
     const result = await standing(service, stranger);
-    expect(result.standing?.flame).not.toBeNull();
+    expect(result.visible).toBe(true);
+    expect(result.standing?.flame).toBeNull();
   });
 
   it('un inconnu ne la voit pas, même quand le membre a réglé son rang sur « tout le monde »', async () => {
@@ -78,17 +89,17 @@ describe('la Flamme n’est servie qu’aux AMIS (#9541)', () => {
     expect((await standing(service, { userId: READER, role: 'ADMIN' as const })).standing?.flame).not.toBeNull();
   });
 
-  it('une Flamme éteinte se tait pour tout le monde, amis compris', async () => {
+  it('une Flamme éteinte se tait pour tout le monde, Proches compris', async () => {
     const { db, service } = setup({}, { lastStreakDate: new Date('2026-09-01T00:00:00Z'), flameFreezes: 0 });
-    befriend(db);
+    closeLink(db);
     expect((await standing(service, stranger)).standing?.flame).toBeNull();
   });
 });
 
 describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
-  it('un ami lit ses points et le nombre de ses trophées, avec le niveau, le rang et la division', async () => {
+  it('un Proche lit ses points et le nombre de ses trophées, avec le niveau, le rang et la division', async () => {
     const { db, service } = setup();
-    befriend(db);
+    closeLink(db);
 
     const result = await standing(service, stranger);
 
@@ -104,9 +115,9 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
     expect(result.standing).not.toHaveProperty('trophyCount');
   });
 
-  it('le nombre de trophées suit le réglage de la VITRINE : fermée à l’ami, il n’en voit pas le compte', async () => {
+  it('le nombre de trophées suit le réglage de la VITRINE : fermée au Proche, il n’en voit pas le compte', async () => {
     const { db, service } = setup({ showcaseVisibility: 'me' });
-    befriend(db);
+    closeLink(db);
     const result = await standing(service, stranger);
     expect(result.standing).not.toHaveProperty('trophyCount');
     expect(result.standing?.points).toBe(SCORE);
@@ -162,9 +173,9 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
     expect((await standing(service, stranger)).standing).toMatchObject({ rank: 'legende', division: 1, division5: 1, mythic: null });
   });
 
-  it('jamais les jours de série ni une date — même pour un ami ; sa Gloire, oui (#10913)', async () => {
+  it('jamais les jours de série ni une date — même pour un Proche ; sa Gloire, oui (#10913)', async () => {
     const { db, service } = setup();
-    befriend(db);
+    closeLink(db);
     const served = await standing(service, stranger);
     expect(served.standing?.glory).toBe(3000);
     const wire = JSON.stringify(served);

@@ -55,6 +55,8 @@ class ChatComposerTrayTest {
             return IngestedFile("/work/$id", bytes.size.toLong(), thumbnail)
         }
         override suspend fun readBytes(path: String): ByteArray? = "bytes-of-$path".toByteArray()
+        override suspend fun uploadItem(path: String, fileName: String, mimeType: String): MediaUploadItem? =
+            MediaUploadItem(bytes = "bytes-of-$path".toByteArray(), fileName = fileName, mimeType = mimeType)
         override suspend fun delete(paths: Collection<String>) = Unit
     }
 
@@ -86,7 +88,7 @@ class ChatComposerTrayTest {
         justRun { socket.emitTypingStop(any()) }
         val uploads = mockk<MediaUploadQueue>(relaxed = true)
         var count = 0
-        coEvery { uploads.enqueue(any()) } answers { "upload-${count++}" }
+        coEvery { uploads.enqueue(any(), any(), any()) } answers { "upload-${count++}" }
         val ingestor = Ingestor().also { if (!open) it.gate = CompletableDeferred() }
         val tray = ComposerTrayController(RuntimeEnvironment.getApplication(), ingestor)
         tray.attach(Host(this))
@@ -119,7 +121,7 @@ class ChatComposerTrayTest {
         r.tray.stageBytes(byteArrayOf(2), "b.jpg", "image/jpeg")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { r.uploads.enqueue(any()) }
+        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
         coVerify(exactly = 0) { r.repo.sendOptimistic(any(), any(), any(), any(), any()) }
         assertThat(r.tray.state.value.items).hasSize(2)
     }
@@ -136,7 +138,7 @@ class ChatComposerTrayTest {
         advanceUntilIdle()
 
         val items = mutableListOf<MediaUploadItem>()
-        coVerify(exactly = 2) { r.uploads.enqueue(capture(items)) }
+        coVerify(exactly = 2) { r.uploads.enqueue(capture(items), any(), any()) }
         assertThat(items.map { it.fileName }).containsExactly("a.jpg", "b.jpg").inOrder()
         val attachments = slot<List<ApiMessageAttachment>>()
         coVerify(exactly = 1) {
@@ -269,7 +271,7 @@ class ChatComposerTrayTest {
         r.composer.send()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { r.uploads.enqueue(any()) }
+        coVerify(exactly = 0) { r.uploads.enqueue(any(), any(), any()) }
         assertThat(r.tray.state.value.items).hasSize(1)
 
         r.ingestor.gate.complete(Unit)
@@ -277,7 +279,7 @@ class ChatComposerTrayTest {
         r.composer.send()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { r.uploads.enqueue(any()) }
+        coVerify(exactly = 1) { r.uploads.enqueue(any(), any(), any()) }
     }
 
     @Test

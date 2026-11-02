@@ -186,7 +186,7 @@ function doubleStats() {
       findMany: jest.fn(() => Promise.resolve([])),
     },
     friendRequest: { count: jest.fn(() => Promise.resolve(3)) },
-    user: { findUnique: jest.fn(() => Promise.resolve({ createdAt: new Date('2024-01-01') })) },
+    user: { findUnique: jest.fn(() => Promise.resolve({ createdAt: new Date("2024-01-01") })), findMany: jest.fn(() => Promise.resolve([])) },
     post: {
       count: jest.fn(() => Promise.resolve(5)),
       findMany: jest.fn(() => Promise.resolve(messagesEnBase())),
@@ -283,8 +283,11 @@ describe('GET /users/me/stats/achievements — budget de lignes lues', () => {
     // `reelsCount` / `storiesCount`, qu'aucun succès ne lit — plus la lecture
     // des identités du compte (`participant.findMany`, une ligne par
     // conversation rejointe) qui permet de compter par `senderId` indexé
-    // plutôt que par la relation `sender` (un `$lookup` par message).
-    expect(journal.lectures).toHaveLength(7);
+    // plutôt que par la relation `sender` (un `$lookup` par message) — et les
+    // deux lectures de la relation de blocage (#13350, `getBlockRelatedUserIds`,
+    // bornées par cette relation, presque toujours vide) qui retirent de
+    // `friendRequestsReceived` les demandes d'une personne bloquée.
+    expect(journal.lectures).toHaveLength(9);
     expect(aAppele(journal, 'participant', 'findMany')).toBe(true);
   });
 });

@@ -33,7 +33,9 @@ import { sliceByIdCursor } from '../../utils/pagination';
  *  - `'everyone'` — ADMIN/BIGBOSS, que la loi sert FULL : aucune borne ;
  *  - un ensemble — soi-même ∪ amitiés acceptées (`acceptedFriendIds`), la
  *    seule relation que la directive du 2026-08-25 tient pour une
- *    autorisation ; VIDE pour un viewer anonyme, qui ne voit personne en ligne.
+ *    autorisation. L'Ami y reste : il a le droit de savoir qu'on est EN LIGNE
+ *    (#13928) ; ce qu'il ne reçoit jamais, c'est `lastActiveAt`, que la porte
+ *    tait à la sortie ; VIDE pour un viewer anonyme, qui ne voit personne en ligne.
  *
  * Ce que la porte MASQUE ensuite (préférence `showOnlineStatus`, blocage,
  * désactivation) sort de la page par `servedOnline` : la sélection en amont ne

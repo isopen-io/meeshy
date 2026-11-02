@@ -49,6 +49,7 @@ import {
   normalizedPhoneDigits,
   phoneRefusal,
   usernameFieldRefusal,
+  displayNameFieldRefusal,
   type SignupFormState,
 } from '@/lib/signup-form';
 import {
@@ -60,6 +61,7 @@ import {
   type SignupProgress,
   type SignupVerification,
 } from '@/lib/view/signup-phases';
+import { NAME_MIN_LENGTH } from '@/lib/identity-bounds';
 import { placeSignupFailure, usernameRefusalMessage, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import { forgetReferralCode } from '@/lib/view/referral-memory';
 import { landingAfterSession, safeNextPath, sessionNextPath } from '@/lib/session-guard';
@@ -318,6 +320,9 @@ export default function SignupScreen({
   const usernameRefusal = usernameFieldRefusal(form);
   const usernameError =
     feedback.fieldErrors.username ?? (usernameRefusal !== null ? usernameRefusalMessage(interfaceLanguage, usernameRefusal) : undefined);
+  const displayNameError =
+    feedback.fieldErrors.displayName ??
+    (displayNameFieldRefusal(form) !== null ? translate(interfaceLanguage, 'signup.username.tooShort', { min: String(NAME_MIN_LENGTH) }) : undefined);
   const isPasswordStrong = hasPassword(form.password) && isPasswordValid(form.password);
   const language = getLanguageInfo(form.systemLanguage);
   const busy = isSubmitting || isValidating;
@@ -428,7 +433,7 @@ export default function SignupScreen({
                   onFocus={(field) => setFocused(field)}
                   onBlur={() => setFocused(null)}
                   usernameError={usernameError}
-                  displayNameError={feedback.fieldErrors.displayName}
+                  displayNameError={displayNameError}
                   suggestions={feedback.usernameSuggestions}
                 />
               }

@@ -73,8 +73,8 @@ struct NotificationAudioCard: View {
 
             NotificationProgressTrack(
                 progress: NotificationPlaybackRate.progress(elapsed: player.elapsed, duration: player.duration),
-                elapsed: NotificationPlaybackRate.clock(seconds: player.elapsed),
-                total: NotificationPlaybackRate.clock(seconds: player.duration),
+                elapsed: MediaFormat.duration(player.elapsed),
+                total: MediaFormat.duration(player.duration),
                 height: geometry.pillSide,
                 accent: accent,
                 seek: player.seek(toFraction:)

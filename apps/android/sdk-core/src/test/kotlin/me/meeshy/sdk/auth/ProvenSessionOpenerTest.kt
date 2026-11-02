@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.MeeshyUser
@@ -165,7 +166,7 @@ class ProvenSessionOpenerTest {
         val s = scenario()
         s.opener.hold(proven("u1"))
         s.opener.hold(proven("u2"))
-        advanceUntilIdle()
+        runCurrent()
 
         assertThat(s.port.closedJwts).containsExactly("jwt-u1")
         assertThat(s.opener.installHeld()).isEqualTo(ProvenOpenResult.Opened)

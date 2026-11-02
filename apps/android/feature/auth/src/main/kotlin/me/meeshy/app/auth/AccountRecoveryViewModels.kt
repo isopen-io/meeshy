@@ -94,6 +94,7 @@ class MagicLinkViewModel @Inject constructor(
 
     fun send() {
         val email = _state.value.email.trim()
+        if (_state.value.isSubmitting) return
         if (!_state.value.canSend && _state.value.sentTo == null) return
         _state.update { it.copy(isSubmitting = true, errorMessage = null) }
         viewModelScope.launch {

@@ -35,3 +35,19 @@ describe('createPublicationKeyring — une clé par contenu, stable au rejeu', (
     expect(publicationFingerprint({ a: 1, b: { c: 2, d: [1, 2] } })).toBe(publicationFingerprint({ b: { d: [1, 2], c: 2 }, a: 1 }));
   });
 });
+
+describe('createPublicationKeyring — les clés d’une publication non envoyée survivent au rechargement (#13416)', () => {
+  test('le trousseau rouvert rend la clé émise avant, et prévient des clés neuves', () => {
+    const body = publicationFingerprint({ type: 'POST', content: 'Bonjour' });
+    const before = createPublicationKeyring();
+    const key = before.keyFor(body);
+    const reopened = createPublicationKeyring();
+    let minted = 0;
+    reopened.subscribe(() => (minted += 1));
+    reopened.adopt(before.entries());
+    expect(reopened.keyFor(body)).toBe(key);
+    expect(minted).toBe(0);
+    reopened.keyFor(publicationFingerprint({ type: 'POST', content: 'Bonsoir' }));
+    expect(minted).toBe(1);
+  });
+});

@@ -1,10 +1,19 @@
 package me.meeshy.sdk.model
 
-/** Les modes de visibilité d'une publication (port de `PostVisibility`). */
+/**
+ * Les modes de visibilité d'une publication (port de `PostVisibility`, `POST_VISIBILITIES` du serveur).
+ *
+ * Les audiences de CERCLE (#13931, #13939) se lisent au niveau effectif de l'auteur avec le lecteur : [ACQUAINTANCES]
+ * (Connaissances et au-dessus), [CLOSE] (Proches et au-dessus), [BLOOD] (Sang seul). [FRIENDS] garde son sens historique
+ * « Amis et au-dessus ». L'ordre de déclaration est l'échelle du composeur, du plus large au plus étroit.
+ */
 enum class StoryVisibility(val wire: String) {
     PUBLIC("PUBLIC"),
     COMMUNITY("COMMUNITY"),
+    ACQUAINTANCES("ACQUAINTANCES"),
     FRIENDS("FRIENDS"),
+    CLOSE("CLOSE"),
+    BLOOD("BLOOD"),
     EXCEPT("EXCEPT"),
     ONLY("ONLY"),
     PRIVATE("PRIVATE"),
@@ -12,6 +21,16 @@ enum class StoryVisibility(val wire: String) {
 
     /** EXCEPT / ONLY exigent une sélection d'utilisateurs : la passerelle rejette un envoi sans. */
     val requiresUserSelection: Boolean get() = this == EXCEPT || this == ONLY
+
+    companion object {
+        /**
+         * Une audience SERVIE, lue fail-closed (#13939) : une valeur que ce client ne connaît pas se lit RESTREINTE
+         * ([PRIVATE]), jamais [PUBLIC]. Afficher « Public » une audience inconnue, puis la réécrire en public à
+         * l'édition, est le risque que cette lecture referme — miroir de `PostVisibility(served:)` (iOS).
+         */
+        fun fromWire(value: String): StoryVisibility =
+            entries.firstOrNull { it.wire == value.uppercase() } ?: PRIVATE
+    }
 }
 
 /** Ce que déclenche un tap sur une entrée du sous-menu « Modifier la visibilité ». */

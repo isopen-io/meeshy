@@ -43,6 +43,15 @@ internal object WidgetPresence {
 
     class Parsed(val state: PresenceState, val token: String)
 
+    /** Le jeton publié pour [state] ; `null` = rien de servi (même rendu que hors ligne : aucun point). */
+    fun token(state: PresenceState?): String? = when (state) {
+        PresenceState.ONLINE -> "online"
+        PresenceState.AWAY -> "away"
+        PresenceState.IDLE -> "idle"
+        PresenceState.OFFLINE -> OFFLINE_TOKEN
+        null -> null
+    }
+
     fun parse(token: String?): Parsed? = when (token?.lowercase()) {
         "online" -> Parsed(PresenceState.ONLINE, "online")
         "away" -> Parsed(PresenceState.AWAY, "away")

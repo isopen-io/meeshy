@@ -451,6 +451,115 @@
             "bytes": 9598,
             "sha256": "5aff839c02a1cfcb6906f41b3f1bf74f312afaa24b94fd98d204c964c2fb1df6"
           }
+        },
+        {
+          "key": "maree",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#0C4A6E",
+              "ink": "#22D3EE",
+              "soft": "#0E7490"
+            },
+            "dark": {
+              "base": "#062033",
+              "ink": "#0891B2",
+              "soft": "#155E75"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.75,
+                "y": 0.1,
+                "r": 0.45,
+                "role": "ink",
+                "opacity": 0.3
+              },
+              {
+                "x": 0.2,
+                "y": 1,
+                "r": 0.6,
+                "role": "soft",
+                "opacity": 0.6
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "b91b4b2e5d828890.json",
+            "bytes": 3047,
+            "sha256": "b91b4b2e5d82889042d675520de64154b320ddcc12d9b51680390d9b566f80d2"
+          }
+        },
+        {
+          "key": "braises",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#2A0F1F",
+              "ink": "#F97316",
+              "soft": "#9F1239"
+            },
+            "dark": {
+              "base": "#14060F",
+              "ink": "#EA580C",
+              "soft": "#881337"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.55,
+                "role": "ink",
+                "opacity": 0.45
+              },
+              {
+                "x": 0.12,
+                "y": 0.9,
+                "r": 0.35,
+                "role": "ink",
+                "opacity": 0.25
+              },
+              {
+                "x": 0.9,
+                "y": 0.85,
+                "r": 0.35,
+                "role": "soft",
+                "opacity": 0.5
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "039a32b2874b1119.json",
+            "bytes": 7855,
+            "sha256": "039a32b2874b11197966a8793f3b6a36dbf098c553a58fe14f64c134f0f73e49"
+          }
         }
       ]
     }

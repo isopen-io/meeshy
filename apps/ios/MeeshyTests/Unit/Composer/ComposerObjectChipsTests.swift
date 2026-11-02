@@ -508,7 +508,7 @@ final class ComposerObjectChipsTests: XCTestCase {
     /// arguments, justes ou faux, et plus rien ne dirait lesquels.
     func test_lesMotsDeLaPlanche_sontCeuxDuCatalogue() throws {
         let copy = try MyStoriesSourceCorpus.text(
-            of: "Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift")
+            of: "Meeshy/Features/Composer/ComposerObjectChipsCopy.swift")
 
         for mot in ["STYLE · %@", "TAILLE %@", "ALIGN · %@", "SON %@", "ROTATION %@°",
                     "%1$@ · %2$@ · z %3$@",
@@ -530,7 +530,7 @@ final class ComposerObjectChipsTests: XCTestCase {
     func test_leTemoinDesMots_litVraimentSaSource() throws {
         XCTAssertGreaterThan(
             try MyStoriesSourceCorpus.text(
-                of: "Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift").count,
+                of: "Meeshy/Features/Composer/ComposerObjectChipsCopy.swift").count,
             2_000)
     }
 

@@ -16,10 +16,12 @@
  * La projection est une liste BLANCHE écrite ici, pas un `select` qu'on
  * espère étroit : une ligne qui porterait davantage (une adresse IP héritée
  * d'avant #9342, une ville de session, la chaîne User-Agent, une empreinte, un
- * e-mail, la présence) n'en ferait rien sortir.
+ * e-mail, la présence) n'en ferait rien sortir. Le visage (`avatar`, #12571) y
+ * est un champ NOMMÉ, résolu par la loi partagée `resolveParticipantAvatar`.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world';
 import type { WorldParticipantCard, WorldParticipantClient } from '@meeshy/shared/types/world-participant-card';
 import { majorVersion } from '../conversations/guestClient';
@@ -62,6 +64,7 @@ const PARTICIPANT_CARD_SELECT = {
   type: true,
   userId: true,
   displayName: true,
+  avatar: true,
   role: true,
   language: true,
   isActive: true,
@@ -81,6 +84,7 @@ const PARTICIPANT_CARD_SELECT = {
 
 const USER_CARD_SELECT = {
   username: true,
+  avatar: true,
   role: true,
   systemLanguage: true,
   regionalLanguage: true,
@@ -196,6 +200,9 @@ export async function loadWorldParticipantCard(
     participantId: participant.id,
     participantType: participantType(participant.type),
     displayName: participant.displayName,
+    /* Le VISAGE du fil, lu sur `user` (jamais sur `account`) : la hiérarchie
+       retient les détails d'un compte, pas la photo qu'il montre déjà à toute la conversation. */
+    avatar: resolveParticipantAvatar({ avatar: participant.avatar ?? null, user: { avatar: user?.avatar ?? null } }),
     username: orNull(user?.username) ?? orNull(participant.anonymousSession?.profile?.username),
     conversationRole: participant.role,
     accountRole: account ? orNull(String(account.role)) : null,

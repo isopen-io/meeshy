@@ -40,6 +40,7 @@
               744,
               924
             ],
+            "path": "M201 496h678v1h6v1h2v1h3v1h3v1h2v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v2h1v1h1v3h1v2h1v4h1v4h1v860h-1v4h-1v4h-1v2h-1v3h-1v1h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-2v1h-1v1h-3v1h-2v1h-4v1h-5v1h-679v-1h-5v-1h-3v-1h-3v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-1h-1v-3h-1v-2h-1v-4h-1v-4h-1v-860h1v-4h1v-4h1v-2h1v-3h1v-1h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h3v-1h3v-1h2v-1h6Z",
             "mask": {
               "src": "cea1d80024071cd9.webp",
               "bytes": 240,
@@ -299,6 +300,44 @@
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    46,
+                    1442,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    786,
+                    1345,
+                    282,
+                    282
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-bravo",
@@ -310,7 +349,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-salut",
@@ -322,8 +367,94 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    -30.4,
+                    753.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0.0411,
+                    0,
+                    0.9179,
+                    1
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    893.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 47,
+                "depth": 3,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 68,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 11131,
+                "depth": 121,
+                "face": 0
               }
             }
           },
@@ -375,6 +506,7 @@
               744,
               892
             ],
+            "path": "M513 528h57v1h12v1h10v1h7v1h7v1h6v1h6v1h5v1h6v1h4v1h5v1h4v1h4v1h4v1h3v1h4v1h4v1h3v1h4v1h3v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h3v1h2v1h3v1h2v1h3v1h2v1h3v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v3h1v3h1v2h1v3h1v3h1v3h1v3h1v3h1v3h1v3h1v4h1v4h1v4h1v4h1v6h1v5h1v6h1v8h1v10h1v579h-1v4h-1v2h-1v2h-1v2h-1v2h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-3v1h-2v1h-5v1h-698v-1h-5v-1h-2v-1h-3v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-4h-1v-579h1v-11h1v-7h1v-6h1v-5h1v-6h1v-4h1v-4h1v-4h1v-4h1v-3h1v-3h1v-3h1v-4h1v-2h1v-3h1v-3h1v-2h1v-3h1v-3h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h3v-1h3v-1h2v-1h3v-1h3v-1h3v-1h4v-1h3v-1h3v-1h4v-1h3v-1h4v-1h4v-1h4v-1h4v-1h5v-1h4v-1h4v-1h6v-1h5v-1h6v-1h7v-1h6v-1h9v-1h10v-1h12Z",
             "mask": {
               "src": "eb3a73c24daa704e.webp",
               "bytes": 806,
@@ -634,6 +766,44 @@
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    3,
+                    1363,
+                    282,
+                    282
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    777,
+                    1336,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-sourire",
@@ -645,7 +815,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-cool",
@@ -657,8 +833,94 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    -26.4,
+                    753.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.025,
+                    1,
+                    0.95
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    893.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0104,
+                    1,
+                    0.9792
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 81,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 39,
+                "depth": 3,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 10866,
+                "depth": 120,
+                "face": 0
               }
             }
           },
@@ -710,6 +972,7 @@
               744,
               916
             ],
+            "path": "M224 504h632v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v804h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-631v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-804h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1Z",
             "mask": {
               "src": "6169597d0a3da400.webp",
               "bytes": 452,
@@ -952,7 +1215,13 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0564,
+                    1,
+                    0.8872
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-feu-artifice",
@@ -964,8 +1233,21 @@
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0567,
+                    0,
+                    0.8867,
+                    1
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },
@@ -1017,6 +1299,7 @@
               742,
               890
             ],
+            "path": "M539 529h2v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v2h1v3h1v3h1v3h1v3h1v3h1v3h1v4h1v4h1v4h1v5h1v7h1v7h1v554h-1v5h-1v2h-1v3h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-3v1h-2v1h-5v1h-698v-1h-5v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-3h-1v-2h-1v-5h-1v-554h1v-7h1v-7h1v-5h1v-4h1v-4h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2Z",
             "mask": {
               "src": "943a9683a3d70bf8.webp",
               "bytes": 1014,
@@ -1287,7 +1570,13 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0219,
+                    0,
+                    0.9562,
+                    1
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-trophee",
@@ -1299,8 +1588,21 @@
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.033,
+                    1,
+                    0.934
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },
@@ -1352,6 +1654,7 @@
               740,
               926
             ],
+            "path": "M529 497h17v1h19v1h11v1h7v1h7v1h5v1h5v1h5v1h5v1h4v1h3v1h4v1h4v1h3v1h3v1h3v1h3v1h3v1h3v1h3v1h2v1h3v1h2v1h3v1h2v1h2v1h3v1h2v1h2v1h2v1h2v1h3v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h2v1h2v1h2v1h1v1h2v1h2v1h2v1h1v1h2v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v1h1v2h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v1h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v2h1v3h1v2h1v2h1v2h1v3h1v2h1v3h1v2h1v3h1v2h1v3h1v2h1v3h1v3h1v2h1v3h1v3h1v3h1v3h1v3h1v3h1v3h1v3h1v4h1v3h1v3h1v4h1v3h1v4h1v4h1v4h1v4h1v4h1v4h1v5h1v5h1v4h1v5h1v6h1v6h1v6h1v6h1v8h1v7h1v10h1v11h1v15h1v64h-1v15h-1v11h-1v9h-1v8h-1v8h-1v6h-1v6h-1v6h-1v5h-1v6h-1v5h-1v4h-1v5h-1v4h-1v4h-1v4h-1v4h-1v4h-1v4h-1v3h-1v4h-1v3h-1v3h-1v4h-1v3h-1v3h-1v3h-1v3h-1v3h-1v3h-1v3h-1v3h-1v2h-1v3h-1v3h-1v2h-1v3h-1v2h-1v3h-1v2h-1v3h-1v2h-1v3h-1v2h-1v2h-1v2h-1v3h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v1h-1v2h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v2h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-1v1h-2v1h-2v1h-1v1h-2v1h-2v1h-1v1h-2v1h-2v1h-2v1h-1v1h-2v1h-2v1h-2v1h-2v1h-2v1h-1v1h-2v1h-2v1h-2v1h-3v1h-2v1h-2v1h-2v1h-2v1h-2v1h-3v1h-2v1h-3v1h-2v1h-3v1h-2v1h-3v1h-3v1h-3v1h-3v1h-3v1h-3v1h-3v1h-4v1h-4v1h-3v1h-4v1h-5v1h-5v1h-5v1h-5v1h-7v1h-7v1h-11v1h-18v1h-13v-1h-18v-1h-13v-1h-6v-1h-6v-1h-7v-1h-4v-1h-5v-1h-5v-1h-4v-1h-3v-1h-4v-1h-3v-1h-4v-1h-3v-1h-3v-1h-3v-1h-3v-1h-3v-1h-3v-1h-2v-1h-3v-1h-2v-1h-3v-1h-2v-1h-3v-1h-2v-1h-2v-1h-2v-1h-2v-1h-3v-1h-2v-1h-2v-1h-2v-1h-2v-1h-1v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-2v-1h-1v-1h-2v-1h-2v-1h-1v-1h-2v-1h-2v-1h-1v-1h-2v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-1h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-2h-1v-2h-1v-3h-1v-2h-1v-3h-1v-2h-1v-3h-1v-2h-1v-3h-1v-2h-1v-3h-1v-3h-1v-2h-1v-3h-1v-3h-1v-3h-1v-3h-1v-3h-1v-3h-1v-3h-1v-3h-1v-4h-1v-3h-1v-3h-1v-4h-1v-3h-1v-4h-1v-4h-1v-4h-1v-4h-1v-4h-1v-4h-1v-5h-1v-4h-1v-5h-1v-6h-1v-5h-1v-6h-1v-6h-1v-6h-1v-8h-1v-8h-1v-8h-1v-12h-1v-14h-1v-65h1v-15h1v-11h1v-10h1v-7h1v-8h1v-6h1v-6h1v-6h1v-6h1v-5h1v-4h1v-5h1v-5h1v-4h1v-4h1v-4h1v-4h1v-4h1v-4h1v-3h1v-4h1v-3h1v-3h1v-4h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-3h1v-2h1v-3h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-3h1v-2h1v-2h1v-2h1v-3h1v-2h1v-2h1v-2h1v-2h1v-3h1v-1h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-2h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h2v-1h1v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h2v-1h1v-1h2v-1h1v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h2v-1h1v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h2v-1h3v-1h2v-1h2v-1h3v-1h2v-1h3v-1h2v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h3v-1h4v-1h4v-1h4v-1h3v-1h5v-1h5v-1h4v-1h7v-1h6v-1h8v-1h6v-1h17Z",
             "mask": {
               "src": "260527ce57148a90.webp",
               "bytes": 1776,
@@ -1606,7 +1909,13 @@
                   ],
                   "rotate": -6,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0746,
+                    1,
+                    0.8507
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-champagne",
@@ -1618,8 +1927,21 @@
                   ],
                   "rotate": 6,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0758,
+                    1,
+                    0.8484
+                  ]
                 }
+              }
+            },
+            "validated": {
+              "ruban": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
               }
             }
           },
@@ -1670,6 +1992,7 @@
               744,
               924
             ],
+            "path": "M194 496h692v1h5v1h2v1h3v1h2v1h2v1h1v1h1v1h1v1h1v1h1v1h1v1h1v2h1v2h1v3h1v3h1v4h1v872h-1v4h-1v3h-1v3h-1v2h-1v1h-1v1h-1v2h-1v1h-1v1h-1v1h-2v1h-1v1h-1v1h-2v1h-3v1h-2v1h-5v1h-693v-1h-4v-1h-2v-1h-3v-1h-2v-1h-1v-1h-2v-1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-2h-1v-1h-1v-2h-1v-2h-1v-4h-1v-4h-1v-872h1v-4h1v-3h1v-3h1v-2h1v-2h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h1v-1h2v-1h2v-1h3v-1h2v-1h5Z",
             "mask": {
               "src": "24d3fee7b4014fc0.webp",
               "bytes": 212,
@@ -1929,6 +2252,44 @@
           "birds": {
             "default": "perches",
             "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1390,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    734,
+                    1398,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
+                }
+              },
               "perches": {
                 "mee": {
                   "sticker": "mee-coucou",
@@ -1940,7 +2301,13 @@
                   ],
                   "rotate": -10,
                   "flip": false,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
                 },
                 "meo": {
                   "sticker": "meo-bravo",
@@ -1952,8 +2319,94 @@
                   ],
                   "rotate": 10,
                   "flip": true,
-                  "opacity": 1
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
                 }
+              },
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    -26.4,
+                    753.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0865,
+                    1,
+                    0.827
+                  ]
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    897.6,
+                    833.6,
+                    212.8,
+                    212.8
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0.0325,
+                    0,
+                    0.9349,
+                    1
+                  ]
+                }
+              },
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    650,
+                    1090,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1,
+                  "art": [
+                    0,
+                    0.0375,
+                    1,
+                    0.9251
+                  ]
+                }
+              }
+            },
+            "validated": {
+              "pied": {
+                "overlap": 45,
+                "depth": 4,
+                "face": 0
+              },
+              "perches": {
+                "overlap": 0,
+                "depth": 0,
+                "face": 0
+              },
+              "cotes": {
+                "overlap": 59,
+                "depth": 4,
+                "face": 0
+              },
+              "selfie": {
+                "overlap": 11403,
+                "depth": 123,
+                "face": 0
               }
             }
           },

@@ -184,12 +184,16 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
    * (`routes/conversations.tsx`, `minHeight: 44`). Le geste qu'on rattrape est
    * souvent tapé en marchant, sur un réseau qui coupe — il ne peut pas être le
    * seul contrôle du chantier sous la règle.
+   *
+   * La hauteur s'arrondit avant d'être comparée (#12758) : la mise en page au
+   * sous-pixel mesure parfois 43,9999 une bande de 44 px CSS, et le gate
+   * rougissait pour une cible tenue. Même idiome que `check-gateway-build.mjs`.
    */
   if (failedShown) {
     const band = page.locator('main li button[data-send-failed="retryable"]').first();
     const box = await band.boundingBox();
     expect(
-      box !== null && box.height >= 44,
+      box !== null && Math.round(box.height) >= 44,
       `la bande de reprise du fil couvre au moins 44 px de haut (obtenu : ${box?.height ?? 'absent'})`,
     );
   }

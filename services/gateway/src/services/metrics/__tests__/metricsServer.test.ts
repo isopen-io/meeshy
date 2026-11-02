@@ -6,7 +6,7 @@
  *
  * @jest-environment node
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import { mediaStageMetrics } from '../mediaStageMetrics';
 import { metricsServerConfig, startMetricsServer } from '../metricsServer';
 
@@ -76,5 +76,30 @@ describe('attachMetricsServer', () => {
     await app.ready();
     await app.close();
     expect(started).toEqual([]);
+  });
+
+  it('un port déjà pris ne fait pas tomber la passerelle, et l’avertissement est ÉCRIT (pas le no-op de logger: false)', async () => {
+    const { default: Fastify } = await import('fastify');
+    const { createServer } = await import('node:net');
+    const { attachMetricsServer } = await import('../metricsServer');
+    const squatter = createServer();
+    await new Promise<void>((resolve) => squatter.listen(0, '127.0.0.1', resolve));
+    const port = (squatter.address() as { port: number }).port;
+    const written: string[] = [];
+    const spy = jest.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => { written.push(args.map(String).join(' ')); });
+    try {
+      const app = Fastify({ logger: false });
+      const started: number[] = [];
+      attachMetricsServer(app, { port, host: '127.0.0.1' }, mediaStageMetrics().registry, (p) => started.push(p));
+
+      await app.ready();
+      await app.close();
+
+      expect(started).toEqual([]);
+      expect(written.some((line) => line.includes('metrics server did not start'))).toBe(true);
+    } finally {
+      spy.mockRestore();
+      await new Promise<void>((resolve) => squatter.close(() => resolve()));
+    }
   });
 });

@@ -68,7 +68,7 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 const HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
 
 const lawFaithfulResolver =
-  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  (friendsOfViewer: ReadonlySet<string> = new Set(), level: 'FRIEND' | 'CLOSE' = 'FRIEND') =>
   async (viewer: PresenceViewer, ids: readonly string[]) =>
     new Map(
       ids.map((id) => [
@@ -77,7 +77,7 @@ const lawFaithfulResolver =
           ? resolvePresenceVisibility({
               isSelf: viewer.userId === id,
               viewerRole: viewer.role,
-              areConnected: friendsOfViewer.has(id),
+              relationLevel: friendsOfViewer.has(id) ? level : 'PUBLIC',
               targetShowOnlineStatus: true,
               targetShowLastSeen: true,
               targetIsDeactivated: false,
@@ -350,8 +350,17 @@ describe.each(['PUT', 'PATCH'] as const)(
       );
     });
 
-    it('ami accepté ⇒ présence servie', async () => {
+    it('Ami ⇒ « en ligne » servi, lastActiveAt JAMAIS (#13928)', async () => {
       mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([USER_ID])));
+
+      const served = await updateWithParticipants([participantRow()]);
+
+      expect(served.participants[0].isOnline).toBe(true);
+      expect(served.participants[0].lastActiveAt).toBeNull();
+    });
+
+    it('Proche ⇒ présence détaillée servie (#13928)', async () => {
+      mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([USER_ID]), 'CLOSE'));
 
       const served = await updateWithParticipants([participantRow()]);
 
@@ -531,9 +540,40 @@ describe('Autorité de plateforme sur une conversation (#3941)', () => {
       await app.close();
     });
 
-    it('un MODERATOR de la plateforme reste un participant ordinaire', async () => {
+    it('un MODERATOR de la plateforme, simple membre, renomme comme un ADMIN (#11217)', async () => {
       const { prisma, conversationUpdate } = createMockPrisma('member');
       const app = await buildApp(prisma, 'MODERATOR');
+
+      const res = await update(app, 'PUT', { title: 'Renommé par un modérateur global' });
+
+      expect(res.statusCode).toBe(200);
+      expect(conversationUpdate).toHaveBeenCalled();
+      await app.close();
+    });
+
+    // « une fois DANS » (#3941, #11217) : sans ligne de participation, un rôle
+    // de plateforme n'a aucun rang ici. Configurer une conversation dont on
+    // n'est pas membre passe par la route souveraine (`requireAdminRank`,
+    // motif écrit, `AdminAuditLog`), jamais par la route de membre.
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])(
+      'refuse un %s de la plateforme ÉTRANGER à la conversation',
+      async (platformRole) => {
+        const { prisma, conversationUpdate } = createMockPrisma(null);
+        const app = await buildApp(prisma, platformRole);
+
+        const res = await update(app, 'PUT', { title: 'Renommé du dehors' });
+        const patch = await update(app, 'PATCH', { slowModeSeconds: 30 });
+
+        expect(res.statusCode).toBe(403);
+        expect(patch.statusCode).toBe(403);
+        expect(conversationUpdate).not.toHaveBeenCalled();
+        await app.close();
+      },
+    );
+
+    it.each(['AUDIT', 'ANALYST'])('un %s de la plateforme reste un participant ordinaire', async (platformRole) => {
+      const { prisma, conversationUpdate } = createMockPrisma('member');
+      const app = await buildApp(prisma, platformRole);
 
       const res = await update(app, 'PUT', { title: 'Renommé par un modérateur global' });
 
@@ -593,6 +633,20 @@ describe('Autorité de plateforme sur une conversation (#3941)', () => {
       expect(res.statusCode).toBe(403);
       await app.close();
     });
+
+    it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])(
+      'refuse de fermer pour un %s de la plateforme ÉTRANGER à la conversation (#11217)',
+      async (platformRole) => {
+        const { prisma, conversationUpdate } = createMockPrisma(null);
+        const app = await buildApp(prisma, platformRole);
+
+        const res = await remove(app);
+
+        expect(res.statusCode).toBe(403);
+        expect(conversationUpdate).not.toHaveBeenCalled();
+        await app.close();
+      },
+    );
 
     it('laisse supprimer un ADMIN de la plateforme simple membre', async () => {
       const { prisma, conversationUpdate } = createMockPrisma('member');

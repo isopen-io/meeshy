@@ -22,10 +22,12 @@ const item = (pack: string, key: string): ServedProfileDecorItem => ({ pack, ite
 describe('le sélecteur de contour', () => {
   test('ne liste que les contours possédés et installés, un par choix, plus « Aucun »', () => {
     const html = renderToStaticMarkup(<DecorChoices side="avatarRing" language="fr" groups={rings} names={names} current={null} accent="#6366F1" scheme="light" onChoose={noop} />);
-    expect((html.match(/role="radio"/g) ?? []).length).toBe(8);
+    expect((html.match(/role="radio"/g) ?? []).length).toBe(46);
     expect(html).toContain('Aucun');
     expect(html).toContain('Filet');
     expect(html).toContain('Laurier');
+    expect(html).toContain('Masque félin');
+    expect(html).toContain('Ailes de démon');
   });
 
   test('le contour équipé est le seul coché', () => {
@@ -45,9 +47,9 @@ describe('le sélecteur de contour', () => {
 });
 
 describe('le sélecteur de bannière', () => {
-  test('propose « Photo » en tête, puis les sept bannières', () => {
+  test('propose « Photo » en tête, puis les neuf bannières', () => {
     const html = renderToStaticMarkup(<DecorChoices side="banner" language="fr" groups={banners} names={names} current={null} accent="#6366F1" scheme="dark" onChoose={noop} />);
-    expect((html.match(/role="radio"/g) ?? []).length).toBe(8);
+    expect((html.match(/role="radio"/g) ?? []).length).toBe(10);
     expect(html.indexOf('Photo')).toBeLessThan(html.indexOf('Aurore'));
     expect(html).toContain('domaine=banner');
   });

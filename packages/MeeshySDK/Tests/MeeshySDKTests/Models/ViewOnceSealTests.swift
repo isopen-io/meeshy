@@ -133,3 +133,39 @@ private struct InMemoryReceiptLedger: EphemeralReceiptRecording {
     func destruction(of messageId: String) -> Date? { nil }
     func noteDestruction(of messageId: String, at date: Date) {}
 }
+
+/// #13109 — une pièce peut ne déclarer sa protection que par ses `effectFlags`
+/// (`isViewOnce == false`) : la loi unique la lit quand même.
+@Suite("Une pièce protégée par ses seuls drapeaux est protégée")
+struct PieceEffectFlagsProtectionTests {
+    private func message(piece: MeeshyMessageAttachment) -> MeeshyMessage {
+        MeeshyMessage(id: "m1", conversationId: "c1", senderId: "s1", content: "SECRET", attachments: [piece])
+    }
+
+    @Test func aPieceDeclaredViewOnceByItsFlagsOnly_makesTheMessageHoldAViewOnce() {
+        let piece = MeeshyMessageAttachment(id: "a1", isViewOnce: false, effectFlags: MessageEffectFlags.viewOnce.rawValue)
+
+        let held = message(piece: piece)
+
+        #expect(piece.declaresViewOnce)
+        #expect(held.holdsViewOnce)
+        #expect(held.protectionFlags.contains(.viewOnce))
+        #expect(held.isViewOnceSealed)
+    }
+
+    @Test func aPieceDeclaredBlurredByItsFlagsOnly_declaresItsBlur() {
+        let piece = MeeshyMessageAttachment(id: "a1", isBlurred: false, effectFlags: MessageEffectFlags.blurred.rawValue)
+
+        #expect(piece.declaresBlur)
+        #expect(!piece.declaresViewOnce)
+    }
+
+    @Test func anOrdinaryPiece_declaresNothing() {
+        let piece = MeeshyMessageAttachment(id: "a1")
+
+        #expect(!piece.declaresBlur)
+        #expect(!piece.declaresViewOnce)
+        #expect(!message(piece: piece).holdsViewOnce)
+    }
+}
+

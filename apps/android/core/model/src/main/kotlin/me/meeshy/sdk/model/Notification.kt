@@ -28,10 +28,18 @@ data class RegisterDeviceTokenRequest(
     val deviceName: String? = null,
     val appVersion: String? = null,
     val bundleId: String? = null,
+    /**
+     * What this client can render. [CAPABILITY_DATA_ONLY] tells the gateway the app renders a
+     * data-only push itself (gated by the local preferences), so it may stop sending the
+     * `notification` block. Optional : the gateway strips an unknown key today
+     * (`registerDeviceTokenSchema` is a non-strict `z.object`), so the token still registers.
+     */
+    val capabilities: List<String>? = null,
 ) {
     companion object {
         const val PLATFORM_ANDROID = "android"
         const val TYPE_FCM = "fcm"
+        const val CAPABILITY_DATA_ONLY = "data-only"
         const val DEVICE_ID_MAX = 255
         const val DEVICE_NAME_MAX = 100
         const val APP_VERSION_MAX = 50

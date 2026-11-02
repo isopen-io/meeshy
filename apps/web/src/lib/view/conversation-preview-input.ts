@@ -8,6 +8,8 @@ import type {
 import type { ListConversation, ListLastMessage } from '@/lib/api/list-preview';
 import type { Attachment, Conversation } from '@/lib/api/types';
 
+import { endToEndRegimeOf, isForgedPlaintext, isVerifiedPlaintext, SEALED_CONTENT, shownForm, type EndToEndRegimeView } from './end-to-end-sealed';
+
 /**
  * CE QUE LA LIGNE SAIT EN PLUS DE LA CONVERSATION — le lecteur, ses langues,
  * l'instant, et les trois sources locales que le cache de liste ne porte pas :
@@ -24,6 +26,8 @@ export type PreviewContext = {
   readonly servedDeadline?: number | null;
   readonly typing?: readonly string[] | null;
   readonly draft?: string | null;
+  /** Le régime vu de la conversation (#12992) ; absent : lu dans le registre du compte. */
+  readonly regime?: EndToEndRegimeView;
 };
 
 type Hoisted = {
@@ -82,13 +86,49 @@ function attachmentOf(attachment: ProtectedAttachment): ConversationPreviewAttac
   };
 }
 
-function messageOf(conversation: Conversation, context: PreviewContext): ConversationPreviewMessage | null {
+/**
+ * #12992 — un clair forgé après l'activation du bout en bout se dit comme un
+ * message chiffré : la loi unique (`isForgedPlaintext`) que le fil applique.
+ */
+function sealedPreviewOf(message: ConversationPreviewMessage): ConversationPreviewMessage {
+  return { ...message, content: SEALED_CONTENT, isEncrypted: true, translations: null, location: null, sticker: null, attachment: null, attachmentSummary: null };
+}
+
+function messageOf(conversation: Conversation, context: PreviewContext, regime: EndToEndRegimeView): ConversationPreviewMessage | null {
   const message = conversation.lastMessage as (ListLastMessage & Hoisted) | undefined | null;
   if (message === undefined || message === null) return null;
+  if (isForgedPlaintext(message, regime)) return sealedPreviewOf(projectedMessageOf(conversation, message, context));
+  if (!isVerifiedPlaintext(message, regime)) return projectedMessageOf(conversation, message, context);
+  /* #12992 (revues) — un clair d'avant l'activation reconnu par son empreinte
+     se dit depuis sa forme VÉRIFIÉE (`shownForm`), comme dans le fil : ni les
+     traductions ni la langue servies À CÔTÉ du message, ni le résumé de
+     pièces, l'appel ou l'avis système servis par la liste. */
+  const verified = shownForm(message, regime) as ListLastMessage & Hoisted;
+  return projectedMessageOf(conversation, verified, context, { trustServed: false });
+}
+
+type LastReaction = NonNullable<ConversationPreviewInput['lastReaction']>;
+
+/**
+ * #12992 (audit) — l'extrait du message réagi est un texte que la passerelle
+ * sert à côté du dernier message : dans une conversation scellée, il se dit
+ * chiffré, jamais lu (ni dans la ligne, ni dans le widget de la coque).
+ */
+const sealedReactionOf = (reaction: LastReaction | null, regime: EndToEndRegimeView): LastReaction | null =>
+  reaction === null || !regime.sealed || (reaction.excerptProtection !== null && reaction.excerptProtection !== 'ephemeral')
+    ? reaction
+    : { ...reaction, excerpt: null, excerptTranslations: null, excerptProtection: 'encrypted' };
+
+function projectedMessageOf(
+  conversation: Conversation,
+  message: ListLastMessage & Hoisted,
+  context: PreviewContext,
+  options: { readonly trustServed: boolean } = { trustServed: true },
+): ConversationPreviewMessage {
   const sender = message.sender;
   const attachments = (message.attachments ?? []) as readonly ProtectedAttachment[];
   const first = attachments[0];
-  const summary = message.attachmentSummary ?? summaryOf(attachments);
+  const summary = (options.trustServed ? message.attachmentSummary : undefined) ?? summaryOf(attachments);
   const served = context.servedDeadline ?? null;
   const expiresAt = served ?? message.expiresAt ?? null;
 
@@ -98,8 +138,8 @@ function messageOf(conversation: Conversation, context: PreviewContext): Convers
     senderUserId: sender?.userId ?? null,
     senderName: nonEmpty(sender?.displayName) ?? nonEmpty(sender?.user?.displayName) ?? nonEmpty(sender?.user?.username),
     content: message.content ?? null,
-    originalLanguage: conversation.lastMessageOriginalLanguage ?? message.originalLanguage ?? null,
-    translations: conversation.lastMessageTranslations ?? null,
+    originalLanguage: (options.trustServed ? conversation.lastMessageOriginalLanguage : undefined) ?? message.originalLanguage ?? null,
+    translations: options.trustServed ? (conversation.lastMessageTranslations ?? null) : null,
     createdAt: message.createdAt,
     deletedAt: message.deletedAt ?? null,
     messageType: message.messageType ?? null,
@@ -133,6 +173,8 @@ function messageOf(conversation: Conversation, context: PreviewContext): Convers
  */
 export function previewInputOf(conversation: Conversation, context: PreviewContext): ConversationPreviewInput {
   const row = conversation as ListConversation;
+  const regime =
+    context.regime ?? endToEndRegimeOf({ conversationId: conversation.id, servedMode: conversation.encryptionMode, servedSince: conversation.encryptionEnabledAt });
   return {
     viewerId: context.viewerId,
     language: context.language,
@@ -142,8 +184,8 @@ export function previewInputOf(conversation: Conversation, context: PreviewConte
     activeCall: row.activeCall ?? null,
     typing: context.typing ?? null,
     draft: context.draft ?? null,
-    lastReaction: row.lastReaction ?? null,
-    lastMessage: messageOf(conversation, context),
+    lastReaction: sealedReactionOf(row.lastReaction ?? null, regime),
+    lastMessage: messageOf(conversation, context, regime),
     isDirect: conversation.type === 'direct',
   };
 }

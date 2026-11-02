@@ -39,7 +39,7 @@ public final class ProgressiveURLAsset: AVURLAsset, @unchecked Sendable {
 
 // unchecked: les requêtes en attente vivent sous `state` (Locked) et ne sont touchées que sur `queue`.
 public final class ProgressiveAssetLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
-    public typealias Source = @Sendable () async -> ProgressiveMediaDownload?
+    public typealias Source = @Sendable @concurrent () async -> ProgressiveMediaDownload?
 
     let queue = DispatchQueue(label: "me.meeshy.progressive-asset-loader", qos: .userInitiated)
 

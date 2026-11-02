@@ -115,3 +115,28 @@ describe('… et garde ce qui pouvait l’être', () => {
     await app.close();
   });
 });
+
+describe('#13825 — un pseudo sous le plancher n’est pas « disponible »', () => {
+  it('« Al » rend usernameAvailable: false, sans interroger la base sur lui, et propose des pseudos valides', async () => {
+    const app = await monter(false);
+
+    const res = await appeler(app, 'username=Al');
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.usernameAvailable).toBe(false);
+    expect(Array.isArray(data.suggestions)).toBe(true);
+    expect((data.suggestions as string[]).every((s) => s.length >= 3)).toBe(true);
+    expect((app as unknown as { prisma: { user: { findFirst: { mock: { calls: unknown[] } } } } }).prisma.user.findFirst.mock.calls).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('« Ali » libre reste disponible', async () => {
+    const app = await monter(false);
+
+    expect((await appeler(app, 'username=Ali')).json().data.usernameAvailable).toBe(true);
+
+    await app.close();
+  });
+});

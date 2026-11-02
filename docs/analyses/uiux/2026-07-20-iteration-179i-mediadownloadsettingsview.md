@@ -3,7 +3,7 @@
 **Date:** 2026-07-20
 **Scope:** iOS only
 **Area:** Design system (brand-color tokenization) + Accessibility (VoiceOver section headers)
-**File touched:** `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift` (1 file, 0 logic, 0 new i18n key, 0 new test)
+**File touched:** `apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift` (1 file, 0 logic, 0 new i18n key, 0 new test)
 
 ## Component
 

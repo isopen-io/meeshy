@@ -6,6 +6,9 @@ import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
 import { notificationEventOf } from '@/lib/notifications/notification-telemetry';
 import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from '@/lib/notifications/target';
 
+/** L'identifiant de publication de la coque (#13619) : `me.meeshy.app` est celui de l'application native. */
+export const SHELL_APP_PACKAGE = 'me.meeshy.webapp';
+
 /**
  * **LA COQUE ANDROID REÇOIT UN PUSH, APPLICATION FERMÉE** (#7307, ombrelle #7282).
  *
@@ -28,14 +31,6 @@ import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from 
  * `startShellPushInShell()` (`shell-push-runtime.ts`) branche les réels.
  */
 
-/**
- * **LE CANAL QUE LA PASSERELLE NOMME** (`android.notification.channelId`).
- * Sur Android 8+, une notification adressée à un canal INEXISTANT est jetée en
- * silence — FCM rend un succès, rien n'apparaît. Le créer au démarrage n'est
- * donc pas un réglage : c'est la condition pour qu'une bannière existe.
- */
-export const SHELL_PUSH_CHANNEL_ID = 'meeshy_notifications';
-
 export type ShellPushPermission = 'prompt' | 'prompt-with-rationale' | 'granted' | 'denied';
 
 type Listener<T> = (event: T) => void;
@@ -46,12 +41,6 @@ export type ShellPushPlugin = {
   requestPermissions(): Promise<{ readonly receive: ShellPushPermission }>;
   register(): Promise<void>;
   unregister(): Promise<void>;
-  createChannel(channel: {
-    readonly id: string;
-    readonly name: string;
-    readonly importance?: 1 | 2 | 3 | 4 | 5;
-    readonly visibility?: -1 | 0 | 1;
-  }): Promise<void>;
   addListener(eventName: 'registration', listener: Listener<{ readonly value: string }>): Promise<unknown>;
   addListener(eventName: 'registrationError', listener: Listener<{ readonly error: string }>): Promise<unknown>;
   addListener(eventName: 'pushNotificationReceived', listener: Listener<{ readonly data?: unknown }>): Promise<unknown>;
@@ -164,7 +153,9 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
   const registerToken = (): void => {
     const credential = account();
     if (token === null || activeUser === null || credential === null) return;
-    const body = { token, platform: 'android', type: 'fcm', appVersion: env.appVersion };
+    // L'identifiant de publication sépare la coque de l'application native sur `platform: 'android'` : sans lui,
+    // la passerelle ne sert aucun type qui exige une version de client (#10267, `push-type-routing.ts`).
+    const body = { token, platform: 'android', type: 'fcm', appVersion: env.appVersion, bundleId: SHELL_APP_PACKAGE };
     const send = (identity: ShellDeviceIdentity) =>
       transport.request({
         method: 'POST',
@@ -192,8 +183,6 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
   });
 
   await plugin.addListener('pushNotificationReceived', ({ data }) => note(data, 'received'));
-
-  await plugin.createChannel({ id: SHELL_PUSH_CHANNEL_ID, name: 'Meeshy', importance: 4, visibility: 0 }).catch(() => undefined);
 
   const opened = async (): Promise<void> => {
     const current = await plugin.checkPermissions().catch(() => ({ receive: 'denied' as const }));

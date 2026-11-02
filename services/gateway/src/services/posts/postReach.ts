@@ -1,3 +1,4 @@
+import { notePairInteraction } from '../relations/pairInteractionRecorder.js';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { rawReadingRetentionMs } from '../../config/raw-reading-retention';
 import type { AnalyticsStanding } from '../social/eventPrivacy';
@@ -226,6 +227,8 @@ export async function recordView(
       ? false
       : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration, ...context });
     creditStoryViewed(deps.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
+    // Les cercles (#13932) : une NOUVELLE vue du contenu de l'autre compte pour la paire.
+    if (isNewView) notePairInteraction(deps.prisma, { actorId: userId, otherId: target.authorId, nature: 'postView', at: now });
     if (context.impliesImpression && target.authorId !== userId) {
       await impressionImpliedByView(deps.prisma, { postId, userId, surface: context.surface }).catch((error: unknown) =>
         log.warn('recordView: impression implied by the view not written', {

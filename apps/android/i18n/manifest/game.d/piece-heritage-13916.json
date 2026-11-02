@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.minted.one",
+          "androidName": "game_fiche_heritage_minted_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.fiche.heritage.minted.other",
+          "androidName": "game_fiche_heritage_minted_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.treasury",
+          "androidName": "game_concept_fact_treasury",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.next_treasury",
+          "androidName": "game_concept_fact_next_treasury",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.treasury.what",
+          "androidName": "game_detail_treasury_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.treasury.how",
+          "androidName": "game_detail_treasury_how",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

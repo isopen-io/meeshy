@@ -89,14 +89,11 @@ const frStickerPacks = {
   'packs.shop.domains': "Domaine de la boutique",
   'packs.shop.hint': "Tous les packs : stickers, cadres, fonds, contours et bannières. Ce que vous possédez apparaît dans les écrans concernés.",
   'packs.retry': "Réessayer",
-  'packs.locked': "À débloquer",
-  'packs.unlock.rank': "Rang {rank} — Gloire manquante : {missing}",
-  'packs.unlock.glory': "Gloire manquante : {missing}",
-  'packs.unlock.trophy': "Se gagne avec un trophée",
-  'packs.unlock.season': "Récompense de la saison {number}",
-  'packs.unlock.upcoming': "Disponible à partir du {date}",
-  'packs.unlock.until': "Disponible jusqu’au {date}",
-  'packs.unlock.closed': "N’est plus proposé",
+  'packs.error.notRemovable': "Ce pack reste installé : il ne peut pas être retiré.",
+  'packs.frames.changeAtmosphere': "Changer d’atmosphère",
+  'packs.frames.yourAtmosphere': "Votre atmosphère",
+  'packs.frames.atmosphereKept': "Ce pack porte votre atmosphère : il reste installé. Changez d’atmosphère pour le retirer.",
+  'packs.frames.atmosphereQueued': "Hors ligne : votre choix partira avec la connexion.",
 } as const;
 
 export default frStickerPacks;

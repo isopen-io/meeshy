@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from '../CacheStore';
 
 const COMMUNITY_COMEMBERS_CACHE_TTL = 300; // 5 min — miroir des listes amis/contacts
+const COMMUNITY_ROWS_PER_MEMBER = 4;
 
 /**
  * La seule surface Prisma que la résolution touche. Déclarée en `Pick` plutôt
@@ -46,6 +47,68 @@ export async function getCommunityCoMemberIds(
     return result;
   } catch {
     return [];
+  }
+}
+
+/**
+ * Au plus `limit` co-membres actifs de `userId` — la lecture BORNÉE des éventails
+ * d'entourage au cran Communauté ou Public (#13929) : une grande communauté ne se
+ * charge jamais entière en mémoire pour une notification. Self exclu, sans cache
+ * (la borne en ferait une liste tronquée partagée). Panne ⇒ `[]`.
+ */
+export async function getCommunityCoMemberIdsBounded(
+  prisma: CommunityVisibilityPrisma,
+  userId: string,
+  limit: number,
+): Promise<string[]> {
+  try {
+    const memberships = await prisma.communityMember.findMany({
+      where: { userId, isActive: true },
+      select: { communityId: true },
+    });
+    if (memberships.length === 0) return [];
+    // Pas de `distinct` : sur Mongo, Prisma le résout en mémoire APRÈS lecture,
+    // ce qui rendrait `take` inopérant. Une marge de lignes (un membre peut être
+    // co-membre par plusieurs communautés), puis dédoublonnage et borne.
+    const coMembers = await prisma.communityMember.findMany({
+      where: { communityId: { in: memberships.map((m) => m.communityId) }, userId: { not: userId }, isActive: true },
+      select: { userId: true },
+      take: limit * COMMUNITY_ROWS_PER_MEMBER,
+    });
+    return [...new Set(coMembers.map((m) => m.userId))].slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Les co-membres actifs de `userId` PARMI `candidates` — l'intersection, jamais la
+ * communauté entière (#14081) : les appartenances de `userId`, puis, dans ses
+ * communautés, celles des seuls candidats. Coût en O(candidats × communautés de
+ * `userId`), quelle que soit la taille des communautés ; aucun `take`, qui
+ * couperait un candidat présent dans plusieurs d'entre elles. Panne ⇒ ensemble
+ * vide (personne n'est admis).
+ */
+export async function filterCommunityCoMembersAmong(
+  prisma: CommunityVisibilityPrisma,
+  userId: string,
+  candidates: readonly string[],
+): Promise<Set<string>> {
+  const others = [...new Set(candidates)].filter((id) => id !== userId);
+  if (others.length === 0) return new Set();
+  try {
+    const memberships = await prisma.communityMember.findMany({
+      where: { userId, isActive: true },
+      select: { communityId: true },
+    });
+    if (memberships.length === 0) return new Set();
+    const coMembers = await prisma.communityMember.findMany({
+      where: { communityId: { in: memberships.map((m) => m.communityId) }, userId: { in: others }, isActive: true },
+      select: { userId: true },
+    });
+    return new Set(coMembers.map((m) => m.userId));
+  } catch {
+    return new Set();
   }
 }
 

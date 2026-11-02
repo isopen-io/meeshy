@@ -57,7 +57,7 @@ périmée en occupait souvent plusieurs — elle a donc laissé les sites
 juste à côté d'un paragraphe qui ne l'était pas). Vérifié site par site,
 fermé pour de bon dans cette même passe :
 
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1211-1223`
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift:1211-1223`
   disait déjà, correctement, que les deux prémisses de la porte étaient
   tombées (en-tête posé, `carrierAspect` répare l'aller-retour) — mais le
   paragraphe SUIVANT, `:1225-1230`, redisait « le lecteur prendra la main le

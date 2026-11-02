@@ -23,6 +23,12 @@ enum ActionPolicyVectorFixtures {
         return try JSONDecoder().decode(ActionPolicyVectorFile<Vector>.self, from: Data(contentsOf: url)).vectors
     }
 
+    /// Un fichier partagé quelconque, par son chemin depuis la racine du dépôt
+    /// (`packages/shared/fixtures/relation-access-cases.json`).
+    static func sharedData(_ repoRelativePath: String) throws -> Data {
+        try Data(contentsOf: repoRoot().appendingPathComponent(repoRelativePath))
+    }
+
     static func date(_ raw: String?) -> Date? {
         raw.flatMap(WireDate.date(from:))
     }

@@ -9,7 +9,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
 
     private func makeSUT() -> (sut: CallTranscriptionService, socket: MockMessageSocket) {
         let socket = MockMessageSocket()
-        let sut = CallTranscriptionService(socket: socket)
+        let sut = CallTranscriptionService(socket: socket, gateResolver: MockCallCaptionsGateResolver(gate: .open))
+        sut.setCaptionsGateForTesting(.open)
         return (sut, socket)
     }
 
@@ -571,7 +572,7 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -786,7 +787,7 @@ final class CallTranscriptionServiceDeadCodeTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

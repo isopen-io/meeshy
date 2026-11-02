@@ -197,6 +197,7 @@ struct GalleryScenePage: View, Equatable {
             isPlaying: .constant(isPlaying && isActive && openingResolved),
             accentColorHex: accentColor,
             carrier: item.carrier,
+            sceneFloorHex: item.sceneFloorHex,
             preferredContentLanguages: preferredContentLanguages,
             startAt: isEntry ? openingPosition : 0,
             // **Le canvas ne peint JAMAIS son hors-champ** (#6791, #6904) :

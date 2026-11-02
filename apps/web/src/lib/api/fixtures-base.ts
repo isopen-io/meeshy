@@ -76,24 +76,57 @@ export const dayAt = (daysAgo: number, hour: number, minute: number): Date => {
  * puisqu'il n'en reste qu'une seule.
  */
 const THREAD_SPAN_MINUTES = 96;
-export const parisCalendarDay = (date: Date): string =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-    date,
-  );
+const calendarDayIn = (timeZone: string) => (date: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+
+export const parisCalendarDay = calendarDayIn('Europe/Paris');
+
+/**
+ * Le fuseau du programme qui charge les fixtures : celui du navigateur pour
+ * l'application et ses gates (UTC en intégration continue), celui du
+ * processus pour `bun test`. C'est dans CE fuseau que la lentille range la
+ * conversation (#12878) : entre 00:00 et 01:36 UTC, une ancre posée sur le
+ * seul jour parisien tombait la veille pour un navigateur en UTC.
+ */
+const runtimeTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**
  * Pure — extraite pour être testée indépendamment du chargement du module
  * (#5797) : quel que soit `at`, l'ancre rendue tombe TOUJOURS dans le jour
- * calendaire parisien de `at`, y compris quand `at` est à quelques minutes
- * d'un minuit parisien de part ou d'autre.
+ * calendaire de `at` dans CHACUN des fuseaux donnés (Paris, que les témoins
+ * de sections déclarent, et le fuseau du programme), y compris à quelques
+ * minutes d'un minuit de part ou d'autre.
  */
-export const resolveThreadAnchor = (at: Date, spanMinutes: number): Date => {
-  const todayInParis = parisCalendarDay(at);
+export const resolveThreadAnchor = (
+  at: Date,
+  spanMinutes: number,
+  timeZones: readonly string[] = ['Europe/Paris', runtimeTimeZone()],
+): Date => {
+  const days = timeZones.map(calendarDayIn);
+  const today = days.map((day) => day(at));
+  const isToday = (candidate: Date): boolean => days.every((day, index) => day(candidate) === today[index]);
   let candidate = new Date(at.getTime() - spanMinutes * 60_000);
-  while (parisCalendarDay(candidate) !== todayInParis) {
+  while (!isToday(candidate)) {
     candidate = new Date(candidate.getTime() + 60_000);
   }
   return candidate;
+};
+
+const HOUR_MS = 60 * 60_000;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Pure (#12826) — le même instant d'horloge, le jour calendaire PARISIEN
+ * suivant celui de `at`. Ajouter 24 heures ne suffit pas : un jour de
+ * changement d'heure dure 25 heures (hiver) ou 23 (été) à Paris, et +24 h y
+ * retombe sur le même jour, ou en saute deux.
+ */
+export const nextParisDayInstant = (at: Date): Date => {
+  const target = new Date(Date.parse(`${parisCalendarDay(at)}T00:00:00.000Z`) + DAY_MS).toISOString().slice(0, 10);
+  const sameClock = new Date(at.getTime() + DAY_MS);
+  const reached = parisCalendarDay(sameClock);
+  if (reached === target) return sameClock;
+  return new Date(sameClock.getTime() + (reached < target ? HOUR_MS : -HOUR_MS));
 };
 
 /**

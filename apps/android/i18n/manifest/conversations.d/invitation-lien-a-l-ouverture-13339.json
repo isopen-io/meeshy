@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "invite.defaultMessage",
+          "androidName": "invite_defaultMessage",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "invite.customize",
+          "androidName": "invite_customize",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

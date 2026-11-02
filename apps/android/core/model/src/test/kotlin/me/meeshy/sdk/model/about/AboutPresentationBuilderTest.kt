@@ -14,7 +14,7 @@ class AboutPresentationBuilderTest {
         versionName: String = "1.2.3",
         versionCode: Long = 45L,
         osRelease: String = "14",
-        applicationId: String = "me.meeshy.android",
+        applicationId: String = "me.meeshy.app",
         sdkVersion: String = "1.0.0",
     ) = AboutParams(versionName, versionCode, osRelease, applicationId, sdkVersion)
 

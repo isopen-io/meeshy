@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_column_text_style",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_text_effect",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_text_color",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_text_align",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_text_background",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_text_timing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_draw_color",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_draw_width",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_column_exit_tool",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

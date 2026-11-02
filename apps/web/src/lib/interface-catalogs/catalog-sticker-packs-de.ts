@@ -86,14 +86,11 @@ const deStickerPacks = {
   'packs.shop.domains': "Shop-Kategorie",
   'packs.shop.hint': "Alle Pakete: Sticker, Rahmen, Hintergründe, Ringe und Banner. Was du besitzt, erscheint in den passenden Bildschirmen.",
   'packs.retry': "Erneut versuchen",
-  'packs.locked': "Gesperrt",
-  'packs.unlock.rank': "Rang {rank} — fehlender Ruhm: {missing}",
-  'packs.unlock.glory': "Fehlender Ruhm: {missing}",
-  'packs.unlock.trophy': "Mit einer Trophäe zu gewinnen",
-  'packs.unlock.season': "Belohnung der Saison {number}",
-  'packs.unlock.upcoming': "Verfügbar ab {date}",
-  'packs.unlock.until': "Verfügbar bis {date}",
-  'packs.unlock.closed': "Nicht mehr im Angebot",
+  'packs.error.notRemovable': "Dieses Paket bleibt installiert: Es kann nicht entfernt werden.",
+  'packs.frames.changeAtmosphere': "Atmosphäre wechseln",
+  'packs.frames.yourAtmosphere': "Deine Atmosphäre",
+  'packs.frames.atmosphereKept': "Dieses Paket trägt deine Atmosphäre und bleibt installiert. Wechsle die Atmosphäre, um es zu entfernen.",
+  'packs.frames.atmosphereQueued': "Offline: Deine Wahl wird gesendet, sobald die Verbindung zurück ist.",
 } satisfies StickerPacksCatalog;
 
 export default deStickerPacks;

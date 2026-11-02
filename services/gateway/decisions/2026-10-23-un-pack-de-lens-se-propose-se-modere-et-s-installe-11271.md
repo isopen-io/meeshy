@@ -37,6 +37,23 @@ MeeshyLens v1 avait son contrat (`lens-format.ts`, #11270) mais aucun circuit : 
 - **La purge réécrit `credits.author`** dans le document publié et le ré-adresse (nouvelle empreinte, nouvelle adresse).
 - **Une LUT passe par sa propre porte, sans perte** (`lensLutImage.ts`) : relue, ré-écrite en PNG, à sa définition. La porte des stickers la ramenait à 512 px et pouvait l'écrire en WebP q90, ce qui fausse une table de couleurs.
 
+### Corrigé après le contre-audit de #12293, puis par #12329
+
+- **Une LUT garde chacune de ses valeurs** (N2, `lensLutImage.ts`) :
+  - le profil ICC est IGNORÉ, jamais appliqué : une table marquée Display P3 n'est pas convertie vers sRGB ;
+  - une table 16 bits sort en 16 bits (`rgb16`), et une table 16 bits sans couleur est refusée ;
+  - depuis #12329 (R4), une source hors RVB et gris (CMYK, Lab) est refusée : la convertir changerait chaque valeur.
+- **Le journal nomme le modérateur** (N3) : `adminId` porte l'identifiant de qui a modéré. Ce n'est pas forcément un administrateur : un MODERATOR peut modérer les lens (`canModerateContent`).
+- **Une lens retirée reste désinstallable, jamais réinstallable** (N4). `installable` la rend « non offerte » : `PUT /:slug/install` répond 404, tandis que `DELETE /:slug/install` aboutit pour qui l'avait installée. **Une lens retirée par erreur se rétablit** (#12321) : `POST /:slug/restore`, sous `canModerateContent`, fait `withdrawn → approved`, de façon conditionnelle.
+  - Le geste est journalisé avant d'agir (`LENS_PACK_RESTORE`), puis son issue (`LENS_PACK_RESTORE_APPLIED` avec `installationsReset`, ou `LENS_PACK_RESTORE_NOT_APPLIED`).
+  - **Tranché (#12329 R3) : ses installations retirées ne reviennent pas.** Elles sont remises à zéro avant que la lens redevienne visible, et `installCount` les décompte dans la même écriture. Chacun la réinstalle par son propre geste : une lens que la modération a jugée retirable ne réapparaît pas d'elle-même dans la caméra de qui ne l'a pas redemandée.
+- **Un geste qui n'a pas eu lieu le dit** :
+  - une course entre modérateurs (`updateMany` sans ligne) journalise `LENS_PACK_APPROVE_NOT_APPLIED`, `LENS_PACK_REJECT_NOT_APPLIED` ou `LENS_PACK_WITHDRAW_NOT_APPLIED`, avec la raison `concurrent-review` (N5) ;
+  - depuis #12329 (R2), une écriture qui LÈVE journalise la même ligne avec la raison `write-failed` avant que l'erreur ne remonte (500) ;
+  - si la ligne « non appliqué » ne s'écrit pas elle-même, le trou du journal se signale en erreur, nommé (action, slug, raison).
+
+À dire au produit (#12329) : pendant un déploiement progressif, la boutique peut différer d'une instance à l'autre, chacune relisant les surcharges du registre à son rythme (30 s au plus). Et `adminId` peut désigner un utilisateur de rôle MODERATOR.
+
 ### Laissé absent, à dessein
 
 - **Points « ATTEND » de #11251, jamais tranchés ici** :

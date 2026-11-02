@@ -26,6 +26,9 @@ public object ComposerPlateauInk {
     public val secondary: Color = MeeshyAdaptiveColors.textSecondary(isDark = true)
     public val accent: Color = MeeshyPalette.Indigo400
 
+    /** Ink laid ON the accent (a door's counter): the deepest indigo, legible on [accent] in both app themes. */
+    public val onAccent: Color = MeeshyPalette.Indigo950
+
     /** Hit target floor of a rail control, in dp (iOS `ComposerRailGeometry.railWidth`). */
     public const val HIT_TARGET_DP: Int = 44
 }

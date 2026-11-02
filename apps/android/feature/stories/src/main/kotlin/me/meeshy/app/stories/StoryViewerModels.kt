@@ -4,10 +4,13 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryClipTransition
+import me.meeshy.sdk.model.StoryLocationObject
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StorySourceWindowMs
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
 import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
 import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
@@ -15,6 +18,9 @@ import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryKeyframeResolver
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 import me.meeshy.sdk.model.scene.SceneLookRecipe
+import me.meeshy.sdk.model.scene.SceneObjectNumbers
+import me.meeshy.sdk.model.scene.LayeredScale
+import me.meeshy.sdk.model.scene.SceneObjectScalePolicy
 
 /**
  * A foreground media layer on a slide — a non-background [StoryMediaObject]
@@ -23,8 +29,8 @@ import me.meeshy.sdk.model.scene.SceneLookRecipe
  * [opacity] are the layer's *static* base transform; when the clip carries
  * [keyframes] or participates in a slide [clipTransitions] entry, call [animated]
  * with the playhead to obtain the transform for that instant. [id] matches the
- * clip against transitions; [duration] bounds its own timing window. Rotation is
- * still not applied in this projection.
+ * clip against transitions; [duration] bounds its own timing window. [rotation] is the
+ * author's static tilt in DEGREES (iOS `StoryMediaLayer`), which keyframes do not animate.
  */
 @Immutable
 data class StoryForegroundMediaView(
@@ -35,6 +41,7 @@ data class StoryForegroundMediaView(
     val y: Double,
     val scale: Double,
     val aspectRatio: Double,
+    val rotation: Double = 0.0,
     val opacity: Double = 1.0,
     val startTime: Double = 0.0,
     val duration: Double = 0.0,
@@ -49,6 +56,15 @@ data class StoryForegroundMediaView(
      * qu'il y est.
      */
     val sourceWindow: StorySourceWindowMs? = null,
+    /** Le look PROPRE de ce média (son filtre, ses réglages) : il ne colore que lui, jamais la scène. */
+    val lookRecipe: me.meeshy.sdk.model.scene.SceneLookRecipe = me.meeshy.sdk.model.scene.SceneLookRecipe.NEUTRAL,
+    /** L'affiche de la vidéo (la vignette que le serveur sert) : ce que la scène au repos peint à son cadre, sans lecteur. */
+    val posterUrl: String? = null,
+    /** Le ThumbHash de la pièce : l'affiche de repli quand le serveur n'a pas de vignette. */
+    val thumbHash: String? = null,
+    val zIndex: Int = 0,
+    /** Le recadrage d'une IMAGE posée (#13849) : le cadre en montre cette part, la source entière peinte derrière. */
+    val crop: me.meeshy.sdk.model.StoryMediaCrop? = null,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -79,6 +95,9 @@ data class StoryForegroundMediaView(
      */
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
+
+    /** The written scale split between the laid-out frame and the layer that magnifies beyond it (#14298) — no ceiling, no floor. */
+    val layered: LayeredScale get() = SceneObjectScalePolicy.layered(scale)
 
     fun animated(atSeconds: Float): StoryForegroundMediaView {
         val resolved = StoryKeyframeResolver.resolve(
@@ -118,12 +137,27 @@ data class StoryForegroundMediaView(
         }
         val opacityBase = fadeEnvelope ?: base.opacity
         return copy(
-            x = base.x,
-            y = base.y,
-            scale = base.scale,
-            opacity = opacityBase * transitionOpacity,
+            x = SceneObjectNumbers.position(base.x),
+            y = SceneObjectNumbers.position(base.y),
+            scale = SceneObjectScalePolicy.served(base.scale),
+            opacity = SceneObjectNumbers.opacity(opacityBase * transitionOpacity),
         )
     }
+
+    /** Les nombres d'un média publié par un TIERS, bornés une fois à la projection, comme ceux d'un texte (#13581). */
+    fun bounded(): StoryForegroundMediaView = copy(
+        x = SceneObjectNumbers.position(x),
+        y = SceneObjectNumbers.position(y),
+        scale = SceneObjectScalePolicy.served(scale),
+        aspectRatio = SceneObjectNumbers.aspectRatio(aspectRatio),
+        rotation = SceneObjectNumbers.rotation(rotation),
+        opacity = SceneObjectNumbers.opacity(opacity),
+        startTime = SceneObjectNumbers.seconds(startTime),
+        duration = SceneObjectNumbers.seconds(duration),
+        fadeIn = SceneObjectNumbers.seconds(fadeIn),
+        fadeOut = SceneObjectNumbers.seconds(fadeOut),
+        keyframes = SceneObjectNumbers.capped(keyframes).map(SceneObjectNumbers::keyframe),
+    )
 }
 
 /**
@@ -182,6 +216,13 @@ data class StorySlideView(
      */
     val backgroundTransform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
     /**
+     * Le fond est AJUSTÉ (`backgroundTransform.videoFitMode == "fit"`, iOS `.resizeAspect`, #14199) : le média tient ENTIER dans
+     * la scène, centré, et ses bandes se peignent de [backdrop]. Faux — l'absence comprise — il la REMPLIT, rogné au centre.
+     */
+    val backgroundFits: Boolean = false,
+    /** Le fond des bandes d'un média ajusté : le flou du média par défaut, ou la teinte que l'auteur a choisie. */
+    val backdrop: StoryBackdrop = StoryBackdrop.BLUR,
+    /**
      * The ThumbHash the viewer decodes into an instant blur behind the background
      * [imageUrl] while it loads — no black flash on cold load. Resolved once at
      * projection time via [StorySlidePlaceholder] (slide-level `effects.thumbHash`
@@ -190,6 +231,11 @@ data class StorySlideView(
      * no placeholder, exactly as before.
      */
     val backgroundThumbHash: String? = null,
+    /**
+     * L'affiche d'un fond VIDÉO (la vignette que le serveur sert) : ce que la scène au repos peint à la place du lecteur
+     * (#13663). `null` sans vignette — le [backgroundThumbHash] de la vidéo, puis l'aplat, prennent le relais.
+     */
+    val backgroundPosterUrl: String? = null,
     /**
      * The locked repost attribution shown after the author's name when this slide
      * is a repost of someone else's story (repost icon + `@handle`, no "via"),
@@ -207,6 +253,8 @@ data class StorySlideView(
     val strokes: List<StoryDrawingStroke> = emptyList(),
     /** Les stickers posés sur la scène (iOS `StoryStickerLayer`), du plus bas au plus haut. */
     val stickers: List<StoryStickerView> = emptyList(),
+    /** Les pastilles de lieu posées sur la scène (#13846, `storyEffects.locationObjects`). */
+    val places: List<StoryLocationObject> = emptyList(),
     /** Les puces des sons de premier plan (iOS `AudioForegroundChip`). */
     val audioChips: List<StoryAudioChipView> = emptyList(),
     /** Déjà vue par le lecteur à l'ouverture : la lecture commence à la première non vue. */
@@ -254,18 +302,33 @@ data class StoryViewerUiState(
     val isDismissed: Boolean = false,
     val reactionCount: Int = 0,
     val myReactions: Set<String> = emptySet(),
+    /** Les republications de la story à l'écran : le compte servi, plus celles de ce lecteur dès son geste (#14443). */
+    val repostCount: Int = 0,
+    /** Ce lecteur l'a republiée — la marque tient dès le geste et tombe si le serveur refuse. */
+    val hasReposted: Boolean = false,
     val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
     val isOwnStory: Boolean = false,
     val currentStoryId: String? = null,
+    /** « Composer » sait reprendre la story courante à l'identique (#13849, iOS `composableSlide`) : sinon l'entrée n'existe pas. */
+    val canCompose: Boolean = false,
     val prefetchUrls: List<String> = emptyList(),
     val canAutoAdvance: Boolean = false,
     val availableLanguages: List<StoryLanguageOption> = emptyList(),
     val languageOverride: String? = null,
+    /** La langue réellement servie sur le slide (jamais la sentinelle « Original ») : puce et texte la partagent. */
+    val activeLanguageCode: String? = null,
+    /** L'explorateur de langues ouvert (feuille), `null` tant qu'il est fermé. */
+    val languageExplorer: StoryLanguageExplorer? = null,
     /**
      * Ni le cache ni le réseau n'ont de story jouable pour l'auteur demandé : le lecteur
      * propose Réessayer et Fermer au lieu de se refermer seul ou d'ouvrir un autre auteur.
      */
     val loadFailed: Boolean = false,
+    /**
+     * La story précise demandée (une story republiée) n'est plus jouable : expirée, supprimée ou d'un auteur absent. L'écran
+     * ouvre alors la fiche du post ([loadFailed] reste faux — ce n'est pas un échec de chargement).
+     */
+    val missingStoryId: String? = null,
     /**
      * Pause demandée par l'appui long (iOS `StoryGestureOverlayView`, ≥ 200 ms) : la
      * lecture se fige et l'interface s'efface ; le relâchement ne reprend PAS, le tap
@@ -276,7 +339,15 @@ data class StoryViewerUiState(
     val isMuted: Boolean = false,
     /** Avatar de l'auteur du groupe courant, résolu ; `null` ⇒ initiales. */
     val authorAvatarUrl: String? = null,
+    /** Nombre d'auteurs dans la session : le geste horizontal sait s'il a un voisin à ouvrir. */
+    val groupCount: Int = 1,
+    /** Identifiant de l'auteur du groupe courant : cible du tap sur son identité (profil). */
+    val authorUserId: String? = null,
+    /** Présence servie de l'auteur courant (jamais la sienne) : repli de la carte unique pour le point de l'en-tête. */
+    val authorPresence: UserPresence? = null,
 ) {
+    val hasNextGroup: Boolean get() = groupIndex < groupCount - 1
+    val hasPreviousGroup: Boolean get() = groupIndex > 0
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
     val hasPrevious: Boolean get() = index > 0

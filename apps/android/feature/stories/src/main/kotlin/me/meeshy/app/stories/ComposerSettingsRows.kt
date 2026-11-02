@@ -13,7 +13,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Opacity
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PersonRemove
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -34,35 +47,32 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryBackgroundPalette
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.hexColor
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun VisibilityRow(
-    selected: StoryVisibility,
-    onSelect: (StoryVisibility) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        items(StoryVisibility.entries) { visibility ->
-            FilterChip(
-                selected = visibility == selected,
-                onClick = { onSelect(visibility) },
-                label = { Text(stringResource(visibility.labelRes())) },
-            )
-        }
-    }
+/** Les crans du cercle (#13939) suivent les glyphes d'iOS : main levée (👋), flamme (🔥), goutte (🩸). */
+internal fun StoryVisibility.icon(): ImageVector = when (this) {
+    StoryVisibility.PUBLIC -> Icons.Filled.Public
+    StoryVisibility.FRIENDS -> Icons.Filled.People
+    StoryVisibility.COMMUNITY -> Icons.Filled.Groups
+    StoryVisibility.ACQUAINTANCES -> MeeshyIcons.Hand
+    StoryVisibility.CLOSE -> MeeshyIcons.FlameFilled
+    StoryVisibility.BLOOD -> Icons.Filled.Opacity
+    StoryVisibility.ONLY -> Icons.Filled.PersonAdd
+    StoryVisibility.EXCEPT -> Icons.Filled.PersonRemove
+    StoryVisibility.PRIVATE -> Icons.Filled.Lock
 }
 
 internal fun StoryVisibility.labelRes(): Int = when (this) {
     StoryVisibility.PUBLIC -> R.string.stories_visibility_public
     StoryVisibility.FRIENDS -> R.string.stories_visibility_friends
     StoryVisibility.COMMUNITY -> R.string.stories_visibility_community
+    StoryVisibility.ACQUAINTANCES -> R.string.stories_visibility_acquaintances
+    StoryVisibility.CLOSE -> R.string.stories_visibility_close
+    StoryVisibility.BLOOD -> R.string.stories_visibility_blood
     StoryVisibility.PRIVATE -> R.string.stories_visibility_private
+    StoryVisibility.ONLY -> R.string.stories_visibility_only
+    StoryVisibility.EXCEPT -> R.string.stories_visibility_except
 }
 
 /**
@@ -158,7 +168,7 @@ internal fun FilterRow(
     selected: StoryFilter?,
     intensity: Float,
     onSelect: (StoryFilter?) -> Unit,
-    onIntensityChange: (Float) -> Unit,
+    onIntensityChange: ((Float) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -184,7 +194,7 @@ internal fun FilterRow(
                 )
             }
         }
-        if (selected != null) {
+        if (selected != null && onIntensityChange != null) {
             val intensityLabel = stringResource(R.string.stories_composer_filter_intensity)
             Slider(
                 value = intensity,

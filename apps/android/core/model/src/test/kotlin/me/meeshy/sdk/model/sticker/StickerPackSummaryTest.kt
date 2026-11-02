@@ -27,4 +27,14 @@ class StickerPackSummaryTest {
         assertThat(StickerPackSummary(slug = "fruits").isRemovable).isTrue()
         assertThat(StickerPackSummary(slug = "fruits", removable = false).isRemovable).isFalse()
     }
+
+    @Test
+    fun `la boutique lit l'auteur, la description et la couverture d'un pack`() {
+        val body = """[{"slug":"fruits","name":"Fruits","author":"Ada","description":"Des fruits","coverUrl":"/s/c.png"}]"""
+        val pack = json.decodeFromString(StickerPackList.serializer(), body).packs.single()
+        assertThat(pack.author).isEqualTo("Ada")
+        assertThat(pack.description).isEqualTo("Des fruits")
+        assertThat(pack.coverUrl).isEqualTo("/s/c.png")
+        assertThat(StickerPackSummary(slug = "x").author).isNull()
+    }
 }

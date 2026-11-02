@@ -8,6 +8,7 @@ import type { ApiResult } from '@/lib/api/http';
 import { createPackGestureGuard, newPurchaseRequestId } from '@/lib/api/packs';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { unlockText } from '@/lib/packs/unlock-texts';
 
 /**
  * **LA BOUTIQUE DE PACKS, UNE POUR TOUS LES DOMAINES** (#10149, LP1) — la
@@ -41,6 +42,8 @@ export type PackShopAdapter<P extends ShopPack> = {
   description(pack: P): string;
   meta(pack: P): readonly string[];
   cover(pack: P): ReactNode;
+  /** Ce qui MONTRE le pack sans l'installer, sous sa rangée (l'atlas des vignettes d'un pack de cadres, #10275) ; `null` ou absent : rien. */
+  preview?(pack: P): ReactNode;
   /** En Meeshes ; `null` ou absent = gratuit. Affichage seulement. */
   price?(pack: P): number | null;
   /** La possession lue au serveur (`owned`) ; absent = possédé. Le client ne la décide jamais. */
@@ -58,9 +61,19 @@ export type PackShopAdapter<P extends ShopPack> = {
   unlock?(pack: P): string | null;
   /** `true` = le pack n'est pas encore débloqué : ni « Installer » ni « Acheter » ne s'offrent (le serveur refuserait). */
   locked?(pack: P): boolean;
+  /**
+   * Le geste qui REMPLACE « Retirer » sur un pack installé que le compte tient en place (l'atmosphère choisie, #10163 PP7) ;
+   * `null` ou absent : le geste ordinaire.
+   */
+  swap?(pack: P): { readonly label: string; readonly run: () => void } | null;
+  /** Ce que dit un retrait refusé (409) de ce pack ; absent : « ce pack reste installé ». */
+  keptText?(pack: P): string;
 };
 
-type Notice = 'install' | 'insufficient' | 'purchase' | null;
+type Notice = 'install' | 'insufficient' | 'purchase' | { readonly kept: string } | null;
+
+/** Un retrait que le serveur refuse (409) n'est pas une panne : le pack reste, et cela se dit. */
+const isKept = (failure: { readonly status: number }, installing: boolean): boolean => !installing && failure.status === 409;
 
 /** Les rangées fantômes du premier chargement (cache vide) — jamais au-dessus d'un cache. */
 const SKELETON_ROWS = [0, 1, 2] as const;
@@ -156,7 +169,7 @@ export function PackShop<P extends ShopPack>({
     if (!result.ok) {
       queryClient.setQueryData(adapter.catalogueKey, beforeCatalogue);
       queryClient.setQueryData(adapter.installedKey, beforeInstalled);
-      setFailure('install');
+      setFailure(isKept(result, next) ? { kept: adapter.keptText?.(pack) ?? translateStickerPacks(language, 'packs.error.notRemovable') } : 'install');
       return;
     }
     complete?.(queryClient);
@@ -168,8 +181,11 @@ export function PackShop<P extends ShopPack>({
   useEffect(() => {
     if (focusPresent) focusedRow.current?.scrollIntoView?.({ block: 'center' });
   }, [focusPresent, focusSlug]);
+  const kept = typeof failure === 'object' && failure !== null;
   const notice =
-    failure === 'insufficient'
+    kept
+      ? failure.kept
+      : failure === 'insufficient'
       ? translateStickerPacks(language, 'packs.error.insufficient')
       : failure === 'purchase'
         ? translateStickerPacks(language, 'packs.error.purchase')
@@ -184,7 +200,7 @@ export function PackShop<P extends ShopPack>({
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
         {hint}
       </p>
-      <p className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: 'var(--ios-error)' }}>
+      <p className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: kept ? 'var(--color-ios-ink-2)' : 'var(--ios-error)' }}>
         {notice}
       </p>
 
@@ -222,6 +238,7 @@ export function PackShop<P extends ShopPack>({
             const title = adapter.title(pack);
             const price = adapter.price?.(pack) ?? null;
             const toBuy = needsPurchase(pack);
+            const swap = pack.installed && !toBuy ? (adapter.swap?.(pack) ?? null) : null;
             const action = toBuy
               ? translateStickerPacks(language, 'packs.buy', { price: String(price) })
               : translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install');
@@ -230,53 +247,67 @@ export function PackShop<P extends ShopPack>({
                 key={pack.slug}
                 data-shop-pack={pack.slug}
                 {...(pack.slug === focusSlug ? { 'data-shop-pack-focused': '', 'aria-current': 'true' as const, ref: focusedRow } : {})}
-                className="flex items-center gap-3 rounded-2xl p-3"
+                className="flex flex-col gap-2 rounded-2xl p-3"
                 style={{ backgroundColor: 'var(--color-ios-card)', ...(pack.slug === focusSlug ? { outline: '2px solid var(--accent, var(--color-ios-brand))' } : {}) }}
               >
-                {adapter.cover(pack)}
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <h3 className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                    {title}
-                  </h3>
-                  <p className="line-clamp-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    {adapter.description(pack)}
-                  </p>
-                  {unlockOf(pack) === null ? null : (
-                    <p data-shop-unlock className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                      {unlockOf(pack)}
+                <div className="flex items-center gap-3">
+                  {adapter.cover(pack)}
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <h3 className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+                      {title}
+                    </h3>
+                    <p className="line-clamp-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                      {adapter.description(pack)}
                     </p>
+                    {unlockOf(pack) === null ? null : (
+                      <p data-shop-unlock className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                        {unlockOf(pack)}
+                      </p>
+                    )}
+                    <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
+                      {[...adapter.meta(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
+                    </p>
+                  </div>
+                  {adapter.locked?.(pack) === true && !pack.installed ? (
+                    <span data-shop-locked={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                      {unlockText(language, 'locked')}
+                    </span>
+                  ) : swap !== null ? (
+                    <button
+                      type="button"
+                      data-shop-swap={pack.slug}
+                      aria-label={`${swap.label} — ${title}`}
+                      onClick={swap.run}
+                      className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
+                      style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}
+                    >
+                      {swap.label}
+                    </button>
+                  ) : pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
+                    <span data-shop-included={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                      {translateStickerPacks(language, 'packs.included')}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      data-shop-toggle={pack.slug}
+                      {...(toBuy ? {} : { 'aria-pressed': pack.installed })}
+                      data-shop-buy={toBuy ? pack.slug : undefined}
+                      aria-busy={flying.has(pack.slug)}
+                      aria-label={`${action} ${title}`}
+                      onClick={() => void toggle(pack)}
+                      className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
+                      style={
+                        pack.installed && !toBuy
+                          ? { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
+                          : { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)' }
+                      }
+                    >
+                      {action}
+                    </button>
                   )}
-                  <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-                    {[...adapter.meta(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
-                  </p>
                 </div>
-                {adapter.locked?.(pack) === true && !pack.installed ? (
-                  <span data-shop-locked={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    {translateStickerPacks(language, 'packs.locked')}
-                  </span>
-                ) : pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
-                  <span data-shop-included={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    {translateStickerPacks(language, 'packs.included')}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    data-shop-toggle={pack.slug}
-                    {...(toBuy ? {} : { 'aria-pressed': pack.installed })}
-                    data-shop-buy={toBuy ? pack.slug : undefined}
-                    aria-busy={flying.has(pack.slug)}
-                    aria-label={`${action} ${title}`}
-                    onClick={() => void toggle(pack)}
-                    className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
-                    style={
-                      pack.installed && !toBuy
-                        ? { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
-                        : { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)' }
-                    }
-                  >
-                    {action}
-                  </button>
-                )}
+                {adapter.preview?.(pack) ?? null}
               </li>
             );
           })}

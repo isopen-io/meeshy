@@ -29,6 +29,23 @@ describe('liftOffset', () => {
   });
 });
 
+/**
+ * LE FLIP PART DU BORD QUE TIENT L'APERÇU (#12635) — en RTL, une bulle envoyée
+ * vit à GAUCHE : partir du bord droit de la rangée la faisait sauter, au départ
+ * de l'élévation, de la différence de largeur entre la rangée et l'aperçu.
+ */
+describe('liftOffset — le bord tenu par l’aperçu', () => {
+  const row = { left: 14, right: 376, top: 300 };
+
+  test('RTL, bulle envoyée tenue à gauche : le décalage part du bord GAUCHE', () => {
+    expect(liftOffset({ anchor: row, placement: { ...placement, previewEdge: 'left' }, isMine: true })).toEqual({ dx: -2, dy: 60 });
+  });
+
+  test('sans bord déclaré, le côté du message décide comme avant', () => {
+    expect(liftOffset({ anchor: row, placement, isMine: true })).toEqual({ dx: 2, dy: 60 });
+  });
+});
+
 describe('liftMotion', () => {
   const offset = { dx: -16, dy: 60 };
 

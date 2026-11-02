@@ -16,7 +16,7 @@ plutôt que d'inventer un chiffre.
 
 ## 1. Sources lues
 
-### iOS — `apps/ios/Meeshy/Features/Main/Lentille/**` (5 687 lignes, lu en entier)
+### iOS — `apps/ios/Meeshy/Features/Lens/**` (5 687 lignes, lu en entier)
 
 | fichier | lignes lues |
 |---|---|
@@ -372,7 +372,7 @@ posée par `.visualEffect` (iOS 17+ ; sur iOS 16 le rang est rendu tel quel, `:1
 n'écrit QUE `opacity` et `scaleEffect` (`:172-174`), avec l'ancre `UnitPoint(0.16, 0.5)`
 (`transformOrigin`, `:110-112`, lue dans `LentilleMetrics.Row`). Un dossier entier est gardé contre
 `.font(`, `.offset(`, `blur(`, `rotationEffect(` — `LentillePerspectiveCurveTests` scanne
-dynamiquement `Lentille/Perspective/*` (cité par `Mode/LentilleFocusCard.swift:5-15`).
+dynamiquement `Lens/Perspective/*` (cité par `Mode/LentilleFocusCard.swift:5-15`).
 
 La courbe est le miroir gelé `FocalFocusCurve.focusCurve(distance:variant: .list)`
 (`Focal/Core/FocalFocusCurve.swift:133-152`) :
@@ -887,7 +887,7 @@ citent le contrat, pas le code — et le contrat est antérieur au correctif.
 Elle le dit elle-même (`§0` et `§7.3` : « capture iOS indisponible »), et cela se voit à trois
 endroits :
 
-1. **Elle a été écrite depuis les ACTIONS, pas depuis le dossier `Lentille/`.** Ses références iOS
+1. **Elle a été écrite depuis les ACTIONS, pas depuis le dossier `Lens/`.** Ses références iOS
    sont `ConversationListView.swift:945-1040`, `+Rows.swift:113-216`, `ConversationListQuickActions.swift`
    — c'est-à-dire le montage. Résultat : le pont ✦, la magnification actionnable, la scène et son
    aplatissement, les sections/stickers, le squelette et le rail **n'apparaissent nulle part dans la

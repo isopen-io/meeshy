@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.call
 
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.call.group.GroupCallArrival
 
 /**
  * Pure mapper: an inbound `call:*` Socket.IO frame → the [CallEvent] the
@@ -86,12 +87,12 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
-     * Decode a `call:ice-servers-refreshed` frame into the fresh STUN/TURN servers
-     * the callee's WebRTC engine needs (the caller already has them from the
-     * initiate ACK). `null` on a malformed frame.
+     * Decode a `call:ice-servers-refreshed` frame: the call it answers, the fresh STUN/TURN servers and their
+     * lifetime (`ttl`, seconds), which re-arms the next refresh (#13773, iOS `CallTurnCredentials`). `null` on a
+     * malformed frame.
      */
-    fun iceServersRefreshed(rawJson: String): List<SocketIceServer>? = runCatching {
-        json.decodeFromString<IceServersRefreshedPayload>(rawJson).iceServers
+    fun iceServersRefreshed(rawJson: String): IceServersRefreshedPayload? = runCatching {
+        json.decodeFromString<IceServersRefreshedPayload>(rawJson)
     }.getOrNull()
 
     /**
@@ -132,6 +133,28 @@ object CallSignalMapper {
             }
             else -> null
         }
+    }.getOrNull()
+
+    /**
+     * Decode a `call:participant-joined` frame into the call it joins and the arrival a group call admits to its
+     * roster (name, avatar, media) — the FSM-facing [map] keeps only the joiner's id. `null` on a malformed frame,
+     * a blank call id or a joiner without id.
+     */
+    fun participantArrival(rawJson: String): CallParticipantArrival? = runCatching {
+        val payload = json.decodeFromString<CallParticipantPayload>(rawJson)
+        val ref = payload.participant
+        val userId = ref?.userId?.takeIf { it.isNotBlank() }
+        if (payload.callId.isBlank() || userId == null) return@runCatching null
+        CallParticipantArrival(
+            callId = payload.callId,
+            arrival = GroupCallArrival(
+                userId = userId,
+                displayName = ref.displayName?.takeIf { it.isNotBlank() } ?: ref.username?.takeIf { it.isNotBlank() },
+                avatarUrl = ref.avatar?.takeIf { it.isNotBlank() },
+                isAudioEnabled = ref.isAudioEnabled,
+                isVideoEnabled = ref.isVideoEnabled,
+            ),
+        )
     }.getOrNull()
 
     /**
@@ -201,8 +224,11 @@ object CallSignalMapper {
      * `missed` reason carries [CallEvent.RingTimeout] (parity with the dedicated
      * `call:missed` event the gateway emits alongside).
      */
-    private fun endedEvent(payload: CallEndedPayload): CallEvent =
-        when (payload.reason) {
+    private fun endedEvent(payload: CallEndedPayload): CallEvent = endedEvent(payload.reason)
+
+    /** The FSM event of a call ended server-side for [reason] — `call:ended`, or a rejoin refused `CALL_ENDED` (#13765). */
+    fun endedEvent(reason: String?): CallEvent =
+        when (reason) {
             "missed" -> CallEvent.RingTimeout
             // A server/peer-signalled TRANSIENT failure must reach the FSM as a
             // ConnectionFailed (→ retryable Ended(Failed)), NOT a RemoteHangUp
@@ -210,10 +236,13 @@ object CallSignalMapper {
             // (`failed`/`connectionlost` → `.connectionLost`, retryable) so the
             // « Réessayer » affordance appears on all three platforms even when a
             // peer-signalled drop beats the caller's own reconnect-budget cutoff.
-            "failed", "connectionLost" -> CallEvent.ConnectionFailed(payload.reason ?: "failed")
+            "failed", "connectionLost" -> CallEvent.ConnectionFailed(reason ?: "failed")
             else -> CallEvent.RemoteHangUp
         }
 
     private fun mapError(payload: CallErrorPayload): CallEvent =
         CallEvent.ConnectionFailed(payload.message ?: payload.code ?: "Call error")
 }
+
+/** A `call:participant-joined` frame, decoded for a group call's roster. */
+data class CallParticipantArrival(val callId: String, val arrival: GroupCallArrival)

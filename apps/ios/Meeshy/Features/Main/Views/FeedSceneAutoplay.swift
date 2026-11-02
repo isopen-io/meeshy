@@ -162,7 +162,8 @@ struct PostSceneCard: View {
                     sceneIndex: .constant(0),
                     isPlaying: .constant(isActive),
                     accentColorHex: accentColor,
-                    carrier: carrier
+                    carrier: carrier,
+                    sceneFloorHex: post.storyAccentHex
                 )
                 .preferredContentLanguages(preferredContentLanguages)
             }

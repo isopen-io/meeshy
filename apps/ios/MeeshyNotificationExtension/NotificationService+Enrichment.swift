@@ -1,6 +1,6 @@
 @preconcurrency import UserNotifications
 import Foundation
-import MeeshySDK
+import MeeshyCore
 
 extension NotificationService {
 

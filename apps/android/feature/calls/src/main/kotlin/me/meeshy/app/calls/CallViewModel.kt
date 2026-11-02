@@ -8,19 +8,31 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallPreviewPhase
+import me.meeshy.sdk.model.call.CallRejoinMedia
+import me.meeshy.sdk.model.call.CallRejoinStep
 import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
+import me.meeshy.sdk.model.call.CallSignalingRejoinLaw
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
+import me.meeshy.sdk.model.call.CallTurnCredentialsLaw
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
+import me.meeshy.sdk.model.call.TurnRefreshIceAction
 import me.meeshy.sdk.model.call.ConnectionQuality
-import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.TelecomCallPolicy
+import me.meeshy.sdk.model.call.camera.CameraFacing
+import me.meeshy.sdk.model.call.group.GroupCallTitle
+import me.meeshy.sdk.model.call.group.text
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
@@ -55,6 +67,10 @@ class CallViewModel @Inject constructor(
     /** The seams capabilities plug into; the call screen reads the UI ones from here. */
     val extensions: CallExtensionPoints,
     private val ongoing: CallOngoingController,
+    private val peerVisuals: CallPeerVisualSource,
+    private val preview: CallPreviewCoordinator,
+    private val turnCredentials: CallTurnCredentialsController,
+    private val groupTitleWording: GroupCallTitleWordingSource,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -89,6 +105,16 @@ class CallViewModel @Inject constructor(
     /** `true` while the app itself froze the outgoing video ([CallVideoHealth]). */
     private var videoAutoPaused: Boolean = false
 
+    /**
+     * The name of a group call once its primary left (#13768, iOS `groupCallTitleDidChange` → `remoteUsername`): the
+     * header, the pill and the ongoing-call notification all read it. Kept until the next [start], like iOS.
+     */
+    private var groupTitle: GroupCallTitle? = null
+
+    /** The signalling socket's last known edge (`null` before the first), and the rejoin it started (#13765). */
+    private var socketWasConnected: Boolean? = null
+    private var rejoinJob: Job? = null
+
     /** What the collaborators may read of this session, and the one door back into it. */
     private val host = object : CallSessionHost {
         override val scope: CoroutineScope get() = viewModelScope
@@ -101,10 +127,20 @@ class CallViewModel @Inject constructor(
         override fun endMedia() = coordinator.end()
         override fun restartMediaIce() = coordinator.retryIceRestart()
         override fun publish() = this@CallViewModel.publish()
+        override fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean =
+            coordinator.routesGroupMediaToggle(toggle)
     }
 
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
+
+    private val _peerVisual = MutableStateFlow(CallPeerVisual.EMPTY)
+
+    /** La photo, le contour équipé et la bannière du correspondant ([CallPeerVisualSource]), cache d'abord. */
+    val peerVisual: StateFlow<CallPeerVisual> = _peerVisual.asStateFlow()
+
+    /** Résout le visuel de l'appel en cours ; remplacé à chaque [start]. */
+    private var peerVisualJob: Job? = null
 
     /**
      * The inputs of the call in flight — read by the app shell to rebuild the call
@@ -114,13 +150,19 @@ class CallViewModel @Inject constructor(
      */
     val activeConfig: CallConfig get() = config
 
+    /** L'aperçu avant décroché (#8480) : la vidéo de l'appelant chez l'appelé, l'exposition chez l'appelant. */
+    val previewUi: StateFlow<CallPreviewUi> get() = preview.ui
+
     init {
+        preview.attach(viewModelScope, ::onPreviewAudible)
         coordinator.onRemoteBye = { onRemoteBye() }
         coordinator.onSetupFailed = { message -> dispatch(CallEvent.ConnectionFailed(message)) }
+        coordinator.onPrimaryVacated = ::onPrimaryVacated
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host)
         analytics.attach(host)
+        turnCredentials.attach(host)
         ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute, onAnswer = ::accept, onDecline = ::decline)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
@@ -132,10 +174,62 @@ class CallViewModel @Inject constructor(
             signalManager.iceServersRefreshed.collect(::onIceServersRefreshed)
         }
         viewModelScope.launch {
+            signalManager.participantArrivals.collect(coordinator::onParticipantArrival)
+        }
+        viewModelScope.launch {
+            signalManager.participantLeft.collect(coordinator::onParticipantLeft)
+        }
+        viewModelScope.launch {
             appStatePresence.foreground.collect(::onAppStateChanged)
         }
         viewModelScope.launch {
             extensions.videoHealth.isVideoAutoPaused.collect(::onVideoHealthChanged)
+        }
+        viewModelScope.launch {
+            signalManager.socketConnected.collect(::onSocketConnection)
+        }
+        viewModelScope.launch {
+            coordinator.groupMesh.map { it.title }.distinctUntilChanged().collect(::onGroupTitle)
+        }
+    }
+
+    private fun onGroupTitle(title: GroupCallTitle?) {
+        if (title == null || title == groupTitle) return
+        groupTitle = title
+        publish()
+    }
+
+    /**
+     * The signalling socket came back during a call (#13765, iOS `CallSignalingRouter.observeSocketReconnect`):
+     * the gateway took the dropped socket out of the room and forgot its media, so the call joins again WITH the
+     * ACK and only then says its camera and microphone and takes the ACK's fresh TURN set
+     * ([CallSignalingRejoinLaw]). The media path is the ICE restart's; the screen share re-announces itself.
+     */
+    private fun onSocketConnection(connected: Boolean) {
+        val returned = CallSignalingRejoinLaw.returns(socketWasConnected, connected)
+        socketWasConnected = connected
+        if (!returned || !CallSignalingRejoinLaw.rejoins(callState, callId)) return
+        val joining = callId
+        rejoinJob?.cancel()
+        rejoinJob = viewModelScope.launch {
+            val result = signalManager.emitJoinAwaitingAck(joining)
+            if (!callState.isActive || callId != joining) return@launch
+            CallSignalingRejoinLaw.plan(result, CallRejoinMedia(isMuted = media.isMuted, isCameraOn = media.isCameraOn))
+                .forEach { applyRejoin(joining, it) }
+            // iOS cancels the periodic refresh and asks for a fresh set on the return; Android already holds the
+            // ACK's fresh set, so the deadline restarts from it (an empty set asks now, the room being joined).
+            if (result is CallJoinResult.Success && callState.isActive && callId == joining) {
+                turnCredentials.afterConfigure(joining, result.iceServers)
+            }
+        }
+    }
+
+    private fun applyRejoin(joined: String, step: CallRejoinStep) {
+        when (step) {
+            is CallRejoinStep.End -> onRemoteEnded(CallEndedSignal(joined, step.event))
+            is CallRejoinStep.AnnounceVideo -> signalManager.emitToggleVideo(joined, enabled = step.enabled)
+            is CallRejoinStep.AnnounceAudio -> signalManager.emitToggleAudio(joined, enabled = step.enabled)
+            is CallRejoinStep.RefreshIceServers -> coordinator.updateIceServers(step.servers)
         }
     }
 
@@ -166,22 +260,48 @@ class CallViewModel @Inject constructor(
      * room ([CallEvent.ParticipantJoined]) — offering earlier races the callee.
      */
     private fun onRemoteEvent(event: CallEvent) {
+        // An incoming call enters through start(config) only: the socket offer carries no
+        // identity here, and folding it first left the FSM ringing with a blank callId, so the
+        // screen's start() was inert and « Répondre » could never join the room.
+        if (event == CallEvent.ReceiveIncoming) return
         extensions.controllers.notifyRemoteEvent(event, session())
         dispatch(event)
         if (event is CallEvent.ParticipantJoined) coordinator.onParticipantJoined(event.peerId)
     }
 
-    /** A fresh TURN set landed (refresh) → hand it to the engine mid-call. */
-    private fun onIceServersRefreshed(iceServers: List<SocketIceServer>) {
+    /**
+     * A fresh TURN set landed (#13773, iOS `observeIceServerRefresh`): the connection takes it by `setConfiguration`,
+     * the next refresh is armed on its lifetime, and ICE re-gathers its relays with it ([CallTurnCredentialsLaw.iceAction]).
+     * A set for another call is not this call's.
+     */
+    private fun onIceServersRefreshed(refresh: IceServersRefreshedPayload) {
+        val iceServers = refresh.iceServers
+        preview.onIceServersRefreshed(iceServers)
         if (!awaitingIncomingIce) {
-            if (callId.isNotBlank()) coordinator.updateIceServers(iceServers)
+            if (callId.isBlank() || (refresh.callId != null && refresh.callId != callId)) return
+            turnCredentials.schedule(refresh.ttl?.toLong())
+            if (iceServers.isEmpty()) return
+            coordinator.updateIceServers(iceServers)
+            when (CallTurnCredentialsLaw.iceAction(callState)) {
+                TurnRefreshIceAction.Inert -> Unit
+                TurnRefreshIceAction.RearmReconnect -> coordinator.retryIceRestart()
+                TurnRefreshIceAction.RestartIce -> coordinator.restartIceOnFreshCredentials()
+            }
             return
         }
         awaitingIncomingIce = false
         coordinator.startIncoming(
             viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
-            ::onMediaConnected, ::onMediaStalled,
+            ::onMediaConnected, ::onMediaStalled, conversationId = config.conversationId,
         )
+    }
+
+    /**
+     * The primary left a group call that carries on (#13740): its connection is no longer watched, so a stall it
+     * caused on its way out must not leave the call « Reconnexion… » while the mesh carries everyone else.
+     */
+    private fun onPrimaryVacated() {
+        if (callState is CallState.Reconnecting) dispatch(CallEvent.MediaConnected)
     }
 
     /** WebRTC reports the media path is up → advance the FSM to Connected. */
@@ -208,6 +328,8 @@ class CallViewModel @Inject constructor(
         this.elapsedSeconds = 0L
         this.mediaEstablished = false
         this.connectionQuality = null
+        this.groupTitle = null
+        turnCredentials.cancelAll()
         telecomReporter.begin(TelecomCallInfo(config.peerId, config.peerName, config.isVideo, config.isOutgoing))
         waiting.reset()
         analytics.begin()
@@ -215,7 +337,17 @@ class CallViewModel @Inject constructor(
         stopQuality()
         watchdogs.reset()
         peers.clear()
+        resolvePeerVisual(config)
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
+    }
+
+    /** Le visuel d'un appel précédent ne survit jamais : vide d'abord, puis ce que la source résout. */
+    private fun resolvePeerVisual(config: CallConfig) {
+        peerVisualJob?.cancel()
+        _peerVisual.value = CallPeerVisual.EMPTY
+        peerVisualJob = viewModelScope.launch {
+            peerVisuals.visualFor(config).collect { _peerVisual.value = it }
+        }
     }
 
     /**
@@ -230,8 +362,11 @@ class CallViewModel @Inject constructor(
                     callId = result.ack.callId
                     coordinator.startOutgoing(
                         viewModelScope, callId, result.ack.iceServers, config.peerId, selfId,
-                        config.isVideo, ::onMediaConnected, ::onMediaStalled,
+                        config.isVideo, ::onMediaConnected, ::onMediaStalled, conversationId = config.conversationId,
                     )
+                    preview.adoptIceServers(callId, result.ack.iceServers)
+                    turnCredentials.schedule(result.ack.ttlSeconds?.toLong())
+                    syncPreview()
                 }
                 is CallInitiateResult.ServerError -> dispatch(CallEvent.ConnectionFailed(result.message))
                 CallInitiateResult.Timeout -> dispatch(CallEvent.ConnectionFailed(INITIATE_TIMED_OUT))
@@ -244,16 +379,24 @@ class CallViewModel @Inject constructor(
     fun accept() {
         dispatch(CallEvent.LocalAnswer)
         if (callId.isBlank()) return
+        coordinator.holdIncomingSignals(viewModelScope, callId)
         // Join WITH the ACK (iOS emitCallJoinWithAck parity): it confirms this socket
         // is in the room AND carries the ICE servers, so media opens straight away.
         // A fire-and-forget join raced the room -> NOT_A_PARTICIPANT on answer.
         viewModelScope.launch {
             when (val result = signalManager.emitJoinAwaitingAck(callId)) {
-                is CallJoinResult.Success -> coordinator.startIncoming(
-                    viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
-                    ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
-                )
-                is CallJoinResult.Failure -> dispatch(CallEvent.ConnectionFailed(result.message))
+                is CallJoinResult.Success -> {
+                    coordinator.startIncoming(
+                        viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
+                        ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
+                        conversationId = config.conversationId,
+                    )
+                    if (callState.isActive) turnCredentials.afterConfigure(callId, result.iceServers)
+                }
+                is CallJoinResult.Failure -> {
+                    coordinator.end()
+                    dispatch(CallEvent.ConnectionFailed(result.message))
+                }
             }
         }
     }
@@ -298,7 +441,13 @@ class CallViewModel @Inject constructor(
     /** Le serveur-id de l'appel en cours (vide avant que l'ACK ne le donne) : la clé par appel des surfaces. */
     val activeCallId: String get() = callId
     val localVideoTrack get() = coordinator.localVideoTrack
+
+    /** Le zoom de MA caméra (objectifs, pincement) : lu par les feuilles, jamais par l'écran entier. */
+    val cameraZoom get() = coordinator.cameraZoom
     val remoteVideoTracks get() = coordinator.remoteVideoTracks
+
+    /** Le maillage d'un appel de groupe : la scène de groupe le lit (#13740). */
+    val groupMesh: StateFlow<GroupCallMeshUi> get() = coordinator.groupMesh
 
     /** Toggle the local camera (only meaningful on a video call) and signal the peer. */
     fun toggleCamera() {
@@ -307,6 +456,67 @@ class CallViewModel @Inject constructor(
         coordinator.setCameraEnabled(media.isCameraOn)
         emitIfIdentified { signalManager.emitToggleVideo(it, enabled = media.isCameraOn) }
     }
+
+    /** Basculer la caméra avant/arrière (iOS `switchCamera`) : sans effet caméra coupée, jamais signalé. */
+    fun flipCamera() {
+        if (!media.isCameraOn) return
+        val before = media.isFrontCamera
+        media = media.copy(isFrontCamera = !before)
+        publish()
+        coordinator.switchCamera { isFront ->
+            viewModelScope.launch {
+                media = media.copy(isFrontCamera = isFront ?: before)
+                publish()
+            }
+        }
+    }
+
+    /**
+     * « Choisir la caméra » (iOS `selectCamera(id:)`) quand une caméra est branchée : sans effet caméra coupée,
+     * jamais signalé. Le miroir de mon aperçu suit la face que la capture a réellement ouverte.
+     */
+    fun selectCamera(id: String) {
+        if (!media.isCameraOn) return
+        val zoom = coordinator.cameraZoom
+        if (!zoom.selectCamera(id)) return
+        val facing = zoom.state.value.facing ?: return
+        media = media.copy(isFrontCamera = facing == CameraFacing.Front)
+        publish()
+    }
+
+    /** « Activer l'audio » de l'écran entrant : entendre l'appelant avant de décrocher. */
+    fun togglePreviewSound() = preview.toggleSound()
+
+    /** Appelant : le micro que l'appelé entend avant de décrocher, retenu pour ce correspondant. */
+    fun togglePreviewAudio() = preview.togglePreviewAudio()
+
+    /** Appelant : la caméra que l'appelé voit avant de décrocher, retenue pour ce correspondant. */
+    fun togglePreviewVideo() = preview.togglePreviewVideo()
+
+    /**
+     * L'appelé entend l'appelant (ou plus) : la sonnerie se tait et la route audio s'ouvre sur le
+     * haut-parleur — l'écran de sonnerie est tenu devant soi, pas à l'oreille. La sonnerie ne reprend
+     * pas si l'on recoupe le son, comme iOS.
+     */
+    private fun onPreviewAudible(audible: Boolean) {
+        if (audible && activeLoop != CallSound.None) {
+            activeLoop = CallSound.None
+            toneController.setLoop(CallSound.None)
+        }
+        coordinator.routePreviewAudio(audible, isVideo = config.isVideo)
+    }
+
+    /** Ce que l'aperçu lit de l'appel : resynchronisé à chaque publication, inerte si rien n'a changé. */
+    private fun syncPreview() = preview.sync(
+        CallPreviewHostState(
+            callId = callId,
+            localUserId = selfId,
+            peerUserId = config.peerId,
+            phase = CallPreviewPhase.of(callState),
+            isMicMuted = media.isMuted,
+            isVideoEnabled = config.isVideo && media.isCameraOn,
+        ),
+    )
 
     /** Settle a terminal call back to idle (dismissing the ended screen). */
     fun dismiss() = dispatch(CallEvent.Settle)
@@ -382,6 +592,7 @@ class CallViewModel @Inject constructor(
         val previous = callState
         callState = CallStateMachine.reduce(previous, event)
         if (callState is CallState.Connected) mediaEstablished = true
+        if (!callState.isActive) turnCredentials.cancelAll() else turnCredentials.onTransition(previous, callState)
         driveTone(previous, callState)
         driveTelecom(previous, callState)
         analytics.onTransition(previous, callState)
@@ -409,6 +620,7 @@ class CallViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        preview.release()
         ongoing.detach()
         toneController.release()
         telecomReporter.release()
@@ -463,7 +675,9 @@ class CallViewModel @Inject constructor(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
-        )
+            peerScreenSharing = peer.screenSharing,
+        ).withGroupTitle(groupTitle?.text(groupTitleWording.current()))
+        syncPreview()
     }
 
     private companion object {

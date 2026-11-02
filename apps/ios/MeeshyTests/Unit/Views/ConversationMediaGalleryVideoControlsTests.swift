@@ -101,11 +101,9 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
 
     func test_galleryVideoPage_posterButton_usesAdaptiveGlass() throws {
         let source = try gallerySource()
-        guard let start = source.range(of: "private var playOrDownloadButton") else {
+        guard let body = DeclarationBodyScanner.body(containing: "private var playOrDownloadButton", in: source) else {
             XCTFail("playOrDownloadButton not found"); return
         }
-        let end = source.index(start.lowerBound, offsetBy: 1400, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[start.lowerBound..<end])
         XCTAssertTrue(
             body.contains(".adaptiveGlassProminent(in: Circle()"),
             "Le bouton poster doit être en Liquid Glass prominent teinté accent " +

@@ -39,6 +39,7 @@ import { deferAfterResponse, type AfterResponse } from '../../utils/after-respon
 import { loadPrivacyPreferencesCached } from '../preferences/privacy-cache.js';
 import type { NotificationService } from './NotificationService.js';
 import { getSharedNotificationService } from './notification-service-registry.js';
+import { amisAcceptesParmi } from '../friendship.js';
 
 const logger = enhancedLogger.child({ module: 'ContactJoined' });
 
@@ -118,17 +119,7 @@ async function hidesFromSearch(prisma: PrismaClient, joinerId: string): Promise<
 
 async function acceptedFriendsOf(prisma: PrismaClient, joinerId: string, ids: readonly string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const rows = await prisma.friendRequest.findMany({
-    where: {
-      status: 'accepted',
-      OR: [
-        { senderId: joinerId, receiverId: { in: [...ids] } },
-        { senderId: { in: [...ids] }, receiverId: joinerId },
-      ],
-    },
-    select: { senderId: true, receiverId: true },
-  });
-  return new Set(rows.map((row) => (row.senderId === joinerId ? row.receiverId : row.senderId)));
+  return amisAcceptesParmi(prisma, joinerId, ids);
 }
 
 async function claimPair(prisma: PrismaClient, recipientId: string, joinerId: string): Promise<boolean> {

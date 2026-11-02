@@ -63,9 +63,9 @@ final class ComposerCaptureZoomScaleTests: XCTestCase {
         XCTAssertTrue(camera.contains("zoomScale.device("), "le facteur affiché se convertit à l'écriture")
         XCTAssertFalse(camera.contains("AVCaptureDevice.default(.builtInWideAngleCamera"),
                        "l'objectif grand-angle seul plafonnait le zoom à ×1")
-        let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("ComposerCaptureZoomBar("), "la barre des zooms, qui morphe à la bascule (#9753)")
-        let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureMotion.swift")
+        let barre = try Self.code("Meeshy/Features/Composer/ComposerCaptureMotion.swift")
         XCTAssertTrue(barre.contains("ComposerCaptureZoomPresets("), "la pastille ×0,5 / ×1 / ×2")
     }
 

@@ -246,9 +246,9 @@ Tu es l'agent de FUSION : seul autorisé à \`gh pr merge\`, et uniquement \`gh 
 1. \`cd ${WT[chaine]} && gh pr view ${pr.numero} --json state,mergeStateStatus,headRefName,statusCheckRollup,commits\` — la PR doit être OPEN vers ${BASE}.
    DIRTY/BEHIND ⇒ \`git fetch origin && git checkout ${pr.branche} && git merge origin/${BASE}\` (jamais rebase), résous en gardant les deux
    apports (project.pbxproj : reprends celui de origin/${BASE} et régénère par xcodegen), rejoue les gates rapides, pousse.
-2. État des checks SANS attendre plus de 20 min au total (\`gh pr checks ${pr.numero}\` toutes les 2 min au plus) :
+2. État des checks SANS attendre plus de 20 min au total — \`node scripts/ci/pr-verte.mjs ${pr.numero} --attendre 20\` (l'outil UNIQUE du dépôt, #12559 : 0 vert, 1 rouge avec les checks nommés, 3 encore en cours, 2 lecture impossible — relance) :
    - en cours depuis moins de 40 min ⇒ rends fusionnee=false, abandon="checks en cours" (le tour suivant reprendra) ;
-   - TOUT VERT (pour une PR iOS : le sujet du commit de tête contient « run test », sinon pose un commit VIDE \`test(ios): … — run test (Refs #n)\`
+   - sortie 0 (pour une PR iOS : le sujet du commit de tête contient « run test », sinon pose un commit VIDE \`test(ios): … — run test (Refs #n)\`
      et reviens au point 2) ⇒ \`gh pr merge ${pr.numero} --merge\` puis \`gh pr view ${pr.numero} --json mergedAt,mergeCommit\` ;
    - UN ROUGE ⇒ \`gh run view <id> --log-failed | tail -120\` : rouge PRÉEXISTANT (même job/suite dans ${SCRATCH}/rouge-prealable.json)
      ⇒ fusionne et DIS-LE dans un commentaire de la PR ; rouge CAUSÉ par le lot ⇒ corrige-le en TDD sur la branche (pour iOS :

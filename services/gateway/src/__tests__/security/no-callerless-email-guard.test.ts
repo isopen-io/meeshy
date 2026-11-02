@@ -42,22 +42,37 @@ function methodesDeclarees(): string[] {
   return [...source.matchAll(/async (send[A-Za-z]+Email)\(/g)].map((m) => m[1]);
 }
 
-/** Les appels `.<methode>(` du dépôt, hors tests et hors `EmailService.ts`. */
-function appelantsDeProduction(methode: string): string[] {
+/**
+ * Les fichiers qui appellent chaque `.send<X>Email(`, hors tests et hors
+ * `EmailService.ts`, en UN seul `git grep` borné dans le temps. Un `git grep`
+ * par méthode coûtait quinze secondes en local et figeait la tranche de CI
+ * jusqu'à son délai (2026-10-27) : la garde rougit désormais au lieu de pendre.
+ */
+function appelantsParMethode(): ReadonlyMap<string, ReadonlySet<string>> {
   let sortie = '';
   try {
     sortie = execFileSync(
       'git',
-      ['grep', '-l', `.${methode}(`, '--', 'services', 'apps', 'packages'],
-      { cwd: RACINE_DEPOT, encoding: 'utf8' },
+      ['grep', '-o', '-E', '\\.send[A-Za-z]+Email\\(', '--', 'services', 'apps', 'packages'],
+      { cwd: RACINE_DEPOT, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 },
     );
-  } catch {
-    return []; // `git grep` sort en 1 quand il ne trouve rien
+  } catch (erreur) {
+    if ((erreur as { status?: number }).status === 1) return new Map(); // `git grep` sort en 1 quand il ne trouve rien
+    throw erreur;
   }
-  return sortie
-    .split('\n')
-    .filter(Boolean)
-    .filter((f) => !f.includes('__tests__') && !f.endsWith('EmailService.ts'));
+  const appelants = new Map<string, Set<string>>();
+  for (const ligne of sortie.split('\n').filter(Boolean)) {
+    const separateur = ligne.lastIndexOf(':.');
+    const fichier = ligne.slice(0, separateur);
+    if (fichier.includes('__tests__') || fichier.endsWith('EmailService.ts')) continue;
+    const methode = ligne.slice(separateur + 2, -1);
+    appelants.set(methode, (appelants.get(methode) ?? new Set<string>()).add(fichier));
+  }
+  return appelants;
+}
+
+function appelantsDeProduction(methode: string): string[] {
+  return [...(appelantsParMethode().get(methode) ?? [])];
 }
 
 describe('Aucun gabarit d\'e-mail sans appelant de production (#4500)', () => {
@@ -73,7 +88,8 @@ describe('Aucun gabarit d\'e-mail sans appelant de production (#4500)', () => {
   });
 
   it('chaque méthode déclarée a au moins un appelant hors tests', () => {
-    const orphelines = methodes.filter((m) => appelantsDeProduction(m).length === 0);
+    const appelants = appelantsParMethode();
+    const orphelines = methodes.filter((m) => (appelants.get(m)?.size ?? 0) === 0);
     expect(orphelines).toEqual([]);
   });
 });

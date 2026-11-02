@@ -44,6 +44,18 @@
         },
         {
           "catalog": "ui",
+          "iosKey": "profile.action.call.audio",
+          "androidName": "profile_action_call_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.call.video",
+          "androidName": "profile_action_call_video",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
           "iosKey": "profile.action.report",
           "androidName": "profile_action_report",
           "status": "adopted"
@@ -109,9 +121,9 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "voiceProfile.manage.cancelDelete",
-          "androidName": "profile_cancel",
+          "catalog": "app",
+          "iosKey": "call.dial.notConnected",
+          "androidName": "profile_call_not_placed",
           "status": "adopted"
         },
         {
@@ -179,10 +191,6 @@
           "iosKey": "profile.edit",
           "androidName": "profile_edit",
           "status": "adopted"
-        },
-        {
-          "androidName": "profile_edit_title",
-          "status": "android-only"
         },
         {
           "catalog": "app",

@@ -1,12 +1,12 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
 import type { PackRequirementPreview } from '@meeshy/shared/types/pack-unlock';
 import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
 
-import { loadStickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
 import { packIsLocked, packUnlockLine } from './unlock-line';
+import { unlockTextKeysOf } from './unlock-texts';
 
 /**
  * W18 (#11324) — LA BOUTIQUE DIT CE QUI RESTE À DÉBLOQUER, ET COMMENT. La
@@ -15,9 +15,8 @@ import { packIsLocked, packUnlockLine } from './unlock-line';
  * la langue de l'interface. Le serveur reste juge : la ligne montre, elle
  * n'accorde rien.
  */
-beforeAll(async () => {
-  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadStickerPacksCatalog(language)));
-});
+// Aucun catalogue chargé : les phrases voyagent avec la vitrine
+// (`unlock-texts.ts`), jamais dans `interface_catalogs_sticker_packs`.
 
 const rank = (missing: number): PackRequirementPreview => ({
   met: false,
@@ -66,8 +65,13 @@ describe('packUnlockLine — ce qui reste, et comment', () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       const text = packUnlockLine({ preview: { met: false, reward: { kind: 'season', number: 3, met: false }, window: { state: 'closed' } }, language });
       expect(text).toContain('3');
-      expect(text).not.toContain('packs.unlock');
+      expect(text).not.toContain('{');
     }
+  });
+
+  test('les sept langues portent exactement les clés du français', () => {
+    const source = [...unlockTextKeysOf('fr')].sort();
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) expect([...unlockTextKeysOf(language)].sort()).toEqual(source);
   });
 });
 

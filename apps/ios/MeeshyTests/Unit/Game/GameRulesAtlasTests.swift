@@ -9,7 +9,7 @@ final class GameRulesAtlasTests: XCTestCase {
     private func atlasViewSource() throws -> String {
         let here = URL(fileURLWithPath: #filePath)
         let root = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Game/GameRulesAtlasView.swift"), encoding: .utf8)
+        return try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Game/GameRulesAtlasView.swift"), encoding: .utf8)
     }
 
     func test_theNotebookShowsNineFamilies_inTheOrderOfTheDesign() {
@@ -108,7 +108,7 @@ final class GameRulesAtlasTests: XCTestCase {
     func test_theNotebookPageMountsTheAtlas() throws {
         let here = URL(fileURLWithPath: #filePath)
         let root = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let page = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Game/GameRulesView.swift"), encoding: .utf8)
+        let page = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Game/GameRulesView.swift"), encoding: .utf8)
         XCTAssertTrue(page.contains("GameRulesAtlasView()"))
     }
 }

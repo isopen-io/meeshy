@@ -44,7 +44,7 @@ final class SceneFloorTests: XCTestCase {
     /// de RÉFÉRENCE : c'est sa recette que les deux autres reçoivent.
     func test_lesTroisSurfacesPleinEcran_montentLeSolDeScene() throws {
         let surfaces = [
-            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+            "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",
             "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift",
             "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
         ]
@@ -78,9 +78,9 @@ final class SceneFloorTests: XCTestCase {
         // L'UNITÉ du canvas : le fond, les couches et le cadrage ont leurs fichiers, et la
         // recette du sol ne doit se cacher dans aucun.
         let code = Self.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
-            alsoIncluding: ["Meeshy/Features/Main/Views/StoryReaderBackground.swift",
-                            "Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"]))
+            "Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift",
+            alsoIncluding: ["Meeshy/Features/Stories/Views/StoryReaderBackground.swift",
+                            "Meeshy/Features/Stories/Views/StoryReaderCanvasLayout.swift"]))
         for motif in ["storyBlurredBackdrop", "blur(radius: 60)", "scaleEffect(1.18)"] {
             XCTAssertFalse(code.contains(motif),
                            "la recette du sol vit dans SceneFloorView : « \(motif) » n'a plus " +

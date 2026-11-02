@@ -19,11 +19,13 @@ import kotlinx.serialization.json.jsonPrimitive
  *
  * - [Success] — `success:true`; [iceServers] is the (possibly empty) TURN/STUN set.
  * - [Failure] — the gateway rejected the join, no ACK arrived, or the body could
- *   not be decoded; the join can't be trusted, so the FSM settles to failed.
+ *   not be decoded; the join can't be trusted, so the FSM settles to failed. A
+ *   refusal carries the gateway [Failure.code] and, for a call already ended
+ *   (`CALL_ENDED`), its real [Failure.endReason].
  */
 sealed interface CallJoinResult {
     data class Success(val iceServers: List<SocketIceServer>) : CallJoinResult
-    data class Failure(val message: String) : CallJoinResult
+    data class Failure(val message: String, val code: String? = null, val endReason: String? = null) : CallJoinResult
 }
 
 /**
@@ -50,7 +52,7 @@ object CallJoinAckParser {
             if (response.success) {
                 CallJoinResult.Success(response.data?.iceServers ?: emptyList())
             } else {
-                CallJoinResult.Failure(messageOf(response.error))
+                CallJoinResult.Failure(messageOf(response.error), fieldOf(response.error, "code"), fieldOf(response.error, "endReason"))
             }
         }.getOrElse { CallJoinResult.Failure(UNKNOWN_ERROR) }
     }
@@ -60,6 +62,9 @@ object CallJoinAckParser {
         is JsonPrimitive -> error.contentOrNull?.takeIf { error.isString } ?: UNKNOWN_ERROR
         else -> UNKNOWN_ERROR
     }
+
+    private fun fieldOf(error: JsonElement?, key: String): String? =
+        (error as? JsonObject)?.get(key)?.jsonPrimitive?.contentOrNull
 
     @Serializable
     private data class JoinAckResponse(

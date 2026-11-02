@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {"catalog": "ui", "iosKey": "profile.conversations.noShared", "status": "adopted"},
+        {"catalog": "ui", "iosKey": "profile.conversations.interactionsDisabled", "status": "adopted"},
+        {"androidName": "profile_header_compact_label", "status": "android-only"}
+      ]
+    }
+  }
+}

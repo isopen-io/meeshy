@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { composeConversationPreview, renderConversationPreviewText } from '@meeshy/shared/utils/conversation-preview';
 
 import type { ListConversation } from '@/lib/api/list-preview';
+import { clearPrintOf } from '@/lib/clear-print';
 import type { Conversation, Message } from '@/lib/api/types';
 
 import { previewInputOf, type PreviewContext } from './conversation-preview-input';
@@ -151,5 +152,78 @@ describe('previewInputOf (#7547)', () => {
       lastMessage: message({ content: '', isViewOnce: true, viewOnceCount: 1, maxViewOnceCount: 1, viewOnceConsumed: false }),
     });
     expect(line(c)).not.toContain('Ouvert');
+  });
+});
+
+/**
+ * #12992 — LA LIGNE DE LISTE SUIT LA LOI UNIQUE DU CLAIR FORGÉ : dans une
+ * conversation chiffrée de bout en bout, un dernier message qui se dit en
+ * clair après l'activation se dit « chiffré », sans texte, traduction ni pièce.
+ */
+describe('le clair forgé dans la ligne (#12992)', () => {
+  const sealedConversation = (last: Message) =>
+    conversation({ encryptionMode: 'e2ee', encryptionEnabledAt: new Date('2026-09-20T00:00:00.000Z'), lastMessage: last, lastMessageTranslations: { en: 'Send me the SMS code' } } as Partial<ListConversation>);
+
+  test('après l’activation : scellé', () => {
+    const shown = line(sealedConversation(message({ content: 'Envoie-moi le code reçu par SMS', attachments: [{ id: 'a1', mimeType: 'image/jpeg', fileName: 'p.jpg', fileSize: 1 }] })));
+    expect(shown).not.toContain('SMS');
+    expect(shown).not.toContain('Photo');
+    expect(shown).toBe(line(sealedConversation(message({ content: '[Encrypted]', isEncrypted: true, encryptionMode: 'e2ee' }))));
+  });
+
+  test('avant l’activation, vu par ce navigateur avant d’apprendre le bout en bout : lisible', () => {
+    const before = message({ content: 'Avant', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    expect(line(sealedConversation(before), ctx({ regime }))).toBe('Alice : Avant');
+  });
+
+  test('audit — l’extrait d’une réaction servie à côté du dernier message se dit chiffré, jamais lu', () => {
+    const reacted = {
+      ...sealedConversation(message({ content: '[Encrypted]', isEncrypted: true, encryptionMode: 'e2ee' })),
+      lastReaction: { emoji: '👍', reactorName: 'Alice', reactorUserId: 'u-alice', messageId: 'm-1', excerpt: 'Envoie-moi le code reçu par SMS', excerptTranslations: { en: 'Send me the SMS code' }, excerptOriginalLanguage: 'fr', excerptProtection: null, createdAt: '2026-09-23T09:59:30.000Z' },
+    } as unknown as Conversation;
+    const input = previewInputOf(reacted, ctx());
+    expect(JSON.stringify(input.lastReaction)).not.toContain('SMS');
+    expect(input.lastReaction?.excerptProtection).toBe('encrypted');
+    expect(line(reacted)).not.toContain('SMS');
+  });
+
+  test('revue — un dernier message reconnu par son empreinte ne se dit pas dans une traduction servie à côté', () => {
+    const before = message({ content: 'Vorher', originalLanguage: 'de', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    const forgedTranslation = conversation({
+      encryptionMode: 'e2ee',
+      lastMessage: before,
+      lastMessageOriginalLanguage: 'de',
+      lastMessageTranslations: { fr: 'Envoie-moi le code reçu par SMS' },
+    } as Partial<ListConversation>);
+    expect(line(forgedTranslation, ctx({ regime }))).toBe('Alice : Vorher');
+  });
+
+  test('hors bout en bout, l’extrait d’une réaction reste lu', () => {
+    const reacted = {
+      ...conversation(),
+      lastReaction: { emoji: '👍', reactorName: 'Alice', reactorUserId: 'u-alice', messageId: 'm-1', excerpt: 'Bonjour', excerptTranslations: null, excerptOriginalLanguage: 'fr', excerptProtection: null, createdAt: '2026-09-23T09:59:30.000Z' },
+    } as unknown as Conversation;
+    expect(previewInputOf(reacted, ctx()).lastReaction?.excerpt).toBe('Bonjour');
+  });
+
+  test('avant l’activation mais jamais vu avant l’apprentissage (date servie, antidatable) : scellé', () => {
+    expect(line(sealedConversation(message({ content: 'Antidaté', createdAt: '2026-09-19T09:59:00.000Z' })))).not.toContain('Antidaté');
+  });
+});
+
+describe('relecture : la ligne d’un clair reconnu se dit depuis sa forme vérifiée', () => {
+  test('ni l’appel, ni l’avis système, ni le résumé de pièces servis à côté', () => {
+    const before = message({ content: 'Vorher', originalLanguage: 'de', createdAt: '2026-09-19T09:59:00.000Z' });
+    const regime = { sealed: true, since: Date.parse('2026-09-20T00:00:00.000Z'), clearKnown: new Set([clearPrintOf(before)!]) };
+    const padded = {
+      ...before,
+      callSummary: { kind: 'missed', durationSec: 0 },
+      systemEvent: { key: 'system.member-joined', params: { name: 'SMS' } },
+      attachmentSummary: { count: 1, kinds: ['image'], firstKind: 'image' },
+    };
+    const input = previewInputOf(conversation({ encryptionMode: 'e2ee', lastMessage: padded as unknown as Message } as Partial<ListConversation>), ctx({ regime }));
+    expect(input.lastMessage).toMatchObject({ content: 'Vorher', callSummary: null, systemEvent: null, attachmentSummary: null, translations: null });
   });
 });

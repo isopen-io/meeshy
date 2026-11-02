@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.pocket.label",
+          "androidName": "game_sparks_pocket_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.lifetime.label",
+          "androidName": "game_sparks_lifetime_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.level.label",
+          "androidName": "game_sparks_level_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.levelMax.label",
+          "androidName": "game_sparks_level_max_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.sparks.levelRecord.line",
+          "androidName": "game_sparks_level_record_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.step.line",
+          "androidName": "game_level_step_line",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.level.step.done",
+          "androidName": "game_level_step_done",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.hero.earn.title",
+          "androidName": "game_hero_earn_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.hero.earn.chip",
+          "androidName": "game_hero_earn_chip",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.hero.earn.a11y",
+          "androidName": "game_hero_earn_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.ring.what",
+          "androidName": "game_detail_ring_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.ring.how",
+          "androidName": "game_detail_ring_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.rank.what",
+          "androidName": "game_detail_rank_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.rank.how",
+          "androidName": "game_detail_rank_how",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

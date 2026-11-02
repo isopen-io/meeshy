@@ -18,7 +18,9 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
+import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.StarredMessages
 import me.meeshy.sdk.model.UnreadUpdateEvent
@@ -37,6 +39,8 @@ class ConversationListRealtimeBinderTest {
         val deleted = MutableSharedFlow<ConversationDeletedSocketEvent>(extraBufferCapacity = 64)
         val closed = MutableSharedFlow<ConversationClosedSocketEvent>(extraBufferCapacity = 64)
         val left = MutableSharedFlow<ParticipantLeftEvent>(extraBufferCapacity = 64)
+        val joined = MutableSharedFlow<ParticipantJoinedEvent>(extraBufferCapacity = 64)
+        val unbanned = MutableSharedFlow<ParticipantUnbannedEvent>(extraBufferCapacity = 64)
     }
 
     private fun TestScope.binder(
@@ -55,6 +59,8 @@ class ConversationListRealtimeBinderTest {
             every { conversationRestored } returns MutableSharedFlow()
             every { conversationClosed } returns frames.closed
             every { participantLeft } returns frames.left
+            every { participantJoined } returns frames.joined
+            every { participantUnbanned } returns frames.unbanned
         },
         preferencesSocketManager = mockk<PreferencesSocketManager> {
             every { conversationPreferencesUpdated } returns
@@ -182,5 +188,85 @@ class ConversationListRealtimeBinderTest {
         runCurrent()
 
         coVerify(exactly = 2) { repo.refresh() }
+    }
+
+    @Test
+    fun `a member who joined sets the served headcount on the known row`() = runTest(StandardTestDispatcher()) {
+        val frames = Frames()
+        val repo = mockk<ConversationRepository>(relaxed = true)
+        binder(frames, repo)
+        runCurrent()
+
+        frames.joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "u2", memberCount = 9, memberCountCapped = true))
+        runCurrent()
+
+        coVerify(exactly = 1) { repo.applyMembership("c1", absolute = 9, absoluteCapped = true, delta = +1) }
+    }
+
+    @Test
+    fun `a join without a served headcount falls back to plus one`() = runTest(StandardTestDispatcher()) {
+        val frames = Frames()
+        val repo = mockk<ConversationRepository>(relaxed = true)
+        binder(frames, repo)
+        runCurrent()
+
+        frames.joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "u2"))
+        runCurrent()
+
+        coVerify(exactly = 1) { repo.applyMembership("c1", absolute = null, absoluteCapped = null, delta = +1) }
+    }
+
+    @Test
+    fun `my own join is left to conversation new, never counted twice`() = runTest(StandardTestDispatcher()) {
+        val frames = Frames()
+        val repo = mockk<ConversationRepository>(relaxed = true)
+        binder(frames, repo, me = "me")
+        runCurrent()
+
+        frames.joined.emit(ParticipantJoinedEvent(conversationId = "c1", userId = "me", memberCount = 9))
+        runCurrent()
+
+        coVerify(exactly = 0) { repo.applyMembership(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `an unban that gave the membership back counts the member`() = runTest(StandardTestDispatcher()) {
+        val frames = Frames()
+        val repo = mockk<ConversationRepository>(relaxed = true)
+        binder(frames, repo)
+        runCurrent()
+
+        frames.unbanned.emit(ParticipantUnbannedEvent(conversationId = "c1", userId = "u2", memberCount = 5))
+        frames.unbanned.emit(ParticipantUnbannedEvent(conversationId = "c2", userId = "u3"))
+        runCurrent()
+
+        coVerify(exactly = 1) { repo.applyMembership("c1", absolute = 5, absoluteCapped = null, delta = +1) }
+        coVerify(exactly = 1) { repo.applyMembership("c2", absolute = null, absoluteCapped = null, delta = +1) }
+    }
+
+    @Test
+    fun `an unban that restored nothing and served no headcount changes nothing`() = runTest(StandardTestDispatcher()) {
+        val frames = Frames()
+        val repo = mockk<ConversationRepository>(relaxed = true)
+        binder(frames, repo)
+        runCurrent()
+
+        frames.unbanned.emit(ParticipantUnbannedEvent(conversationId = "c1", userId = "u2", membershipRestored = false))
+        runCurrent()
+
+        coVerify(exactly = 0) { repo.applyMembership(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a served headcount settles an unban even when the membership was not restored`() = runTest(StandardTestDispatcher()) {
+        val frames = Frames()
+        val repo = mockk<ConversationRepository>(relaxed = true)
+        binder(frames, repo)
+        runCurrent()
+
+        frames.unbanned.emit(ParticipantUnbannedEvent(conversationId = "c1", userId = "u2", membershipRestored = false, memberCount = 12))
+        runCurrent()
+
+        coVerify(exactly = 1) { repo.applyMembership("c1", absolute = 12, absoluteCapped = null, delta = +1) }
     }
 }

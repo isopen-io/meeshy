@@ -2,12 +2,14 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
+import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { offerLastMessage } from '@/lib/api/list-preview';
 import { findCachedThreadMessage, messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
 import { attachmentReplyOf } from './attachment-reply';
+import { plaintextWithheld } from './served-regime';
 import type { Message, Participant } from '@/lib/api/types';
 
 import { messageTypeOfPending, type PendingAttachment } from './attachments';
@@ -262,6 +264,18 @@ async function attempt(params: {
 }): Promise<void> {
   const { conversationId, message, deps } = params;
 
+  /* #12949 — la garde AVANT le téléversement : retenir le seul message
+     laisserait le fichier déjà parti en clair au serveur. */
+  if (plaintextWithheld(conversationId, deps.queryClient)) {
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, {
+      ok: false,
+      status: 0,
+      error: 'Cette conversation est chiffrée de bout en bout : rien n’y part en clair',
+      code: E2EE_PLAINTEXT_WITHHELD,
+    });
+    return;
+  }
+
   const attachmentIds = await uploadPhase(params);
   if (attachmentIds === null) return; // markFailed déjà posé par uploadPhase.
 
@@ -331,6 +345,12 @@ export async function performSend(params: {
   readonly deps: SendDeps;
 }): Promise<void> {
   const { conversationId, draft, viewerId, sender, deps } = params;
+  /* #13171 — dans une conversation vue chiffrée de bout en bout, le clair ne
+     naît nulle part : ni entrée d'outbox, ni ligne de liste optimiste (que le
+     cache RANGE sur le disque), ni requête. L'appelant dit le refus
+     (`plaintextWithheld`) ; un envoi déjà en file avant l'apprentissage reste
+     retenu par `attempt`. */
+  if (plaintextWithheld(conversationId, deps.queryClient)) return;
   const now = deps.now ?? Date.now;
   const nowMs = now();
 

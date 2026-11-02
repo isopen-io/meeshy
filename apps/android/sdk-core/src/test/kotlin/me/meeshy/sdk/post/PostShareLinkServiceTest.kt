@@ -7,6 +7,7 @@ import io.mockk.mockk
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.PostShareTarget
@@ -65,6 +66,7 @@ class PostShareLinkServiceTest {
 
         val first = async { service.resolve("p1", "copy") }
         val second = async { service.resolve("p1", "system") }
+        runCurrent()
         gate.complete(Unit)
 
         assertThat(first.await()).isEqualTo(second.await())

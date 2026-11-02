@@ -1,8 +1,5 @@
 package me.meeshy.ui.component.viewer
 
-import android.os.Build
-import android.view.ViewGroup
-import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +12,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -34,6 +30,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.SecureFlagPolicy
+import coil.request.CachePolicy
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -66,6 +64,8 @@ public fun MeeshyImageViewer(
     onDismiss: () -> Unit,
     captions: List<String?> = emptyList(),
     authors: List<String?> = emptyList(),
+    /** Per page, the author's face (account + photo) for the live presence dot; a page past the end shows the name alone. */
+    authorIdentities: List<ImageViewerAuthor?> = emptyList(),
     timestamps: List<String?> = emptyList(),
     /**
      * Per-page low-res thumbnail, positionally aligned with [imageUrls] (#3878) — the blurred
@@ -80,11 +80,13 @@ public fun MeeshyImageViewer(
      */
     exportable: List<Boolean> = emptyList(),
     onImageSaved: ((Result<Unit>) -> Unit)? = null,
+    /** Un contenu protégé : fenêtre exclue des captures, aucune copie dans le cache disque d'images. */
+    secure: Boolean = false,
 ) {
     if (imageUrls.isEmpty()) return
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        properties = viewerDialogProperties(secure),
     ) {
         val pagerState = rememberPagerState(
             initialPage = initialIndex.coerceIn(0, imageUrls.lastIndex),
@@ -104,7 +106,11 @@ public fun MeeshyImageViewer(
         LaunchedEffect(pagerState.currentPage, imageUrls) {
             val loader = context.imageLoader
             ImageViewerPrefetch.neighbors(currentIndex = pagerState.currentPage, total = imageUrls.size)
-                .forEach { index -> loader.enqueue(ImageRequest.Builder(context).data(imageUrls[index]).build()) }
+                .forEach { index -> loader.enqueue(
+                    ImageRequest.Builder(context).data(imageUrls[index])
+                        .apply { if (secure) diskCachePolicy(CachePolicy.DISABLED) }
+                        .build(),
+                ) }
         }
         LaunchedEffect(pagerState) {
             snapshotFlow { pagerState.settledPage }.drop(1).collect {
@@ -158,6 +164,7 @@ public fun MeeshyImageViewer(
                     onTap = { chrome = chrome.tappingMedia() },
                     onDragProgress = { dragProgress = it },
                     onDismiss = onDismiss,
+                    secure = secure,
                 )
             }
 
@@ -191,6 +198,7 @@ public fun MeeshyImageViewer(
                         timestamp = timestamps.getOrNull(page)?.takeIf { it.isNotBlank() },
                         caption = captions.getOrNull(page)?.takeIf { it.isNotBlank() },
                         captionKey = page,
+                        identity = authorIdentities.getOrNull(page),
                     )
                     ImageViewerFilmstrip(
                         thumbnails = imageUrls.indices.map { thumbnailUrls.getOrNull(it) ?: imageUrls[it] },
@@ -212,24 +220,11 @@ private const val STAGE_FADE_ON_DRAG = 0.6f
  */
 @Composable
 private fun SystemBarsForViewer(immersive: Boolean) {
+    FullScreenDialogWindow()
     val view = LocalView.current
     val window = (view.parent as? DialogWindowProvider)?.window ?: return
-    DisposableEffect(window) {
-        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
-        window.setDimAmount(0f)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes = window.attributes.apply {
-                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
-        }
-        onDispose { }
-    }
     LaunchedEffect(window, immersive) {
         val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = false
-        controller.isAppearanceLightNavigationBars = false
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         if (immersive) {
             controller.hide(WindowInsetsCompat.Type.systemBars())

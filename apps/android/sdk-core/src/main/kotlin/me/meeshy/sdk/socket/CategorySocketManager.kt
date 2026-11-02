@@ -2,7 +2,6 @@ package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.CategoriesReorderedSocketData
 import me.meeshy.sdk.model.CategoryDeletedSocketData
@@ -44,7 +43,7 @@ class CategorySocketManager @Inject constructor(
     private val _categoryEvents = SocketInboundRoute.subject<CategoryEvent>()
 
     /** The unified real-time category-change stream (created/updated/deleted/reordered). */
-    val categoryEvents: SharedFlow<CategoryEvent> = _categoryEvents.asSharedFlow()
+    val categoryEvents: SharedFlow<CategoryEvent> = _categoryEvents.exposed()
 
     fun attach() {
         router.install(
@@ -52,10 +51,10 @@ class CategorySocketManager @Inject constructor(
                 upsert(SocketEventNames.CATEGORY_CREATED),
                 upsert(SocketEventNames.CATEGORY_UPDATED),
                 SocketInboundRoute.decoding<CategoryDeletedSocketData>(SocketEventNames.CATEGORY_DELETED, json, serializer()) {
-                    _categoryEvents.tryEmit(it.toEvent())
+                    _categoryEvents.emitArrived(it.toEvent())
                 },
                 SocketInboundRoute.decoding<CategoriesReorderedSocketData>(SocketEventNames.CATEGORIES_REORDERED, json, serializer()) {
-                    _categoryEvents.tryEmit(it.toEvent())
+                    _categoryEvents.emitArrived(it.toEvent())
                 },
             ),
         )
@@ -63,6 +62,6 @@ class CategorySocketManager @Inject constructor(
 
     private fun upsert(event: String): SocketInboundRoute =
         SocketInboundRoute.decoding<CategoryUpsertedSocketData>(event, json, serializer()) {
-            _categoryEvents.tryEmit(it.toEvent())
+            _categoryEvents.emitArrived(it.toEvent())
         }
 }

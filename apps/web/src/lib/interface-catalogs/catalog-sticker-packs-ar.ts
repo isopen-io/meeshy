@@ -86,14 +86,11 @@ const arStickerPacks = {
   'packs.shop.domains': "فئة المتجر",
   'packs.shop.hint': "كل الحزم: ملصقات وإطارات وخلفيات وحلقات ولافتات. ما تملكه يظهر في الشاشات التي تستخدمها.",
   'packs.retry': "إعادة المحاولة",
-  'packs.locked': "مقفل",
-  'packs.unlock.rank': "الرتبة {rank} — المجد الناقص: {missing}",
-  'packs.unlock.glory': "المجد الناقص: {missing}",
-  'packs.unlock.trophy': "يُكسب بكأس",
-  'packs.unlock.season': "مكافأة الموسم {number}",
-  'packs.unlock.upcoming': "متاح ابتداءً من {date}",
-  'packs.unlock.until': "متاح حتى {date}",
-  'packs.unlock.closed': "لم يعد معروضًا",
+  'packs.error.notRemovable': "تبقى هذه الحزمة مثبّتة: لا يمكن إزالتها.",
+  'packs.frames.changeAtmosphere': "تغيير الأجواء",
+  'packs.frames.yourAtmosphere': "أجواؤك",
+  'packs.frames.atmosphereKept': "تحمل هذه الحزمة أجواءك، لذا تبقى مثبّتة. غيّر الأجواء لإزالتها.",
+  'packs.frames.atmosphereQueued': "غير متصل: سيُرسل اختيارك عند عودة الاتصال.",
 } satisfies StickerPacksCatalog;
 
 export default arStickerPacks;

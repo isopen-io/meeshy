@@ -20,6 +20,7 @@ import {
   ApplicationPreferenceSchema,
   APPLICATION_PREFERENCE_DEFAULTS
 } from '../index';
+import { CIRCLE_NOTIFY_DEFAULTS } from '../../../utils/relation-levels';
 
 describe('PrivacyPreferenceSchema', () => {
   test('devrait accepter des données valides', () => {
@@ -211,11 +212,12 @@ describe('NotificationPreferenceSchema', () => {
       friendContentEnabled: false,
       contactActivityEnabled: false,
       gameEnabled: false,
-      gamePhotoEnabled: false
+      gamePhotoEnabled: false,
+      bringEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);
-    expect(result).toEqual(valid);
+    expect(result).toEqual({ ...CIRCLE_NOTIFY_DEFAULTS, ...valid });
   });
 
   test('« Quand un contact revient sur Meeshy » est reçu par défaut (#8285)', () => {

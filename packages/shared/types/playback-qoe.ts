@@ -1,6 +1,6 @@
 /**
- * La lecture AGRÉGÉE de la qualité de lecture (#11280) : temps-à-première-image
- * et rebuffer en p50/p95, par surface × tier d'appareil × jour, servie par
+ * La lecture AGRÉGÉE de la qualité de lecture (#11280) : temps-à-première-image,
+ * rebuffer et, pour le web, Web Vitals et longues images (#11317), en p50/p95, par surface × tier d'appareil × jour, servie par
  * `GET /api/v1/admin/analytics/playback`.
  *
  * k-anonymat : une cellule n'est servie qu'au-delà de `minDevices` comptes
@@ -31,7 +31,17 @@ export type PlaybackQoeCell = {
   readonly rebufferRatio: QuantilePair | null;
   /** Part des sessions qui ont rebufferisé au moins une fois. */
   readonly rebufferedRate: number | null;
-};
+} & PlaybackPageVitalsQuantiles;
+
+/**
+ * W11 (#11317) — les Web Vitals de la page et les longues images d'animation
+ * survenues pendant la séance, telles que le web les envoie avec le résumé de
+ * lecture. `null` quand aucune séance de la cellule ne les porte (client
+ * natif, ancien web) — jamais zéro.
+ */
+export const PLAYBACK_PAGE_VITALS = ['lcpMs', 'cls', 'inpMs', 'longFrames', 'longFramesBlockingMs', 'longFrameWorstMs'] as const;
+export type PlaybackPageVital = (typeof PLAYBACK_PAGE_VITALS)[number];
+export type PlaybackPageVitalsQuantiles = { readonly [K in PlaybackPageVital]: QuantilePair | null };
 
 export type PlaybackQoeSummary = {
   readonly windowDays: number;

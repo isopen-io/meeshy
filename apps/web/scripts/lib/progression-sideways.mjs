@@ -65,7 +65,11 @@ export const sidewaysReleve = () => {
   const coupeX = (el) => /(hidden|clip|auto|scroll)/.test(getComputedStyle(el).overflowX);
 
   const main = document.getElementById('contenu');
-  if (main === null) return { chemin: location.pathname + location.search, sansContenu: true };
+  if (main === null) return { chemin: location.pathname + location.search, sansContenu: true, enChargement: false };
+  /* #12783 — un `#contenu` qui porte encore son squelette (`aria-busy`, `ProgressionSkeleton`) n'est pas la page :
+     mesuré, la première page reste ~30 ms en « squelette, réseau au repos » avant de demander le chunk suivant, et
+     deux lectures à 50 ms y concordaient sous charge — le témoin mesurait le squelette (« niveau lu : null »). */
+  const enChargement = main.querySelector('[aria-busy="true"]') !== null;
   const cadre = main.getBoundingClientRect();
 
   /* 1. Aucun conteneur ne défile de côté, bande comprise. */
@@ -100,6 +104,7 @@ export const sidewaysReleve = () => {
   return {
     chemin: location.pathname + location.search,
     sansContenu: false,
+    enChargement,
     defilants,
     debords,
     rogne: main.scrollWidth - main.clientWidth,

@@ -62,7 +62,7 @@ these UI capabilities to a native Android (Kotlin / Jetpack Compose) rebuild.
   searchable list. Keep the `systemLanguage`/`regionalLanguage` resolution order (Prisme rule:
   never use device UI locale for content language).
 
-## apps/ios/Meeshy/Features/Main/Views/BlockedUsersView.swift
+## apps/ios/Meeshy/Features/Settings/Views/BlockedUsersView.swift
 
 - Purpose: List of blocked users with unblock (swipe action + button + confirm alert).
 - Public API surface: `struct BlockedUsersView: View`; uses `[BlockedUser]` model.
@@ -466,7 +466,7 @@ these UI capabilities to a native Android (Kotlin / Jetpack Compose) rebuild.
 - Public API surface: `final class TopLevelCommentCell` — `configure(with: CommentRecord)`.
 - Android port note: Compose comment item.
 
-## apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift
+## apps/ios/Meeshy/Features/Settings/Views/ChangePasswordView.swift
 
 - Purpose: Change-password form (current, new, confirm) with validation + strength meter.
 - Public API surface: `struct ChangePasswordView: View`; private `Field` focus enum.
@@ -502,7 +502,7 @@ these UI capabilities to a native Android (Kotlin / Jetpack Compose) rebuild.
   state from a `CommentViewModel` mirroring `CommentStore` (`topLevelComments`, `replies`,
   `expandedThreads`). DiffUtil-equivalent is automatic with Compose keys. Self-sizing is free.
 
-## apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift
+## apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift
 
 - Purpose: Detail screen for one community invite link (copy / share / copy identifier, stats, info).
 - Public API surface: `struct CommunityLinkDetailView: View` — `link: CommunityLink`.
@@ -510,7 +510,7 @@ these UI capabilities to a native Android (Kotlin / Jetpack Compose) rebuild.
   `UIActivityViewController`; member count, active status, info rows.
 - Android port note: Compose screen; `ClipboardManager`; share `Intent.ACTION_SEND`.
 
-## apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift
+## apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift
 
 - Purpose: List of communities the user administers, with their invite links + stats overview.
 - Public API surface: `struct CommunityLinksView: View`; `@MainActor class CommunityLinksViewModel:

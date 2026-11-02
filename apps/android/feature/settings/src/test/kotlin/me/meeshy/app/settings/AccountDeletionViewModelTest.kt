@@ -53,6 +53,15 @@ class AccountDeletionViewModelTest {
     private fun vm(api: AccountDeletionApi = mockk(relaxed = true)) =
         AccountDeletionViewModel(api)
 
+    /**
+     * A strict fake for the deletion route: every [AccountDeletionApi.open] answer must be
+     * stubbed by the test, while the status read the VM performs on init answers as
+     * unreadable — it asserts nothing, so the open-path assertions stand on their own.
+     */
+    private fun strictApi(): AccountDeletionApi = mockk<AccountDeletionApi>().also { api ->
+        coEvery { api.status() } returns NetworkResult.Failure(ApiError(message = "offline", code = "NETWORK"))
+    }
+
     private fun AccountDeletionViewModel.submitConfirmed() {
         requestDeletion()
         confirmDeletion()
@@ -121,7 +130,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun submit_success_flipsEmailSentAndSendsCanonicalPhraseAndPassword() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Success(AccountDeletionOpenedResponse(message = "email sent"))
         val sut = vm(api)
@@ -145,7 +154,7 @@ class AccountDeletionViewModelTest {
     // must not linger in the ViewModel's state past that point.
     @Test
     fun submit_success_clearsThePasswordBuffer() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Success(AccountDeletionOpenedResponse(message = "email sent"))
         val sut = vm(api)
@@ -160,7 +169,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun submit_http401_mapsToInvalidPassword() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "wrong password", code = "HTTP_401", httpStatus = 401))
         val sut = vm(api)
@@ -184,7 +193,7 @@ class AccountDeletionViewModelTest {
     // HTTP status, or a NO_EMAIL response is silently reported as ALREADY_PENDING.
     @Test
     fun submit_http409NoEmail_mapsToNoEmail() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "no email", code = "NO_EMAIL", httpStatus = 409))
         val sut = vm(api)
@@ -202,7 +211,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun submit_http409_mapsToAlreadyPending() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "already", code = "HTTP_409", httpStatus = 409))
         val sut = vm(api)
@@ -220,7 +229,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun submit_networkFailure_mapsToNetwork() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "offline", code = "NETWORK"))
         val sut = vm(api)
@@ -235,7 +244,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun submit_otherFailure_mapsToGeneric() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "boom", code = "HTTP_500", httpStatus = 500))
         val sut = vm(api)
@@ -250,7 +259,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun editingConfirmation_clearsAPriorError() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "boom", code = "HTTP_500", httpStatus = 500))
         val sut = vm(api)
@@ -267,7 +276,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun editingPassword_clearsAPriorError() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "wrong password", code = "HTTP_401", httpStatus = 401))
         val sut = vm(api)
@@ -285,7 +294,7 @@ class AccountDeletionViewModelTest {
     @Test
     fun submit_whileInFlight_callsApiOnce() = runTest(dispatcher) {
         val gate = CompletableDeferred<NetworkResult<AccountDeletionOpenedResponse>>()
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } coAnswers { gate.await() }
         val sut = vm(api)
         sut.onConfirmationTextChange(AccountDeletionConfirmation.REQUIRED_PHRASE)
@@ -360,7 +369,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun confirmDeletion_twice_callsTheApiOnce() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns NetworkResult.Success(AccountDeletionOpenedResponse())
         val sut = readyVm(api)
         sut.requestDeletion()
@@ -374,7 +383,7 @@ class AccountDeletionViewModelTest {
 
     @Test
     fun confirmDeletion_successThenFailure_emitSuccessAndErrorHaptics() = runTest(dispatcher) {
-        val api = mockk<AccountDeletionApi>()
+        val api = strictApi()
         coEvery { api.open(any(), any()) } returns NetworkResult.Success(AccountDeletionOpenedResponse())
         val ok = readyVm(api)
         ok.submitConfirmed()

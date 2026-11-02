@@ -8,7 +8,7 @@ import {
   sendFriendRequestSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { envoyerDemande, repondreDemande, servirParties, INCLUDE_PARTIES } from './directory/friend-requests-core';
+import { envoyerDemande, repondreDemande, servirParties, clauseHorsBlocage, INCLUDE_PARTIES } from './directory/friend-requests-core';
 import {
   repondreDemandeHTTP,
   creerGardesFriendRequests,
@@ -352,7 +352,12 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       // canonique, plutôt qu'un `select` local qui charge cinq colonnes et
       // OUBLIE `isOnline`/`lastActiveAt`.
       return await servirPageDemandes(fastify, request, reply, {
-        where: { receiverId: request.user!.userId, status: 'pending' as const },
+        where: {
+          AND: [
+            { receiverId: request.user!.userId, status: 'pending' as const },
+            await clauseHorsBlocage(fastify, request.user!.userId),
+          ],
+        },
         include: { sender: INCLUDE_PARTIES.sender },
       });
 
@@ -407,7 +412,12 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       // `INCLUDE_PARTIES.receiver` — même raison que GET .../received :
       // projection PARTAGÉE avec la route canonique (#4283).
       return await servirPageDemandes(fastify, request, reply, {
-        where: { senderId: request.user!.userId },
+        where: {
+          AND: [
+            { senderId: request.user!.userId },
+            await clauseHorsBlocage(fastify, request.user!.userId),
+          ],
+        },
         include: { receiver: INCLUDE_PARTIES.receiver },
       });
 

@@ -7,6 +7,7 @@ import type { DraftStore } from '@/lib/send/draft-store';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { postMenuEntries } from '@/lib/feed/publication-menu';
 import { translate } from '@/lib/i18n-catalog';
+import { isSceneExportCatalogLoaded, loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { useRovingMenu } from '@/lib/view/roving-menu';
@@ -19,6 +20,9 @@ import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
  * doc-comment de `publication-menu-panel.tsx`).
  */
 const PostMenuPanel = lazy(() => import('./publication-menu-panel').then((m) => ({ default: m.PostMenuPanel })));
+
+/** Ce que « Sauvegarder » et « Imager » rendent (#13873) — la scène de la carte et son auteur, sans rien charger tant que le menu n'est pas ouvert. */
+export type PostMenuSceneExport = Pick<FeedCardModel, 'id' | 'isReel' | 'scene' | 'author'>;
 
 /**
  * **LE MENU « ⋯ » D'UNE CARTE DU FIL** (#7533, directive porteur du
@@ -78,6 +82,7 @@ export function FeedPostMenu({
   originalLanguage,
   bookmarked,
   studioEditable = false,
+  sceneExport,
   isDetail,
   tone,
   menu,
@@ -100,6 +105,8 @@ export function FeedPostMenu({
    * média, et n'est pas une republication : sa modification se fait dans le
    * studio (`/posts/:id/edit`). Sinon, la feuille de texte (#7534). */
   readonly studioEditable?: boolean;
+  /** LA SCÈNE À EXPORTER (#13873) — absente, ni « Sauvegarder » ni « Imager ». */
+  readonly sceneExport?: PostMenuSceneExport | undefined;
   readonly isDetail: boolean;
   /** `card` sur le fond de la carte, `overlay` sur un média (le réel). */
   readonly tone: 'card' | 'overlay';
@@ -111,6 +118,10 @@ export function FeedPostMenu({
   const [editing, setEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
   const [removing, setRemoving] = useState(false);
+  /* Les libellés de l'export vivent dans un catalogue chargé à l'ouverture du
+     menu, avec le panneau : les deux entrées s'offrent dès qu'il est là. */
+  const [, setExportLabelsReady] = useState(false);
+  const exportable = sceneExport?.scene !== undefined && isSceneExportCatalogLoaded(currentInterfaceLanguage());
   const entries = postMenuEntries({
     viewerId: menu.viewerId,
     authorId,
@@ -120,6 +131,7 @@ export function FeedPostMenu({
     canSave: onGesture !== undefined,
     viewerIsAdministrator: menu.viewerIsAdministrator === true,
     viewerModerates: menu.viewerModerates === true && menu.onRemove !== undefined,
+    canExportScene: exportable,
   });
 
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
@@ -162,6 +174,12 @@ export function FeedPostMenu({
           event.preventDefault();
           event.stopPropagation();
           if (!open) measure();
+          if (!open && sceneExport?.scene !== undefined) {
+            void loadSceneExportCatalog(currentInterfaceLanguage()).then(
+              () => setExportLabelsReady(true),
+              () => undefined,
+            );
+          }
           setOpen((value) => !value);
         }}
         /* UNE VRAIE BOÎTE DE 44 (`check-profile.mjs` mesure la boîte, pas un
@@ -195,6 +213,7 @@ export function FeedPostMenu({
             originalLanguage={originalLanguage}
             bookmarked={bookmarked}
             studioEditable={studioEditable}
+            sceneExport={sceneExport}
             menu={menu}
             onShare={onShare}
             onGesture={onGesture}
@@ -251,6 +270,7 @@ export function ModelPostMenu({
       originalLanguage={model.text?.originalLanguage}
       bookmarked={model.viewer.bookmarked}
       studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
+      sceneExport={model.scene === undefined ? undefined : model}
       isDetail={isDetail}
       tone={tone}
       menu={menu}

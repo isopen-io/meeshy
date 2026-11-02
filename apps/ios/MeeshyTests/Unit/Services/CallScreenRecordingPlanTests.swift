@@ -64,7 +64,7 @@ final class CallScreenRecordingPlanTests: XCTestCase {
 
     func test_recording_neverSizesItselfFromUIScreenMain() throws {
         let code = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallScreenRecordingService.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallScreenRecordingService.swift"))
         XCTAssertFalse(code.contains("UIScreen.main"))
     }
 }

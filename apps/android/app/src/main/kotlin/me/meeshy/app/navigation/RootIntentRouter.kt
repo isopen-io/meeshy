@@ -143,7 +143,7 @@ class RootIntentOverlay @Inject constructor(
                         }
                     }
                     is RootIntentAction.ShowProfileSheet -> navController.navigate(Routes.profile(action.userId))
-                    RootIntentAction.ShowStoryComposer -> navController.navigate(Routes.STORY_COMPOSER)
+                    RootIntentAction.ShowStoryComposer -> navController.navigate(storyDoor)
                     is RootIntentAction.NavigateToRoute -> navController.navigate(action.route)
                     RootIntentAction.Ignore -> Unit
                 }

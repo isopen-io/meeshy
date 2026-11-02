@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -25,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,10 +43,13 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.story.isExpired
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -60,15 +63,34 @@ import java.util.Locale
  * read-only, and its tap opens the ORIGINAL reposted post ([RepostEmbedPresentation.id]),
  * never the outer card — mirrors iOS `FeedPostCard.repostTapTargetId`.
  *
- * A full story/reel canvas embed is out of scope for this slice: STORY/REEL
- * reposts render the same quote block with a discreet kind badge (there is no
- * Android story-canvas renderer yet).
+ * A reposted STORY plays through the shared scene renderer (only when the feed elects it, [sceneId]; a tap opens THAT story full screen while it is alive and its author known, else the post); a reposted REEL shows
+ * its cover above the quote (poster, resting scene or accent backdrop — never a
+ * player per card) and opens the reels player on that reel (iOS `ReelRepostEmbedCell`).
  */
 @Composable
 fun RepostEmbedCell(
     embed: RepostEmbedPresentation,
     onOpen: (String) -> Unit,
+    onOpenReel: ((String) -> Unit)? = null,
+    sceneId: String? = null,
 ) {
+    if (embed.isUnavailable) {
+        UnavailableRepostCell(embed)
+        return
+    }
+    val sceneRenderer = LocalRepostSceneRenderer.current
+    val scene = embed.storyItem
+    if (scene != null && sceneRenderer != null) {
+        val live by rememberSceneLive(sceneId)
+        val openStory = LocalStoryOpener.current
+        val authorId = embed.authorId
+        // Le lecteur de stories ne joue que ce qu'il sait trouver : une story expirée, ou sans auteur connu, ouvre la fiche du post.
+        val open: () -> Unit = {
+            if (openStory != null && authorId != null && !scene.isExpired()) openStory(authorId, embed.id) else onOpen(embed.id)
+        }
+        sceneRenderer(scene, embed.authorName, live, open, Modifier.fillMaxWidth().sceneFrame(sceneId))
+        return
+    }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val header = stringResource(
         if (embed.isQuote) R.string.feed_repost_quoted else R.string.feed_repost_reposted,
@@ -111,18 +133,7 @@ fun RepostEmbedCell(
         Spacer(Modifier.height(MeeshySpacing.sm))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(contentAlignment = Alignment.Center) {
-                MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp)
-                if (!embed.authorAvatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = embed.authorAvatarUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape),
-                    )
-                }
-            }
+            MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp, imageUrl = embed.authorAvatarUrl, presence = rememberPresence(embed.authorId))
             Spacer(Modifier.width(MeeshySpacing.sm))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -176,7 +187,17 @@ fun RepostEmbedCell(
             }
         }
 
-        embed.previewImageUrl?.let { url ->
+        embed.reelCover?.let { cover ->
+            Spacer(Modifier.height(MeeshySpacing.sm))
+            ReelCoverView(
+                cover = cover,
+                authorName = embed.authorName,
+                onOpen = { (onOpenReel ?: onOpen)(embed.id) },
+                modifier = Modifier.fillMaxWidth().height(REEL_STRIP_HEIGHT),
+            )
+        }
+
+        embed.previewImageUrl?.takeIf { embed.reelCover == null }?.let { url ->
             Spacer(Modifier.height(MeeshySpacing.sm))
             Box(
                 modifier = Modifier
@@ -247,6 +268,53 @@ fun RepostEmbedCell(
                     color = MeeshyPalette.Indigo500.copy(alpha = 0.7f),
                 )
             }
+        }
+    }
+}
+
+/**
+ * L'original d'un repost n'est plus servi (supprimé, retiré, hors de portée) : un état dessiné, de la même
+ * silhouette que la citation, qui n'ouvre rien — pas un bloc vide qui promet un contenu.
+ */
+@Composable
+private fun UnavailableRepostCell(embed: RepostEmbedPresentation) {
+    val message = stringResource(R.string.feed_repost_unavailable)
+    val header = stringResource(
+        if (embed.isQuote) R.string.feed_repost_quoted else R.string.feed_repost_reposted,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .border(
+                width = 1.dp,
+                color = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(MeeshyRadius.md),
+            )
+            .background(MeeshyTheme.tokens.textSecondary.copy(alpha = 0.05f))
+            .padding(MeeshySpacing.md)
+            .semantics(mergeDescendants = true) { contentDescription = "$header. $message" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.Block,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(18.dp),
+        )
+        Column {
+            Text(
+                text = header,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
         }
     }
 }

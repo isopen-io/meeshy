@@ -1,16 +1,16 @@
 [
  {
   "file": "nord-ambassadeur-1",
-  "overlap": 3,
+  "overlap": 4,
   "face": 0,
-  "depth": 1,
+  "depth": 2,
   "bbox": [
    389,
    662,
-   391,
-   665
+   392,
+   666
   ],
-  "windowPx": 127633,
+  "windowPx": 127831,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -20,7 +20,7 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 159936,
+  "windowPx": 160154,
   "layout": "perches",
   "verdict": "ok"
  },
@@ -30,13 +30,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 121064,
+  "windowPx": 121232,
   "layout": "perches",
   "verdict": "ok"
  },
  {
   "file": "nord-ambassadeur-4",
-  "overlap": 34,
+  "overlap": 35,
   "face": 0,
   "depth": 3,
   "bbox": [
@@ -45,13 +45,13 @@
    451,
    481
   ],
-  "windowPx": 150395,
+  "windowPx": 150524,
   "layout": "cotes",
   "verdict": "ok"
  },
  {
   "file": "nord-ambassadeur-5",
-  "overlap": 85,
+  "overlap": 86,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -60,7 +60,7 @@
    471,
    725
   ],
-  "windowPx": 180354,
+  "windowPx": 180416,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -70,37 +70,37 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 105544,
+  "windowPx": 105661,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "nord-legende-2",
-  "overlap": 120,
+  "overlap": 125,
   "face": 0,
   "depth": 4,
   "bbox": [
-   84,
-   689,
+   83,
+   688,
    456,
    701
   ],
-  "windowPx": 154308,
+  "windowPx": 154340,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "nord-legende-3",
-  "overlap": 57,
+  "overlap": 65,
   "face": 0,
-  "depth": 3,
+  "depth": 4,
   "bbox": [
    103,
    660,
    437,
    721
   ],
-  "windowPx": 142841,
+  "windowPx": 142878,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -110,28 +110,28 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 128531,
+  "windowPx": 128650,
   "layout": "ruban",
   "verdict": "ok"
  },
  {
   "file": "nord-legende-5",
-  "overlap": 53,
+  "overlap": 67,
   "face": 0,
-  "depth": 4,
+  "depth": 5,
   "bbox": [
-   103,
+   102,
    715,
-   440,
+   441,
    723
   ],
-  "windowPx": 142030,
+  "windowPx": 142142,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "nord-mythe-a",
-  "overlap": 62,
+  "overlap": 63,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -140,13 +140,13 @@
    446,
    713
   ],
-  "windowPx": 142392,
+  "windowPx": 142425,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "nord-mythe-b",
-  "overlap": 449,
+  "overlap": 451,
   "face": 0,
   "depth": 14,
   "bbox": [
@@ -155,7 +155,7 @@
    405,
    700
   ],
-  "windowPx": 116647,
+  "windowPx": 116715,
   "layout": "selfie",
   "verdict": "ok"
  },
@@ -165,13 +165,13 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 128315,
+  "windowPx": 128385,
   "layout": "pied",
   "verdict": "ok"
  },
  {
   "file": "nord-oracle-a",
-  "overlap": 6421,
+  "overlap": 6440,
   "face": 0,
   "depth": 81,
   "bbox": [
@@ -180,13 +180,13 @@
    453,
    727
   ],
-  "windowPx": 147545,
+  "windowPx": 147634,
   "layout": "selfie",
   "verdict": "ok"
  },
  {
   "file": "nord-oracle-b",
-  "overlap": 56,
+  "overlap": 64,
   "face": 0,
   "depth": 3,
   "bbox": [
@@ -195,7 +195,7 @@
    412,
    725
   ],
-  "windowPx": 153406,
+  "windowPx": 153626,
   "layout": "pied",
   "verdict": "ok"
  },
@@ -205,22 +205,22 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 123231,
+  "windowPx": 123342,
   "layout": "perches",
   "verdict": "ok"
  },
  {
   "file": "nord-orateur-a",
-  "overlap": 39,
+  "overlap": 50,
   "face": 0,
   "depth": 3,
   "bbox": [
-   146,
+   145,
    725,
    399,
    727
   ],
-  "windowPx": 152619,
+  "windowPx": 152821,
   "layout": "ruban",
   "verdict": "ok"
  },
@@ -235,13 +235,13 @@
    429,
    665
   ],
-  "windowPx": 141610,
+  "windowPx": 141649,
   "layout": "cotes",
   "verdict": "ok"
  },
  {
   "file": "nord-orateur-c",
-  "overlap": 94,
+  "overlap": 99,
   "face": 0,
   "depth": 4,
   "bbox": [
@@ -250,7 +250,7 @@
    455,
    725
   ],
-  "windowPx": 169503,
+  "windowPx": 169632,
   "layout": "pied",
   "verdict": "ok"
  }

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La carte d'une conversation Meeshy dans une bulle (#13672) : clés propres à Android, jamais au catalogue iOS. -->
+<resources>
+    <string name="conversation_card_invites_you">lädt dich ein, dieser Unterhaltung beizutreten</string>
+    <string name="conversation_card_join_prompt">Beitreten?</string>
+    <string name="conversation_card_join_choice_anonymous">Anonym</string>
+    <string name="conversation_card_join_choice_account">Mein Konto</string>
+    <string name="conversation_card_a11y_join_anonymously">Anonym beitreten</string>
+    <string name="conversation_card_a11y_join_with_account">Mit meinem Konto beitreten</string>
+    <string name="conversation_card_a11y_join_with_named_account">Mit dem Konto %1$s beitreten</string>
+    <string name="conversation_card_leave">Verlassen</string>
+    <string name="conversation_card_open">Öffnen</string>
+    <string name="conversation_card_in_progress">Läuft…</string>
+    <string name="conversation_card_expired">Link abgelaufen</string>
+    <string name="conversation_card_private_title">Private Unterhaltung</string>
+    <string name="conversation_card_private_hint">Nur ihre Mitglieder können sie sehen.</string>
+    <string name="conversation_card_loading">Unterhaltung wird geladen</string>
+    <string name="conversation_card_leave_confirm_title">Diese Unterhaltung verlassen?</string>
+    <string name="conversation_card_leave_confirm_message">Du erhältst ihre Nachrichten nicht mehr.</string>
+    <string name="conversation_card_a11y_members">Mitglieder: %1$d</string>
+    <string name="conversation_card_a11y_messages">Nachrichten: %1$d</string>
+    <string name="conversation_card_a11y_languages">Sprachen: %1$s</string>
+    <string name="conversation_card_a11y_label">Unterhaltung: %1$s</string>
+    <string name="conversation_card_error_leave">Die Unterhaltung kann nicht verlassen werden.</string>
+    <string name="conversation_card_error_join">Beitritt zur Unterhaltung nicht möglich</string>
+    <string name="conversation_card_error_not_found">Link nicht gefunden</string>
+    <string name="conversation_card_error_inactive">Dieser Link ist nicht mehr aktiv</string>
+    <string name="conversation_card_error_forbidden">Zugriff auf diese Unterhaltung verweigert</string>
+</resources>

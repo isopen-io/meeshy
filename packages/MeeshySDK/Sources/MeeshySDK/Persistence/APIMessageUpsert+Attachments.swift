@@ -22,6 +22,7 @@ extension APIMessageUpsert {
             mimeType: apiAtt.mimeType ?? "application/octet-stream",
             fileSize: apiAtt.fileSize ?? 0,
             fileUrl: apiAtt.fileUrl ?? "",
+            alt: apiAtt.alt,
             forwardedFromAttachmentId: apiAtt.forwardedFromAttachmentId,
             isForwarded: apiAtt.isForwarded == true,
             capturedInApp: apiAtt.capturedInApp == true,
@@ -52,7 +53,9 @@ extension APIMessageUpsert {
             watchedByAllAt: apiAtt.watchedByAllAt,
             viewedCount: apiAtt.viewedCount,
             downloadedCount: apiAtt.downloadedCount,
-            consumedCount: apiAtt.consumedCount
+            consumedCount: apiAtt.consumedCount,
+            altLanguage: apiAtt.altLanguage,
+            altTranslations: apiAtt.altTranslations
         )
     }
 

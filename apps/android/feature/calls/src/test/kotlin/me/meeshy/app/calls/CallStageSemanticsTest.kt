@@ -9,7 +9,13 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.CallDuoStageLayout
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallState
@@ -60,7 +66,7 @@ class CallStageSemanticsTest {
     @Test
     fun `the audio stage names the peer and shows the weak network pill`() {
         rule.setContent {
-            MeeshyTheme { CallAudioStage(connected(peerQualityDegraded = true), peerAvatarUrl = null) }
+            MeeshyTheme { CallAudioStage(connected(peerQualityDegraded = true), peer = CallPeerVisual.EMPTY) }
         }
         rule.onNodeWithText("Alice").assertExists()
         rule.onNodeWithText("Poor network (contact)").assertExists()
@@ -70,7 +76,7 @@ class CallStageSemanticsTest {
     @Test
     fun `the audio stage shows the server disconnected pill and the muted contact pill`() {
         rule.setContent {
-            MeeshyTheme { CallAudioStage(connected(peerAudio = false), peerAvatarUrl = null, signalingDegraded = true) }
+            MeeshyTheme { CallAudioStage(connected(peerAudio = false), peer = CallPeerVisual.EMPTY, signalingDegraded = true) }
         }
         rule.onNodeWithText("Server disconnected").assertExists()
         rule.onNodeWithText("Contact muted").assertExists()
@@ -150,5 +156,41 @@ class CallStageSemanticsTest {
         val node = rule.onNodeWithContentDescription("Swap videos, Video paused. Weak connection, video will resume automatically")
             .fetchSemanticsNode()
         assertThat(node.config.getOrNull(SemanticsProperties.StateDescription)).isEqualTo("Medium thumbnail, Video paused")
+    }
+
+    private val noEgl = object : org.webrtc.EglBase.Context {
+        override fun getNativeEglContext(): Long = 0
+    }
+
+    private fun duoStage(taps: () -> Unit) {
+        rule.setContent {
+            MeeshyTheme {
+                Box(Modifier.fillMaxSize()) {
+                    CallDuoVideoStage(
+                        state = connected(videoAutoPaused = true),
+                        callKey = "call-1",
+                        remoteTrack = null,
+                        localTrack = null,
+                        eglContext = noEgl,
+                        peerAvatarUrl = null,
+                        connected = true,
+                        reduceMotion = true,
+                        layout = CallDuoStageLayout(isMyImageFullScreen = false, showsSelfTile = true),
+                        selfTileMemory = CallSelfTileMemory(),
+                        onSceneTap = taps,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `a tap on the scene reaches the scene handler, a tap on the tile stays the tile's`() {
+        var sceneTaps = 0
+        duoStage(taps = { sceneTaps++ })
+        rule.onRoot().performTouchInput { click(Offset(width / 2f, height / 2f)) }
+        assertThat(sceneTaps).isEqualTo(1)
+        rule.onNodeWithContentDescription("Swap videos", substring = true).performClick()
+        assertThat(sceneTaps).isEqualTo(1)
     }
 }

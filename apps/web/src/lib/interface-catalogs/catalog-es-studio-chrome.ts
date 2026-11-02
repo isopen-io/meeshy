@@ -80,6 +80,8 @@ const esStudioChrome = {
   'story.studio.background.cameraHold': 'Mantener: abrir la cámara',
   'story.studio.camera.close': 'Volver a la escena',
   'story.studio.camera.flip': 'Cambiar de cámara',
+  'story.studio.camera.frames': 'Marcos',
+  'story.studio.camera.frames.none': 'Sin marco',
   'story.studio.camera.flash': 'Flash',
   'story.studio.camera.shutter.photo': 'Hacer una foto',
   'story.studio.camera.shutter.start': 'Empezar a grabar',
@@ -145,6 +147,10 @@ const esStudioChrome = {
   'story.studio.edit.saving': 'Guardando…',
   'story.studio.edit.cancel': 'Descartar los cambios',
   'story.studio.publish.as.storyAndReel': 'Publicar historia y reel',
+  'story.studio.unsent': 'Publicación no enviada.',
+  'story.studio.unsent.retry': 'Reintentar',
+  'story.studio.unsent.discard': 'Eliminar',
+  'story.studio.volatile': 'Este dispositivo no guarda tus archivos: no recargues la página antes de publicar.',
 } satisfies StudioChromeCatalogSlice;
 
 export default esStudioChrome;

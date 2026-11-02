@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.call.frames.CallFrameOrnament
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentGeometry
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentKind
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentMotionPlan
+import me.meeshy.sdk.model.call.frames.CallFrameOrnamentPartition
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentSpot
 import me.meeshy.sdk.model.call.frames.CallFrameOrnamentStage
 import me.meeshy.sdk.model.call.frames.CallFrameRect
@@ -37,7 +38,13 @@ import kotlin.math.sin
 private fun Double.f(): Float = toFloat()
 
 /** Ce que l'ornement en cours sait de lui-même : sa couleur, sa graine, sa scène — et comment il sème. */
-private class OrnamentCtx(val canvas: Canvas, val ornament: CallFrameOrnament, val scene: CallFrameOrnamentStage, val seed: Double) {
+private class OrnamentCtx(
+    val canvas: Canvas,
+    val ornament: CallFrameOrnament,
+    val scene: CallFrameOrnamentStage,
+    val seed: Double,
+    val partition: CallFrameOrnamentPartition? = null,
+) {
     val u get() = scene.unit
     val w get() = scene.width
     val h get() = scene.height
@@ -47,7 +54,8 @@ private class OrnamentCtx(val canvas: Canvas, val ornament: CallFrameOrnament, v
     fun between(draw: Int, low: Double, high: Double): Double = u * (low + rand(seed + 5, draw.toDouble()) * (high - low))
 
     fun scattered(base: Double, size: (Int) -> Double, body: (CallFrameOrnamentSpot) -> Unit) =
-        CallFrameOrnamentGeometry.spots(scene, seed, count(base, ornament.density), size).forEach(body)
+        CallFrameOrnamentGeometry.spots(scene, seed, count(base, ornament.density), size)
+            .forEach { spot -> if (partition?.includes(spot.draw) != false) body(spot) }
 
     fun scatteredBetween(base: Double, low: Double, high: Double, body: (CallFrameOrnamentSpot) -> Unit) =
         scattered(base, { between(it, low, high) }, body)
@@ -76,10 +84,11 @@ internal object CallFrameRendererOrnaments {
         headline: CallFrameRect? = null,
         elapsed: Double = 0.0,
         reduceMotion: Boolean = false,
+        excluded: Set<Int> = emptySet(),
     ) {
         val scene = CallFrameOrnamentGeometry.stage(stage.bounds, stage.areas, stage.boxes, layer == CallFrameLayer.FRONT, text, headline)
         stage.look.ornaments.forEachIndexed { rank, ornament ->
-            if (ornament.layer != layer) return@forEachIndexed
+            if (ornament.layer != layer || rank in excluded) return@forEachIndexed
             val (dx, dy) = CallFrameOrnamentMotionPlan.offset(ornament.motion, rank, elapsed, scene.unit, reduceMotion)
             val alpha = CallFrameOrnamentMotionPlan.alpha(ornament.motion, elapsed, reduceMotion)
             val saved = if (alpha < 1.0) canvas.saveLayerAlpha(null, (alpha * 255).toInt().coerceIn(0, 255)) else canvas.save()
@@ -89,8 +98,9 @@ internal object CallFrameRendererOrnaments {
         }
     }
 
-    fun paint(canvas: Canvas, ornament: CallFrameOrnament, scene: CallFrameOrnamentStage, rank: Int) {
-        val ctx = OrnamentCtx(canvas, ornament, scene, CallFrameOrnamentGeometry.seed(rank))
+    /** Un ornement ; avec [partition], seuls les tirages de ce groupe (un ornement animé se peint en groupes décalés). */
+    fun paint(canvas: Canvas, ornament: CallFrameOrnament, scene: CallFrameOrnamentStage, rank: Int, partition: CallFrameOrnamentPartition? = null) {
+        val ctx = OrnamentCtx(canvas, ornament, scene, CallFrameOrnamentGeometry.seed(rank), partition)
         val dressing = ornament.kind == CallFrameOrnamentKind.CROWN || ornament.kind == CallFrameOrnamentKind.TAPE
         canvas.save()
         if (!dressing && scene.front) canvas.clipPath(Path().apply { scene.zones.forEach { rect(it.minX, it.minY, it.width, it.height) } })
@@ -228,11 +238,18 @@ internal object CallFrameRendererOrnaments {
         c.canvas.drawRect(fx.f(), (y + height).f(), (fx + width * 0.6).f(), (y + height + height * 0.6).f(), fillPaint(fringe))
     }
 
+    /**
+     * Skia lâche un rectangle anticrénelé de moins d'un pixel de haut là où CoreGraphics le couvre
+     * en partie : sur une vignette, les lignes d'iOS (0,7 px) disparaissaient. Une ligne plus fine
+     * qu'un pixel se peint donc sur un pixel, son opacité réduite d'autant — la même encre déposée.
+     */
     private fun scanlines(c: OrnamentCtx) {
         val step = max(2.0, c.u * 0.006)
+        val thickness = step * 0.35
+        val painted = max(1.0, thickness)
         val lines = Path()
-        (0 until kotlin.math.ceil(c.h / step).toInt()).forEach { lines.rect(0.0, it * step, c.w, step * 0.35) }
-        fill(c.canvas, lines, c.ink)
+        (0 until kotlin.math.ceil(c.h / step).toInt()).forEach { lines.rect(0.0, it * step, c.w, painted) }
+        fill(c.canvas, lines, c.ink, alphaScale = thickness / painted)
     }
 
     private fun grain(c: OrnamentCtx) {

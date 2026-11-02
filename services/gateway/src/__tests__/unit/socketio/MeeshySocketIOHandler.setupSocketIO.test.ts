@@ -58,7 +58,7 @@ async function buildApp(opts: {
   // Satisfy the `fastify.authenticate` decorator used in route preHandlers
   app.decorate('authenticate', async (_req: FastifyRequest, _rep: FastifyReply) => undefined);
 
-  const handler = new MeeshySocketIOHandler({} as any, {} as any);
+  const handler = new MeeshySocketIOHandler({} as any, { getZmqClient: () => null } as any);
   await handler.setupSocketIO(app);
 
   await app.ready();
@@ -172,7 +172,7 @@ describe('POST /api/socketio/disconnect-user', () => {
     const nullApp = Fastify({ logger: false });
     nullApp.decorate('authenticate', async (_req: FastifyRequest, _rep: FastifyReply) => undefined);
 
-    const handler = new MeeshySocketIOHandler({} as any, {} as any);
+    const handler = new MeeshySocketIOHandler({} as any, { getZmqClient: () => null } as any);
     // Override: make initialize() NOT set socketIOManager
     mockManagerInstance.initialize.mockResolvedValueOnce(undefined);
     // Manually clear the internal manager after setup

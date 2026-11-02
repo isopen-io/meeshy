@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- lot: socle-pipeline-push-et-cycle-de-vie — canaux de notification par categorie. -->
+<resources>
+    <string name="push_channel_social_name">اجتماعي</string>
+    <string name="push_channel_social_description">الإعجابات والتعليقات والقصص وجهات الاتصال</string>
+    <string name="push_channel_system_name">الحساب والأمان</string>
+    <string name="push_channel_system_description">تنبيهات الأمان والبلاغات ورسائل الخدمة</string>
+    <string name="push_channel_silent_name">إشعارات صامتة</string>
+    <string name="push_channel_silent_description">تصل بهدوء خلال ساعات الهدوء أو عند كتم فئة</string>
+</resources>

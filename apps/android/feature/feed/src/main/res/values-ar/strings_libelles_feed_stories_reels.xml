@@ -29,26 +29,13 @@
     <string name="post_comments_replying_to_generic">ردّ…</string>
     <string name="post_comments_reply_hint">أضف ردًا…</string>
     <string name="post_comments_hide_replies">إخفاء الردود</string>
-    <string name="status_bar_add_label">إضافة حالة</string>
-    <string name="status_bar_my_status_label">حالتي %1$s</string>
-    <string name="status_bar_load_error">خطأ في التحميل</string>
-    <string name="status_bar_retry">إعادة تحميل الحالات</string>
-    <string name="status_bar_react">تفاعل بـ %1$s</string>
-    <string name="status_feed_toggle_label">موجز الحالات</string>
     <string name="status_composer_republishing">إعادة نشر @%1$s</string>
     <string name="status_composer_placeholder">كيف حالك؟</string>
     <string name="status_composer_mood_label">المزاج %1$s</string>
     <string name="feed_composer_open_placeholder">شارك شيئًا مع العالم…</string>
     <string name="feed_composer_attach_media">إضافة صورة أو فيديو</string>
-    <string name="feed_composer_take_video">تسجيل فيديو</string>
     <string name="feed_composer_remove_media">إزالة الوسائط</string>
-    <string name="feed_composer_add_location">إضافة موقعي</string>
-    <string name="feed_composer_remove_location">إزالة الموقع</string>
-    <string name="feed_composer_location_unavailable">الموقع غير متاح — تحقق من إعدادات الموقع وأعد المحاولة</string>
     <string name="feed_composer_media_unusable">تعذّر إرفاق هذه الوسائط</string>
-    <string name="feed_composer_media_alt_label">صف هذه الصورة أو الفيديو لقارئات الشاشة (%1$d)</string>
-    <string name="feed_composer_media_alt_placeholder">مثال: دراجة حمراء مسندة إلى جدار من الطوب</string>
-    <string name="feed_composer_language_button">لغة المنشور: %1$s</string>
     <string name="feed_post_options">خيارات المنشور</string>
     <string name="feed_quote_title">اقتباس المنشور</string>
     <string name="feed_quote_hint">أضف تعليقًا</string>
@@ -80,4 +67,5 @@
         <item quantity="many">يمكنك إرفاق %1$d عنصرًا كحد أقصى</item>
         <item quantity="other">يمكنك إرفاق %1$d عنصر كحد أقصى</item>
     </plurals>
+    <string name="status_composer_emoji_too_long">هذا الرمز التعبيري طويل جدًا لحالة — اختر رمزًا آخر.</string>
 </resources>

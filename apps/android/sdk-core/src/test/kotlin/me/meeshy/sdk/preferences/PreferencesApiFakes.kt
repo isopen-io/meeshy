@@ -20,6 +20,10 @@ internal fun refused() = ApiResponse<Unit>(success = false, error = "refused", c
 
 /** Scriptable [PreferencesApi]: every route records its call and answers from a public field. */
 internal open class ScriptedPreferencesApi : PreferencesApi {
+    override suspend fun updateAudio(body: me.meeshy.sdk.model.AudioPreferenceSyncBody) = ApiResponse<Unit>(success = false)
+
+    override suspend fun getAudio() = ApiResponse<me.meeshy.sdk.model.AudioPreferenceSyncBody>(success = false)
+
     var all: ApiResponse<UserPreferences> = ApiResponse(success = false, error = "offline")
     var categories: ApiResponse<List<ApiCategory>> = ApiResponse(success = false, error = "offline")
     var patchCategoryResponse: ApiResponse<Unit> = okResponse(Unit)

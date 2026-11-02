@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { MemberRole } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -8,6 +8,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { refuserCommeIntrouvable } from './utils/access-control';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { noticeActor } from '../../services/conversations/conversationNotice';
@@ -135,7 +136,7 @@ export function registerInviteRoute(
       });
 
       if (!conversation) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier que l'inviteur est membre de la conversation

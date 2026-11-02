@@ -48,7 +48,7 @@ final class StoryCanvasLongPressLiftGuardTests: XCTestCase {
     }
 
     /// L'armement n'est posé QUE dans la branche du viseur : un appui long qui
-    /// ouvre le menu d'un fond n'arme aucune prise, et un `.began` refusé par les
+    /// sélectionne un fond n'arme aucune prise, et un `.began` refusé par les
     /// trois gardes n'en arme pas davantage.
     func test_lArmement_estPoseDansLaSeuleBrancheDuViseur() throws {
         let nu = try gestures()
@@ -56,8 +56,8 @@ final class StoryCanvasLongPressLiftGuardTests: XCTestCase {
             .replacingOccurrences(of: "\n", with: "")
         XCTAssertTrue(nu.contains("case.openViewfinder:backgroundLongPressOrigin=recognizer.location(in:self)"),
                       "l'armement suit immédiatement le verdict `.openViewfinder`")
-        XCTAssertFalse(nu.contains("case.presentBackgroundMenu(letid):backgroundLongPressOrigin"),
-                       "ouvrir un menu n'arme aucune prise")
+        XCTAssertFalse(nu.contains("case.selectBackground(letid):backgroundLongPressOrigin"),
+                       "sélectionner le fond n'arme aucune prise")
     }
 
     /// Les deux levées sortent tôt quand rien n'est armé. Sans ces gardes,
@@ -75,5 +75,29 @@ final class StoryCanvasLongPressLiftGuardTests: XCTestCase {
                       + "la prise ouverte")
         XCTAssertTrue(nu.contains("backgroundLongPressOrigin=nil"),
                       "et le relâchement DÉSARME, sinon la levée suivante partirait seule")
+    }
+
+    /// **Le fond est un calque de `itemsContainer`** (#13974) : `hitTestItem`
+    /// le rend. L'appui long ne distingue donc que le PREMIER PLAN — un objet
+    /// y ouvre le menu de l'hôte (#14206), jamais le viseur — et le menu
+    /// contextuel cède le fond chez un hôte qui le sélectionne, sans quoi
+    /// l'appui long sur une photo de fond ouvrait un menu vide.
+    func test_lAppuiLongDuFond_neGardeQueLePremierPlan_etLeMenuLuiCedeLeFond() throws {
+        let nu = try gestures()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        XCTAssertTrue(nu.contains(
+            "ifletobjet=hitTestForegroundItem(at:recognizer.location(in:self)){requestItemMenu(id:objet,at:recognizer.location(in:self))return}"))
+        XCTAssertFalse(nu.contains("guardhitTestItem(at:recognizer.location(in:self))==nilelse{return}"))
+        let menu = try sdkSource("Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+ContextMenu.swift")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        XCTAssertTrue(menu.contains(
+            "guardonBackgroundMediaLongPressed==nil||hitTestForegroundItem(at:location)!=nilelse{returnnil}"))
+        let delegues = try sdkSource("Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+PointerAndDelegates.swift")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        XCTAssertTrue(delegues.contains("tap:singleTapRecognizer,longPress:backgroundLongPressRecognizer){returnfalse}"),
+                      "le toucher du même geste ne désélectionne pas ce que l'appui long a sélectionné")
     }
 }

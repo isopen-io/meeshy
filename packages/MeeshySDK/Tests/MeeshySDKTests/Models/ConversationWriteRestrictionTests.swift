@@ -129,4 +129,28 @@ final class ConversationWriteRestrictionTests: XCTestCase {
         let api = try decodeAPIConversation(#"{"id":"c1","type":"direct","createdAt":"2026-09-01T00:00:00Z","encryptionMode":"e2ee"}"#)
         XCTAssertEqual(api.toConversation(currentUserId: "me").encryptionMode, "e2ee")
     }
+
+    // MARK: - #11380 — l'activation date l'historique en clair
+
+    func test_toConversation_carriesTheEncryptionActivation_andTheCacheKeepsIt() throws {
+        let api = try decodeAPIConversation(
+            #"{"id":"c1","type":"direct","createdAt":"2026-09-01T00:00:00Z","encryptionMode":"e2ee","encryptionEnabledAt":"2026-10-01T08:00:00Z"}"#
+        )
+        let conversation = api.toConversation(currentUserId: "me")
+        let activation = Date(timeIntervalSince1970: 1_790_841_600)
+
+        XCTAssertEqual(conversation.encryptionEnabledAt, activation)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let cached = try decoder.decode(MeeshyConversation.self, from: encoder.encode(conversation))
+        XCTAssertEqual(cached.encryptionEnabledAt, activation, "la ligne mise en cache garde la date : l'ouverture à froid la lit")
+    }
+
+    func test_toConversation_withoutActivation_leavesItUnknown() throws {
+        let api = try decodeAPIConversation(#"{"id":"c1","type":"direct","createdAt":"2026-09-01T00:00:00Z","encryptionMode":"e2ee"}"#)
+        XCTAssertNil(api.toConversation(currentUserId: "me").encryptionEnabledAt)
+    }
 }

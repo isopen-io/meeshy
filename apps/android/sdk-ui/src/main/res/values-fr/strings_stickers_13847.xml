@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sticker_library_title">Mes stickers</string>
+    <string name="sticker_library_empty">Collez une image pour commencer votre bibliothèque</string>
+    <string name="sticker_library_lift">Détourer</string>
+    <string name="sticker_library_lift_a11y">Détourer le sujet d\'une photo</string>
+    <string name="sticker_library_item_a11y">Autocollant de votre bibliothèque</string>
+    <string name="sticker_library_paste">Coller</string>
+    <string name="sticker_pack_by">par %1$s</string>
+    <string name="sticker_text_example">Coucou !</string>
+    <string name="sticker_text_placeholder">Écrivez vos mots…</string>
+    <string name="sticker_text_field_a11y">Texte de la décoration</string>
+    <string name="sticker_custom_text">Texte</string>
+    <string name="sticker_custom_time">Heure</string>
+    <string name="sticker_shop_install">Installer</string>
+    <string name="sticker_shop_remove">Retirer</string>
+    <string name="sticker_shop_failed">Le pack n\'a pas pu changer d\'état. Réessaie.</string>
+    <string name="sticker_template_text_speech_bubble">Bulle</string>
+    <string name="sticker_template_text_thought_bubble">Pensée</string>
+    <string name="sticker_template_text_sticky_note">Post-it</string>
+    <string name="sticker_template_text_ribbon">Ruban</string>
+    <string name="sticker_template_text_badge">Badge</string>
+    <string name="sticker_template_text_neon">Néon</string>
+    <string name="sticker_template_text_tag">Étiquette</string>
+    <string name="sticker_template_text_signboard">Panneau</string>
+    <string name="sticker_template_text_tape">Adhésif</string>
+    <string name="sticker_template_text_stamp">Tampon</string>
+    <string name="sticker_template_time_digital">Heure numérique</string>
+    <string name="sticker_template_time_analog">Cadran</string>
+    <string name="sticker_template_time_ribbon">Ruban</string>
+    <string name="sticker_template_time_calendar_day">Feuille de calendrier</string>
+    <string name="sticker_template_time_a11y">%1$s, %2$s</string>
+</resources>

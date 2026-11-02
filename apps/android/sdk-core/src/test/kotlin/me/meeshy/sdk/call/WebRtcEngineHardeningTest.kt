@@ -12,7 +12,6 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
-import org.webrtc.EglBase
 import org.webrtc.IceCandidate
 import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
@@ -31,7 +30,7 @@ class WebRtcEngineHardeningTest {
         val sender: RtpSender = mockk(relaxed = true) { every { track() } returns null }
         val transceiver: RtpTransceiver = mockk(relaxed = true) {
             every { mediaType } returns MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO
-            every { this@mockk.sender } returns sender
+            every { this@mockk.sender } returns this@Rig.sender
         }
         val peer: PeerConnection = mockk(relaxed = true) {
             every { transceivers } returns listOf(transceiver)
@@ -50,7 +49,7 @@ class WebRtcEngineHardeningTest {
         }
         val engine = WebRtcEngine(
             appContext = mockk<Context>(relaxed = true),
-            stackProvider = { WebRtcStack(mockk<EglBase>(relaxed = true), factory) },
+            stackProvider = { WebRtcStack(InertEglBase(), factory) },
             activityGate = CallActivityGate(),
         )
     }

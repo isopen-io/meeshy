@@ -1,9 +1,15 @@
 package me.meeshy.app.chat
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -44,7 +50,8 @@ class ChatMessageRowTest {
     ) = BubbleContent(
         messageId = id,
         text = text,
-        isOutgoing = false,
+        // Seul un message ENVOYÉ peut échouer : la bande de renvoi ne se pose que sur lui.
+        isOutgoing = deliveryStatus == DeliveryStatus.Failed,
         isTranslated = false,
         originalText = null,
         senderName = null,
@@ -59,6 +66,8 @@ class ChatMessageRowTest {
         bubble: BubbleContent,
         replyCount: Int? = null,
         actions: ChatMessageRowActions = ChatMessageRowActions(),
+        canWrite: Boolean = true,
+        showReplyCountPill: Boolean = false,
     ) {
         val store = LinkPreviewStore(CoroutineScope(Job()), SilentFetcher())
         compose.setContent {
@@ -73,6 +82,8 @@ class ChatMessageRowTest {
                         linkPreviewStore = store,
                         linkPreviewCache = LinkPreviewCache(),
                         actions = actions,
+                        canWrite = canWrite,
+                        showReplyCountPill = showReplyCountPill,
                     )
                 }
             }
@@ -95,7 +106,7 @@ class ChatMessageRowTest {
     fun `a delivered message shows no retry line and no thread pill`() {
         show(bubble())
 
-        compose.onNodeWithText(retryLabel).assertDoesNotExist()
+        compose.onNodeWithContentDescription(retryLabel).assertDoesNotExist()
         compose.onNodeWithText(replyCountLabel(2)).assertDoesNotExist()
     }
 
@@ -107,22 +118,92 @@ class ChatMessageRowTest {
             actions = ChatMessageRowActions(onRetry = { retried += it }),
         )
 
-        compose.onNodeWithText(retryLabel).performClick()
+        // iOS : la bande orange intégrée au bord de la bulle (BubbleFailedRetryBar).
+        compose.onNodeWithContentDescription(retryLabel).performClick()
 
         assertThat(retried).containsExactly("m7")
     }
 
     @Test
-    fun `a message with replies shows the thread pill and a tap reports its own id`() {
+    fun `a message with replies shows no thread pill by default, like iOS`() {
+        show(bubble(id = "m3"), replyCount = 2)
+
+        compose.onNodeWithText(replyCountLabel(2)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a message with replies shows the thread pill when asked and a tap reports its own id`() {
         val tapped = mutableListOf<String>()
         show(
             bubble(id = "m3"),
             replyCount = 2,
+            showReplyCountPill = true,
             actions = ChatMessageRowActions(onReplyCountTap = { tapped += it }),
         )
 
         compose.onNodeWithText(replyCountLabel(2)).performClick()
 
         assertThat(tapped).containsExactly("m3")
+    }
+
+    private fun spokenActions(text: String = "Salut à tous"): List<CustomAccessibilityAction> {
+        val config = compose.onNodeWithText(text).fetchSemanticsNode().config
+        return config.getOrNull(SemanticsActions.CustomActions).orEmpty()
+    }
+
+    private fun swipeTowardReply(text: String = "Salut à tous") {
+        compose.onNodeWithText(text).performTouchInput { swipeRight(startX = centerX, endX = centerX + 180f) }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `TalkBack offers the reply and the forward the law grants, each reporting its own id`() {
+        val replied = mutableListOf<String>()
+        val forwarded = mutableListOf<String>()
+        show(
+            bubble(id = "m4"),
+            actions = ChatMessageRowActions(onReply = { replied += it }, onForward = { forwarded += it }),
+        )
+
+        val spoken = spokenActions()
+        assertThat(spoken.map { it.label }).containsExactly("Reply", "Forward").inOrder()
+        compose.runOnIdle { spoken.forEach { it.action() } }
+
+        assertThat(replied).containsExactly("m4")
+        assertThat(forwarded).containsExactly("m4")
+    }
+
+    @Test
+    fun `TalkBack offers no reply to a reader who may not write`() {
+        show(bubble(), canWrite = false)
+
+        assertThat(spokenActions().map { it.label }).containsExactly("Forward")
+    }
+
+    @Test
+    fun `TalkBack offers nothing on a bubble the server does not know yet`() {
+        show(bubble(id = "cid_0b8f3c2e-4d5a-4b6c-8d7e-9f0a1b2c3d4e"))
+
+        assertThat(spokenActions()).isEmpty()
+    }
+
+    @Test
+    fun `swiping an answerable message toward reply replies to it`() {
+        val replied = mutableListOf<String>()
+        show(bubble(id = "m5"), actions = ChatMessageRowActions(onReply = { replied += it }))
+
+        swipeTowardReply()
+
+        assertThat(replied).containsExactly("m5")
+    }
+
+    @Test
+    fun `swiping a message the law refuses to answer replies to nothing`() {
+        val replied = mutableListOf<String>()
+        show(bubble(id = "m6"), actions = ChatMessageRowActions(onReply = { replied += it }), canWrite = false)
+
+        swipeTowardReply()
+
+        assertThat(replied).isEmpty()
     }
 }

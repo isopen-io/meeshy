@@ -18,6 +18,7 @@ public object ApiRoutesAttachments {
     public const val BY_ATTACHMENT_ID_METADATA: String = "attachments/{attachmentId}/metadata"
     public const val BY_ATTACHMENT_ID_STATUS: String = "attachments/{attachmentId}/status"
     public const val BY_ATTACHMENT_ID_STATUS_DETAILS: String = "attachments/{attachmentId}/status-details"
+    public const val BY_ATTACHMENT_ID_SUBTITLES_BY_LANG: String = "attachments/{attachmentId}/subtitles/{lang}"
     public const val BY_ATTACHMENT_ID_THUMBNAIL: String = "attachments/{attachmentId}/thumbnail"
     public const val BY_ATTACHMENT_ID_TRANSCRIBE: String = "attachments/{attachmentId}/transcribe"
     public const val BY_ATTACHMENT_ID_TRANSLATE: String = "attachments/{attachmentId}/translate"

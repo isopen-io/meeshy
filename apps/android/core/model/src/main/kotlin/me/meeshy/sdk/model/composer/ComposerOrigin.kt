@@ -52,7 +52,16 @@ sealed interface ComposerOrigin {
 }
 
 /** What the composer shows first once opened. */
-enum class ComposerOpening { CAMERA_READY, KEYBOARD_ON_CONTENT, VIDEO_CAMERA_READY, MOOD_GRID, RESUME, MEDIA_SEEDED }
+enum class ComposerOpening {
+    CAMERA_READY, KEYBOARD_ON_CONTENT, VIDEO_CAMERA_READY, MOOD_GRID, RESUME, MEDIA_SEEDED;
+
+    /**
+     * The keyboard rises only where the door promised one would write at once (iOS `focusesContentOnAppear`): a
+     * resumed draft is reread, a seeded media is looked at, the mood grid is picked from — the keyboard would cover them.
+     * No viewfinder opens on mount either: the camera is a gesture, so the two never meet.
+     */
+    val focusesContentOnAppear: Boolean get() = this == KEYBOARD_ON_CONTENT
+}
 
 /** The legacy composer an origin still routes to while the unified one is not complete. */
 enum class LegacyComposer { STATUS_COMPOSER, REPOST_COMPOSER, STORY_EDIT, EDIT_POST_SHEET, FEED_COMPOSER, FEED_INLINE_COMPOSER }

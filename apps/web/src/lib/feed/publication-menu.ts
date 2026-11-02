@@ -50,7 +50,7 @@
  * `lib/view/content-removal.ts`) retire le post, le réel ou la story d'un
  * autre, avec un MOTIF dont l'auteur est prévenu. L'entrée précède « Signaler ».
  */
-export type PostMenuEntry = 'open' | 'copyText' | 'share' | 'save' | 'views' | 'pin' | 'edit' | 'delete' | 'remove' | 'report';
+export type PostMenuEntry = 'open' | 'copyText' | 'share' | 'saveMedia' | 'imager' | 'save' | 'views' | 'pin' | 'edit' | 'delete' | 'remove' | 'report';
 
 export function postMenuEntries(params: {
   readonly viewerId: string | null;
@@ -63,6 +63,13 @@ export function postMenuEntries(params: {
   readonly viewerIsAdministrator: boolean;
   /** MODERATOR/ADMIN/BIGBOSS (#11150) — absent ⇒ non : « Retirer » ne s'offre pas. */
   readonly viewerModerates?: boolean;
+  /**
+   * LA PUBLICATION PORTE UNE SCÈNE (#13873) — « Sauvegarder » l'exporte en
+   * vidéo complète, son compris, « Imager » en rend tout ou partie (miroir
+   * `feed.reel.save_media` / `PostSaveRoute.renderScene` iOS). Ouvert à tout
+   * lecteur, comme iOS : ce qu'on voit, on peut le garder. Absent ⇒ non.
+   */
+  readonly canExportScene?: boolean;
 }): readonly PostMenuEntry[] {
   const { viewerId, authorId, isDetail, hasText, canShare, canSave, viewerIsAdministrator } = params;
   const signedIn = viewerId !== null && viewerId !== '';
@@ -72,6 +79,7 @@ export function postMenuEntries(params: {
     ...(isDetail ? [] : (['open'] as const)),
     ...(hasText ? (['copyText'] as const) : []),
     ...(canShare ? (['share'] as const) : []),
+    ...(params.canExportScene === true ? (['saveMedia', 'imager'] as const) : []),
     ...(canSave && signedIn ? (['save'] as const) : []),
     ...(signedIn && viewerIsAdministrator ? (['views'] as const) : []),
     ...(isOwn ? (['pin', 'edit', 'delete'] as const) : []),
