@@ -45,6 +45,8 @@ final class ProfileCircleViewModel: ObservableObject {
         self.linksStore = linksStore
     }
 
+    nonisolated deinit {}
+
     /// Le niveau commun, Connaissance et au-dessus ; `nil` sinon.
     var shownLevel: RelationLevel? {
         guard let level = link?.effectiveLevel, level >= .acquaintance else { return nil }
