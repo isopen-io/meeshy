@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +43,7 @@ import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.relation.CircleSection
 import me.meeshy.sdk.model.relation.RelationLink
 import me.meeshy.ui.component.ConnectionFeedbackHost
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -189,7 +188,7 @@ private fun Banner(state: CirclesUiState, onRetry: () -> Unit) {
                 .semantics(mergeDescendants = true) {},
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Warning, contentDescription = null, tint = MeeshyPalette.Warning)
+            Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = MeeshyPalette.Warning)
             Spacer(Modifier.width(8.dp))
             Text(
                 text = stringResource(R.string.circles_error_load),
@@ -208,7 +207,7 @@ private fun Banner(state: CirclesUiState, onRetry: () -> Unit) {
                 .semantics(mergeDescendants = true) {},
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.CloudOff, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
+            Icon(MeeshyIcons.WifiOff, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
             Spacer(Modifier.width(8.dp))
             Text(
                 text = stringResource(R.string.circles_offline_banner),
@@ -232,7 +231,7 @@ private fun SectionHeader(section: CircleSection, state: CirclesUiState) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text = levelIcon(section.level, state.config))
+        Text(text = levelIcon(section.level, state.config), modifier = Modifier.clearAndSetSemantics {})
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,

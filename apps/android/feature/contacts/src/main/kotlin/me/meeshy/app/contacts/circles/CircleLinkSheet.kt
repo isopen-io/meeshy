@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -79,12 +80,15 @@ internal fun CircleLinkSheet(
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(text = name, style = MaterialTheme.typography.titleMedium, color = tokens.textPrimary)
-                    Text(
-                        text = "${levelIcon(level, config)} ${levelTitle(level, config)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = level.tint(),
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(text = levelIcon(level, config), modifier = Modifier.clearAndSetSemantics {})
+                        Text(
+                            text = levelTitle(level, config),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = level.tint(),
+                        )
+                    }
                 }
             }
             summaryText(CircleProgressSummary.of(link), config)?.let {

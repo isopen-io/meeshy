@@ -14,10 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +27,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,11 +44,15 @@ import me.meeshy.sdk.model.relation.RelationsConfig
 import me.meeshy.sdk.model.relation.requestedLevel
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 
 private const val UNKNOWN_NAME = "?"
+
+/** La goutte du Sang, l'icône de repli du niveau (`CircleLevelIcons`). */
+internal val BLOOD_GLYPH: String = me.meeshy.sdk.model.relation.CircleLevelIcons.of(RelationLevel.BLOOD)
 
 /**
  * La ligne d'un lien (#13938) — iso `CircleRowView` : la personne, son niveau, ce qui manque pour monter, et l'action de
@@ -214,19 +215,34 @@ internal fun CircleRequestRow(
         Spacer(Modifier.width(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (incoming) {
-                RoundAction(Icons.Filled.Close, MeeshyTheme.tokens.textSecondary, stringResource(R.string.circles_requests_decline), shown, onDecline)
+                RoundAction(MeeshyIcons.Close, MeeshyTheme.tokens.textSecondary, stringResource(R.string.circles_requests_decline), shown, onDecline)
                 if (isBlood) {
-                    RoundAction(Icons.Filled.Opacity, MeeshyPalette.Error, stringResource(R.string.circles_requests_ritual), shown, onRitual)
+                    RitualAction(stringResource(R.string.circles_requests_ritual), shown, onRitual)
                 } else {
-                    RoundAction(Icons.Filled.Check, MeeshyPalette.Success, stringResource(R.string.circles_requests_accept), shown, onAccept)
+                    RoundAction(MeeshyIcons.Check, MeeshyPalette.Success, stringResource(R.string.circles_requests_accept), shown, onAccept)
                 }
             } else {
                 if (isBlood) {
-                    RoundAction(Icons.Filled.Opacity, MeeshyPalette.Error, stringResource(R.string.circles_requests_ritual), shown, onRitual)
+                    RitualAction(stringResource(R.string.circles_requests_ritual), shown, onRitual)
                 }
-                RoundAction(Icons.Filled.Close, MeeshyTheme.tokens.textSecondary, stringResource(R.string.circles_requests_cancel), shown, onCancel)
+                RoundAction(MeeshyIcons.Close, MeeshyTheme.tokens.textSecondary, stringResource(R.string.circles_requests_cancel), shown, onCancel)
             }
         }
+    }
+}
+
+/** Le rituel se signale par la goutte du Sang (🩸, l'icône servie du niveau) : aucune glyphe Material ne la dit. */
+@Composable
+private fun RitualAction(label: String, name: String, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(MeeshyPalette.Error.copy(alpha = 0.15f))
+            .semantics { contentDescription = "$label — $name" },
+    ) {
+        Text(text = BLOOD_GLYPH, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clearAndSetSemantics {})
     }
 }
 

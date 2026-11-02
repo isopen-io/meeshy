@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. -->
 <resources>
-    <string name="circles_action_request">اطلب %s</string>
+    <string name="circles_action_request">اطلب %1$s</string>
     <string name="circles_action_request_a11y">اطلب من %2$s المستوى %1$s</string>
     <string name="circles_empty_action">ابحث عن جهات اتصال</string>
     <string name="circles_empty_subtitle">كلما تبادلت مع الأشخاص، انضموا إلى دوائرك</string>
@@ -21,23 +21,23 @@
     <string name="circles_missing_reaction">تفاعل</string>
     <string name="circles_offline_banner">غير متصل — هذه آخر دوائرك المعروفة</string>
     <string name="circles_offline_empty">غير متصل — ستظهر دوائرك عند عودة الشبكة</string>
-    <string name="circles_pending">تم إرسال الطلب · %s</string>
-    <string name="circles_progress_eligible">جاهز للمستوى %s</string>
-    <string name="circles_progress_missing">ينقص: %s</string>
+    <string name="circles_pending">تم إرسال الطلب · %1$s</string>
+    <string name="circles_progress_eligible">جاهز للمستوى %1$s</string>
+    <string name="circles_progress_missing">ينقص: %1$s</string>
     <string name="circles_progress_weeks">أسابيع متتالية: %1$d من %2$d</string>
     <string name="circles_requests_accept">قبول</string>
     <string name="circles_requests_cancel">إلغاء الطلب</string>
     <string name="circles_requests_decline">رفض</string>
-    <string name="circles_requests_incoming">يطلب المستوى %s</string>
-    <string name="circles_requests_outgoing">قيد الانتظار · %s</string>
+    <string name="circles_requests_incoming">يطلب المستوى %1$s</string>
+    <string name="circles_requests_outgoing">قيد الانتظار · %1$s</string>
     <string name="circles_requests_ritual">افتح الطقس</string>
     <string name="circles_ritual_a11y_hold">اضغط مع الاستمرار</string>
     <string name="circles_ritual_a11y_release">حرّر</string>
-    <string name="circles_ritual_awaiting">لقد أكّدت. في انتظار %s…</string>
+    <string name="circles_ritual_awaiting">لقد أكّدت. في انتظار %1$s…</string>
     <string name="circles_ritual_busy">يجري تحديث الطقس، أعد المحاولة بعد لحظة</string>
-    <string name="circles_ritual_completed">تم ختم الدم مع %s</string>
+    <string name="circles_ritual_completed">تم ختم الدم مع %1$s</string>
     <string name="circles_ritual_consent_continue">متابعة</string>
-    <string name="circles_ritual_consent_intro">قبل الختم، اختر ما تشاركه مع %s. يمكنك رفض أي مشاركة والعودة إليها لاحقًا.</string>
+    <string name="circles_ritual_consent_intro">قبل الختم، اختر ما تشاركه مع %1$s. يمكنك رفض أي مشاركة والعودة إليها لاحقًا.</string>
     <string name="circles_ritual_consent_listening_title">عنوان ما أستمع إليه</string>
     <string name="circles_ritual_consent_listening_title_detail">يرى العنوان والمصدر مباشرةً ما دامت المشاركة مفعّلة.</string>
     <string name="circles_ritual_consent_location_history">سجل موقعي (30 يومًا)</string>
@@ -50,14 +50,14 @@
     <string name="circles_ritual_hold_hint">يجب أن يضغط كلاكما على الشاشة في الوقت نفسه.</string>
     <string name="circles_ritual_lapsed">تركت الطرف الآخر. لم يُسجَّل شيء ولم يتغيّر شيء.</string>
     <string name="circles_ritual_open_failed">تعذّر فتح الطقس</string>
-    <string name="circles_ritual_other_waiting">%s ينتظرك</string>
+    <string name="circles_ritual_other_waiting">%1$s ينتظرك</string>
     <string name="circles_ritual_retry">ابدأ من جديد</string>
     <string name="circles_ritual_seal_failed">تعذّر إتمام الطقس، واصل الضغط على الشاشة</string>
     <string name="circles_ritual_synchronised">متزامنان</string>
     <string name="circles_ritual_title">طقس الدم</string>
     <string name="circles_ritual_unavailable_generic">لم يعد الطقس ممكنًا: الطلب لم يعد معلّقًا أو تغيّر الرابط.</string>
     <string name="circles_ritual_unavailable_offline">الطقس غير متاح دون اتصال.</string>
-    <string name="circles_ritual_waiting_other">في انتظار %s…</string>
+    <string name="circles_ritual_waiting_other">في انتظار %1$s…</string>
     <string name="circles_section_requests">طلبات الترقية</string>
     <string name="circles_settings_bring">Bring</string>
     <string name="circles_settings_listening">ما أستمع إليه</string>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. -->
 <resources>
-    <string name="circles_action_request">Ask for %s</string>
+    <string name="circles_action_request">Ask for %1$s</string>
     <string name="circles_action_request_a11y">Ask %2$s for the %1$s level</string>
     <string name="circles_empty_action">Find contacts</string>
     <string name="circles_empty_subtitle">As you exchange with people, they join your circles</string>
@@ -21,23 +21,23 @@
     <string name="circles_missing_reaction">a reaction</string>
     <string name="circles_offline_banner">Offline — here are your last known circles</string>
     <string name="circles_offline_empty">Offline — your circles will appear when you\'re back online</string>
-    <string name="circles_pending">Request sent · %s</string>
-    <string name="circles_progress_eligible">Ready for %s</string>
-    <string name="circles_progress_missing">Missing: %s</string>
+    <string name="circles_pending">Request sent · %1$s</string>
+    <string name="circles_progress_eligible">Ready for %1$s</string>
+    <string name="circles_progress_missing">Missing: %1$s</string>
     <string name="circles_progress_weeks">Weeks in a row: %1$d of %2$d</string>
     <string name="circles_requests_accept">Accept</string>
     <string name="circles_requests_cancel">Cancel request</string>
     <string name="circles_requests_decline">Decline</string>
-    <string name="circles_requests_incoming">Asks for the %s level</string>
-    <string name="circles_requests_outgoing">Waiting · %s</string>
+    <string name="circles_requests_incoming">Asks for the %1$s level</string>
+    <string name="circles_requests_outgoing">Waiting · %1$s</string>
     <string name="circles_requests_ritual">Open the ritual</string>
     <string name="circles_ritual_a11y_hold">Hold the screen</string>
     <string name="circles_ritual_a11y_release">Let go</string>
-    <string name="circles_ritual_awaiting">You confirmed. Waiting for %s…</string>
+    <string name="circles_ritual_awaiting">You confirmed. Waiting for %1$s…</string>
     <string name="circles_ritual_busy">The ritual is updating, try again in a moment</string>
-    <string name="circles_ritual_completed">Blood sealed with %s</string>
+    <string name="circles_ritual_completed">Blood sealed with %1$s</string>
     <string name="circles_ritual_consent_continue">Continue</string>
-    <string name="circles_ritual_consent_intro">Before sealing, choose what you share with %s. Each share can be declined, and you can come back to it.</string>
+    <string name="circles_ritual_consent_intro">Before sealing, choose what you share with %1$s. Each share can be declined, and you can come back to it.</string>
     <string name="circles_ritual_consent_listening_title">Title of what I\'m listening to</string>
     <string name="circles_ritual_consent_listening_title_detail">They see the title and source, live, while sharing is on.</string>
     <string name="circles_ritual_consent_location_history">My location history (30 days)</string>
@@ -50,14 +50,14 @@
     <string name="circles_ritual_hold_hint">You both need to hold the screen at the same time.</string>
     <string name="circles_ritual_lapsed">The other let go. Nothing was recorded, nothing changed.</string>
     <string name="circles_ritual_open_failed">Couldn\'t open the ritual</string>
-    <string name="circles_ritual_other_waiting">%s is waiting for you</string>
+    <string name="circles_ritual_other_waiting">%1$s is waiting for you</string>
     <string name="circles_ritual_retry">Start again</string>
     <string name="circles_ritual_seal_failed">The ritual couldn\'t complete, keep holding the screen</string>
     <string name="circles_ritual_synchronised">In sync</string>
     <string name="circles_ritual_title">The Blood ritual</string>
     <string name="circles_ritual_unavailable_generic">The ritual is no longer possible: the request is no longer pending or the link changed.</string>
     <string name="circles_ritual_unavailable_offline">The ritual isn\'t available offline.</string>
-    <string name="circles_ritual_waiting_other">Waiting for %s…</string>
+    <string name="circles_ritual_waiting_other">Waiting for %1$s…</string>
     <string name="circles_section_requests">Level-up requests</string>
     <string name="circles_settings_bring">Bring</string>
     <string name="circles_settings_listening">What I\'m listening to</string>

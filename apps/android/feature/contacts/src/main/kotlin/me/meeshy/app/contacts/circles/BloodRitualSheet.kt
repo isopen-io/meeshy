@@ -20,10 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Opacity
-import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,6 +50,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.relation.RelationRitualConsentKey
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -98,21 +96,21 @@ internal fun BloodRitualSheet(controller: BloodRitualController, onFinished: () 
                 RitualStage.READY, RitualStage.OPENING -> ReadyStep(controller, state)
                 RitualStage.WAITING, RitualStage.SYNCHRONISED, RitualStage.AWAITING_OTHER -> HoldStep(controller, state)
                 RitualStage.COMPLETED -> Outcome(
-                    icon = Icons.Filled.Opacity,
+                    icon = null,
                     tint = MeeshyPalette.Error,
                     text = stringResource(R.string.circles_ritual_completed, controller.displayName),
                     retry = null,
                     onClose = onFinished,
                 )
                 RitualStage.LAPSED -> Outcome(
-                    icon = Icons.Filled.PanTool,
+                    icon = MeeshyIcons.Hand,
                     tint = tokens.textMuted,
                     text = stringResource(R.string.circles_ritual_lapsed),
                     retry = controller::retry,
                     onClose = onFinished,
                 )
                 RitualStage.UNAVAILABLE -> Outcome(
-                    icon = Icons.Filled.Block,
+                    icon = MeeshyIcons.Block,
                     tint = tokens.textMuted,
                     text = stringResource(
                         if (state.isOfflineUnavailable) R.string.circles_ritual_unavailable_offline else R.string.circles_ritual_unavailable_generic,
@@ -307,18 +305,22 @@ private fun HoldRing(controller: BloodRitualController, state: BloodRitualState)
                 style = Stroke(width = stroke, cap = StrokeCap.Round),
             )
         }
-        Icon(Icons.Filled.Opacity, contentDescription = null, tint = ringTint, modifier = Modifier.size(48.dp))
+        Text(text = BLOOD_GLYPH, style = MaterialTheme.typography.displaySmall, modifier = Modifier.clearAndSetSemantics {})
     }
 }
 
 @Composable
-private fun Outcome(icon: ImageVector, tint: Color, text: String, retry: (() -> Unit)?, onClose: () -> Unit) {
+private fun Outcome(icon: ImageVector?, tint: Color, text: String, retry: (() -> Unit)?, onClose: () -> Unit) {
     Column(
         modifier = Modifier.semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(48.dp))
+        if (icon == null) {
+            Text(text = BLOOD_GLYPH, style = MaterialTheme.typography.displaySmall, modifier = Modifier.clearAndSetSemantics {})
+        } else {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(48.dp))
+        }
         Text(text = text, style = MaterialTheme.typography.bodyLarge, color = MeeshyTheme.tokens.textPrimary, textAlign = TextAlign.Center)
         if (retry != null) {
             Button(
