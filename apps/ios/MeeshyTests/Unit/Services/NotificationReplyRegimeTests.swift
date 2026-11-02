@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import Combine
 import MeeshySDK
 import MeeshyE2EE
 @testable import Meeshy
@@ -60,6 +61,18 @@ final class NotificationReplyRegimeTests: XCTestCase {
         let vault: MockEndToEndMessaging
         let awaiting: NotificationRepliesAwaitingRegime
         let refusals: () -> [EndToEndSendRefusal]
+        let notices: NoticeLog
+    }
+
+    /// Ce que l'utilisateur a lu de l'attente (#14673), et l'horloge et le
+    /// trousseau que la règle consulte.
+    private final class NoticeLog {
+        var waiting: [String] = []
+        var settled: [String] = []
+        var dropped: [String] = []
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        var activeUser = "user1"
+        var preservedSessions: Set<String> = ["user1", "user2"]
     }
 
     private func makeSUT(served: Result<APIConversation, Error> = .success(conversation(mode: nil))) -> SUT {
@@ -69,8 +82,18 @@ final class NotificationReplyRegimeTests: XCTestCase {
         let queue = ReplyQueueSpy()
         let persistence = PersistenceSpy()
         let vault = MockEndToEndMessaging()
-        let awaiting = NotificationRepliesAwaitingRegime(defaults: nil)
+        let awaiting = NotificationRepliesAwaitingRegime(fileURL: nil)
         var refusals: [EndToEndSendRefusal] = []
+        let log = NoticeLog()
+        let rules = NotificationReplyRegimeWait.Rules(
+            notices: NotificationReplyWaitNotices(
+                waiting: { _, id in log.waiting.append(id) },
+                settled: { log.settled.append($0) },
+                dropped: { conversationId, _ in log.dropped.append(conversationId) }
+            ),
+            sessionIsPreserved: { log.preservedSessions.contains($0) },
+            now: { log.now }
+        )
         let handler = NotificationActionHandler(
             messageService: messages,
             conversationService: conversations,
@@ -79,7 +102,7 @@ final class NotificationReplyRegimeTests: XCTestCase {
             backgroundTasks: NoBackgroundTasks(),
             authTokenProvider: { nil },
             applyAuthToken: { _ in },
-            currentUserId: { "user1" },
+            currentUserId: { log.activeUser },
             preferredLanguage: { "fr" },
             isRegisteredUser: { true },
             openNotification: { _ in },
@@ -93,11 +116,13 @@ final class NotificationReplyRegimeTests: XCTestCase {
             destinationGuard: .isolated(),
             notifyRefusedEndToEndReply: { _, refusal in refusals.append(refusal) },
             endToEnd: vault,
-            repliesAwaitingRegime: awaiting
+            repliesAwaitingRegime: awaiting,
+            awaitingReplyRules: rules
         )
         return SUT(
             handler: handler, messages: messages, conversations: conversations,
-            queue: queue, persistence: persistence, vault: vault, awaiting: awaiting, refusals: { refusals }
+            queue: queue, persistence: persistence, vault: vault, awaiting: awaiting, refusals: { refusals },
+            notices: log
         )
     }
 
@@ -274,16 +299,36 @@ final class NotificationReplyRegimeTests: XCTestCase {
         XCTAssertEqual(sut.refusals(), [.unkeptOutsideConversation])
     }
 
-    func test_awaitingStore_survivesARelaunch_withoutTheText() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "awaiting-\(UUID().uuidString)"))
+    func test_awaitingStore_survivesARelaunch_withoutTheText_outsideTheBackup() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("awaiting-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("awaiting-regime.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let item = OfflineQueueItem(conversationId: "conv1", content: Self.secret, replyToId: "msg1")
-        NotificationRepliesAwaitingRegime(defaults: defaults).add(NotificationReplyAwaitingRegime(item, senderId: "user1"))
+        NotificationRepliesAwaitingRegime(fileURL: url).add(NotificationReplyAwaitingRegime(item, senderId: "user1"))
 
-        let relaunched = NotificationRepliesAwaitingRegime(defaults: defaults)
+        let relaunched = NotificationRepliesAwaitingRegime(fileURL: url)
 
         XCTAssertEqual(relaunched.awaiting.map(\.clientMessageId), [item.clientMessageId])
-        let persisted = try XCTUnwrap(defaults.data(forKey: "meeshy.notificationReply.awaitingRegime"))
-        XCTAssertFalse(String(decoding: persisted, as: UTF8.self).contains("4512"), "aucun clair dans les préférences")
+        let persisted = try Data(contentsOf: url)
+        XCTAssertFalse(String(decoding: persisted, as: UTF8.self).contains("4512"), "aucun clair sur le disque")
+        XCTAssertEqual(try url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true,
+                       "la fiche ne part pas dans la sauvegarde iCloud ou Finder")
+    }
+
+    /// Les fiches écrites dans les préférences sauvegardées avant #14673
+    /// rejoignent le fichier, sans date, et quittent les préférences.
+    func test_awaitingStore_adoptsLegacyPreferenceFiches_andLeavesThePreferences() throws {
+        let suite = "awaiting-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let legacy = #"[{"clientMessageId":"cm1","conversationId":"conv1","senderId":"user1","replyToId":"msg1"}]"#
+        defaults.set(Data(legacy.utf8), forKey: NotificationRepliesAwaitingRegime.legacyKey)
+
+        let store = NotificationRepliesAwaitingRegime(fileURL: nil, legacyDefaults: defaults)
+
+        XCTAssertEqual(store.awaiting.map(\.clientMessageId), ["cm1"])
+        XCTAssertNil(defaults.data(forKey: NotificationRepliesAwaitingRegime.legacyKey))
     }
 
     func test_handleReply_gatewayServesReadableMode_sendsTheReply() async {
@@ -295,6 +340,202 @@ final class NotificationReplyRegimeTests: XCTestCase {
         XCTAssertEqual(sut.messages.lastSendRequest?.content, Self.secret)
         XCTAssertEqual(sut.queue.enqueuedItems.count, 1)
         XCTAssertTrue(sut.refusals().isEmpty)
+    }
+
+    // MARK: - L'attente se voit, et finit (#14673)
+
+    private func waitingReply(_ sut: SUT) async -> String {
+        sut.conversations.getByIdResult = .failure(Unreachable())
+        await reply(sut, userInfo: replyUserInfo())
+        return sut.awaiting.awaiting.first?.clientMessageId ?? ""
+    }
+
+    private func assertWithdrawn(_ sut: SUT, file: StaticString = #filePath, line: UInt = #line) {
+        assertNoPlaintextLeft(sut, file: file, line: line)
+        XCTAssertTrue(sut.persistence.insertedRecords.isEmpty, "aucune bulle", file: file, line: line)
+        XCTAssertTrue(sut.awaiting.awaiting.isEmpty, "la fiche part", file: file, line: line)
+        XCTAssertTrue(sut.vault.storedIds.isEmpty, "le clair quitte le coffre", file: file, line: line)
+        XCTAssertEqual(sut.notices.dropped, ["conv1"], "l'utilisateur lit que la réponse ne partira pas", file: file, line: line)
+    }
+
+    func test_handleReply_unconfirmedRegime_announcesTheWait() async {
+        let sut = makeSUT()
+
+        let id = await waitingReply(sut)
+
+        XCTAssertEqual(sut.notices.waiting, [id], "la réponse en attente se voit")
+        XCTAssertTrue(sut.notices.dropped.isEmpty)
+    }
+
+    func test_confirmAwaiting_sent_withdrawsTheWaitNotice() async {
+        let sut = makeSUT()
+        let id = await waitingReply(sut)
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.messages.sendCallCount, 1)
+        XCTAssertEqual(sut.notices.settled, [id])
+    }
+
+    func test_confirmAwaiting_gatewayNoLongerServesTheConversation_withdrawsAndSaysIt() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.conversations.getByIdResult = .failure(MeeshyError.forbidden(reason: nil, body: nil))
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        assertWithdrawn(sut)
+    }
+
+    func test_confirmAwaiting_conversationGone_withdrawsAndSaysIt() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.conversations.getByIdResult = .failure(MeeshyError.server(statusCode: 404, message: "Not found"))
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        assertWithdrawn(sut)
+    }
+
+    func test_confirmAwaiting_serverErrorOrExpiredSession_keepsWaiting() async {
+        for error: Error in [MeeshyError.server(statusCode: 503, message: "busy"), MeeshyError.auth(.sessionExpired)] {
+            let sut = makeSUT()
+            _ = await waitingReply(sut)
+            sut.conversations.getByIdResult = .failure(error)
+
+            await sut.handler.confirmRepliesAwaitingRegime()
+
+            XCTAssertEqual(sut.awaiting.awaiting.count, 1, "\(error) est transitoire")
+            XCTAssertEqual(vaultTexts(sut), [Self.secret])
+            XCTAssertTrue(sut.notices.dropped.isEmpty)
+        }
+    }
+
+    func test_handleReply_gatewayNoLongerServesTheConversation_writesNothingAndSaysIt() async {
+        let sut = makeSUT(served: .failure(MeeshyError.server(statusCode: 404, message: "Not found")))
+
+        await reply(sut, userInfo: replyUserInfo())
+
+        assertWithdrawn(sut)
+        XCTAssertTrue(sut.notices.waiting.isEmpty, "rien n'attend une conversation qui n'est plus servie")
+    }
+
+    func test_confirmAwaiting_pastItsAge_isWithdrawnWithoutReadingTheGateway() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        let reads = sut.conversations.getByIdCallCount
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.notices.now = sut.notices.now.addingTimeInterval(NotificationReplyRegimeWait.maxAge + 1)
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        assertWithdrawn(sut)
+        XCTAssertEqual(sut.conversations.getByIdCallCount, reads, "une réponse échue ne se relit plus")
+    }
+
+    func test_confirmAwaiting_withinItsAge_stillSends() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.notices.now = sut.notices.now.addingTimeInterval(NotificationReplyRegimeWait.maxAge - 60)
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.messages.sendCallCount, 1)
+    }
+
+    // MARK: - La déconnexion (#14673)
+
+    func test_signOut_withdrawsTheAccountRepliesAndErasesTheirPlaintext() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.notices.preservedSessions = []
+        let authenticated = CurrentValueSubject<Bool, Never>(true)
+        sut.handler.observeSignOutsForAwaitingReplies(authenticated.eraseToAnyPublisher())
+
+        authenticated.send(false)
+        await waitUntil { sut.awaiting.awaiting.isEmpty }
+
+        assertWithdrawn(sut)
+    }
+
+    func test_signOut_vaultAlreadyClosed_keepsAWithdrawnFicheThatNeverSends() async {
+        let sut = makeSUT()
+        let id = await waitingReply(sut)
+        sut.notices.preservedSessions = []
+        sut.vault.erasureAccepted = false
+        let authenticated = CurrentValueSubject<Bool, Never>(true)
+        sut.handler.observeSignOutsForAwaitingReplies(authenticated.eraseToAnyPublisher())
+        authenticated.send(false)
+        await waitUntil { sut.awaiting.awaiting.first?.withdrawnAt != nil }
+
+        sut.notices.preservedSessions = ["user1"]
+        sut.vault.erasureAccepted = true
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.messages.sendCallCount, 0, "une réponse retirée à la déconnexion ne part jamais")
+        XCTAssertTrue(sut.queue.enqueuedItems.isEmpty)
+        XCTAssertTrue(sut.awaiting.awaiting.isEmpty, "le coffre rouvert, la fiche part")
+        XCTAssertFalse(sut.vault.storedIds.contains(id), "et le clair avec elle")
+        XCTAssertEqual(sut.notices.dropped, ["conv1"], "dit une seule fois")
+    }
+
+    func test_accountSwitch_keepsTheRepliesOfTheSuspendedAccount() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        let authenticated = CurrentValueSubject<Bool, Never>(true)
+        sut.handler.observeSignOutsForAwaitingReplies(authenticated.eraseToAnyPublisher())
+
+        authenticated.send(false)
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.awaiting.awaiting.count, 1, "la session gardée garde sa réponse")
+        XCTAssertEqual(vaultTexts(sut), [Self.secret])
+        XCTAssertTrue(sut.notices.dropped.isEmpty)
+    }
+
+    // MARK: - Le compte et la réentrance (#14674)
+
+    func test_confirmAwaiting_ficheOfAnotherAccount_isNeverReplayedUnderTheActiveOne() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.notices.activeUser = "user2"
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: "e2ee"))
+
+        await sut.handler.confirmRepliesAwaitingRegime()
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        await sut.handler.confirmRepliesAwaitingRegime()
+
+        XCTAssertEqual(sut.messages.sendCallCount, 0, "la réponse de user1 ne part pas sous user2")
+        XCTAssertTrue(sut.queue.enqueuedItems.isEmpty)
+        XCTAssertTrue(sut.persistence.insertedRecords.isEmpty, "aucune bulle de user1 dans la base de user2")
+        XCTAssertEqual(sut.awaiting.awaiting.map(\.senderId), ["user1"], "la fiche attend son compte")
+        XCTAssertEqual(vaultTexts(sut), [Self.secret])
+    }
+
+    func test_confirmAwaiting_twoConcurrentWakes_sendTheReplyOnce() async {
+        let sut = makeSUT()
+        _ = await waitingReply(sut)
+        sut.conversations.getByIdResult = .success(Self.conversation(mode: nil))
+        sut.vault.onPlaintexts = { try? await Task.sleep(for: .milliseconds(200)) }
+
+        let handler = sut.handler
+        let first = Task { @MainActor in await handler.confirmRepliesAwaitingRegime() }
+        let second = Task { @MainActor in await handler.confirmRepliesAwaitingRegime() }
+        await first.value
+        await second.value
+
+        XCTAssertEqual(sut.messages.sendCallCount, 1, "deux réveils, une seule réponse")
+        XCTAssertEqual(sut.queue.enqueuedItems.count, 1, "une seule entrée d'outbox")
+        XCTAssertEqual(sut.persistence.insertedRecords.count, 1, "une seule ligne")
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async {
+        for _ in 0..<200 where !condition() {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     // MARK: - La règle seule

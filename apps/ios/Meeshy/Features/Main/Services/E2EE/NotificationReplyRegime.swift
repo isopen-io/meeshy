@@ -36,6 +36,9 @@ struct NotificationReplyRegime {
         case endToEnd
         /// Le régime n'a pas pu être relu : la réponse attend sa confirmation.
         case unconfirmed
+        /// La passerelle refuse pour de bon (403, 404, 410 : plus membre,
+        /// conversation supprimée) : la réponse ne partira jamais (#14673).
+        case inaccessible
     }
 
     /// Les clés du push qui portent le mode : celle de la conversation, et
@@ -61,21 +64,28 @@ struct NotificationReplyRegime {
     @MainActor
     func destination(of conversationId: String, userInfo: [AnyHashable: Any]) async -> Destination {
         if await destinationGuard.seals(conversationId, served: Self.pushedModes(userInfo)) { return .endToEnd }
-        guard let served = await freshlyServedMode(of: conversationId) else {
+        switch await freshlyServedMode(of: conversationId) {
+        case nil:
             Logger.e2ee.warning("notification reply: regime not confirmed by the gateway, kept off the network")
             return .unconfirmed
+        case .refused?:
+            Logger.e2ee.warning("notification reply: the gateway no longer serves the conversation")
+            return .inaccessible
+        case .served(let mode)?:
+            return await destinationGuard.seals(conversationId, served: [mode]) ? .endToEnd : .readableByServer
         }
-        return await destinationGuard.seals(conversationId, served: [served.mode]) ? .endToEnd : .readableByServer
     }
 
     @MainActor
-    private func freshlyServedMode(of conversationId: String) async -> ServedMode? {
-        let slot = OSAllocatedUnfairLock<ServedMode?>(initialState: nil)
+    private func freshlyServedMode(of conversationId: String) async -> Reading? {
+        let slot = OSAllocatedUnfairLock<Reading?>(initialState: nil)
         let read = servedMode
         let fetch = Task { @MainActor in
             do {
-                let served = ServedMode(mode: try await read(conversationId))
+                let served = Reading.served(try await read(conversationId))
                 slot.withLock { $0 = served }
+            } catch where Self.isDefinitive(error) {
+                slot.withLock { $0 = .refused }
             } catch {}
         }
         await BoundedWait.first(of: fetch, orAfter: limit)
@@ -83,8 +93,28 @@ struct NotificationReplyRegime {
         return slot.withLock { $0 }
     }
 
-    private struct ServedMode: Sendable {
-        let mode: String?
+    /// Un refus qui ne changera pas en réessayant : plus membre (403, ou 404
+    /// que la passerelle sert pour ne pas dire qu'elle existe), conversation
+    /// supprimée (404, 410). Une session expirée (401), un délai ou un 5xx
+    /// restent transitoires.
+    nonisolated static func isDefinitive(_ error: any Error) -> Bool {
+        switch error {
+        case MeeshyError.forbidden:
+            return true
+        case MeeshyError.server(let status, _):
+            return definitiveStatuses.contains(status)
+        case APIError.serverError(let status, _):
+            return definitiveStatuses.contains(status)
+        default:
+            return false
+        }
+    }
+
+    nonisolated private static let definitiveStatuses: Set<Int> = [403, 404, 410]
+
+    private enum Reading: Sendable {
+        case served(String?)
+        case refused
     }
 }
 
@@ -104,13 +134,34 @@ struct NotificationReplyAwaitingRegime: Codable, Equatable, Sendable {
     let senderId: String
     let replyToId: String?
     let originalLanguage: String?
+    /// Le geste : au-delà de `NotificationReplyRegimeWait.maxAge`, la réponse
+    /// ne part plus (#14673).
+    let createdAt: Date
+    /// Retirée (compte déconnecté, échue, refusée) : elle ne partira jamais,
+    /// et la fiche ne reste que le temps d'effacer son clair d'un coffre fermé.
+    var withdrawnAt: Date?
 
-    init(_ item: OfflineQueueItem, senderId: String) {
+    init(_ item: OfflineQueueItem, senderId: String, createdAt: Date = Date()) {
         clientMessageId = item.clientMessageId
         conversationId = item.conversationId
         self.senderId = senderId
         replyToId = item.replyToId
         originalLanguage = item.originalLanguage
+        self.createdAt = createdAt
+        withdrawnAt = nil
+    }
+
+    /// Une fiche écrite avant #14673 n'a pas de date : elle prend celle de sa
+    /// première lecture, que le magasin réécrit aussitôt.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        clientMessageId = try container.decode(String.self, forKey: .clientMessageId)
+        conversationId = try container.decode(String.self, forKey: .conversationId)
+        senderId = try container.decode(String.self, forKey: .senderId)
+        replyToId = try container.decodeIfPresent(String.self, forKey: .replyToId)
+        originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        withdrawnAt = try container.decodeIfPresent(Date.self, forKey: .withdrawnAt)
     }
 
     /// La réponse telle que le geste l'avait composée, avec le texte relu au coffre.
@@ -128,9 +179,12 @@ protocol NotificationRepliesAwaitingRegimeStoring: AnyObject {
     var awaiting: [NotificationReplyAwaitingRegime] { get }
     func add(_ reply: NotificationReplyAwaitingRegime)
     func remove(_ clientMessageId: String)
+    func withdraw(_ clientMessageId: String, at date: Date)
 }
 
-/// Les fiches vivent dans les préférences (aucun texte) ; `defaults: nil`
+/// Les fiches (aucun texte) vivent dans un fichier HORS de la sauvegarde
+/// iCloud ou Finder (#14673) : identifiants de conversation et de message cité
+/// n'ont rien à faire dans une copie qui survit à l'appareil. `fileURL: nil`
 /// les garde en mémoire seulement.
 @MainActor
 final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegimeStoring {
@@ -138,15 +192,19 @@ final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegime
     // hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    static let shared = NotificationRepliesAwaitingRegime()
-    private static let key = "meeshy.notificationReply.awaitingRegime"
-    private let defaults: UserDefaults?
+    static let shared = NotificationRepliesAwaitingRegime(fileURL: defaultFileURL, legacyDefaults: .standard)
+    /// La clé des préférences sauvegardées, où vivaient les fiches avant #14673.
+    static let legacyKey = "meeshy.notificationReply.awaitingRegime"
+    private let fileURL: URL?
     private(set) var awaiting: [NotificationReplyAwaitingRegime]
 
-    init(defaults: UserDefaults? = .standard) {
-        self.defaults = defaults
-        awaiting = defaults?.data(forKey: Self.key)
-            .flatMap { try? JSONDecoder().decode([NotificationReplyAwaitingRegime].self, from: $0) } ?? []
+    init(fileURL: URL?, legacyDefaults: UserDefaults? = nil) {
+        self.fileURL = fileURL
+        let legacy = legacyDefaults?.data(forKey: Self.legacyKey).flatMap(Self.decode) ?? []
+        let stored = fileURL.flatMap { try? Data(contentsOf: $0) }.flatMap(Self.decode) ?? []
+        awaiting = stored + legacy.filter { old in !stored.contains { $0.clientMessageId == old.clientMessageId } }
+        save(awaiting)
+        legacyDefaults?.removeObject(forKey: Self.legacyKey)
     }
 
     func add(_ reply: NotificationReplyAwaitingRegime) {
@@ -157,8 +215,37 @@ final class NotificationRepliesAwaitingRegime: NotificationRepliesAwaitingRegime
         save(awaiting.filter { $0.clientMessageId != clientMessageId })
     }
 
+    func withdraw(_ clientMessageId: String, at date: Date) {
+        save(awaiting.map { reply in
+            guard reply.clientMessageId == clientMessageId, reply.withdrawnAt == nil else { return reply }
+            var withdrawn = reply
+            withdrawn.withdrawnAt = date
+            return withdrawn
+        })
+    }
+
     private func save(_ replies: [NotificationReplyAwaitingRegime]) {
         awaiting = replies
-        defaults?.set(try? JSONEncoder().encode(replies), forKey: Self.key)
+        guard let fileURL, let data = try? JSONEncoder().encode(replies) else { return }
+        do {
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var excluded = URLResourceValues()
+            excluded.isExcludedFromBackup = true
+            var url = fileURL
+            try url.setResourceValues(excluded)
+        } catch {
+            Logger.e2ee.error("notification replies awaiting regime not saved: \(String(describing: type(of: error)), privacy: .public)")
+        }
+    }
+
+    private static func decode(_ data: Data) -> [NotificationReplyAwaitingRegime]? {
+        try? JSONDecoder().decode([NotificationReplyAwaitingRegime].self, from: data)
+    }
+
+    private static var defaultFileURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("NotificationReplies", isDirectory: true)
+            .appendingPathComponent("awaiting-regime.json")
     }
 }

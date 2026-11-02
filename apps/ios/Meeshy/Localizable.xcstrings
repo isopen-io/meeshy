@@ -150961,6 +150961,53 @@
         }
       }
     },
+    "notifications.reply_awaiting.regime": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرد قيد الانتظار: سيُرسل عندما تصبح المحادثة متاحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antwort wartet: Sie wird gesendet, sobald die Unterhaltung erreichbar ist"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply pending: it will be sent as soon as the conversation is reachable"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Respuesta en espera: se enviará en cuanto la conversación esté disponible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réponse en attente : elle partira dès que la conversation sera joignable"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risposta in attesa: verrà inviata appena la conversazione sarà raggiungibile"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resposta pendente: será enviada assim que a conversa estiver acessível"
+          }
+        }
+      }
+    },
     "notifications.reply_refused.locked_conversation": {
       "extractionState": "manual",
       "localizations": {
@@ -151004,6 +151051,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Resposta não enviada: abra a conversa"
+          }
+        }
+      }
+    },
+    "notifications.reply_unsent.never_sent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر إرسال ردك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Antwort konnte nicht gesendet werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your reply could not be sent"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo enviar tu respuesta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre réponse n'a pas pu être envoyée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile inviare la tua risposta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível enviar sua resposta"
           }
         }
       }

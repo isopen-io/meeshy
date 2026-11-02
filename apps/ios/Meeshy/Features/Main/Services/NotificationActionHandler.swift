@@ -118,9 +118,9 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let notifyRefusedEndToEndReply: @MainActor (String, EndToEndSendRefusal) -> Void
     /// Le coffre libsignal, seul lieu du clair d'une réponse chiffrée (#13067).
     private let endToEnd: any EndToEndMessagingProviding
-    /// #14667 — les réponses dont le régime attend d'être relu.
+    /// #14667, #14673 — les réponses dont le régime attend d'être relu.
     private let repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring
-    private var confirmingAwaitingReplies = false
+    private let awaitingReplyRules: NotificationReplyRegimeWait.Rules
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -222,9 +222,11 @@ final class NotificationActionHandler: NotificationActionHandling {
             NotificationReplyFailure.postEndToEndReplyRefused(conversationId: $0, refusal: $1)
         },
         endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
-        repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared
+        repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared,
+        awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live
     ) {
         self.repliesAwaitingRegime = repliesAwaitingRegime
+        self.awaitingReplyRules = awaitingReplyRules
         self.destinationGuard = destinationGuard
         self.notifyRefusedEndToEndReply = notifyRefusedEndToEndReply
         self.endToEnd = endToEnd
@@ -621,7 +623,10 @@ final class NotificationActionHandler: NotificationActionHandling {
             notifyRefusedEndToEndReply(conversationId, refusal)
         case .unconfirmed:
             removeDeliveredForConversation(conversationId)
-            await awaitRegime(item, senderId: senderId)
+            await awaitingReplies.hold(item, senderId: senderId)
+        case .inaccessible:
+            removeDeliveredForConversation(conversationId)
+            awaitingReplies.refuseInaccessible(conversationId)
         }
         return true
     }
@@ -638,55 +643,28 @@ final class NotificationActionHandler: NotificationActionHandling {
         EndToEndOffThreadReply(endToEnd: endToEnd, persistence: messagePersistence)
     }
 
-    private func awaitRegime(_ item: OfflineQueueItem, senderId: String) async {
-        guard await offThreadReply.vault(item, senderId: senderId) else {
-            logger.warning("notification reply: regime not confirmed and the vault did not keep it, nothing written")
-            notifyRefusedEndToEndReply(item.conversationId, .unkeptOutsideConversation)
-            return
-        }
-        repliesAwaitingRegime.add(NotificationReplyAwaitingRegime(item, senderId: senderId))
-    }
+    /// #14667, #14673 — la suite des réponses dont le régime attend : relecture,
+    /// retrait, effacement du clair (`NotificationReplyRegimeWait`).
+    private lazy var awaitingReplies = NotificationReplyRegimeWait(
+        store: repliesAwaitingRegime,
+        rules: awaitingReplyRules,
+        endToEnd: endToEnd,
+        currentUserId: currentUserId,
+        destination: { [unowned self] in await self.replyRegime.destination(of: $0, userInfo: [:]) },
+        offThreadReply: { [unowned self] in self.offThreadReply },
+        sendReadable: { [unowned self] in await self.sendReadableReply($0, senderId: $1) },
+        notifyRefusedEndToEndReply: notifyRefusedEndToEndReply
+    )
 
-    /// #14667 — relit le régime de chaque réponse en attente du compte actif :
-    /// en clair, le texte quitte le coffre pour l'outbox ; chiffré de bout en
-    /// bout, la bulle scellée en échec naît ; toujours non confirmé, rien ne
-    /// bouge. Appelé à chaque réveil de l'outbox (lancement, retour au premier
-    /// plan, réseau ou socket retrouvés).
+    /// Appelé à chaque réveil de l'outbox (lancement, retour au premier plan,
+    /// réseau ou socket retrouvés).
     func confirmRepliesAwaitingRegime() async {
-        guard !confirmingAwaitingReplies, let userId = currentUserId() else { return }
-        confirmingAwaitingReplies = true
-        defer { confirmingAwaitingReplies = false }
-        for reply in repliesAwaitingRegime.awaiting where reply.senderId == userId {
-            await confirm(reply)
-        }
+        await awaitingReplies.confirmAll()
     }
 
-    private func confirm(_ reply: NotificationReplyAwaitingRegime) async {
-        switch await replyRegime.destination(of: reply.conversationId, userInfo: [:]) {
-        case .unconfirmed:
-            return
-        case .endToEnd:
-            let refusal = await offThreadReply.bubble(reply.queueItem(content: ""), senderId: reply.senderId)
-            repliesAwaitingRegime.remove(reply.clientMessageId)
-            notifyRefusedEndToEndReply(reply.conversationId, refusal)
-        case .readableByServer:
-            await sendFromVault(reply)
-        }
-    }
-
-    /// Le coffre fermé fait attendre ; un clair absent du coffre ouvert ne
-    /// reviendra plus, la fiche part.
-    private func sendFromVault(_ reply: NotificationReplyAwaitingRegime) async {
-        let id = reply.clientMessageId
-        guard let stored = await endToEnd.storedMessageIds(as: reply.senderId) else { return }
-        let entry = stored.contains(id) ? await endToEnd.plaintexts(for: [id], as: reply.senderId)[id] : nil
-        guard case .readable(let content, _)? = entry, let text = content.text else {
-            repliesAwaitingRegime.remove(id)
-            return
-        }
-        await sendReadableReply(reply.queueItem(content: text), senderId: reply.senderId)
-        repliesAwaitingRegime.remove(id)
-        _ = await endToEnd.erase([id], as: reply.senderId)
+    /// Les fiches d'un compte déconnecté se retirent à la sortie de sa session.
+    func observeSignOutsForAwaitingReplies(_ authenticated: AnyPublisher<Bool, Never>) {
+        awaitingReplies.observeSignOuts(authenticated)
     }
 
     // MARK: - Inline comment on social pushes (R3/R4)
