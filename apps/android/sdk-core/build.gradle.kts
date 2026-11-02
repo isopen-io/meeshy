@@ -85,12 +85,9 @@ dependencies {
     testImplementation(libs.mockk)
     // Test-only: OutboxFlushWorkerTest builds the worker with TestListenableWorkerBuilder.
     testImplementation(libs.work.testing)
-    // Test-only: TusUploadRepositoryTest constructs raw retrofit2.Response fixtures
-    // to stub TusApi.createUpload (the Location-header response createSession()
-    // reads). :core:network keeps retrofit an `implementation` (not `api`) dependency
-    // deliberately — production code here never touches retrofit2 types directly,
-    // routing through NetworkResult/createSession — so this stays test-scoped only.
-    testImplementation(libs.retrofit)
+    // deletionCall (:core:network) prend la Response brute de Retrofit : StoryRepository
+    // la nomme en production, et TusUploadRepositoryTest en construit des fixtures.
+    implementation(libs.retrofit)
     // Test-only: SceneAssetFetcherTest serves a media file over a local socket.
     testImplementation(libs.okhttp.mockwebserver)
 }

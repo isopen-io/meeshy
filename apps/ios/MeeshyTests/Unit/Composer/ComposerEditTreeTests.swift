@@ -116,4 +116,20 @@ final class ComposerEditTreeTests: XCTestCase {
         XCTAssertEqual(ComposerEditRailCopy.label(.background(.putOnScene)), ComposerEditTreeCopy.label(.putOnScene))
         XCTAssertEqual(ComposerEditRailCopy.symbol(.background(.replace)), "arrow.triangle.2.circlepath")
     }
+
+    /// #14614 — **ce que le rail DIT, jamais une clé.** La présence d'une clé
+    /// dans un catalogue ne suffit pas : le rail résout les mots de l'arbre
+    /// dans le catalogue de l'app, et la Boucle d'un fond vidéo y rendait
+    /// « story.timeline.inspector.loop ».
+    func test_everyWordTheRailSays_isResolved_neverARawKey() {
+        let cles = Set(ComposerEditTree.shared.levels.flatMap { [$0.title] + $0.entries.map(\.label) })
+        let entrees = ComposerBackgroundModifyEntry.allCases.map(ComposerEditRailItem.backgroundEntry)
+            + ComposerBackgroundEditAction.allCases.map(ComposerEditRailItem.background)
+            + [.volume, .mute]
+        for entree in entrees {
+            let mot = ComposerEditRailCopy.label(entree)
+            XCTAssertFalse(mot.isEmpty, "\(entree) ne dit rien.")
+            XCTAssertFalse(cles.contains(mot), "\(entree) affiche sa clé brute « \(mot) ».")
+        }
+    }
 }

@@ -3,10 +3,10 @@
     <!-- Lot image-editeur-ecran-et-outils : libellés propres à Android (iOS les écrit en dur). -->
     <string name="image_editor_mode_simple">Mode Simple</string>
     <string name="image_editor_mode_pro">Mode Pro</string>
-    <string name="image_editor_mode_group">Mode d'édition</string>
+    <string name="image_editor_mode_group">Mode d\'édition</string>
     <string name="image_editor_ratio_free">Libre</string>
     <string name="image_editor_close">Fermer</string>
-    <string name="image_editor_title">Éditeur d'image</string>
+    <string name="image_editor_title">Éditeur d\'image</string>
     <string name="image_editor_adjust_exposure">Exposition</string>
     <string name="image_editor_adjust_vibrance">Vibrance</string>
     <string name="image_editor_adjust_temperature">Température</string>

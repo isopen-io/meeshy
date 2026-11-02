@@ -74,7 +74,7 @@ internal class ImageEditorCropController(
         if (vm.uiState.value.activeTool == EditorTool.CROP && !leavingCrop) enter()
     }
 
-    fun setRatio(next: CropRatio) {
+    fun chooseRatio(next: CropRatio) {
         dirty = true
         ratio = next
         if (display.width > 1f && display.height > 1f) rect = CropFrame.adjustedToRatio(rect, next.aspectRatio, display)

@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
@@ -84,6 +85,7 @@ import me.meeshy.ui.theme.meeshyText
  *
  * [accent] est passé en paramètre (jamais codé en dur) : l'hôte donne l'accent de son contexte.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 public fun MeeshyImageEditorScreen(
     image: Bitmap,
@@ -183,7 +185,7 @@ private fun ToolContent(tool: EditorTool, vm: ImageEditorViewModel, ui: ImageEdi
             mode = ui.mode,
             ratio = crop.ratio,
             accent = accent,
-            onRatio = { crop.setRatio(it) },
+            onRatio = { crop.chooseRatio(it) },
             onRotate = { crop.rotate(it) },
             onFlip = { crop.flip(it) },
         )
