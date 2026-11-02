@@ -32,13 +32,15 @@ data class StoryRailPlan(
             canReply: Boolean = false,
             canCompose: Boolean = false,
             commentCount: Int = 0,
+            /** La loi du repartage n'offre RIEN à une story de Sang (RG-18, #13939) : pas de bouton pour un choix vide. */
+            isRepublishable: Boolean = true,
         ): StoryRailPlan =
             StoryRailPlan(
                 showsReact = !isOwnStory,
                 showsLanguage = hasTranslatableContent,
                 showsReply = StoryReplyRules.railOffersReply(isOwnStory, canReply),
                 showsSend = true,
-                showsRepost = !isOwnStory,
+                showsRepost = !isOwnStory && isRepublishable,
                 showsViews = isOwnStory,
                 showsCompose = !isOwnStory && canCompose,
                 showsComments = commentCount > 0,
