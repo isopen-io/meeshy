@@ -329,8 +329,11 @@ export const updateUserPreferenceRequestSchema = {
 export const updateUserRequestSchema = {
   type: 'object',
   properties: {
-    firstName: { type: 'string', minLength: 1, maxLength: 50, description: 'First name' },
-    lastName: { type: 'string', minLength: 1, maxLength: 50, description: 'Last name' },
+    // `minLength: 1` — le minimum d'AVANT, gardé à dessein (#13825) : l'iOS
+    // publié renvoie les noms INCHANGÉS ; la borne de 2 ne vaut que pour un nom
+    // CHANGÉ, et c'est le handler qui la juge.
+    firstName: { type: 'string', minLength: 1, maxLength: 50, description: 'First name (a CHANGED value needs at least 2 visible characters)' },
+    lastName: { type: 'string', minLength: 1, maxLength: 50, description: 'Last name (a CHANGED value needs at least 2 visible characters)' },
     // PAS de `minLength` : `''` est une valeur PRODUIT valide (EFFACER le nom
     // d'affichage, cf. le handler `updateUserProfile`). `minLength: 1`
     // rejetait cette requête au niveau AJV — AVANT que Zod (sans borne basse

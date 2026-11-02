@@ -1,0 +1,32 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="call_link_confirm_audio">%1$s per Audio anrufen?</string>
+    <string name="call_link_confirm_call">Anrufen</string>
+    <string name="call_link_confirm_cancel">Abbrechen</string>
+    <string name="call_link_confirm_video">%1$s per Video anrufen?</string>
+    <string name="call_link_refused_blocked">Du hast diesen Kontakt blockiert</string>
+    <string name="call_link_refused_unknown">Dieser Kontakt wurde nicht gefunden</string>
+    <string name="composer_format_denied_mood">Nur Text</string>
+    <string name="composer_format_denied_mood_empty">Schreib zuerst etwas</string>
+    <string name="composer_format_denied_post">Für diesen Inhalt nicht verfügbar</string>
+    <string name="composer_format_denied_reel">Braucht ein Video, einen Ton oder zwei Fotos</string>
+    <string name="composer_format_denied_story">Über diesen Einstieg nicht verfügbar</string>
+    <string name="composer_format_post">Beitrag</string>
+    <string name="composer_format_reel">Reel</string>
+    <string name="composer_format_status">Mood</string>
+    <string name="composer_format_story">Story</string>
+    <string name="composer_mosaic_carousel">Bild für Bild</string>
+    <string name="composer_mosaic_hero">Eine große, die anderen daneben</string>
+    <string name="composer_mosaic_reel">Durchgehendes Scrollen</string>
+    <string name="composer_mosaic_section">Anordnung der Szenen</string>
+    <string name="composer_mosaic_sine">Im Zickzack</string>
+    <string name="composer_mosaic_wave">In Wellen</string>
+    <string name="composer_publish_menu_a11y_hint">Öffnet die Auswahl von Format und Anordnung</string>
+    <string name="composer_publish_menu_title">Veröffentlichen als</string>
+    <string name="push_action_comment">Kommentieren</string>
+    <string name="push_action_comment_hint">Kommentieren…</string>
+    <string name="upgrade_required_action">Aktualisieren</string>
+    <string name="upgrade_required_message">Diese Meeshy-Version kann nicht mehr mit dem Server kommunizieren. Installiere die neueste Version, um fortzufahren.</string>
+    <string name="upgrade_required_min_version">Mindestversion: %1$s</string>
+    <string name="upgrade_required_title">Update erforderlich</string>
+</resources>

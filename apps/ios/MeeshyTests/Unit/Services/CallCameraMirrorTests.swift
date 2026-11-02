@@ -75,7 +75,7 @@ final class CallCameraMirrorTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main").appendingPathComponent(relative)
+            .appendingPathComponent("Meeshy/Features/Call").appendingPathComponent(relative)
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

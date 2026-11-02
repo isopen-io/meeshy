@@ -12,6 +12,7 @@
 import { conversationActionsFor, type ConversationActionInput, type ConversationActions } from '../../utils/conversation-action-policy.js';
 import {
   conversationIsEndToEnd,
+  editContentRefusal,
   messageActionsFor,
   type ActionConversation,
   type ActionViewer,
@@ -77,6 +78,7 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['groupe-auteur-date-illisible', { ...mine, createdAt: 'pas-une-date' }, {}, {}],
   ['groupe-moderator-plateforme-membre-sur-autrui', {}, {}, { platformRole: 'MODERATOR' }],
   ['groupe-moderator-plateforme-non-membre-retire-sans-modifier', {}, {}, { platformRole: 'MODERATOR', isActiveMember: false, conversationRole: null }],
+  ['groupe-admin-plateforme-non-membre-retire-sans-modifier', {}, {}, { platformRole: 'ADMIN', isActiveMember: false, conversationRole: null }],
   ['groupe-role-plateforme-en-minuscules-ne-modere-pas', {}, {}, { platformRole: 'moderator' }],
   ['groupe-ecriture-moderateurs-role-plateforme-en-minuscules-ne-repond-pas', {}, { defaultWriteRole: 'moderator' }, { platformRole: 'moderator' }],
   ['groupe-audit-vaut-user', {}, {}, { platformRole: 'AUDIT' }],
@@ -85,6 +87,9 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['groupe-rang-conversation-inconnu-ferme', {}, {}, { conversationRole: 'owner' }],
   ['groupe-rang-en-majuscules-ferme', {}, {}, { conversationRole: 'MODERATOR' }],
   ['chiffrement-serveur-garde-les-services', { ...mine, isEncrypted: true, encryptionMode: 'server' }, { encryptionMode: 'server' }, {}],
+  ['serveur-auteur-texte-se-modifie', mine, { encryptionMode: 'server' }, {}],
+  ['hybride-moderator-plateforme-modifie', {}, { encryptionMode: 'hybrid' }, { platformRole: 'MODERATOR' }],
+  ['serveur-ligne-servie-scellee-ne-se-modifie-pas', { ...mine, content: '', isEncrypted: true, encryptionMode: 'server' }, { encryptionMode: 'server' }, {}],
   ['groupe-moderator-de-conversation-retire', {}, {}, { conversationRole: 'moderator' }],
   ['groupe-admin-de-conversation-retire', {}, {}, { conversationRole: 'admin' }],
   ['groupe-creator-retire', {}, {}, { conversationRole: 'creator' }],
@@ -121,11 +126,18 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['vocal-transcriptible', vocal, {}, {}],
   ['vocal-en-conversation-serveur-transcriptible', vocal, { encryptionMode: 'server' }, {}],
   ['e2ee-texte-d-autrui-se-traduit-sur-l-appareil', {}, { encryptionMode: 'e2ee' }, {}],
+  // #11375 — le modérateur de plateforme modifie le message d'autrui à visage découvert, jamais en bout en bout.
+  ['e2ee-moderator-plateforme-ne-modifie-pas-autrui', {}, { encryptionMode: 'e2ee' }, { platformRole: 'MODERATOR' }],
+  ['serveur-moderator-plateforme-modifie-autrui', {}, { encryptionMode: 'server' }, { platformRole: 'MODERATOR' }],
   ['serveur-photo-ne-se-transfere-pas', photoOf(), { encryptionMode: 'server' }, {}],
   ['hybride-photo-ne-se-transfere-pas', photoOf(), { encryptionMode: 'hybrid' }, {}],
   ['serveur-photo-chiffree-par-le-message-ne-se-transfere-pas', photoOf({ isEncrypted: true, encryptionMode: 'server' }), {}, {}],
   ['hybride-texte-se-transfere', {}, { encryptionMode: 'hybrid' }, {}],
   ['non-membre-supprimer-pour-moi-refuse', {}, {}, { isActiveMember: false, conversationRole: null }],
+  ['membre-actif-supprimer-pour-moi', {}, {}, { isActiveMember: true }],
+  ['ancien-membre-supprimer-pour-moi-refuse', {}, {}, { isActiveMember: false }],
+  ['ancien-membre-son-propre-message-ne-se-supprime-plus-pour-moi', mine, {}, { isActiveMember: false }],
+  ['ancien-membre-message-supprime-ne-se-masque-plus', { deletedAt: iso(NOW - HOUR) }, {}, { isActiveMember: false }],
   ['photo-enregistrable', { content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg' }] }, {}, {}],
   ['video-vue-unique', { content: '', messageType: 'video', isViewOnce: true, attachments: [{ mimeType: 'video/mp4' }] }, {}, {}],
   ['photo-floutee', { content: '', messageType: 'image', isBlurred: true, attachments: [{ mimeType: 'image/jpeg' }] }, {}, {}],
@@ -166,7 +178,6 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['inscrit-et-anonyme-se-lit-comme-un-invite', { senderId: 'part-other', authorUserId: 'user-viewer' }, {}, { isAnonymous: true }],
 ];
 
-const EDITABLE_AT_GATEWAY_ONLY: ReadonlySet<string> = new Set(['location', 'poll', 'sticker']);
 const NOTICES: ReadonlySet<string> = new Set(['system', 'call']);
 const WRITE_HIERARCHY_FREE: ReadonlySet<string> = new Set(['direct', 'global']);
 
@@ -188,10 +199,11 @@ function stricterOf(input: MessageActionInput): readonly StricterVerdict[] {
   const expired = subject.expiresAt != null && Date.parse(String(subject.expiresAt)) <= input.now;
   const notLive = kind === 'deleted' || expired || flags.optimistic || flags.failed;
   const notice = NOTICES.has(kind);
-  const noText = notice || (subject.content ?? '').trim() === '';
-  const e2ee = flags.encrypted || conversationIsEndToEnd(room);
+  // #12792 — vue unique, message chiffré, avis et formes structurées : la passerelle les refuse AUSSI
+  // (`editContentRefusal`), la parité y est donc exacte ; seul un texte vide reste un refus propre au client.
+  const noText = editContentRefusal({ kind, flags }) === null && (subject.content ?? '').trim() === '';
   const incoherent = reader.hasAccount && reader.isAnonymous;
-  const edit = notLive || noText || e2ee || flags.viewOnce || EDITABLE_AT_GATEWAY_ONLY.has(kind) || incoherent;
+  const edit = notLive || noText || conversationIsEndToEnd(room) || incoherent;
   const remove = notLive || (notice && !flags.captureNotice) || incoherent;
   const react = notLive || !reader.canSendMessages;
   const pin = notLive || notice || flags.viewOnce || !reader.hasAccount || reader.isAnonymous || lawClosesWriting(room);
@@ -221,6 +233,7 @@ const PROFILES: readonly (readonly [string, Partial<ActionViewer>])[] = [
   ['admin-plateforme-membre', { platformRole: 'ADMIN' }],
   ['bigboss-non-membre', { platformRole: 'BIGBOSS', isActiveMember: false, conversationRole: null }],
   ['moderator-plateforme-membre', { platformRole: 'MODERATOR' }],
+  ['moderator-plateforme-non-membre', { platformRole: 'MODERATOR', isActiveMember: false, conversationRole: null }],
   ['audit', { platformRole: 'AUDIT' }],
   ['analyst', { platformRole: 'ANALYST' }],
   ['rang-inconnu', { conversationRole: 'owner' }],

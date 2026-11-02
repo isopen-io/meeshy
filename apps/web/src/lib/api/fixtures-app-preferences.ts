@@ -23,6 +23,7 @@ const INITIAL: AppPreferences = {
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
   gameEnabled: true,
+  gamePhotoEnabled: true,
 };
 
 const state: { preferences: AppPreferences } = { preferences: INITIAL };

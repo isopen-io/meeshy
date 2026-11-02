@@ -25,15 +25,24 @@ final class StoryViewerExportRailTests: XCTestCase {
 
     // MARK: - Story qui n'est pas de l'auteur
 
-    func test_notAuthorStory_hidesSave_regardlessOfSaveProgress() {
+    func test_notAuthorStory_atRest_showsNeitherSaveNorRing() {
         let idle = StoryExportRailButtons.resolve(showsExport: false, saveProgress: nil)
         XCTAssertFalse(idle.showsSaveButton)
         XCTAssertFalse(idle.showsSaveProgressRing)
+    }
 
-        // `showsExport` reste le SEUL déterminant, jamais `saveProgress` seul.
-        let withStaleProgress = StoryExportRailButtons.resolve(showsExport: false, saveProgress: 0.5)
-        XCTAssertFalse(withStaleProgress.showsSaveButton)
-        XCTAssertFalse(withStaleProgress.showsSaveProgressRing)
+    /// #13871 : le menu « … » enregistre ou image la story d'un AUTRE — son
+    /// anneau doit tourner au rail, sinon ni progression ni annulation.
+    func test_notAuthorStory_exportInFlight_showsTheRing_butNeverTheSaveButton() {
+        let exporting = StoryExportRailButtons.resolve(showsExport: false, saveProgress: 0.5)
+        XCTAssertFalse(exporting.showsSaveButton, "« Enregistrer » reste au menu pour la story d'un autre")
+        XCTAssertTrue(exporting.showsSaveProgressRing)
+    }
+
+    func test_theRailReadsTheProgress_ofEveryStory_notOnlyTheAuthors() throws {
+        let rail = MyStoriesSourceCorpus.strippingComments(try sidebar())
+        XCTAssertTrue(rail.contains("let exportSaveProgress = currentStory.flatMap { saveService.progress(for: $0.id) }"))
+        XCTAssertFalse(rail.contains("let exportSaveProgress = railPlan.showsExport"))
     }
 
     // MARK: - Job de sauvegarde en vol
@@ -60,7 +69,7 @@ final class StoryViewerExportRailTests: XCTestCase {
     // MARK: - #9953 : plus de « Partager » au rail de l'auteur, « Envoyer » reste
 
     private func sidebar() throws -> String {
-        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift")
     }
 
     func test_theAuthorRail_noLongerCarriesTheShareButton() throws {

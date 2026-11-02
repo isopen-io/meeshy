@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.error
 import me.meeshy.sdk.model.net.EndpointAuthKind
 import me.meeshy.sdk.model.net.EndpointRejectionPolicy
 import me.meeshy.sdk.model.net.RetryDecision
+import me.meeshy.sdk.model.net.UpgradeRequirement
 
 public enum class NetworkErrorKind(public val label: String) {
     NO_CONNECTION("Pas de connexion internet"),
@@ -77,8 +78,9 @@ public sealed class MeeshyError {
 
         /**
          * Classe une réponse d'échec. L'ORDRE est le contrat (miroir de
-         * `APIFailureVerdict.classify`) : 426 → refus structuré (réservé aux routes qui le
-         * déclarent, fermé à 401/403/429) → 401 → 403 → limite du jour → 429 → 5xx → défaut.
+         * `APIFailureVerdict.classify`) : 426 → refus serveur (le corps `minVersion` / `storeUrl` n'est pas lu ici : l'intercepteur
+         * `UpgradeRequiredInterceptor` le lit et monte l'écran « Mettre à jour Meeshy », [UpgradeRequirement]) → refus structuré
+         * (réservé aux routes qui le déclarent, fermé à 401/403/429) → 401 → 403 → limite du jour → 429 → 5xx → défaut.
          */
         public fun fromHttp(
             statusCode: Int,
@@ -89,7 +91,7 @@ public sealed class MeeshyError {
             fieldName: String? = null,
             suggestions: List<String> = emptyList(),
         ): MeeshyError = when {
-            statusCode == 426 -> Server(426, message ?: "Mise à jour requise")
+            statusCode == UpgradeRequirement.STATUS -> Server(UpgradeRequirement.STATUS, message ?: "Mise à jour requise")
             rejectionPolicy == EndpointRejectionPolicy.STRUCTURED &&
                 statusCode in 400..499 && statusCode !in setOf(401, 403, 429) ->
                 Rejected(MeeshyRejection(statusCode, message ?: "Erreur inconnue", code, fieldName, suggestions))

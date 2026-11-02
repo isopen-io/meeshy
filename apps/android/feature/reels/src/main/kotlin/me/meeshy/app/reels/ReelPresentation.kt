@@ -1,7 +1,9 @@
 package me.meeshy.app.reels
 
 import me.meeshy.sdk.util.resolveMediaUrl
+import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
@@ -9,6 +11,8 @@ import me.meeshy.sdk.model.ReelMediaLayout
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.app.stories.StorySlideView
+import me.meeshy.sdk.model.StoryItem
 
 /** A single reel ready to render: a playable video + its author/caption/counters. */
 data class ReelPresentation(
@@ -28,12 +32,33 @@ data class ReelPresentation(
     /** The caption in the reader's language (Prisme), or the original when none is preferred. */
     val caption: String?,
     val isCaptionTranslated: Boolean = false,
+    /** La légende d'origine et ses traductions : les drapeaux de langue changent la légende lue. */
+    val captionOriginalLanguage: String? = null,
+    val captionOriginal: String? = null,
+    val captionTranslations: Map<String, String> = emptyMap(),
+    val createdAtIso: String? = null,
+    /** Compteurs de portée : servis par la passerelle à l'auteur seul. */
+    val viewCount: Int = 0,
+    val impressionCount: Int = 0,
     val likeCount: Int,
     val isLiked: Boolean,
     val commentCount: Int,
     val repostCount: Int,
+    /** Le lecteur a republié ce réel — servi par la passerelle, ou posé au geste en attendant sa réponse (#14456). */
+    val isReposted: Boolean = false,
+    /** Le réel que celui-ci republie : « Republier » vise l'original (iOS `originalRepostOfId ?? repostOfId ?? id`). */
+    val repostOf: ApiRepostOf? = null,
     val isBookmarked: Boolean,
     val bookmarkCount: Int,
+    /** Les envois du réel (iOS `reel.shareCount`), compte d'« Envoyer » au rail. */
+    val shareCount: Int = 0,
+    /**
+     * La scène que ce réel REJOUE (iOS `reelSceneDocument`) : la même projection que le lecteur de stories.
+     * Quand elle existe, le fichier média du post n'en est que le fond ou le son — jamais un second lecteur.
+     */
+    val scene: StorySlideView? = null,
+    /** Ce que « Enregistrer », « Partager » et « Imager » rendent (#13896) : la charge servie et la scène qu'elle peint. */
+    val export: Pair<StoryItem, StorySlideView>? = null,
 )
 
 object ReelBuilder {
@@ -57,14 +82,15 @@ object ReelBuilder {
                     .sortedBy { it.order ?: Int.MAX_VALUE }
                     .mapNotNull { it.toReelMedia() }
                 val layout = ReelMediaLayout.resolve(feedMedia)
-                if (layout is ReelMediaLayout.Empty) return@mapNotNull null
+                val scene = ReelScene.project(post, mediaBaseUrl, preferences)
+                if (layout is ReelMediaLayout.Empty && scene == null) return@mapNotNull null
                 val resolve = { url: String -> resolveMediaUrl(url, mediaBaseUrl) }
                 val images = feedMedia.filter { it.type == FeedMediaType.IMAGE }.mapNotNull { it.url?.let(resolve) }
                 val audio = feedMedia.firstOrNull { it.type == FeedMediaType.AUDIO }?.url?.let(resolve)
                 val video = (layout as? ReelMediaLayout.Video)?.media
                 ReelPresentation(
                     id = post.id,
-                    videoUrl = video?.url?.let(resolve) ?: audio,
+                    videoUrl = if (scene != null) null else video?.url?.let(resolve) ?: audio,
                     posterUrl = (video?.thumbnailUrl ?: feedMedia.firstOrNull()?.thumbnailUrl)?.let(resolve),
                     layout = layout,
                     imageUrls = images,
@@ -73,15 +99,28 @@ object ReelBuilder {
                     authorId = post.author?.id,
                     authorName = (post.author?.displayName ?: post.author?.username)
                         ?.takeIf { it.isNotBlank() },
-                    authorAvatarUrl = post.author?.avatar?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    authorAvatarUrl = resolveServedImageUrl(post.author?.avatar, mediaBaseUrl),
                     caption = (preferences?.let(post::displayContent) ?: post.content)?.takeIf { it.isNotBlank() },
                     isCaptionTranslated = preferences?.let(post::isTranslated) == true,
+                    captionOriginalLanguage = post.originalLanguage,
+                    captionOriginal = post.content?.takeIf { it.isNotBlank() },
+                    captionTranslations = post.translations.orEmpty()
+                        .mapNotNull { (language, entry) -> entry.text.takeIf { it.isNotBlank() }?.let { language to it } }
+                        .toMap(),
+                    createdAtIso = post.createdAt,
+                    viewCount = post.viewCount ?: 0,
+                    impressionCount = post.impressionCount ?: 0,
                     likeCount = post.likeCount ?: 0,
                     isLiked = post.isLikedByMe == true,
                     commentCount = post.commentCount ?: 0,
                     repostCount = post.repostCount ?: 0,
+                    isReposted = post.isRepostedByMe == true,
+                    repostOf = post.repostOf,
                     isBookmarked = post.isBookmarkedByMe == true,
                     bookmarkCount = post.bookmarkCount ?: 0,
+                    shareCount = post.shareCount ?: 0,
+                    scene = scene,
+                    export = ReelScene.export(post, scene, layout, mediaBaseUrl, preferences),
                 )
             }
             .toList()

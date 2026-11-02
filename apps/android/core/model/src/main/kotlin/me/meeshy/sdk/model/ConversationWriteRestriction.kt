@@ -37,8 +37,24 @@ sealed interface ConversationWriteRestriction {
 
         fun fromWire(value: String): ConversationWriteRestriction =
             if (value == MINOR_GLOBAL) MinorGlobal else Unknown(value)
+
+        /**
+         * La restriction qu'un REFUS d'écriture révèle : le code [GLOBAL_ADULTS_ONLY_CODE] d'un 403.
+         * `null` pour tout autre code.
+         */
+        fun fromRefusalCode(code: String?): ConversationWriteRestriction? =
+            if (code == GLOBAL_ADULTS_ONLY_CODE) MinorGlobal else null
     }
 }
+
+/**
+ * Le lecteur est-il MINEUR dans cette conversation, pour la loi des actions ? Seule
+ * [ConversationWriteRestriction.MinorGlobal] le dit ; une restriction inconnue laisse écrire.
+ */
+val ConversationWriteRestriction?.declaresMinor: Boolean get() = this?.closesComposer == true
+
+/** La conversation est rangée d'office dans les archives du lecteur : « Désarchiver » ne s'offre pas. */
+val ApiConversation.isArchiveImposed: Boolean get() = viewerWriteRestriction?.imposesArchive == true
 
 /**
  * Tolérant : `null`, un nombre ou un objet valent « aucune restriction » (`null`), une chaîne vide

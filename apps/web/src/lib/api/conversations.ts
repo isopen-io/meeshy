@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
+import { isEndToEndMode } from '@/lib/end-to-end-regime-ledger';
 
 import { unwrap } from './client';
 import { deltaWatermark, FULL_RECONCILE_INTERVAL_MS, loadConversationsDelta, mergeConversationsDelta } from './conversations-delta';
@@ -11,6 +12,7 @@ import { conversationById, conversationsWithSurged, directConversationWith } fro
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
 import type { Conversation } from './types';
+import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
 /**
  * LE PORT DE LA LISTE ET D'UNE CONVERSATION (#5650, F2 ; paginé #6195) —
@@ -308,21 +310,47 @@ export function refreshConversations(queryClient: QueryClient, deps: Conversatio
  * direct déjà existant entre les deux comptes est RENDU, jamais recréé — ce
  * port n'a donc pas à distinguer les deux issues, les DEUX rendent la même
  * `Conversation`.
+ *
+ * **Deux tête-à-tête par personne au plus** (#12966) : un chiffré de bout en
+ * bout et un que le serveur lit. Sans option, la passerelle rend le chiffré
+ * s'il existe, sinon le plus récemment actif ; `{ plaintext: true }` demande
+ * celui qu'elle lit, et le crée à côté du chiffré s'il n'existe pas.
+ *
+ * **Le mode de chiffrement ne se choisit qu'à l'écran de création** (décision
+ * du 2026-11-01) : lui seul passe `encryptionMode`. Toute autre création
+ * (profil, partage, carte de contact, clavier d'appel, humeur, notification,
+ * geste « sans chiffrement de bout en bout ») n'en envoie aucun, et la
+ * passerelle pose Serveur. `plaintext` et `encryptionMode` s'excluent (la
+ * passerelle rend 400 `ENCRYPTION_MODE_CONFLICT`) : le type l'interdit.
  */
-export function createDirectConversation(deps: ConversationsDeps, participantId: string): Promise<ApiResult<Conversation>> {
+export type DirectCreationOptions =
+  | { readonly plaintext?: true; readonly encryptionMode?: never }
+  | { readonly plaintext?: never; readonly encryptionMode?: CreationEncryptionMode };
+
+export function createDirectConversation(
+  deps: ConversationsDeps,
+  participantId: string,
+  options: DirectCreationOptions = {},
+): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     /* Les survenues AUSSI, et les HORS-LISTE : un direct qui vient
        d'apparaître, ou qu'aucune page de liste ne porte, est un direct
        EXISTANT — et le serveur est idempotent, il le rend plutôt que refuser
        (`fixtures.ts` § `directConversationWith`). */
     const found = directConversationWith(participantId);
-    if (found !== undefined) return Promise.resolve({ ok: true, data: found });
+    const served = options.plaintext === true && found !== undefined && isEndToEndMode(found.encryptionMode) ? undefined : found;
+    if (served !== undefined) return Promise.resolve({ ok: true, data: served });
     return Promise.resolve({ ok: false, status: 501, error: 'Création de direct indisponible en fixtures' });
   }
   return deps.transport.request<Conversation>({
     method: 'POST',
     path: conversationsEndpoints.root,
-    body: { type: 'direct', participantIds: [participantId] },
+    body: {
+      type: 'direct',
+      participantIds: [participantId],
+      ...(options.plaintext === true ? { plaintext: true } : {}),
+      ...(options.encryptionMode === undefined ? {} : { encryptionMode: options.encryptionMode }),
+    },
   });
 }
 
@@ -353,7 +381,12 @@ export function createDirectConversation(deps: ConversationsDeps, participantId:
  */
 export function createGroupConversation(
   deps: ConversationsDeps,
-  body: { readonly title: string; readonly description?: string; readonly participantIds: readonly string[] },
+  body: {
+    readonly title: string;
+    readonly description?: string;
+    readonly participantIds: readonly string[];
+    readonly encryptionMode?: CreationEncryptionMode;
+  },
 ): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     return Promise.resolve({ ok: false, status: 501, error: 'Création de groupe indisponible en fixtures' });
@@ -366,6 +399,7 @@ export function createGroupConversation(
       title: body.title,
       ...(body.description === undefined || body.description === '' ? {} : { description: body.description }),
       participantIds: [...body.participantIds],
+      ...(body.encryptionMode === undefined ? {} : { encryptionMode: body.encryptionMode }),
     },
   });
 }

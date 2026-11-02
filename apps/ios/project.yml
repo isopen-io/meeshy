@@ -146,7 +146,7 @@ settings:
   # pourtant exactement cela ; c'est la CLI qui ne l'atteint pas. Créer la
   # version sur ASC d'abord, puis relancer `version set` pour les fichiers :
   # il constate alors « already reads 1.0.9 » et écrit les trois sites.
-  MARKETING_VERSION: "1.1.3"
+  MARKETING_VERSION: "1.1.4"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
@@ -192,9 +192,13 @@ targets:
       # notification n'a pas d'hôte de test : le seul endroit d'où une règle
       # pure est éprouvable est `MeeshyTests`, qui `@testable import Meeshy`.
       # Le fichier est donc compilé dans les DEUX cibles — même mécanique que
-      # l’écran de partage unique (`Meeshy/Features/Main/Share/`) pour l’extension de partage, en sens
+      # l’écran de partage unique (`Meeshy/Features/Share/`) pour l’extension de partage, en sens
       # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      # #12655 — le miroir des conversations verrouillées par PIN : l'app
+      # l'ÉCRIT, l'extension le LIT. Une seule définition tient les deux bouts
+      # du fichier. Foundation seul ; garde : `NSELockedConversationMirrorTests`.
+      - path: MeeshyNotificationExtension/NSELockedConversationMirror.swift
       # #8858 — ce que la NSE et les ACTIONS de notification tirent du détail
       # d'un message (catégorie, vignette vidéo, corps détaillé) : une seule
       # lecture pour l'extension qui choisit la catégorie et l'app qui exécute
@@ -271,6 +275,9 @@ targets:
         product: MeeshySDK
       - package: MeeshySDK
         product: MeeshyUI
+      # #12536 — l'E2EE libsignal : l'app et l'extension de notification seules.
+      - package: MeeshySDK
+        product: MeeshyE2EE
       - package: Firebase
         product: FirebaseCore
       - package: Firebase
@@ -348,10 +355,21 @@ targets:
       # partage et l'extension de contenu hébergent du SwiftUI : elles restent
       # MainActor, et ce commentaire dit pourquoi.
       SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+      # #13137 — un fichier qui n'importe que MeeshyCore ne voit que les membres
+      # de MeeshyCore : sans ce réglage, les extensions de MeeshySDK, lié à côté,
+      # fuient dans tout le module et le cliquet d'import ne prouve rien.
+      SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
     dependencies:
-      # NotificationService.swift imports MeeshySDK (and GRDB transitively).
+      # #13137 — le noyau LÉGER (sans Socket.IO ni WebRTC) : la NSE n'importe
+      # plus que lui, fichier par fichier ; MeeshySDK reste lié tant que
+      # NotificationService et NSEMessagePrePersister le lisent.
+      - package: MeeshySDK
+        product: MeeshyCore
       - package: MeeshySDK
         product: MeeshySDK
+      # #12536 — la NSE déchiffrera sous le verrou du groupe d'apps (#12537).
+      - package: MeeshySDK
+        product: MeeshyE2EE
 
   # #8859 — Notification Content Extension : la notification DÉPLOYÉE (appui
   # long) fait écouter un vocal, explorer une position, lire une carte de
@@ -389,13 +407,16 @@ targets:
       # (« Unable to find NSExtensionContextClass », mesuré au simulateur).
       ENABLE_DEBUG_DYLIB: NO
     dependencies:
+      # #13137 — les politiques partagées avec la NSE importent MeeshyCore.
+      - package: MeeshySDK
+        product: MeeshyCore
       - package: MeeshySDK
         product: MeeshySDK
       - sdk: UserNotificationsUI.framework
 
   # Share Extension — "Share to Meeshy" depuis d'autres apps. Depuis l'écran de
   # partage UNIQUE (#10947), elle monte LA MÊME vue que l'app (`ShareSheetView`
-  # et ses sous-vues, compilées ici depuis `Meeshy/Features/Main/Share/`), avec
+  # et ses sous-vues, compilées ici depuis `Meeshy/Features/Share/`), avec
   # ses propres coutures (`ExtensionShareDirectory`, `ExtensionShareDispatcher`)
   # et le catalogue de mots de l'APP (`Bundle.meeshyShare`). Elle lie donc
   # MeeshySDK et MeeshyUI. Recâblé 2026-06-24 (présent sur disque mais absent de
@@ -421,21 +442,23 @@ targets:
       # `ShareRecipientDirectory.swift` (LiveShareRecipientDirectory), ni
       # `ShareSheetHost+App.swift` : ceux-là parlent aux singletons de l'app.
       # Garde : `ShareExtensionScreenGuardTests`.
-      - path: Meeshy/Features/Main/Share/ShareContentZone.swift
-      - path: Meeshy/Features/Main/Share/ShareDirectorySnapshot.swift
-      - path: Meeshy/Features/Main/Share/ShareDurationRow.swift
-      - path: Meeshy/Features/Main/Share/ShareIncomingStrip.swift
-      - path: Meeshy/Features/Main/Share/ShareRecipient.swift
-      - path: Meeshy/Features/Main/Share/ShareRecipientRow.swift
-      - path: Meeshy/Features/Main/Share/ShareRelayHandoff.swift
-      - path: Meeshy/Features/Main/Share/ShareSendBar.swift
-      - path: Meeshy/Features/Main/Share/ShareSheetCopy.swift
-      - path: Meeshy/Features/Main/Share/ShareSheetView.swift
-      - path: Meeshy/Features/Main/Share/ShareSheetView+Actions.swift
-      - path: Meeshy/Features/Main/Share/ShareSheetViewModel.swift
-      - path: Meeshy/Features/Main/Share/ShareSourcing.swift
-      - path: Meeshy/Features/Main/Share/ShareStringsBundle.swift
-      - path: Meeshy/Features/Main/Share/ShareSubject.swift
+      - path: Meeshy/Features/Share/ShareContentZone.swift
+      - path: Meeshy/Features/Share/ShareDirectorySnapshot.swift
+      - path: Meeshy/Features/Share/ShareDurationRow.swift
+      # #12985 — le reflet de la mémoire du bout en bout que l'app dépose.
+      - path: Meeshy/Features/Share/EndToEndShareMemory.swift
+      - path: Meeshy/Features/Share/ShareIncomingStrip.swift
+      - path: Meeshy/Features/Share/ShareRecipient.swift
+      - path: Meeshy/Features/Share/ShareRecipientRow.swift
+      - path: Meeshy/Features/Share/ShareRelayHandoff.swift
+      - path: Meeshy/Features/Share/ShareSendBar.swift
+      - path: Meeshy/Features/Share/ShareSheetCopy.swift
+      - path: Meeshy/Features/Share/ShareSheetView.swift
+      - path: Meeshy/Features/Share/ShareSheetView+Actions.swift
+      - path: Meeshy/Features/Share/ShareSheetViewModel.swift
+      - path: Meeshy/Features/Share/ShareSourcing.swift
+      - path: Meeshy/Features/Share/ShareStringsBundle.swift
+      - path: Meeshy/Features/Share/ShareSubject.swift
       # Les noms courts des modèles du SDK (`Message`, `MessageAttachment`).
       - path: Meeshy/Features/Main/Models/MessageAliases.swift
     settings:
@@ -553,10 +576,10 @@ targets:
       # resurrected now that the sources are shared).
       - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
       - path: MeeshyNotificationExtension/NSEDecryptor.swift
-      # NSEPreferencesGate importe MeeshySDK (modèle UserNotificationPreferences,
+      # NSEPreferencesGate importe MeeshyCore (modèle UserNotificationPreferences,
       # déjà lié au bundle de tests) + UserNotifications (data-only en test).
       - path: MeeshyNotificationExtension/NSEPreferencesGate.swift
-      # NSEAPIRequest importe MeeshySDK (ClientInfoProvider.identityHeaders) :
+      # NSEAPIRequest importe MeeshyCore (ClientInfoProvider.identityHeaders) :
       # c'est la requête que la NSE envoie, et ce qu'elle dépose est ce que
       # l'app peint au tap (#7804).
       - path: MeeshyNotificationExtension/NSEAPIRequest.swift
@@ -568,6 +591,7 @@ targets:
       - path: MeeshyNotificationExtension/NSEDeadline.swift
       - path: MeeshyNotificationExtension/NSEEnrichmentPlan.swift
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      - path: MeeshyNotificationExtension/NSELockedConversationMirror.swift
       - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
       # #8858 — l'instantané de carte d'une position partagée (MapKit + UIKit).
       # `xcrun simctl push` n'exécute PAS la NSE : c'est le seul endroit d'où

@@ -122,6 +122,26 @@ class CreateShareLinkViewModel @Inject constructor(
 
     fun onExpirationChange(value: ShareLinkExpiration) = updateForm { it.withExpiration(value) }
 
+    /**
+     * « Inviter mes amis » (iOS `InviteFriendsSheet`) : le lien se crée dès l'ouverture, avec le message
+     * d'invitation par défaut, et se partage en un geste. Inerte sans conversation amorcée, ou si un lien
+     * est déjà créé / en cours — rouvrir l'écran ne fabrique pas un second lien.
+     */
+    fun createOnOpen(defaultInviteMessage: String) {
+        val current = _state.value
+        if (conversationId == null || current.isCreated || current.isSubmitting || openedAutomatically) return
+        openedAutomatically = true
+        if (current.form.description.isBlank()) onDescriptionChange(defaultInviteMessage)
+        submit()
+    }
+
+    /** « Personnaliser les options » : referme le lien créé et rend le formulaire, qui en créera un autre. */
+    fun customize() {
+        _state.update { it.copy(created = null) }
+    }
+
+    private var openedAutomatically = false
+
     fun submit() {
         val current = _state.value
         if (current.isSubmitting) return

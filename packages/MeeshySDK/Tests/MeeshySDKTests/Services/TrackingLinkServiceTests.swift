@@ -179,7 +179,7 @@ final class TrackingLinkServiceTests: XCTestCase {
     }
 
     func test_createdTrackingLink_gatewayCreatedBody_decodesTheWrappedLink() throws {
-        let response = try APIClient.makeAPIPayloadDecoder().decode(
+        let response = try MeeshyCoders.decoder(.api).decode(
             APIResponse<CreatedTrackingLink>.self,
             from: Self.gatewayCreateBody(existed: nil)
         )
@@ -191,7 +191,7 @@ final class TrackingLinkServiceTests: XCTestCase {
     }
 
     func test_createdTrackingLink_gatewayExistingBody_reportsExisted() throws {
-        let response = try APIClient.makeAPIPayloadDecoder().decode(
+        let response = try MeeshyCoders.decoder(.api).decode(
             APIResponse<CreatedTrackingLink>.self,
             from: Self.gatewayCreateBody(existed: true)
         )
@@ -209,7 +209,7 @@ final class TrackingLinkServiceTests: XCTestCase {
         }}
         """.utf8)
 
-        let response = try APIClient.makeAPIPayloadDecoder().decode(
+        let response = try MeeshyCoders.decoder(.api).decode(
             APIResponse<CreatedTrackingLink>.self, from: body
         )
 
@@ -218,7 +218,7 @@ final class TrackingLinkServiceTests: XCTestCase {
     }
 
     func test_createLink_customToken_travelsUnderTheKeyTheGatewayDeclares() async throws {
-        let created = try APIClient.makeAPIPayloadDecoder().decode(
+        let created = try MeeshyCoders.decoder(.api).decode(
             APIResponse<CreatedTrackingLink>.self,
             from: Self.gatewayCreateBody(existed: nil)
         )

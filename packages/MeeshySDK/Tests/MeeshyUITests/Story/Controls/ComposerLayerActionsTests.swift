@@ -108,8 +108,8 @@ final class ComposerLayerActionsTests: XCTestCase {
 
     func test_addSticker_appendsToCurrentEffects_andBringsToFront() {
         let vm = StoryComposerViewModel()
-        let a = vm.addSticker(emoji: "😀")
-        let b = vm.addSticker(emoji: "🔥")
+        let a = vm.addSticker(emoji: "😀")!
+        let b = vm.addSticker(emoji: "🔥")!
 
         XCTAssertEqual(vm.currentEffects.stickerObjects?.count, 2)
         XCTAssertGreaterThan(vm.zIndex(for: b.id), vm.zIndex(for: a.id),
@@ -143,5 +143,33 @@ final class ComposerLayerActionsTests: XCTestCase {
         vm.deleteElement(id: "nonexistent")
         XCTAssertEqual(vm.currentEffects.textObjects.count, 1)
         XCTAssertEqual(vm.currentEffects.textObjects.first?.id, id)
+    }
+
+    // MARK: - duplicateElement sert les cinq familles (#13839, L5)
+
+    /// « Dupliquer » est une action de la barre de sélection pour TOUTE famille
+    /// posée : un sticker ou un lieu que le modèle ne sait pas copier rendrait le
+    /// bouton inerte.
+    func test_duplicateElement_sticker_appendsAnOffsetCopyAndSelectsIt() throws {
+        let vm = StoryComposerViewModel()
+        let original = try XCTUnwrap(vm.addSticker(emoji: "😎"))
+        vm.duplicateElement(id: original.id)
+        let stickers = vm.currentEffects.stickerObjects ?? []
+        XCTAssertEqual(stickers.count, 2)
+        let copie = try XCTUnwrap(stickers.first { $0.id != original.id })
+        XCTAssertEqual(copie.emoji, "😎")
+        XCTAssertGreaterThan(copie.x, original.x)
+        XCTAssertEqual(vm.selectedElementId, copie.id)
+    }
+
+    func test_duplicateElement_place_appendsAnOffsetCopyAndSelectsIt() throws {
+        let vm = StoryComposerViewModel()
+        let original = vm.addLocation(place: SharedPlace(latitude: 48.88, longitude: 2.35, name: "Gare du Nord"))
+        vm.duplicateElement(id: original.id)
+        let lieux = vm.currentEffects.locationObjects
+        XCTAssertEqual(lieux.count, 2)
+        let copie = try XCTUnwrap(lieux.first { $0.id != original.id })
+        XCTAssertEqual(copie.place, original.place)
+        XCTAssertEqual(vm.selectedElementId, copie.id)
     }
 }

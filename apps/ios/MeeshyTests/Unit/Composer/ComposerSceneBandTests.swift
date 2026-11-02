@@ -141,7 +141,7 @@ final class ComposerSceneBandTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(fichier)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(fichier)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -211,8 +211,8 @@ final class ComposerSceneBandTests: XCTestCase {
         // `HStack` vide en dessous. Toujours PAS une bande — la garde négative
         // ci-dessous continue de le vérifier.
         XCTAssertTrue(
-            compacte.contains(compact("if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty { let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen) socle")),
-            "Le socle est monté par la seule PROPRIÉTÉ DU CHROME (et ses zones) ; il ne s'efface que devant un OUTIL ouvert (#8652), jamais devant une bande."
+            compacte.contains(compact("if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty { let servi = sceneSelectionRelay.publicationIsShown(toolOwnsScreen: sceneToolOwnsScreen) socle")),
+            "Le socle est monté par la seule PROPRIÉTÉ DU CHROME (et ses zones) ; il ne s'efface que devant un OUTIL ouvert (#8652) ou une édition (#13957), jamais devant une bande."
         )
         // Et la bande n'apparaît PAS dans cette pile : elle est passée à la
         // surface de scène, dans une propriété à part. Un identifiant de bande
@@ -279,7 +279,7 @@ final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneBand.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneBand.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -361,7 +361,7 @@ final class ComposerSceneBandOpeningContrastGuardTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneBand.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneBand.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -445,7 +445,7 @@ final class ComposerLowZoneTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneSurface.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

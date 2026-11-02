@@ -1,51 +1,40 @@
 package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.sdk.model.ApiConversation
-import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.PresenceState
-import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.presence.PresenceDecayClock
+import me.meeshy.sdk.model.presence.PresenceMapReducer
 import org.junit.Test
+import java.time.Instant
 
-/** Une personne qui écrit est TOUJOURS verte (règle produit ; iOS `typingUsername != nil ? .online`). */
+/**
+ * La cellule d'avatar lit la carte de présence unique (`rememberPresence`) : une frappe DATE l'activité
+ * (la carte porte `lastActiveAt = maintenant`), elle ne force plus `isOnline` — le point est vert 60 s puis
+ * décroît sur l'horloge partagée de 15 s.
+ */
 class ConversationListTypingPresenceTest {
 
-    private val direct = ApiConversation(
-        id = "c1",
-        type = "direct",
-        participants = listOf(
-            ApiParticipant(id = "p-me", userId = "me", displayName = "Me"),
-            ApiParticipant(id = "p-ali", userId = "ali", displayName = "Ali"),
-        ),
-    )
-
-    private fun typing(conversationId: String, userId: String) =
-        mapOf(conversationId to mapOf(userId to ConversationTyper(userId = userId, displayName = "Ali")))
+    private val now = 1_800_000_000_000L
 
     @Test
-    fun `a peer typing with no presence data at all reads online`() {
-        val state = ConversationListUiState(currentUserId = "me", typers = typing("c1", "ali"))
-
-        assertThat(state.presenceStateFor(direct, nowEpochMillis = 0L)).isEqualTo(PresenceState.ONLINE)
-    }
-
-    @Test
-    fun `a peer typing whose last presence frame said offline reads online`() {
-        val state = ConversationListUiState(
-            currentUserId = "me",
-            typers = typing("c1", "ali"),
-            presenceByUserId = mapOf(
-                "ali" to UserStatusEvent(userId = "ali", isOnline = false, lastActiveAt = "2020-01-01T00:00:00Z"),
-            ),
+    fun `a peer who just typed reads online even though the server said offline`() {
+        val map = PresenceMapReducer.noteActivity(
+            mapOf("ali" to UserPresence(false, Instant.ofEpochMilli(now - 3_600_000).toString())), "ali", "me", now,
         )
 
-        assertThat(state.presenceStateFor(direct, nowEpochMillis = 1_800_000_000_000)).isEqualTo(PresenceState.ONLINE)
+        assertThat(PresenceDecayClock.derive(map["ali"], now + 1_000)).isEqualTo(PresenceState.ONLINE)
     }
 
     @Test
-    fun `someone typing in ANOTHER conversation does not light this row`() {
-        val state = ConversationListUiState(currentUserId = "me", typers = typing("c2", "ali"))
+    fun `a typer decays to away after 60 seconds instead of staying green`() {
+        val map = PresenceMapReducer.noteActivity(emptyMap(), "ali", "me", now)
 
-        assertThat(state.presenceStateFor(direct, nowEpochMillis = 0L)).isNull()
+        assertThat(PresenceDecayClock.derive(map["ali"], now + 61_000)).isEqualTo(PresenceState.AWAY)
+    }
+
+    @Test
+    fun `no entry means no dot`() {
+        assertThat(PresenceDecayClock.derive(null, now)).isNull()
     }
 }

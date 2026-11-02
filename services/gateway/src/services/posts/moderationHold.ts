@@ -1,8 +1,9 @@
-import type { PostVisibility } from '@meeshy/shared/prisma/client';
+import type { PostVisibility, PrismaClient } from '@meeshy/shared/prisma/client';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { isRepostVisibilityAllowed } from '@meeshy/shared/utils/repost-audience';
 import { canUserConsumePost, loadPostAcl, type PostAclPrisma } from './postVisibility';
 import { NOT_DELETED } from './softDelete';
+import { isBlockedWithContentAuthors } from './contentAuthorBlock';
 
 /**
  * **CE QUE L'AUTEUR NE PEUT PAS DÉFAIRE D'UN RETRAIT DE MODÉRATION** (#10315).
@@ -34,7 +35,7 @@ type SourceRow = {
   readonly originalRepostOfId: string | null;
 };
 
-export type ModerationHoldPrisma = PostAclPrisma;
+export type ModerationHoldPrisma = PostAclPrisma & Pick<PrismaClient, 'user'>;
 
 const HOLD_SELECT = { authorId: true, moderationHiddenAt: true, moderationPriorVisibility: true, repostOfId: true } as const;
 const SOURCE_SELECT = { visibility: true, moderationHiddenAt: true, deletedAt: true, originalRepostOfId: true } as const;
@@ -86,9 +87,11 @@ export async function audienceChangeVerdict(
 
 /**
  * Peut-on republier cette source ? Il faut pouvoir la LIRE (la même audience que
- * l'ouverture : `canUserConsumePost`), et qu'elle ne soit pas hors ligne — même
- * pour son auteur. Refus indistinct : absente, supprimée, hors audience ou hors
- * ligne rendent le même `false`.
+ * l'ouverture : `canUserConsumePost`), qu'elle ne soit pas hors ligne — même
+ * pour son auteur —, et qu'aucun blocage ne sépare le republieur de son auteur
+ * ni de l'auteur de ce qu'elle republie (#14242 : republier comme citer). Refus
+ * indistinct : absente, supprimée, hors audience, hors ligne ou bloquée rendent
+ * le même `false`.
  */
 export async function mayRepostSource(prisma: ModerationHoldPrisma, sourceId: string, userId: string): Promise<boolean> {
   if (!isValidObjectId(sourceId)) return false;
@@ -100,5 +103,6 @@ export async function mayRepostSource(prisma: ModerationHoldPrisma, sourceId: st
     if (root !== null && root.moderationHiddenAt !== null) return false;
   }
   const acl = await loadPostAcl(prisma, sourceId);
-  return acl !== null && canUserConsumePost(prisma, acl, userId);
+  if (acl === null || !(await canUserConsumePost(prisma, acl, userId))) return false;
+  return !(await isBlockedWithContentAuthors(prisma, { actorId: userId, postId: sourceId }));
 }

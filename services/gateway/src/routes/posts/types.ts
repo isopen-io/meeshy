@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+import { POST_VISIBILITIES } from '@meeshy/shared/types/post';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 import { parseMessageSticker } from '../../services/stickers/messageSticker';
+import { enforceMediaIdsOnCreate, enforceMediaIdsOnUpdate, enforceStoryLimits, enforceStoryTextLengthOnCreate } from './storyLimits';
+import { StoryKeyframesBoundsSchema, StoryScenesBoundsSchema, StoryTimelineDurationSchema } from './storyEffectsBounds';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -61,7 +64,7 @@ const STORY_LANG_MAX = 16;              // BCP-47
 const STORY_HEX_MAX = 16;               // "#RRGGBBAA" + marge
 const STORY_FONT_MAX = 64;
 const STORY_STYLE_MAX = 64;
-const STORY_ARRAY_CAP = 32;             // medias/texts/stickers/audios par slide
+const STORY_ARRAY_CAP = 32;             // keyframes/variantes ; le NOMBRE d'objets par scène est dans storyLimits.ts
 
 // Les REGLAGES d'une image posee (#9175) — `ImageAdjustments` iOS : seules les
 // valeurs actives voyagent. Bornes LARGES (le client borne chaque reglage a sa
@@ -110,7 +113,7 @@ export const StoryMediaObjectSchema = z.object({
   aspectRatio: z.number().min(0.05).max(20).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   // Plafond a 2 : l'auteur peut pousser un media au-dela de son niveau nominal
   // (quitte a saturer, c'est un choix de composition assume). Miroir de
@@ -136,6 +139,7 @@ export const StoryMediaObjectSchema = z.object({
   filter: z.string().max(32).optional(),
   adjustments: StoryMediaAdjustmentsSchema.optional(),
   crop: StoryMediaCropSchema.optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 const StoryTextObjectSchema = z.object({
@@ -144,7 +148,7 @@ const StoryTextObjectSchema = z.object({
   content: z.string().max(STORY_TEXT_MAX).optional(),  // legacy field
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   fontSize: z.number().min(1).max(1000).optional(),
   textSize: z.number().min(1).max(1000).optional(),  // legacy field
@@ -164,7 +168,8 @@ const StoryTextObjectSchema = z.object({
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
-  translations: z.record(z.string(), z.string().max(STORY_TEXT_MAX)).optional(),
+  // Traductions écrites par le serveur : jamais bornées par le plafond de création (#13590).
+  translations: z.record(z.string(), z.string()).optional(),
   /**
    * `User.id` quand cet objet EST un badge de référence, absent pour du texte
    * libre. C'est LUI que `collectMentionableText` lit pour exclure le badge de
@@ -176,6 +181,7 @@ const StoryTextObjectSchema = z.object({
    * mérite d'être validé comme les autres.
    */
   referenceUserId: z.string().regex(OBJECT_ID_REGEX).optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 const StoryStickerObjectSchema = z.object({
@@ -183,9 +189,10 @@ const StoryStickerObjectSchema = z.object({
   emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
-  scale: z.number().min(0).max(20).optional(),
+  scale: z.number().min(0).optional(),
   rotation: z.number().min(-720).max(720).optional(),
   zIndex: z.number().int().min(-1000).max(1000).optional(),
+  keyframes: StoryKeyframesBoundsSchema,
 }).passthrough();
 
 export const StoryAudioObjectSchema = z.object({
@@ -223,11 +230,13 @@ const STORY_EFFECTS_MAX_BYTES = 256 * 1024;
 export const StoryEffectsSchema = z.object({
   background: z.string().max(64).optional(),
   thumbHash: z.string().max(STORY_THUMBHASH_MAX).optional(),
-  mediaObjects: z.array(StoryMediaObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  textObjects: z.array(StoryTextObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  stickerObjects: z.array(StoryStickerObjectSchema).max(STORY_ARRAY_CAP).optional(),
-  audioPlayerObjects: z.array(StoryAudioObjectSchema).max(STORY_ARRAY_CAP).optional(),
+  mediaObjects: z.array(StoryMediaObjectSchema).optional(),
+  textObjects: z.array(StoryTextObjectSchema).optional(),
+  stickerObjects: z.array(StoryStickerObjectSchema).optional(),
+  audioPlayerObjects: z.array(StoryAudioObjectSchema).optional(),
   slideDuration: z.number().min(0).max(86400).optional(),
+  timelineDuration: StoryTimelineDurationSchema,
+  scenes: StoryScenesBoundsSchema,
 }).passthrough()
   .refine((effects) => {
     // Garde-fou final : sérialiser et vérifier taille totale. Couvre les
@@ -237,7 +246,8 @@ export const StoryEffectsSchema = z.object({
     } catch {
       return false;
     }
-  }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` });
+  }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` })
+  .superRefine(enforceStoryLimits);
 
 /**
  * Une personne que le post NOMME sans que son texte le dise.
@@ -275,10 +285,19 @@ export const PostReferenceInputSchema = z.object({
   message: 'userId ou username requis',
 });
 
+/**
+ * L'audience d'une publication — UN seul schéma pour les quatre entrées (création,
+ * édition, republication, publication d'une pièce jointe), dérivé de la liste
+ * partagée `POST_VISIBILITIES`. Quatre `z.enum` recopiés à la main divergent : une
+ * valeur ajoutée à l'un et oubliée aux autres refuse, selon la porte, une audience
+ * que le schéma Prisma accepte.
+ */
+export const PostVisibilitySchema = z.enum(POST_VISIBILITIES);
+
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).default('POST'),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
-  visibilityUserIds: z.array(z.string()).max(500).optional(),
+  visibility: PostVisibilitySchema.optional(),
+  visibilityUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(500).optional(),
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),
   // Story-specific
@@ -309,7 +328,7 @@ export const CreatePostSchema = z.object({
   // préfère à sa propre détection par regex quand `originalLanguage` manque.
   detectedLanguage: z.string().min(2).max(6).optional(),
   // Media IDs (already uploaded)
-  mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  mediaIds: z.array(z.string()).optional(), // borne selon le type : storyLimits.ts (enforceMediaIds*)
   // Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un id
   // de `mediaIds` ci-dessus, IGNORÉ pour tout id absent de `mediaIds` (le
   // service ne l'applique qu'aux lignes qu'il vient réellement de rattacher
@@ -373,6 +392,13 @@ export const CreatePostSchema = z.object({
 }, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' })
   .refine(hasAnyContentCarrier, {
     message: 'A post must carry something: content, media, audio, a mood, a repost, or story effects',
+  })
+  // 1000 caractères par texte à la CRÉATION (#13590) — sauf une republication, qui recopie le texte STOCKÉ de sa
+  // source (`StoryComposerViewModel(reposting:)`) : une story stockée reste publiable telle qu'elle est.
+  .superRefine((data, ctx) => {
+    enforceMediaIdsOnCreate(data, ctx);
+    if (data.repostOfId?.trim() || !data.storyEffects) return;
+    enforceStoryTextLengthOnCreate(data.storyEffects, ctx);
   });
 
 /**
@@ -426,8 +452,8 @@ function hasAnyContentCarrier(data: {
 
 export const UpdatePostSchema = z.object({
   content: z.string().max(5000).optional(),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
-  visibilityUserIds: z.array(z.string()).max(500).optional(),
+  visibility: PostVisibilitySchema.optional(),
+  visibilityUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(500).optional(),
   storyEffects: StoryEffectsSchema.optional(),
   // Opt-in extraction bande-son vidéo — même contrat que CreatePostSchema.
   // Basculer à false libère l'usage vidéo à la prochaine passe de capture.
@@ -450,7 +476,7 @@ export const UpdatePostSchema = z.object({
   // Ids of freshly uploaded media (PostMedia created by TUS with postId=null)
   // to attach during the edit — same contract and bound as CreatePostSchema.
   // On a STORY this counts as a content edit (engagement reset).
-  mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  mediaIds: z.array(z.string()).optional(), // borne selon le type : storyLimits.ts (enforceMediaIds*)
   // Texte alternatif par média — même contrat que `CreatePostSchema.mediaAlt`
   // (clé = un id de `mediaIds` ci-dessus, ignoré sinon). Édite l'accessibilité
   // d'un média qui vient d'être rattaché ; les médias déjà attachés au post ne
@@ -467,7 +493,8 @@ export const UpdatePostSchema = z.object({
     return false;
   }
   return true;
-}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
+}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' })
+  .superRefine(enforceMediaIdsOnUpdate);
 
 /// Surfaces d'où peut partir un « Enregistrer ». Volontairement plus courte que
 /// IMPRESSION_SOURCES : seules ces trois surfaces exposent l'action.
@@ -561,7 +588,7 @@ export const RepostSchema = z.object({
   // Audience choisie par le REPOSTEUR. Le composer l'affiche depuis toujours ;
   // sans ce champ elle n'atteignait aucune couche et tout repost sortait avec
   // la visibilité de l'original (donc PUBLIC, seule valeur repostable).
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibility: PostVisibilitySchema.optional(),
 });
 
 export const TranslatePostSchema = z.object({
@@ -765,7 +792,7 @@ export const PublishAttachmentSchema = z.object({
   attachmentId: z.string().min(1),
   target: z.enum(['POST', 'REEL', 'STORY']).optional(),
   content: z.string().max(5000).optional(),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibility: PostVisibilitySchema.optional(),
   capturedInApp: z.boolean().optional(),
   editedInApp: z.boolean().optional(),
 });

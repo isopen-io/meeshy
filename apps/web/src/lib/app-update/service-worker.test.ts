@@ -5,6 +5,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { LEGACY_CACHE_NAMESPACE, SW_RUNTIME_CACHES, WORKBOX_PRECACHE_PREFIX } from '../sw-caches';
 
 import {
+  commitOf,
   createAppUpdateController,
   SKIP_WAITING_MESSAGE,
   SW_SCRIPT_URL,
@@ -104,6 +105,8 @@ function harness(
     readonly waiting?: WorkerLike | null;
     readonly cacheNames?: readonly string[];
     readonly keysFail?: boolean;
+    readonly bundleRevision?: string | null;
+    readonly servedRevision?: () => Promise<string | null>;
   } = {},
 ): Harness {
   const registration = fakeRegistration({ waiting: options.waiting ?? null });
@@ -169,6 +172,8 @@ function harness(
     onError: (error) => {
       errors.push(error);
     },
+    bundleRevision: options.bundleRevision === undefined ? 'rev-a' : options.bundleRevision,
+    servedRevision: options.servedRevision ?? (() => Promise.resolve('rev-a')),
   };
 
   return {
@@ -430,5 +435,87 @@ describe("un navigateur sans service worker", () => {
 
     expect(await controller.register()).toBeNull();
     expect(h.errors).toEqual([]);
+  });
+});
+
+describe('la révision servie diffère de celle en cache (#12654)', () => {
+  test("annonce la mise à jour quand /build-info.json sert une autre révision et qu'aucun worker neuf n'est en route", async () => {
+    const h = harness({ bundleRevision: 'rev-a', servedRevision: () => Promise.resolve('rev-b') });
+    const registration = await createAppUpdateController(h.env).register();
+
+    expect(h.announcements).toEqual([registration!]);
+  });
+
+  test("n'annonce rien quand la révision servie est la sienne", async () => {
+    const h = harness({ bundleRevision: 'rev-a', servedRevision: () => Promise.resolve('rev-a') });
+    await createAppUpdateController(h.env).register();
+
+    expect(h.announcements).toEqual([]);
+  });
+
+  test("n'annonce rien sans révision connue d'un côté ou de l'autre — jamais une alerte fabriquée", async () => {
+    const sansServie = harness({ servedRevision: () => Promise.resolve(null) });
+    await createAppUpdateController(sansServie.env).register();
+    const sansGravee = harness({ bundleRevision: null, servedRevision: () => Promise.resolve('rev-b') });
+    await createAppUpdateController(sansGravee.env).register();
+
+    expect(sansServie.announcements).toEqual([]);
+    expect(sansGravee.announcements).toEqual([]);
+  });
+
+  test("une lecture de /build-info.json qui échoue n'annonce rien et ne casse pas la vérification", async () => {
+    const h = harness({ servedRevision: () => Promise.reject(new Error('hors ligne')) });
+    await createAppUpdateController(h.env).register();
+
+    expect(h.announcements).toEqual([]);
+    expect(h.registration.updates).toBe(1);
+  });
+
+  test("laisse le worker neuf annoncer lui-même quand il s'installe — une seule annonce", async () => {
+    const h = harness({ servedRevision: () => Promise.resolve('rev-b') });
+    const worker = fakeWorker();
+    const original = h.registration.update.bind(h.registration);
+    h.registration.update = () => {
+      h.registration.findUpdate(worker);
+      return original();
+    };
+    await createAppUpdateController(h.env).register();
+    worker.install();
+
+    expect(h.announcements.length).toBe(1);
+  });
+
+  test("n'annonce qu'une fois la même révision servie, vérification après vérification", async () => {
+    const h = harness({ servedRevision: () => Promise.resolve('rev-b') });
+    const controller = createAppUpdateController(h.env);
+    await controller.register();
+    await controller.checkForUpdate();
+    await controller.checkForUpdate();
+
+    expect(h.announcements.length).toBe(1);
+  });
+
+  test('cliquer purge les caches possédés et recharge, la révision neuve arrive du réseau', async () => {
+    const h = harness({ servedRevision: () => Promise.resolve('rev-b') });
+    const controller = createAppUpdateController(h.env);
+    const registration = await controller.register();
+    await controller.applyUpdate(registration!);
+
+    expect(h.reloads()).toBe(1);
+    expect(h.discards()).toBe(1);
+  });
+});
+
+describe('la lecture de /build-info.json (#12654)', () => {
+  test('rend le commit servi par le conteneur', () => {
+    expect(commitOf({ build: { commit: '965073b79b', commitShort: '965073b', builtAt: '2026-10-22T00:10:09Z' } })).toBe('965073b79b');
+  });
+
+  test('rend null pour une image construite sans VCS_REF ou une réponse qui n\'est pas la sienne', () => {
+    expect(commitOf({ build: { commit: null } })).toBeNull();
+    expect(commitOf({ build: { commit: '' } })).toBeNull();
+    expect(commitOf('<!doctype html>')).toBeNull();
+    expect(commitOf(null)).toBeNull();
+    expect(commitOf({})).toBeNull();
   });
 });

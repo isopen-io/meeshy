@@ -100,6 +100,7 @@ public fun MeeshyNotificationToast(
     modifier: Modifier = Modifier,
     avatarName: String = senderName,
     accentColor: Color = MeeshyPalette.Indigo500,
+    avatarUrl: String? = null,
     onTap: (() -> Unit)? = null,
 ) {
     val tapModifier = if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier
@@ -111,7 +112,7 @@ public fun MeeshyNotificationToast(
             modifier = Modifier.padding(MeeshySpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MeeshyAvatar(name = avatarName, size = 44.dp, containerColor = accentColor)
+            MeeshyAvatar(name = avatarName, size = 44.dp, containerColor = accentColor, imageUrl = avatarUrl)
             Spacer(Modifier.width(MeeshySpacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

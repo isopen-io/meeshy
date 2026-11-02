@@ -41,6 +41,10 @@ final class ExtensionShareDispatcher: ShareDispatching {
     private let now: () -> Date
     private let sendShare: Send
     private let createDirect: CreateDirect
+    /// Les conversations que ce compte a vues chiffrées de bout en bout, d'après
+    /// le reflet que l'app dépose (`EndToEndShareMemory`, #12985) : elles se
+    /// relaient, même servies sans mode. Sans reflet, toutes se relaient.
+    private let remembersEndToEnd: @Sendable (String) -> Bool
 
     /// La fiche du partage, dès le premier envoi tenté.
     private(set) var share: SharePendingShare?
@@ -56,8 +60,12 @@ final class ExtensionShareDispatcher: ShareDispatching {
         staged: [ShareStagedMedia],
         now: @escaping () -> Date = Date.init,
         sendShare: @escaping Send = { share, session in await ShareSender.send(share: share, session: session) },
-        createDirect: @escaping CreateDirect = { userId, session in await ExtensionShareDispatcher.createDirectConversation(with: userId, session: session) }
+        createDirect: @escaping CreateDirect = { userId, session in await ExtensionShareDispatcher.createDirectConversation(with: userId, session: session) },
+        remembersEndToEnd: (@Sendable (String) -> Bool)? = nil
     ) {
+        self.remembersEndToEnd = remembersEndToEnd ?? EndToEndShareMemory.remembers(
+            in: UserDefaults(suiteName: EndToEndShareMemory.appGroupIdentifier), userId: session?.userId
+        )
         self.shareId = shareId
         self.session = session
         self.staged = staged
@@ -83,7 +91,7 @@ final class ExtensionShareDispatcher: ShareDispatching {
             return .failed(reason: Self.unreachableReason)
         }
         let conversationId = destination.id
-        if destination.isEncrypted {
+        if destination.isEncrypted || remembersEndToEnd(conversationId) {
             if !relayedConversationIds.contains(conversationId) { relayedConversationIds.append(conversationId) }
             relayedText = request.subject.composedText(caption: request.caption)
             relayedMedia = keptMedia(of: request.subject)
@@ -158,14 +166,15 @@ final class ExtensionShareDispatcher: ShareDispatching {
     /// `{ data: { id, encryptionMode } }` — la création est idempotente et rend
     /// la directe EXISTANTE, éventuellement chiffrée. Une réponse qui ne dit pas
     /// le mode explicitement (`null` ou chaîne) compte comme chiffrée : on relaie
-    /// plutôt que d'envoyer en clair.
+    /// plutôt que d'envoyer en clair. `server` et `hybrid` reçoivent le clair,
+    /// que le serveur chiffre lui-même ; un mode inconnu se lit bout en bout (#12978).
     nonisolated static func createdDirect(fromResponse data: Data) -> CreatedDirect? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let payload = root["data"] as? [String: Any],
               let id = payload["id"] as? String, !id.isEmpty else { return nil }
         let mode = payload["encryptionMode"]
         let knownClear = payload.keys.contains("encryptionMode") && (mode is NSNull)
-        let encrypted = (mode as? String).map { !$0.isEmpty } ?? !knownClear
+        let encrypted = (mode as? String).map { EndToEndSendGate.requiresSeal(conversationEncryptionModes: [$0]) } ?? !knownClear
         return CreatedDirect(id: id, isEncrypted: encrypted)
     }
 

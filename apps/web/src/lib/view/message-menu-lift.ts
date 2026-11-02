@@ -1,4 +1,5 @@
 import { PREVIEW_FADE_MS, PREVIEW_LIFT_MS } from './message-menu-metrics';
+import type { PreviewEdge } from './popover';
 
 /**
  * L'APERÇU SE SOULÈVE DEPUIS SA RANGÉE, ET Y RETOURNE (#11206) — un FLIP :
@@ -19,12 +20,20 @@ import { PREVIEW_FADE_MS, PREVIEW_LIFT_MS } from './message-menu-metrics';
 export type LiftOffset = { readonly dx: number; readonly dy: number };
 
 type LiftAnchor = { readonly left: number; readonly right: number; readonly top: number };
-type LiftPlacement = { readonly previewLeft: number; readonly previewWidth: number; readonly previewTop: number };
+type LiftPlacement = {
+  readonly previewLeft: number;
+  readonly previewWidth: number;
+  readonly previewTop: number;
+  /** Le bord que l'aperçu tient (`placeMessageMenuCluster`, #12635) ; absent : le côté du message. */
+  readonly previewEdge?: PreviewEdge;
+};
 
 /** Le décalage qui ramène le CONTENU de l'hôte placé sur celui de la rangée,
  * du côté d'où le message part (droite pour un envoi, gauche sinon), au pixel
  * entier. `inset` : le rembourrage de la surface de l'aperçu (Focal, Script) —
- * sans lui, le texte sautait de ce rembourrage de côté au départ de l'élévation. */
+ * sans lui, le texte sautait de ce rembourrage de côté au départ de l'élévation.
+ * Le bord est celui que l'aperçu TIENT (#12635) : en RTL, une bulle envoyée
+ * vit à gauche, et partir du bord droit la faisait sauter au départ. */
 export function liftOffset({
   anchor,
   placement,
@@ -36,9 +45,11 @@ export function liftOffset({
   readonly isMine: boolean;
   readonly inset?: number;
 }): LiftOffset {
-  const dx = isMine
-    ? anchor.right - (placement.previewLeft + placement.previewWidth - inset)
-    : anchor.left - (placement.previewLeft + inset);
+  const edge = placement.previewEdge ?? (isMine ? 'right' : 'left');
+  const dx =
+    edge === 'right'
+      ? anchor.right - (placement.previewLeft + placement.previewWidth - inset)
+      : anchor.left - (placement.previewLeft + inset);
   return { dx: Math.round(dx), dy: Math.round(anchor.top - (placement.previewTop + inset)) };
 }
 

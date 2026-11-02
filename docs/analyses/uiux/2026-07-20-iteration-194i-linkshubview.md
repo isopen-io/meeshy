@@ -3,7 +3,7 @@
 **Date:** 2026-07-20
 **Scope:** iOS only
 **Area:** Accessibility (VoiceOver) — links hub screen (share / tracking / community / affiliate cards)
-**File touched:** `apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift` (1 file, 0 logic, 0 new i18n key, 0 SDK change, 0 new test)
+**File touched:** `apps/ios/Meeshy/Features/Links/Views/LinksHubView.swift` (1 file, 0 logic, 0 new i18n key, 0 SDK change, 0 new test)
 
 ## Component
 

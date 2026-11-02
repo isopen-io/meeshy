@@ -16,52 +16,79 @@
  * périmé ne traîne : le Swift ne peut pas dériver du JSON en silence.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const FRAME_MOODS = ['signature', 'distingue', 'elegant', 'jovial', 'deconnecte', 'corporate', 'fantastique', 'futuriste', 'glauque', 'hors-norme', 'morbide', 'feerique'] as const;
-export const FRAME_BUCKETS = ['duo', 'comite', 'groupe', 'tablee'] as const;
-export const FRAME_ARRANGEMENTS = ['split', 'diagonal', 'hero', 'grid', 'row', 'column', 'arch', 'orbit', 'scatter', 'tiers', 'mosaic', 'honeycomb', 'cascade'] as const;
-export const SLOT_SHAPES = ['rect', 'round', 'circle', 'oval', 'arch', 'hex', 'diamond', 'heart', 'star', 'ticket', 'stamp', 'blob', 'torn', 'polaroid', 'frame-oval'] as const;
-export const SLOT_TONES = ['color', 'mono', 'sepia', 'noir', 'warm', 'cool', 'faded', 'duotone', 'luminosity'] as const;
-export const SLOT_TILTS = ['none', 'gentle', 'wild'] as const;
-export const FRAME_PATTERNS = ['dots', 'stripes', 'grid', 'checker', 'halftone', 'scanlines', 'grain', 'stars', 'confetti', 'sunburst', 'waves', 'circuit', 'damask', 'hearts'] as const;
-export const FRAME_BORDERS = ['hairline', 'double', 'deco', 'baroque', 'filmstrip', 'ticket', 'perforated', 'neon', 'brackets', 'torn', 'mourning', 'vines', 'bulbs', 'polaroid'] as const;
-export const FRAME_ORNAMENTS = [
-  'sparkles', 'bokeh', 'confetti', 'balloons', 'stars', 'hearts', 'fireflies', 'petals', 'leaves', 'bubbles', 'snow', 'rays',
-  'glitch', 'scanlines', 'grain', 'vignette', 'lightleak', 'crown', 'ribbon', 'tape', 'rec', 'crosshair', 'orbits', 'runes',
-  'cobwebs', 'drips', 'lightning', 'notes', 'candles', 'moon', 'clouds', 'bats', 'skulls', 'roses',
-] as const;
-export const FRAME_FONTS = ['bold', 'neon', 'typewriter', 'handwriting', 'classic', 'calligraphy', 'cartoon', 'futuristic', 'fantasy', 'curve', 'tag', 'italic', 'retro', 'elegant', 'poster', 'bubble', 'note', 'brush'] as const;
-export const BRAND_MARKS = ['logo', 'wordmark', 'both'] as const;
-export const BRAND_PLACES = ['top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'watermark'] as const;
-export const TEXT_SIZES = ['s', 'm', 'l'] as const;
-export const NAME_SHOWS = ['none', 'name', 'handle', 'both'] as const;
-export const NAME_STYLES = ['caption', 'plate', 'ribbon', 'badge', 'bubble', 'tag', 'list'] as const;
-export const TITLE_SOURCES = ['group', 'names', 'brand', 'date', 'none', 'time', 'datetime', 'place', 'landmark', 'emotion'] as const;
-export const TEXT_EFFECTS = ['none', 'shadow', 'glow', 'outline'] as const;
-/* L'extension du format (#9197, doc 06 § 3) — les mêmes listes que `frame-spec.ts`, dans le même ordre. */
-export const SLOT_LOOKS = ['instant-film', 'film-grain', 'oil-paint', 'scratch-film', 'halftone', 'vignette', 'bloom'] as const;
-export const ORNAMENT_MOTIONS = ['still', 'loop', 'onAppear'] as const;
-export const TEXT_FORMS = [
-  'digital', 'digital-seconds', 'analog', 'words', 'moment',
-  'short', 'long', 'day-month', 'calendar-tile', 'roman',
-  'inline', 'stacked', 'stamp',
-  'city', 'city-country', 'neighborhood', 'street', 'address', 'country-flag', 'coordinates', 'pin', 'map-silhouette',
-  'name', 'line-art', 'badge', 'skyline',
-  'emoji', 'word', 'color-aura', 'particles', 'sticker',
-] as const;
-export const ELEMENT_PLACES = ['top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center-left', 'center-right'] as const;
-export const WATERMARK_CONTENTS = ['brand', 'brand-handle'] as const;
-export const WATERMARK_ORIENTATIONS = ['diagonal-up', 'diagonal-down', 'horizontal', 'vertical', 'cross'] as const;
-export const FRAME_SURFACES = ['capture', 'live'] as const;
-export const FRAME_COSTS = ['light', 'standard', 'rich'] as const;
-export const SCENE_LAYER_KINDS = ['image', 'lottie', 'sprite', 'video-loop', 'particles', 'light'] as const;
-export const SCENE_DEPTHS = ['back', 'front', 'effects'] as const;
-export const BEHAVIOR_TRIGGERS = ['onTap', 'onShake', 'onTilt', 'onSmile', 'onEmotion', 'onTime', 'onSpeaking', 'onCallEvent'] as const;
-export const BEHAVIOR_ACTIONS = ['burst', 'calm', 'tint', 'play', 'stop', 'show', 'hide', 'shake'] as const;
-export const BEHAVIOR_CONDITIONS = ['joy', 'love', 'pride', 'calm', 'surprise', 'nostalgia', 'party', 'gratitude', 'morning', 'day', 'evening', 'night', 'start', 'end'] as const;
+/*
+ * Les vocabulaires sont ceux du schéma partagé (`types/capture-frames.ts`, #10169) : le générateur
+ * les IMPORTE, il n'en garde plus de copie. Réexportés pour le témoin et les scripts qui les lisent ici.
+ */
+export {
+  FRAME_MOODS,
+  FRAME_BUCKETS,
+  FRAME_ARRANGEMENTS,
+  SLOT_SHAPES,
+  SLOT_TONES,
+  SLOT_TILTS,
+  FRAME_PATTERNS,
+  FRAME_BORDERS,
+  FRAME_ORNAMENTS,
+  FRAME_FONTS,
+  BRAND_MARKS,
+  BRAND_PLACES,
+  TEXT_SIZES,
+  NAME_SHOWS,
+  NAME_STYLES,
+  TITLE_SOURCES,
+  TEXT_EFFECTS,
+  SLOT_LOOKS,
+  ORNAMENT_MOTIONS,
+  TEXT_FORMS,
+  ELEMENT_PLACES,
+  WATERMARK_CONTENTS,
+  WATERMARK_ORIENTATIONS,
+  FRAME_SURFACES,
+  FRAME_COSTS,
+  SCENE_LAYER_KINDS,
+  SCENE_DEPTHS,
+  BEHAVIOR_TRIGGERS,
+  BEHAVIOR_ACTIONS,
+  BEHAVIOR_CONDITIONS
+} from '../types/capture-frames.js';
+import {
+  FRAME_MOODS,
+  FRAME_BUCKETS,
+  FRAME_ARRANGEMENTS,
+  SLOT_SHAPES,
+  SLOT_TONES,
+  SLOT_TILTS,
+  FRAME_PATTERNS,
+  FRAME_BORDERS,
+  FRAME_ORNAMENTS,
+  FRAME_FONTS,
+  BRAND_MARKS,
+  BRAND_PLACES,
+  TEXT_SIZES,
+  NAME_SHOWS,
+  NAME_STYLES,
+  TITLE_SOURCES,
+  TEXT_EFFECTS,
+  SLOT_LOOKS,
+  ORNAMENT_MOTIONS,
+  TEXT_FORMS,
+  ELEMENT_PLACES,
+  WATERMARK_CONTENTS,
+  WATERMARK_ORIENTATIONS,
+  FRAME_SURFACES,
+  FRAME_COSTS,
+  SCENE_LAYER_KINDS,
+  SCENE_DEPTHS,
+  BEHAVIOR_TRIGGERS,
+  BEHAVIOR_ACTIONS,
+  BEHAVIOR_CONDITIONS,
+  FRAME_NAME_LANGUAGES
+} from '../types/capture-frames.js';
 
 /** Les formes admises par source (spec 01 § 2) : une forme hors de SA source fait échouer la génération, comme le schéma zod. */
 const FORMS_BY_SOURCE: Readonly<Record<string, readonly string[]>> = {
@@ -77,7 +104,7 @@ const LAYERS = ['back', 'front'] as const;
 const TITLE_PLACES = ['top', 'bottom'] as const;
 const LETTER_CASES = ['upper', 'as-is'] as const;
 
-export const OUTPUT_RELATIVE_DIR = 'apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated';
+export const OUTPUT_RELATIVE_DIR = 'apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated';
 
 type Json = Readonly<Record<string, unknown>>;
 
@@ -187,6 +214,10 @@ const element = (value: unknown, path: string): string => {
 const particleCount = (value: unknown, path: string): string =>
   typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 150 ? String(value) : fail(path, 'entier de 1 à 150 attendu');
 
+/** Les coins d'une image en neuf morceaux : réservés aux couches `image`, de 0 à 0,5 exclus. */
+const sliceFraction = (value: unknown, kind: unknown, path: string): string =>
+  kind === 'image' && typeof value === 'number' && value > 0 && value < 0.5 ? numberLiteral(value, path) : fail(path, `découpe d'une image attendue, de 0 à 0,5 exclus ${JSON.stringify(value)}`);
+
 const sceneLayer = (value: unknown, path: string): string => {
   const it = record(value, path);
   const fields = [
@@ -198,6 +229,7 @@ const sceneLayer = (value: unknown, path: string): string => {
     `color: ${optional(it.color, (color) => hex(color, `${path}.color`))}`,
     `amount: ${optional(it.amount, (amount) => fraction(amount, `${path}.amount`))}`,
     `maxParticles: ${optional(it.max, (max) => particleCount(max, `${path}.max`))}`,
+    ...present(it.slice, (slice) => `slice: ${sliceFraction(slice, it.kind, `${path}.slice`)}`),
   ];
   return `CallFrameSceneLayer(${fields.join(', ')})`;
 };
@@ -367,7 +399,60 @@ const title = (value: unknown, path: string): string => {
 const LOOK_KEYS = ['layout', 'slot', 'background', 'pattern', 'border', 'ornaments', 'brand', 'names', 'title', 'subtitle', 'elements', 'scene', 'behaviors', 'fallbacks'] as const;
 
 /** Les clés du MOTIF (doc 06 § 3) : elles valent pour toutes ses tranches, aucune variante ne les surcharge. */
-const MOTIF_KEYS = ['credits', 'surfaces', 'cost'] as const;
+const MOTIF_KEYS = ['credits', 'surfaces', 'cost', 'styles'] as const;
+
+/** Une déclinaison ne surcharge que les clés qu'elle déclare, dans l'ordre de `CallFrameLookOverride`. */
+const lookOverride = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  Object.keys(it).filter((key) => !(LOOK_KEYS as readonly string[]).includes(key)).forEach((key) => fail(path, `clé inconnue « ${key} »`));
+  const fields = [
+    ...present(it.layout, (declared) => `layout: ${layout(declared, `${path}.layout`)}`),
+    ...present(it.slot, (declared) => `slot: ${slot(declared, `${path}.slot`)}`),
+    ...present(it.background, (declared) => `background: ${background(declared, `${path}.background`)}`),
+    ...present(it.pattern, (declared) => `pattern: ${pattern(declared, `${path}.pattern`)}`),
+    ...present(it.border, (declared) => `border: ${border(declared, `${path}.border`)}`),
+    ...present(it.ornaments, (declared) => `ornaments: ${listLiteral(declared, `${path}.ornaments`, ornament)}`),
+    ...present(it.brand, (declared) => `brand: ${brand(declared, `${path}.brand`)}`),
+    ...present(it.names, (declared) => `names: ${names(declared, `${path}.names`)}`),
+    ...present(it.title, (declared) => `title: ${title(declared, `${path}.title`)}`),
+    ...present(it.subtitle, (declared) => `subtitle: ${title(declared, `${path}.subtitle`)}`),
+    ...present(it.elements, (declared) => `elements: ${listLiteral(declared, `${path}.elements`, element, 6)}`),
+    ...present(it.scene, (declared) => `scene: ${listLiteral(declared, `${path}.scene`, sceneLayer, 12)}`),
+    ...present(it.behaviors, (declared) => `behaviors: ${listLiteral(declared, `${path}.behaviors`, behavior)}`),
+    ...present(it.fallbacks, (declared) => `fallbacks: ${fallbacks(declared, `${path}.fallbacks`)}`),
+  ];
+  return `CallFrameLookOverride(${fields.join(', ')})`;
+};
+
+/**
+ * Le nom dans chaque langue (#13953), en dictionnaire Swift rangé dans l'ordre des langues ; absent ⇒ rien
+ * (le cadre d'avant n'a que `name`). Une langue inconnue ou un nom vide fait échouer, comme le schéma zod.
+ */
+const localizedNames = (value: unknown, path: string): string | null => {
+  if (value === undefined) return null;
+  const it = record(value, path);
+  Object.keys(it)
+    .filter((key) => !(FRAME_NAME_LANGUAGES as readonly string[]).includes(key))
+    .forEach((key) => fail(path, `langue inconnue « ${key} »`));
+  const entries = FRAME_NAME_LANGUAGES.flatMap((language) => {
+    const name = it[language];
+    if (name === undefined) return [];
+    return typeof name === 'string' && name.trim().length > 0 && name.length <= 40 ? [`${quote(language)}: ${quote(name)}`] : fail(`${path}.${language}`, 'nom attendu (40 caractères au plus)');
+  });
+  return entries.length === 0 ? null : `[${entries.join(', ')}]`;
+};
+
+const styles = (value: unknown, path: string): string => {
+  const list = items(value, path, 6);
+  const ids = list.map((item, index) => slug(record(item, `${path}[${index}]`).id, `${path}[${index}].id`));
+  if (new Set(ids).size !== ids.length) return fail(path, 'déclinaisons en double');
+  return `[${list.map((item, index) => {
+    const it = record(item, `${path}[${index}]`);
+    const name = typeof it.name === 'string' && it.name.length > 0 && it.name.length <= 40 ? quote(it.name) : fail(`${path}[${index}].name`, 'nom attendu (40 caractères au plus)');
+    const localized = localizedNames(it.localizedNames, `${path}[${index}].localizedNames`);
+    return `CallFrameStyle(id: ${ids[index]}, name: ${name}, ${localized === null ? '' : `localizedNames: ${localized}, `}look: ${lookOverride(it.look, `${path}[${index}].look`)})`;
+  }).join(', ')}]`;
+};
 
 const look = (value: Json, path: string): string => {
   const required = ['layout', 'slot', 'background', 'ornaments', 'names', 'title'];
@@ -397,6 +482,8 @@ export type ExpandedFrame = {
   readonly motif: string;
   readonly mood: string;
   readonly name: string;
+  /** Le nom dans chaque langue, en littéral Swift (#13953) ; `null` quand le motif n'en déclare pas. */
+  readonly localizedNames: string | null;
   readonly bucket: string;
   readonly look: Json;
   /** `credits`, `surfaces`, `cost` — seulement ceux que le motif déclare. */
@@ -410,6 +497,7 @@ export function expandMotif(motif: Json, path: string): readonly ExpandedFrame[]
   const id = typeof motif.id === 'string' && MOTIF_ID.test(motif.id) ? motif.id : fail(path, `identifiant de motif invalide ${JSON.stringify(motif.id)}`);
   const name = typeof motif.name === 'string' && motif.name.length > 0 ? motif.name : fail(path, 'nom de motif vide');
   const mood = typeof motif.mood === 'string' ? motif.mood : fail(path, 'ambiance absente');
+  const localized = localizedNames(motif.localizedNames, `${path}.localizedNames`);
   const base = record(motif.base, `${path}.base`);
   const variants = record(motif.variants, `${path}.variants`);
   const motifKeys: Json = Object.fromEntries(MOTIF_KEYS.filter((key) => motif[key] !== undefined).map((key) => [key, motif[key]]));
@@ -423,7 +511,7 @@ export function expandMotif(motif: Json, path: string): readonly ExpandedFrame[]
     Object.keys(merged)
       .filter((key) => !(LOOK_KEYS as readonly string[]).includes(key))
       .forEach((key) => fail(`${path}.${bucket}`, `clé inconnue « ${key} »`));
-    return [{ id: `${id}.${bucket}`, motif: id, mood, name, bucket, look: merged, motifKeys }];
+    return [{ id: `${id}.${bucket}`, motif: id, mood, name, localizedNames: localized, bucket, look: merged, motifKeys }];
   });
 }
 
@@ -449,11 +537,13 @@ const frameLiteral = (frame: ExpandedFrame): string => {
     `motif: ${quote(frame.motif)}`,
     `mood: ${member(frame.mood, FRAME_MOODS, frame.id)}`,
     `name: ${quote(frame.name)}`,
+    ...(frame.localizedNames === null ? [] : [`localizedNames: ${frame.localizedNames}`]),
     `bucket: ${member(frame.bucket, FRAME_BUCKETS, frame.id)}`,
     `look: ${look(frame.look, frame.id)}`,
     ...present(frame.motifKeys.credits, (declared) => `credits: ${credits(declared, `${frame.id}.credits`)}`),
     ...present(frame.motifKeys.surfaces, (declared) => `surfaces: ${surfaces(declared, `${frame.id}.surfaces`)}`),
     ...present(frame.motifKeys.cost, (declared) => `cost: ${qualified(declared, FRAME_COSTS, 'CallFrameCost', `${frame.id}.cost`)}`),
+    ...present(frame.motifKeys.styles, (declared) => `styles: ${styles(declared, `${frame.id}.styles`)}`),
   ];
   return ['        CallFrameDesign(', fields.map((field) => `            ${field}`).join(',\n'), '        )'].join('\n');
 };
@@ -519,6 +609,60 @@ export function renderSwift(files: readonly unknown[]): readonly GeneratedSwiftF
   return [indexFile(), ...FRAME_MOODS.map((mood) => moodFile(mood, frames.filter((frame) => frame.mood === mood)))];
 }
 
+/*
+ * **LES AMBIANCES OUVERTES PAR DÉFAUT** (#12683) — `spotlight.json` range les ambiances que le
+ * carrousel d'appel montre d'office, dans leur ordre, chacune avec ses cadres vedettes ; les
+ * autres restent dans l'app derrière « Plus d'ambiances ». Le fichier Swift généré porte un
+ * nom hors du motif `CallFrameCatalogue+*.swift` : il ne compte pas parmi les fichiers par ambiance.
+ */
+
+export const SPOTLIGHT_FILE = 'CallFrameSpotlight+Generated.swift';
+export const SPOTLIGHT_MAX_FEATURED = 6;
+
+export type SpotlightEntry = { readonly mood: string; readonly featured: readonly string[] };
+
+const spotlightEntry = (value: unknown, path: string, motifs: ReadonlyMap<string, string>, seen: Set<string>): SpotlightEntry => {
+  const it = record(value, path);
+  const mood = typeof it.mood === 'string' && (FRAME_MOODS as readonly string[]).includes(it.mood) && !seen.has(it.mood)
+    ? it.mood
+    : fail(`${path}.mood`, `ambiance inconnue ou déjà déclarée ${JSON.stringify(it.mood)}`);
+  seen.add(mood);
+  const list = items(it.featured, `${path}.featured`, SPOTLIGHT_MAX_FEATURED);
+  if (list.length === 0) return fail(`${path}.featured`, 'au moins un cadre vedette');
+  const featured = list.map((motif, index) => {
+    const at = `${path}.featured[${index}]`;
+    if (typeof motif !== 'string' || motifs.get(motif) !== mood) return fail(at, `motif inconnu de l'ambiance « ${mood} » ${JSON.stringify(motif)}`);
+    return list.indexOf(motif) === index ? motif : fail(at, `cadre vedette en double ${JSON.stringify(motif)}`);
+  });
+  return { mood, featured };
+};
+
+/** Les ambiances ouvertes par défaut, vérifiées contre le catalogue déplié : chaque vedette est un motif de SON ambiance. */
+export function spotlightOf(spotlight: unknown, frames: readonly ExpandedFrame[]): readonly SpotlightEntry[] {
+  const motifs = new Map(frames.map((frame) => [frame.motif, frame.mood]));
+  const seen = new Set<string>();
+  const it = record(spotlight, 'spotlight.json');
+  return items(it.moods, 'moods').map((entry, index) => spotlightEntry(entry, `moods[${index}]`, motifs, seen));
+}
+
+export function renderSpotlightSwift(spotlight: unknown, frames: readonly ExpandedFrame[]): GeneratedSwiftFile {
+  const entries = spotlightOf(spotlight, frames).map(
+    (entry) => `        CallFrameSpotlight(mood: ${member(entry.mood, FRAME_MOODS, entry.mood)}, featured: [${entry.featured.map(quote).join(', ')}])`,
+  );
+  const body = entries.length === 0 ? '[]' : `[\n${entries.join(',\n')}\n    ]`;
+  return {
+    name: SPOTLIGHT_FILE,
+    content: [
+      HEADER,
+      '/// Les ambiances que le carrousel d\'appel ouvre d\'office (#12683), dans leur ordre, et leurs cadres vedettes.',
+      'nonisolated extension CallFrameCatalogue {',
+      `    static let spotlight: [CallFrameSpotlight] = ${body}`,
+      '}',
+      '',
+    ].join('\n'),
+  };
+}
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(HERE, '../../..');
 export const SOURCE_DIR = resolve(REPO_ROOT, 'packages/shared/design/call-capture-frames');
@@ -526,6 +670,43 @@ export const OUTPUT_DIR = resolve(REPO_ROOT, OUTPUT_RELATIVE_DIR);
 
 export function readMoodFiles(directory: string = SOURCE_DIR): readonly unknown[] {
   return FRAME_MOODS.map((mood): unknown => JSON.parse(readFileSync(join(directory, `${mood}.json`), 'utf8')));
+}
+
+/*
+ * **LES ILLUSTRATIONS DES CADRES** (#12683) — les couches `image` d'une scène pointent vers
+ * `assets/call-frames/<fichier>.webp` sous le dossier des JSON. iOS les embarque à plat dans son
+ * bundle : le générateur en tient une copie à l'octet près dans `IOS_ASSETS_RELATIVE_DIR`, et un
+ * fichier référencé mais absent fait échouer la génération.
+ */
+
+export const ASSET_SOURCE_RELATIVE_DIR = 'assets/call-frames';
+export const IOS_ASSETS_RELATIVE_DIR = 'apps/ios/Meeshy/Resources/CallFrames';
+const ASSET_FILE = /^[A-Za-z0-9_-]+\.webp$/;
+
+/** Les fichiers d'illustration que les cadres référencent, triés, chacun une fois. */
+export function referencedAssets(files: readonly unknown[]): readonly string[] {
+  const styleScenes = (frame: { readonly motifKeys: Json }): readonly unknown[] =>
+    Array.isArray(frame.motifKeys.styles)
+      ? frame.motifKeys.styles.flatMap((style: unknown) => (isRecord(style) && isRecord(style.look) && Array.isArray(style.look.scene) ? style.look.scene : []))
+      : [];
+  const sources = expandFiles(files).flatMap((frame) => {
+    const scene = [...(Array.isArray(frame.look.scene) ? frame.look.scene : []), ...styleScenes(frame)];
+    return scene.flatMap((layer: unknown) => {
+      if (!isRecord(layer) || layer.kind !== 'image' || typeof layer.src !== 'string') return [];
+      const prefix = `${ASSET_SOURCE_RELATIVE_DIR}/`;
+      const name = layer.src.startsWith(prefix) ? layer.src.slice(prefix.length) : '';
+      return ASSET_FILE.test(name) ? [name] : fail(`${frame.id}.scene`, `illustration hors de ${prefix} ${JSON.stringify(layer.src)}`);
+    });
+  });
+  return [...new Set(sources)].sort();
+}
+
+export function assetFilesIn(directory: string): readonly string[] {
+  return existsSync(directory) ? readdirSync(directory).filter((name) => ASSET_FILE.test(name)).sort() : [];
+}
+
+export function readSpotlight(directory: string = SOURCE_DIR): unknown {
+  return JSON.parse(readFileSync(join(directory, 'spotlight.json'), 'utf8'));
 }
 
 /** Les fichiers générés présents sur disque — ceux que le générateur possède (`CallFrameCatalogue+*.swift`). */
@@ -542,6 +723,15 @@ if (isMain) {
   const expected = new Set(generated.map((file) => file.name));
   generatedFilesOnDisk().filter((name) => !expected.has(name)).forEach((name) => rmSync(join(OUTPUT_DIR, name)));
   generated.forEach((file) => writeFileSync(join(OUTPUT_DIR, file.name), file.content));
+  const spotlight = renderSpotlightSwift(readSpotlight(), expandFiles(readMoodFiles()));
+  writeFileSync(join(OUTPUT_DIR, spotlight.name), spotlight.content);
+  const assets = referencedAssets(readMoodFiles());
+  const sourceAssets = join(SOURCE_DIR, ASSET_SOURCE_RELATIVE_DIR);
+  const iosAssets = resolve(REPO_ROOT, IOS_ASSETS_RELATIVE_DIR);
+  assets.filter((name) => !existsSync(join(sourceAssets, name))).forEach((name) => fail(name, 'illustration référencée mais absente'));
+  mkdirSync(iosAssets, { recursive: true });
+  assetFilesIn(iosAssets).filter((name) => !assets.includes(name)).forEach((name) => rmSync(join(iosAssets, name)));
+  assets.forEach((name) => copyFileSync(join(sourceAssets, name), join(iosAssets, name)));
   const count = generated.reduce((sum, file) => sum + (file.content.match(/^ {8}CallFrameDesign\($/gm) ?? []).length, 0);
   process.stdout.write(`${OUTPUT_RELATIVE_DIR} — ${generated.length} fichiers, ${count} cadres\n`);
 }

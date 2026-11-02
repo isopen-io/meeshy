@@ -144,7 +144,8 @@ describe('AdminPostPanel — identité : le nom de la publication, son auteur, s
   test('le fil d’Ariane : Contenus › Publications (lien) › le nom', async () => {
     const { host } = await ouvrir();
     expect([...host.querySelectorAll('nav[aria-label] li')].map((item) => item.textContent?.trim())).toEqual(['Contenus', 'Publications', 'Story de Awa Diop']);
-    expect(host.querySelector('nav[aria-label] a')?.getAttribute('href')).toBe('/admin/posts');
+    expect(host.querySelector('[data-admin-trail-step="section"] a')?.getAttribute('href')).toBe('/admin/posts');
+    expect(host.querySelector('[data-admin-trail-step="group"] a')?.getAttribute('href')).toBe('/admin?group=content');
   });
 
   test('les six compteurs', async () => {

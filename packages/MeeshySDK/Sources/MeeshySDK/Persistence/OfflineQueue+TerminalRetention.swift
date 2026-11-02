@@ -49,6 +49,7 @@ extension OfflineQueue {
         olderThan retention: TimeInterval = OfflineQueue.discardableTerminalRetention,
         now: Date = Date()
     ) async -> Int {
+        PendingMediaDirectories.sweepEmptyDirectories(now: now)
         guard let pool = outboxPool else { return 0 }
         let cutoff = now.addingTimeInterval(-retention)
         let discardable = OutboxKind.allCases

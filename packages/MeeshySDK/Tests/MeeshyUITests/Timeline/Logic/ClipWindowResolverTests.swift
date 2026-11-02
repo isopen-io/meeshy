@@ -27,7 +27,7 @@ final class ClipWindowResolverTests: XCTestCase {
     }
 
     func test_move_pastCeiling_keepsWholeClipInside() {
-        let r = Resolver.resolve(.move(to: 599), from: window(2, 3))
+        let r = Resolver.resolve(.move(to: Resolver.maximumEnd - 1), from: window(2, 3))
         XCTAssertEqual(r.end, Resolver.maximumEnd, accuracy: 0.001,
                        "Le clip entier doit tenir sous le plafond, pas seulement son début.")
         XCTAssertEqual(r.duration, 3, accuracy: 0.001)

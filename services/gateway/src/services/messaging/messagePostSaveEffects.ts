@@ -5,6 +5,7 @@ import type { EngagementActivityOptions } from '../engagement/EngagementService'
 import { memberSignature } from '../engagement/memberSignature';
 import { sharedPlaceFromMetadata } from '../location/sharedPlace';
 import { conversationStatsService } from '../ConversationStatsService';
+import { isEndToEndMode } from './e2eePlaintextAdmission';
 import {
   conversationMessageStatsService,
   resolveAttachmentType,
@@ -24,6 +25,8 @@ export interface TranslatableMessage {
   readonly content: string;
   readonly messageType: string;
   readonly replyToId?: string | null;
+  /** #12518 — `e2ee` : le serveur ne lit pas ce message, rien ne part au translator. */
+  readonly encryptionMode?: string | null;
 }
 
 /**
@@ -227,6 +230,7 @@ export function queueMessageTranslation(params: {
   originalLanguage: string;
 }): Promise<unknown> {
   const { translationService, message, originalLanguage } = params;
+  if (isEndToEndMode(message.encryptionMode)) return Promise.resolve({ status: 'e2ee_skipped' });
   return translationService.handleNewMessage({
     id: message.id,
     conversationId: message.conversationId,

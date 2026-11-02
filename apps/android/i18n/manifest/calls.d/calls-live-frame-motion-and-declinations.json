@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_live_frame_suspended_device",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_suspended_motion",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_declination_state",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_declination_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_live_frame_declination_previous",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

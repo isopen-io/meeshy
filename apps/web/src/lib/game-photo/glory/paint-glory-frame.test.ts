@@ -4,6 +4,7 @@ import type { GloryFrameFormat, GloryFrameTextSlot } from '@meeshy/shared/types/
 
 import type { PaintContext, PhotoArt, PhotoBanner, PhotoPalette } from '../compose';
 import { DEFAULT_RECIPE, type GloryTexts } from './frame-spec';
+import { loadGloryFrameImages, type ClosableImage, type GloryAssetDeps } from './frame-assets';
 import { paintGloryFrame, type GloryLayerImages, type GloryPaintInput, type PaintSurface } from './paint-glory-frame';
 
 /**
@@ -122,6 +123,7 @@ function formatOf(over: Partial<GloryFrameFormat> = {}): GloryFrameFormat {
 
 const layers: GloryLayerImages = {
   mask: image('mask'),
+  windowPath: null,
   decor: image('decor'),
   windowFill: image('fill'),
   grade: [image('grade0'), image('grade1')],
@@ -240,6 +242,63 @@ describe('la photo dans sa fenêtre', () => {
     expect(calls.some((c) => c.op === 'clip')).toBe(false);
     const big = nums(calls.find((c) => c.op === 'drawImage' && idOf(c.args[0]) === 'emblem'));
     expect(at(big, 3)).toBeGreaterThan(300);
+  });
+});
+
+describe('la fenêtre découpée par son CHEMIN (#10254)', () => {
+  const PATH = 'M128 528h824v948h-824Z';
+  const withPath = formatOf({ window: { box: WINDOW, path: PATH, mask: ref('mask', WINDOW), veilMaxAlpha: 0 } });
+  const builtPath = { d: PATH } as unknown as Path2D;
+
+  test('le chargeur a construit le chemin : la photo couvre la boîte, découpée par CE chemin, sans masque ni surface de travail', () => {
+    const { calls, surfaces } = paint({ format: withPath, layers: { ...layers, mask: null, windowPath: builtPath } });
+    const main = calls.map((c) => (c.op === 'drawImage' ? `img:${idOf(c.args[0])}` : c.op));
+    expect(calls.find((c) => c.op === 'clip')?.args[0]).toBe(builtPath);
+    expect(main.lastIndexOf('save', main.indexOf('clip'))).toBeGreaterThanOrEqual(0);
+    expect(main.indexOf('clip')).toBeLessThan(main.indexOf('img:photo'));
+    expect(main.indexOf('restore', main.indexOf('img:photo'))).toBeGreaterThan(main.indexOf('img:photo'));
+    expect(nums(calls.find((c) => c.op === 'drawImage' && idOf(c.args[0]) === 'photo')).slice(5)).toEqual([128, 528, 824, 948]);
+    expect(surfaces).toHaveLength(0);
+    expect(main).not.toContain('img:mask');
+    expect(main).not.toContain('rect');
+    expect(calls.filter((c) => c.op === 'save').length).toBe(calls.filter((c) => c.op === 'restore').length);
+  });
+
+  test('aucun chemin construit (contrat sans chemin, ou moteur sans Path2D) : rectangle puis masque, comme avant', () => {
+    const { calls, surfaces } = paint({ format: withPath });
+    expect(surfaces).toHaveLength(1);
+    expect(calls.find((c) => c.op === 'rect')?.args).toEqual([128, 528, 824, 948]);
+    expect(calls.find((c) => c.op === 'clip')?.args).toEqual([]);
+    expect(surfaces[0]?.calls.some((c) => c.op === 'drawImage' && idOf(c.args[0]) === 'mask')).toBe(true);
+  });
+
+  const storeDeps = (path2d: ((d: string) => Path2D) | null): GloryAssetDeps => ({
+    read: async (asset) => new Blob([asset.src]),
+    request: () => undefined,
+    decode: async (blob) => image(await blob.text()) as ClosableImage,
+    rasterSticker: async (markup) => image(markup) as ClosableImage,
+    stickerMarkup: (sticker) => sticker,
+    path2d,
+  });
+
+  test('de bout en bout, un moteur sans Path2D : le chargeur fournit le masque et le peintre découpe par lui, jamais au seul rectangle', async () => {
+    const loaded = await loadGloryFrameImages(withPath, null, storeDeps(null));
+    if (loaded === null) throw new Error('cadre attendu');
+    const { calls, surfaces } = paint({ format: withPath, layers: loaded.layers });
+    expect(calls.find((c) => c.op === 'clip')?.args).toEqual([]);
+    const masked = surfaces[0]?.calls.map((c) => (c.op === 'drawImage' ? `img:${idOf(c.args[0])}` : c.op === 'globalCompositeOperation' ? `gco:${String(c.args[0])}` : c.op)) ?? [];
+    expect(masked.indexOf('gco:destination-in')).toBeLessThan(masked.indexOf('img:mask'));
+    expect(masked.indexOf('img:mask')).toBeGreaterThan(masked.indexOf('img:photo'));
+  });
+
+  test('de bout en bout, un moteur qui sait : le chemin construit au chargement découpe, et il ne se reconstruit pas à chaque image', async () => {
+    const built: string[] = [];
+    const loaded = await loadGloryFrameImages(withPath, null, storeDeps((d) => (built.push(d), { d }) as unknown as Path2D));
+    if (loaded === null) throw new Error('cadre attendu');
+    const frames = [paint({ format: withPath, layers: loaded.layers }), paint({ format: withPath, layers: loaded.layers }), paint({ format: withPath, layers: loaded.layers })];
+    expect(built).toEqual([PATH]);
+    expect(frames.map(({ calls }) => (calls.find((c) => c.op === 'clip')?.args[0] as { readonly d: string } | undefined)?.d)).toEqual([PATH, PATH, PATH]);
+    expect(frames.every(({ surfaces }) => surfaces.length === 0)).toBe(true);
   });
 });
 

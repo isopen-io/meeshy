@@ -106,10 +106,10 @@ final class StoryCitationAcrossSkinsTests: XCTestCase {
         // `FocalStoryCitationQuote` enveloppe `BubbleStoryCitationCard`.
         let peaux = [
             ("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift", "BubbleStoryCitationCard("),
-            ("Meeshy/Features/Main/Focal/Row/FocalRow.swift", "FocalStoryCitationQuote("),
-            ("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift", "BubbleStoryCitationCard(")
+            ("Meeshy/Features/Focal/Row/FocalRow.swift", "FocalStoryCitationQuote("),
+            ("Meeshy/Features/River/View/RiverBubbleView.swift", "BubbleStoryCitationCard(")
         ]
-        let enveloppe = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Focal/Row/FocalQuoteRail.swift"))
+        let enveloppe = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Focal/Row/FocalQuoteRail.swift"))
         XCTAssertTrue(enveloppe.contains("BubbleStoryCitationCard("), "l'enveloppe de la rangée plate doit monter la carte de scène")
         for (peau, montage) in peaux {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(peau))
@@ -127,8 +127,8 @@ final class StoryCitationAcrossSkinsTests: XCTestCase {
     /// jumeaux finiraient par diverger.
     func test_aucunePeau_neRendLesDeuxFormes() throws {
         for (peau, plate) in [
-            ("Meeshy/Features/Main/Focal/Row/FocalRow.swift", "FocalQuotedReplyView("),
-            ("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift", "quotedReply(replyPreview)")
+            ("Meeshy/Features/Focal/Row/FocalRow.swift", "FocalQuotedReplyView("),
+            ("Meeshy/Features/River/View/RiverBubbleView.swift", "quotedReply(replyPreview)")
         ] {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(peau))
             XCTAssertTrue(
@@ -143,8 +143,8 @@ final class StoryCitationAcrossSkinsTests: XCTestCase {
     /// #5059 : trois peaux, une règle atteignable par une seule.
     func test_aucunePeau_neReecritLePredicat() throws {
         for peau in [
-            "Meeshy/Features/Main/Focal/Row/FocalRow.swift",
-            "Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift"
+            "Meeshy/Features/Focal/Row/FocalRow.swift",
+            "Meeshy/Features/River/View/RiverBubbleView.swift"
         ] {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(peau))
             XCTAssertFalse(

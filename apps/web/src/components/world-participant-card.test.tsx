@@ -226,6 +226,7 @@ const CARD: WorldParticipantCard = {
   participantId: PARTICIPANT_ID,
   participantType: 'anonymous',
   displayName: 'Awa',
+  avatar: null,
   username: null,
   conversationRole: 'member',
   accountRole: null,
@@ -336,6 +337,25 @@ describe('la feuille : ce que le contrat sert, et rien sur un refus', () => {
     expect(text).toContain('iOS 17');
     expect(text).toContain('World Wide');
     expect(text).not.toContain('sans compte');
+  });
+
+  test('la photo servie remplace les initiales de l’en-tête (#12571)', async () => {
+    mountHost({ identifier: 'world', role: 'MODERATOR', card: () => ({ ok: true, data: { ...CARD, avatar: '2026/09/awa/photo.png' } }) });
+    await settle(() => probe() === 'open');
+    click(container?.querySelector('[data-probe]') as HTMLElement);
+    await settle(() => (sheet()?.textContent ?? '').includes('Safari 17'));
+    const img = sheet()?.querySelector('img');
+    expect(img?.getAttribute('src')).toContain('/attachments/file/2026%2F09%2Fawa%2Fphoto.png');
+    expect(sheet()?.querySelectorAll('.avatar-root')).toHaveLength(1);
+  });
+
+  test('sans photo servie : les initiales seules, aucune <img> (#12571)', async () => {
+    mountHost({ identifier: 'world', role: 'MODERATOR' });
+    await settle(() => probe() === 'open');
+    click(container?.querySelector('[data-probe]') as HTMLElement);
+    await settle(() => (sheet()?.textContent ?? '').includes('Safari 17'));
+    expect(sheet()?.querySelector('img')).toBeNull();
+    expect(sheet()?.querySelector('[data-avatar-initials]')?.textContent).toBe('AW');
   });
 
   test('un 403 : la feuille se referme, rien n’est affiché', async () => {

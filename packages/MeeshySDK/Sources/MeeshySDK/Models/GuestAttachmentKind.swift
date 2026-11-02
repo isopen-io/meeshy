@@ -72,6 +72,16 @@ public struct GuestAttachmentAllowance: Sendable, Equatable {
 
     public static let unrestricted = GuestAttachmentAllowance(kinds: nil)
 
+    /// Aucune famille ouverte : aucune porte de pièce, de lieu ni de sticker.
+    public static let closed = GuestAttachmentAllowance(kinds: [])
+
+    /// Dans une conversation chiffrée de bout en bout (#11379), aucune pièce,
+    /// aucun lieu, aucun sticker ne se chiffre encore : les portes du composeur
+    /// se ferment AVANT le geste, au lieu d'un refus après la sélection.
+    public func sealing(_ refusal: EndToEndSendRefusal?) -> GuestAttachmentAllowance {
+        refusal == nil ? self : .closed
+    }
+
     /// `GUEST_ATTACHMENT_MAX_BYTES` — le serveur lit le fichier ENTIER pour le
     /// juger, d'où la borne, qui ne vaut que sur un lien restreint.
     public static let maxBytes: Int64 = 25 * 1024 * 1024

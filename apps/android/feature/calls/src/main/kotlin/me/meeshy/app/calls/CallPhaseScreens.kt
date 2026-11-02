@@ -85,6 +85,7 @@ internal fun CallOutgoingRingingBody(
     reduceMotion: Boolean,
     onHangUp: () -> Unit,
     modifier: Modifier = Modifier,
+    previewPanel: @Composable () -> Unit = {},
 ) {
     val fade = if (reduceMotion) 0 else FADE_MILLIS
     Column(
@@ -123,6 +124,7 @@ internal fun CallOutgoingRingingBody(
         Spacer(Modifier.height(MeeshySpacing.lg))
         CallTypeBadge(isVideo = state.isVideoCall, label = callTypeLabel(state.isVideoCall))
         Spacer(Modifier.height(MeeshySpacing.xxxl))
+        previewPanel()
         CallCircleButton(
             icon = Icons.Filled.CallEnd,
             background = CallPalette.Decline,
@@ -139,6 +141,7 @@ internal fun CallOutgoingRingingScreen(
     peer: CallPeerVisual,
     reduceMotion: Boolean,
     onHangUp: () -> Unit,
+    previewPanel: @Composable () -> Unit = {},
 ) {
     var secondsRinging by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
@@ -151,7 +154,7 @@ internal fun CallOutgoingRingingScreen(
     LaunchedEffect(label) {
         if (label == OutgoingRingingLabel.WaitingForPeer) announce(context.getString(R.string.call_outgoing_waiting))
     }
-    CallOutgoingRingingBody(state, label, peer, reduceMotion, onHangUp)
+    CallOutgoingRingingBody(state, label, peer, reduceMotion, onHangUp, previewPanel = previewPanel)
 }
 
 /** L'écran de connexion : avatar, nom, pastille de progression « Connexion… », raccrocher. */

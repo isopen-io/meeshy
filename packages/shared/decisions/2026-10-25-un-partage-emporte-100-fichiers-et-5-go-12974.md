@@ -1,0 +1,17 @@
+## 2026-10-25 : un partage emporte 100 fichiers et 5 Go (révision porteur de D10, #12974)
+
+**Statut** : Accepté (demande du porteur du 2026-10-25 ; révise D10 du partage unique, #10949, arrêtée le 2026-10-18).
+
+**Avant.** D10 fixait les plafonds communs d'un partage à 20 fichiers, 500 Mo et 10 destinataires, une publication portant au plus 10 médias. Les 20 fichiers venaient de la spécification du 2026-08-19 (`docs/superpowers/specs/2026-08-19-forward-reach-and-share-media-design.md`), qui les justifiait par un seau de débit « plateforme » : Fastify tournait alors sans `trustProxy`, et toutes les requêtes partageaient une seule clé. Ce n'est plus vrai depuis #4137 — la clé est l'adresse de l'appelant.
+
+**Décision.** `SHARE_LIMITS.maxFiles = 100`, `SHARE_LIMITS.maxTotalBytes = 5 Gio` (`packages/shared/utils/share-limits.ts`). Les 10 destinataires et les 10 médias de publication ne changent pas. Les miroirs suivent dans le même lot : `ShareLimits` (`SharePlan.swift`, app et extension iOS), `ShareLimits.kt` (Android natif), `ShareIntentRules.java` (coque Android), `sw-share-target.js` (PWA), et les trois clés `…WithMaxCount` de l'`Info.plist` de l'extension.
+
+**Les chiffres ne vivent plus dans les catalogues.** Les deux phrases iOS (`share.sheet.content.over-budget`, `share.sheet.limits.too-heavy`) écrivaient « 20 fichiers et 500 Mo » dans sept langues : elles prennent désormais les plafonds en arguments, formatés depuis `ShareLimits`, et le poids se dit en puissances de 1 024 (« 5 Go », jamais « 5,37 Go » ni « 5 120 Mo ») — `ShareSheetCopy.limitSize` sur iOS, `sizeIn` sur le web. Le catalogue web était déjà paramétré.
+
+**Ce que la passerelle borne, et qui n'est PAS un plafond de partage.**
+- Par fichier : 4 Go (`UPLOAD_LIMITS`, `types/attachment.ts`), appliqué par TUS (`onUploadCreate`, 413) et par le multipart. Un partage de 5 Go passe donc en plusieurs fichiers ; un fichier seul de plus de 4 Go est refusé à la montée. Relever ce plafond, ou le faire dire par l'écran avant l'envoi, est une décision distincte (disque du serveur partagé, rendus vidéo), non prise ici : #12990.
+- Par message : 199 pièces (`MAX_ATTACHMENTS_PER_MESSAGE`, REST, socket et transfert) — 100 tiennent.
+- Par requête directe (`POST /attachments/upload`) : 30 fichiers (`MAX_DIRECT_UPLOAD_FILES`, la borne `limits.files` du multipart, désormais nommée), et chaque fichier tenu en mémoire (`part.toBuffer()`). C'est pourquoi le web découpe un partage (`uploadBatchesOf`) : des requêtes directes de 30 fichiers et 50 Mo au plus, et la reprise (TUS, sans contexte de publication ⇒ `MessageAttachment`) pour chaque fichier plus lourd. Relever `files` ou envoyer 5 Go par la voie directe aurait chargé jusqu'à 4 Go par fichier dans la mémoire d'une passerelle qui partage son serveur avec le staging.
+- Débit : 300 requêtes par minute et par adresse, routes TUS comprises. Une montée de 5 Go en tranches de 10 Mo (iOS) ou de 2 Mio (web) dépasse ce seau sur un réseau rapide : un 429 y est une attente, pas un échec (iOS reprend depuis le point de reprise de la file ; le web attend `Retry-After`, borné). Un seau propre aux tranches TUS est suivi à part : #12989.
+
+**La copie de l'extension iOS reste en flux** (`ShareMediaStaging` : `loadFileRepresentation`, tranches de 64 Kio, jamais `Data(contentsOf:)`), sous le budget cumulé atomique (`ShareByteBudget`) et la marge d'espace libre de 128 Mio. La bande des pièces devient paresseuse (`LazyHStack`) : seules les vignettes visibles se décodent.

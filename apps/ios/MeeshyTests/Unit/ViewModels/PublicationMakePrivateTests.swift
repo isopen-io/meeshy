@@ -99,9 +99,9 @@ final class PublicationMakePrivateTests: XCTestCase {
     }
 
     func test_storyMenu_offersMakePrivate_toTheModeration_only() {
-        let theirs = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: false, isPublicStory: true, hasAudioTranscript: false, canCompose: false, canRemove: true)
-        let ordinary = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: false, isPublicStory: true, hasAudioTranscript: false, canCompose: false, canRemove: false)
-        let mine = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: true, isPublicStory: true, hasAudioTranscript: false, canCompose: false, canRemove: false)
+        let theirs = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: false, hasAudioTranscript: false, canCompose: false, canRemove: true)
+        let ordinary = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: false, hasAudioTranscript: false, canCompose: false, canRemove: false)
+        let mine = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: true, hasAudioTranscript: false, canCompose: false, canRemove: false)
 
         XCTAssertTrue(theirs.sections.contains([.report, .makePrivate, .remove]))
         XCTAssertFalse(ordinary.entries.contains(.makePrivate))

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_capture_hint_tap_or_hold">Touchez pour la caméra · maintenez pour filmer</string>
+    <string name="composer_capture_hint_hold">Maintenez pour filmer</string>
+    <string name="composer_media_from_camera">Prendre une photo</string>
+    <string name="composer_column_media_crop">Recadrer</string>
+    <string name="story_viewer_compose">Composer</string>
+    <string name="story_recompose_preparing">Préparation du média…</string>
+    <string name="story_recompose_unavailable">Ce média n\'est pas disponible. Vérifiez votre connexion, puis réessayez.</string>
+</resources>

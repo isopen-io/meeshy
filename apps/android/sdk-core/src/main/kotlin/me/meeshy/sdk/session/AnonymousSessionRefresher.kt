@@ -3,7 +3,9 @@ package me.meeshy.sdk.session
 import me.meeshy.sdk.model.AnonymousSessionContext
 import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.model.auth.AnonymousRefreshRequest
+import me.meeshy.sdk.model.guest.GuestSessionEnd
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.GuestSessionEndSignal
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AnonymousApi
 import me.meeshy.sdk.net.apiCall
@@ -27,6 +29,8 @@ import javax.inject.Singleton
  * Les droits rendus sont DURCIS comme à l'adhésion ([ParticipantPermissions.anonymous]) :
  * seuls messages, fichiers et images se négocient, jamais vidéos, audios, positions
  * ni liens.
+ *
+ * [heldSessionEnd] lit les 410 qui terminent la session détenue (#13529).
  */
 @Singleton
 class AnonymousSessionRefresher @Inject constructor(
@@ -59,6 +63,18 @@ class AnonymousSessionRefresher @Inject constructor(
                 NetworkResult.Success(refreshed)
             }
         }
+    }
+
+    /**
+     * La passerelle a-t-elle terminé la session détenue (accès retiré, lien désactivé ou expiré, conversation close) ?
+     * Le signal nomme le jeton rafraîchi : [me.meeshy.sdk.auth.AuthRepository.endGuestSession] ne purge que si c'est
+     * encore le jeton courant. Seule la réponse de CE rafraîchissement est lue — jamais celle d'une autre route.
+     */
+    suspend fun heldSessionEnd(): GuestSessionEndSignal? {
+        val token = store.load()?.sessionToken ?: return null
+        val failure = refresh() as? NetworkResult.Failure ?: return null
+        val end = GuestSessionEnd.fromRefresh(failure.error.httpStatus, failure.error.code, error = failure.error.message) ?: return null
+        return GuestSessionEndSignal(end, refusedToken = token)
     }
 
     companion object {

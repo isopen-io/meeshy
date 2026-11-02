@@ -32,6 +32,9 @@ public nonisolated struct HistoryStore<S: Equatable & Sendable>: Sendable {
     /// ressources mises de côté doit encore pouvoir ressusciter.
     public var states: [S] { entries }
 
+    /// L'état courant de la trajectoire — ce que l'écran montre une fois capturé.
+    public var current: S? { entries.indices.contains(index) ? entries[index] : nil }
+
     public var canUndo: Bool { index > 0 }
     public var canRedo: Bool { index >= 0 && index < entries.count - 1 }
 
@@ -49,6 +52,12 @@ public nonisolated struct HistoryStore<S: Equatable & Sendable>: Sendable {
         guard entries.count > cap else { return nil }
         index -= 1
         return entries.removeFirst()
+    }
+
+    /// Réécrit chaque état SANS bouger le curseur : un fait qui n'est pas un
+    /// geste de l'auteur vaut pour toute la trajectoire et n'y ajoute rien.
+    public mutating func amendAll(_ transform: (S) -> S) {
+        entries = entries.map(transform)
     }
 
     /// Recule d'un cran et rend l'état précédent (`nil` au plancher).

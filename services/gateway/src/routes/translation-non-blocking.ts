@@ -6,6 +6,8 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
 import type { UnifiedAuthRequest } from '../middleware/auth';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
+import { gatewayKeyring, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, translationSourceOf } from '../services/messaging/atRestTranslationSource';
+import { SERVER_AT_REST_UNREADABLE } from '../services/messaging/serverAtRest';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -236,11 +238,17 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
         }
 
 
+        // #11381 — un message `server`/`hybrid` se retraduit depuis son CLAIR, jamais depuis `content: ''`.
+        const source = await translationSourceOf(existingMessage, gatewayKeyring(fastify.prisma));
+        if (!source.readable) {
+          return sendError(reply, 409, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, { code: SERVER_AT_REST_UNREADABLE });
+        }
+
         // Preparer les donnees de traduction
         const messageData = {
           id: validatedData.message_id,
           conversationId: existingMessage.conversationId,
-          content: validatedData.text || existingMessage.content,
+          content: validatedData.text || source.row.content,
           originalLanguage: validatedData.source_language || existingMessage.originalLanguage,
           targetLanguage: validatedData.target_language,
           modelType: validatedData.model_type || 'basic'

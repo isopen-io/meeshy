@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le décompte de l'Atlas, accordé à la quantité de langues tamponnées : « 1 langue sur 83 » (#13357). -->
+<resources>
+    <plurals name="game_atlas_languages">
+        <item quantity="one">%1$s idioma de %2$s</item>
+        <item quantity="many">%1$s idiomas de %2$s</item>
+        <item quantity="other">%1$s idiomas de %2$s</item>
+    </plurals>
+</resources>

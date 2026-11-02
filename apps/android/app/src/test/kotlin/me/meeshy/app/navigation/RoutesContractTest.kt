@@ -27,6 +27,7 @@ class RoutesContractTest {
             "SHARE_LINK_PICKER" to Routes.SHARE_LINK_PICKER,
             "MY_SHARE_LINKS" to Routes.MY_SHARE_LINKS,
             "SHARE_LINK_DETAIL" to Routes.SHARE_LINK_DETAIL,
+            "SHARE_LINK_ARRIVALS" to Routes.SHARE_LINK_ARRIVALS,
             "CHAT" to Routes.CHAT,
             "FEED" to Routes.FEED,
             "SAVED_POSTS" to Routes.SAVED_POSTS,
@@ -61,6 +62,7 @@ class RoutesContractTest {
             "SHARE_LINK_PICKER", "conversations/share-link/picker",
             "MY_SHARE_LINKS", "share-links",
             "SHARE_LINK_DETAIL", "share-links/{linkId}",
+            "SHARE_LINK_ARRIVALS", "share-links/{linkId}/arrivals",
             "CHAT", "chat/{conversationId}?messageId={messageId}",
             "FEED", "feed",
             "SAVED_POSTS", "feed/saved",
@@ -75,16 +77,37 @@ class RoutesContractTest {
             "PROFILE_USER", "profile/{userId}",
             "USER_POSTS", "profile/{userId}/posts",
             "REPORT_USER", "report/{userId}?username={username}",
-            "STORY_VIEWER", "story/{userId}",
-            "STORY_COMPOSER_ROUTE", "story_composer?repostOfId={repostOfId}",
+            "STORY_VIEWER", "story/{userId}?storyId={storyId}",
+            "STORY_COMPOSER_ROUTE", "story_composer?repostOfId={repostOfId}&audience={audience}&editStoryId={editStoryId}&recomposeStoryId={recomposeStoryId}",
             "REELS", "reels?seed={seed}",
             "CALL", CallRoute.PATTERN,
         )
     }
 
     @Test
+    fun `l'onboarding d'un mineur ouvre le composeur sur FRIENDS, un adulte sur la route par defaut`() {
+        assertThat(Routes.storyComposerFromOnboarding(me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility.FRIENDS))
+            .isEqualTo("story_composer?audience=FRIENDS")
+        assertThat(Routes.storyComposerFromOnboarding(me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility.PUBLIC))
+            .isEqualTo(Routes.STORY_COMPOSER)
+    }
+
+    @Test
+    fun `modifier une story publiee rouvre le composeur par un argument optionnel de la route du composeur`() {
+        assertThat(Routes.STORY_COMPOSER_EDIT_ARG).isEqualTo("editStoryId")
+        assertThat(Routes.STORY_COMPOSER_ROUTE).contains("&editStoryId={editStoryId}")
+        assertThat(Routes.STORY_COMPOSER_ROUTE).startsWith(Routes.STORY_COMPOSER)
+    }
+
+    @Test
+    fun `composer depuis une story vue ouvre le composeur par son propre argument, jamais celui d'une edition`() {
+        assertThat(Routes.STORY_COMPOSER_RECOMPOSE_ARG).isEqualTo("recomposeStoryId")
+        assertThat(Routes.STORY_COMPOSER_ROUTE).contains("&recomposeStoryId={recomposeStoryId}")
+    }
+
+    @Test
     fun `deep link patterns are frozen`() {
-        assertThat(Routes.GUEST_JOIN_DEEP_LINK).isEqualTo("meeshy://join/{identifier}")
+        assertThat(Routes.GUEST_JOIN_DEEP_LINK).isEqualTo("meeshy://join/{identifier}?anonymous={anonymous}")
         assertThat(Routes.GUEST_JOIN_WEB_DEEP_LINK).isEqualTo("https://meeshy.me/join/{identifier}")
         assertThat(Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK).isEqualTo("https://meeshy.me/chat/{identifier}")
         assertThat(Routes.CONVERSATIONS_DEEP_LINK).isEqualTo("meeshy://conversations")
@@ -140,6 +163,11 @@ class RoutesContractTest {
     }
 
     @Test
+    fun `my encrypted devices live under settings`() {
+        assertThat(Routes.ENCRYPTED_DEVICES).isEqualTo("settings/encrypted-devices")
+    }
+
+    @Test
     fun `legal route resolves for every document kind`() {
         LegalDocumentKind.values().forEach { kind ->
             assertThat(Routes.legal(kind)).isEqualTo("settings/legal/${kind.arg}")
@@ -154,6 +182,7 @@ class RoutesContractTest {
         assertThat(Routes.profile("u1")).isEqualTo("profile/u1")
         assertThat(Routes.userPosts("u1")).isEqualTo("profile/u1/posts")
         assertThat(Routes.story("u1")).isEqualTo("story/u1")
+        assertThat(Routes.story("u1", storyId = "s 1")).isEqualTo("story/u1?storyId=s%201")
         assertThat(Routes.postDetail("p1")).isEqualTo("feed/post/p1")
         assertThat(Routes.guestJoin("abc")).isEqualTo("join/abc")
         assertThat(Routes.createShareLink("c1")).isEqualTo("conversations/c1/share-link/new")

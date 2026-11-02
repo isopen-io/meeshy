@@ -401,6 +401,13 @@ class ZMQTranslationServer:
                 'story_text_object_translation'
             )
             logger.debug(f"🚀 [NON-BLOCKING] StoryTextObject task créée ({len(self.active_tasks)} actives)")
+        elif request_type == 'cache_forget':
+            # #13102 — l'oubli d'une pièce ou d'un message effacés par la
+            # passerelle : identifiants seuls, acquitté par `cache_forget_done`.
+            self._create_tracked_task(
+                self.translation_handler._handle_cache_forget(request_data),
+                'cache_forget'
+            )
         elif request_type == 'voice_api':
             # ✨ Lancer en tâche asynchrone trackée
             self._create_tracked_task(

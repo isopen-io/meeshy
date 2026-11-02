@@ -13,6 +13,7 @@ import me.meeshy.sdk.model.game.GameTextKey
 import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.LevelTierKey
 import me.meeshy.sdk.model.game.TreasuryTierKey
+import me.meeshy.sdk.model.game.GameNumberFormat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -68,6 +69,14 @@ class GameCopyTest {
     }
 
     @Test
+    fun `les etincelles d un grand nombre portent le separateur de milliers de la langue`() {
+        val french = Locale.forLanguageTag("fr")
+        val grouped = GameNumberFormat.formatCount(103_571, french)
+        assertThat(grouped).isNotEqualTo("103571")
+        assertThat(GameCopy.resolve(resourcesIn("fr"), GameCopyLaws.points(103_571))).isEqualTo("$grouped étincelles")
+    }
+
+    @Test
     fun `une phrase imbriquee est resolue d abord`() {
         val text = GameCopyLaws.levelToNext(remaining = 624, nextLevel = 4)
         val sentence = GameCopy.resolve(resourcesIn("fr"), text)
@@ -116,11 +125,27 @@ class GameCopyTest {
         listOf("en", "fr", "ar").forEach { tag ->
             val res = resourcesIn(tag)
             GameTextKey.entries.forEach { key ->
-                val text = GameText(key, listOf(GameTextArg.Count(2), GameTextArg.Count(3), GameTextArg.Count(4)))
+                val text = GameText(key, (2..7).map { GameTextArg.Count(it) })
                 if (key != GameTextKey.JoinedBySpace) {
                     assertThat(GameCopy.resolve(res, text)).isNotEmpty()
                 }
             }
         }
+    }
+
+    @Test
+    fun `un jour et un decimal s ecrivent par la locale`() {
+        assertThat(GameCopy.day("2026-11-01", Locale.FRANCE)).contains("2026")
+        assertThat(GameCopy.day("pas-un-jour", Locale.FRANCE)).isEqualTo("pas-un-jour")
+        assertThat(GameCopy.decimal(1.25, Locale.FRANCE)).isEqualTo("1,25")
+        assertThat(GameCopy.decimal(2.0, Locale.US)).isEqualTo("2")
+    }
+
+    @Test
+    fun `une serie se dit au pluriel de la locale et la carte du Voyage date son ouverture`() {
+        val record = GameText.of(GameTextKey.StreakRecord, GameTextArg.Count(12))
+        assertThat(GameCopy.resolve(resourcesIn("fr"), record)).contains("12")
+        val upcoming = GameText.of(GameTextKey.DoorSeasonUpcoming, GameTextArg.Day("2026-11-01"))
+        assertThat(GameCopy.resolve(resourcesIn("fr"), upcoming)).contains("2026")
     }
 }

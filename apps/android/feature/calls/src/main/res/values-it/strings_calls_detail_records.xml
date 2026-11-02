@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_network_title">Qualità e rete</string>
+    <string name="call_network_timeline">Cronologia</string>
+    <string name="call_network_packet_loss">Perdita di pacchetti</string>
+    <string name="call_network_latency">Latenza</string>
+    <string name="call_network_jitter">Jitter</string>
+    <string name="call_network_reconnections">Riconnessioni</string>
+    <string name="call_network_route">Percorso di rete</string>
+    <string name="call_network_route_relayed">Relay</string>
+    <string name="call_network_route_direct">Diretto</string>
+    <string name="call_network_profiles">Profilo dati</string>
+    <string name="call_network_faults">Incidenti multimediali</string>
+    <string name="call_network_peak">%1$s (picco %2$s)</string>
+    <string name="call_network_ms">%1$s ms</string>
+    <string name="call_network_event_link_connecting">Collegamento in corso</string>
+    <string name="call_network_event_link_connected">Collegamento stabilito</string>
+    <string name="call_network_event_link_disconnected">Collegamento interrotto</string>
+    <string name="call_network_event_link_failed">Collegamento perso</string>
+    <string name="call_network_event_reconnecting">Riconnessione, tentativo %1$d</string>
+    <string name="call_network_event_reconnected">Riconnesso</string>
+    <string name="call_network_event_route">Percorso: %1$s</string>
+    <string name="call_network_event_tier">Qualità: %1$s</string>
+    <string name="call_network_event_profile">Profilo: %1$s</string>
+    <string name="call_network_event_fault">Incidente multimediale</string>
+    <string name="call_network_event_ended">Fine della chiamata</string>
+    <string name="call_network_tier_excellent">Eccellente</string>
+    <string name="call_network_tier_good">Buona</string>
+    <string name="call_network_tier_fair">Media</string>
+    <string name="call_network_tier_poor">Scarsa</string>
+    <string name="call_transcript_disclaimer">Copia crittografata conservata su questo dispositivo. La trascrizione della chiamata è conservata anche sul server Meeshy, leggibile solo dai suoi partecipanti. Include le parole del tuo interlocutore, così come ricevute durante la chiamata.</string>
+    <string name="call_transcript_delete">Elimina questa trascrizione</string>
+    <string name="call_transcript_delete_confirm_title">Eliminare questa trascrizione?</string>
+    <string name="call_transcript_delete_confirm_message">Viene rimossa definitivamente da questo dispositivo. La trascrizione conservata sul server non viene cancellata.</string>
+</resources>

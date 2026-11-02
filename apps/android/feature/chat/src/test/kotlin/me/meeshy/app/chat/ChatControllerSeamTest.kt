@@ -1,5 +1,7 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.outbox.OutOfThreadAdmission
+import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import androidx.lifecycle.SavedStateHandle
 import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
@@ -35,12 +37,12 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
+import me.meeshy.sdk.reaction.OwnReactionWithdrawals
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -194,7 +196,6 @@ class ChatControllerSeamTest {
             justRun { emitTypingStart(any()) }
             justRun { emitTypingStop(any()) }
         }
-        val relay = mockk<TypingPresenceRelay> { every { forcedOnline } returns MutableSharedFlow() }
         val fileDownloader = mockk<FileAttachmentDownloader>(relaxed = true)
         every { fileDownloader.download(any(), any(), any()) } returns emptyFlow()
         val clock = object : CacheClock {
@@ -209,7 +210,6 @@ class ChatControllerSeamTest {
             InMemoryLocallyHiddenMessagesStore(),
             InMemoryStarredMessagesStore(),
             socket,
-            relay,
             mockk<WorkManager>(relaxed = true),
             MeeshyConfig(),
             clock,
@@ -224,6 +224,8 @@ class ChatControllerSeamTest {
             fileDownloader,
             SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1")),
             controllers,
+            ownReactionWithdrawals = OwnReactionWithdrawals(),
+            outOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
         )
     }
 

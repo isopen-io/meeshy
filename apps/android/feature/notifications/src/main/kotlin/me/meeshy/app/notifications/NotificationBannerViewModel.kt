@@ -15,11 +15,13 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ActiveContextMatch
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.ConversationBannerName
+import me.meeshy.sdk.model.NotificationBannerAvatar
 import me.meeshy.sdk.model.NotificationBannerFraming
 import me.meeshy.sdk.model.NotificationBannerPresentation
 import me.meeshy.sdk.model.NotificationToastDecision
 import me.meeshy.sdk.model.NotificationToastPolicy
 import me.meeshy.sdk.model.ToastDedupWindow
+import me.meeshy.sdk.model.isDirectConversationType
 import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -40,6 +42,12 @@ data class InAppBanner(
      * le même libellé, d'où le drapeau explicite plutôt qu'une inférence sur `body == null`.
      */
     val previewHidden: Boolean = false,
+    /**
+     * La notification d'un palier ou d'un événement du JEU (succès, badge, série, niveau, ligue…) : la toucher ouvre
+     * l'écran que la carte de navigation du jeu nomme, et un palier SE CÉLÈBRE d'abord (iOS `RootNotificationNavigator`,
+     * `pendingEngagementReveal`). `null` pour tout autre contenu.
+     */
+    val game: ApiNotification? = null,
 )
 
 /**
@@ -159,25 +167,33 @@ class NotificationBannerViewModel @Inject constructor(
             runCatching { conversationRepository.conversationStream(id).first() }.getOrNull()
         }
 
+        val groupName = ConversationBannerName.composed(
+            customName = conversation?.preferences?.customName,
+            title = conversation?.title,
+            favoriteEmoji = conversation?.preferences?.reaction,
+        )
+        val isDirect = isDirectConversationType(conversation?.type ?: shown.context?.conversationType)
+        val avatar = NotificationBannerAvatar.of(
+            notification = shown,
+            actorName = shown.actor?.displayName?.takeIf { it.isNotBlank() } ?: shown.actor?.username.orEmpty(),
+            isDirect = isDirect,
+            groupName = groupName ?: shown.context?.conversationTitle,
+        )
+
         dismissJob?.cancel()
         _banner.value = InAppBanner(
             notificationId = shown.id,
             presentation = NotificationBannerFraming.present(
                 notification = shown,
-                groupName = ConversationBannerName.composed(
-                    customName = conversation?.preferences?.customName,
-                    title = conversation?.title,
-                    favoriteEmoji = conversation?.preferences?.reaction,
-                ),
-                isDirect = (conversation?.type ?: shown.context?.conversationType)
-                    .equals("direct", ignoreCase = true),
+                groupName = groupName,
+                isDirect = isDirect,
             ).appliedPreviewSetting(showPreview = prefs.showPreview),
-            avatarName = shown.actor?.displayName?.takeIf { it.isNotBlank() }
-                ?: shown.actor?.username.orEmpty(),
-            avatarUrl = shown.actor?.avatar ?: shown.context?.conversationAvatar,
+            avatarName = avatar.name,
+            avatarUrl = avatar.url,
             conversationId = conversationId,
             postId = shown.context?.postId ?: shown.metadata?.postId,
             previewHidden = !prefs.showPreview,
+            game = shown.takeIf { NotificationDestinationResolver.resolve(it) is NotificationDestination.Game },
         )
         dismissJob = viewModelScope.launch {
             delay(VISIBLE_MS)

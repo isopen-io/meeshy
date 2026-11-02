@@ -46,6 +46,14 @@ class ChatHostsSmokeTest {
         openReactionDetails = { _ -> },
         openImageViewer = { _, _ -> },
         onFileAttachmentOpen = { _, _ -> },
+        onFileAttachmentTap = { _, _ -> },
+        onPieceSave = { _, _ -> },
+        pieceOverlayFor = { _, _ -> null },
+        onPieceReact = { _, _, _ -> },
+        onPieceDelete = { _, _ -> },
+        openForwardPiece = { _, _ -> },
+        pieceFailures = kotlinx.coroutines.flow.emptyFlow(),
+        onHubFileOpen = { _, _ -> },
         onFileAttachmentShare = { _, _ -> },
         onReplyPreviewTap = { _ -> },
         onFlagTap = { _, _ -> },
@@ -62,7 +70,10 @@ class ChatHostsSmokeTest {
         cancelEdit = { },
         cancelReply = { },
         removeClipboardContent = { },
+        setPendingPlace = { },
+        clearPendingPlace = { },
         pickFile = { _, _, _ -> },
+        sendSticker = {},
         removePendingAttachment = { _ -> },
         stagePendingUris = { _ -> },
         dismissImageViewer = { },
@@ -78,6 +89,7 @@ class ChatHostsSmokeTest {
         openReport = { _ -> },
         dismissMessageActions = { },
         dismissFileDownload = { },
+        retryFileDownload = { },
         selectReportReason = { _ -> },
         onReportDetailsChange = { _ -> },
         submitReport = { },
@@ -100,7 +112,6 @@ class ChatHostsSmokeTest {
         onReplyThreadReplyTap = { _ -> },
         closeForward = { },
         onForwardQueryChange = { _ -> },
-        forwardTo = { _ -> },
     )
 
     private fun host(state: ChatUiState = ChatUiState(conversationTitle = "Équipe")) = ChatHostContext(
@@ -121,9 +132,10 @@ class ChatHostsSmokeTest {
     )
 
     @Test
-    fun `the header host shows the conversation title`() {
+    fun `the header host names the conversation on its avatar, as iOS's collapsed band`() {
         compose.setContent { MeeshyTheme(darkTheme = false) { ChatHeaderHost(host()) } }
-        compose.onNodeWithText("Équipe").assertExists()
+        // Replié (par défaut, comme iOS), l'en-tête ne montre pas le nom : l'avatar le porte.
+        compose.onNodeWithContentDescription("Équipe", substring = true).assertExists()
     }
 
     @Test
@@ -198,16 +210,12 @@ class ChatHostsSmokeTest {
                     isEditing = false,
                     hasAttachmentTiles = false,
                     attachmentTrayOpen = false,
-                    hasEffects = false,
-                    languageCode = "fr",
                     fieldValue = TextFieldValue("Bonjour"),
-                    sentiment = null,
                     showMic = false,
+                    hasSomethingToSend = true,
                     sendEnabled = true,
                     accentColor = Color.Blue,
                     onToggleTray = {},
-                    onOpenEffects = {},
-                    onPickLanguage = {},
                     onFieldChange = {},
                     onRequestVoice = {},
                     onSend = { sent += 1 },

@@ -41,6 +41,45 @@ struct FramePaint {
     static func cgColor(_ hex: String, opacity: Double = 1) -> CGColor {
         UIColor(Color(hex: hex)).withAlphaComponent(opacity).cgColor
     }
+
+    /// Peint `path` dans `context` (repère courant) : tracé à `lineWidth`, rempli sinon ; le dégradé (en
+    /// fractions de la boîte du chemin) s'étend au-delà de ses bornes, sa couleur s'il est illisible. Le
+    /// dessin fixe d'un cadre de bannière (`BannerFrameRenderer`) et d'un contour (`AvatarRingRenderer`).
+    func fill(_ path: CGPath, in context: CGContext, opacity: Double, lineWidth: CGFloat?, evenOdd: Bool) {
+        context.saveGState()
+        defer { context.restoreGState() }
+        guard let gradient,
+              let cg = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                  colors: gradient.stops.map { Self.cgColor(palette[safe: $0.color] ?? "#000000", opacity: $0.opacity ?? 1) } as CFArray,
+                                  locations: gradient.stops.map { CGFloat($0.at) }) else {
+            context.addPath(path)
+            if let lineWidth {
+                context.setStrokeColor(color.withAlphaComponent(opacity).cgColor)
+                context.setLineWidth(lineWidth)
+                context.strokePath()
+            } else {
+                context.setFillColor(color.withAlphaComponent(opacity).cgColor)
+                context.fillPath(using: evenOdd ? .evenOdd : .winding)
+            }
+            return
+        }
+        let box = path.boundingBoxOfPath
+        context.addPath(path)
+        if let lineWidth {
+            context.setLineWidth(lineWidth)
+            context.replacePathWithStrokedPath()
+            context.clip()
+        } else {
+            context.clip(using: evenOdd ? .evenOdd : .winding)
+        }
+        context.setAlpha(CGFloat(opacity))
+        context.drawLinearGradient(
+            cg,
+            start: CGPoint(x: box.minX + gradient.x1 * box.width, y: box.minY + gradient.y1 * box.height),
+            end: CGPoint(x: box.minX + gradient.x2 * box.width, y: box.minY + gradient.y2 * box.height),
+            options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+        )
+    }
 }
 
 enum FrameMotionLayers {

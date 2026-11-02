@@ -46,7 +46,7 @@ struct MessageViewsConsumptionCard: View {
                         .lineLimit(1)
 
                     if let duration = attachment.duration {
-                        Text(LocalizedNumber.duration(seconds: duration / 1000))
+                        Text(MediaFormat.duration(duration / 1000))
                             .font(.system(.caption2, design: .monospaced).weight(.medium))
                             .foregroundStyle(theme.textMuted)
                     }
@@ -146,7 +146,7 @@ struct MessageViewsConsumptionCard: View {
                                     }
                                     .foregroundStyle(MeeshyColors.success)
                                 } else if let pos = reading.positionMs, pos > 0 {
-                                    Text(LocalizedNumber.duration(seconds: pos / 1000))
+                                    Text(MediaFormat.duration(pos / 1000))
                                         .font(.system(.caption2, design: .monospaced).weight(.semibold))
                                         .foregroundStyle(theme.textMuted)
                                         .padding(.horizontal, MeeshySpacing.xsPlus)

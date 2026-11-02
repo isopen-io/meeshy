@@ -78,6 +78,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated let liveFeed = ComposerCameraFeed()
     /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction.
     nonisolated let previewMirroring = ComposerPreviewMirroring()
+    /// L'horizon de l'objectif en service, posé sur la photo au déclenchement.
+    private let horizon = ComposerCaptureHorizon()
     /// La session est configurée (ou en cours de l'être sur sa file) : on ne la
     /// refait pas.
     private(set) var sessionIsPrepared = false
@@ -373,6 +375,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Ce que l'objectif installé change à l'écran — publié APRÈS le commit.
     private func adopt(_ installe: CameraInputInstaller.InstalledCamera) {
         activeVideoDevice = installe.device
+        horizon.follow(installe.device)
         currentPosition = installe.position
         liveFeed.setPosition(installe.position)
         zoomScale = installe.zoomScale
@@ -483,7 +486,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// La couverture reste le temps que le nouvel objectif serve, puis s'efface.
     private func endSwitch() {
         Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(ComposerCameraSwitchRule.coverHold * 1_000_000_000))
+            guard await cancellableSleep(for: .seconds(ComposerCameraSwitchRule.coverHold)) else { return }
             self?.switchCover = nil
             self?.isSwitchingCamera = false
         }
@@ -509,6 +512,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         if photoOutput.supportedFlashModes.contains(flash) {
             settings.flashMode = flash
         }
+        horizon.level(connection)
         isTakingPhoto = true
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
@@ -535,7 +539,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         let limite = Date().addingTimeInterval(timeout)
         while !isCaptureReady {
             guard !Task.isCancelled, Date() < limite else { return false }
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard await cancellableSleep(for: .milliseconds(50)) else { return false }
         }
         return !Task.isCancelled
     }
@@ -828,7 +832,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         Task { @MainActor [weak self] in
             let limite = Date().addingTimeInterval(ComposerCameraSwitchRule.segmentResumeWait)
             while let self, !self.videoRecordingIsPossible, !self.pendingStopRequested, Date() < limite {
-                try? await Task.sleep(nanoseconds: 30_000_000)
+                guard await cancellableSleep(for: .milliseconds(30)) else { break }
             }
             self?.reopenSegmentAfterSwitch()
         }

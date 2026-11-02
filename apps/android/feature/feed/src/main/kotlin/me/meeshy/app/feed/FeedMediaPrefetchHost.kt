@@ -96,6 +96,6 @@ internal fun FeedMediaPrefetchEffect(listState: LazyListState, posts: List<FeedP
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }
             .distinctUntilChanged()
-            .collect { index -> current.getOrNull(index)?.let { viewModel.onRowVisible(it.id) } }
+            .collect { index -> current.getOrNull(FeedListLayout.postIndexAt(index))?.let { viewModel.onRowVisible(it.id) } }
     }
 }

@@ -86,10 +86,6 @@ extension APIMessage {
                 alt: apiAtt.alt,
                 forwardedFromAttachmentId: apiAtt.forwardedFromAttachmentId, isForwarded: apiAtt.isForwarded == true,
                 capturedInApp: apiAtt.capturedInApp == true,
-                // #7070 — la charge socket et REST porte désormais ces cinq
-                // familles (protection + chiffrement) ; les PORTER ici est ce
-                // qui manquait — le décodage seul (`APIMessageAttachment`) ne
-                // suffit pas, voir #7098.
                 isViewOnce: apiAtt.isViewOnce == true, maxViewOnceCount: apiAtt.maxViewOnceCount,
                 viewOnceCount: apiAtt.viewOnceCount ?? 0, isBlurred: apiAtt.isBlurred == true,
                 effectFlags: apiAtt.effectFlags,
@@ -243,7 +239,7 @@ extension APIMessage {
             conversationId: conversationId, senderId: senderId,
             content: content ?? "",
             originalLanguage: originalLanguage ?? "fr", messageType: msgType, messageSource: msgSource,
-            isEdited: isEdited ?? false, deletedAt: deletedAt, replyToId: replyToId,
+            isEdited: isEdited ?? false, editedById: editedById, deletedAt: deletedAt, replyToId: replyToId,
             storyReplyToId: storyReplyToId,
             forwardedFromId: forwardedFromId, forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: expiresAt, effects: effects,
@@ -266,7 +262,7 @@ extension APIMessage {
             callSummary: callSummary,
             joinNotice: joinNotice,
             captureNotice: captureNotice,
-            arrivalsNotice: arrivalsNotice,
+            arrivalsNotice: arrivalsNotice, encryptionSwitchNotice: encryptionSwitchNotice,
             sticker: sticker,
             trackedLinkMap: trackedLinkMap
         )

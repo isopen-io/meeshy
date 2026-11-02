@@ -99,6 +99,7 @@ import { conversationPreviewString } from '@meeshy/shared/utils/conversation-pre
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { listedRowCount, revealRow } from './lib/reveal-row.mjs';
 import { INSTANT } from './lib/instant.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
@@ -118,13 +119,28 @@ const constate = (ok, what) => {
 
 /** La géométrie de MISE EN PAGE de chaque case — jamais son apparence. */
 const geometrie = (page) =>
-  page.evaluate(() =>
-    [...document.querySelectorAll('[data-row]')].map((li) => ({
-      id: li.dataset.row,
-      haut: li.offsetTop,
-      height: li.offsetHeight,
-    })),
-  );
+  page.evaluate(() => {
+    const frame = document.getElementById('contenu')?.getBoundingClientRect();
+    return [...document.querySelectorAll('[data-row]')].map((li) => {
+      const box = li.getBoundingClientRect();
+      return {
+        id: li.dataset.row,
+        haut: li.offsetTop,
+        height: li.offsetHeight,
+        /* À l'écran — la liste virtualisée (#11228) monte aussi, hors champ, les
+           deux bouts de la liste et la rangée qui tient l'arrêt clavier. */
+        shown: frame !== undefined && box.bottom > frame.top && box.top < frame.bottom,
+      };
+    });
+  });
+
+/** Les rangées montées aux DEUX relevés dont la case a changé — par identifiant,
+ * jamais par rang : une rangée qui sort de la fenêtre quitte le document (#11228). */
+const movedBetween = (before, after) =>
+  after.filter((r) => {
+    const was = before.find((b) => b.id === r.id);
+    return was !== undefined && (r.haut !== was.haut || r.height !== was.height);
+  });
 
 const apparence = (page) =>
   page.evaluate(() =>
@@ -175,27 +191,6 @@ constate(
 constate(
   protectedRow !== null && protectedRow.includes(HIDDEN_LABEL),
   `la rangée « c-protection » ne dit pas « ${HIDDEN_LABEL} » : ${JSON.stringify(protectedRow)}`,
-);
-
-/**
- * #5780 — une conversation SANS HISTORIQUE (`lastMessage` absent, aucun
- * message jamais envoyé) ne doit jamais rendre une ligne 2 vide : elle dit
- * « Nouvelle conversation », et l'heure de création reste servie
- * (`lastMessageAt` n'est jamais absent sur le wire — `schema.prisma:495`).
- */
-const nouvelleRow = await page.evaluate(() => {
-  const li = document.querySelector('[data-row="c-nouvelle"]');
-  if (li === null) return null;
-  return { text: li.textContent ?? '', hasTime: li.querySelector('[data-time]') !== null };
-});
-constate(nouvelleRow !== null, 'la rangée « c-nouvelle » (conversation sans historique) est introuvable dans la Lentille');
-constate(
-  nouvelleRow !== null && nouvelleRow.text.includes(EMPTY_LABEL),
-  `la rangée « c-nouvelle » ne dit pas « ${EMPTY_LABEL} » : ${JSON.stringify(nouvelleRow?.text)}`,
-);
-constate(
-  nouvelleRow !== null && nouvelleRow.hasTime,
-  'la rangée « c-nouvelle » ne montre aucune heure — lastMessageAt devrait pourtant toujours être servi',
 );
 
 /**
@@ -258,7 +253,11 @@ for (const y of [40, 120, 240, 400, 600]) {
 }
 
 for (const { y, geo } of readings) {
-  const moves = geo.filter((r, i) => before[i] === undefined || r.haut !== before[i].haut || r.height !== before[i].height);
+  const moves = movedBetween(before, geo);
+  constate(
+    geo.some((r) => before.some((b) => b.id === r.id)),
+    `à ${y} px de défilement, aucune rangée du relevé initial n'est encore montée — l'invariant n'a rien comparé`,
+  );
   constate(
     moves.length === 0,
     `à ${y} px de défilement, ${moves.length} case(s) ont bougé en MISE EN PAGE — ` +
@@ -360,6 +359,30 @@ const magnifiedAfterReturn = await page.evaluate(
   () => document.querySelectorAll('[aria-hidden="false"].lens-extra').length,
 );
 constate(magnifiedAfterReturn > 0, 'un nouveau défilement ne réarme pas la magnification après aplatissement');
+
+/**
+ * #5780 — une conversation SANS HISTORIQUE (`lastMessage` absent, aucun
+ * message jamais envoyé) ne doit jamais rendre une ligne 2 vide : elle dit
+ * « Nouvelle conversation », et l'heure de création reste servie
+ * (`lastMessageAt` n'est jamais absent sur le wire — `schema.prisma:495`).
+ */
+/* La rangée vit plus bas que la première fenêtre : la liste est virtualisée
+   (#11228), elle n'est dans le document qu'une fois amenée à l'écran. */
+await revealRow(page, 'c-nouvelle');
+const nouvelleRow = await page.evaluate(() => {
+  const li = document.querySelector('[data-row="c-nouvelle"]');
+  if (li === null) return null;
+  return { text: li.textContent ?? '', hasTime: li.querySelector('[data-time]') !== null };
+});
+constate(nouvelleRow !== null, 'la rangée « c-nouvelle » (conversation sans historique) est introuvable dans la Lentille');
+constate(
+  nouvelleRow !== null && nouvelleRow.text.includes(EMPTY_LABEL),
+  `la rangée « c-nouvelle » ne dit pas « ${EMPTY_LABEL} » : ${JSON.stringify(nouvelleRow?.text)}`,
+);
+constate(
+  nouvelleRow !== null && nouvelleRow.hasTime,
+  'la rangée « c-nouvelle » ne montre aucune heure — lastMessageAt devrait pourtant toujours être servi',
+);
 
 await page.close();
 await context.close();
@@ -735,9 +758,7 @@ constate(!headerReturned.pinnedPresent, 'la bande épinglée ne se retire pas qu
 constate(headerReturned.h1Opacity === 1, `le titre ne reprend pas sa place (opacité ${headerReturned.h1Opacity})`);
 constate(headerReturned.h1AriaHidden === null, 'le titre reste aria-hidden après le retour du grand rail');
 const rowGeoAfterRoundTrip = await geometrie(headerPage);
-const movedByRoundTrip = rowGeoAfterRoundTrip.filter(
-  (r, i) => rowGeoBeforeRoundTrip[i] === undefined || r.haut !== rowGeoBeforeRoundTrip[i].haut || r.height !== rowGeoBeforeRoundTrip[i].height,
-);
+const movedByRoundTrip = movedBetween(rowGeoBeforeRoundTrip, rowGeoAfterRoundTrip);
 constate(
   movedByRoundTrip.length === 0,
   `l'aller-retour de la bande épinglée a déplacé ${movedByRoundTrip.length} rangée(s) — ${JSON.stringify(movedByRoundTrip.slice(0, 3))}`,
@@ -948,8 +969,13 @@ for (const colorScheme of ['light', 'dark']) {
   const RENDERED_PAGE_1 = 29;
   const RENDERED_TOTAL = 44;
 
+  /* La liste est virtualisée (#11228) : elle PORTE toutes ses rangées — montées
+     ou tenues par une cale — et n'en monte que la fenêtre. Le compte est celui
+     qu'elle porte ; la géométrie, celle des rangées montées. */
   const page1 = await geometrie(pgPage);
-  constate(page1.length === RENDERED_PAGE_1, `§9 (${colorScheme}) : la page 1 ne porte pas ${RENDERED_PAGE_1} rangées rendues (${page1.length})`);
+  const listed1 = await listedRowCount(pgPage);
+  constate(listed1 === RENDERED_PAGE_1, `§9 (${colorScheme}) : la page 1 ne porte pas ${RENDERED_PAGE_1} rangées rendues (${listed1})`);
+  constate(page1.length < listed1, `§9 (${colorScheme}) : la page 1 monte toutes ses rangées (${page1.length}/${listed1}) — la liste n'est pas virtualisée`);
 
   await pgPage.evaluate(() => {
     const el = document.getElementById('contenu');
@@ -957,19 +983,37 @@ for (const colorScheme of ['light', 'dark']) {
   });
   await pgPage
     .waitForFunction(
-      (n) => document.querySelectorAll('[data-row]').length === n,
+      (n) =>
+        document.querySelectorAll('[data-row]').length +
+          [...document.querySelectorAll('[data-row-gap]')].reduce((sum, gap) => sum + Math.round(gap.getBoundingClientRect().height / 84), 0) ===
+        n,
       RENDERED_TOTAL,
       { timeout: 5_000 },
     )
     .catch(() => undefined);
 
+  const listed2 = await listedRowCount(pgPage);
+  constate(listed2 === RENDERED_TOTAL, `§9 (${colorScheme}) : après défilement, ${RENDERED_TOTAL} rangées attendues (${listed2})`);
+  const bottom = await geometrie(pgPage);
+  constate(
+    bottom.every((r) => r.height === 84),
+    `§9 (${colorScheme}) : une case ne mesure plus 84 en bas de la page 2`,
+  );
+  /* Les rangées de la page 1 se relisent EN TÊTE, là où elles étaient : la
+     fenêtre les y remonte, et chacune doit retrouver sa case exacte. */
+  await pgPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 0 }));
+  await pgPage.waitForTimeout(300);
   const page2 = await geometrie(pgPage);
-  constate(page2.length === RENDERED_TOTAL, `§9 (${colorScheme}) : après défilement, ${RENDERED_TOTAL} rangées attendues (${page2.length})`);
   constate(
     page2.every((r) => r.height === 84),
     `§9 (${colorScheme}) : une case ne mesure plus 84 après la page 2`,
   );
-  for (const before of page1) {
+  /* Les rangées que le lecteur VOIT en tête de la page 1 — toutes doivent s'y
+     retrouver, à leur case exacte (#11228 : celles montées hors champ, les
+     bouts de liste, ne sont plus retenues une fois la page 2 arrivée). */
+  const seen1 = page1.filter((r) => r.shown);
+  constate(seen1.length > 0, `§9 (${colorScheme}) : aucune rangée de la page 1 n'est à l'écran`);
+  for (const before of seen1) {
     const after = page2.find((r) => r.id === before.id);
     constate(
       after !== undefined && after.haut === before.haut,
@@ -1000,12 +1044,12 @@ for (const colorScheme of ['light', 'dark']) {
   // Ce que la §9 a mesuré, DIT — sans cette ligne, une section entière du gate
   // ne laissait aucune trace dans sa sortie : impossible de voir qu'elle a
   // tourné, donc impossible de distinguer « verte » de « sautée ».
-  pagination.push(`${colorScheme} : ${page1.length} → ${page2.length} rangées, pied « ${footerAndTail.footerState} », aucune rangée déplacée`);
+  pagination.push(`${colorScheme} : ${listed1} → ${listed2} rangées (${page1.length} montées), pied « ${footerAndTail.footerState} », aucune rangée déplacée`);
 
   // Aplatissement (§6 du fichier) — l'invariant tient aussi après immobilité.
   await pgPage.waitForTimeout(5_000);
   const page2AfterRest = await geometrie(pgPage);
-  for (const before of page1) {
+  for (const before of seen1) {
     const after = page2AfterRest.find((r) => r.id === before.id);
     constate(
       after !== undefined && after.haut === before.haut,

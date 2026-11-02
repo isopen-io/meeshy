@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { findWallpaperDesign, loadWallpaperNames, visibleWallpaperPacks, WALLPAPER_PACKS } from './wallpaper-catalog';
 
-describe('les 15 modèles embarqués', () => {
-  test('cinq packs et quinze modèles que le contrat lit tous', () => {
+describe('les 17 modèles embarqués', () => {
+  test('cinq packs et dix-sept modèles que le contrat lit tous', () => {
     expect(WALLPAPER_PACKS.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes']);
-    expect(WALLPAPER_PACKS.flatMap((pack) => pack.designs)).toHaveLength(15);
+    expect(WALLPAPER_PACKS.flatMap((pack) => pack.designs)).toHaveLength(17);
   });
 
   test('trouve un modèle par son pack et sa clé, pas par la clé seule', () => {

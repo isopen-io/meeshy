@@ -934,7 +934,7 @@ describe('AttachmentService — direct-access methods', () => {
       const svc = new AttachmentService(makePrisma() as PrismaClient);
       const file = { buffer: Buffer.from(''), filename: 'a.jpg', mimeType: 'image/jpeg', size: 0 };
       const result = svc.validateFile(file);
-      expect(mockUploadProcessor.validateFile).toHaveBeenCalledWith(file);
+      expect(mockUploadProcessor.validateFile).toHaveBeenCalledWith(file, 'registered');
       expect(result).toEqual({ valid: true });
     });
 

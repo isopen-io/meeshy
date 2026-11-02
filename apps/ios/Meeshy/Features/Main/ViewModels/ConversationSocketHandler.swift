@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import GRDB
 import MeeshySDK
 import UIKit
 import os
@@ -22,6 +21,12 @@ final class ConversationSocketHandler {
     // it (not `self`) to the MainActor `Task` that clears it — self is
     // uniquely referenced at that point, so there's no real race.
     nonisolated(unsafe) weak var delegate: ConversationSocketDelegate?
+
+    /// Le lecteur a quitté, a été retiré ou banni PENDANT que le fil est
+    /// ouvert (#11415) — posé par `subscribeMembershipEnd`, lu par l'autorité
+    /// du menu (`ConversationMenuAuthority.make(conversation:viewModel:)`) au
+    /// moment où un menu s'ouvre. La vue reste montée.
+    private(set) var membershipEnded = false
 
     /// Optional persistence actor — when set, message-related socket events
     /// write through the actor in addition to updating the delegate/ViewModel.
@@ -46,7 +51,14 @@ final class ConversationSocketHandler {
     // MainActor via `Task { @MainActor [weak self] in ... }` before mutating.
     nonisolated(unsafe) private var typingTimer: Timer?
     nonisolated(unsafe) private var typingIdleTimer: Timer?
-    nonisolated(unsafe) private var isEmittingTyping = false
+    /// Le canal de la frappe en cours ; `nil` : rien n'est émis. Dans une
+    /// conversation chiffrée, la frappe part en signal chiffré (#13142) et son
+    /// arrêt suit le MÊME canal que son départ.
+    nonisolated(unsafe) private var typingChannel: TypingChannel?
+    /// Le relais chiffré de la frappe : `true` quand il l'a prise.
+    private let endToEndTyping: (@MainActor (Bool) -> Bool)?
+
+    nonisolated private enum TypingChannel { case clear, endToEnd }
     private static let typingDebounceInterval: TimeInterval = 3.0
     private static let typingReemitInterval: TimeInterval = 3.0
     private static let typingSafetyTimeout: TimeInterval = 15.0
@@ -81,11 +93,13 @@ final class ConversationSocketHandler {
     init(
         conversationId: String,
         currentUserId: String,
-        messageSocket: MessageSocketProviding = MessageSocketManager.shared
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared,
+        endToEndTyping: (@MainActor (Bool) -> Bool)? = nil
     ) {
         self.conversationId = conversationId
         self.currentUserId = currentUserId
         self.messageSocket = messageSocket
+        self.endToEndTyping = endToEndTyping
     }
 
     /// Side-effects d'ouverture : join de la room socket + publication de la
@@ -166,7 +180,7 @@ final class ConversationSocketHandler {
                     MessageSocketManager.shared.leaveConversation(id)
                 }
             }
-            if isEmittingTyping {
+            if case .clear = typingChannel {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
             }
         }
@@ -216,18 +230,24 @@ final class ConversationSocketHandler {
     private func startTypingEmission() {
         guard UserPreferencesManager.shared.privacy.showTypingIndicator else { return }
 
-        if !isEmittingTyping {
-            isEmittingTyping = true
-            messageSocket.emitTypingStart(conversationId: conversationId)
+        if typingChannel == nil {
+            typingChannel = startTyping()
         }
 
         guard typingTimer == nil else { return }
         typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingReemitInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.isEmittingTyping else { return }
-                self.messageSocket.emitTypingStart(conversationId: self.conversationId)
+                guard let self, self.typingChannel != nil else { return }
+                self.typingChannel = self.startTyping()
             }
         }
+    }
+
+    /// Chiffrée par le relais dans une conversation e2ee, en clair ailleurs.
+    private func startTyping() -> TypingChannel {
+        if endToEndTyping?(true) == true { return .endToEnd }
+        messageSocket.emitTypingStart(conversationId: conversationId)
+        return .clear
     }
 
     func stopTypingEmission() {
@@ -236,9 +256,12 @@ final class ConversationSocketHandler {
         typingIdleTimer?.invalidate()
         typingIdleTimer = nil
 
-        guard isEmittingTyping else { return }
-        isEmittingTyping = false
-        messageSocket.emitTypingStop(conversationId: conversationId)
+        guard let channel = typingChannel else { return }
+        typingChannel = nil
+        switch channel {
+        case .clear: messageSocket.emitTypingStop(conversationId: conversationId)
+        case .endToEnd: _ = endToEndTyping?(false)
+        }
     }
 
     // MARK: - Typing Safety Timers
@@ -314,6 +337,7 @@ final class ConversationSocketHandler {
         subscribeReactions(on: lane)
         subscribePresence(on: lane)
         subscribeConversationState()
+        subscribeMembershipEnd()
         // Réactions par-pièce-jointe, statut de consommation, enrichissements
         // (transcription / traduction audio) — extraits par responsabilité
         // dans `ConversationSocketHandler+MediaEvents.swift` (I4, #7360).
@@ -509,6 +533,31 @@ final class ConversationSocketHandler {
             .store(in: &cancellables)
     }
 
+    /// **La fin d'appartenance du LECTEUR, fil ouvert** (#11415). La passerelle
+    /// adresse `conversation:participant-left` / `participant-banned` à la room
+    /// personnelle du partant ; la liste en retire la ligne, mais le fil ouvert
+    /// gardait sa conversation capturée et offrait encore « Supprimer pour
+    /// moi », réagir, signaler — tous refusés en 403. `names(_:)` : le même
+    /// test d'identité que la liste. Un bannissement qui nomme le lecteur le
+    /// laisse hors de la conversation, que l'événement dise ou non qu'il a
+    /// retiré une appartenance (`ParticipantBannedEvent.membershipEnded`).
+    private func subscribeMembershipEnd() {
+        let convId = conversationId
+        let me = currentUserId
+
+        messageSocket.participantSelfLeft
+            .filter { $0.conversationId == convId && $0.names(me) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.membershipEnded = true }
+            .store(in: &cancellables)
+
+        messageSocket.participantBanned
+            .filter { $0.conversationId == convId && $0.names(me) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.membershipEnded = true }
+            .store(in: &cancellables)
+    }
+
     // MARK: - Event Application (ordered lane)
 
     private func applyIncoming(_ apiMsg: APIMessage) async {
@@ -568,7 +617,9 @@ final class ConversationSocketHandler {
                 newContent: apiMsg.content ?? "",
                 editedAt: apiMsg.editedAt ?? Date(),
                 marksEdited: apiMsg.isEdited ?? true,
-                arrivalsNotice: apiMsg.arrivalsNotice
+                arrivalsNotice: apiMsg.arrivalsNotice,
+                // #11375 — l'auteur servi : le modérateur est gravé, l'auteur efface la mention.
+                authorship: apiMsg.editAuthorship
             )
         } catch {
             Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")

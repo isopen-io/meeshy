@@ -9,7 +9,8 @@ import MeeshySDK
 // (`DeviceTranslationCoordinator`) demande à un moteur : il ne sait ni quel
 // moteur traduit, ni que la traduction sera partagée.
 //
-// Un seul moteur aujourd'hui — `AppleTranslationEngine`, iOS 18+. Sous iOS 16 et
+// Un seul moteur aujourd'hui — `AppleTranslationEngine`, iOS 18+, derrière
+// `EntityShieldedDeviceTranslationEngine` (les identités ne sont jamais traduites). Sous iOS 16 et
 // 17, `UnavailableDeviceTranslationEngine` déclare tout couple non pris en
 // charge : l'appareil ne traduit rien, mais reçoit encore les traductions que
 // les autres membres partagent.
@@ -89,8 +90,56 @@ enum DeviceTranslationEngineFactory {
     /// téléchargement est partagé, à l'échelle de la session d'app.
     static func makeDefault() -> any DeviceTranslationEngineProviding {
         if #available(iOS 18.0, *) {
-            return AppleTranslationEngine()
+            return EntityShieldedDeviceTranslationEngine(AppleTranslationEngine())
         }
         return UnavailableDeviceTranslationEngine()
+    }
+}
+
+/// Le masquage des identités devant n'importe quel moteur (#14333) : nom de
+/// l'auteur d'une phrase de partage, adresses, e-mails, @mentions, #hashtags,
+/// pseudos nus et émojis ne sont jamais donnés au moteur, et une sortie qui en
+/// a perdu un n'est jamais servie — la règle du translator (#14327), portée par
+/// `TranslationShieldedBatch` (MeeshySDK).
+@MainActor
+final class EntityShieldedDeviceTranslationEngine: DeviceTranslationEngineProviding {
+    nonisolated deinit {}
+
+    /// Le moteur masqué — l'hôte de sa session (`AppleTranslationHost`) se monte sur lui.
+    let inner: any DeviceTranslationEngineProviding
+
+    init(_ inner: any DeviceTranslationEngineProviding) {
+        self.inner = inner
+    }
+
+    var engineName: String { inner.engineName }
+
+    func availability(of pair: DeviceTranslationPair) async -> DeviceTranslationAvailability {
+        await inner.availability(of: pair)
+    }
+
+    func translate(
+        _ requests: [DeviceTranslationRequest],
+        pair: DeviceTranslationPair
+    ) async -> [DeviceTranslationResult] {
+        let batch = TranslationShieldedBatch(requests.map { TranslationShieldedPiece(id: $0.id, text: $0.text) })
+        let settlement = batch.settle(await engineOutput(batch.requests, pair: pair))
+        var served = settlement.served
+        if let retry = settlement.retry, !Task.isCancelled {
+            served.merge(retry.settle(await engineOutput(retry.requests, pair: pair))) { first, _ in first }
+        }
+        return requests.compactMap { request in
+            served[request.id].map { DeviceTranslationResult(id: request.id, text: $0) }
+        }
+    }
+
+    func cancelPending() {
+        inner.cancelPending()
+    }
+
+    private func engineOutput(_ pieces: [TranslationShieldedPiece], pair: DeviceTranslationPair) async -> [String: String] {
+        guard !pieces.isEmpty else { return [:] }
+        let results = await inner.translate(pieces.map { DeviceTranslationRequest(id: $0.id, text: $0.text) }, pair: pair)
+        return Dictionary(results.map { ($0.id, $0.text) }, uniquingKeysWith: { first, _ in first })
     }
 }

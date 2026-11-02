@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import UIKit
 @testable import Meeshy
 
 /// **Ce qu'on voit avant la prise est ce qu'on a après** (#9464) : la photo et
@@ -34,6 +35,37 @@ final class ComposerCaptureMirrorRuleTests: XCTestCase {
         XCTAssertTrue(camera.contains("ComposerCaptureMirrorRule.mirrors("))
         XCTAssertTrue(camera.contains("automaticallyAdjustsVideoMirroring = false"))
         XCTAssertTrue(camera.contains("videoRotationAngle = ComposerCaptureMirrorRule.portraitAngle"))
+    }
+
+    func test_horizonAngle_followsHowTheDeviceIsHeld() {
+        XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .portrait), 90)
+        XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .landscapeLeft), 0)
+        XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .landscapeRight), 180)
+        XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .portraitUpsideDown), 270)
+    }
+
+    func test_horizonAngle_flatOrUnknown_designatesNoHorizon() {
+        XCTAssertNil(ComposerCaptureHorizonRule.angle(for: .faceUp))
+        XCTAssertNil(ComposerCaptureHorizonRule.angle(for: .faceDown))
+        XCTAssertNil(ComposerCaptureHorizonRule.angle(for: .unknown))
+    }
+
+    func test_videoOrientation_matchesTheRotationAngleTable() {
+        XCTAssertEqual(ComposerCaptureHorizonRule.videoOrientation(for: 0), .landscapeRight)
+        XCTAssertEqual(ComposerCaptureHorizonRule.videoOrientation(for: 90), .portrait)
+        XCTAssertEqual(ComposerCaptureHorizonRule.videoOrientation(for: 180), .landscapeLeft)
+        XCTAssertEqual(ComposerCaptureHorizonRule.videoOrientation(for: 270), .portraitUpsideDown)
+    }
+
+    func test_everyPhotoCamera_levelsTheConnectionAtTheShutter() throws {
+        for chemin in ["Meeshy/Features/Main/Components/CameraModel.swift",
+                       "Meeshy/Features/Game/Photo/GamePhotoCamera.swift"] {
+            let camera = try Self.code(chemin)
+            XCTAssertTrue(camera.contains("horizon.follow("), "\(chemin) : l'horizon doit suivre l'objectif installé")
+            let niveau = try XCTUnwrap(camera.range(of: "horizon.level("), "\(chemin) : la photo doit être mise à l'horizon")
+            let prise = try XCTUnwrap(camera.range(of: ".capturePhoto(with:"), chemin)
+            XCTAssertLessThan(niveau.lowerBound, prise.lowerBound, "\(chemin) : l'horizon se pose AVANT le déclenchement")
+        }
     }
 
     private static func code(_ relative: String) throws -> String {

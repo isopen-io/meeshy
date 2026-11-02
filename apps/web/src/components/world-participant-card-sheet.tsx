@@ -157,7 +157,7 @@ function CardBody({ view, purpose }: { readonly view: WorldParticipantCardView; 
         className="flex items-center gap-3.5 rounded-[18px] p-3.5"
         style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent, var(--color-ios-brand)) 16%, var(--color-ios-card)), var(--color-ios-card))' }}
       >
-        <Avatar initials={header.initials} color="var(--accent, var(--color-ios-brand))" size={56} />
+        <Avatar initials={header.initials} color="var(--accent, var(--color-ios-brand))" size={56} {...(header.avatar === null ? {} : { src: header.avatar })} />
         <div className="grid min-w-0 gap-1">
           <p className="truncate text-thread font-bold leading-tight" style={{ color: 'var(--color-ios-ink)' }}>
             {header.name}

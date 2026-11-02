@@ -74,15 +74,16 @@ public final class SoundLibraryPickerModel: ObservableObject {
 
     public var canLoadMore: Bool { tab == .mine && nextCursor != nil && !isLoading }
 
-    public var emptyMessage: String {
+    public var emptyMessage: String { emptyMessage(for: .story) }
+
+    /// « Mes sons » vide nomme le format composé (#13913).
+    public func emptyMessage(for wording: ComposerFormatWording) -> String {
         if !query.isEmpty {
             return String(localized: "story.sound.library.emptySearch",
                           defaultValue: "Aucun son ne correspond à cette recherche.", bundle: .module)
         }
         return tab == .mine
-            ? String(localized: "story.sound.library.emptyMine",
-                     defaultValue: "Vos sons apparaîtront ici dès que vous publierez une story avec un audio original.",
-                     bundle: .module)
+            ? wording.soundLibraryEmptyMine
             : String(localized: "story.sound.library.emptyTrending",
                      defaultValue: "Aucun son public pour le moment.", bundle: .module)
     }

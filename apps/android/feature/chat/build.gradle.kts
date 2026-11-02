@@ -53,7 +53,9 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.browser)
+    implementation(libs.timber)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 

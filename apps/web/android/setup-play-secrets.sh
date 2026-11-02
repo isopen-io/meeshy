@@ -2,7 +2,7 @@
 # Pose les secrets GitHub de la release Android (#9843) depuis un dossier tenu
 # HORS du dépôt, après avoir vérifié que la clé s'ouvre et que son empreinte
 # est bien celle publiée dans assetlinks.json. Puis, avec --run, lance le
-# workflow « Android Release (coque apps/web) ».
+# workflow « Android coque · publication Play ».
 #
 #   apps/web/android/setup-play-secrets.sh [--dir <dossier>] [--run <piste>] [--ref <branche>]
 #

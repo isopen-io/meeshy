@@ -31,7 +31,7 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
     }
 
     private func settingsCode() throws -> String {
-        try code("Features/Main/Views/SettingsView.swift")
+        try code("Features/Settings/Views/SettingsView.swift")
     }
 
     // MARK: - La bêta a disparu
@@ -131,14 +131,14 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
     func test_listReadingModeSubmenu_isOfferedOnlyWhenReadingModesAreOn() throws {
         XCTAssertTrue(
             try code("Features/Main/Views/ConversationListView+Overlays.swift")
-                .contains("if LentilleFeatureFlag.isLentilleListEnabled, LentilleFeatureFlag.isReadingModesEnabled { LentilleReadingModeSubmenu("),
+                .contains("offersReadingModes: LentilleFeatureFlag.isLentilleListEnabled && LentilleFeatureFlag.isReadingModesEnabled"),
             "Modes de lecture coupés ⇒ le menu contextuel de la liste ne propose pas un mode que l'ouverture ignorerait."
         )
     }
 
     func test_lentilleModePill_isMountedOnlyWhenReadingModesAreOn() throws {
         XCTAssertTrue(
-            try code("Features/Main/Lentille/Row/LentilleConversationRow.swift")
+            try code("Features/Lens/Row/LentilleConversationRow.swift")
                 .contains("if LentilleFeatureFlag.isReadingModesEnabled { LentilleModePill("),
             "Modes de lecture coupés ⇒ la rangée magnifiée ne porte pas d'encoche de mode."
         )

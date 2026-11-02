@@ -10,6 +10,7 @@ arrow.down
 arrow.down.circle.fill
 arrow.down.doc.fill
 arrow.down.right
+arrow.down.right.and.arrow.up.left
 arrow.down.right.circle
 arrow.down.to.line
 arrow.forward.circle.fill
@@ -44,12 +45,14 @@ bell.slash.fill
 bold
 bolt.fill
 bookmark
+bookmark.fill
 bubble.left.and.bubble.right
 bubble.left.and.bubble.right.fill
 bubble.left.fill
 bubble.right
 camera.fill
 camera.filters
+captions.bubble
 cellularbars
 character.book.closed.fill
 character.bubble
@@ -74,6 +77,7 @@ clock.badge.xmark
 clock.fill
 cloud
 cpu.fill
+crop
 crown.fill
 cursorarrow.click
 delete.left.fill
@@ -82,7 +86,9 @@ diamond.fill
 doc.fill
 doc.on.doc
 doc.plaintext.fill
+dollarsign.circle.fill
 dot.radiowaves.left.and.right
+ear.fill
 ellipsis
 ellipsis.circle.fill
 ellipsis.message.fill
@@ -215,6 +221,8 @@ photo.on.rectangle.angled
 photo.stack
 pin
 pin.fill
+pip.enter
+pip.exit
 play.circle
 play.circle.fill
 play.fill
@@ -229,16 +237,19 @@ plus.rectangle.on.rectangle
 qrcode
 questionmark.folder
 quote.opening
+record.circle
 rectangle.2.swap
 rectangle.compress.vertical
 rectangle.expand.vertical
 rectangle.on.rectangle
 rectangle.portrait.and.arrow.forward
 rectangle.portrait.and.arrow.right
+rectangle.split.2x1
 rectangle.stack
 rectangle.stack.badge.plus
 repeat
 scissors
+scribble.variable
 shield
 shield.checkered
 shield.fill
@@ -253,6 +264,7 @@ sparkles.rectangle.stack
 speaker.fill
 speaker.slash.fill
 speaker.wave.3.fill
+speedometer
 square
 square.and.arrow.down
 square.and.arrow.up
@@ -271,6 +283,7 @@ star.circle
 star.fill
 star.slash
 star.slash.fill
+stop.circle.fill
 stop.fill
 sun.max
 sun.max.fill

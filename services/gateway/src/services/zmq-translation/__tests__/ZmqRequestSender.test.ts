@@ -312,6 +312,16 @@ describe('ZmqRequestSender', () => {
       expect(arg.type).toBe('translation');
     });
 
+    it('#12822 — forwards atRest: true so the translator neither caches nor logs the text', async () => {
+      await sender.sendTranslationRequest(makeTranslationRequest({ atRest: true }));
+      expect(firstSendArg(connectionManager).atRest).toBe(true);
+    });
+
+    it('#12822 — leaves the frame unchanged when the text is not encrypted at rest', async () => {
+      await sender.sendTranslationRequest(makeTranslationRequest());
+      expect(firstSendArg(connectionManager)).not.toHaveProperty('atRest');
+    });
+
     it('uses existingTaskId when provided', async () => {
       const taskId = await sender.sendTranslationRequest(makeTranslationRequest(), 'existing-id-123');
       expect(taskId).toBe('existing-id-123');

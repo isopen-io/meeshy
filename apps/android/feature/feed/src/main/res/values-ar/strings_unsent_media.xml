@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_unsent_media_row">وسيط %1$d</string>
+    <string name="feed_unsent_media_uploaded">أُرسل</string>
+    <string name="feed_unsent_media_waiting">في الانتظار</string>
+    <string name="feed_unsent_media_refused">رُفض، يجب إعادة إرساله</string>
+    <string name="feed_unsent_media_lost">غير موجود على هذا الجهاز</string>
+    <string name="feed_unsent_rupture_counts">مفقود: %1$d. سليم: %2$d.</string>
+    <string name="feed_unsent_gesture_replace">أعد فتحه لاستبدال الوسيط المفقود.</string>
+    <string name="feed_unsent_gesture_replace_story">احذفه وأعد إنشاءه.</string>
+    <string name="feed_unsent_gesture_wait">سيُرسل فور عودة الاتصال.</string>
+    <string name="feed_unsent_gesture_retry">أعد المحاولة: لم يضع شيء.</string>
+</resources>

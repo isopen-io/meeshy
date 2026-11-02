@@ -59,13 +59,16 @@ public struct ImageViewerView: View {
     }
 
     public var isOwnMessage: Bool = false
+    let imageLoader: any MediaImageLoading
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
                 accentColor: String = MeeshyColors.brandPrimaryHex, isOwnMessage: Bool = false,
+                imageLoader: any MediaImageLoading = CoordinatorImageLoader.images,
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
                 onSaveRequested: (() -> Void)? = nil) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.isOwnMessage = isOwnMessage
+        self.imageLoader = imageLoader
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onSaveRequested = onSaveRequested
     }
@@ -87,6 +90,7 @@ public struct ImageViewerView: View {
                 imageUrl: imageURL,
                 accentColor: accentColor,
                 attachmentId: isOwnMessage ? nil : attachment.id,
+                imageLoader: imageLoader,
                 onSaveRequested: onSaveRequested
             )
             .contentExitGate(exitGate)
@@ -114,7 +118,8 @@ public struct ImageViewerView: View {
             CachedAsyncImage(
                 url: urlStr,
                 targetSize: CGSize(width: 280, height: 280),
-                thumbHash: attachment.thumbHash
+                thumbHash: attachment.thumbHash,
+                imageLoader: imageLoader
             ) {
                 placeholder(icon: "photo")
                     .shimmer()
@@ -204,6 +209,7 @@ public struct ImageFullscreen: View {
     public var caption: String? = nil
     public var mentionDisplayNames: [String: String]? = nil
     public var attachmentId: String? = nil
+    let imageLoader: any MediaImageLoading
     /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
     /// l'app quand fourni ; nil = save Photos direct legacy.
     public var onSaveRequested: (() -> Void)? = nil
@@ -224,10 +230,12 @@ public struct ImageFullscreen: View {
 
     public init(imageUrl: URL?, accentColor: String, caption: String? = nil,
                 mentionDisplayNames: [String: String]? = nil, attachmentId: String? = nil,
+                imageLoader: any MediaImageLoading = CoordinatorImageLoader.images,
                 onSaveRequested: (() -> Void)? = nil) {
         self.imageUrl = imageUrl; self.accentColor = accentColor
         self.caption = caption; self.mentionDisplayNames = mentionDisplayNames
         self.attachmentId = attachmentId
+        self.imageLoader = imageLoader
         self.onSaveRequested = onSaveRequested
     }
 
@@ -245,7 +253,7 @@ public struct ImageFullscreen: View {
                 // explicite qui prime sur la politique réseau ambiante (contrat
                 // §14.1) : sans cela, Low Data Mode / Wi-Fi seul laisse un
                 // spinner infini alors que l'utilisateur a demandé l'image.
-                CachedAsyncImage(url: url.absoluteString, autoLoad: true) {
+                CachedAsyncImage(url: url.absoluteString, autoLoad: true, imageLoader: imageLoader) {
                     ProgressView().tint(.white)
                 }
                 .aspectRatio(contentMode: .fit)
@@ -425,9 +433,13 @@ public struct ImageFullscreen: View {
         if let onDisk = CacheCoordinator.imageLocalFileURL(for: url.absoluteString) {
             return await PhotoLibraryManager.shared.addImageFile(at: onDisk, alias: attachmentId)
         }
-        guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
+        guard let data = await Self.receivedBytes(for: url, using: imageLoader) else {
             return .failed
         }
         return await PhotoLibraryManager.shared.addImage(data, alias: attachmentId)
+    }
+
+    static func receivedBytes(for url: URL, using loader: any MediaImageLoading) async -> Data? {
+        try? await loader.data(for: url.absoluteString)
     }
 }

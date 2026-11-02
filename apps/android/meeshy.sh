@@ -20,7 +20,7 @@ fi
 ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR_BIN="$ANDROID_HOME/emulator/emulator"
 AVD="${MEESHY_AVD:-meeshy_pixel8}"
-APP_ID="me.meeshy.android.debug"
+APP_ID="me.meeshy.app.debug"
 LAUNCH_COMPONENT="$APP_ID/me.meeshy.app.MainActivity"
 
 device_ready() {
@@ -44,6 +44,16 @@ boot_emulator() {
   echo "Emulateur pret."
 }
 
+# Android 9 (Samsung S8) n'optimise pas une debug a l'installation : elle tourne depuis l'APK
+# (`status=run-from-apk`), ART relit et verifie les 33 dex (~130 Mo) a CHAQUE demarrage a froid,
+# soit ~9 s avant la premiere image au lieu de ~2,4 s (#13647). La passe `verify` (~30 s) ecrit
+# le vdex une fois. MEESHY_SKIP_DEXOPT=1 la saute.
+dexopt_installed() {
+  [[ "${MEESHY_SKIP_DEXOPT:-0}" == "1" ]] && return 0
+  echo "Optimisation ART de ${APP_ID} (verify)..."
+  "$ADB" shell cmd package compile -m verify -f "$APP_ID" || echo "dexopt ignore (appareil sans cmd package compile)" >&2
+}
+
 CMDLINE_HINT="\$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n $AVD -d pixel_8 -k 'system-images;android-35;google_apis;arm64-v8a'"
 
 CMD="${1:-build}"
@@ -61,9 +71,11 @@ case "$CMD" in
   i18n-test) python3 -m unittest discover -s scripts/i18n/tests "$@" ;;
   emulator) boot_emulator ;;
   devices)  "$ADB" devices -l ;;
-  install)  boot_emulator; ./gradlew :app:installDebug "$@" ;;
+  install)  boot_emulator; ./gradlew :app:installDebug "$@"; dexopt_installed ;;
+  dexopt)   dexopt_installed ;;
   run)      boot_emulator
             ./gradlew :app:installDebug "$@"
+            dexopt_installed
             "$ADB" shell am start -n "$LAUNCH_COMPONENT"
             echo "App lancee (${APP_ID}). Logs (Ctrl-C pour quitter):"
             until PID="$("$ADB" shell pidof -s "$APP_ID" 2>/dev/null | tr -d '\r')" && [[ -n "$PID" ]]; do

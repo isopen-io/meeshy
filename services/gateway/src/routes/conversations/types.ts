@@ -18,6 +18,8 @@ export interface CreateConversationBody {
   participantIds?: string[];
   communityId?: string;
   identifier?: string;
+  plaintext?: boolean;
+  encryptionMode?: 'server' | 'hybrid' | 'e2ee';
 }
 
 export interface SendMessageBody {

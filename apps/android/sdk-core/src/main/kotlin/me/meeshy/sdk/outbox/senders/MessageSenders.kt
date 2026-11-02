@@ -9,8 +9,10 @@ import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.conversation.MessageMediaWriteBack
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.ConsumeAfterReadRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.apiCall
@@ -18,6 +20,9 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.OutboxPayloadGraft
+import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
+import me.meeshy.sdk.outbox.ConsumeAfterReadPayload
+import me.meeshy.sdk.outbox.ConsumeViewOncePayload
 import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
@@ -33,6 +38,7 @@ public class SendMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val messageRepository: MessageRepository,
     private val json: Json,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override val payloadGraft: OutboxPayloadGraft = MessageMediaWriteBack::graft
@@ -44,12 +50,12 @@ public class SendMessageHandler @Inject constructor(
                     messageRepository.reconcileSent(row.cmid, result.data)
                     SendResult.Success
                 }
-                is NetworkResult.Failure -> SendResult.TransientFailure
+                is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger) ?: SendResult.TransientFailure
             }
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        messageRepository.markSendFailed(row.cmid)
+        messageRepository.markSendFailed(row.cmid, row.lastError)
     }
 }
 
@@ -57,21 +63,54 @@ public class SendMessageHandler @Inject constructor(
 public class EditMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val json: Json,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<EditMessageRequest>(row) { body ->
-            apiCall { messageApi.edit(row.targetId, body) }.toSendResult()
+            val result = apiCall { messageApi.edit(row.targetId, body) }
+            (result as? NetworkResult.Failure)?.let { PlaintextRefusal.of(it, PlaintextRefusal.laneConversation(row.lane), ledger) }
+                ?: result.toSendResult()
         }
 }
 
-/** `DELETE_MESSAGE`: deletes the message. */
+/**
+ * #13628 — la passerelle a refusé un CLAIR vers une conversation chiffrée de bout en bout (`E2EE_PLAINTEXT_REFUSED`, #11216) :
+ * l'appareil l'ignorait (événement d'activation manqué). Il l'apprend aussitôt — aucune ligne suivante ne part en clair — et la
+ * ligne est épuisée au lieu d'être renvoyée en clair à chaque essai.
+ */
+internal object PlaintextRefusal {
+    const val CODE: String = "E2EE_PLAINTEXT_REFUSED"
+
+    private const val MESSAGE_LANE_PREFIX: String = "message:"
+
+    fun of(failure: NetworkResult.Failure, conversationId: String?, ledger: EndToEndRegimeLedger): SendResult? {
+        if (failure.error.code != CODE) return null
+        conversationId?.takeIf { it.isNotBlank() }?.let(ledger::learn)
+        return SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_END_TO_END)
+    }
+
+    fun laneConversation(lane: String): String? =
+        lane.takeIf { it.startsWith(MESSAGE_LANE_PREFIX) }?.removePrefix(MESSAGE_LANE_PREFIX)?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * `DELETE_MESSAGE`: deletes the message for everyone. An exhausted deletion (refused in clear for an end-to-end
+ * conversation, #13790, or retries spent) refreshes the conversation of its lane, so the tombstone gives way to the
+ * server's message.
+ */
 public class DeleteMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
+    private val messageRepository: MessageRepository,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        apiCall { messageApi.delete(row.targetId) }.toSendResult()
+        apiCall { messageApi.delete(row.targetId) }.toSendResult(PlaintextRefusal.laneConversation(row.lane), ledger)
+
+    override suspend fun onExhausted(row: OutboxEntity) {
+        PlaintextRefusal.laneConversation(row.lane)?.let { messageRepository.refresh(it) }
+    }
 }
 
 /**
@@ -82,11 +121,12 @@ public class PinMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val messageRepository: MessageRepository,
     private val json: Json,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<PinPayload>(row) { payload ->
-            apiCall { messageApi.pin(payload.conversationId, row.targetId) }.toSendResult()
+            apiCall { messageApi.pin(payload.conversationId, row.targetId) }.toSendResult(payload.conversationId, ledger)
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
@@ -99,16 +139,44 @@ public class UnpinMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val messageRepository: MessageRepository,
     private val json: Json,
+    private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult =
         json.withPayload<PinPayload>(row) { payload ->
-            apiCall { messageApi.unpin(payload.conversationId, row.targetId) }.toSendResult()
+            apiCall { messageApi.unpin(payload.conversationId, row.targetId) }.toSendResult(payload.conversationId, ledger)
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
         refreshPinnedConversation(json, messageRepository, row)
     }
+}
+
+/**
+ * `CONSUME_AFTER_READ` (#13995) : la flamme-œil vue puis quittée disparaît chez ce lecteur — l'effet
+ * local est déjà posé, le serveur l'applique à ses autres appareils (`message:expired`). Rien à défaire.
+ */
+public class ConsumeAfterReadHandler @Inject constructor(
+    private val messageApi: MessageApi,
+    private val json: Json,
+) : OutboxKindHandler {
+
+    override suspend fun send(row: OutboxEntity): SendResult =
+        json.withPayload<ConsumeAfterReadPayload>(row) { payload ->
+            apiCall { messageApi.consumeAfterRead(row.targetId, ConsumeAfterReadRequest(payload.messageIds)) }.toSendResult(row.targetId)
+        }
+}
+
+/** `CONSUME_VIEW_ONCE` (#13995) : la vue unique lue et refermée consomme son compteur serveur. */
+public class ConsumeViewOnceHandler @Inject constructor(
+    private val messageApi: MessageApi,
+    private val json: Json,
+) : OutboxKindHandler {
+
+    override suspend fun send(row: OutboxEntity): SendResult =
+        json.withPayload<ConsumeViewOncePayload>(row) { payload ->
+            apiCall { messageApi.consumeViewOnce(payload.conversationId, row.targetId) }.toSendResult(payload.conversationId)
+        }
 }
 
 private suspend fun refreshPinnedConversation(
@@ -149,4 +217,14 @@ public interface MessageSendersModule {
     @IntoMap
     @OutboxKindKey(OutboxKind.UNPIN_MESSAGE)
     public fun unpinMessage(handler: UnpinMessageHandler): OutboxKindHandler
+
+    @Binds
+    @IntoMap
+    @OutboxKindKey(OutboxKind.CONSUME_AFTER_READ)
+    public fun consumeAfterRead(handler: ConsumeAfterReadHandler): OutboxKindHandler
+
+    @Binds
+    @IntoMap
+    @OutboxKindKey(OutboxKind.CONSUME_VIEW_ONCE)
+    public fun consumeViewOnce(handler: ConsumeViewOnceHandler): OutboxKindHandler
 }

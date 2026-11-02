@@ -23,7 +23,7 @@ final class BubbleQuotedReplyThumbHashGuardTests: XCTestCase {
     private struct UnanchoredSource: Error { let reason: String }
 
     private static let bubblePath = "Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift"
-    private static let focalPath = "Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift"
+    private static let focalPath = "Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift"
     private static let composerPath = "Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift"
     private static let rulePath = "Meeshy/Features/Main/Views/Bubble/QuotedReplyPresentation.swift"
 

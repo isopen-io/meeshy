@@ -5,7 +5,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { getRequestContext } from '../../services/GeoIPService';
 import { clientRateKey } from '../../utils/client-rate-key';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
-import { candidatsDePseudo } from '../../utils/username-candidates';
+import { candidatsDePseudo, pseudoSousLePlancher } from '../../utils/username-candidates';
 
 const logger = enhancedLogger.child({ module: 'DirectoryAvailability' });
 
@@ -152,7 +152,11 @@ export async function directoryAvailabilityRoutes(fastify: FastifyInstance) {
         // `select: { id: true }` : l'existence se TESTE, elle ne se télécharge
         // pas. Les quatre `findFirst` de l'ancienne route chargeaient la ligne
         // entière — `password`, `twoFactorSecret`, `twoFactorBackupCodes`.
-        const pris = await fastify.prisma.user.findFirst({
+        //
+        // Un pseudo sous le plancher (#13825) se rend « taken », avec des
+        // rechanges valides : la forme de la réponse ne connaît que deux
+        // statuts, et « available » ferait croire qu'il passera la soumission.
+        const pris = pseudoSousLePlancher(demande) || await fastify.prisma.user.findFirst({
           where: { username: { equals: demande, mode: 'insensitive' } },
           select: { id: true },
         });

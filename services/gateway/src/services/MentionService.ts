@@ -13,6 +13,7 @@ import type { MentionedUser } from '@meeshy/shared/types';
 import { MAX_MENTIONS_PER_MESSAGE } from '../validation/mention-list.js';
 import { MentionSuggestionFinder, type MentionSuggestion } from './mentions/mentionSuggestions';
 import { mentionableScope } from './mentions/mentionableScope';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 
 // Logger dédié pour MentionService
 const logger = enhancedLogger.child({ module: 'MentionService' });
@@ -224,8 +225,8 @@ export class MentionService {
   }
 
   /**
-   * Suggestions d'autocomplete sous un post : auteur, commentateurs, amis,
-   * puis l'annuaire.
+   * Suggestions d'autocomplete sous un post : connaissances, intervenants,
+   * contacts de tout cercle, puis l'annuaire (#14052, #14057).
    *
    * @throws Error('Post non trouvé ou accès refusé') si le post n'existe pas ou est supprimé
    */
@@ -267,7 +268,9 @@ export class MentionService {
       where: { id: conversationId },
       include: {
         participants: {
-          where: { isActive: true },
+          // #14066 — une participation VIVANTE (active ET non bannie) : un banni
+          // ne cite personne et ne se cite pas.
+          where: PARTICIPATION_VIVANTE,
           select: { userId: true }
         }
       }
@@ -283,6 +286,20 @@ export class MentionService {
     }
 
     const memberIds = conversation.participants.map(m => m.userId).filter(Boolean) as string[];
+
+    // #14066 — un expéditeur inscrit qui n'est pas membre actif ne cite
+    // personne, quelle que soit la portée. Un anonyme (`null`) n'a pas de
+    // `User.id` : son appartenance se vérifie par son `Participant.id`, chez le
+    // transport (`resolveMessageMentions`).
+    if (senderId !== null && !memberIds.includes(senderId)) {
+      return {
+        isValid: false,
+        validUserIds: [],
+        invalidUsernames: [],
+        errors: ['Seul un membre de la conversation peut mentionner']
+      };
+    }
+
     const validUserIds: string[] = [];
     const invalidUserIds: string[] = [];
     const errors: string[] = [];

@@ -1680,7 +1680,7 @@ public struct VoiceProfileManageView: View {
 
 ### D6. Extend SettingsView -- Add "Profil vocal" Section
 
-**File**: `/Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/SettingsView.swift`
+**File**: `/Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Settings/Views/SettingsView.swift`
 
 Add `@State private var showVoiceProfile = false` to the state variables.
 

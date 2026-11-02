@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { STORY_LIMITS, storyTextLength } from '@meeshy/shared/utils/story-limits';
+import { playPattern } from '@/lib/view/haptics';
 import { useStore } from 'zustand';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -17,7 +19,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { storyReturn } from '@/lib/onboarding/story-return';
-import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
+import { audienceLabelKey, defaultAudienceOf, seededAudience, servedAudience, shownAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
 import { studioPublishRefusal, type PublicationKind, type StudioOrigin } from '@/lib/stories/publication-kind';
 import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
 import { composeStoryCanvas } from '@/lib/stories/story-document';
@@ -33,6 +35,7 @@ import {
   studioPublishablePageCount,
   studioSnapshotOf,
   withAddedPage,
+  studioTextRefusal,
   withAddedText,
   withCurrentPage,
   withPage,
@@ -51,6 +54,7 @@ import {
   withVisualPose,
   withoutPage,
   withoutPages,
+  emptyStudioDraft,
   withoutSound,
   withoutText,
   withoutVisual,
@@ -59,6 +63,7 @@ import {
 import { takeStudioSeed } from '@/lib/stories/studio-seed';
 import { studioPreviewDocument } from '@/lib/stories/studio-preview';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { studioOutbox, type StudioOutbox } from '@/lib/stories/studio-outbox';
 import { settlePages, studioPublishPlan } from '@/lib/stories/studio-publish';
 import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
 import { armedPublishChoice, companionReelOffered, publishChoiceTitleKey, publishedKinds, toggledPublishChoice } from '@/lib/stories/publish-also-as-reel';
@@ -79,7 +84,7 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 import { PublishSplitButton } from '@/components/publish-split-button';
 import { href, navigate } from '@/routes/route-table';
 import { StudioShell } from '@/routes/story-compose-shell';
-import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
+import { AudienceChip } from '@/routes/story-compose-audience';
 import { publicationRefusalText, studioAssetsShown, StudioFooterMessage, studioFooterSpeaks, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
 import { FrameMark, StudioAnimatedToggle, StudioMoreMenu, StudioPostTextButton, StudioTile, type StudioMenuItem } from '@/routes/story-compose-chrome';
 import { StudioRefusal } from '@/routes/story-compose-parts';
@@ -101,6 +106,7 @@ import { ALL_DOORS, uploadKey, useStudioUploads } from '@/routes/use-studio-uplo
 import { useStudioTimeline } from '@/routes/use-studio-timeline';
 import { useStudioQuickCapture } from '@/routes/use-studio-quick-capture';
 import { StudioPendingBand, useStudioPendingSend } from '@/routes/story-compose-pending';
+import { useStudioOutbox } from '@/routes/use-studio-outbox';
 import { studioChrome, studioOpenTool } from '@/lib/stories/studio-focus';
 import type { StudioBackgroundEdit } from '@/lib/stories/studio-background-tools';
 import { StudioBackLayer, useStudioBackgroundTools } from '@/routes/use-studio-background-tools';
@@ -173,10 +179,15 @@ const StudioFloorLayer = lazy(() => import('@/routes/story-compose-floor').then(
 /** Le Cadre d'un fond qu'on n'a pas encore réglé — le contrat (#8414). */
 const DEFAULT_FRAME: StoryFrame = { fitMode: 'fit', backdrop: 'blur' };
 
+/** Le retour d'un geste REFUSÉ par un plafond : deux touches courtes (#13590). */
+const REFUSAL_HAPTIC = [20, 40, 20] as const;
+
 export type StoryStudioDeps = {
   readonly api: ConversationsDeps;
   readonly upload: PostMediaUploadDeps;
   readonly drafts: StudioDraftStore;
+  /** LES PUBLICATIONS NON ENVOYÉES (#13416) — fichiers et intention, sur l'appareil. */
+  readonly outbox?: StudioOutbox;
   /** LE TRANSPORT D'UNE PISTE PROTÉGÉE (#7015) — injectable pour les témoins
    * UNIQUEMENT, comme tout le réseau de cet écran. La production prend
    * `protectedMediaDeps`, le site UNIQUE. */
@@ -194,6 +205,7 @@ const defaultStoryStudioDeps: StoryStudioDeps = {
   api: apiDeps,
   upload: postMediaUploadDeps,
   drafts: studioDraftStore,
+  outbox: studioOutbox,
   media: protectedMediaDeps,
 };
 
@@ -352,6 +364,15 @@ function StoryStudio({
   /** Chaque aperçu local créé — révoqués au DÉPART du studio seulement : un
    * média retiré peut revenir par Annuler, son `blob:` doit vivre jusque-là. */
   const blobsRef = useRef(new Set<string>());
+  const outbox = useStudioOutbox({ outbox: deps.outbox ?? null, viewerId, draft, setDraft, language, blobs: blobsRef, purged: purgedRef, keyring: pending.keyring, onResume: (intent) => (setChoice(intent.choice), pending.arm()) });
+  /** SUPPRIMER une publication non envoyée — le geste EXPLICITE qui efface brouillon et médias de l'appareil. */
+  const discardUnsent = () => {
+    latestDraft.current.pages.forEach((p) => (ALL_DOORS.forEach((door) => forgetUpload(p.id, door)), revokePageMedia(p)));
+    historyRef.current = emptyStudioHistory;
+    void outbox.discard();
+    if (viewerId !== null) deps.drafts.clear(viewerId);
+    setDraft(emptyStudioDraft(language));
+  };
   /** UN GESTE SUR LA SCÈNE — le site unique qui écrit l'historique. `key`
    * coalise les gestes continus (la frappe dans un même texte) en un pas. */
   const edit = useCallback((change: (current: StudioDraft) => StudioDraft, key: string | null = null) => {
@@ -468,6 +489,11 @@ function StoryStudio({
     if (target === undefined) return;
     edit((current) => withText(current, target, value), `text:${target}`);
     reportComposeText(value);
+    // `withText` coupe le texte à la borne, comptée en caractères AFFICHÉS : l'auteur doit savoir POURQUOI.
+    if (storyTextLength(value) >= STORY_LIMITS.maxTextCharacters) {
+      setPlaceRefusal({ reason: 'text-length' });
+      playPattern(REFUSAL_HAPTIC);
+    } else setPlaceRefusal((current) => (current?.reason === 'text-length' ? null : current));
   }
 
   /**
@@ -536,6 +562,7 @@ function StoryStudio({
     if (!canPublishStudioDraft(draft) || publishing) return;
     if (studioPublishRefusal(draft, chosen.kind) !== null) return;
     setChoice(chosen);
+    outbox.arm({ choice: chosen, promoted });
     if (!online) {
       pending.arm();
       return;
@@ -555,6 +582,7 @@ function StoryStudio({
     const current = latestDraft.current;
     const plan = studioPublishPlan({ pages: current.pages, settled: settledByPage, choice: chosen });
     if (plan.kind !== 'ready') {
+      outbox.fail();
       pending.settle(cancelSignal);
       setPublishing(false);
       return;
@@ -586,7 +614,7 @@ function StoryStudio({
     if (outcome.kind !== 'published') {
       setPublishProgress(null);
       setPublishing(false);
-      if (outcome.kind === 'failed') setPublishFailure({ failure: outcome.failure, published: outcome.published, total: outcome.total });
+      if (outcome.kind === 'failed') (outbox.fail(), setPublishFailure({ failure: outcome.failure, published: outcome.published, total: outcome.total }));
       return;
     }
 
@@ -597,6 +625,9 @@ function StoryStudio({
     purgedRef.current = true;
     if (viewerId !== null) deps.drafts.clear(viewerId);
     current.pages.forEach(revokePageMedia);
+    // L'appareil est vidé AVANT de quitter le studio : une page qui part
+    // pendant l'écriture rendrait les médias publiés au studio suivant.
+    await outbox.discard();
     if (chosen.kind === 'STORY') {
       if (chosen.alsoAsReel === true) void refreshFeedAction().catch(() => undefined);
       await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
@@ -662,8 +693,8 @@ function StoryStudio({
   /** **CE QUI PARTIRA** (#7683) — l'audience CHOISIE, sinon le défaut de la
    * passerelle pour le format en cours (`defaultAudienceOf`) : la pastille
    * dit toujours ce qui part, même quand rien n'a été choisi. */
-  const audienceValue = draft.visibility ?? defaultAudienceOf(kind);
-  const audienceSource: AudienceSource = draft.visibility === null ? 'default' : 'chosen';
+  const shown = shownAudience({ chosen: draft.visibility, served: servedAudience(reopened?.origin.visibility), fallback: defaultAudienceOf(kind) });
+  const { value: audienceValue, source: audienceSource } = shown;
   /** Ce que CHAQUE format du menu partirait (§ 1.6) — un choix explicite
    * s'applique aux trois formats identiquement ; sans choix, chacun a son
    * propre défaut serveur. */
@@ -723,6 +754,11 @@ function StoryStudio({
   /** « T+ » et l'invite sans texte (#8515) — pose un texte (entré à la tête
    * sur une scène animée) ET ouvre sa saisie : on tape aussitôt. */
   const addTextAndWrite = () => {
+    if (studioTextRefusal(latestDraft.current) !== null) {
+      setPlaceRefusal({ reason: 'text-max' });
+      playPattern(REFUSAL_HAPTIC);
+      return;
+    }
     const id = currentStudioPage(withAddedText(latestDraft.current, language)).selected;
     edit((current) => {
       const added = withAddedText(current, language);
@@ -867,7 +903,7 @@ function StoryStudio({
           ni ⋯ ni Publier ne se posent sur le dessin. La carte reste 9:16 et se
           centre dans ce qui reste ; les deux rails flottent sur ses bords. */}
       <div data-story-studio-plateau className="relative z-10 min-h-0 flex-1">
-        <StudioPendingBand lang={lang} online={online} pending={pending} />
+        <StudioPendingBand lang={lang} online={online} pending={{ ...pending, cancel: () => (pending.cancel(), outbox.disarm()) }} unsent={outbox.unsent === null ? null : { retry: () => void publish(outbox.unsent!.choice, outbox.unsent!.promoted), discard: discardUnsent }} volatile={outbox.volatile} />
 
         {/* Frise ouverte, les portes cèdent : seul l'ÉCLAIR reste, là où il a
             ouvert le mode — le geste qui l'éteint demeure à sa place. */}

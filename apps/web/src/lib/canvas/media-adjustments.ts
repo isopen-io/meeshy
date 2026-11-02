@@ -35,7 +35,7 @@ const MID_GRAY = 0.5;
 const VIBRANCE_WEIGHT = 0.5;
 const TINT_ALPHA = 0.5;
 const VIGNETTE_ALPHA_PER_UNIT = 0.5;
-const VIGNETTE_CLEAR_STOP = '45%';
+const VIGNETTE_CLEAR_STOP = 0.45;
 const WARM_TINT = '255, 138, 0';
 const COOL_TINT = '0, 122, 255';
 /** Le grain de CoreImage : du noir dont l'alpha suit un bruit uniforme, au
@@ -57,19 +57,37 @@ export type MediaAdjustmentsPaint = {
   readonly glow?: number;
 };
 
+/**
+ * UN CALQUE EN FORME (#13880) — ce que les calques CSS projettent, et ce
+ * qu'un canvas peint lui-même (l'export d'une story) : la teinte en lumière
+ * douce, la vignette (transparente jusqu'à `clearStop` du rayon, puis noire
+ * jusqu'à `alpha`), le grain (du noir dont l'alpha suit un bruit, au plus `alpha`).
+ */
+export type MediaAdjustmentLayer =
+  | { readonly kind: 'tint'; readonly rgb: string; readonly alpha: number }
+  | { readonly kind: 'vignette'; readonly alpha: number; readonly clearStop: number }
+  | { readonly kind: 'grain'; readonly alpha: number };
+
 export type MediaAdjustmentsPaintOptions = {
   readonly target: MediaAdjustmentTarget;
+  /** L'unité du flou, en pixels du repère design — `cqw` par défaut (le lecteur) ; un canvas la veut en pixels. */
+  readonly blurLength?: (designPixels: number) => string;
   /** Pixels du repère design (1080 de large) par pixel de la SOURCE — le rayon
    * du flou CoreImage se compte en pixels de l'image ; 1 quand la source est
    * inconnue. */
   readonly designPixelsPerSourcePixel?: number;
 };
 
+/** Le rayon du bloom (`CIBloom`, 10 px de la source) en fraction de la LARGEUR du média, sur une source supposée large de 1080 px — le halo du lecteur (`MediaGlowFilter`) et celui de l'export. */
+export const BLOOM_RADIUS_FRACTION = 10 / 1080;
+
 const NOTHING: MediaAdjustmentsPaint = { filter: undefined, overlays: [] };
 
 const round4 = (value: number): number => Math.round(value * 10000) / 10000;
 
-function filterChain(values: MediaAdjustments, designPixelsPerSourcePixel: number): readonly string[] {
+const cqwLength = (designPixels: number): string => cqw(designPixels / DESIGN_WIDTH);
+
+function filterChain(values: MediaAdjustments, designPixelsPerSourcePixel: number, blurLength: (designPixels: number) => string): readonly string[] {
   const { exposure, brightness, contrast, saturation, vibrance, blur } = values;
   return [
     exposure !== undefined ? `brightness(${round4(2 ** (exposure / SRGB_GAMMA))})` : null,
@@ -77,34 +95,47 @@ function filterChain(values: MediaAdjustments, designPixelsPerSourcePixel: numbe
     contrast !== undefined ? `contrast(${round4(contrast)})` : null,
     saturation !== undefined ? `saturate(${round4(saturation)})` : null,
     vibrance !== undefined ? `saturate(${round4(1 + vibrance * VIBRANCE_WEIGHT)})` : null,
-    blur !== undefined ? `blur(${cqw((BLUR_SOURCE_PIXELS * blur * designPixelsPerSourcePixel) / DESIGN_WIDTH)})` : null,
+    blur !== undefined ? `blur(${blurLength(BLUR_SOURCE_PIXELS * blur * designPixelsPerSourcePixel)})` : null,
   ].filter((step): step is string => step !== null);
 }
 
 /** Un bruit en tuile de 256 px : `feTurbulence` donne la valeur, la matrice la
  * porte à l'alpha d'un noir pur — la forme du grain de CoreImage. */
-const grainLayer = (grain: number): MediaAdjustmentOverlay => {
+const grainBackground = (alpha: number): string => {
   const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><filter id="g">' +
     '<feTurbulence type="fractalNoise" baseFrequency="0.9" stitchTiles="stitch"/>' +
-    `<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ${round4(grain * GRAIN_ALPHA_PER_UNIT)} 0 0 0 0"/>` +
+    `<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ${alpha} 0 0 0 0"/>` +
     '</filter><rect width="100%" height="100%" filter="url(#g)"/></svg>';
   // Les parenthèses aussi : un `)` nu fermerait le `url(` d'un analyseur CSS strict.
   const encoded = encodeURIComponent(svg).replace(/\(/g, '%28').replace(/\)/g, '%29');
-  return { background: `url("data:image/svg+xml,${encoded}")` };
+  return `url("data:image/svg+xml,${encoded}")`;
 };
 
-function overlaysOf({ temperature, vignette, grain }: MediaAdjustments): readonly MediaAdjustmentOverlay[] {
-  const tint: readonly MediaAdjustmentOverlay[] =
-    temperature === undefined
-      ? []
-      : [{ background: `rgba(${temperature > 0 ? WARM_TINT : COOL_TINT}, ${round4(Math.abs(temperature) * TINT_ALPHA)})`, mixBlendMode: 'soft-light' }];
-  const shade: readonly MediaAdjustmentOverlay[] =
-    vignette === undefined
-      ? []
-      : [{ background: `radial-gradient(ellipse at center, rgba(0, 0, 0, 0) ${VIGNETTE_CLEAR_STOP}, rgba(0, 0, 0, ${round4(Math.min(1, vignette * VIGNETTE_ALPHA_PER_UNIT))}) 100%)` }];
-  const noise: readonly MediaAdjustmentOverlay[] = grain === undefined ? [] : [grainLayer(grain)];
+function layersOf({ temperature, vignette, grain }: MediaAdjustments): readonly MediaAdjustmentLayer[] {
+  const tint: readonly MediaAdjustmentLayer[] =
+    temperature === undefined ? [] : [{ kind: 'tint', rgb: temperature > 0 ? WARM_TINT : COOL_TINT, alpha: round4(Math.abs(temperature) * TINT_ALPHA) }];
+  const shade: readonly MediaAdjustmentLayer[] =
+    vignette === undefined ? [] : [{ kind: 'vignette', alpha: round4(Math.min(1, vignette * VIGNETTE_ALPHA_PER_UNIT)), clearStop: VIGNETTE_CLEAR_STOP }];
+  const noise: readonly MediaAdjustmentLayer[] = grain === undefined ? [] : [{ kind: 'grain', alpha: round4(grain * GRAIN_ALPHA_PER_UNIT) }];
   return [...tint, ...shade, ...noise];
+}
+
+function overlayOf(layer: MediaAdjustmentLayer): MediaAdjustmentOverlay {
+  switch (layer.kind) {
+    case 'tint':
+      return { background: `rgba(${layer.rgb}, ${layer.alpha})`, mixBlendMode: 'soft-light' };
+    case 'vignette':
+      return { background: `radial-gradient(ellipse at center, rgba(0, 0, 0, 0) ${layer.clearStop * 100}%, rgba(0, 0, 0, ${layer.alpha}) 100%)` };
+    case 'grain':
+      return { background: grainBackground(layer.alpha) };
+  }
+}
+
+/** Les calques des réglages, en forme, dans l'ordre où ils se superposent. */
+export function mediaAdjustmentLayers(payload: Readonly<Record<string, unknown>>, target: MediaAdjustmentTarget): readonly MediaAdjustmentLayer[] {
+  const values = readMediaAdjustments(payload, target);
+  return values === null ? [] : layersOf(values);
 }
 
 /** La peinture de `payload.adjustments` : une chaîne de filtres CSS (ou
@@ -112,15 +143,15 @@ function overlaysOf({ temperature, vignette, grain }: MediaAdjustments): readonl
  * sans réglage actif. */
 export function mediaAdjustmentsPaint(
   payload: Readonly<Record<string, unknown>>,
-  { target, designPixelsPerSourcePixel = 1 }: MediaAdjustmentsPaintOptions,
+  { target, designPixelsPerSourcePixel = 1, blurLength = cqwLength }: MediaAdjustmentsPaintOptions,
 ): MediaAdjustmentsPaint {
   const values = readMediaAdjustments(payload, target);
   if (values === null) return NOTHING;
   const scale = Number.isFinite(designPixelsPerSourcePixel) && designPixelsPerSourcePixel > 0 ? designPixelsPerSourcePixel : 1;
-  const chain = filterChain(values, scale);
+  const chain = filterChain(values, scale, blurLength);
   return {
     filter: chain.length === 0 ? undefined : chain.join(' '),
-    overlays: overlaysOf(values),
+    overlays: layersOf(values).map(overlayOf),
     ...(values.bloom !== undefined ? { glow: values.bloom } : {}),
   };
 }

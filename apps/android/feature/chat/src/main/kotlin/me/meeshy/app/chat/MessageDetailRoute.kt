@@ -17,6 +17,7 @@ sealed interface MessageDetailRoute {
     data class Report(override val messageId: String) : MessageDetailRoute { override val tag get() = "report" }
     data class CallDetails(override val messageId: String) : MessageDetailRoute { override val tag get() = "call" }
     data class Map(override val messageId: String) : MessageDetailRoute { override val tag get() = "map" }
+    data class Transcription(override val messageId: String) : MessageDetailRoute { override val tag get() = "transcription" }
 
     fun encode(): String = "$tag|$messageId"
 
@@ -33,6 +34,7 @@ sealed interface MessageDetailRoute {
                 "report" -> Report(id)
                 "call" -> CallDetails(id)
                 "map" -> Map(id)
+                "transcription" -> Transcription(id)
                 else -> null
             }
         }

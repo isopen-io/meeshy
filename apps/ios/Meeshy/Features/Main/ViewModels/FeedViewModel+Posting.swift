@@ -87,7 +87,7 @@ extension FeedViewModel {
                 }
             }
         } catch {
-            publishError = error.localizedDescription
+            publishError = DailyGestureLimitNotice.refusalText(error) ?? error.localizedDescription
         }
     }
 

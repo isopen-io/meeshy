@@ -18,12 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -56,12 +53,15 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * A single user's authored-posts feed — reached from a profile's "Publications" row.
@@ -100,8 +100,8 @@ fun UserPostsScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.user_posts_back),
+                                imageVector = leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.user_posts_back)),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
                         }
@@ -140,9 +140,11 @@ fun UserPostsScreen(
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
                             UserPostCard(
+                                modifier = Modifier.animateItem(),
                                 post = post,
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                                 onOpenPost = onOpenPost,
+                                onOpenReel = onPostClick,
                             )
                         }
                         if (state.isLoadingMore) {
@@ -169,32 +171,32 @@ fun UserPostsScreen(
 }
 
 @Composable
-private fun UserPostCard(
+internal fun UserPostCard(
+    modifier: Modifier = Modifier,
     post: FeedPostPresentation,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenReel: (String) -> Unit,
 ) {
+    post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
+        ReelPostCard(
+            post = post,
+            cover = cover,
+            onOpenReel = onOpenReel,
+            modifier = modifier,
+        )
+        return
+    }
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(contentAlignment = Alignment.Center) {
-                    MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp)
-                    if (!post.authorAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = post.authorAvatarUrl,
-                            contentDescription = post.authorName ?: unknownAuthor,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                        )
-                    }
-                }
+                MeeshyAvatar(name = post.authorName ?: unknownAuthor, size = 40.dp, imageUrl = post.authorAvatarUrl, presence = rememberPresence(post.authorId))
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -217,7 +219,11 @@ private fun UserPostCard(
                 }
             }
 
-            post.images.firstOrNull()?.let { image ->
+            val scenes = post.scenes
+            if (scenes != null) {
+                Spacer(Modifier.height(MeeshySpacing.md))
+                PostScenesView(scenes = scenes, live = false)
+            } else post.images.firstOrNull()?.let { image ->
                 Spacer(Modifier.height(MeeshySpacing.md))
                 AsyncImage(
                     model = image.url,
@@ -231,33 +237,7 @@ private fun UserPostCard(
                 )
             }
 
-            post.repostEmbed?.let { embed ->
-                Spacer(Modifier.height(MeeshySpacing.md))
-                RepostEmbedCell(embed = embed, onOpen = onOpenPost)
-            }
-
-            if (post.isReel) {
-                Spacer(Modifier.height(MeeshySpacing.md))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.semantics {
-                        contentDescription = post.authorName ?: unknownAuthor
-                    },
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayCircle,
-                        contentDescription = null,
-                        tint = MeeshyPalette.Indigo500,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(MeeshySpacing.xs))
-                    Text(
-                        text = stringResource(R.string.feed_reel),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-            }
+            FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
         }
     }
 }

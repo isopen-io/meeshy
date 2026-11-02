@@ -98,7 +98,7 @@ extension ConversationViewModel {
         messageTranslations.removeValue(forKey: messageId)
         messageTranscriptions.removeValue(forKey: messageId)
         messageTranslatedAudios.removeValue(forKey: messageId)
-        try? await messagePersistence.markViewOnceOpened(localId: messageId)
+        try? await messagePersistence.markViewOnceOpened(localId: messageId, origin: .authenticated)
     }
 
     /// Pose la révélation de la visite sur des messages relus du magasin : une

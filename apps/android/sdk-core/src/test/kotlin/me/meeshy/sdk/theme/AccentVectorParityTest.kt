@@ -17,7 +17,7 @@ import org.junit.Test
  * cross-plateforme de la couleur d'accent de conversation (CLAUDE.md §
  * *Conversation Accent Color*). TS le rejoue déjà
  * (`packages/shared/__tests__/vectors/accent.vectors.test.ts`) et iOS aussi
- * (`apps/ios/MeeshyTests/Unit/Lentille/AccentVectorTests.swift`). Android
+ * (`apps/ios/MeeshyTests/Unit/Lens/AccentVectorTests.swift`). Android
  * n'en rejouait AUCUN cas — `DynamicColorGeneratorTest` ne vérifie qu'une
  * poignée d'exemples écrits à la main. C'est la troisième et dernière branche
  * du miroir : 3 clients sur 3 rejouent désormais les 24 vecteurs (leçon 291 —

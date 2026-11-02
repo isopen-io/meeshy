@@ -84,11 +84,16 @@ internal object CacheTables {
         "CREATE INDEX IF NOT EXISTS `index_messages_pinnedAt` ON `messages` (`pinnedAt`)",
     )
 
+    /** #13821 — version 22 : la fenêtre récente d'un fil (`ORDER BY createdAt DESC LIMIT n`) sans tri temporaire. */
+    val messagesTimelineIndex: String =
+        "CREATE INDEX IF NOT EXISTS `index_messages_conversationId_createdAt` ON `messages` (`conversationId`, `createdAt`)"
+
     val messages = CacheTableDefinition(
         name = "messages",
         createSql = "CREATE TABLE IF NOT EXISTS `messages` (`id` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `seq` INTEGER, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `sendState` TEXT, " +
             messageColumnsAddedIn20.joinToString(", ") + ", PRIMARY KEY(`id`))",
-        indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_messages_conversationId` ON `messages` (`conversationId`)") + messagesIndexes,
+        indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_messages_conversationId` ON `messages` (`conversationId`)") +
+            messagesIndexes + messagesTimelineIndex,
     )
 
     val pendingIds = CacheTableDefinition(

@@ -49,6 +49,7 @@ import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.ConnectionActionChip
 import me.meeshy.ui.component.ConnectionFeedbackHost
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.MeeshyPalette
@@ -278,7 +279,7 @@ private fun ResultList(
 }
 
 @Composable
-private fun ResultRow(
+internal fun ResultRow(
     row: DiscoverRow,
     onAdd: () -> Unit,
     onAccept: () -> Unit,
@@ -300,6 +301,7 @@ private fun ResultRow(
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(user.id.ifBlank { name })),
             imageUrl = user.avatar,
+            presence = rememberPresence(user.id, user.servedPresence()),
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {

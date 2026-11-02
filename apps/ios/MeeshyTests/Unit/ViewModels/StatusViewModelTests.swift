@@ -785,6 +785,23 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertNil(handler, "Should return nil when no status exists for the user")
     }
 
+    func test_moodSpotlightHandler_returnsNilWhenNoStatus() {
+        XCTAssertNil(sut.moodSpotlightHandler(for: "no-status-user"))
+    }
+
+    func test_moodSpotlightHandler_opensTheMoodPageOfTheLiveStatus() {
+        let entry = makeStatusEntry(userId: "tap-user")
+        sut.statuses = [entry]
+        let controller = StatusBubbleController()
+        var opened: StatusEntry?
+        controller.onOpenSpotlight = { opened = $0 }
+
+        sut.moodSpotlightHandler(for: "tap-user", controller: controller)?(.zero)
+
+        XCTAssertEqual(opened?.id, entry.id)
+        XCTAssertNil(controller.currentEntry, "en conversation, aucune bulle ne s'ouvre")
+    }
+
     // MARK: - Status Lifecycle Tests (Point 85)
 
     func test_publishStatus_success_addsToList() async {

@@ -1,6 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { MessageHiddenForMeEventData } from '@meeshy/shared/types/socketio-events/message';
 
+import { rowExitStore } from '@/lib/view/row-exit-motion';
+
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { hideRowsForReader } from './delete-message';
 
@@ -19,6 +21,13 @@ import { hideRowsForReader } from './delete-message';
  * la session ne retire rien. Rejoué (l'appareil qui a fait le geste le reçoit
  * aussi), il ne change rien — les rangées sont déjà parties.
  *
+ * L'ÉCHO D'UN REPLI EN COURS NE RETIRE PAS SA RANGÉE (#12634). La passerelle
+ * diffuse AVANT de répondre en HTTP : l'appareil du geste reçoit l'événement
+ * pendant que sa rangée se replie encore (`row-exit-motion.ts`). Une rangée
+ * notée sortante est laissée au geste local, qui la retire à la fin du repli
+ * et relit lui-même la ligne de liste ; la retirer ici la faisait disparaître
+ * d'un coup, à mi-fondu.
+ *
  * `message:restored-for-me` (l'inverse) n'est pas écouté : le web n'offre pas
  * ce geste, et la rangée revient au prochain chargement du fil.
  */
@@ -35,10 +44,12 @@ export function isMessageHiddenForMeEvent(payload: unknown): payload is MessageH
 
 export function applyMessageHiddenForMe(queryClient: QueryClient, data: MessageHiddenForMeEventData, viewerId: string): void {
   if (viewerId === '' || data.userId !== viewerId) return;
-  const conversationIds = [...new Set(data.messages.map((ref) => ref.conversationId))];
+  const { leaving } = rowExitStore.getState();
+  const refs = data.messages.filter((ref) => !leaving.has(ref.messageId));
+  const conversationIds = [...new Set(refs.map((ref) => ref.conversationId))];
   const describedByList = conversationIds
     .map((conversationId) => {
-      const ids = new Set(data.messages.filter((ref) => ref.conversationId === conversationId).map((ref) => ref.messageId));
+      const ids = new Set(refs.filter((ref) => ref.conversationId === conversationId).map((ref) => ref.messageId));
       return hideRowsForReader(queryClient, conversationId, ids).describedByList;
     })
     .some(Boolean);

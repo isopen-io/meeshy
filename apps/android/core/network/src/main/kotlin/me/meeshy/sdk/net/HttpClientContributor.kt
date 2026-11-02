@@ -35,8 +35,19 @@ private class FunctionContributor(
 
 /** Les priorités du socle ; un lot ultérieur choisit une valeur ENTRE elles. */
 object HttpPriority {
+    /** Outermost: a response that outlives the session which asked for it is dropped (#13558). */
+    const val SESSION_BOUNDARY = 50
+
+    /** Un morceau tus attend la réponse de la passerelle à sa mesure, jamais les 10 s par défaut (#13959). */
+    const val UPLOAD_TIMEOUTS = 60
+
+    /** Voit la réponse FINALE, après relance et authentification : un 426 n'est jamais rejoué, il ferme l'application (#13954). */
+    const val UPGRADE_REQUIRED = 70
     const val URL_GUARD = 100
     const val ENDPOINT_POLICY = 200
+
+    /** Avant la relance et l'authentification : le rejeu d'une action gardée repasse par les jetons. */
+    const val EMAIL_VERIFICATION_GATE = 250
     const val RETRY = 300
     const val PROACTIVE_REFRESH = 900
     const val AUTH = 1_000
@@ -44,6 +55,9 @@ object HttpPriority {
     const val CLIENT_CAPABILITIES = 1_100
     const val DEVICE_LOCALE = 1_200
     const val AUTH_EXPIRY = 1_300
+
+    /** Apres l'identite : voit la requete telle qu'elle part, sous son jeton. */
+    const val GUEST_SESSION_END = 1_350
     const val AUTHENTICATOR = 1_400
     const val SLOW_REQUEST = 1_500
     const val LOGGING = 9_000
@@ -72,6 +86,10 @@ internal fun builtInContributors(
     transition: SessionTransitionFlags = SessionTransitionFlags(),
     visitorKey: VisitorReaderKeyProviding? = null,
 ): List<HttpClientContributor> = listOfNotNull(
+    HttpClientContributor.of("session-boundary", HttpPriority.SESSION_BOUNDARY) {
+        it.addInterceptor(SessionBoundaryInterceptor(transition))
+    },
+    HttpClientContributor.of("upload-timeouts", HttpPriority.UPLOAD_TIMEOUTS) { it.addInterceptor(UploadTransferTimeoutInterceptor()) },
     HttpClientContributor.of("url-guard", HttpPriority.URL_GUARD) { it.addInterceptor(UrlGuardInterceptor()) },
     HttpClientContributor.of("endpoint-policy", HttpPriority.ENDPOINT_POLICY) {
         it.addInterceptor(EndpointPolicyInterceptor())

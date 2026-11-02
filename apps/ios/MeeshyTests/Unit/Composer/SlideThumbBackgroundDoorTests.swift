@@ -40,7 +40,7 @@ final class SlideThumbBackgroundDoorTests: XCTestCase {
     /// pour la meilleure des raisons apparentes.
     func test_leTemoin_litBienLesDeuxFichiers() throws {
         let bande = try source("packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+SlideStrip.swift")
-        let meuble = try source("apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
+        let meuble = try source("apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift")
         XCTAssertTrue(bande.contains("func slideThumb("),
                       "le témoin doit lire la vignette qu'il prétend garder")
         XCTAssertTrue(meuble.contains("var composerSurface"),
@@ -83,7 +83,7 @@ final class SlideThumbBackgroundDoorTests: XCTestCase {
     /// deux chemins au #4634.
     func test_leMeuble_cableLaPorteSurLeSiteUnique() throws {
         let nu = compact(try source(
-            "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift"))
+            "apps/ios/Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift"))
         XCTAssertTrue(nu.contains("onEditSceneObject:{openObjectEditor($0)}"),
                       "l'atelier reçoit la porte, et elle mène au site unique")
     }

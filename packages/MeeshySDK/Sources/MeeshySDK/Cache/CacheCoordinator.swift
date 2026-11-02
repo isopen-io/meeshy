@@ -60,6 +60,9 @@ public actor CacheCoordinator {
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
+    /// #13938 — « Mes cercles » : les liens servis par `GET /relations` (niveau, progression, éligibilité),
+    /// peints avant le réseau. Chiffré : le graphe social d'une personne est une donnée personnelle.
+    public let relationLinks: GRDBCacheStore<String, RelationLink>
     /// #9612 — Sécurité > Sessions s'ouvre sur la dernière liste connue. Chiffré : adresses et villes.
     /// `nonisolated` : un acteur ne protège rien d'une constante Sendable, et la
     /// lecture reste synchrone hors du module sous Swift 6.2 comme sous 6.4.
@@ -174,6 +177,7 @@ public actor CacheCoordinator {
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
         self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
+        self.relationLinks = GRDBCacheStore(policy: .participants, db: db, namespace: "rellinks", encrypted: true)
         self.sessions = GRDBCacheStore(policy: .participants, db: db, namespace: "sessions", encrypted: true)
         self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
         self.phonebook = GRDBCacheStore(policy: .participants, db: db, namespace: "phonebook", encrypted: true)

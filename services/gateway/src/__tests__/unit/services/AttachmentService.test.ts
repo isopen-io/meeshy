@@ -142,7 +142,7 @@ describe('AttachmentService (Orchestrator)', () => {
 
       const result = service.validateFile(file);
 
-      expect(mockUploadProcessor.validateFile).toHaveBeenCalledWith(file);
+      expect(mockUploadProcessor.validateFile).toHaveBeenCalledWith(file, 'registered');
       expect(result.valid).toBe(true);
     });
 

@@ -137,8 +137,8 @@ Transposition Android : Compose: Layout custom ancré au rect de la vignette ; B
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallCameraControls.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+CameraRail.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallCameraControls.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+CameraRail.swift`
 
 </details>
 
@@ -161,8 +161,8 @@ Transposition Android : Modifier.alpha animé + pointerInput qui laisse passer p
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallChromeVisibility.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallChromeInteraction.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallChromeVisibility.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallChromeInteraction.swift`
 
 </details>
 
@@ -184,7 +184,7 @@ Transposition Android : presentationDetents -> ModalBottomSheet ; RemoteInput de
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallDeclineSheet.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallDeclineSheet.swift`
 
 </details>
 
@@ -209,7 +209,7 @@ Transposition Android : RTCPeerConnection par lien -> PeerConnection par lien (s
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCGroupPeerLink.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCGroupPeerLink.swift`
 
 </details>
 
@@ -230,10 +230,10 @@ Transposition Android : RTCRtpTransceiver.setCodecPreferences / RTCRtpSender.par
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CodecPreferences.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+SdpRules.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+SenderEncoding.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/VideoDegradationPreference.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+CodecPreferences.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+SdpRules.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+SenderEncoding.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/VideoDegradationPreference.swift`
 
 </details>
 
@@ -304,11 +304,11 @@ Transposition Android : AVPictureInPictureController -> Activity.enterPictureInP
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/PiPCallController.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/PiPVideoRenderer.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/AVSampleBufferDisplayLayer+Meeshy.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/VideoFrameConverter.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallPiPPolicy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/PiPCallController.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/PiPVideoRenderer.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/AVSampleBufferDisplayLayer+Meeshy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/VideoFrameConverter.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallPiPPolicy.swift`
 - `apps/ios/Meeshy/Features/Main/Views/PiPSourceAnchor.swift`
 - `apps/ios/Meeshy/Features/Main/Views/PiPVideoSampleBufferView.swift`
 
@@ -360,9 +360,9 @@ Transposition Android : Réponse rapide iOS → chips Compose sur l'écran entra
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallDeclineReply.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallDeclineMessenger.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+DeclineReply.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallDeclineReply.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallDeclineMessenger.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+DeclineReply.swift`
 
 </details>
 
@@ -389,7 +389,7 @@ Transposition Android : GroupPeerLinkFactory/GroupCallMeshBinding → classe Gro
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+GroupMesh.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+GroupMesh.swift`
 
 </details>
 
@@ -412,7 +412,7 @@ Transposition Android : CXSetHeldCallAction → core-telecom onSetInactive/onSet
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Hold.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Hold.swift`
 
 </details>
 
@@ -436,8 +436,8 @@ Transposition Android : Combine publishers → Flow/StateFlow ; animations flott
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallControlsController.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Controls.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallControlsController.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Controls.swift`
 
 </details>
 
@@ -462,10 +462,10 @@ Transposition Android : ReplayKit RPScreenRecorder → MediaProjection (+ foregr
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallRecordingController.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallRecordingService.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallScreenRecordingService.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Recording.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallRecordingController.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallRecordingService.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallScreenRecordingService.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Recording.swift`
 
 </details>
 
@@ -489,9 +489,9 @@ Transposition Android : ReplayKit Broadcast Upload Extension + Darwin notificati
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/ScreenShare/CallScreenShareController.swift`
-- `apps/ios/Meeshy/Features/Main/Services/ScreenShare/ScreenShareService.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+ScreenShare.swift`
+- `apps/ios/Meeshy/Features/Call/Services/ScreenShare/CallScreenShareController.swift`
+- `apps/ios/Meeshy/Features/Call/Services/ScreenShare/ScreenShareService.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+ScreenShare.swift`
 
 </details>
 
@@ -514,7 +514,7 @@ Transposition Android : AVPictureInPictureController (sample buffer layer) → A
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+SystemPiP.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+SystemPiP.swift`
 
 </details>
 
@@ -537,12 +537,12 @@ Transposition Android : AVCaptureDevice.videoZoomFactor/ramp -> Camera2 CaptureR
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CameraZoomController.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CameraZoomPolicy.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CaptureDeviceZoomTarget.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallCameraZoomGesture.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallZoomIndicator.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallZoomLensControls.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CameraZoomController.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CameraZoomPolicy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CaptureDeviceZoomTarget.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallCameraZoomGesture.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallZoomIndicator.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallZoomLensControls.swift`
 
 </details>
 
@@ -562,9 +562,9 @@ Transposition Android : NWPath.isExpensive/isConstrained -> ConnectivityManager 
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallDataProfile.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallNetworkPathMonitor.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+DataProfile.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallDataProfile.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallNetworkPathMonitor.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+DataProfile.swift`
 
 </details>
 
@@ -585,8 +585,8 @@ Transposition Android : DragGesture -> detectDragGestures ; RTL -> LayoutDirecti
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallEffectsCompanions.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallEffectsCompanionStrip.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallEffectsCompanions.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallEffectsCompanionStrip.swift`
 
 </details>
 
@@ -610,11 +610,11 @@ Transposition Android : Core Image/Vision -> RenderScript-free GPU (GLES/Skia Re
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallModeCarousel.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallModeControls.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallModeRules.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallEffectsCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Mode.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallModeCarousel.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallModeControls.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallModeRules.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallEffectsCopy.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Mode.swift`
 
 </details>
 
@@ -638,8 +638,8 @@ Transposition Android : Carte en overlay non bloquant au bas de l'écran (Surfac
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/CallFeedbackViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallFeedbackCard.swift`
+- `apps/ios/Meeshy/Features/Call/ViewModels/CallFeedbackViewModel.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallFeedbackCard.swift`
 - `apps/ios/Meeshy/Features/Main/Views/RootLayers/CallFeedbackLayer.swift`
 
 </details>
@@ -663,15 +663,15 @@ Transposition Android : CGContext/CoreText -> android.graphics.Canvas/Path/Paint
 
 <details><summary>Sources iOS (9)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Decor.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Kit.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Names.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+OrnamentPieces.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Ornaments.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Shapes.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameRenderer+Text.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameTextsResolver.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Decor.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Kit.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Names.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+OrnamentPieces.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Ornaments.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Shapes.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameRenderer+Text.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameTextsResolver.swift`
 
 </details>
 
@@ -694,13 +694,13 @@ Transposition Android : MTKView + CIContext Metal -> GLSurfaceView/TextureView +
 
 <details><summary>Sources iOS (7)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameBudget.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameCompositor.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameSession.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameVideoFeed.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallLiveFrameProposal.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallLiveFrameSurface.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+LiveFrame.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallLiveFrameBudget.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallLiveFrameCompositor.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallLiveFrameSession.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallLiveFrameVideoFeed.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallLiveFrameProposal.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallLiveFrameSurface.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+LiveFrame.swift`
 
 </details>
 
@@ -723,12 +723,12 @@ Transposition Android : CoreGraphics/CIImage -> Canvas/Bitmap + OpenGL/MediaCode
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallMontageLayout.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallMontageLayout+Glamour.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallCaptureIdentity.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallCaptureCopy.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallFrameMoodChips.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrames/CallFrameThumbnailCache.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallMontageLayout.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallMontageLayout+Glamour.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallCaptureIdentity.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallCaptureCopy.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallFrameMoodChips.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrames/CallFrameThumbnailCache.swift`
 
 </details>
 
@@ -752,7 +752,7 @@ Transposition Android : CacheCoordinator -> Room avec TTL ; formatage via Locale
 
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/CallNetworkJournal.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/CallNetworkJournalStore.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallNetworkJournalSection.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallNetworkJournalSection.swift`
 
 </details>
 
@@ -774,7 +774,7 @@ Transposition Android : Second PeerConnection d'aperçu côté Android (stream-w
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallPreviewViews.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallPreviewViews.swift`
 
 </details>
 
@@ -796,8 +796,8 @@ Transposition Android : presentationDetents -> ModalBottomSheet partiellement d�
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallQualitySheet.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/CallQualityDetailViewModel.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallQualitySheet.swift`
+- `apps/ios/Meeshy/Features/Call/ViewModels/CallQualityDetailViewModel.swift`
 
 </details>
 
@@ -822,8 +822,8 @@ Transposition Android : Menus contextuels -> DropdownMenu / ModalBottomSheet ; a
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallControlsViews.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+CallControls.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallControlsViews.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+CallControls.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/CallModerationRemoteService.swift`
 
 </details>
@@ -846,8 +846,8 @@ Transposition Android : AVAudioEngine/ReplayKit -> MediaRecorder/AudioRecord + M
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallRecordingControls.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Recording.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallRecordingControls.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Recording.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/CallRecordingRemoteService.swift`
 
 </details>
@@ -871,8 +871,8 @@ Transposition Android : Broadcast Upload Extension + RPSystemBroadcastPickerView
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallScreenShareControls.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+ScreenShare.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallScreenShareControls.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+ScreenShare.swift`
 
 </details>
 
@@ -900,7 +900,7 @@ Transposition Android : Cache chiffré iOS -> Room + EncryptedFile/Keystore ; fe
 - `packages/MeeshySDK/Sources/MeeshySDK/Models/CallTranscript.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/CallTranscriptStore.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/CallTranscriptRemoteService.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallTranscriptSection.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallTranscriptSection.swift`
 
 </details>
 
@@ -922,7 +922,7 @@ Transposition Android : Core Image -> GPU shader / RenderEffect via VideoProcess
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift`
 
 </details>
 
@@ -949,25 +949,25 @@ Transposition Android : CallFrameCatalogue+Generated.swift (généré) → CallF
 
 <details><summary>Sources iOS (19)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameSpec.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameCatalogue.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameFormatExtension.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameLayoutGeometry.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameText.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/CallFrameCallTexts.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Generated.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Corporate.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Deconnecte.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Distingue.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Elegant.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Fantastique.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Feerique.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Futuriste.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Glauque.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+HorsNorme.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Jovial.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Morbide.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/Generated/CallFrameCatalogue+Signature.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameSpec.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameCatalogue.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameFormatExtension.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameLayoutGeometry.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameText.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/CallFrameCallTexts.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Generated.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Corporate.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Deconnecte.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Distingue.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Elegant.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Fantastique.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Feerique.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Futuriste.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Glauque.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+HorsNorme.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Jovial.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Morbide.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/Generated/CallFrameCatalogue+Signature.swift`
 
 </details>
 
@@ -993,14 +993,14 @@ Transposition Android : RTCVideoRenderer tap (CallFrameTap) → org.webrtc.Video
 
 <details><summary>Sources iOS (8)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallCaptureController.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallCaptureController+Frames.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFrameGrabber.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallMontageRecorder.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallMontageRenderer.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallMontageRenderer+Glamour.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallMontageRenderer+Layers.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/CallMontageFrameRule.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallCaptureController.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallCaptureController+Frames.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFrameGrabber.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallMontageRecorder.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallMontageRenderer.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallMontageRenderer+Glamour.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallMontageRenderer+Layers.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/CallMontageFrameRule.swift`
 
 </details>
 
@@ -1024,10 +1024,10 @@ Transposition Android : Vision VNDetectFaceLandmarksRequest → ML Kit Face Mesh
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallFaceEffect.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFaceEffectGeometry.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFaceEffectsRenderer.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFaceTracker.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFaceEffect.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFaceEffectGeometry.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFaceEffectsRenderer.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFaceTracker.swift`
 
 </details>
 
@@ -1074,7 +1074,7 @@ Transposition Android : isDeviceConstrained → ThermalStatus ≥ MODERATE + low
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallFrames/CallLiveFrameRule.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallFrames/CallLiveFrameRule.swift`
 
 </details>
 
@@ -1097,8 +1097,8 @@ Transposition Android : Combine/actor → Flow + reducer pur ; GRDB cache du com
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallNetworkJournalBinding.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallNetworkJournalRecorder.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallNetworkJournalBinding.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallNetworkJournalRecorder.swift`
 
 </details>
 
@@ -1120,8 +1120,8 @@ Transposition Android : RecordingPlaybackDucker / PlaybackCoordinator → coordi
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallRingPlayback.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallPlaybackInterruptionBinding.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallRingPlayback.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallPlaybackInterruptionBinding.swift`
 
 </details>
 
@@ -1143,8 +1143,8 @@ Transposition Android : UserDefaults → Preferences DataStore ; Bool.random() 1
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallFeedbackPolicy.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallFeedbackService.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFeedbackPolicy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallFeedbackService.swift`
 
 </details>
 
@@ -1168,9 +1168,9 @@ Transposition Android : GroupPeerLinkFactory (lien réception seule) → PeerLin
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallPreviewCoordinator.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallPreviewConsentStore.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+CallPreview.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallPreviewCoordinator.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallPreviewConsentStore.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+CallPreview.swift`
 
 </details>
 
@@ -1191,7 +1191,7 @@ Transposition Android : Capsule SwiftUI → Surface(shape = CircleShape/RoundedC
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Components/CallTypeBadgeView.swift`
+- `apps/ios/Meeshy/Features/Call/Components/CallTypeBadgeView.swift`
 
 </details>
 
@@ -1244,15 +1244,15 @@ Transposition Android : Liquid Glass (adaptiveGlass/AdaptiveGlassContainer) -> S
 
 <details><summary>Sources iOS (9)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallControlsLayout.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallScreenLayer.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallGroupStageSizing.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallControlGlass.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallDeviceControls.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallPillRow.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Pill.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Controls.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Panels.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallControlsLayout.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallScreenLayer.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallGroupStageSizing.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallControlGlass.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallDeviceControls.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallPillRow.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Pill.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Controls.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Panels.swift`
 
 </details>
 
@@ -1279,9 +1279,9 @@ Transposition Android : RTCMTLVideoView/WebRTCVideoView -> SurfaceViewRenderer (
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Connected.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallRemoteVideoSurface.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallPeerMutedBadge.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Connected.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallRemoteVideoSurface.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallPeerMutedBadge.swift`
 - `apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift`
 
 </details>
@@ -1309,10 +1309,10 @@ Transposition Android : SwiftUI states -> Composables par CallStatus ; HapticFee
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallView+States.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Copy.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallEndReason.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallRetryPolicy.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+States.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Copy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallEndReason.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallRetryPolicy.swift`
 
 </details>
 
@@ -1340,7 +1340,7 @@ Transposition Android : fullScreenCover/UIWindow -> couche Compose racine ou Cal
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallView.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView.swift`
 
 </details>
 
@@ -1366,15 +1366,15 @@ Transposition Android : RTCPeerConnection/RTCPeerConnectionFactory (GoogleWebRTC
 
 <details><summary>Sources iOS (9)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+PeerConnectionAsync.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+PeerDelegates.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+Fallback.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCClientProviding.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCClientDelegate.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCError.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCSharedFactory.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+PeerConnectionAsync.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+PeerDelegates.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+Fallback.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCClientProviding.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCClientDelegate.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCError.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCSharedFactory.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/WebRTCTypes.swift`
 
 </details>
 
@@ -1401,9 +1401,9 @@ Transposition Android : AVAudioSession routeChangeNotification / availableInputs
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+AudioSession.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Speaker.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallAudioRouteService.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+AudioSession.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Speaker.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallAudioRouteService.swift`
 - `apps/ios/Meeshy/Features/Main/Services/CallManager+AudioInterruptions.swift`
 
 </details>
@@ -1428,11 +1428,11 @@ Transposition Android : CallManagerHost → Provider Hilt paresseux (dagger.Lazy
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallStateMachine.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallEndReasonMapper.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManagerHost.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Duration.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallStateMachine.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallEndReasonMapper.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManagerHost.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Duration.swift`
 
 </details>
 
@@ -1457,8 +1457,8 @@ Transposition Android : CXAnswerCallAction tenue en attente jusqu'à la connexio
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingSignal.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Answer.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+IncomingSignal.swift`
 - `apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingOffer.swift`
 
 </details>
@@ -1485,8 +1485,8 @@ Transposition Android : PushKit VoIP + CallKit reportNewIncomingCall → message
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/VoIPPushManager.swift`
-- `apps/ios/Meeshy/Features/Main/Services/VoIPDedupRing.swift`
+- `apps/ios/Meeshy/Features/Call/Services/VoIPPushManager.swift`
+- `apps/ios/Meeshy/Features/Call/Services/VoIPDedupRing.swift`
 - `apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingCall.swift`
 
 </details>
@@ -1515,8 +1515,8 @@ Transposition Android : AVCaptureDevice front/back → Camera2Enumerator + Camer
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+MediaControls.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+MuteSync.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+MediaControls.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+MuteSync.swift`
 
 </details>
 
@@ -1543,9 +1543,9 @@ Transposition Android : AVAudioApplication.requestRecordPermission / AVCaptureDe
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Outgoing.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+RemoteEvents.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Outgoing.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+VideoFallback.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+RemoteEvents.swift`
 
 </details>
 
@@ -1571,9 +1571,9 @@ Transposition Android : NWPathMonitor → ConnectivityManager.registerDefaultNet
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Reconnection.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Connection.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+NetworkMonitoring.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Reconnection.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Connection.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+NetworkMonitoring.swift`
 
 </details>
 
@@ -1600,7 +1600,7 @@ Transposition Android : CallKit CXProvider/CXCallController → androidx.core:co
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+CallKitProxy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+CallKitProxy.swift`
 
 </details>
 
@@ -1628,9 +1628,9 @@ Transposition Android : RTCPeerConnection (GoogleWebRTC) → org.webrtc.PeerConn
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTCService.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+WebRTCDelegate.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+DataChannel.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTCService.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+WebRTCDelegate.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+DataChannel.swift`
 
 </details>
 
@@ -1655,12 +1655,12 @@ Transposition Android : RTCStatisticsReport (iOS) -> RTCStatsReport via PeerConn
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/QualityThresholds.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/VideoQualityLevel.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallStats.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/DegradedLinkTracker.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/JitterBitrateCapTracker.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/VideoThermalProfile.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/QualityThresholds.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/VideoQualityLevel.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallStats.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/DegradedLinkTracker.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/JitterBitrateCapTracker.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/VideoThermalProfile.swift`
 
 </details>
 
@@ -1684,7 +1684,7 @@ Transposition Android : AVRoutePickerView/AVAudioSession -> AudioManager.getAvai
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/CallAudioRouteViewModel.swift`
+- `apps/ios/Meeshy/Features/Call/ViewModels/CallAudioRouteViewModel.swift`
 
 </details>
 
@@ -1710,11 +1710,11 @@ Transposition Android : Fenêtre passe-plat UIKit -> overlay Compose draggable a
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallBubbleGestureResolver.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallBubbleSizeTier.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallDisplayMode.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallParticipantVisual.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallBubbleView.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallBubbleGestureResolver.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallBubbleSizeTier.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallDisplayMode.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallParticipantVisual.swift`
 
 </details>
 
@@ -1741,13 +1741,13 @@ Transposition Android : RTCCameraVideoCapturer/AVCaptureSession -> CameraVideoCa
 
 <details><summary>Sources iOS (8)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallCameraMirror.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CameraCatalog.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CameraDeviceOption.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+Camera.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureFormat.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/VideoConfig.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallCameraMirror.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CameraCatalog.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CameraDeviceOption.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+Camera.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+CaptureFormat.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+CaptureInterruption.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/VideoConfig.swift`
 - `apps/ios/Meeshy/Features/Main/Views/LocalCameraVideoView.swift`
 
 </details>
@@ -1770,10 +1770,10 @@ Transposition Android : RTCDataChannel -> DataChannel (org.webrtc) ; delegate ->
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/DataChannelControlMessage.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/DataChannelInbound.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/DataChannelTranscriptEntry.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/DataChannelTranscriptMessage.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/DataChannelControlMessage.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/DataChannelInbound.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/DataChannelTranscriptEntry.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/DataChannelTranscriptMessage.swift`
 
 </details>
 
@@ -1798,9 +1798,9 @@ Transposition Android : Navigation: NavController vers la route conversation tou
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Header.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallDurationClock.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallVideoBadgeAccessibility.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Header.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallDurationClock.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallVideoBadgeAccessibility.swift`
 
 </details>
 
@@ -1852,12 +1852,12 @@ Transposition Android : SFSpeechRecognizer on-device -> SpeechRecognizer (EXTRA_
 
 <details><summary>Sources iOS (6)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallCaptionLine.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallTranscriptJournal.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallTranscriptMergeRules.swift`
-- `apps/ios/Meeshy/Features/Main/Models/CallTranscriptionSegment.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallCaptionsViews.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+Transcript.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallCaptionLine.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallTranscriptJournal.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallTranscriptMergeRules.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallTranscriptionSegment.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallCaptionsViews.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+Transcript.swift`
 
 </details>
 
@@ -1880,10 +1880,10 @@ Transposition Android : Politique pure partagée ; timers et ICE restart côté 
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallReliabilityPolicy.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/HalfOpenMonitorState.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/TurnCredentialRefreshPolicy.swift`
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/CallConnectedCatchUpPolicy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallReliabilityPolicy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/HalfOpenMonitorState.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/TurnCredentialRefreshPolicy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/CallConnectedCatchUpPolicy.swift`
 
 </details>
 
@@ -1931,8 +1931,8 @@ Transposition Android : DragGesture/MagnificationGesture -> detectDragGestures +
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Models/CallSelfTile.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CallView+SelfView.swift`
+- `apps/ios/Meeshy/Features/Call/Models/CallSelfTile.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallView+SelfView.swift`
 
 </details>
 
@@ -1956,7 +1956,7 @@ Transposition Android : Même politique pure ; actuateur = RtpSender / VideoTrac
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/WebRTC/VideoSurvivalController.swift`
+- `apps/ios/Meeshy/Features/Call/Services/WebRTC/VideoSurvivalController.swift`
 
 </details>
 
@@ -1981,7 +1981,7 @@ Transposition Android : NotificationCenter didEnterBackground/willEnterForegroun
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+SystemMonitoring.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+SystemMonitoring.swift`
 
 </details>
 
@@ -2034,7 +2034,7 @@ Transposition Android : CallDialReadiness → suspend fun awaitReady() combinant
 - `apps/ios/Meeshy/Features/Contacts/CallBackDialer.swift`
 - `apps/ios/Meeshy/Features/Contacts/CallBackRequest.swift`
 - `apps/ios/Meeshy/Features/Contacts/CallDialReadiness.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallRefusalMessage.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallRefusalMessage.swift`
 
 </details>
 
@@ -2061,9 +2061,9 @@ Transposition Android : SFSpeechRecognizer + AVAudioEngine tap → android.speec
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Transcription.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+TranscriptionSegments.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallTranscriptionService.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Transcription.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+TranscriptionSegments.swift`
 
 </details>
 
@@ -2089,7 +2089,7 @@ Transposition Android : Bulle/PiP in-app → overlay Compose (Box draggable avec
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Components/CallBannerContrast.swift`
+- `apps/ios/Meeshy/Features/Call/Components/CallBannerContrast.swift`
 
 </details>
 
@@ -2115,9 +2115,9 @@ Transposition Android : ProcessInfo.thermalState → PowerManager.getCurrentTher
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+VideoSurvival.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Thermal.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+AudioQuality.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+VideoSurvival.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Thermal.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+AudioQuality.swift`
 
 </details>
 
@@ -2143,10 +2143,10 @@ Transposition Android : CallLaunchResume (première connexion du socket) → col
 
 <details><summary>Sources iOS (5)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Resume.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallResumePolicy.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallLaunchResume.swift`
-- `apps/ios/Meeshy/Features/Main/Services/LiveCallJoiner.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Resume.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallResumePolicy.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallLaunchResume.swift`
+- `apps/ios/Meeshy/Features/Call/Services/LiveCallJoiner.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationLayers/CallHeaderSnapshot.swift`
 
 </details>
@@ -2198,9 +2198,9 @@ Transposition Android : SF Symbol cellularbars(variableValue:) → Canvas Compos
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift`
-- `apps/ios/Meeshy/Features/Main/Components/CallQualityRows.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallQualityStatsFeed.swift`
+- `apps/ios/Meeshy/Features/Call/Components/CallSignalGlyph.swift`
+- `apps/ios/Meeshy/Features/Call/Components/CallQualityRows.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallQualityStatsFeed.swift`
 
 </details>
 
@@ -2226,8 +2226,8 @@ Transposition Android : Socket.IO via CallSignalManager (déjà) ; ordonnancemen
 <details><summary>Sources iOS (3)</summary>
 
 - `apps/ios/Meeshy/Features/Main/Services/CallManager+Signaling.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Negotiation.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallErrorDisposition.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Negotiation.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallErrorDisposition.swift`
 
 </details>
 
@@ -2253,10 +2253,10 @@ Transposition Android : UserDefaults du résumé → Preferences DataStore ; pen
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Teardown.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+Hangup.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+AnalyticsRecorder.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallManager+QualitySummaryStore.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Teardown.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+Hangup.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+AnalyticsRecorder.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallManager+QualitySummaryStore.swift`
 
 </details>
 
@@ -2281,7 +2281,7 @@ Transposition Android : Compose AnimatedVisibility(slideInVertically + fadeIn) ;
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift`
+- `apps/ios/Meeshy/Features/Call/Views/CallWaitingBannerView.swift`
 
 </details>
 
@@ -2306,8 +2306,8 @@ Transposition Android : Vision VNGeneratePersonSegmentationRequest → ML Kit Se
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallBackgroundBlur.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallVisionWorker.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallBackgroundBlur.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallVisionWorker.swift`
 
 </details>
 
@@ -2356,8 +2356,8 @@ Transposition Android : Core Image CIColorCube + CIKernel → fragment shaders G
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/CallColorLook.swift`
-- `apps/ios/Meeshy/Features/Main/Services/CallSkinRetouch.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallColorLook.swift`
+- `apps/ios/Meeshy/Features/Call/Services/CallSkinRetouch.swift`
 
 </details>
 

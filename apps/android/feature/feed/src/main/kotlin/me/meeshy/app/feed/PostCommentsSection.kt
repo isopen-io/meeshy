@@ -15,13 +15,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -30,12 +27,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -48,11 +47,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -60,9 +57,19 @@ import kotlinx.coroutines.flow.map
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.wrapContentHeight
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.card.PostCommentCardLabels
+import me.meeshy.sdk.model.card.PostCommentCardPost
+import me.meeshy.sdk.model.card.PostCommentCardSubject
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.composer.ComposerConfiguration
+import me.meeshy.ui.component.composer.LocalUniversalComposer
+import me.meeshy.ui.component.composer.UniversalComposerSpec
+import me.meeshy.ui.component.composer.rememberComposerMediaIntake
+import me.meeshy.ui.component.message.MeeshyMentionSuggestions
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.theme.MeeshyPalette
@@ -75,14 +82,16 @@ import me.meeshy.ui.theme.hexColor
  * The comment thread beneath a post in [PostDetailScreen]. Hosts its own
  * [PostCommentsViewModel] (scoped to the same nav entry, so it reads the same `postId`)
  * and renders — top to bottom — a section header, the projected comments (each Prisme-
- * resolved, an optimistic row dimmed until confirmed), an optional "show more" affordance,
- * and a pinned composer. Accent-coherent (Indigo) with the post card above it.
+ * resolved, an optimistic row dimmed until confirmed) and an optional "show more" affordance;
+ * its composer is [PostCommentsComposerBar], pinned by the screen. Accent-coherent (Indigo) with the post card above it.
  */
 @Composable
 internal fun PostCommentsSection(
     viewModel: PostCommentsViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
     onNotice: suspend (CommentNotice) -> Unit = {},
+    support: PostCommentCardPost? = null,
+    showsTitle: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) {
@@ -92,14 +101,42 @@ internal fun PostCommentsSection(
         }
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.post_comments_title),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MeeshyTheme.tokens.textPrimary,
-            modifier = Modifier.padding(bottom = MeeshySpacing.sm),
+    val imaging = rememberCommentImaging(viewModel, support)
+    CommentMediaFullscreen { CommentsColumn(state, viewModel, modifier, imaging, showsTitle) }
+}
+
+/**
+ * #13922 — « Imager » un commentaire ouvre l'atelier de carte que l'application fournit ([LocalCommentCardExporter]) ;
+ * sans lui, l'entrée n'existe pas. La carte se compose au moment du geste, sur le fil chargé.
+ */
+@Composable
+private fun rememberCommentImaging(viewModel: PostCommentsViewModel, support: PostCommentCardPost?): CommentImaging? {
+    val exporter = LocalCommentCardExporter.current ?: return null
+    val title = stringResource(R.string.feed_comment_card_thread)
+    val folded = stringResource(R.string.feed_comment_card_folded)
+    val labels = remember(title, folded) { PostCommentCardLabels(thread = title, folded = { count -> String.format(folded, count) }) }
+    var imaged by remember { mutableStateOf<Pair<String, PostCommentCardSubject>?>(null) }
+    imaged?.let { (id, card) -> exporter(id, card) { imaged = null } }
+    return remember(viewModel, support, labels) {
+        CommentImaging(
+            cardOf = { id -> viewModel.commentCard(id, support, labels) },
+            open = { id, card -> imaged = id to card },
         )
+    }
+}
+
+@Composable
+private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsViewModel, modifier: Modifier, imaging: CommentImaging?, showsTitle: Boolean) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (showsTitle) {
+            Text(
+                text = stringResource(R.string.post_comments_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textPrimary,
+                modifier = Modifier.padding(bottom = MeeshySpacing.sm),
+            )
+        }
 
         when {
             state.showSkeleton -> CommentsSkeleton()
@@ -132,6 +169,7 @@ internal fun PostCommentsSection(
                         onReply = viewModel::beginReply,
                         onFlagTap = viewModel::onCommentFlagTap,
                         onDelete = viewModel::deleteComment,
+                        imaging = imaging,
                     )
                     ReplyThread(
                         comment = comment,
@@ -142,6 +180,7 @@ internal fun PostCommentsSection(
                         onReply = viewModel::beginReply,
                         onFlagTap = viewModel::onCommentFlagTap,
                         onDelete = viewModel::deleteComment,
+                        imaging = imaging,
                     )
                 }
             }
@@ -156,16 +195,39 @@ internal fun PostCommentsSection(
             }
         }
 
-        Spacer(Modifier.height(MeeshySpacing.md))
+    }
+}
+
+/**
+ * #14285 — le composeur des commentaires, ÉPINGLÉ sous le fil comme la barre de saisie d'iOS : l'écran du détail le pose
+ * hors du défilement, au-dessus du clavier. Il lit le même [PostCommentsViewModel] que la section (même entrée de
+ * navigation), donc le brouillon, la cible de la réponse et les pièces jointes restent une seule source.
+ */
+@Composable
+fun PostCommentsComposerBar(
+    viewModel: PostCommentsViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
+    Box(modifier.fillMaxWidth()) {
         CommentComposer(
             draft = state.draft,
             mention = state.mention,
             isSubmitting = state.isSubmitting,
+            canSubmit = state.canSubmit,
+            attachments = state.attachments,
             replyTarget = state.replyTarget,
             onDraftChange = viewModel::onDraftChange,
             onMentionSelected = viewModel::onMentionSelected,
+            onAttach = viewModel::attachMedia,
+            onEditPiece = editPiece,
+            onRemovePiece = viewModel::removeMedia,
             onSubmit = viewModel::submit,
             onCancelReply = viewModel::cancelReply,
+            languageCode = state.composerLanguageCode,
+            onPickLanguage = viewModel::onComposerLanguagePicked,
+            onQuickEmoji = viewModel::sendQuickEmoji,
         )
     }
 }
@@ -178,6 +240,7 @@ private fun CommentRow(
     onReply: (String) -> Unit,
     onFlagTap: (String, String) -> Unit,
     onDelete: (String) -> Unit,
+    imaging: CommentImaging? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val timeText = comment.createdAtIso?.let { detailRelativeTime(it) }
@@ -194,18 +257,7 @@ private fun CommentRow(
             .fillMaxWidth()
             .alpha(if (comment.isPending) 0.5f else 1f),
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp)
-            if (!comment.authorAvatarUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = comment.authorAvatarUrl,
-                    contentDescription = comment.authorName ?: unknownAuthor,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape),
-                )
-            }
-        }
+        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId))
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column(Modifier.weight(1f)) {
             Column(textBlockSemantics) {
@@ -237,16 +289,19 @@ private fun CommentRow(
                     )
                 }
             }
-            SelectionContainer {
-                RichMessageText(
-                    text = comment.content,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    linkColor = MeeshyPalette.Indigo500,
-                    mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
-                )
+            if (comment.hasBody) {
+                SelectionContainer {
+                    RichMessageText(
+                        text = comment.content,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        linkColor = MeeshyPalette.Indigo500,
+                        mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
+                    )
+                }
             }
             }
+            CommentMediaStrip(comment.media)
             if (comment.languageStrip.isNotEmpty()) {
                 Spacer(Modifier.height(2.dp))
                 CommentLanguageStrip(
@@ -260,7 +315,7 @@ private fun CommentRow(
             ) {
                 CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
                 CommentReplyButton(comment = comment, onReply = onReply)
-                CommentMoreMenu(comment = comment, onDelete = onDelete)
+                CommentMoreMenu(comment = comment, onDelete = onDelete, imaging = imaging)
             }
         }
     }
@@ -362,6 +417,7 @@ private fun ReplyThread(
     onReply: (String) -> Unit,
     onFlagTap: (String, String) -> Unit,
     onDelete: (String) -> Unit,
+    imaging: CommentImaging? = null,
 ) {
     val isExpanded = thread?.isExpanded == true
     val isPreview = thread?.isPreview == true
@@ -378,6 +434,7 @@ private fun ReplyThread(
                         onReply = onReply,
                         onFlagTap = onFlagTap,
                         onDelete = onDelete,
+                        imaging = imaging,
                     )
                 }
             }
@@ -444,6 +501,7 @@ private fun ReplyThread(
                         onReply = onReply,
                         onFlagTap = onFlagTap,
                         onDelete = onDelete,
+                        imaging = imaging,
                     )
                 }
             }
@@ -480,110 +538,69 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
     }
 }
 
+/**
+ * **LE COMPOSEUR DES COMMENTAIRES EST CELUI DES CONVERSATIONS** (#14265, #14384, iOS `UniversalComposerBar(mode: .comment)`
+ * + `foldableComment`) : la géométrie de la barre de message — pastille de langue, sticker, photothèque, caméra et ⌄ ;
+ * emojis rapides, vocal et envoi dans la rangée de saisie. Ce qu'on joint rejoint le bandeau, se téléverse aussitôt, et
+ * part avec le commentaire. Au-dessus de la saisie : les mentions, la cible de la réponse et les pièces en attente.
+ */
 @Composable
 private fun CommentComposer(
     draft: String,
     mention: MentionAutocompleteState,
     isSubmitting: Boolean,
+    canSubmit: Boolean,
+    attachments: CommentAttachmentTray,
     replyTarget: ReplyTarget?,
     onDraftChange: (String) -> Unit,
     onMentionSelected: (MentionCandidate) -> Unit,
+    onAttach: (MediaUploadItem) -> Unit,
+    onEditPiece: (CommentPendingPiece) -> Unit,
+    onRemovePiece: (String) -> Unit,
     onSubmit: () -> Unit,
     onCancelReply: () -> Unit,
+    languageCode: String,
+    onPickLanguage: (String) -> Unit,
+    onQuickEmoji: (String) -> Unit,
 ) {
-    val isReply = replyTarget != null
-    Column {
-        CommentMentionStrip(mention = mention, onSelect = onMentionSelected)
-        if (isReply) {
-            ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
-            Spacer(Modifier.height(MeeshySpacing.xs))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = onDraftChange,
-                placeholder = {
-                    Text(
-                        stringResource(
-                            if (isReply) R.string.post_comments_reply_hint else R.string.post_comments_input_hint,
-                        ),
-                    )
-                },
-                modifier = Modifier.weight(1f),
-                maxLines = 4,
-            )
-            Spacer(Modifier.width(MeeshySpacing.sm))
-            if (isSubmitting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MeeshyPalette.Indigo500,
-                )
-            } else {
-                IconButton(
-                    onClick = onSubmit,
-                    enabled = draft.isNotBlank(),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = stringResource(R.string.post_comments_send),
-                        tint = if (draft.isNotBlank()) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-            }
-        }
-    }
+    val composer = LocalUniversalComposer.current ?: return
+    val intake = rememberComposerMediaIntake(onAttach)
+    val canAttach = !attachments.isFull && !isSubmitting
+    val focusTrigger = rememberReplyFocusTrigger(replyTarget)
+    val placeholder = stringResource(if (replyTarget != null) R.string.post_comments_composer_reply_hint else R.string.post_comments_composer_hint)
+    composer(
+        UniversalComposerSpec(
+            configuration = ComposerConfiguration.COMMENT,
+            draft = draft,
+            placeholder = placeholder,
+            canSend = canSubmit && !isSubmitting,
+            onDraftChange = onDraftChange,
+            onSend = onSubmit,
+            hasPendingAttachments = attachments.hasMedia,
+            pendingAttachmentCount = attachments.pieces.size,
+            focusTrigger = focusTrigger,
+            onAttachUris = intake.onUris.takeIf { canAttach },
+            onAttachFile = intake.onFile.takeIf { canAttach },
+            languageCode = languageCode,
+            onPickLanguage = onPickLanguage,
+            onQuickEmoji = onQuickEmoji,
+            foldable = true,
+            topSlot = {
+                MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
+                if (replyTarget != null) ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
+                CommentAttachmentBar(tray = attachments, onEdit = onEditPiece, onRemove = onRemovePiece)
+            },
+        ),
+        Modifier,
+    )
 }
 
-/**
- * Autocomplete panel above the comment composer while an `@mention` is in progress — the feed
- * mirror of the chat composer's `MentionSuggestionStrip`. Neutral input-assistance chrome (the
- * accent tint stays on message-content surfaces); rows are capped and scroll, and a tap inserts
- * the handle via [onSelect]. Hidden when no mention is active or nothing matches.
- */
+/** Viser un commentaire pour y répondre rend la main au champ (iOS `beginReply` → `composerFocusTrigger`). */
 @Composable
-private fun CommentMentionStrip(
-    mention: MentionAutocompleteState,
-    onSelect: (MentionCandidate) -> Unit,
-) {
-    if (!mention.isActive || mention.suggestions.isEmpty()) return
-    Surface(
-        color = MeeshyTheme.tokens.backgroundSecondary,
-        shape = RoundedCornerShape(MeeshyRadius.md),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
-            items(mention.suggestions, key = { it.id }) { candidate ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(candidate) }
-                        .semantics { role = Role.Button }
-                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-                ) {
-                    MeeshyAvatar(name = candidate.displayName, size = 32.dp)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = candidate.displayName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MeeshyTheme.tokens.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "@${candidate.username}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MeeshyTheme.tokens.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        }
-    }
+private fun rememberReplyFocusTrigger(replyTarget: ReplyTarget?): Int {
+    var trigger by remember { mutableIntStateOf(0) }
+    LaunchedEffect(replyTarget) { if (replyTarget != null) trigger += 1 }
+    return trigger
 }
 
 /**

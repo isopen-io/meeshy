@@ -1210,7 +1210,8 @@ final class StoryViewModelTests: XCTestCase {
             source.range(of: "func deleteStory(storyId: String, reason: String? = nil) async -> Bool").map { String(source[$0.lowerBound...].prefix(500)) },
             "deleteStory a disparu de StoryViewModel"
         )
-        XCTAssertTrue(body.contains("Self.deleteRemotely(storyId:"), "deleteStory doit appeler la frontière @concurrent")
+        XCTAssertTrue(body.contains("Self.deleteRemotely(storyId: storyId, reason: reason, with: storyService)"),
+                      "deleteStory doit appeler la frontière @concurrent, motif de modération compris (#11151)")
         XCTAssertFalse(body.contains("storyService.delete("), "aucun appel nonsending direct dans deleteStory")
         XCTAssertTrue(
             source.contains("@concurrent\n    nonisolated static func deleteRemotely("),

@@ -108,7 +108,7 @@ final class ComposerGlassDoorsTests: XCTestCase {
                 .appendingPathComponent("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift"),
             encoding: .utf8)
         XCTAssertFalse(toolbar.contains("textAnalyzer.sentiment"), "L'indicateur d'humeur quitte la barre d'outils.")
-        XCTAssertTrue(toolbar.contains("onRequestStickerPicker"), "Le sticker ouvre le sélecteur de stickers.")
+        XCTAssertTrue(toolbar.contains("resolvedOnStickerPicker"), "Le sticker ouvre le sélecteur de stickers.")
         XCTAssertTrue(toolbar.contains("ComposerGlassDoors.trailing("), "L'angle droit consulte la loi.")
     }
     private func source(_ name: String) throws -> String {

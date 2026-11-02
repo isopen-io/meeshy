@@ -7,7 +7,7 @@
 
 ## Problem
 
-`VoiceProfileManageView.emptyState` (`apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift`)
+`VoiceProfileManageView.emptyState` (`apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift`)
 hand-rolls a full-screen empty state — a `VStack` with a fixed `.system(size: 64)` gradient
 hero glyph, a title, a subtitle, and a bespoke full-width `RoundedRectangle(cornerRadius: 14)`
 CTA button — reimplementing the shared `EmptyStateView` primitive

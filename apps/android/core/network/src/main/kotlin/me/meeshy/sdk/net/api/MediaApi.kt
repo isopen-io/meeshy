@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.MediaUploadResponse
 import me.meeshy.sdk.model.media.AttachmentStatusBody
 import okhttp3.MultipartBody
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.Path
@@ -41,4 +42,11 @@ interface MediaApi {
         @Path("attachmentId") attachmentId: String,
         @Body body: AttachmentStatusBody,
     ): ApiResponse<JsonElement>
+
+    /**
+     * Efface UNE pièce (`DELETE /attachments/:attachmentId`) : celui qui l'a déposée, ou un rôle de modération, y a droit
+     * (403 sinon). La passerelle retire la ligne et les fichiers ; elle ne diffuse aucun événement aux autres membres.
+     */
+    @DELETE("attachments/{attachmentId}")
+    suspend fun delete(@Path("attachmentId") attachmentId: String): ApiResponse<JsonElement>
 }

@@ -28,6 +28,11 @@
     <string name="stories_composer_add_slide">Folie hinzufügen</string>
     <string name="stories_composer_duplicate_slide">Folie duplizieren</string>
     <string name="stories_composer_remove_slide">Folie entfernen</string>
+    <string name="stories_composer_remove_slide_title">Diese Folie entfernen?</string>
+    <string name="stories_composer_remove_slide_message">Alles darauf geht verloren.</string>
+    <string name="stories_composer_remove_slide_confirm">Entfernen</string>
+    <string name="stories_composer_slide_move_earlier">Nach vorn verschieben</string>
+    <string name="stories_composer_slide_move_later">Nach hinten verschieben</string>
     <string name="stories_composer_text_placeholder">Schreib etwas …</string>
     <string name="stories_composer_remove_text">Text entfernen</string>
     <string name="stories_composer_bg_none">Kein Hintergrund</string>
@@ -35,6 +40,8 @@
     <string name="stories_composer_fade_out">Text ausblenden</string>
     <string name="stories_composer_timing_start">Startzeit des Texts</string>
     <string name="stories_composer_timing_duration">Sichtbarkeitsdauer des Texts</string>
+    <string name="stories_composer_timing_unset">Nicht festgelegt</string>
+    <string name="stories_composer_timing_value">%1$s Sekunden</string>
     <string name="stories_composer_draw_undo">Strich rückgängig machen</string>
     <string name="stories_composer_draw_done">Zeichnen beenden</string>
     <string name="stories_composer_remove_sticker">Sticker entfernen</string>

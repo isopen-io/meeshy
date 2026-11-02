@@ -51,7 +51,6 @@ class ComposerInlineTextEditTest {
                     onDrag = { _, _ -> },
                     onDragEnd = {},
                     onTransform = { _, _ -> },
-                    onRemove = {},
                     onTextChange = onTextChange,
                 )
             }

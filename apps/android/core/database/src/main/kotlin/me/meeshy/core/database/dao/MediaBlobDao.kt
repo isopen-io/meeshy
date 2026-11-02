@@ -24,6 +24,10 @@ public interface MediaBlobDao {
     @Query("SELECT EXISTS(SELECT 1 FROM media_blob WHERE cmid = :cmid)")
     public suspend fun exists(cmid: String): Boolean
 
+    /** Every held `cmid` — the boot sweep keeps the sealed files these name (#13555). */
+    @Query("SELECT cmid FROM media_blob")
+    public suspend fun cmids(): List<String>
+
     @Query("DELETE FROM media_blob WHERE cmid = :cmid")
     public suspend fun delete(cmid: String)
 

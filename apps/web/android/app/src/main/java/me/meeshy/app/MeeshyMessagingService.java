@@ -80,7 +80,7 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         Bundle extras = intent == null ? null : intent.getExtras();
         Map<String, String> data = NotificationFunnelStore.extrasOf(extras);
         boolean inForeground = MainActivity.isInForeground();
-        boolean displayed = inForeground || !withheldCorrection(data);
+        boolean displayed = inForeground || !withheld(data);
         if (displayed) super.handleIntent(intent);
         try {
             NotificationFunnelStore.noteShown(this, data, inForeground, displayed && (inForeground || systemShows(data)));
@@ -109,17 +109,21 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
     /**
      * #10989 — une correction dont la banniere a ete balayee, ou remplacee par
      * un message plus recent du fil, ou qui dit deja ce texte : FCM ne
-     * l'affiche pas ({@link NotificationCorrectionRules}).
+     * l'affiche pas. #12479 — un push livre deux fois non plus, comme sur le
+     * web ({@link NotificationCorrectionRules}).
      */
-    private boolean withheldCorrection(Map<String, String> data) {
-        if (!NotificationCorrectionRules.isCorrection(data)) return false;
+    private boolean withheld(Map<String, String> data) {
+        String tag = NotificationFunnelRules.bannerTag(data);
+        if (tag.isEmpty() || !NotificationFunnelRules.fcmDisplays(data)) return false;
         try {
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager == null) return false;
-            Notification shown = NotificationVoiceBanner.find(manager, NotificationFunnelRules.bannerTag(data));
-            return !NotificationCorrectionRules.shows(data, shown == null ? null : shownOf(shown.extras));
+            Notification found = NotificationVoiceBanner.find(manager, tag);
+            NotificationCorrectionRules.Shown shown = found == null ? null : shownOf(found.extras);
+            if (NotificationCorrectionRules.isCorrection(data)) return !NotificationCorrectionRules.shows(data, shown);
+            return NotificationCorrectionRules.repeats(data, shown);
         } catch (RuntimeException failure) {
-            Log.w(TAG, "correction affichee sans verification", failure);
+            Log.w(TAG, "push affiche sans verification", failure);
             return false;
         }
     }
@@ -154,6 +158,20 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
         return value == null ? null : value.toString();
     }
 
+    /** #12523 — sous le tag d'une conversation, la banniere d'un message plus recent reste. */
+    private static void cancelUnmarkedConversations(NotificationManager manager, Map<String, String> data) {
+        try {
+            for (String tag : NotificationRevocation.conversationTags(data)) {
+                Notification shown = NotificationVoiceBanner.find(manager, tag);
+                String marked = shown == null || shown.extras == null
+                    ? null : shown.extras.getString(NotificationCorrectionRules.EXTRA_NOTIFICATION_ID);
+                if (shown != null && NotificationRevocation.closesConversationBanner(marked)) manager.cancel(tag, 0);
+            }
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "bannieres de conversation non revoquees", failure);
+        }
+    }
+
     /** #11032 — la banniere marquee d'une notification revoquee, sous quelque tag que ce soit. */
     private static void cancelMarked(NotificationManager manager, Map<String, String> data) {
         try {
@@ -175,6 +193,7 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 for (String tag : revoked) manager.cancel(tag, 0);
+                cancelUnmarkedConversations(manager, message.getData());
                 cancelMarked(manager, message.getData());
             }
             return;
@@ -205,13 +224,17 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
     /**
      * Best-effort, comme `sw-push.js` : un accuse manque (pas de credential,
      * reseau coupe) laisse le message « envoye » jusqu'a la reconnexion — l'etat
-     * d'avant #8124, jamais pire. `onMessageReceived` et `handleIntent` tournent
-     * deja hors du fil principal : l'appel reseau y est permis.
+     * d'avant #8124, jamais pire. Il part hors du fil des pushs (#12623) : un
+     * reseau lent ne retarde plus la banniere du message suivant.
      */
     private void acknowledgeDelivery(PushDeliveryReceipt receipt) {
         if (receipt == null) return;
         String[] header = CallShellStore.credentialHeader(this);
         if (header == null) return;
+        ReceiptDispatch.run(() -> post(receipt, header));
+    }
+
+    private static void post(PushDeliveryReceipt receipt, String[] header) {
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) URI.create(receipt.url).toURL().openConnection();

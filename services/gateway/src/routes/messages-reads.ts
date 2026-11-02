@@ -4,6 +4,12 @@
  * GET /attachments/:attachmentId/status-details. Issue #4284. Point d'entrée :
  * messages.ts.
  */
+import { signReaderAttachmentsIn, type ReaderBoundMessage, type SignableAttachment } from '../services/attachments/signedAttachmentUrls';
+import { readerFileUrlSignerFromEnv } from '../services/attachments/readerFileSignature';
+import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
+import { editAttributionReaderOf } from '../services/messaging/editAttributionReader';
+import { AT_REST_MESSAGE_SELECT, lazyKeyring, revealAtRest } from '../services/messaging/serverAtRest';
+import { getEncryptionService } from '../services/EncryptionService';
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentFullSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
@@ -215,12 +221,18 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           messageSource: true,
           isEdited: true,
           editedAt: true,
+          thirdPartyEditorId: true,
+          thirdPartyEditorRole: true,
           deletedAt: true,
           replyToId: true,
           forwardedFromId: true,
           forwardedFromConversationId: true,
           expiresAt: true,
+          // #13100 — la loi de sortie lit la durée : sans elle, toute pièce se signerait.
+          ephemeralDuration: true,
           isViewOnce: true,
+          // #11269 — lue pour la projection par lecteur, jamais servie.
+          viewOnceBurnedAt: true,
           maxViewOnceCount: true,
           viewOnceCount: true,
           isBlurred: true,
@@ -385,12 +397,22 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       );
 
       // #7950 — la citation d'une story retirée sort expurgée de `metadata`.
-      const [citedMessage] = await servePostReplyCitations(prisma, [message]);
+      // #11381 — un message `server`/`hybrid` sort en clair, ses traductions comprises.
+      const opened = await revealAtRest(message, lazyKeyring(() => getEncryptionService(prisma)));
+      const [citedMessage] = await servePostReplyCitations(prisma, [opened]);
       return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
-        ...citedMessage,
+        // #11375 — `data` traverse entier : les colonnes de l'éditeur tiers en
+        // sortent, ce lecteur reçoit ce que `servedEditAttribution` lui accorde.
+        ...withServedEditAttribution(citedMessage, editAttributionReaderOf(authRequest.authContext)),
         // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
         metadata: servedLinkMetadata(citedMessage.metadata, message.sender),
         sender: gatedSender,
+        // #13100 — une pièce scellée au repos (ou protégée) sort sous l'adresse signée de CE lecteur.
+        attachments: signReaderAttachmentsIn(citedMessage.attachments as SignableAttachment[] | undefined, {
+          message: message as ReaderBoundMessage,
+          readerParticipantId,
+          signer: readerFileUrlSignerFromEnv(new Date()),
+        }),
         // `Message.translations` est une CARTE Mongo (`langue → {text, …}`),
         // jamais un tableau — le contrat, lui, déclare un TABLEAU d'objets
         // `{targetLanguage, translatedContent, …}`, et c'est ce que décodent
@@ -411,7 +433,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         // au moins une traduction.
         translations: transformTranslationsToArray(
           messageId,
-          (message as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+          (opened as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
         ),
         // Les mêmes valeurs écrasent aussi les champs de premier niveau issus
         // du `select` : les trois clients y décodent leurs coches de livraison.
@@ -468,7 +490,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           senderId: true,
           isViewOnce: true,
           messageType: true,
-          metadata: true
+          metadata: true,
+          // #12822 — de quoi ouvrir un message `server`/`hybrid` et ses traductions ; rien de cela ne sort.
+          ...AT_REST_MESSAGE_SELECT
         }
       });
 
@@ -507,13 +531,14 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         });
       }
 
+      const opened = await revealAtRest(message, lazyKeyring(() => getEncryptionService(prisma)));
       return sendSuccess(reply, {
-        messageId: message.id,
-        originalContent: message.content,
-        originalLanguage: message.originalLanguage,
+        messageId: opened.id,
+        originalContent: opened.content,
+        originalLanguage: opened.originalLanguage,
         translations: transformTranslationsToArray(
-          message.id,
-          message.translations as Record<string, any>
+          opened.id,
+          opened.translations as unknown as Record<string, MessageTranslationJSON> | null
         )
       });
 

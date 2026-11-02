@@ -129,7 +129,7 @@ function makeDeps(overrides: Partial<{
     // liste `onlineUsers` ne nomme personne. Les témoins de projection vivent
     // dans la suite jumelle (`socketio/handlers/__tests__/ConversationHandler.test.ts`).
     presenceViewer: overrides.presenceViewer ?? jest.fn().mockResolvedValue({ userId: USER_ID, role: 'USER' }),
-    presenceVisibility: overrides.presenceVisibility ?? { resolveForTargets: jest.fn().mockResolvedValue(new Map()) },
+    presenceVisibility: overrides.presenceVisibility ?? { resolveForPresenceEvent: jest.fn().mockResolvedValue(new Map()) },
   };
 }
 

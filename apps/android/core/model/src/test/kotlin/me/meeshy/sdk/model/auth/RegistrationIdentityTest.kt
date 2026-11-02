@@ -1,10 +1,54 @@
 package me.meeshy.sdk.model.auth
 
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import me.meeshy.sdk.model.auth.RegistrationIdentity.UsernameRefusal
 import org.junit.Test
 
 class RegistrationIdentityTest {
+
+    @Test
+    fun `un pseudo commence a trois caracteres et un nom a deux, rognes`() {
+        assertThat(RegistrationIdentity.PSEUDO_MIN).isEqualTo(3)
+        assertThat(RegistrationIdentity.NAME_MIN).isEqualTo(2)
+        assertThat(RegistrationIdentity.usernameRefusal("Al")).isEqualTo(UsernameRefusal.TOO_SHORT)
+        assertThat(RegistrationIdentity.usernameRefusal("Ali")).isNull()
+        assertThat(RegistrationIdentity.isNameLongEnough("A")).isFalse()
+        assertThat(RegistrationIdentity.isNameLongEnough("  A  ")).isFalse()
+        assertThat(RegistrationIdentity.isNameLongEnough("Al")).isTrue()
+        assertThat(RegistrationIdentity.isNameLongEnough(" Li ")).isTrue()
+        assertThat(RegistrationIdentity.isNameLongEnough("")).isFalse()
+    }
+
+    @Test
+    fun `un nom compte ses caracteres VISIBLES, comme la passerelle`() {
+        listOf("😀😀", "🇫🇷🇨🇲", "A😀", "Ét", "E\u0301t", "👨‍👩‍👧Al").forEach {
+            assertWithMessage(it).that(RegistrationIdentity.isNameLongEnough(it)).isTrue()
+            assertWithMessage(it).that(RegistrationIdentity.isNameTooShort(it)).isFalse()
+        }
+        listOf("😀", "🇫🇷", "👨‍👩‍👧", "A\u200E", "A\u2060", "A\u00AD", "E\u0301", "A\u3164", "A<b></b>", "A\u200B").forEach {
+            assertWithMessage(it).that(RegistrationIdentity.isNameLongEnough(it)).isFalse()
+            assertWithMessage(it).that(RegistrationIdentity.isNameTooShort(it)).isTrue()
+        }
+    }
+
+    @Test
+    fun `le pseudo d'un invite se mesure sur ce que la passerelle en sert`() {
+        assertThat(RegistrationIdentity.isGuestNicknameLongEnough("Ali")).isTrue()
+        assertThat(RegistrationIdentity.isGuestNicknameLongEnough(" a.b ")).isTrue()
+        assertThat(RegistrationIdentity.isGuestNicknameLongEnough("Al#")).isFalse()
+        assertThat(RegistrationIdentity.isGuestNicknameLongEnough("Zoé")).isFalse()
+        assertThat(RegistrationIdentity.isGuestNicknameLongEnough("")).isFalse()
+    }
+
+    @Test
+    fun `un pseudo derive d'une adresse fait toujours trois caracteres au moins`() {
+        assertThat(RegistrationIdentity.pseudoRacine(displayName = null, email = "al@x.com"))
+            .isEqualTo(RegistrationIdentity.PSEUDO_DE_SECOURS)
+        assertThat(RegistrationIdentity.pseudoRacine(displayName = "Al", email = "ali@x.com")).isEqualTo("ali")
+        assertThat(RegistrationIdentity.pseudoRacine(displayName = null, email = "ada@x.com").length)
+            .isAtLeast(RegistrationIdentity.PSEUDO_MIN)
+    }
 
     @Test
     fun `capitalizeName respecte les composes`() {

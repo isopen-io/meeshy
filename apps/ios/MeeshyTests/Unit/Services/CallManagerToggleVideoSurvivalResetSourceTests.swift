@@ -35,7 +35,7 @@ import XCTest
 final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
 
     /// Bounded from the `ensureCamera` pre-flight check up to the `do {` that
@@ -48,7 +48,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
             XCTFail("Camera permission pre-flight check not found in toggleVideo — file structure changed"); return
         }
         guard let endRange = source.range(
-            of: "let needsRenegotiation: Bool",
+            of: "return true",
             range: startRange.upperBound..<source.endIndex
         ) else {
             XCTFail("Could not bound the permission pre-flight block"); return
@@ -60,7 +60,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
             "Sanity check: this must be toggleVideo's permission pre-flight branch, which disables video."
         )
         XCTAssertTrue(
-            block.contains("self.videoSurvivalController.reset()"),
+            block.contains("call.videoSurvivalController.reset()"),
             "toggleVideo's permission pre-flight failure (camera already refused) must reset the survival " +
             "controller, exactly like the success path just below it and the sibling failure branches — " +
             "skipping it can leave a stale isVideoSuspended/isTransitioning behind if a suspend/resume " +
@@ -85,7 +85,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
             "Sanity check: this must be toggleVideo's cameraPermissionDenied catch branch, which disables video."
         )
         XCTAssertTrue(
-            block.contains("self.videoSurvivalController.reset()"),
+            block.contains("call.videoSurvivalController.reset()"),
             "toggleVideo's cameraPermissionDenied catch must reset the survival controller, exactly like " +
             "its handleHold twin (Vague 167) and this same function's success path — both disable video " +
             "for the rest of the call."
@@ -110,7 +110,7 @@ final class CallManagerToggleVideoSurvivalResetSourceTests: XCTestCase {
             "Sanity check: this must be toggleVideo's generic catch branch, which disables video."
         )
         XCTAssertTrue(
-            block.contains("self.videoSurvivalController.reset()"),
+            block.contains("call.videoSurvivalController.reset()"),
             "toggleVideo's generic catch (any upgradeToVideo()/downgradeFromVideo() failure besides " +
             "camera-permission-denied) must reset the survival controller, exactly like its " +
             "cameraPermissionDenied sibling just above it — both disable video for the rest of the call."

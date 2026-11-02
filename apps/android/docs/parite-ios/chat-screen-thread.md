@@ -2024,7 +2024,7 @@ Transposition Android : CallKit/PushKit -> Telecom ConnectionService + notificat
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift`
+- `apps/ios/Meeshy/Features/Call/Views/IncomingCallView.swift`
 
 </details>
 

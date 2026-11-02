@@ -89,6 +89,14 @@ public class AnonymousSessionRepository @Inject constructor(
         return result
     }
 
+    /**
+     * Pose une session invitée déjà formée par une autre porte d'entrée (la jonction canonique
+     * `POST /links/:key/members` de World Wide) : mêmes jeton et persistance qu'après [join].
+     */
+    public suspend fun adopt(context: AnonymousSessionContext) {
+        persist(context)
+    }
+
     private suspend fun persist(context: AnonymousSessionContext) {
         tokenStore.sessionToken = context.sessionToken
         store.save(context)

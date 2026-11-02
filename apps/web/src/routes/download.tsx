@@ -6,7 +6,7 @@ import { AuthAmbient } from '@/components/auth-chrome';
 import { LANDING_COPY } from '@/landing/landing-copy';
 import { LanguageSelect, SiteFooter, SiteHeader, type SitePage } from '@/landing/site-chrome';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import { appInstitutionalHref } from '@/lib/institutional-href';
+import { appInstitutionalHref, appSiteHref } from '@/lib/institutional-href';
 import { currentInterfaceLanguage, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
 
@@ -229,6 +229,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
         copy={copy}
         onLanding={false}
         languageControl={<LanguageSelect language={language} label={copy.languageLabel} onSelect={chooseLanguage} />}
+        siteHref={appSiteHref}
       />
       <main className="relative mx-auto grid w-full max-w-5xl grow content-start gap-8 px-4 py-10 sm:px-8 md:py-14">
         <header className="grid justify-items-center gap-3 text-center">

@@ -290,7 +290,7 @@ final class ComposerPreUploadRegistryTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(host.contains("returnComposerCompressingPreUploader.story(baseURL:base,token:jeton)"))
         let monteur = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerPreUploadRegistry.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerPreUploadRegistry.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(monteur.contains("inner:ComposerTusPreUploader(baseURL:baseURL,token:token)"))
         XCTAssertTrue(monteur.contains("compressVideo($0,context:.story)"))

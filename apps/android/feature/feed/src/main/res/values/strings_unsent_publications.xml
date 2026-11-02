@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_notice_publish_queued">Your post is on its way</string>
+    <string name="feed_unsent_title">Unsent posts</string>
+    <plurals name="feed_unsent_count">
+        <item quantity="one">%1$d unsent post</item>
+        <item quantity="other">%1$d unsent posts</item>
+    </plurals>
+    <string name="feed_unsent_open">Show unsent posts</string>
+    <string name="feed_unsent_sending">Sending…</string>
+    <string name="feed_unsent_failed">Couldn’t send</string>
+    <string name="feed_unsent_retry">Retry</string>
+    <string name="feed_unsent_reopen">Reopen</string>
+    <string name="feed_unsent_delete">Delete</string>
+    <string name="feed_unsent_delete_confirm_title">Delete this post?</string>
+    <string name="feed_unsent_delete_confirm_body">It and its media will be removed from this device.</string>
+    <string name="feed_unsent_cancel">Cancel</string>
+    <string name="feed_unsent_kind_post">Post</string>
+    <string name="feed_unsent_kind_reel">Reel</string>
+    <string name="feed_unsent_kind_story">Story</string>
+    <plurals name="feed_unsent_media_count">
+        <item quantity="one">%1$d media</item>
+        <item quantity="other">%1$d media</item>
+    </plurals>
+</resources>

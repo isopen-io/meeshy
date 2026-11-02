@@ -18,6 +18,9 @@ import { GameMissionWindowJob } from './game-mission-window';
 import { GamePhotoMomentsJob } from './game-photo-moments';
 import { BackupStatusCheckJob } from './backup-status-check';
 import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirror-follow';
+import { RelationWeeklyJob } from './relation-weekly';
+import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
+import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -47,6 +50,7 @@ export class BackgroundJobsManager {
   private backupStatusCheckJob: BackupStatusCheckJob;
   /** Le miroir continu des médias vers le seau S3 (#11267) : éteint sans MEDIA_S3_MIRROR_FOLLOW=on. */
   private mediaMirrorFollowJob: MediaMirrorFollowJob;
+  private relationWeeklyJob: RelationWeeklyJob;
   /**
    * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
    * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
@@ -62,6 +66,8 @@ export class BackgroundJobsManager {
   private geoCacheInterval: NodeJS.Timeout | null = null;
   /** La conservation (#9614, #9642) : une passe par jour, sans état propre. */
   private retentionInterval: NodeJS.Timeout | null = null;
+  /** Les enveloppes E2EE jamais accusées s'effacent à 30 jours (#3706) : une requête, sans état. */
+  private envelopeSweepInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
   private prismaClient: PrismaClient;
@@ -88,6 +94,7 @@ export class BackgroundJobsManager {
     this.gamePhotoMomentsJob = new GamePhotoMomentsJob(prisma);
     this.backupStatusCheckJob = new BackupStatusCheckJob({ prisma, emailService });
     this.mediaMirrorFollowJob = processMediaMirrorFollowJob(prisma, logger);
+    this.relationWeeklyJob = new RelationWeeklyJob(prisma);
   }
 
   /**
@@ -113,18 +120,32 @@ export class BackgroundJobsManager {
     this.gamePhotoMomentsJob.start();
     this.backupStatusCheckJob.start();
     this.mediaMirrorFollowJob.start();
+    this.relationWeeklyJob.start();
 
     // Toutes les six heures : une session dont l'échéance est passée cesse de
     // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
     // — 140 lignes le faisaient en production, dont depuis mars (#5712).
+    // #12543 — puis l'appareil chiffré de toute session finie est retiré : le
+    // filet des chemins qui ne l'ont pas fait eux-mêmes (expiration, clôture).
     const balayerLesSessions = () => {
       sweepExpiredSessions(this.prismaClient)
         .then((n) => { if (n > 0) logger.info(`${n} expired session(s) invalidated`); })
-        .catch((err) => logger.error('Session expiry sweep failed', err));
+        .catch((err) => logger.error('Session expiry sweep failed', err))
+        .then(() => sweepDevicesOfEndedSessions(this.prismaClient, { now: new Date() }))
+        .then((n) => { if (n > 0) logger.info(`${n} e2ee device(s) of ended sessions retired`); })
+        .catch((err) => logger.error('E2EE device retirement sweep failed', err));
     };
     balayerLesSessions();
     this.sessionSweepInterval = guardedInterval({ name: 'session-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesSessions });
     this.sessionSweepInterval.unref();
+
+    const balayerLesEnveloppes = () => {
+      createE2EEEnvelopeRelay({ prisma: this.prismaClient }).sweep()
+        .then((n) => { if (n > 0) logger.info(`${n} unacknowledged e2ee envelope(s) swept after 30 days`); })
+        .catch((err) => logger.error('E2EE envelope sweep failed', err));
+    };
+    this.envelopeSweepInterval = guardedInterval({ name: 'e2ee-envelope-sweep', everyMs: 6 * 60 * 60 * 1000, logger, run: balayerLesEnveloppes });
+    this.envelopeSweepInterval.unref();
 
     /* LE CACHE GEOIP SE LIBÈRE (#9239). Ses entrées expirées n'étaient
        qu'IGNORÉES à la lecture : la table, indexée par l'IP du client,
@@ -211,10 +232,16 @@ export class BackgroundJobsManager {
     this.gamePhotoMomentsJob.stop();
     this.backupStatusCheckJob.stop();
     this.mediaMirrorFollowJob.stop();
+    this.relationWeeklyJob.stop();
 
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);
       this.sessionSweepInterval = null;
+    }
+
+    if (this.envelopeSweepInterval) {
+      clearInterval(this.envelopeSweepInterval);
+      this.envelopeSweepInterval = null;
     }
 
     if (this.geoCacheInterval) {

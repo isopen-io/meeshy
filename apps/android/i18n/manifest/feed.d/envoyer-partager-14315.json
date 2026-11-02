@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "reels.action.send",
+          "androidName": "feed_action_send",
+          "status": "adopted"
+        },
+        {
+          "androidName": "share_post_text",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

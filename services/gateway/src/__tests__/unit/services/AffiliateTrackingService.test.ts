@@ -17,6 +17,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { AffiliateTrackingService } from '../../../services/AffiliateTrackingService';
+import { relationStore } from '../../helpers/user-relation-store';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,8 @@ function makePrisma(overrides: {
   sessionPreference?: any;
   deleteCount?: number;
   existingFriendRequest?: any;
+  blockedBetween?: boolean;
+  referredCreatedAt?: Date | null;
 } = {}) {
   const {
     affiliateToken = ACTIVE_TOKEN,
@@ -51,9 +54,17 @@ function makePrisma(overrides: {
     sessionPreference = null,
     deleteCount = 0,
     existingFriendRequest = null,
+    blockedBetween = false,
+    referredCreatedAt = new Date(),
   } = overrides;
 
   return {
+    // Le filleul : un compte qui vient de naître (`createdAt`), que ni lui ni le
+    // parrain n'ont bloqué (`isBlockedBetween` lit `user.findFirst`).
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue(referredCreatedAt ? { id: 'user-new', createdAt: referredCreatedAt } : null),
+      findFirst: jest.fn<any>().mockResolvedValue(blockedBetween ? { id: 'user-affiliate' } : null),
+    },
     affiliateToken: {
       findUnique: jest.fn<any>().mockResolvedValue(affiliateToken),
       update: jest.fn<any>().mockResolvedValue({}),
@@ -263,7 +274,7 @@ describe('convertAffiliateVisit', () => {
     expect(prisma.friendRequest.create).not.toHaveBeenCalled();
     expect(prisma.friendRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'fr-1' },
+        where: { id: 'fr-1', status: 'pending' },
         data: expect.objectContaining({ status: 'accepted' }),
       })
     );
@@ -472,5 +483,87 @@ describe('cleanupExpiredVisitSessions (H-9)', () => {
     const prisma = makePrisma();
     (prisma.affiliateVisitSession.deleteMany as jest.Mock<any>).mockRejectedValue(new Error('down'));
     expect((await AffiliateTrackingService.cleanupExpiredVisitSessions(prisma)).success).toBe(false);
+  });
+});
+
+describe('convertAffiliateVisit — le lien entre le parrain et le filleul (#13926)', () => {
+  const withRelations = (overrides: Parameters<typeof makePrisma>[0] = {}) => {
+    const store = relationStore();
+    return { prisma: { ...makePrisma(overrides), userRelation: store.prisma.userRelation }, store };
+  };
+
+  it('écrit la ligne FRIEND/FRIEND quand l’affiliation crée la demande acceptée', async () => {
+    const { prisma, store } = withRelations();
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(store.relations()).toHaveLength(1);
+    expect(store.relations()[0]).toMatchObject({
+      userLowId: 'user-affiliate', userHighId: 'user-new', grantedByLow: 'FRIEND', grantedByHigh: 'FRIEND', origin: 'request',
+    });
+  });
+
+  it('l’écrit aussi quand la demande préexistante passe à acceptée', async () => {
+    const { prisma, store } = withRelations({
+      existingFriendRequest: { id: 'fr-0', senderId: 'user-new', receiverId: 'user-affiliate', status: 'pending' },
+    });
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(store.relations()).toHaveLength(1);
+  });
+
+  it('ne fait pas échouer la conversion si l’écriture du lien échoue', async () => {
+    const { prisma } = withRelations();
+    (prisma as unknown as { userRelation: unknown }).userRelation = { findUnique: jest.fn<any>().mockRejectedValue(new Error('mongo down')) };
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('[audit #13926] un lien d’invitation n’efface ni un refus ni un blocage', () => {
+  const withRelations = (overrides: Parameters<typeof makePrisma>[0] = {}) => {
+    const store = relationStore();
+    return { prisma: { ...makePrisma(overrides), userRelation: store.prisma.userRelation }, store };
+  };
+
+  it.each(['rejected', 'blocked'])('une demande « %s » du filleul vers le parrain ne devient pas une amitié FRIEND/FRIEND', async (status) => {
+    const { prisma, store } = withRelations({
+      existingFriendRequest: { id: 'fr-0', senderId: 'user-new', receiverId: 'user-affiliate', status },
+    });
+
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(store.relations()).toHaveLength(0);
+    expect(prisma.friendRequest.update).not.toHaveBeenCalled();
+  });
+
+  it('un blocage entre le parrain et le filleul refuse la conversion : ni relation, ni amitié', async () => {
+    const { prisma, store } = withRelations({ blockedBetween: true });
+
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(result.success).toBe(false);
+    expect(prisma.affiliateRelation.create).not.toHaveBeenCalled();
+    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
+    expect(store.relations()).toHaveLength(0);
+  });
+
+  it('un compte inscrit depuis plus longtemps que la fenêtre de parrainage ne se fait pas parrainer', async () => {
+    const { prisma, store } = withRelations({ referredCreatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) });
+
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(result.success).toBe(false);
+    expect(prisma.affiliateRelation.create).not.toHaveBeenCalled();
+    expect(store.relations()).toHaveLength(0);
+  });
+
+  it('un compte introuvable ne se fait pas parrainer', async () => {
+    const { prisma } = withRelations({ referredCreatedAt: null });
+
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new');
+
+    expect(result.success).toBe(false);
+    expect(prisma.affiliateRelation.create).not.toHaveBeenCalled();
   });
 });

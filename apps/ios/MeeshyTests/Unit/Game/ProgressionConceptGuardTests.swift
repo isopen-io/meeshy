@@ -34,9 +34,9 @@ final class ProgressionConceptGuardTests: XCTestCase {
     /// l'écran). Le retour à la ligne se fait ENTRE les pastilles, y compris en Dynamic Type agrandi.
     func test_everyChip_holdsOnOneLine_andShrinksRatherThanWidenThePage() throws {
         let chips: [(file: String, header: String)] = [
-            ("Meeshy/Features/Main/Game/GameSurface.swift", "struct GameChip: View {"),
-            ("Meeshy/Features/Main/Views/ProgressionHub.swift", "struct ProgressionWrap: View {"),
-            ("Meeshy/Features/Main/Game/GameHeroParts.swift", "private func chip(_ item: GameHero.EarnItem) -> some View {"),
+            ("Meeshy/Features/Game/GameSurface.swift", "struct GameChip: View {"),
+            ("Meeshy/Features/Profile/Views/ProgressionHub.swift", "struct ProgressionWrap: View {"),
+            ("Meeshy/Features/Game/GameHeroParts.swift", "private func chip(_ item: GameHero.EarnItem) -> some View {"),
         ]
         for chip in chips {
             let code = try body(of: chip.header, in: try source(chip.file))
@@ -50,10 +50,10 @@ final class ProgressionConceptGuardTests: XCTestCase {
     /// à la ligne suivante au lieu de comprimer ses voisines.
     func test_everyRowOfChips_wrapsBetweenChips() throws {
         let hosts = [
-            "Meeshy/Features/Main/Game/GameMissionsView.swift",
-            "Meeshy/Features/Main/Game/GameMintPreviewView.swift",
-            "Meeshy/Features/Main/Game/GameHeroView.swift",
-            "Meeshy/Features/Main/Game/ProgressionConceptViews.swift",
+            "Meeshy/Features/Game/GameMissionsView.swift",
+            "Meeshy/Features/Game/GameMintPreviewView.swift",
+            "Meeshy/Features/Game/GameHeroView.swift",
+            "Meeshy/Features/Game/ProgressionConceptViews.swift",
         ]
         for host in hosts {
             let lines = try source(host).components(separatedBy: "\n")
@@ -70,13 +70,13 @@ final class ProgressionConceptGuardTests: XCTestCase {
 
     func test_theFrontPage_mountsNoGestureView() throws {
         // La LISTE ne porte aucun geste. L'en-tête, lui, retrouve le compteur de Meeshes et sa feuille (amendement n° 2).
-        let list = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
+        let list = try source("Meeshy/Features/Game/ProgressionFrontList.swift")
         for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameGaugesView(",
                         "GameBadgeShelfView(", "ProgressionMeeshEntry(", "ProgressionMeeshDetail(", "GameLeagueDetailCard",
                         "viewModel.mint()", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
             XCTAssertFalse(list.contains(gesture), "« \(gesture) » est dans la liste de la première page : les gestes vivent dans les fiches")
         }
-        let page = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        let page = try source("Meeshy/Features/Profile/Views/ProgressionView.swift")
         for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameGaugesView(",
                         "GameBadgeShelfView(", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
             XCTAssertFalse(page.contains(gesture), "« \(gesture) » est sur la première page : les gestes vivent dans les fiches")
@@ -87,7 +87,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     }
 
     func test_theSheet_hostsTheGesturesTheFrontPageLost() throws {
-        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        let fiche = try source("Meeshy/Features/Game/ProgressionConceptPage.swift")
         for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameBadgeShelfView(",
                         "ProgressionLastAchievementHero(", "ProgressionElansHero(", "GameLeagueDetailCard.make("] {
             XCTAssertTrue(fiche.contains(gesture), "« \(gesture) » n'est rangé dans aucune fiche : une vue écrite et montée par personne")
@@ -99,11 +99,11 @@ final class ProgressionConceptGuardTests: XCTestCase {
     /// La pile porte le chemin complet (#9564) : Progression n'attend plus d'ancre pour pousser une fiche après coup —
     /// une seule transition, aucune image perdue.
     func test_theFirstPage_waitsForNoAnchor_theStackCarriesTheChain() throws {
-        let progression = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        let progression = try source("Meeshy/Features/Profile/Views/ProgressionView.swift")
         XCTAssertFalse(progression.contains("Anchor"), "plus d'ancre ramassée : l'entrée pose son chemin complet")
         XCTAssertFalse(progression.contains("Task.sleep"), "plus de seconde poussée retardée")
         XCTAssertFalse(progression.contains("proxy.scrollTo("), "plus rien ne défile jusqu'à une section : la première page n'en a plus")
-        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        let fiche = try source("Meeshy/Features/Game/ProgressionConceptPage.swift")
         XCTAssertTrue(fiche.contains("proxy.scrollTo(section"), "la fiche se pose à la section que l'entrée demande")
         for host in ["Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift", "Meeshy/Features/Main/Views/iPadRootView+Panels.swift"] {
             let code = try source(host)
@@ -160,7 +160,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertFalse(ProgressionCopy.elanTitle(factor: 2).contains("×2.0"), "jamais une précision inexistante")
 
         let hero = try body(of: "struct ProgressionElansHero: View {",
-                            in: try source("Meeshy/Features/Main/Views/ProgressionHub.swift"))
+                            in: try source("Meeshy/Features/Profile/Views/ProgressionHub.swift"))
         XCTAssertFalse(hero.contains("\"Élan"), "aucune chaîne en dur dans la carte des élans")
         XCTAssertTrue(hero.contains("ProgressionCopy.elanTitle(factor:"), "le titre passe par la copie localisée")
     }
@@ -315,7 +315,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertEqual(Set(entries.map { $0.body }).count, entries.count, "deux entrées du carnet partagent leur explication")
         XCTAssertFalse(entries.contains { $0.name.isEmpty || $0.body.isEmpty })
 
-        let page = try source("Meeshy/Features/Main/Game/GameRulesView.swift")
+        let page = try source("Meeshy/Features/Game/GameRulesView.swift")
         XCTAssertTrue(page.contains("GameRulesGlossarySection()"), "la section est écrite et montée par personne")
         XCTAssertTrue(page.contains("ForEach(GameRulesGlossary.entries)"), "la section PARCOURT le glossaire, elle ne le recopie pas")
     }
@@ -337,7 +337,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
             XCTAssertNil(table[key], "\(key) : un manque sans cible est resté au catalogue")
             XCTAssertFalse(corpus.contains("\"\(key)\""), "\(key) : un manque sans cible est resté dans l'app")
         }
-        let surface = try source("Meeshy/Features/Main/Game/GameSurface.swift")
+        let surface = try source("Meeshy/Features/Game/GameSurface.swift")
         XCTAssertTrue(surface.contains("missing: @MainActor (String) -> String\n"), "la phrase de manque n'est plus obligatoire sur la rangée de dépense")
         // Ce qu'il reste sur la bannière nomme le niveau visé : deux substitutions, dans les sept langues.
         let banner = try XCTUnwrap(table["game2.banner.missing"])
@@ -438,7 +438,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
             XCTAssertFalse(text.contains("+"), "game.hero.earn.chip [\(locale)] : le « + » est resté — « \(text) »")
         }
         let chip = try body(of: "private func chip(_ item: GameHero.EarnItem) -> some View {",
-                            in: try source("Meeshy/Features/Main/Game/GameHeroParts.swift"))
+                            in: try source("Meeshy/Features/Game/GameHeroParts.swift"))
         XCTAssertFalse(chip.contains("+\\("), "le « + » est resté dans la valeur par défaut de la pastille")
         XCTAssertEqual(try catalog(prefix: "game.mint.")["game.mint.chip.glory"]?["fr"]?.hasPrefix("+"), true, "le « + » de la Gloire reste")
     }
@@ -447,7 +447,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     /// et l'autre lues sur `ProgressionConceptFiche`, qui ne redit rien de ce que l'écran montre (#11180). La carte
     /// n'a plus de phrase d'état : un nom, une valeur, une ligne.
     func test_theSheetShowsTheFourAnswersAndItsWhere_theCardThreeStoreys() throws {
-        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        let fiche = try source("Meeshy/Features/Game/ProgressionConceptPage.swift")
         for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.how(concept)", "ConceptText.use(concept)",
                       "ProgressionConceptFiche.make(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
             XCTAssertTrue(fiche.contains(piece), "« \(piece) » n'est plus dans la fiche")
@@ -457,7 +457,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
         let facts = try XCTUnwrap(fiche.range(of: "ProgressionConceptFacts(facts: fiche.facts, concept: concept)"))
         XCTAssertTrue(where_.lowerBound < stateLine.lowerBound && stateLine.lowerBound < facts.lowerBound,
                       "la phrase d'état ouvre « Où j'en suis », avant les lignes")
-        let card = try body(of: "struct ProgressionConceptCardView: View {", in: try source("Meeshy/Features/Main/Game/ProgressionConceptViews.swift"))
+        let card = try body(of: "struct ProgressionConceptCardView: View {", in: try source("Meeshy/Features/Game/ProgressionConceptViews.swift"))
         for storey in ["Text(card.name)", "Text(card.value)", "if let line = card.line"] {
             XCTAssertTrue(card.contains(storey), "la carte ne rend pas « \(storey) »")
         }

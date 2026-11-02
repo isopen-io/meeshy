@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_publish_block_caption">La didascalia è troppo lunga — accorciala per pubblicare</string>
+    <string name="composer_publish_block_text">Un testo contiene al massimo 1000 caratteri — accorcialo per pubblicare</string>
+    <string name="composer_publish_block_texts">Più di 50 testi in una scena — eliminane alcuni per pubblicare</string>
+    <string name="composer_publish_block_stickers">Più di 50 sticker in una scena — eliminane alcuni per pubblicare</string>
+    <string name="composer_publish_block_media">Più di 50 media in una scena — rimuovine alcuni per pubblicare</string>
+    <string name="composer_publish_block_sounds">Più di 50 suoni in una scena — rimuovine alcuni per pubblicare</string>
+    <string name="composer_publish_block_duration">La story dura più di 2 ore — accorcia una slide per pubblicare</string>
+</resources>

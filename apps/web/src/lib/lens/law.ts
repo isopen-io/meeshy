@@ -137,7 +137,7 @@ export const bandCenter = ({
  * de la magnifiée, pendant le défilement seulement.
  *
  * Ses trois cotes ne viennent PAS de `focus-curve.ts` mais de
- * `LentilleMetrics.FocusCard` (`apps/ios/.../Lentille/Core/LentilleMetrics.swift`) :
+ * `LentilleMetrics.FocusCard` (`apps/ios/.../Lens/Core/LentilleMetrics.swift`) :
  * la courbe de perspective est partagée entre les clients, la respiration est
  * une cote de la peau Lentille. `scripts/check-curve.mjs` va donc les
  * chercher dans le fichier Swift, exactement comme le générateur de jetons va
@@ -161,7 +161,7 @@ const ramp = (distance: number): number => clamp01((Math.abs(distance) - RAMP_ST
 
 /**
  * L'OPACITÉ D'UNE RANGÉE EN SOURDINE — `LentilleMetrics.Muted.opacity`
- * (`apps/ios/.../Lentille/Core/LentilleMetrics.swift:303`), le SEUL rendu de
+ * (`apps/ios/.../Lens/Core/LentilleMetrics.swift:303`), le SEUL rendu de
  * la sourdine sur la peau Lentille (contrat §4.3, cité par
  * `LentilleConversationRow.rowOpacity`) : pas de glyphe cloche sur le rang
  * plat, juste ce fondu. `scripts/check-curve.mjs` la compare à sa source.
@@ -170,7 +170,7 @@ export const MUTED_OPACITY = 0.55;
 
 /**
  * `blend` — miroir `LentilleSceneActivity.blend(_:level:)`
- * (`Lentille/Perspective/LentilleSceneActivity.swift:60-66`) : fond une
+ * (`Lens/Perspective/LentilleSceneActivity.swift:60-66`) : fond une
  * perspective vers l'IDENTITÉ selon le niveau d'activité de la scène.
  * `level` 0 ⇒ identité (alpha 1, échelle 1 — l'AJUSTEMENT AU REPOS, écart 2
  * de la spécification #5694) ; `level` 1 ⇒ la perspective telle quelle.

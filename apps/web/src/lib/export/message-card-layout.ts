@@ -11,7 +11,7 @@ import {
 import { DEFAULT_AUDIO_STYLE, heroMediaOps, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock } from './message-card-media';
 import type { CardOp } from './message-card-ops';
 import { HERO_GAP, heroHeight, heroSpan } from './message-card-hero';
-import { threadLevel, threadRoom, threadSeparatorHeight, threadSeparatorOps, threadShift } from './message-card-thread';
+import { THREAD_SEPARATOR_ROW, threadLevel, threadRoom, threadSeparatorOps, threadShift } from './message-card-thread';
 import { GUILLEMET_FONT, canvasFont, templateOf, type CardLinkId, type CardPalette, type MessageCardTemplateId } from './message-card-templates';
 import { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
 
@@ -57,7 +57,16 @@ export type MessageCardPart = {
   readonly text: string;
   /** L'heure du message, déjà rédigée — peinte à côté du nom quand le cadre la montre. */
   readonly time?: string | null;
+  /**
+   * LE FIL D'UN COMMENTAIRE (#13922, `MessageCardPart.thread` iOS) — une ligne
+   * par commentaire, déjà nommée, à son niveau : chaque niveau la retire d'un
+   * cran, et une ligne de séparation précède chaque entrée de niveau ≥ 1. Le
+   * bloc se nomme alors par son titre (`author`).
+   */
+  readonly thread?: readonly MessageCardThreadLine[];
 };
+
+export type MessageCardThreadLine = { readonly text: string; readonly level: number };
 
 export type MessageCardInput = {
   /** Le message auquel on répond — `null` pour un message isolé. */
@@ -92,13 +101,7 @@ export type MessageCardInput = {
    * compte plus parmi les médias de la réponse (#10915).
    */
   readonly heroMedia?: number | null;
-  /** Les commentaires du fil entre la citation et la réponse, chacun à son niveau : un retrait et une barre verticale par niveau. */
-  readonly context?: readonly MessageCardContext[];
-  /** Le niveau d'imbrication de la réponse — 0 : premier niveau. */
-  readonly replyDepth?: number;
 };
-
-export type MessageCardContext = { readonly part: MessageCardPart; readonly depth: number };
 
 /**
  * Les PARTIES d'une carte qu'un geste peut désigner sur l'aperçu : l'en-tête,
@@ -197,8 +200,20 @@ type Sized = {
   readonly replyLines: string[];
   readonly quoteLines: string[];
   readonly followLines: readonly (readonly string[])[];
-  readonly contextLines: readonly (readonly string[])[];
+  /** Le niveau de chaque ligne de la réponse, et si elle porte la séparation d'un fil (vide sans fil). */
+  readonly replyRows: readonly ThreadRow[];
 };
+
+type ThreadRow = { readonly level: number; readonly separator: boolean };
+
+/** Les lignes d'un fil : chaque entrée coupée dans la largeur que son niveau laisse, précédée d'une ligne de séparation dès le niveau 1 (miroir de `MessageCardThread.rows`). */
+function threadRows(lines: readonly MessageCardThreadLine[], width: number, font: string, measure: Measure): readonly (ThreadRow & { readonly text: string })[] {
+  return lines.flatMap((line) => {
+    const level = threadLevel(line.level);
+    const body = wrapText(line.text, threadRoom(width, level), font, measure).map((text) => ({ text, level, separator: false }));
+    return level > 0 ? [{ text: '', level, separator: true }, ...body] : body;
+  });
+}
 
 const replyLineHeight = (size: number) => Math.round(size * REPLY_LEADING);
 const quoteLineHeight = (size: number) => Math.round(size * QUOTE_LEADING);
@@ -256,13 +271,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const textWidth = width - 2 * PAD_X;
   const bubbleWidth = textWidth - BUBBLE_OFFSET;
   const quoteWidth = geometry.bubbles ? bubbleWidth - 2 * BUBBLE_PAD_X : textWidth - QUOTE_INDENT;
-  const replyLevel = threadLevel(input.replyDepth ?? 0);
-  const replyIndent = threadShift(replyLevel);
-  const replyBubbleWidth = bubbleWidth - replyIndent;
-  const replyWidth = geometry.bubbles ? replyBubbleWidth - 2 * BUBBLE_PAD_X : textWidth - replyIndent;
-  const contexts = (input.context ?? []).filter((entry) => entry.part.text.trim() !== '');
-  const depthOf = (entry: MessageCardContext) => threadLevel(entry.depth);
-  const replySeparator = threadSeparatorHeight(template.link, replyLevel);
+  const replyWidth = geometry.bubbles ? bubbleWidth - 2 * BUBBLE_PAD_X : textWidth;
   const title = nonBlank(input.title);
   const date = nonBlank(input.date);
   const showAuthors = input.showAuthors !== false;
@@ -270,6 +279,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const metaOf = (part: MessageCardPart) => metaLine(showAuthors ? part.author : null, nonBlank(part.time), frame.authors);
   const replyMeta = metaOf(input.reply);
   const replyHasText = input.reply.text.trim() !== '';
+  const replyThread = replyHasText ? (input.reply.thread ?? []) : [];
   const followUps = (input.followUps ?? []).filter((part) => part.text.trim() !== '');
   const followMetas = followUps.map(metaOf);
   const followInset = geometry.quoteBar ? QUOTE_INDENT : 0;
@@ -304,7 +314,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     arrangement,
     audioStyle: input.audioStyle ?? DEFAULT_AUDIO_STYLE,
     width: beside ? besideWidth : replyWidth,
-    maxHeight: Math.round(budget * (beside ? 0.62 : replyHasText || hasQuote || contexts.length > 0 ? MEDIA_SHARE : 0.8)),
+    maxHeight: Math.round(budget * (beside ? 0.62 : replyHasText || hasQuote ? MEDIA_SHARE : 0.8)),
     column: beside,
     creditAt: placement === 'backdrop' ? null : frame.authors,
     measure,
@@ -313,7 +323,6 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     font: (size, weight) => canvasFont({ family: null, weight, style: 'normal' }, size),
   });
   const metaHeight = (line: string | null) => (line === null ? 0 : AUTHOR_LINE + AUTHOR_GAP);
-  const contextMetas = contexts.map((entry) => metaOf(entry.part));
   const chrome: Chrome = {
     hero: hasHero ? heroBlock.height + HERO_GAP : 0,
     header: sideHeader !== null || (title === null && date === null) ? 0 : (title === null ? 0 : TITLE_LINE) + (date === null ? 0 : DATE_LINE) + HEADER_GAP,
@@ -330,16 +339,15 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     const quoteSize = Math.max(QUOTE_FLOOR, QUOTE_START * SHRINK ** step);
     const replyFont = canvasFont(typeface.replyFont, replySize);
     const quoteFont = canvasFont(typeface.quoteFont, quoteSize);
+    const rows = threadRows(replyThread, replyTextWidth, replyFont, measure);
     return {
       replySize,
       quoteSize,
       replyFont,
       quoteFont,
-      replyLines: replyHasText ? wrapText(input.reply.text, replyTextWidth, replyFont, measure) : [],
+      replyLines: rows.length > 0 ? rows.map((row) => row.text) : replyHasText ? wrapText(input.reply.text, replyTextWidth, replyFont, measure) : [],
+      replyRows: rows.map(({ level, separator }) => ({ level, separator })),
       quoteLines: hasQuote && quotedText !== '' ? wrapText(input.quoted?.text ?? '', quoteWidth, quoteFont, measure) : [],
-      contextLines: contexts.map((entry) =>
-        truncateLines(wrapText(entry.part.text, threadRoom(quoteWidth, depthOf(entry)), quoteFont, measure), FOLLOW_MAX_LINES, threadRoom(quoteWidth, depthOf(entry)), quoteFont, measure),
-      ),
       followLines: followUps.map((part) => truncateLines(wrapText(part.text, quoteWidth, quoteFont, measure), FOLLOW_MAX_LINES, quoteWidth, quoteFont, measure)),
     };
   };
@@ -350,10 +358,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       (sum, lines, index) => sum + FOLLOW_GAP + metaHeight(followMetas[index] ?? null) + lines.length * quoteLineHeight(sized.quoteSize) + chrome.bubble,
       0,
     );
-  /** Les commentaires du fil gardent leurs lignes (trois au plus) : leur hauteur s'ajoute, comme celle des suites. */
-  const contextHeight = (sized: Sized): number =>
-    sized.contextLines.reduce((sum, lines, index) => sum + threadSeparatorHeight(template.link, depthOf(contexts[index] ?? { part: input.reply, depth: 0 })) + metaHeight(contextMetas[index] ?? null) + lines.length * quoteLineHeight(sized.quoteSize) + chrome.bubble + FOLLOW_GAP, 0);
-  const total = (sized: Sized): number => contentHeight(sized, hasQuote, chrome) + followHeight(sized) + contextHeight(sized) + replySeparator;
+  const total = (sized: Sized): number => contentHeight(sized, hasQuote, chrome) + followHeight(sized);
 
   const atFloor = (sized: Sized) => sized.replySize <= REPLY_FLOOR * typeface.replyScale && sized.quoteSize <= QUOTE_FLOOR;
   let step = 0;
@@ -374,11 +379,16 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     const room = budget - fixed;
     /* La citation cède d'abord : au plus un tiers de la place, deux lignes au moins. */
     const quoteKeep = hasQuote ? Math.min(sized.quoteLines.length, Math.max(2, Math.floor((room * 0.3) / quoteLH))) : 0;
-    const replyKeep = replyHasText ? Math.max(1, Math.floor((room - quoteKeep * quoteLH) / replyLH)) : 0;
+    const fits = replyHasText ? Math.max(1, Math.floor((room - quoteKeep * quoteLH) / replyLH)) : 0;
+    /* Un fil coupé ne finit jamais sur sa ligne de séparation : la coupe se lit sur la dernière ligne écrite. */
+    const replyKeep = fits > 1 && sized.replyRows[fits - 1]?.separator === true ? fits - 1 : fits;
+    const replyRows = sized.replyRows.slice(0, replyKeep);
+    const lastLevel = replyRows[replyRows.length - 1]?.level ?? 0;
     sized = {
       ...sized,
       quoteLines: truncateLines(sized.quoteLines, quoteKeep, quoteWidth, sized.quoteFont, measure),
-      replyLines: replyHasText ? truncateLines(sized.replyLines, replyKeep, replyTextWidth, sized.replyFont, measure) : [],
+      replyLines: replyHasText ? truncateLines(sized.replyLines, replyKeep, lastLevel === 0 ? replyTextWidth : threadRoom(replyTextWidth, lastLevel), sized.replyFont, measure) : [],
+      replyRows,
     };
   }
 
@@ -449,6 +459,8 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       /** Les médias du bloc et leur place — au-dessus, au-dessous, ou en colonne à côté des lignes. */
       readonly media: { readonly block: CardMediaBlock; readonly at: 'above' | 'below' | 'left' | 'right' } | null;
       readonly bubble: { readonly offset: number; readonly color: string; readonly width: number } | null;
+      /** Le niveau et la séparation de chaque ligne d'un fil — absent : toutes au niveau 0. */
+      readonly rows?: readonly ThreadRow[];
     },
   ) => {
     const direction = textDirection(part.text);
@@ -478,10 +490,16 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       ops.push(...media.block.place(boxLeft, y));
       y += media.block.height + (lines.length > 0 ? MEDIA_GAP : 0);
     }
-    for (const line of lines) {
-      ops.push({ kind: 'text', text: line, x: textStart, y: y + Math.round(options.size), font: options.font, color: options.ink, align: align(rtl), direction });
+    lines.forEach((line, index) => {
+      const row = options.rows?.[index];
+      const x = textStart + (rtl ? -1 : 1) * threadShift(row?.level ?? 0);
+      if (row?.separator === true) {
+        ops.push(...threadSeparatorOps(template.link, { x, y: y + Math.round((options.lineHeight - THREAD_SEPARATOR_ROW) / 2), rtl, level: row.level, accent: palette.accent }));
+      } else {
+        ops.push({ kind: 'text', text: line, x, y: y + Math.round(options.size), font: options.font, color: options.ink, align: align(rtl), direction });
+      }
       y += options.lineHeight;
-    }
+    });
     if (media?.at === 'below') {
       y += lines.length > 0 ? MEDIA_GAP : 0;
       mediaTop = y;
@@ -522,42 +540,17 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     y += geometry.block;
   }
 
-  /* L'imbrication est la SÉPARATION du template, par niveau : un retrait proportionnel, jamais une barre propre au fil. */
-  const separate = (level: number, rtl: boolean, inset: number) => {
-    const row = threadSeparatorHeight(template.link, level);
-    if (row === 0) return;
-    ops.push(...threadSeparatorOps(template.link, { x: start(rtl, inset), y, rtl, level, accent: palette.accent }));
-    y += row;
-  };
-  const contextTop = y;
-  contexts.forEach((entry, index) => {
-    const depth = depthOf(entry);
-    const rtl = textDirection(entry.part.text) === 'rtl';
-    separate(depth, rtl, followInset + threadShift(depth));
-    block(entry.part, sized.contextLines[index] ?? [], {
-      size: sized.quoteSize,
-      lineHeight: quoteLineHeight(sized.quoteSize),
-      font: sized.quoteFont,
-      ink: palette.quoteInk,
-      inset: followInset + threadShift(depth),
-      meta: contextMetas[index] ?? null,
-      media: null,
-      bubble: geometry.bubbles ? { offset: threadShift(depth), color: palette.quotePanel, width: bubbleWidth - threadShift(depth) } : null,
-    });
-    y += FOLLOW_GAP;
-  });
-  if (contexts.length > 0) region('replies', contextTop, y - FOLLOW_GAP);
-  separate(replyLevel, textDirection(input.reply.text) === 'rtl', replyIndent);
-
+  /* Le fil se lit RETIRÉ, niveau par niveau, et chaque entrée de niveau ≥ 1 suit la SÉPARATION du template — jamais une barre propre au fil. */
   const reply = block(input.reply, sized.replyLines, {
     size: sized.replySize,
     lineHeight: replyLineHeight(sized.replySize),
     font: sized.replyFont,
     ink: palette.replyInk,
-    inset: replyIndent,
+    inset: 0,
     meta: replyMeta,
     media: placement === 'backdrop' ? { block: mediaBlock, at: 'above' } : { block: mediaBlock, at: placement },
-    bubble: geometry.bubbles ? { offset: BUBBLE_OFFSET + replyIndent, color: palette.replyPanel, width: replyBubbleWidth } : null,
+    bubble: geometry.bubbles ? { offset: BUBBLE_OFFSET, color: palette.replyPanel, width: bubbleWidth } : null,
+    rows: sized.replyRows,
   });
   region('reply', reply.top, y);
   /* Les médias vivent DANS la réponse : leur zone vient après pour se poser au-dessus d'elle. */

@@ -197,7 +197,9 @@ export type ObjectPose = {
 /**
  * `objectPose` — LA loi de pose, publique, testée par son API seule (T-D1…
  * T-D6). Sans `timing`, la pose de base EST le transform : `visible` vaut
- * toujours vrai (T-D2).
+ * toujours vrai (T-D2). L'échelle d'une image clé est un FACTEUR de
+ * `transform.scale`, comme le rendu iOS et `StoryKeyframeResolver` Android
+ * (#14316, `keyframe-scale.vectors.json`).
  */
 export function objectPose(object: CanvasObject, t: number): ObjectPose {
   const anchor = anchorPoint(object);
@@ -210,7 +212,7 @@ export function objectPose(object: CanvasObject, t: number): ObjectPose {
   return {
     x: overrides.x ?? anchor.x,
     y: overrides.y ?? anchor.y,
-    scale: overrides.scale ?? object.transform.scale,
+    scale: object.transform.scale * (overrides.scale ?? 1),
     rotation: object.transform.rotation,
     opacity,
     visible,

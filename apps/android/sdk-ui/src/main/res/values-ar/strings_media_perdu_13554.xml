@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_failed_media_lost">لم يُرسَل: لم تعد هذه الوسائط متاحة على هذا الجهاز. انقر لإزالتها، ثم اخترها من جديد.</string>
+</resources>

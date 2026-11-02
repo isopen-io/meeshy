@@ -20,7 +20,7 @@ import { ThreadWriteLock } from '@/components/thread-write-lock';
 import { ThreadComposerChrome } from '@/components/thread-composer-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
-import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
+import { useConversationsSnapshot, useSealedThread, useThreadData } from '@/lib/api/query';
 import { markCaughtUp } from '@/lib/api/receipts';
 import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
@@ -75,6 +75,7 @@ import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
+import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
 import { keepReadingInPlace } from '@/lib/view/thread-resize-compensation';
 import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
@@ -138,7 +139,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * peut être `undefined` (chargement, refus) — plus AUCUN repli sur une
    * autre conversation (F8, `thread.test.tsx` § id inconnu).
    */
-  const threadData = useThreadData(id);
+  const threadData = useSealedThread(useThreadData(id));
   const conversation = threadData.conversation;
 
   /** LA PHOTO D'UN FRAPPEUR (#6985) — `useTypistAvatar` la résout depuis les participants déjà en cache. */
@@ -298,7 +299,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * (`useComposeLanguage`, #5828) — jamais le rang 1 du Prisme du LECTEUR
    * (`readerLocale`), qui décrit qui LIT, pas qui ÉCRIT.
    */
-  const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry } = useSend({
+  const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, discard } = useSend({
     conversationId,
     viewerId: viewer.id ?? '',
     ...(selfSender === undefined ? {} : { sender: selfSender }),
@@ -377,7 +378,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     getScrollElement: () => scroller.current,
     estimateSize: () => THREAD_ROW_ESTIMATE,
     overscan: 6,
-    getItemKey: (index) => placed[index]?.message.id ?? index,
+    getItemKey: (index) => (placed[index] === undefined ? index : threadRowKeyOf(placed[index].message)),
     anchorTo,
   });
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlace;
@@ -479,7 +480,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   const compose = useThreadCompose({
     store: draftStore,
     scope,
-    conversationId: conversation?.id,
+    conversation,
     messages,
     readerLanguages,
     send,
@@ -513,7 +514,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     readerLocale,
     viewer: actionScope.viewer,
     conversation: actionScope.conversation,
-    send: { retry, failed: sendFailed },
+    send: { retry, discard, failed: (id) => deliveryOf(id) === 'failed', permanent: permanentOf },
     reply: compose,
     announce: announcer.announce,
   });
@@ -841,7 +842,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             startedAtOf={startedAtOf}
             reasonOf={reasonOf}
             permanentOf={permanentOf}
-            retry={retry} retryableOf={messageMenu.retryableOf}
+            retry={retry} retryableOf={messageMenu.retryableOf} discard={messageMenu.discard} discardableOf={messageMenu.discardableOf}
             displayLanguageOf={messageMenu.displayLanguageOf}
             myReactionsOf={messageMenu.myReactionsOf}
             selection={messageMenu.selection}
@@ -936,7 +937,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             dégradé de masquage — le porteur a fait retirer ces voiles
             (#6537, « supprimer ces voiles, non pas simplement les rendre
             invisible, mais permettre qu'on manipule les éléments entre »). */
-        <ThreadWriteLock conversationId={conversationId} conversation={conversation}>
+        <ThreadWriteLock conversationId={conversationId} conversation={conversation} messages={threadData.messages} viewerId={viewer.id ?? ''} title={title}>
         <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <MessageEditDock edit={compose.edit}>
           <Composer

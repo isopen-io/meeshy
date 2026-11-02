@@ -126,6 +126,8 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   avifVariants: true,
   renditions: true,
   processingState: true,
+  // #11327 — la lens qui a produit le média de story/post : « Lens par X » à la lecture.
+  lensSlug: true,
   duration: true,
   order: true,
   caption: true,
@@ -268,6 +270,7 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     // jamais servis : la projection les retire.
     visibility: true,
     moderationHiddenAt: true,
+    deletedAt: true,
     author: { select: postAuthorSelect },
     media: mediaInclude,
     createdAt: true,
@@ -331,6 +334,7 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
       createdAt: true,
       visibility: true,
       moderationHiddenAt: true,
+      deletedAt: true,
       author: { select: postAuthorSelect },
       media: mediaInclude,
     },

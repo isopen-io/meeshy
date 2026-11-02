@@ -125,6 +125,7 @@ const TYPES_DE_RELATION = new Set<string>([
   'friend_accepted',
   'contact_joined',
   'contact_recently_active',
+  'relation_acquaintance',
 ] satisfies readonly TypeDeNotification[]);
 
 export function notificationBannerFraming(notification: Notification): CadrageDeBanniere {

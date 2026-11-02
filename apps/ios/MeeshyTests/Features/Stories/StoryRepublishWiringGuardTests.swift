@@ -58,7 +58,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
     /// par l'appel réseau nu `PostService.shared.repost`.
     func test_railRepostButton_republishesAsAStory_inOneTap() throws {
         let sidebar = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"))
 
         XCTAssertTrue(sidebar.contains("StoryDirectRepost.publish(story, as: .story)"),
                       "Le bouton du rail republie en STORY d'un tap.")
@@ -74,7 +74,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
     /// source directe de la confusion signalée par l'utilisateur.
     func test_railRepostButton_isLabelledRepublish_notShare() throws {
         let sidebar = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"))
         guard let range = sidebar.range(of: "story.viewer.action.repost") else {
             return XCTFail("clé de libellé du bouton de republication introuvable")
         }
@@ -86,36 +86,32 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - 1bis. Envoyer reste au rail ; post et réel passent par « Partager ▸ »
+    // MARK: - 1bis. Envoyer reste au rail ; post et réel passent par la feuille Meeshy
 
-    /// #9953 : le rail garde « Envoyer » (qui transfère n'importe où dans
-    /// l'app) et « Republier » (en story). Le menu (…) offre « Republier en
-    /// post » et « Republier en réel » par la MÊME mécanique, sur TOUTE story
-    /// (la sienne comprise depuis la v4). « Citer en post » a disparu :
+    /// #9953, revu le 2026-10-24 (#12644) : le rail garde « Envoyer » et
+    /// « Republier » (en story). « Envoyer » ouvre la feuille de partage
+    /// MEESHY, qui republie aussi en post et en réel par la MÊME mécanique —
+    /// le menu (…) ne les double plus. « Citer en post » a disparu :
     /// « Composer » le fait.
-    func test_sendStaysOnTheRail_postAndReelAreInTheShareMenu_quoteIsGone() throws {
+    func test_sendStaysOnTheRail_postAndReelAreInTheMeeshySheet_quoteIsGone() throws {
         let sidebar = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift"))
         XCTAssertTrue(sidebar.contains("story.viewer.action.send"), "« Envoyer » reste au rail.")
         XCTAssertTrue(sidebar.contains("sharedContentWrapper = SharedContentWrapper(subject: .story("))
 
+        let dispatcher = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Share/ShareDispatcher.swift"))
+        XCTAssertTrue(dispatcher.contains("StoryDirectRepost.republish(storyId: card.contentId, as: StoryRepostDestination(target))"),
+                      "La feuille Meeshy republie par l'écrivain du rail, jamais un second.")
+
         let header = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift"))
-        XCTAssertTrue(header.contains("StoryDirectRepost.publish(story, as: .post)"))
-        XCTAssertTrue(header.contains("StoryDirectRepost.publish(story, as: .reel)"))
-        for key in ["story.viewer.editAndRepostAsPost", "story.viewer.share.internal", "editAndRepostAsPostSource"] {
+            try source("Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"))
+        for key in ["StoryDirectRepost.publish(", "story.viewer.editAndRepostAsPost", "story.viewer.share.internal", "editAndRepostAsPostSource"] {
             XCTAssertFalse(header.contains(key), "\(key) a quitté le menu (…) — #9953")
         }
         let viewer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+            try source("Meeshy/Features/Stories/Views/StoryViewerView.swift"))
         XCTAssertFalse(viewer.contains("editAndRepostAsPostSource"), "Le cover de « Citer en post » est parti avec son entrée.")
-
-        for isOwnStory in [true, false] {
-            let plan = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: isOwnStory, isPublicStory: false,
-                                                    hasAudioTranscript: false, canCompose: false)
-            XCTAssertTrue(plan.shareEntries.contains(.repostAsPost) && plan.shareEntries.contains(.repostAsReel),
-                          "Toute story, la sienne comprise, sur toute audience (porteur, v4).")
-        }
     }
 
     // MARK: - 2. L'audience est plafonnée
@@ -135,7 +131,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
     /// > DÉCIDE, et non plus celui qui la recopiait.
     func test_composerPresentation_capsTheAudienceWithTheSharedLaw() throws {
         let hydration = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Composer/ComposerHydration.swift"))
+            try source("Meeshy/Features/Composer/ComposerHydration.swift"))
 
         XCTAssertTrue(
             hydration.contains("StoryRepostAudience.allowed(fromRawValue: story.visibility)"),
@@ -172,7 +168,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         // > Celle-ci nomme désormais le site qui DÉCIDE, et son message dit quoi
         // > chercher si le geste déménage encore.
         let composer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Composer/StoryRepublishComposer.swift"))
+            try source("Meeshy/Features/Composer/StoryRepublishComposer.swift"))
         XCTAssertTrue(
             composer.contains("repostOfId: source.story.id"),
             "La publication de la republication doit porter l'id de l'original. Si ce site n'est plus "
@@ -181,7 +177,7 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         )
 
         let viewModel = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/ViewModels/StoryViewModel.swift"))
+            try source("Meeshy/Features/Stories/ViewModels/StoryViewModel.swift"))
         XCTAssertTrue(
             viewModel.contains("repostOfId: upload.repostOfId"),
             "`createStory` doit lire `repostOfId` sur l'état d'upload — il valait " +

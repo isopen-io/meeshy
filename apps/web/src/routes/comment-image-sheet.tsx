@@ -106,6 +106,7 @@ function ComposedCommentImage({ request, composition, handle, onClose, announce,
         ? null
         : postCommentMessageCardSubjectOf(source, choice, {
             folded: (count) => translateExportCard(language, 'export.card.compose.folded', { count: String(count) }),
+            thread: translateExportCard(language, 'export.card.compose.thread'),
           }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [source, subjectKey, language],

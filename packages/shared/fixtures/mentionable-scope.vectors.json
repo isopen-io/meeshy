@@ -1,0 +1,27 @@
+{
+  "_doc": "Qui peut-on mentionner dans une conversation (#14066, #14071). `scopes` : le type BRUT servi → la portée (`interlocutor` | `members` | `directory`), ou null = personne ; correspondance EXACTE, comme la passerelle (aucune casse, aucun blanc retiré). `admits` : la portée d'un lecteur (type + appartenance) et les membres connus → une mention de `candidateId` a-t-elle un effet ? Loi : packages/shared/utils/mention-lookup.ts (mentionableScope, mentionReachOf, isMentionableIn) ; miroirs Swift (MentionReach) et Kotlin (MentionableScope, MentionLookupLaw) rejouent ce fichier.",
+  "scopes": [
+    { "_label": "directe", "input": "direct", "expected": "interlocutor" },
+    { "_label": "groupe", "input": "group", "expected": "members" },
+    { "_label": "publique", "input": "public", "expected": "directory" },
+    { "_label": "globale", "input": "global", "expected": "directory" },
+    { "_label": "diffusion", "input": "broadcast", "expected": "directory" },
+    { "_label": "communauté : pas une portée de mention", "input": "community", "expected": null },
+    { "_label": "canal inconnu", "input": "channel", "expected": null },
+    { "_label": "majuscules refusées", "input": "GROUP", "expected": null },
+    { "_label": "blancs refusés", "input": " public ", "expected": null },
+    { "_label": "chaîne vide", "input": "", "expected": null },
+    { "_label": "aucun type servi", "input": null, "expected": null }
+  ],
+  "admits": [
+    { "_label": "directe : l'interlocuteur", "type": "direct", "isMember": true, "memberIds": ["me", "peer"], "selfId": "me", "candidateId": "peer", "expected": true },
+    { "_label": "directe : jamais soi", "type": "direct", "isMember": true, "memberIds": ["me", "peer"], "selfId": "me", "candidateId": "me", "expected": false },
+    { "_label": "directe : un contact hors conversation", "type": "direct", "isMember": true, "memberIds": ["me", "peer"], "selfId": "me", "candidateId": "contact", "expected": false },
+    { "_label": "groupe : un membre", "type": "group", "isMember": true, "memberIds": ["me", "member"], "selfId": "me", "candidateId": "member", "expected": true },
+    { "_label": "groupe : un contact non membre", "type": "group", "isMember": true, "memberIds": ["me", "member"], "selfId": "me", "candidateId": "contact", "expected": false },
+    { "_label": "publique : tout compte", "type": "public", "isMember": true, "memberIds": ["me"], "selfId": "me", "candidateId": "contact", "expected": true },
+    { "_label": "publique, non-membre : personne", "type": "public", "isMember": false, "memberIds": ["me", "member"], "selfId": "me", "candidateId": "member", "expected": false },
+    { "_label": "groupe, non-membre : personne", "type": "group", "isMember": false, "memberIds": ["me", "member"], "selfId": "me", "candidateId": "member", "expected": false },
+    { "_label": "type inconnu : personne", "type": "channel", "isMember": true, "memberIds": ["me", "member"], "selfId": "me", "candidateId": "member", "expected": false }
+  ]
+}

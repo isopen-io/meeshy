@@ -16,7 +16,12 @@ import java.util.Locale
  *
  * Particularités CLDR : l'allemand et l'italien n'abrègent pas les milliers (« 1.500 »), l'espagnol
  * n'a pas de palier milliard (« 1500 M »).
+ *
+ * [CompactPrecision.UP_TO_ONE_DECIMAL] garde une décimale à tous les paliers (« 12,3 k ») — miroir
+ * de `.precision(.fractionLength(0...1))`, la précision des nombres serrés du jeu (iOS `GameCopy`).
  */
+public enum class CompactPrecision { STANDARD, UP_TO_ONE_DECIMAL }
+
 public object CompactCountFormat {
 
     private data class Tier(val scale: Long, val suffix: String)
@@ -39,12 +44,13 @@ public object CompactCountFormat {
         ),
     )
 
-    public fun text(count: Int, locale: Locale): String = text(count.toLong(), locale)
+    public fun text(count: Int, locale: Locale, precision: CompactPrecision = CompactPrecision.STANDARD): String =
+        text(count.toLong(), locale, precision)
 
     public fun text(count: Double, locale: Locale): String =
         text(if (count.isFinite()) count.coerceIn(0.0, Long.MAX_VALUE.toDouble()).toLong() else 0L, locale)
 
-    public fun text(count: Long, locale: Locale): String {
+    public fun text(count: Long, locale: Locale, precision: CompactPrecision = CompactPrecision.STANDARD): String {
         val symbols = NumberSymbols.forLocale(locale)
         val table = tables[locale.language] ?: english
         val n = count.coerceAtLeast(0L)
@@ -52,20 +58,28 @@ public object CompactCountFormat {
         if (table.thousand == null && n < 1_000_000L) return symbols.digits(grouped(n, symbols.grouping))
         val ladder = listOfNotNull(table.thousand, table.million, table.billion).distinctBy { it.scale to it.suffix }
         val start = ladder.indexOfLast { n >= it.scale }.coerceAtLeast(0)
-        return render(n, ladder, start, symbols, esBillions = table.billion.scale == table.million.scale)
+        val esBillions = table.billion.scale == table.million.scale
+        return render(n, ladder, start, symbols, esBillions, precision)
     }
 
-    private fun render(n: Long, ladder: List<Tier>, index: Int, symbols: NumberSymbols, esBillions: Boolean): String {
+    private fun render(
+        n: Long,
+        ladder: List<Tier>,
+        index: Int,
+        symbols: NumberSymbols,
+        esBillions: Boolean,
+        precision: CompactPrecision,
+    ): String {
         val tier = ladder[index]
         if (esBillions && n >= 1_000_000_000L) {
             val millions = BigDecimal(n).divide(BigDecimal(tier.scale)).round(java.math.MathContext(2, RoundingMode.HALF_EVEN))
             return symbols.digits(millions.setScale(0, RoundingMode.HALF_EVEN).toPlainString()) + tier.suffix
         }
         val mantissa = BigDecimal(n).divide(BigDecimal(tier.scale))
-        val rounded = if (mantissa < BigDecimal.TEN) mantissa.setScale(1, RoundingMode.HALF_EVEN)
-        else mantissa.setScale(0, RoundingMode.HALF_EVEN)
+        val oneDecimal = precision == CompactPrecision.UP_TO_ONE_DECIMAL || mantissa < BigDecimal.TEN
+        val rounded = mantissa.setScale(if (oneDecimal) 1 else 0, RoundingMode.HALF_EVEN)
         if (rounded >= BigDecimal(1_000) && index + 1 < ladder.size) {
-            return render(ladder[index + 1].scale, ladder, index + 1, symbols, esBillions)
+            return render(ladder[index + 1].scale, ladder, index + 1, symbols, esBillions, precision)
         }
         val plain = rounded.stripTrailingZeros().toPlainString()
         return symbols.digits(plain.replace('.', symbols.decimal)) + tier.suffix

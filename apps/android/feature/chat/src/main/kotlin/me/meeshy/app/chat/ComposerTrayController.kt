@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import me.meeshy.sdk.media.MediaUploadItem
 import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -89,13 +90,14 @@ class ComposerTrayController @Inject constructor(
      * Ajoute un fichier enregistré par l'app (un vocal) : copié en arrière-plan, sans passer
      * par la mémoire ni par le fil principal, puis sa source est supprimée.
      */
-    fun stageFile(file: File, declaredMimeType: String?) {
+    fun stageFile(file: File, declaredMimeType: String?, fileName: String? = null) {
         val scope = host?.scope ?: run {
             file.delete()
             return
         }
-        val mime = MimeTypeResolver.resolve(declaredMimeType, file.name)
-        val info = AttachmentSourceInfo(file.name, mime, 0L)
+        val name = fileName?.takeIf { it.isNotBlank() } ?: file.name
+        val mime = MimeTypeResolver.resolve(declaredMimeType, name)
+        val info = AttachmentSourceInfo(name, mime, 0L)
         scope.launch {
             try {
                 admitSource(info)?.let { placeholder -> prepareFrom(Uri.fromFile(file), placeholder, info) }
@@ -160,6 +162,33 @@ class ComposerTrayController @Inject constructor(
     }
 
     /**
+     * Une vidéo retouchée (#12735) remplace sa pièce à sa place : le fichier rendu est copié sans passer
+     * par la mémoire, puis supprimé. Une pièce partie entre-temps ne revient pas, et le rendu s'efface.
+     */
+    fun replaceFile(id: String, file: File, declaredMimeType: String?) {
+        val scope = host?.scope
+        if (scope == null || _state.value.items.none { it.id == id }) {
+            file.delete()
+            return
+        }
+        val info = AttachmentSourceInfo(file.name, MimeTypeResolver.resolve(declaredMimeType, file.name), file.length())
+        scope.launch {
+            try {
+                val copied = runCatching { ingestor.ingest(Uri.fromFile(file), "$id-${idFactory()}", info) }.getOrNull() ?: return@launch
+                if (!ComposerAttachmentLimits.admitsUpload(copied.sizeBytes)) {
+                    deleteFiles(listOfNotNull(copied.localPath, copied.thumbnail?.thumbnailPath))
+                    return@launch reportTooLarge(info.fileName)
+                }
+                val replacement = readyFrom(placeholderFor(info).copy(id = id), copied)
+                val reduction = reduce { PendingAttachmentsReducer.replace(it, id, replacement) }
+                if (!reduction.applied) deleteFiles(replacement.ownedPaths)
+            } finally {
+                ingestor.delete(listOf(file.path))
+            }
+        }
+    }
+
+    /**
      * L'envoi consomme le plateau : `null` s'il est vide ou si une pièce se prépare encore
      * (le bouton Envoyer attend), sinon toutes les pièces prêtes, en un seul lot.
      */
@@ -174,6 +203,10 @@ class ComposerTrayController @Inject constructor(
     }
 
     suspend fun readBytes(item: PendingAttachment): ByteArray? = item.localPath?.let { ingestor.readBytes(it) }
+
+    /** Le fichier de travail d'une pièce prête, tel qu'il part à la file d'envoi (jamais relu en mémoire) ; `null` s'il a disparu. */
+    suspend fun uploadItem(item: PendingAttachment, fileName: String, mimeType: String): MediaUploadItem? =
+        item.localPath?.let { ingestor.uploadItem(it, fileName, mimeType) }
 
     /** Supprime les fichiers de travail d'un lot une fois ses octets remis à la file d'envoi. */
     fun release(batch: StagedBatch) {

@@ -25,10 +25,10 @@
  *   publiée et sa fenêtre ouverte (`approvedFile`). Le document servi ne porte
  *   pas ses communautés : c'est la passerelle qui gouverne l'offre.
  *
- * Points « ATTEND » de #11251 laissés ABSENTS, jamais tranchés ici : ni
- * rémunération, ni crédit « Lens par X » en E2EE, ni géo-créneau — la revue
- * retire `window.geo` du document servi. L'identité partenaire et le comptage
- * d'usage sont S26.
+ * Le géo-créneau n'est pas servi : la revue retire `window.geo` du document.
+ * L'identité partenaire, le crédit « Lens par X » et le comptage d'usage
+ * vivent dans `LensPartners.ts` (#11327, verdicts #11251 du 2026-11-01 :
+ * gratuit des deux côtés, aucune rémunération).
  */
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -38,11 +38,11 @@ import { LENS_PACK_LIMITS, isLensCostDeclaredHonestly, lensAssetRefs, measureLen
 import { packChoiceKey, type PackAssetRef, type PackStatus, type PackSummary } from '@meeshy/shared/types/content-pack';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import { normalizeStickerImage, type StickerImageOutcome } from '../stickers/stickerImage';
+import type { PackInstallationBroadcast } from './PackCatalog';
 import { normalizeLensLut } from './lensLutImage';
 import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './PackCatalog';
-import { enhancedLogger } from '../../utils/logger-enhanced';
+import { logError } from '../../utils/logger';
 
-const logger = enhancedLogger.child({ module: 'LensPacks' });
 
 export type LensPackDetail = PackSummary & {
   readonly cost: LensCost;
@@ -123,9 +123,13 @@ export type LensPacksDeps = {
   readonly normalizeLut?: (bytes: Buffer) => Promise<StickerImageOutcome>;
   /** Où se signale un trou du journal de modération (#12329 R2). */
   readonly log?: LensPacksLog;
+  /** `pack:installation-updated` sur la room personnelle de chaque compte dont l'installation change hors de son propre geste. */
+  readonly broadcast?: PackInstallationBroadcast;
 };
 
-type LensPacksLog = { readonly error: (message: string, context?: Record<string, unknown>) => void };
+type LensPacksLog = { readonly error: (line: string) => void };
+
+const JOURNAL_GAP = 'lens moderation journal incomplete: a gesture is journaled without its outcome';
 
 type NotAppliedReason = 'concurrent-review' | 'write-failed';
 
@@ -262,10 +266,12 @@ export class LensPacks {
   private readonly now: () => Date;
   private readonly normalizeAsset: (bytes: Buffer) => Promise<StickerImageOutcome>;
   private readonly normalizeLut: (bytes: Buffer) => Promise<StickerImageOutcome>;
-  private readonly log: LensPacksLog;
+  private readonly log: LensPacksLog | undefined;
+  private readonly broadcast: PackInstallationBroadcast | undefined;
 
   constructor(deps: LensPacksDeps) {
-    this.log = deps.log ?? logger;
+    this.log = deps.log;
+    this.broadcast = deps.broadcast;
     this.prisma = deps.prisma;
     this.now = deps.now ?? (() => new Date());
     this.normalizeAsset = deps.normalizeAsset ?? normalizeStickerImage;
@@ -280,12 +286,12 @@ export class LensPacks {
   private async recordNotApplied(entry: NotAppliedEntry & { readonly reason: NotAppliedReason }): Promise<void> {
     const journaled = await this.journal({ adminId: entry.moderatorId, submitterId: entry.submitterId, action: entry.action, slug: entry.slug, metadata: { reason: entry.reason } });
     if (!journaled) {
-      this.log.error('lens moderation journal incomplete: a gesture is journaled without its outcome', { action: entry.action, slug: entry.slug, reason: entry.reason });
+      logError(this.log, JOURNAL_GAP, JSON.stringify({ action: entry.action, slug: entry.slug, reason: entry.reason }));
     }
   }
 
   /** L'écriture d'un geste déjà journalisé : si elle LÈVE, le journal le dit avant que l'erreur ne remonte. */
-  private async applyJournaled(update: () => Promise<{ readonly count: number }>, notApplied: NotAppliedEntry): Promise<{ readonly count: number }> {
+  private async applyJournaled<T>(update: () => Promise<T>, notApplied: NotAppliedEntry): Promise<T> {
     try {
       return await update();
     } catch (error) {
@@ -501,10 +507,14 @@ export class LensPacks {
     const journaled = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE', slug, metadata: { note } });
     if (!journaled) return { kind: 'audit-unavailable' };
     const notApplied: NotAppliedEntry = { moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE_NOT_APPLIED', slug };
-    const reset = await this.applyJournaled(
-      () => this.prisma.userStickerPack.updateMany({ where: { packSlug: packChoiceKey('lens', slug), installedAt: { not: null } }, data: { installedAt: null } }),
-      notApplied,
-    );
+    const installed = { packSlug: packChoiceKey('lens', slug), installedAt: { not: null } };
+    const reset = await this.applyJournaled(async () => {
+      const installers = await this.prisma.userStickerPack.findMany({ where: installed, select: { userId: true } });
+      const { count } = await this.prisma.userStickerPack.updateMany({ where: installed, data: { installedAt: null } });
+      return { count, userIds: [...new Set(installers.map((row) => row.userId))] };
+    }, notApplied);
+    const at = this.now().toISOString();
+    reset.userIds.forEach((userId) => this.broadcast?.(userId, { domain: 'lens', slug, installed: false, at }));
     const flipped = await this.applyJournaled(
       () =>
         this.prisma.lensPack.updateMany({
@@ -518,7 +528,7 @@ export class LensPacks {
       return { kind: 'not-found' };
     }
     const applied = await this.journal({ adminId: moderatorId, submitterId: current.submitterId, action: 'LENS_PACK_RESTORE_APPLIED', slug, metadata: { installationsReset: reset.count } });
-    if (!applied) this.log.error('lens moderation journal incomplete: a gesture is journaled without its outcome', { action: 'LENS_PACK_RESTORE_APPLIED', slug });
+    if (!applied) logError(this.log, JOURNAL_GAP, JSON.stringify({ action: 'LENS_PACK_RESTORE_APPLIED', slug }));
     const row = await this.prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
     return row === null ? { kind: 'not-found' } : { kind: 'restored', pack: lensPackDetail(row, false, { userId: moderatorId, canModerate: true }), installationsReset: reset.count };
   }

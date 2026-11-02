@@ -484,7 +484,7 @@ git commit -m "feat(ios): ContactsHubView with 4 tabs, animated tab bar, collaps
 ### Task 9: Update ProfileView + Deprecate FriendRequestListView
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- Modify: `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 
 - [ ] **Step 1: Update ProfileView friend requests button**
 
@@ -502,7 +502,7 @@ Expected: Build succeeded, all tests pass
 - [ ] **Step 4: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/ProfileView.swift apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift
+git add apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift
 git commit -m "feat(ios): ProfileView navigates to contacts hub, deprecate FriendRequestListView"
 ```
 

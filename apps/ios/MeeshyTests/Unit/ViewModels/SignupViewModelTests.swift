@@ -658,6 +658,59 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertEqual(registrar.registerCallCount, 0)
     }
 
+    func test_twoCharacterUsername_showsTheMinimumUnderTheFieldAndSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "Al"
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRefusalMessage(.tooShort))
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.minimumLengthMessage(for: .pseudo))
+        XCTAssertTrue(sut.error(for: .username)?.contains("3") ?? false)
+        XCTAssertFalse(sut.canSubmit)
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_threeCharacterUsername_isAccepted() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "Ali"
+
+        XCTAssertNil(sut.error(for: .username))
+        XCTAssertTrue(sut.canSubmit)
+    }
+
+    func test_oneCharacterDisplayName_showsTheMinimumUnderTheFieldAndSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.displayName = "A"
+
+        XCTAssertEqual(sut.error(for: .displayName), SignupViewModel.minimumLengthMessage(for: .displayName))
+        XCTAssertTrue(sut.error(for: .displayName)?.contains("2") ?? false)
+        XCTAssertFalse(sut.canSubmit)
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_twoCharacterDisplayName_isAccepted() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.displayName = "Al"
+
+        XCTAssertNil(sut.error(for: .displayName))
+        XCTAssertTrue(sut.canSubmit)
+    }
+
     func test_validUsername_hasNoFieldMessage() {
         let (sut, _) = makeSUT()
         fillValidForm(sut)

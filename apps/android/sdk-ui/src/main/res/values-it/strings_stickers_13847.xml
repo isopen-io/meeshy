@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sticker_library_title">I miei sticker</string>
+    <string name="sticker_library_empty">Incolla un\'immagine per iniziare la tua libreria</string>
+    <string name="sticker_library_lift">Scontorna</string>
+    <string name="sticker_library_lift_a11y">Scontorna il soggetto di una foto</string>
+    <string name="sticker_library_item_a11y">Sticker dalla tua libreria</string>
+    <string name="sticker_library_paste">Incolla</string>
+    <string name="sticker_pack_by">di %1$s</string>
+    <string name="sticker_text_example">Ciao!</string>
+    <string name="sticker_text_placeholder">Scrivi le tue parole…</string>
+    <string name="sticker_text_field_a11y">Testo della decorazione</string>
+    <string name="sticker_custom_text">Testo</string>
+    <string name="sticker_custom_time">Ora</string>
+    <string name="sticker_shop_install">Installa</string>
+    <string name="sticker_shop_remove">Rimuovi</string>
+    <string name="sticker_shop_failed">Impossibile modificare il pacchetto. Riprova.</string>
+    <string name="sticker_template_text_speech_bubble">Fumetto</string>
+    <string name="sticker_template_text_thought_bubble">Pensiero</string>
+    <string name="sticker_template_text_sticky_note">Post-it</string>
+    <string name="sticker_template_text_ribbon">Nastro</string>
+    <string name="sticker_template_text_badge">Distintivo</string>
+    <string name="sticker_template_text_neon">Neon</string>
+    <string name="sticker_template_text_tag">Etichetta</string>
+    <string name="sticker_template_text_signboard">Insegna</string>
+    <string name="sticker_template_text_tape">Nastro adesivo</string>
+    <string name="sticker_template_text_stamp">Timbro</string>
+    <string name="sticker_template_time_digital">Orologio digitale</string>
+    <string name="sticker_template_time_analog">Quadrante</string>
+    <string name="sticker_template_time_ribbon">Nastro</string>
+    <string name="sticker_template_time_calendar_day">Foglio di calendario</string>
+    <string name="sticker_template_time_a11y">%1$s, %2$s</string>
+</resources>

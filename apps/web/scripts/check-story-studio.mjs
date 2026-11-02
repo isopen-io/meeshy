@@ -409,8 +409,8 @@ async function runScheme(colorScheme) {
       }),
     );
     check(
-      JSON.stringify(sheet.map((row) => row.value)) === JSON.stringify(['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE']),
-      `${tag} : les six audiences, dans l'ordre iOS — reçu ${JSON.stringify(sheet.map((row) => row.value))}`,
+      JSON.stringify(sheet.map((row) => row.value)) === JSON.stringify(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCES', 'FRIENDS', 'CLOSE', 'BLOOD', 'EXCEPT', 'ONLY', 'PRIVATE']),
+      `${tag} : les neuf audiences, dans l'ordre iOS — reçu ${JSON.stringify(sheet.map((row) => row.value))}`,
     );
     for (const row of sheet) {
       check(row.height >= MIN_TARGET - 0.5, `${tag} : la rangée ${row.value} mesure ${round(row.height)} px — attendu ≥ ${MIN_TARGET}`);

@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { isPermanentFailure } from '@/lib/api/outcome';
-import { retrySendAction, sendAction } from '@/lib/api/query';
+import { appQueryClient } from '@/lib/api/query-client';
+import { discardSendAction, retrySendAction, sendAction } from '@/lib/api/query';
 import type { Message, Participant } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
+import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
@@ -13,6 +15,8 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-store';
 import { sendFailureReason } from '@/lib/send/failure-reason';
+import { plaintextWithheld } from '@/lib/send/served-regime';
+import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 
 import type { LocalDelivery } from './message';
 
@@ -91,6 +95,15 @@ export function useSend(params: {
     sticker?: MessageSticker | null,
   ) => void;
   readonly retry: (messageId: string) => void;
+  /**
+   * ABANDONNER UN ENVOI EN ÉCHEC (#12632) — la règle vit dans `discardSend`
+   * (`send/discard-send.ts`) : l'entrée quitte l'outbox sans compter de
+   * confirmation, la bulle quitte le fil ET la ligne de liste rend sa place au
+   * message qui précède. Un envoi encore EN VOL ne s'abandonne pas. L'issue se
+   * dit dans la région vivante ; après un échec AMBIGU (coupure, délai, 5xx),
+   * elle ne promet pas que le message n'est pas parti.
+   */
+  readonly discard: (messageId: string) => void;
 } {
   const { conversationId, viewerId, sender, announce } = params;
   const online = useOnline();
@@ -134,6 +147,13 @@ export function useSend(params: {
       place: SharedPlace | null = null,
       sticker: MessageSticker | null = null,
     ) => {
+      /* #13171 — vue chiffrée de bout en bout : rien ne naît, l'annonce dit où écrire. */
+      if (plaintextWithheld(conversationId, appQueryClient)) {
+        const language = currentInterfaceLanguage();
+        const reason = sendFailureReason({ ok: false, status: 0, error: '', code: E2EE_PLAINTEXT_WITHHELD }, language);
+        announce(reason === undefined ? translate(language, 'announce.messageNotSent') : translate(language, 'announce.messageNotSent.reason', { reason }));
+        return;
+      }
       void sendAction({
         conversationId,
         draft: {
@@ -157,7 +177,7 @@ export function useSend(params: {
         online,
       });
     },
-    [conversationId, viewerId, sender, online],
+    [conversationId, viewerId, sender, online, announce],
   );
 
   const retry = useCallback(
@@ -165,6 +185,17 @@ export function useSend(params: {
       void retrySendAction({ conversationId, clientMessageId: messageId, online });
     },
     [conversationId, online],
+  );
+
+  const discard = useCallback(
+    (messageId: string) => {
+      const outcome = discardSendAction({ conversationId, clientMessageId: messageId });
+      if (outcome === null) return;
+      const language = currentInterfaceLanguage();
+      if (!isMessagePiecesCatalogLoaded(language)) return;
+      announce(translateMessagePieces(language, outcome.uncertain ? 'message.send.discarded.uncertain' : 'message.send.discarded'));
+    },
+    [conversationId, announce],
   );
 
   const failedCount = useMemo(
@@ -202,5 +233,5 @@ export function useSend(params: {
     previousConfirmedCount.current = confirmedCount;
   }, [failedCount, confirmedCount, entries, announce]);
 
-  return { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry };
+  return { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, discard };
 }

@@ -14,6 +14,16 @@ import pytest
 from services.redis_service import TranslationCacheService
 
 
+@pytest.fixture(autouse=True)
+def _ordinary_regime():
+    """#13102 — le cache ne sert qu'une tâche au régime ordinaire DÉCLARÉ : ces témoins en sont une."""
+    from services.task_privacy import at_rest_scope
+
+    with at_rest_scope(False):
+        yield
+
+
+
 class _FakeRedis:
     def __init__(self):
         self.store = {}
@@ -23,6 +33,21 @@ class _FakeRedis:
 
     async def setex(self, key, ttl, value):
         self.store[key] = value
+        return True
+
+    async def setex_durable(self, key, ttl, value):
+        self.store[key] = value
+        return True
+
+    async def setex_durable_atomic(self, entries):
+        for key, ttl, value in entries:
+            self.store[key] = value
+        return True
+
+    async def write_atomic(self, operations):
+        for op in operations:
+            if op[0] == "setex":
+                self.store[op[1]] = op[3]
         return True
 
 
@@ -46,7 +71,7 @@ async def test_a_translation_cached_by_the_whole_message_pipeline_is_not_served(
 @pytest.mark.asyncio
 async def test_a_translation_cached_by_the_sentence_pipeline_is_served():
     cache = TranslationCacheService(_FakeRedis())
-    await cache.set_translation("Merci !", "fr", "en", "Thank you!", "medium")
+    await cache.set_translation("Merci !", "fr", "en", "Thank you!", "medium", message_id="bbbbbbbbbbbbbbbbbbbbbbb1")
 
     cached = await cache.get_translation("Merci !", "fr", "en", "medium")
 

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.on-meeshy",
+          "androidName": "bubble_contact_card_on_meeshy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.a11y-on-meeshy",
+          "androidName": "bubble_contact_card_a11y_on_meeshy",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

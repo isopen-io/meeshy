@@ -266,11 +266,11 @@ describe('MediaViewer — une vidéo en plein écran (#9577)', () => {
   const actionsOf = (dialog: HTMLElement): readonly (string | null)[] =>
     Array.from(dialog.querySelectorAll('[data-viewer-rail-slot] [data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
 
-  test('le muet puis « ⋯ » suivent « Composer » dans la colonne d’actions', async () => {
+  test('le muet puis « ⋯ » suivent les actions dans la colonne, comme sur iOS (#12420)', async () => {
     const restore = stubPlayback();
     try {
-      const dialog = await mount({ offers: { ...ALL, share: true }, items: [clip('v')] });
-      expect(actionsOf(dialog).slice(-3)).toEqual(['compose', 'mute', 'more']);
+      const dialog = await mount({ offers: { ...ALL, share: true }, items: [clip('v')], onReply: () => {} });
+      expect(actionsOf(dialog)).toEqual(['react', 'reply', 'compose', 'save', 'mute', 'more']);
       expect(actionsOf(dialog)[0]).toBe('react');
     } finally {
       restore();
@@ -379,11 +379,11 @@ describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
     expect(dialog.querySelector('[data-viewer-action="reply"]')).toBeNull();
   });
 
-  test('Répondre, Réagir, Enregistrer et Créer forment la colonne verticale au bord de fin de la scène (#12424)', async () => {
+  test('Réagir, Répondre, Créer et Enregistrer forment la colonne verticale au bord de fin de la scène, dans l’ordre d’iOS (#12424, #12420)', async () => {
     const dialog = await mount({ offers: ALL, onReply: () => {} });
     const rail = dialog.querySelector('[data-viewer-stage-rail] [data-viewer-rail]')!;
     const actions = Array.from(rail.querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
-    expect(actions).toEqual(['reply', 'react', 'save', 'compose']);
+    expect(actions).toEqual(['react', 'reply', 'compose', 'save']);
     expect(rail.getAttribute('aria-label')).toBe('Réagir');
   });
 

@@ -57,6 +57,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
   gameEnabled: true,
+  gamePhotoEnabled: true,
   ...overrides,
 });
 

@@ -18,33 +18,38 @@ def signature(result):
 class SingleSpecifierTests(unittest.TestCase):
     def test_at_sign_becomes_string_conversion(self):
         result = converted("Bonjour %@")
-        self.assertEqual(result.text, "Bonjour %s")
+        self.assertEqual(result.text, "Bonjour %1$s")
         self.assertEqual(signature(result), [(1, "s")])
 
     def test_long_integer_family_becomes_decimal(self):
         for ios in ("%lld", "%ld", "%d", "%i", "%lu", "%llu", "%hd", "%zd"):
             with self.subTest(ios=ios):
                 result = converted(f"{ios} messages")
-                self.assertEqual(result.text, "%d messages")
+                self.assertEqual(result.text, "%1$d messages")
                 self.assertEqual(signature(result), [(1, "d")])
 
     def test_float_precision_is_preserved(self):
         result = converted("Score %.2f")
-        self.assertEqual(result.text, "Score %.2f")
+        self.assertEqual(result.text, "Score %1$.2f")
         self.assertEqual(signature(result), [(1, "f")])
 
     def test_float_with_length_modifier_loses_it(self):
-        self.assertEqual(converted("%lf").text, "%f")
-        self.assertEqual(converted("%Lf").text, "%f")
+        self.assertEqual(converted("%lf").text, "%1$f")
+        self.assertEqual(converted("%Lf").text, "%1$f")
 
     def test_width_and_flags_are_preserved(self):
-        self.assertEqual(converted("%05d").text, "%05d")
-        self.assertEqual(converted("%-8lld").text, "%-8d")
+        self.assertEqual(converted("%1$05d").text, "%1$05d")
+        self.assertEqual(converted("%-8lld").text, "%1$-8d")
 
     def test_hexadecimal_and_octal_are_kept(self):
-        self.assertEqual(converted("%x").text, "%x")
-        self.assertEqual(converted("%lX").text, "%X")
-        self.assertEqual(converted("%o").text, "%o")
+        self.assertEqual(converted("%1$x").text, "%1$x")
+        self.assertEqual(converted("%lX").text, "%1$X")
+        self.assertEqual(converted("%1$o").text, "%1$o")
+
+    def test_a_lone_specifier_is_positional_so_the_bare_specifier_guard_stays_green(self):
+        for ios, expected in (("%@", "%1$s"), ("%d", "%1$d"), ("%ld", "%1$d"), ("%f", "%1$f")):
+            with self.subTest(ios=ios):
+                self.assertEqual(converted(f"x {ios}").text, f"x {expected}")
 
     def test_string_without_specifier_is_untouched(self):
         result = converted("Annuler")
@@ -78,7 +83,7 @@ class PercentTests(unittest.TestCase):
 
     def test_escaped_percent_next_to_a_specifier(self):
         result = converted("%@%%")
-        self.assertEqual(result.text, "%s%%")
+        self.assertEqual(result.text, "%1$s%%")
         self.assertEqual(signature(result), [(1, "s")])
 
     def test_percent_followed_by_conversion_letter_after_escape_is_text(self):
@@ -95,7 +100,7 @@ class PercentTests(unittest.TestCase):
 
     def test_prose_percent_next_to_a_specifier_is_doubled(self):
         result = converted("%@ gagne 30 % de plus")
-        self.assertEqual(result.text, "%s gagne 30 %% de plus")
+        self.assertEqual(result.text, "%1$s gagne 30 %% de plus")
         self.assertTrue(result.formatted)
 
     def test_trailing_percent_is_prose(self):

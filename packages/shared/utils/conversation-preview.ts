@@ -610,6 +610,7 @@ const SYSTEM_KEYS: Readonly<Record<string, (params: Readonly<Record<string, stri
   'system.member-joined': () => 'system.member.joined',
   'system.members-arrived': (params) => arrivalsLineKey(Number(params['count'] ?? 1)),
   'system.encryption-enabled': (params) => (params['mode'] === 'e2ee' ? 'system.encryption.e2ee' : 'system.encryption.enabled'),
+  'system.encryption-disabled': () => 'system.encryption.disabled',
   'system.member-added': () => 'system.member.added',
   'system.member-removed': () => 'system.member.removed',
   'system.member-left': () => 'system.member.left',

@@ -146,7 +146,7 @@ class GeneratedPluralsTests(unittest.TestCase):
         project.write_manifest(document)
         code, _, err = project.run()
         self.assertEqual(code, 0, err)
-        self.assertEqual(project.generated("values")["unread_noen"]["one"], "%d élément")
+        self.assertEqual(project.generated("values")["unread_noen"]["one"], "%1$d élément")
 
 
 if __name__ == "__main__":

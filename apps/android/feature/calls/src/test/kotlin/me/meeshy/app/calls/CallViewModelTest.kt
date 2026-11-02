@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -16,8 +17,12 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.call.camera.CallCameraZoom
+import me.meeshy.sdk.call.camera.CameraZoomActuator
+import me.meeshy.sdk.model.call.camera.CameraDeviceOption
+import me.meeshy.sdk.model.call.camera.CameraFacing
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.IceServersRefreshedPayload
 import me.meeshy.sdk.model.call.CallCue
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -49,7 +54,7 @@ class CallViewModelTest {
     private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
     private val incomingOffers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
     private val endedCalls = MutableSharedFlow<CallEndedSignal>(extraBufferCapacity = 16)
-    private val iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(extraBufferCapacity = 8)
+    private val iceServersRefreshed = MutableSharedFlow<IceServersRefreshedPayload>(extraBufferCapacity = 8)
     private val qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(extraBufferCapacity = 16)
     private val screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(extraBufferCapacity = 16)
     private val translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(extraBufferCapacity = 64)
@@ -160,6 +165,8 @@ class CallViewModelTest {
         every { signalManager.screenCaptureAlerts } returns screenCaptureAlerts
         every { signalManager.translatedSegments } returns translatedSegments
         every { signalManager.mediaToggles } returns mediaToggles
+        every { signalManager.participantArrivals } returns MutableSharedFlow()
+        every { signalManager.participantLeft } returns MutableSharedFlow()
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
@@ -190,6 +197,9 @@ class CallViewModelTest {
         extensions,
         mockk(relaxed = true),
         CallPeerVisualSource { kotlinx.coroutines.flow.emptyFlow() },
+        recordingCallPreview(),
+        silentTurnCredentials(signalManager),
+        testGroupTitleWording,
     )
 
     @Test
@@ -339,6 +349,109 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `flipping the camera switches the capturer locally and never signals the peer`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+
+        verify(exactly = 1) { coordinator.switchCamera(any()) }
+        verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
+    }
+
+    @Test
+    fun `a video call starts on the front camera, which mirrors the self preview`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        assertThat(vm.state.value.isFrontCamera).isTrue()
+    }
+
+    @Test
+    fun `flipping turns to the rear camera at once and keeps it once the capturer confirms`() = runTest {
+        val done = slot<(Boolean?) -> Unit>()
+        every { coordinator.switchCamera(capture(done)) } returns Unit
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+
+        done.captured(false)
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+    }
+
+    @Test
+    fun `a camera switch the capturer refuses puts the front camera back`() = runTest {
+        val done = slot<(Boolean?) -> Unit>()
+        every { coordinator.switchCamera(capture(done)) } returns Unit
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.flipCamera()
+        done.captured(null)
+
+        assertThat(vm.state.value.isFrontCamera).isTrue()
+    }
+
+    @Test
+    fun `flipping with the camera off does nothing`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.toggleCamera()
+
+        vm.flipCamera()
+
+        verify(exactly = 0) { coordinator.switchCamera(any()) }
+    }
+
+    @Test
+    fun `choosing a plugged camera opens it and mirrors the preview by the face it opened on`() = runTest {
+        val zoom = pickableZoom()
+        every { coordinator.cameraZoom } returns zoom
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        vm.selectCamera("10")
+
+        assertThat(zoom.state.value.selectedCameraId).isEqualTo("10")
+        assertThat(vm.state.value.isFrontCamera).isFalse()
+        verify(exactly = 0) { signalManager.emitToggleVideo(any(), any()) }
+    }
+
+    @Test
+    fun `choosing a camera with the camera off does nothing`() = runTest {
+        val zoom = pickableZoom()
+        every { coordinator.cameraZoom } returns zoom
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.toggleCamera()
+
+        vm.selectCamera("10")
+
+        assertThat(zoom.state.value.selectedCameraId).isEqualTo("1")
+    }
+
+    private fun pickableZoom(): CallCameraZoom {
+        val cameras = listOf(
+            CameraDeviceOption("1", CameraFacing.Front),
+            CameraDeviceOption("0", CameraFacing.Back),
+            CameraDeviceOption("10", CameraFacing.External),
+        )
+        lateinit var zoom: CallCameraZoom
+        zoom = CallCameraZoom(object : CameraZoomActuator {
+            override fun setCrop(zoom: Float, rampRate: Float?) = Unit
+            override fun openLens(lensId: String) = Unit
+            override fun openCamera(cameraId: String): Boolean {
+                zoom.attach(null, cameraId, cameras, cameraId, cameras.first { it.id == cameraId }.facing)
+                return true
+            }
+        })
+        zoom.attach(null, "1", cameras, "1", CameraFacing.Front)
+        return zoom
+    }
+
+    @Test
     fun `an audio call never reports the camera on even after a toggle`() {
         val vm = vm()
         vm.start(incomingAudio)
@@ -454,6 +567,29 @@ class CallViewModelTest {
         vm.accept()
 
         coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-9") }
+    }
+
+    @Test
+    fun `the socket offer folded before the incoming screen starts does not swallow the caller identity`() = runTest {
+        val vm = vm()
+        events.emit(CallEvent.ReceiveIncoming)
+        vm.start(incomingAudio)
+        vm.accept()
+
+        assertThat(vm.activeConfig).isEqualTo(incomingAudio)
+        coVerify(exactly = 1) { signalManager.emitJoinAwaitingAck("call-9") }
+    }
+
+    @Test
+    fun `accepting listens for the caller's offer before joining the room`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.accept()
+
+        coVerifyOrder {
+            coordinator.holdIncomingSignals(any(), "call-9")
+            signalManager.emitJoinAwaitingAck("call-9")
+        }
     }
 
     @Test
@@ -990,6 +1126,23 @@ class CallViewModelTest {
 
         mediaToggles.emit(videoToggle(enabled = false))
 
+        assertThat(vm.state.value.isPeerCameraOff).isTrue()
+    }
+
+    @Test
+    fun `a peer sharing their screen with the camera off shows their stream and the banner`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio.copy(isVideo = true))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+        mediaToggles.emit(videoToggle(enabled = false))
+
+        mediaToggles.emit(CallMediaTogglePayload(callId = "call-9", mediaType = "screen", enabled = true))
+
+        assertThat(vm.state.value.isPeerScreenSharing).isTrue()
+        assertThat(vm.state.value.isPeerCameraOff).isFalse()
+        mediaToggles.emit(CallMediaTogglePayload(callId = "call-9", mediaType = "screen", enabled = false))
+        assertThat(vm.state.value.isPeerScreenSharing).isFalse()
         assertThat(vm.state.value.isPeerCameraOff).isTrue()
     }
 
@@ -1673,25 +1826,9 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `a translated segment surfaces the translation as the live caption`() = runTest {
+    fun `a relayed segment no longer draws a bare caption line — the captions band owns the peer's words (#13333)`() = runTest {
         val vm = vm().connect()
         translatedSegments.emit(segment(text = "bonjour", translated = "hello"))
-
-        assertThat(vm.state.value.captionText).isEqualTo("hello")
-    }
-
-    @Test
-    fun `an untranslated segment falls back to the original text`() = runTest {
-        val vm = vm().connect()
-        translatedSegments.emit(segment(text = "bonjour", translated = null))
-
-        assertThat(vm.state.value.captionText).isEqualTo("bonjour")
-    }
-
-    @Test
-    fun `a segment for another call never leaks onto the caption`() = runTest {
-        val vm = vm().connect()
-        translatedSegments.emit(segment(callId = "call-77"))
 
         assertThat(vm.state.value.captionText).isNull()
     }

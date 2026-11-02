@@ -4,11 +4,13 @@ import me.meeshy.sdk.model.ResolvedTrackedLink
 import me.meeshy.sdk.model.SetTrackingLinkActiveRequest
 import me.meeshy.sdk.model.TrackingClickRequest
 import me.meeshy.sdk.model.TrackingLink
+import me.meeshy.sdk.model.TrackingLinkDetail
 import me.meeshy.sdk.model.TrackingRedirectOutcome
 import me.meeshy.sdk.model.TrackingRedirectStatusRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TrackingLinkTokenApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.apiCallUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +34,12 @@ class TrackedLinkRepository @Inject constructor(
     suspend fun setActive(token: String, isActive: Boolean): NetworkResult<TrackingLink> =
         apiCall { api.setActive(token, SetTrackingLinkActiveRequest(isActive)) }
 
+    suspend fun delete(token: String): NetworkResult<Unit> = apiCallUnit { api.delete(token) }
+
+    /** Les clics d'un lien (la fiche en liste les vingt derniers et en tire ses répartitions). */
+    suspend fun clicks(token: String, offset: Int = 0, limit: Int = CLICKS_PAGE): NetworkResult<TrackingLinkDetail> =
+        apiCall { api.clicks(token, offset, limit) }
+
     suspend fun deactivate(token: String): NetworkResult<TrackingLink> = apiCall { api.deactivate(token) }
 
     suspend fun byConversation(conversationId: String): NetworkResult<List<TrackingLink>> =
@@ -39,5 +47,6 @@ class TrackedLinkRepository @Inject constructor(
 
     private companion object {
         const val CLICK_SOURCE = "android-app"
+        const val CLICKS_PAGE = 100
     }
 }

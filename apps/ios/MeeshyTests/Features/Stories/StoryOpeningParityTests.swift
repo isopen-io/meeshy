@@ -68,8 +68,11 @@ final class StoryOpeningParityTests: XCTestCase {
         XCTAssertFalse(source.contains("openingScale: 0.88"),
                        "Le zoom d'ouverture inversé est de retour dans la table d'armement.")
 
-        // La durée reste résolue dans la fenêtre d'ouverture elle-même.
-        XCTAssertTrue(body.contains("StoryRenderer.slideTransitionDuration"),
+        // La courbe de la fenêtre d'ouverture vient de la table, qui lit la
+        // durée du SDK (#13135).
+        XCTAssertTrue(body.contains("StoryOpeningEntrance.animation(for:"),
+                      "La fenêtre d'ouverture doit lire sa courbe dans la table partagée.")
+        XCTAssertTrue(entrance.contains("StoryRenderer.slideTransitionDuration"),
                       "Le lecteur doit lire la durée du SDK, pas la redéclarer.")
 
         // L'échelle et le débattement sont désormais armés par
@@ -90,7 +93,7 @@ final class StoryOpeningParityTests: XCTestCase {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Content.swift")
             .path
     }
 
@@ -98,7 +101,7 @@ final class StoryOpeningParityTests: XCTestCase {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryOpeningEntrance.swift")
+            .appendingPathComponent("Meeshy/Features/Stories/Views/StoryOpeningEntrance.swift")
             .path
     }
 

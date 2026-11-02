@@ -35,7 +35,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
         "Meeshy/Features/Auth/Signup/SignupCountrySheet.swift",
     ]
     private static let signupViewModel = "Meeshy/Features/Auth/Signup/SignupViewModel.swift"
-    private static let welcomeView = "Meeshy/Features/Main/Views/WelcomeView.swift"
+    private static let welcomeView = "Meeshy/Features/Auth/Views/WelcomeView.swift"
     /// Descendu dans MeeshyUI au #6644 : « Mot de passe oublié », qui vit dans le
     /// SDK, monte le même (i) — et le SDK ne peut pas importer l'app.
     private static let infoHint = "../../packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthInfoHint.swift"

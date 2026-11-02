@@ -109,11 +109,20 @@ describe('le document prérendu, par langue (#10002)', () => {
 
       test('le corps porte la planche « Main » : héros, connexion, pied légal', () => {
         expect(body).toContain(copy.headline);
-        for (const path of ['/login', '/chats', '/signup', '/help', '/faq', '/privacy', '/terms']) {
+        for (const path of ['/chats', '/signup', '/help', '/faq', '/privacy', '/terms']) {
           expect(body).toContain(`href="${path}"`);
         }
         expect(body).toContain('src="/brand/logo.png"');
         expect(body).toContain('data-world-return');
+      });
+
+      test('l’en-tête mène directement à « Mes conversations », pour tous, sans « Se connecter » (#12500)', () => {
+        const header = /<header class="ld-header">([\s\S]*?)<\/header>/.exec(body)?.[1] ?? '';
+        const buttons = [...header.matchAll(/<a [^>]*class="ld-btn[^"]*"[^>]*>([\s\S]*?)<\/a>/g)];
+        expect(buttons.map((m) => m[1])).toEqual([copy.myConversations]);
+        expect(buttons[0]?.[0]).toContain('href="/chats"');
+        expect(header).not.toContain('href="/login"');
+        expect(header).not.toContain('data-session-');
       });
 
       test('aucune entrée anonyme en un clic : ni formulaire, ni « Entrer sans compte », ni champ de nom (#10784)', () => {

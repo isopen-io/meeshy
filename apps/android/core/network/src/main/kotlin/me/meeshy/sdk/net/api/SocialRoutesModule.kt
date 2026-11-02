@@ -16,4 +16,7 @@ internal object SocialRoutesModule {
 
     @Provides
     fun providesSocialEventsApi(api: MeeshyApi): SocialEventsApi = api.service(SocialEventsApi::class.java)
+
+    @Provides
+    fun providesSoundLibraryApi(api: MeeshyApi): SoundLibraryApi = api.service(SoundLibraryApi::class.java)
 }

@@ -49,4 +49,13 @@ class FileAttachmentIntentResolverTest {
         val resolved = FileAttachmentIntentResolver.resolveMimeType(mimeType = null, fileName = "data.unknownext")
         assertThat(resolved).isEqualTo("application/octet-stream")
     }
+
+    @Test
+    fun only_a_content_uri_may_be_lent_to_another_app() {
+        assertThat(FileAttachmentIntentResolver.canHandOff("content")).isTrue()
+        assertThat(FileAttachmentIntentResolver.canHandOff("CONTENT")).isTrue()
+        assertThat(FileAttachmentIntentResolver.canHandOff("file")).isFalse()
+        assertThat(FileAttachmentIntentResolver.canHandOff("https")).isFalse()
+        assertThat(FileAttachmentIntentResolver.canHandOff(null)).isFalse()
+    }
 }

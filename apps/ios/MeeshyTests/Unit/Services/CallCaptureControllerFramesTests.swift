@@ -55,6 +55,25 @@ final class CallCaptureControllerFramesTests: XCTestCase {
         try XCTUnwrap(CallFrameCatalogue.frames(forPeople: people).first)
     }
 
+    // MARK: - Un seul visage, l'Écran d'un appareil (#12589)
+
+    func test_render_oneFace_classicScreen_drawsTheDevice() throws {
+        let portrait = CallMontagePortrait(id: "local", name: "Vous", image: makeImage(width: 300, height: 400))
+        let faces = CallCaptureFaces(montage: [portrait], frame: [])
+        let taille = CGSize(width: 108, height: 192)
+        let rendu = try XCTUnwrap(CallCaptureController.render(
+            .classic(.screen), faces: faces, caption: CallMontageCaption(title: "Meeshy", subtitle: "", clock: "09:41"),
+            texts: CallFrameTexts(groupName: nil, isGroup: false, date: "", accentHex: nil), size: taille))
+        let contexte = CGContext(data: nil, width: 108, height: 192, bitsPerComponent: 8, bytesPerRow: 0,
+                                 space: CGColorSpaceCreateDeviceRGB(),
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        contexte.draw(rendu, in: CGRect(x: 0, y: 0, width: 108, height: 192))
+        let octets = contexte.data!.assumingMemoryBound(to: UInt8.self)
+        let ligne = (192 - 1 - 96) * contexte.bytesPerRow
+        XCTAssertLessThan(Int(octets[ligne + 1 * 4]), 30, "un appel à un seul visage reçoit le même bord d'appareil")
+        XCTAssertGreaterThan(Int(octets[ligne + 54 * 4 + 2]), 150, "le centre est le visage")
+    }
+
     // MARK: - Choisir un cadre
 
     func test_selectChoice_frame_isTheChoice_andKeepsTheLastClassic() throws {
@@ -133,7 +152,9 @@ final class CallCaptureControllerFramesTests: XCTestCase {
 
         let ids = sut.frameWindow(for: sut.choice).map(\.id)
 
-        XCTAssertEqual(ids, CallCaptureController.thumbnailWindow(around: selected.id, in: frames.map(\.id), radius: CallCaptureController.thumbnailRadius))
+        let window = CallCaptureController.thumbnailWindow(around: selected.id, in: frames.map(\.id), radius: CallCaptureController.thumbnailRadius)
+        let declinations = CallMontageFrameRule.declinations(of: .frame(selected.id)).dropFirst()
+        XCTAssertEqual(ids, window + declinations)
     }
 
     func test_frameWindow_classicChoice_isEmpty() {
@@ -223,6 +244,35 @@ final class CallCaptureControllerFramesTests: XCTestCase {
 
         sut.show(.classics, people: 3)
         XCTAssertEqual(sut.choice, .classic(.film))
+    }
+
+    // MARK: - La mise en avant (#12683)
+
+    func test_frameScope_opensOnTheSpotlight() {
+        let (sut, _) = makeSUT(people: 2)
+        XCTAssertEqual(sut.requestedFrameScope, .spotlight)
+        XCTAssertEqual(sut.frameScope(people: 2), .spotlight)
+    }
+
+    func test_show_spotlightMood_landsOnItsFirstFeaturedFrame() throws {
+        let (sut, _) = makeSUT(people: 2)
+        let first = try XCTUnwrap(CallFrameSpotlightRule.frames(forPeople: 2, mood: .morbide, scope: .spotlight).first)
+        sut.show(.mood(.morbide), people: 2)
+        XCTAssertEqual(sut.choice, .frame(first.id))
+    }
+
+    func test_setFrameScope_backToSpotlight_movesAHiddenChoiceToTheFirstFeaturedFrame() throws {
+        let (sut, _) = makeSUT(people: 2)
+        let featured = CallFrameSpotlightRule.frames(forPeople: 2, mood: .jovial, scope: .spotlight)
+        let hidden = try XCTUnwrap(CallFrameCatalogue.frames(forPeople: 2, mood: .jovial).first { design in !featured.contains(design) })
+        sut.setFrameScope(.all, people: 2)
+        sut.select(choice: .frame(hidden.id))
+        XCTAssertEqual(sut.frameScope(people: 2), .all)
+
+        sut.setFrameScope(.spotlight, people: 2)
+
+        XCTAssertEqual(sut.choice, .frame(try XCTUnwrap(featured.first).id))
+        XCTAssertEqual(sut.frameScope(people: 2), .spotlight)
     }
 
     func test_reconcileFrame_peopleChange_takesTheSameMotifInTheNewBucket() throws {

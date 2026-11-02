@@ -26,7 +26,7 @@ final class CallManagerSwitchCameraFailureCorrectionSourceTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/\(filename)")
+            .appendingPathComponent("Meeshy/Features/Call/Services/\(filename)")
         guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
             XCTFail("Could not read \(filename)", file: file, line: line)
             return ""
@@ -48,16 +48,16 @@ final class CallManagerSwitchCameraFailureCorrectionSourceTests: XCTestCase {
 
     func test_callManager_switchCamera_revertsMirroringFlagOnFailure() {
         guard let fn = body(
-            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
+            ((try? AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")) ?? ""),
             from: "func switchCamera() {",
             to: "func refreshAvailableCameras()"
         ) else { return }
         XCTAssertTrue(
-            fn.contains("let previousFrontCamera = isUsingFrontCamera"),
+            fn.contains("let previousFrontCamera = call.isUsingFrontCamera"),
             "switchCamera must capture the pre-toggle mirroring state before flipping it optimistically."
         )
         XCTAssertTrue(
-            fn.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            fn.contains("call.isUsingFrontCamera = previousFrontCamera"),
             "switchCamera must revert isUsingFrontCamera when the underlying camera switch fails — " +
             "otherwise the self-preview mirrors the wrong way for the rest of the call with no correction path."
         )

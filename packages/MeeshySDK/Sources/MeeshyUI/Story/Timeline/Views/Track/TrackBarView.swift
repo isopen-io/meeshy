@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Single track row : sticky leading icon-only label (`labelColumnWidth`) +
 /// scrollable lane. Leaf view — primitive `let` parameters only, no @ObservedObject.
@@ -93,9 +94,7 @@ public struct TrackBarView<Content: View>: View {
         if total < 60 {
             return String(format: "%.1f s", total).replacingOccurrences(of: ".", with: ",")
         }
-        let minutes = Int(total) / 60
-        let remainder = Int(total.rounded()) % 60
-        return String(format: "%d:%02d", minutes, remainder)
+        return MediaFormat.duration(TimeInterval(total), rounding: .toNearestOrAwayFromZero)
     }
 
     public var body: some View {

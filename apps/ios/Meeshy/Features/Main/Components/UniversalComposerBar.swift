@@ -79,9 +79,8 @@ struct UniversalComposerBar: View {
     /// anything. `forceHideAttachment` still wins if both are set.
     var forceShowAttachment: Bool = false
 
-    /// Opt-in override that enables voice recording even when `mode` would hide
-    /// it (e.g. comments).
-    var forceShowVoice: Bool = false
+    /// La porte vocale : selon `mode`, ouverte d'office (commentaires) ou fermée par l'hôte (#12918).
+    var voiceDoor: ComposerVoiceDoor = .byMode
 
     // MARK: - Language
 
@@ -349,6 +348,9 @@ struct UniversalComposerBar: View {
     /// Le défilement de la rangée des emojis rapides : posé, et en cours (#10842).
     @State var quickEmojiScroll: CGFloat = 0
     @State var quickEmojiDrag: CGFloat = 0
+    /// L'élargissement que la bande garde après le relâcher, jusqu'au texte
+    /// touché ou à l'émoji choisi (#12440).
+    @State var quickEmojiHeld: CGFloat = 0
     /// La largeur du champ quand la bande est au repos : celle qu'il peut lui céder.
     @State var quickEmojiFieldWidth: CGFloat = 0
 
@@ -366,19 +368,15 @@ struct UniversalComposerBar: View {
     @State var isExpandingToLibrary = false
     @State var currentLanguage: String = "fr"
 
-    // Attachments
     @State var attachments: [ComposerAttachment] = []
 
-    // Minimized / expanded state
     @State var isMinimized: Bool = false
     @State var dragOffsetY: CGFloat = 0
     @State var clipboardContent: ClipboardContent? = nil
 
-    // Ephemeral picker
     @State var showEphemeralPicker = false
     /// Le petit panneau des effets du message, ouvert par la baguette (#7967).
     @State var showEffectsPanel = false
-    // Permanent effects inline picker (for comments)
     @State var showPermanentEffectsPicker = false
 
     // Text analysis (sentiment + language detection from MessageComposer)
@@ -401,11 +399,11 @@ struct UniversalComposerBar: View {
 
     var resolvedFoldControl: ComposerFoldControl? { foldControl ?? environmentFoldControl }
 
-    /// La caméra confiée par l'ENVIRONNEMENT (#9736) — `commentCamera` la pose
-    /// sur un composeur de commentaire sans toucher à l'appel de la barre.
+    /// Caméra (#9736) et sticker (#14335) confiés par l'ENVIRONNEMENT : `commentMediaDoors` les pose sans toucher à l'appel.
     @Environment(\.composerCameraDoor) var environmentCameraDoor
-
+    @Environment(\.composerStickerDoor) var environmentStickerDoor
     var resolvedOnCamera: (() -> Void)? { onCamera ?? environmentCameraDoor?.open }
+    var resolvedOnStickerPicker: (() -> Void)? { onRequestStickerPicker ?? environmentStickerDoor?.open }
 
     /// L'hôte a une hauteur comptée (une feuille) : le panneau cède plutôt
     /// que de pousser la zone d'aperçu sous l'en-tête (`ComposerPanelFrame`).
@@ -457,7 +455,7 @@ struct UniversalComposerBar: View {
 
     var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
     var resolvedMaxLength: Int? { mode?.maxLength ?? maxLength }
-    var resolvedShowVoice: Bool { forceShowVoice || (mode?.showVoice ?? showVoice) }
+    var resolvedShowVoice: Bool { voiceDoor.isOpen(byMode: mode?.showVoice ?? showVoice) }
     var resolvedShowAttachment: Bool {
         if forceHideAttachment { return false }
         return forceShowAttachment || (mode?.showAttachment ?? showAttachment)

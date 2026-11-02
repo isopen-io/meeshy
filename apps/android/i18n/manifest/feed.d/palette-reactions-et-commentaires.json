@@ -15,12 +15,19 @@
           "iosKey": "comments.load-more-replies",
           "androidName": "post_comments_load_more_replies",
           "status": "adopted",
-          "kind": "plurals", "fillMissingQuantities": true
+          "kind": "plurals",
+          "fillMissingQuantities": true
         },
         {
           "catalog": "app",
           "iosKey": "comments.load-more-replies.hint",
           "androidName": "post_comments_load_more_replies_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.edit",
+          "androidName": "post_comments_edit_media",
           "status": "adopted"
         }
       ]

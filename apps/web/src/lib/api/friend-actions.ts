@@ -1,4 +1,5 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
+import type { RelationRequestLevel } from '@meeshy/shared/types/relation';
 
 import { BLOCKED_USERS_QUERY_KEY, blockUser, unblockUser, type BlockedData } from './blocks';
 import { PUBLIC_PROFILE_QUERY_PREFIX, type PublicProfileView, type ServedRelation } from './public-profile';
@@ -154,6 +155,17 @@ const withRequestFirst = (data: FriendRequestsData | undefined, request: FriendR
   };
 };
 
+/**
+ * **UNE DEMANDE AU-DELÀ D'AMI NE TOUCHE PAS LA FICHE** (#13938) — `relation` dit
+ * « contact, en attente, rien » (`relationAvec`) : demander Proche ou Sang à un
+ * Ami, ou refuser et annuler une telle demande, le laisse un contact. Patcher la
+ * fiche à « en attente » ou à « rien » ferait mentir l'écran sur un lien qui
+ * n'a pas bougé. Seule la demande d'un CONTACT (Connaissance, Ami) la réécrit.
+ */
+const RAISES_ABOVE_CONTACT: ReadonlySet<RelationRequestLevel> = new Set<RelationRequestLevel>(['CLOSE', 'BLOOD']);
+
+const rewritesProfile = (level: RelationRequestLevel | undefined): boolean => level === undefined || !RAISES_ABOVE_CONTACT.has(level);
+
 const update = (queryClient: QueryClient, bucket: FriendRequestBucket, next: (data: FriendRequestsData | undefined) => FriendRequestsData | undefined) =>
   queryClient.setQueryData<FriendRequestsData>(friendRequestsQueryKey(bucket), next);
 
@@ -208,7 +220,7 @@ export function performRespondToRequest({
     update(deps.queryClient, from, (data) => withoutRequest(data, request.id));
     /* Accepter, refuser, annuler ÉTEIGNENT la ligne : il n'y a plus rien à
        patcher, et un identifiant survivant offrirait un geste sans objet. */
-    patchProfileRelations(deps.queryClient, otherId, action === 'accept' ? 'friend' : 'none', null);
+    if (rewritesProfile(request.targetLevel)) patchProfileRelations(deps.queryClient, otherId, action === 'accept' ? 'friend' : 'none', null);
     if (action === 'accept') {
       update(deps.queryClient, 'accepted', (data) => withRequestFirst(data, { ...request, status: 'accepted' }, request.id));
     }
@@ -227,15 +239,31 @@ export function performRespondToRequest({
 
 const optimisticRequestId = (userId: string): string => `optimiste:${userId}`;
 
-export function performSendRequest({ person, deps }: { readonly person: PersonSummary; readonly deps: FriendActionDeps }): Promise<FriendActionOutcome> {
+/**
+ * Envoyer une demande — d'Ami, ou d'un CRAN (`targetLevel`, #13938) : le MÊME
+ * geste, le même instantané, la même ligne provisoire dans le panier des
+ * envoyées. « Mes cercles » lit le cran en attente dans ce panier : la ligne
+ * dit « Demande envoyée · Proche » au tap, pas au retour de la passerelle.
+ */
+export function performSendRequest({
+  person,
+  deps,
+  targetLevel,
+}: {
+  readonly person: PersonSummary;
+  readonly deps: FriendActionDeps;
+  readonly targetLevel?: RelationRequestLevel;
+}): Promise<FriendActionOutcome> {
   return once(`send:${person.id}`, async () => {
     if (!deps.isOnline()) return 'offline';
     const snapshot = relationalSnapshot(deps.queryClient, person.id, [friendRequestsQueryKey('sent')]);
     const placeholderId = optimisticRequestId(person.id);
+    const raised = targetLevel === undefined || targetLevel === 'FRIEND' ? {} : { targetLevel };
+    const touchesProfile = rewritesProfile(raised.targetLevel);
     /* La fiche reçoit l'identifiant PROVISOIRE, celui que `isProvisional`
        reconnaît : « Annuler » est donc offert pendant le vol et sait attendre
        l'enregistrement, au lieu de disparaître le temps de la requête. */
-    patchProfileRelations(deps.queryClient, person.id, 'pending_sent', placeholderId);
+    if (touchesProfile) patchProfileRelations(deps.queryClient, person.id, 'pending_sent', placeholderId);
     const placeholder: FriendRequestRecord = {
       id: placeholderId,
       senderId: deps.viewerId() ?? '',
@@ -245,16 +273,17 @@ export function performSendRequest({ person, deps }: { readonly person: PersonSu
       createdAt: new Date().toISOString(),
       sender: null,
       receiver: person,
+      ...raised,
     };
     update(deps.queryClient, 'sent', (data) => withRequestFirst(data, placeholder, placeholderId));
 
-    const result = await sendFriendRequest(deps, person.id);
+    const result = await sendFriendRequest(deps, person.id, targetLevel);
     if (!result.ok) {
       restore(deps.queryClient, snapshot);
       return 'failed';
     }
     update(deps.queryClient, 'sent', (data) => withRequestFirst(data, { ...result.data, receiver: result.data.receiver ?? person }, placeholderId));
-    patchProfileRelations(deps.queryClient, person.id, 'pending_sent', result.data.id);
+    if (touchesProfile) patchProfileRelations(deps.queryClient, person.id, 'pending_sent', result.data.id);
     return 'done';
   });
 }

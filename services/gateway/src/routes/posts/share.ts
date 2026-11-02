@@ -8,7 +8,10 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { mayConsumePost } from './postConsumptionGate';
+import { isBlockedWithContentAuthors } from '../../services/posts/contentAuthorBlock';
 import { creditPostEngagement } from '../../services/posts/postEngagementCredits';
+import { notePairInteraction } from '../../services/relations/pairInteractionRecorder';
+import { relayActivityToEntourage } from '../../services/notifications/fanout/activity-relay';
 
 /** La tranche de `PostService` que le partage touche — rien d'autre n'est prêté. */
 type ShareService = Pick<PostService, 'sharePost' | 'shareWithTrackingLink'>;
@@ -95,6 +98,11 @@ export function registerShareRoutes(
       if (!(await mayConsumePost(prisma, postId, authContext.registeredUser.id))) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
+      // #14242 — un blocage avec l'auteur, dans un sens ou dans l'autre, refuse le
+      // partage comme un contenu introuvable : ni compteur, ni lien, ni relais.
+      if (await isBlockedWithContentAuthors(prisma, { actorId: authContext.registeredUser.id, postId })) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
 
       const payload: {
         shared: boolean;
@@ -133,6 +141,17 @@ export function registerShareRoutes(
           targetId: postId,
           targetOwnerId: post.authorId,
         });
+        // Les cercles (#13932) : partager le post de l'autre compte pour la paire.
+        notePairInteraction(prisma, { actorId: authContext.registeredUser.id, otherId: post.authorId, nature: 'share' });
+      }
+
+      // #14069 — l'entourage apprend le partage, hors du chemin de la réponse.
+      const notifier = fastify.notificationService;
+      if (notifier) {
+        relayActivityToEntourage(
+          { prisma, createNotification: (params) => notifier.createNotification(params) },
+          { activity: 'share', postId, actorId: authContext.registeredUser.id },
+        ).catch((err: unknown) => enhancedLogger.warn('[POST /posts/:postId/share]: relais du partage abandonné', { err }));
       }
 
       return sendSuccess(reply, payload);

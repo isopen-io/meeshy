@@ -181,7 +181,7 @@ struct iPadSheetsLayer: ViewModifier {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             CallBackDialer.shared.dialFromProfile(request)
                         }
-                    }
+                    }, dependencies: .live
                 )
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)

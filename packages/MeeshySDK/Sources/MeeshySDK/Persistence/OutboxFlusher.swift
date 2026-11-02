@@ -16,8 +16,7 @@ public protocol OutboxDispatching: Sendable {
 @inline(__always)
 internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.ReactionContext? {
     guard record.kind == .sendReaction else { return nil }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    let decoder = MeeshyCoders.decoder(.persistence)
     guard let payload = decoder.decodeOrLog(
         ReactionOutboxPayload.self,
         from: record.payload,
@@ -50,8 +49,7 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
 @inline(__always)
 internal func cleanupLocalFiles(for record: OutboxRecord) {
     guard record.kind == .sendMessage else { return }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    let decoder = MeeshyCoders.decoder(.persistence)
     guard let item = decoder.decodeOrLog(
         OfflineQueueItem.self,
         from: record.payload,
@@ -89,14 +87,12 @@ internal func cleanupLocalFiles(for record: OutboxRecord) {
 
 /// Drains the `outbox` table FIFO, dispatching each pending item via the
 /// supplied `OutboxDispatching`. Failures schedule an exponential backoff
-/// retry; after `maxAttempts` failures the item is marked `.exhausted`.
+/// retry; once `retryPolicy` is exhausted the item is marked `.exhausted`.
 public actor OutboxFlusher {
 
     private let pool: any DatabaseWriter
     private let dispatcher: any OutboxDispatching
-    private let maxAttempts: Int
-    private let baseBackoff: TimeInterval
-    private let maxBackoff: TimeInterval
+    private let retryPolicy: RetryPolicy
     private let onOutcome: (@Sendable (OutboxOutcome) -> Void)?
     /// BW1 — optional gate so the flusher can short-circuit when the device
     /// is offline. Without it, a long airplane-mode session burns through
@@ -110,17 +106,13 @@ public actor OutboxFlusher {
     public init(
         pool: any DatabaseWriter,
         dispatcher: any OutboxDispatching,
-        maxAttempts: Int = 5,
-        baseBackoff: TimeInterval = 2,
-        maxBackoff: TimeInterval = 30,
+        retryPolicy: RetryPolicy = .messageOutbox,
         onOutcome: (@Sendable (OutboxOutcome) -> Void)? = nil,
         isNetworkReachable: @escaping @Sendable () async -> Bool = { true }
     ) {
         self.pool = pool
         self.dispatcher = dispatcher
-        self.maxAttempts = maxAttempts
-        self.baseBackoff = baseBackoff
-        self.maxBackoff = maxBackoff
+        self.retryPolicy = retryPolicy
         self.onOutcome = onOutcome
         self.isNetworkReachable = isNetworkReachable
     }
@@ -156,6 +148,15 @@ public actor OutboxFlusher {
     /// avion, assez court pour qu'un moniteur qui se trompe coûte une minute
     /// d'attente et non la session entière.
     public static let offlineRetrySeconds: TimeInterval = 60
+
+    /// #13824 — ce qu'un échec réécrit sur sa ligne : l'état de la tentative,
+    /// jamais la charge ni la marque d'annulation. L'envoi a pu graver la
+    /// charge pendant qu'il tournait (`recordUploadedPostMedia`) : la
+    /// réécrire depuis l'instantané d'avant l'envoi faisait re-téléverser
+    /// chaque média à chaque tentative.
+    static let attemptStateColumns = [
+        "status", "attempts", "lastError", "updatedAt", "nextAttemptAt", "waitingForFanoutOriginSince",
+    ]
 
     @discardableResult
     public func flush() async -> Date? {
@@ -344,13 +345,23 @@ public actor OutboxFlusher {
     /// supprimé ce que la ligne avait créé, soit la source éphémère a expiré.
     /// Sans lui dans cette liste, la ligne brûlait ses cinq tentatives pour
     /// finir au même endroit, une minute de ⏳ plus tard.
-    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 410, 413, 422]
+    ///
+    /// 415 (#13414) : un média refusé APRÈS le repli JPEG
+    /// (`HEICUploadFallback`) ne passera jamais — rejouer renverrait cinq fois
+    /// les mêmes octets. La ligne sort en échec, gardée sur l'appareil.
+    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 410, 413, 415, 422]
     static func isPermanentServerRejection(_ error: Error) -> Bool {
         // 403 is surfaced as a distinct `.forbidden` case by APIClient (resource
         // access loss, not a session problem) — a permanent reject all the same.
         if case MeeshyError.forbidden = error { return true }
         // Limite QUOTIDIENNE de gestes (#9571) : terminale jusqu'à `resetAt`.
         if DailyGestureLimit.from(error) != nil { return true }
+        // #11379 — un clair refusé dans une conversation chiffrée ne se rejoue jamais.
+        if EndToEndSendGate.isServerPlaintextRefusal(error) { return true }
+        // #12985 — un refus posé par l'appareil avant tout transport (cible
+        // chiffrée de bout en bout) ne se lèvera pas en rejouant.
+        if error is EndToEndSendRefusal { return true }
+        if error is UnsupportedImageFormatRefusal { return true }
         if case let MeeshyError.server(statusCode, _) = error {
             return permanentRejectionStatusCodes.contains(statusCode)
         }
@@ -521,11 +532,11 @@ public actor OutboxFlusher {
                 current.lastError = String(describing: error)
                 current.status = .pending
                 current.updatedAt = Date()
-                current.nextAttemptAt = Date().addingTimeInterval(maxBackoff)
+                current.nextAttemptAt = Date().addingTimeInterval(retryPolicy.deferral)
                 let deferredSnapshot = current
                 do {
                     try await pool.write { db in
-                        try deferredSnapshot.update(db)
+                        try deferredSnapshot.update(db, columns: Self.attemptStateColumns)
                     }
                 } catch {
                     // La ligne reste `.inflight` : elle ne sera rejouée qu'au
@@ -554,11 +565,11 @@ public actor OutboxFlusher {
                     current.lastError = String(describing: error)
                     current.status = .pending
                     current.updatedAt = now
-                    current.nextAttemptAt = now.addingTimeInterval(maxBackoff)
+                    current.nextAttemptAt = now.addingTimeInterval(retryPolicy.deferral)
                     let deferredSnapshot = current
                     do {
                         try await pool.write { db in
-                            try deferredSnapshot.update(db)
+                            try deferredSnapshot.update(db, columns: Self.attemptStateColumns)
                         }
                     } catch {
                         // La ligne reste `.inflight` : elle ne sera rejouée
@@ -577,20 +588,18 @@ public actor OutboxFlusher {
             current.updatedAt = Date()
 
             // A permanent 4xx will never succeed — dead-letter now rather than
-            // spin the full backoff schedule. Otherwise cap at `maxAttempts`.
-            if Self.isPermanentServerRejection(error) || current.attempts >= maxAttempts {
+            // spin the full backoff schedule. Otherwise stop once `retryPolicy` is exhausted.
+            if Self.isPermanentServerRejection(error) || retryPolicy.isExhausted(afterFailures: current.attempts) {
                 current.status = .exhausted
             } else {
                 current.status = .pending
-                let backoff = min(maxBackoff, baseBackoff * pow(2.0, Double(current.attempts - 1)))
-                let jitter = Double.random(in: 0...0.5)
-                current.nextAttemptAt = Date().addingTimeInterval(backoff + jitter)
+                current.nextAttemptAt = Date().addingTimeInterval(retryPolicy.delay(afterFailure: current.attempts))
             }
 
             let failedSnapshot = current
             do {
                 try await pool.write { db in
-                    try failedSnapshot.update(db)
+                    try failedSnapshot.update(db, columns: Self.attemptStateColumns)
                 }
             } catch {
                 // `attempts` n'est pas incrémenté : sans trace, la ligne peut

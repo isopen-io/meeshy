@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "androidName": "settings_circle_notify_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_intro",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_family_publication",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_family_on_my_content",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_family_elsewhere",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_summary_mixed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_choice_nobody",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_explain_nobody",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_explain_community",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_explain_public",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_post",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_reel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_story",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_mood",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_repost",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_share",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_comment",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_reaction",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_quote",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_reference",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_action_mention",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_choice_blood",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_choice_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_choice_friend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_choice_acquaintance",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_choice_community",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_choice_public",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

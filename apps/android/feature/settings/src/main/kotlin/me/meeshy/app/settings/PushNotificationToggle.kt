@@ -17,6 +17,8 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.notification.NotificationPermissionPrompt
+import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 
@@ -26,7 +28,11 @@ import me.meeshy.ui.component.permission.rememberPermissionFlow
  * unique (explication, boîte système, ou carte « Ouvrir les Réglages » après un refus définitif).
  */
 @Composable
-internal fun PushNotificationToggle(pushEnabled: Boolean, onSetPushEnabled: (Boolean) -> Unit) {
+internal fun PushNotificationToggle(
+    pushEnabled: Boolean,
+    onSetPushEnabled: (Boolean) -> Unit,
+    color: Color = MeeshyPalette.Error,
+) {
     val context = LocalContext.current
     val permissions = rememberPermissionFlow()
     PermissionFlowHost(permissions)
@@ -44,6 +50,7 @@ internal fun PushNotificationToggle(pushEnabled: Boolean, onSetPushEnabled: (Boo
     }
     NotificationToggleRow(
         label = stringResource(R.string.settings_push_notifications),
+        color = color,
         checked = NotificationPermissionPrompt.pushSwitchOn(pushEnabled, systemAllows),
         onCheckedChange = { on ->
             if (on && !systemAllows) {

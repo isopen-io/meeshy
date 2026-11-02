@@ -126,6 +126,16 @@ export interface Message {
   // ===== ETAT DU MESSAGE =====
   readonly isEdited: boolean;
   readonly editedAt?: Date;
+  /**
+   * #11375 — le tiers (modérateur de plateforme) qui a fait la dernière
+   * modification, tel que servi à CE lecteur : son `User.id` pour ADMIN /
+   * BIGBOSS et lui-même, la marque `MASKED_MODERATOR_EDITOR` sinon ; absent
+   * quand c'est l'auteur.
+   * @see packages/shared/utils/message-edit-attribution.ts
+   */
+  readonly editedById?: string;
+  /** #11375 — son rôle global, servi avec son identité seulement. */
+  readonly editedByRole?: string;
   readonly deletedAt?: Date;
 
   // ===== REPONSE & FORWARDING =====
@@ -228,6 +238,14 @@ export interface Message {
    * ou une pièce jointe protégé (#7591).
    */
   readonly sticker?: MessageSticker | null;
+  /**
+   * Lieu partagé hissé de `metadata.location` par la passerelle (REST et
+   * `message:new`). Même contrat que les charges socket : la forme n'est pas
+   * contrainte ici, la validation stricte vit côté passerelle
+   * (`services/location/sharedPlace.ts`) et le client la revalide
+   * (`placeOf`, apps/web). `null` ou absent : aucun lieu.
+   */
+  readonly location?: unknown;
   /**
    * Les URL BRUTES du contenu que la passerelle a rendues traçables
    * (`metadata.trackingLinks`, hissé tel quel sur `message:new`) — le client

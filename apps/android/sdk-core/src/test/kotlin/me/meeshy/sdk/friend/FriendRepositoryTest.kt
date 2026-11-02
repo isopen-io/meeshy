@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.FriendRequestActionResult
 import me.meeshy.sdk.model.FriendRequestDirection
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.RespondFriendRequest
+import me.meeshy.sdk.model.friend.FriendshipStatus
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.FriendApi
@@ -398,6 +399,51 @@ class FriendRepositoryTest {
         coEvery { api.friendRequests(any(), any(), any(), any(), any()) } throws IOException("offline")
 
         val result = repo().pendingRequests(FriendRequestDirection.Received)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    // --- Le graphe d'amitie : acceptes des deux sens + attentes -----------
+
+    private fun stubPending(direction: String, answer: ApiResponse<List<FriendRequest>>) {
+        coEvery {
+            api.friendRequests(direction = direction, status = "pending", cursor = null, limit = 100)
+        } returns answer
+    }
+
+    @Test
+    fun `the friendship graph keeps an accepted relation the user RECEIVED as a friend`() = runTest {
+        stubAccepted(
+            null,
+            page(
+                listOf(
+                    FriendRequest(id = "in", status = "accepted", senderId = "alice", receiverId = "me"),
+                    FriendRequest(id = "out", status = "accepted", senderId = "me", receiverId = "bob"),
+                ),
+                hasMore = false,
+                nextCursor = null,
+            ),
+        )
+        stubPending("received", page(listOf(FriendRequest(id = "p-in", status = "pending", senderId = "carol", receiverId = "me")), false, null))
+        stubPending("sent", page(listOf(FriendRequest(id = "p-out", status = "pending", senderId = "me", receiverId = "dave")), false, null))
+
+        val graph = (repo().friendshipGraph(currentUserId = "me") as NetworkResult.Success).data
+        val cache = FriendshipCache().apply { hydrate(sent = graph.sent, received = graph.received) }
+
+        assertThat(cache.currentFriendIds).containsExactly("alice", "bob")
+        assertThat(cache.status("carol")).isEqualTo(FriendshipStatus.PendingReceived("p-in"))
+        assertThat(cache.status("dave")).isEqualTo(FriendshipStatus.PendingSent("p-out"))
+    }
+
+    @Test
+    fun `a failing pending read fails the whole friendship graph`() = runTest {
+        stubAccepted(null, page(rows("a", 2), hasMore = false, nextCursor = null))
+        stubPending("received", page(emptyList(), false, null))
+        coEvery {
+            api.friendRequests(direction = "sent", status = "pending", cursor = null, limit = 100)
+        } throws IOException("offline")
+
+        val result = repo().friendshipGraph(currentUserId = "me")
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
     }

@@ -43,6 +43,14 @@ public struct SplitClipCommand: EditCommand {
             right.id = rightId
             right.startTime = originalStart + splitD
             right.duration = max(0, originalDuration - splitD)
+            // **La seconde moitié CONTINUE la source** (#14224) : sans ces
+            // bornes, elle rejouait la vidéo depuis son début. Une image n'a
+            // pas de temps de source.
+            if original.kind == .video {
+                let cut = Self.sourceCut(start: original.sourceStart, at: splitD)
+                left.sourceEnd = cut
+                right.sourceStart = cut
+            }
             project.mediaObjects.replaceSubrange(idx...idx, with: [left, right])
         case .audio:
             guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
@@ -58,6 +66,9 @@ public struct SplitClipCommand: EditCommand {
             right.id = rightId
             right.startTime = originalStart + splitAtRelativeTime
             right.duration = max(0, originalDuration - splitAtRelativeTime)
+            let cut = Self.sourceCut(start: original.sourceStart, at: Double(splitAtRelativeTime))
+            left.sourceEnd = cut
+            right.sourceStart = cut
             project.audioPlayerObjects.replaceSubrange(idx...idx, with: [left, right])
         case .text:
             guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
@@ -93,6 +104,9 @@ public struct SplitClipCommand: EditCommand {
             var restored = left
             restored.id = clipId
             restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
+            // L'entrée de source est celle de la gauche (l'original) ; la
+            // sortie, celle de la droite (#14224).
+            if restored.kind == .video { restored.sourceEnd = right.sourceEnd }
             // La moitié gauche redevient le clip, la droite part — par IDENTITÉ : un clip glissé entre
             // les deux depuis la scission était emporté par un remplacement de plage.
             project.mediaObjects[leftIdx] = restored
@@ -107,6 +121,7 @@ public struct SplitClipCommand: EditCommand {
             var restored = left
             restored.id = clipId
             restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
+            restored.sourceEnd = right.sourceEnd
             // La moitié gauche redevient le clip, la droite part — par IDENTITÉ : un clip glissé entre
             // les deux depuis la scission était emporté par un remplacement de plage.
             project.audioPlayerObjects[leftIdx] = restored
@@ -130,5 +145,11 @@ public struct SplitClipCommand: EditCommand {
         case .place:
             throw EditCommandError.invalidState(reason: "places cannot be split on the timeline")
         }
+    }
+
+    /// Le point de la SOURCE où tombe la coupe : l'entrée de l'original
+    /// (`nil` = le début du fichier) plus le temps coupé.
+    static func sourceCut(start: Double?, at seconds: Double) -> Double {
+        (start ?? 0) + seconds
     }
 }

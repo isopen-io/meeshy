@@ -52,6 +52,8 @@ data class MeeshyUser(
     val activation: UserActivation? = null,
     /** Le decor equipe (#10632) ; `null` = ancien serveur ou profil sans decor, voir [servedDecor]. */
     val profileDecor: ServedProfileDecor? = null,
+    /** La date de désactivation du compte, servie pour SOI ; `null` = compte actif ou ancien serveur. */
+    val deactivatedAt: String? = null,
 ) : LanguageResolver.ContentLanguagePreferences {
 
     val effectiveDisplayName: String

@@ -85,8 +85,25 @@ final class CallMontageLayoutTests: XCTestCase {
 
     // MARK: - Plein écran
 
-    func test_screen_alone_fillsTheCanvas() {
-        XCTAssertEqual(slots(.screen, 1).map(\.frame), [bounds])
+    func test_screen_alone_isAScreenInsideA3PercentBezel_withConcentricCorners() throws {
+        let slot = try XCTUnwrap(slots(.screen, 1).first)
+        let bezel = bounds.width * 0.03
+        XCTAssertEqual(slot.shape, .roundedRectangle)
+        XCTAssertEqual(slot.frame, bounds.insetBy(dx: bezel, dy: bezel), "un bord d'appareil de 3 % de la largeur, sur les quatre côtés")
+        XCTAssertEqual(slot.cornerRadius + bezel, bounds.width * 0.115, accuracy: 0.01,
+                       "le coin de l'écran est concentrique à celui du boîtier")
+    }
+
+    func test_screenSolo_statusBandSitsAtTheTopOfTheScreen() {
+        let solo = CallMontageSoloLayout.screen(in: bounds)
+        XCTAssertEqual(solo.statusBand.minY, solo.screen.minY, accuracy: 0.01)
+        XCTAssertEqual(solo.statusBand.minX, solo.screen.minX, accuracy: 0.01)
+        XCTAssertEqual(solo.statusBand.width, solo.screen.width, accuracy: 0.01)
+        XCTAssertGreaterThan(solo.statusBand.height, 0)
+        XCTAssertLessThan(solo.statusBand.height, solo.screen.height * 0.06)
+        XCTAssertGreaterThanOrEqual(solo.reflection.count, 3, "le reflet est un polygone")
+        XCTAssertTrue(solo.reflection.allSatisfy { solo.screen.insetBy(dx: -0.5, dy: -0.5).contains($0) },
+                      "le reflet ne déborde pas de l'écran")
     }
 
     func test_screen_duo_remoteFullAndSelfAsPictureInPicture() {
@@ -111,6 +128,56 @@ final class CallMontageLayoutTests: XCTestCase {
         }
         let five = slots(.grid, 5).map(\.frame)
         XCTAssertEqual(five[4].midX, bounds.midX, accuracy: 0.5)
+    }
+
+    func test_gridSolo_cutsThePhotoIn3x5Tiles_separatedBy0006uJoints() {
+        let solo = CallMontageSoloLayout.mosaic(in: bounds)
+        XCTAssertEqual(solo.columns, 3)
+        XCTAssertEqual(solo.rows, 5)
+        XCTAssertEqual(solo.tiles.count, 15)
+        XCTAssertEqual(solo.joint, bounds.width * 0.006, accuracy: 0.0001)
+        XCTAssertFalse(overlaps(solo.tiles))
+        XCTAssertTrue(solo.tiles.allSatisfy { solo.slot.insetBy(dx: -0.01, dy: -0.01).contains($0) })
+        XCTAssertEqual(solo.tiles[1].minX - solo.tiles[0].maxX, solo.joint, accuracy: 0.001, "un joint entre deux carreaux d'une rangée")
+        XCTAssertEqual(solo.tiles[3].minY - solo.tiles[0].maxY, solo.joint, accuracy: 0.001, "un joint entre deux rangées")
+        let carreaux = solo.tiles.reduce(0) { $0 + $1.width * $1.height }
+        let joints = solo.joint * solo.slot.height * 2 + solo.joint * solo.slot.width * 4 - solo.joint * solo.joint * 8
+        XCTAssertEqual(carreaux, solo.slot.width * solo.slot.height - joints, accuracy: 1,
+                       "l'union des carreaux est la case moins ses joints")
+        XCTAssertGreaterThan(solo.band.height, solo.joint * 4, "la bande basse porte la signature")
+        XCTAssertEqual(solo.band.minY, solo.slot.maxY, accuracy: 0.01)
+        XCTAssertEqual(solo.band.maxY, bounds.maxY, accuracy: 0.01)
+    }
+
+    func test_gridSolo_followsTheSlotInTheSingleFrame() throws {
+        let slot = try XCTUnwrap(slots(.grid, 1).first)
+        XCTAssertEqual(slot.frame, CallMontageSoloLayout.mosaic(in: bounds).slot)
+    }
+
+    func test_gridSolo_landscapeSwapsTheTiling() {
+        let paysage = CallMontageSoloLayout.mosaic(in: CGRect(x: 0, y: 0, width: 1920, height: 1080))
+        XCTAssertEqual([paysage.columns, paysage.rows], [5, 3])
+        let carre = CallMontageSoloLayout.mosaic(in: CGRect(x: 0, y: 0, width: 1080, height: 1080))
+        XCTAssertEqual([carre.columns, carre.rows], [4, 4])
+        XCTAssertEqual(CallMontageSoloLayout.mosaic(in: CGRect(x: 0, y: 0, width: 1080, height: 1350)).tiles.count, 16,
+                       "un 4:5 est assez près du carré")
+    }
+
+    func test_gridSolo_tintsAreDeterministic_andNeighboursDiffer() {
+        for (columns, rows) in [(3, 5), (5, 3), (4, 4)] {
+            for row in 0 ..< rows {
+                for column in 0 ..< columns {
+                    XCTAssertEqual(CallMontageSoloLayout.tint(row: row, column: column), CallMontageSoloLayout.tint(row: row, column: column))
+                    if column + 1 < columns {
+                        XCTAssertNotEqual(CallMontageSoloLayout.tint(row: row, column: column), CallMontageSoloLayout.tint(row: row, column: column + 1))
+                    }
+                    if row + 1 < rows {
+                        XCTAssertNotEqual(CallMontageSoloLayout.tint(row: row, column: column), CallMontageSoloLayout.tint(row: row + 1, column: column))
+                    }
+                }
+            }
+        }
+        XCTAssertTrue(CallMontageSoloLayout.Tint.allCases.allSatisfy { $0.alpha >= 0 && $0.alpha <= 0.08 })
     }
 
     func test_gridDimensions_growWithTheGroup() {

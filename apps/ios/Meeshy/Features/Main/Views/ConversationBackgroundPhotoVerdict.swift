@@ -44,7 +44,7 @@ nonisolated enum ConversationBackgroundPhotoVerdict: Equatable {
 
     /// Le sélecteur ne propose pas une photo qu'il ne saurait pas peindre.
     static func mayBeOffered(_ attachment: MeeshyMessageAttachment) -> Bool {
-        !attachment.isEncrypted && !attachment.isViewOnce && !attachment.isBlurred
+        !attachment.isEncrypted && !attachment.declaresViewOnce && !attachment.declaresBlur
     }
 }
 
