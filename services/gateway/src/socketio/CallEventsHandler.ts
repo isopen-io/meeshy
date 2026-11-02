@@ -1992,13 +1992,13 @@ export class CallEventsHandler {
             userId: { not: null }
           },
           select: {
-            userId: true
+            userId: true, messageRequestAt: true
           }
         });
 
         const memberUserIds = await ringableCallees(this.prisma, {
           callerUserId: userId,
-          calleeUserIds: conversationParticipants.flatMap(p => (p.userId ? [p.userId] : [])),
+          calleeUserIds: conversationParticipants.flatMap(p => (p.userId && !p.messageRequestAt ? [p.userId] : [])), // #14107 (M2) : une demande en attente ne sonne pas
         });
         logger.info('📋 Conversation members to notify', {
           conversationId: data.conversationId,

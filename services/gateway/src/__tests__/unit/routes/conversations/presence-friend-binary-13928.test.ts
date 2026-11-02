@@ -30,6 +30,13 @@ type Viewer = { userId: string; role: string } | null;
 const mockResolveForTargets = jest.fn<any>();
 const mockResolveForTarget = jest.fn<any>();
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) : ici, tout membre entre directement.
+jest.mock('../../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<object>('../../../../services/messaging/messageRequests'),
+  decideOpenings: jest.fn(async () => new Map()),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
     resolveForTargets: (...args: unknown[]) => mockResolveForTargets(...args),

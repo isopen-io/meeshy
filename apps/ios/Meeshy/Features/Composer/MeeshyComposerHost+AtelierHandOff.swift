@@ -59,25 +59,49 @@ nonisolated enum ComposerAtelierHandOffCopy {
 
 
 // **Un geste, une requête par format** (#13920, décision porteur : « le choix
-// du type de post est composite et non exclusif »). Les formats cochés au
-// chevron partent tous à l'appui sur Publier, chacun par le canal de son format
-// et sous ses propres règles ; un format refusé est nommé, les autres partent.
+// du type de post est composite et non exclusif »). Les formats cochés partent
+// tous à l'appui sur Publier, chacun par son canal et sous ses règles. Le
+// compositeur ne se ferme que si tout est parti ; sinon il reste, ne garde
+// cochés que les formats refusés et les nomme.
 
 extension MeeshyComposerHost {
 
-    /// L'atelier ne publie qu'une fois par geste (son loquet) : il reçoit la
-    /// file entière, que son relais distribue (`atelierFanOut`).
     func publishEachFormat(_ choice: ComposerPublishChoice) {
         let plan = ComposerSeveralFormats.plan(choice, surface: mountedSurface, accepts: { canPublishDocument(as: $0) })
-        ComposerSeveralFormats.sayRefused(plan.refused)
-        plan.scene.forEach { publishStoryScene(as: $0.format, alsoAsReel: $0.alsoAsReel) }
-        if let premiere = plan.atelier.first {
-            atelierFanOut.hold(plan.atelier)
-            publishTrigger.requestPublish(as: premiere.format.postType, visibility: composerVisibility.rawValue,
-                                          visibilityUserIds: composerVisibilityUserIds, alsoAsReel: premiere.alsoAsReel)
-            atelierFanOut.hold([])
+        Task {
+            let refuses = await ComposerSeveralFormats.run(plan, sendDocument: { await sendDocumentLeg($0) }) { dejaRefuses in
+                if case .remains(let reste) = ComposerSeveralFormats.outcome(of: choice, refused: dejaRefuses) {
+                    chooseArmedPublish(reste)
+                    flushAutosave()
+                }
+                pressAtelier(plan.atelier)
+                return plan.scene.filter { !publishStoryScene(as: $0.format, alsoAsReel: $0.alsoAsReel, closing: false) }
+                    .flatMap(\.formats)
+            }
+            switch ComposerSeveralFormats.outcome(of: choice, refused: refuses) {
+            case .published:
+                if plan.document.isEmpty { discardAutosavedDraft() } else { handOverAutosavedDraft() }
+                onDismiss()
+            case .remains(let reste):
+                chooseArmedPublish(reste)
+                ComposerSeveralFormats.sayRefused(reste.formats)
+            }
         }
-        plan.document.forEach { publishDocument($0) }
+    }
+
+    /// L'atelier ne publie qu'une fois par geste (son loquet) : il reçoit la
+    /// file entière, que son relais distribue (`atelierFanOut`).
+    private func pressAtelier(_ legs: [ComposerPublishChoice]) {
+        guard let premiere = legs.first else { return }
+        atelierFanOut.hold(legs)
+        publishTrigger.requestPublish(as: premiere.format.postType, visibility: composerVisibility.rawValue,
+                                      visibilityUserIds: composerVisibilityUserIds, alsoAsReel: premiere.alsoAsReel)
+        atelierFanOut.hold([])
+    }
+
+    private func sendDocumentLeg(_ leg: ComposerPublishChoice) async -> Bool {
+        guard canPublishDocument(as: leg.format) else { return false }
+        return await withCheckedContinuation { suite in publishDocument(leg) { suite.resume(returning: $0) } }
     }
 }
 

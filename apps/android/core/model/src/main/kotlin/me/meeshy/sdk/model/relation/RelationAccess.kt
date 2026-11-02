@@ -54,7 +54,7 @@ public enum class RelationFeature(
     RELAY_COMMENTERS_ON_MY_POSTS("relay.commentersOnMyPosts", RelationLevel.CLOSE),
     RELAY_MY_COMMENTS_ELSEWHERE("relay.myCommentsElsewhere", RelationLevel.BLOOD),
     DM_DIRECT("dm.direct", RelationLevel.ACQUAINTANCE),
-    DM_REQUEST("dm.request", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.COMMUNITY),
+    DM_REQUEST("dm.request", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.ACQUAINTANCE),
     DM_READ_RECEIPTS("dm.readReceipts", RelationLevel.ACQUAINTANCE),
     DM_TYPING("dm.typing", RelationLevel.ACQUAINTANCE),
     PRESENCE_DND("presence.dnd", RelationLevel.ACQUAINTANCE),

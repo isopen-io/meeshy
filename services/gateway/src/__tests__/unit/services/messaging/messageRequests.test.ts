@@ -16,7 +16,7 @@ import {
   requesterPermissionsFor,
   requestRecipientFields,
   servedMessageRequest,
-  shieldedRecipients,
+  decideOpenings,
 } from '../../../../services/messaging/messageRequests';
 import { noteMessageInteractions } from '../../../../services/relations/messageInteractions';
 import { ADULT_BIRTH, MINOR_BIRTH, messagingWorld, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
@@ -72,8 +72,9 @@ describe('decideDirectOpening — direct dès Connaissance, demande en dessous (
     expect(opening).toMatchObject({ kind: 'request', recipientMinor: false });
   });
 
-  it('le Public ne peut pas écrire à un mineur déclaré (RG-21), et le refus ne dit pas pourquoi', async () => {
-    await expect(decideDirectOpening(db(monde()), { senderId: ALICE, recipientId: MINEUR, now: NOW })).resolves.toEqual({ kind: 'refused' });
+  it('vers un mineur déclaré, la porte répond comme vers un majeur ; la demande est CONTENUE (score plafond, filtrée)', async () => {
+    const opening = await decideDirectOpening(db(monde()), { senderId: ALICE, recipientId: MINEUR, now: NOW });
+    expect(opening).toEqual({ kind: 'request', risk: 100, recipientMinor: true });
   });
 
   it('un co-membre d\'une communauté peut adresser une demande à un mineur — ses médias restent fermés', async () => {
@@ -109,15 +110,17 @@ describe('decideDirectOpening — direct dès Connaissance, demande en dessous (
   });
 });
 
-describe('shieldedRecipients — un groupe ne débloque rien (RG-22)', () => {
-  it('le Public ne fait pas entrer un mineur ; un co-membre, un majeur et un âge inconnu passent', async () => {
-    const shielded = await shieldedRecipients(db(monde()), ALICE, [MINEUR, CO_MEMBRE_MINEUR, BOB, NOUVEAU], NOW);
-    expect([...shielded]).toEqual([MINEUR]);
+describe('decideOpenings — un groupe ne débloque rien (RG-22, audit M1)', () => {
+  it('chaque membre hors Connaissance du créateur entre par sa boîte ; la Connaissance entre directement', async () => {
+    const openings = await decideOpenings(db(monde()), { senderId: ALICE, recipientIds: [CONNAISSANCE, BOB, MINEUR], now: NOW });
+    expect(openings.get(CONNAISSANCE)).toEqual({ kind: 'direct' });
+    expect(openings.get(BOB)).toMatchObject({ kind: 'request', recipientMinor: false });
+    expect(openings.get(MINEUR)).toEqual({ kind: 'request', risk: 100, recipientMinor: true });
   });
 
-  it('un mineur fait entrer un autre mineur', async () => {
-    const shielded = await shieldedRecipients(db(monde()), CO_MEMBRE_MINEUR, [MINEUR], NOW);
-    expect(shielded.size).toBe(0);
+  it('une communauté commune ne lève pas le bouclier (audit B3)', async () => {
+    const openings = await decideOpenings(db(monde()), { senderId: ALICE, recipientIds: [CO_MEMBRE_MINEUR], now: NOW });
+    expect(openings.get(CO_MEMBRE_MINEUR)).toEqual({ kind: 'request', risk: 100, recipientMinor: true });
   });
 });
 
@@ -225,6 +228,27 @@ describe('noteMessageInteractions — répondre à une demande l\'accepte', () =
     for (let i = 0; i < 20; i += 1) await flush();
     expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
     expect(world.relations.relations()).toEqual(expect.arrayContaining([expect.objectContaining({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' })]));
+  });
+
+  it('après une baisse volontaire, répondre efface la demande sans recréer le lien (RG-07)', async () => {
+    const world = monde({ participants: demandeEnAttente() });
+    await world.relations.prisma.userRelation.create({
+      data: { userLowId: ALICE < BOB ? ALICE : BOB, userHighId: ALICE < BOB ? BOB : ALICE, grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC',
+        origin: 'request', levelSince: NOW, transitions: [{ actorId: BOB, from: 'FRIEND', to: 'PUBLIC', at: new Date('2026-10-01T00:00:00Z') }] },
+    } as never);
+    reply(world, BOB);
+    for (let i = 0; i < 20; i += 1) await flush();
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
+    expect(world.relations.relations().find((r) => [r.userLowId, r.userHighId].includes(BOB))).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
+
+  it('un mineur qui répond efface la demande, sans lien ni média rouvert : seul « Accepter » les ouvre', async () => {
+    const world = monde({ participants: demandeEnAttente({ userId: MINEUR }) });
+    reply(world, MINEUR);
+    for (let i = 0; i < 20; i += 1) await flush();
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+    expect(world.relations.relations().some((r) => [r.userLowId, r.userHighId].includes(MINEUR))).toBe(false);
   });
 
   it('l\'expéditeur qui relance n\'accepte rien', async () => {

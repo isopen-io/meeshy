@@ -86,20 +86,23 @@ describe('POST /conversations — la boîte de demandes (#14107)', () => {
     expect(participants.find((p) => p.userId === CONNAISSANCE)).not.toHaveProperty('messageRequestAt');
   });
 
-  it('le Public ne peut pas écrire à un mineur : il le trouve INTROUVABLE (404), rien n\'est créé', async () => {
+  it('vers un mineur, la porte répond comme vers un majeur (audit B2) : 201, demande contenue, expéditeur sans média', async () => {
     const { res, participants } = await ouvrir(MINEUR);
-    expect(res.statusCode).toBe(404);
-    expect(res.json().code).toBe('USER_NOT_FOUND');
-    expect(participants).toHaveLength(0);
+    expect(res.statusCode).toBe(201);
+    const jeune = participants.find((p) => p.userId === MINEUR);
+    expect(jeune?.messageRequestRisk).toBe(100);
+    expect(participants.find((p) => p.userId === MOI)?.permissions).toMatchObject({ canSendImages: false, canSendFiles: false });
   });
 
-  it('le Public ne fait pas entrer un mineur dans un groupe (RG-22) : introuvable, rien n\'est créé', async () => {
+  it('un groupe ne débloque rien (RG-22) : l\'inconnu et le mineur entrent par leur boîte, rien ne s\'annonce', async () => {
     const { prisma, conversationCreate } = app();
     const fastify = await server(prisma);
-    const res = await fastify.inject({ method: 'POST', url: '/conversations', payload: { type: 'group', title: 'Club', participantIds: [INCONNU, MINEUR] } });
+    const res = await fastify.inject({ method: 'POST', url: '/conversations', payload: { type: 'group', title: 'Club', participantIds: [INCONNU, MINEUR, CONNAISSANCE] } });
     await fastify.close();
-    expect(res.statusCode).toBe(404);
-    expect(conversationCreate).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(201);
+    const created = (conversationCreate.mock.calls[0]?.[0] as { data: { participants: { create: CreatedParticipant[] } } }).data.participants.create;
+    expect(created.find((p) => p.userId === INCONNU)?.messageRequestAt).toBeInstanceOf(Date);
+    expect(created.find((p) => p.userId === MINEUR)?.messageRequestAt).toBeInstanceOf(Date);
   });
 
   it('vers un majeur, l\'expéditeur garde ses droits fondateurs', async () => {

@@ -4,8 +4,8 @@
  *
  * Un destinataire qui a coupé le réglage ne sonne que pour ses amis acceptés.
  * Un mineur DÉCLARÉ ne sonne pour un majeur que s'il est son Ami (CAL-01/02,
- * bouclier `call.ring`, #14108), quel que soit son réglage — même code de refus
- * qu'un non-contact : son âge ne se révèle pas.
+ * bouclier `call.ring`, #14108), quel que soit son réglage — il ne sonne pas,
+ * sans refus : l'appel ressemble à un appel resté sans réponse.
  * La doctrine d'échec est l'INVERSE de `socketio/call-recipients.ts` : ici on
  * garde une porte, donc une lecture qui échoue ne fait sonner personne de ceux
  * qu'elle devait garder — fail-closed.
@@ -40,8 +40,10 @@ export async function partitionRingableCallees(
       amisAcceptesParmi(prisma, input.callerUserId, guarded),
       minorShieldedAmong(prisma, { feature: 'call.ring', senderId: input.callerUserId, recipientIds: callees }),
     ]);
-    const refused = callees.filter((id) => shielded.has(id) || (guarded.includes(id) && !friends.has(id)));
-    return { ringable: callees.filter((id) => !refused.includes(id)), refused };
+    const refused = guarded.filter((id) => !friends.has(id));
+    // Le mineur bouclé n'est pas un refus : il ne sonne pas, et l'appel se conduit
+    // comme un appel resté sans réponse — aucune issue ne le distingue (audit #14107, B2).
+    return { ringable: callees.filter((id) => !refused.includes(id) && !shielded.has(id)), refused };
   } catch (error) {
     logger.error('Call ring policy resolution failed — refusing every callee (fail-closed)', {
       callerUserId: input.callerUserId,
@@ -65,9 +67,14 @@ export async function assertDirectCalleeReachable(
 ): Promise<void> {
   const members = await prisma.participant.findMany({
     where: { conversationId: input.conversationId, isActive: true, userId: { not: null } },
-    select: { userId: true },
+    select: { userId: true, messageRequestAt: true },
   });
   const calleeUserIds = members.flatMap((m) => (m.userId ? [m.userId] : []));
+  // #14107 (audit M2) — l'expéditeur d'une demande en attente ne fait pas sonner son
+  // destinataire, quel que soit `acceptCallsFromNonContacts` : même refus qu'un non-contact.
+  if (members.some((m) => m.userId !== input.callerUserId && m.messageRequestAt instanceof Date)) {
+    throw new Error(`${CALL_ERROR_CODES.CALLEE_REFUSES_NON_CONTACTS}: This person only accepts calls from their contacts`);
+  }
   const { refused } = await partitionRingableCallees(prisma, {
     callerUserId: input.callerUserId,
     calleeUserIds,

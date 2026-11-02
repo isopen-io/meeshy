@@ -57,9 +57,9 @@ describe('pairAccessAmong — la loi jugée sur les lectures vraies', () => {
     expect(verdict).toMatchObject({ allowed: false, reason: 'level' });
   });
 
-  it('lit la communauté quand elle ouvre : un co-membre mineur reçoit la demande d\'un majeur', async () => {
+  it('une communauté ne lève pas le bouclier (audit B3) : un co-membre mineur reste contenu', async () => {
     const verdict = await pairAccess(db(monde()), { feature: 'dm.request', viewerId: ADULTE, targetId: CO_MEMBRE });
-    expect(verdict).toMatchObject({ allowed: true, effectiveLevel: 'COMMUNITY' });
+    expect(verdict).toMatchObject({ allowed: false, effectiveLevel: 'COMMUNITY', reason: 'level' });
   });
 
   it('écarte soi-même et les doublons de l\'éventail', async () => {

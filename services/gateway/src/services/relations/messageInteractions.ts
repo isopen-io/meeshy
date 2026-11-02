@@ -27,8 +27,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { isEndToEndMode } from '../conversations/encryptionRegime.js';
 import { notePairInteraction, type PairInteractionDb } from './pairInteractionRecorder.js';
-import { acceptMessageRequest, type MessageRequestDb } from '../messaging/messageRequests.js';
-import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache.js';
+import { answerMessageRequest, type MessageRequestDb } from '../messaging/messageRequests.js';
 
 const logger = enhancedLogger.child({ module: 'MessageInteractions' });
 
@@ -58,16 +57,15 @@ type MessageInteractionDb = PairInteractionDb & {
 };
 
 /**
- * #14107 — le destinataire d'une DEMANDE de message qui y répond l'accepte : un
- * ancien client, qui ne connaît pas la boîte de demandes, reste fonctionnel.
- * L'expéditeur qui relance n'accepte rien (sa ligne ne porte pas de demande).
+ * #14107 — le destinataire d'une DEMANDE de message qui y répond l'efface
+ * (`answerMessageRequest` : sans consentement implicite, audit M3). L'expéditeur
+ * qui relance n'efface rien (sa ligne ne porte pas de demande).
  */
 const answersOwnRequest = (conversation: { type: string; participants: ReadonlyArray<InteractionParticipant> }, sender: string): boolean =>
   conversation.type === 'direct' && conversation.participants.some((p) => p.userId === sender && p.messageRequestAt instanceof Date);
 
 async function acceptRequestByReply(prisma: unknown, conversationId: string, userId: string, now: Date): Promise<void> {
-  const acceptance = await acceptMessageRequest(prisma as MessageRequestDb, { conversationId, userId, now });
-  if (acceptance.kind === 'accepted') invalidateParticipantLookup(acceptance.requesterParticipantId, conversationId);
+  await answerMessageRequest(prisma as MessageRequestDb, { conversationId, userId, now });
 }
 
 const isVoiceMessage = (interaction: MessageInteraction): boolean =>

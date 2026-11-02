@@ -273,8 +273,9 @@ describe('resolveRelationAccess — le bouclier des mineurs (RG-21)', () => {
     });
   });
 
-  it('dès la Communauté, un majeur peut adresser une demande de message à un mineur', () => {
-    expect(access({ feature: 'dm.request', viewerMinor: 'adult', targetMinor: 'minor', sharesCommunity: true }).allowed).toBe(true);
+  it('une communauté commune ne suffit pas : seule la Connaissance lève le bouclier', () => {
+    expect(access({ feature: 'dm.request', viewerMinor: 'adult', targetMinor: 'minor', sharesCommunity: true }).allowed).toBe(false);
+    expect(access({ ...both('ACQUAINTANCE'), feature: 'dm.request', viewerMinor: 'adult', targetMinor: 'minor' }).allowed).toBe(true);
   });
 
   it('le bouclier ne vise ni deux mineurs, ni une cible majeure, ni un âge inconnu', () => {

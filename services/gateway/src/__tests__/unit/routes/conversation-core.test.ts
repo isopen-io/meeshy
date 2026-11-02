@@ -45,7 +45,7 @@ const mockSendErrorResponse = jest.fn<any>();
 
 // ─── jest.mock calls (hoisted) ────────────────────────────────────────────────
 
-jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })) })); // #14107 : un DM s'ouvre direct ici
+jest.mock('../../../services/messaging/messageRequests', () => ({ ...jest.requireActual<object>('../../../services/messaging/messageRequests'), decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })), decideOpenings: jest.fn(async () => new Map()) })); // #14107 : direct ici
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

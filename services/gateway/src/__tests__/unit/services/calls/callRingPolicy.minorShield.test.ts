@@ -1,7 +1,8 @@
 /**
  * #14108 (CAL-01/02, colonne « Règle mineurs ») — un majeur qui n'est pas Ami ne
  * fait pas sonner un mineur déclaré, même quand le mineur accepte les appels hors
- * contacts ; un Ami, si. Le refus est celui d'un non-contact : l'âge ne se dit pas.
+ * contacts ; un Ami, si. Ce n'est pas un refus : l'appel ressemble à un appel sans
+ * réponse, rien ne distingue un mineur (audit #14107, B2).
  *
  * @jest-environment node
  */
@@ -41,9 +42,9 @@ function monde(): PrismaClient {
 }
 
 describe('partitionRingableCallees — le bouclier des mineurs (#14108)', () => {
-  it('un majeur Connaissance ne fait pas sonner un mineur ; un majeur Ami, si ; un adulte inconnu sonne comme avant', async () => {
+  it('un majeur Connaissance ne fait pas sonner un mineur, sans refus ; un majeur Ami, si ; un adulte inconnu sonne comme avant', async () => {
     const partition = await partitionRingableCallees(monde(), { callerUserId: MAJEUR, calleeUserIds: [MINEUR_CONNU, MINEUR_AMI, ADULTE_INCONNU] });
-    expect(partition.refused).toEqual([MINEUR_CONNU]);
+    expect(partition.refused).toEqual([]);
     expect([...partition.ringable].sort()).toEqual([ADULTE_INCONNU, MINEUR_AMI].sort());
   });
 

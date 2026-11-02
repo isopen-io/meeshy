@@ -38,6 +38,7 @@ const CREATED_DM = '507f1f77bcf86cd7994390aa';
 jest.mock('../../../services/messaging/messageRequests', () => ({
   ...jest.requireActual<typeof import('../../../services/messaging/messageRequests')>('../../../services/messaging/messageRequests'),
   decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+  decideOpenings: jest.fn(async () => new Map()),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
