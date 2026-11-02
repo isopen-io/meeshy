@@ -9,9 +9,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +29,7 @@ import me.meeshy.feature.conversations.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.icons.MeeshyIcons
 
 /** Etats sans liste : initial, recherche a froid, aucun resultat (icone + titre + sous-titre fusionnes pour TalkBack). */
 @Composable
@@ -52,7 +50,7 @@ internal fun SearchStatus(label: String, sublabel: String? = null, showSpinner: 
             CircularProgressIndicator(color = MeeshyPalette.Indigo500)
         } else {
             Icon(
-                imageVector = Icons.Filled.Search,
+                imageVector = MeeshyIcons.Search,
                 contentDescription = null,
                 tint = MeeshyTheme.tokens.textMuted,
                 modifier = Modifier.size(44.dp),
@@ -85,7 +83,7 @@ internal fun SearchOfflineState(onRetry: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         Icon(
-            imageVector = Icons.Filled.WifiOff,
+            imageVector = MeeshyIcons.WifiOff,
             contentDescription = null,
             tint = MeeshyTheme.tokens.textMuted,
             modifier = Modifier.size(44.dp),

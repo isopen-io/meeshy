@@ -13,13 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -61,6 +54,7 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.icons.MeeshyIcons
 
 @Composable
 internal fun ResultCard(
@@ -150,9 +144,9 @@ private fun washed(segments: List<HighlightSegment>, wash: Color): AnnotatedStri
 private val SEARCH_HIGHLIGHT_WASH = MeeshyPalette.Warning.copy(alpha = 0.45f)
 
 private fun typeIcon(type: String): ImageVector = when (type.lowercase()) {
-    "direct", "bot" -> Icons.Filled.Person
-    "group" -> Icons.Filled.Group
-    else -> Icons.Filled.Public
+    "direct", "bot" -> MeeshyIcons.PersonFilled
+    "group" -> MeeshyIcons.GroupFilled
+    else -> MeeshyIcons.Public
 }
 
 @Composable
@@ -260,9 +254,9 @@ private fun ProtectionLine(protection: RowProtection, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             imageVector = when (protection) {
-                RowProtection.HIDDEN -> Icons.Filled.VisibilityOff
-                RowProtection.VIEW_ONCE -> Icons.Filled.Visibility
-                RowProtection.EXPIRED -> Icons.Filled.Timer
+                RowProtection.HIDDEN -> MeeshyIcons.EyeOffFilled
+                RowProtection.VIEW_ONCE -> MeeshyIcons.EyeFilled
+                RowProtection.EXPIRED -> MeeshyIcons.Timer
             },
             contentDescription = null,
             tint = MeeshyTheme.tokens.textSecondary,
