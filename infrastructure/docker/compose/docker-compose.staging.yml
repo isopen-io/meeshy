@@ -362,6 +362,10 @@ services:
       # /app/sounds éphémère et les perdrait à chaque recréation du conteneur.
       - UPLOAD_DIR=/app/sounds
       - SOUND_LIBRARY_ENABLED=true
+      # Le Bring (#13936) : allumé sur staging SEULEMENT, pour la recette. En production il
+      # reste éteint (défaut du code) tant que les sous-lots clients, #14421 et #14409 ne
+      # sont pas livrés — audit #14441, B2.
+      - BRING_ENABLED=true
       - PUBLIC_URL=https://gate.staging.${DOMAIN:-meeshy.me}
       - TURN_SECRET=${TURN_SECRET}
       # #11278 — le relais de coturn-staging : TURN en clair sur 3480, TLS sur

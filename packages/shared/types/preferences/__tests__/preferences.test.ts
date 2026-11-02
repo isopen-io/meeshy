@@ -212,7 +212,8 @@ describe('NotificationPreferenceSchema', () => {
       friendContentEnabled: false,
       contactActivityEnabled: false,
       gameEnabled: false,
-      gamePhotoEnabled: false
+      gamePhotoEnabled: false,
+      bringEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);

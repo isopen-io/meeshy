@@ -452,7 +452,12 @@
     "PUT /api/v1/messages/:messageId",
     "PUT /api/v1/user-preferences/communities/:communityId",
     "PUT /api/v1/voice/profile/:profileId",
-    "POST /api/v1/relations/:userId/level"
+    "POST /api/v1/relations/:userId/level",
+    "GET /api/v1/bring/:userId",
+    "POST /api/v1/bring/:userId",
+    "DELETE /api/v1/bring/:bringId",
+    "GET /api/v1/relations/:userId/settings",
+    "PUT /api/v1/relations/:userId/settings"
    ]
   },
   {
