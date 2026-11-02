@@ -101,8 +101,6 @@ export type ApiFailure = {
    * métier ; `decodeEmailOwner` (`email-owner.ts`) le valide là où il sert.
    */
   readonly emailOwner?: unknown;
-  /** L'écart Sesame d'un 409 `E2EE_DEVICES_MISMATCH` (#14592), étalé à la racine (`missing`, `extra`, `stale`). BRUT : `lib/e2ee/directory.ts` le décode. */
-  readonly e2eeMismatch?: unknown;
 };
 
 export type ApiSuccess<T> = {
@@ -490,7 +488,6 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ? { suggestedNickname: envelope.suggestedNickname }
         : {}),
       ...(envelope.emailOwner !== undefined && envelope.emailOwner !== null ? { emailOwner: envelope.emailOwner } : {}),
-      ...(code === 'E2EE_DEVICES_MISMATCH' ? { e2eeMismatch: { missing: envelope.missing, extra: envelope.extra, stale: envelope.stale } } : {}),
     };
   }
 

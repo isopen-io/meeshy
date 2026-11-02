@@ -1016,6 +1016,7 @@ const ar = {
   'send.failure.tooMany': 'رسائل كثيرة دفعة واحدة — أعد المحاولة بعد لحظات',
   'send.failure.rejected': 'رُفضت الرسالة',
   'send.failure.gatewayUnavailable': 'الخادم غير متاح',
+  'send.failure.e2eePeerNotEnrolled': 'لا يملك جهة اتصالك جهازًا مشفّرًا بعد',
   'message.deleted': 'تم حذف الرسالة',
   'message.expired.a11y': 'انتهت صلاحية الرسالة المؤقتة',
   'message.story.reply': 'رد على القصة',

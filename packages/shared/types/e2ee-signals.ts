@@ -27,39 +27,13 @@ import { E2EE_SEND_SHAPE, LIBSIGNAL_PROTOCOL, e2eeDeviceIdSchema, type E2EEDevic
 /** La route unique des signaux, sous `/api/v1`. */
 export const E2EE_SIGNAL_ROUTE = '/e2ee/conversations/:conversationId/signals' as const;
 
-/**
- * Les paliers de remplissage du clair d'une enveloppe (octets), communs aux
- * messages et aux signaux : une réaction ne se distingue pas d'un message court.
- * Au-delà du dernier palier, le clair se remplit au multiple suivant de
- * `E2EE_PADDING_STEP` : sa taille exacte ne se lit jamais. Chaque palier est
- * borné par le budget des enveloppes (`E2EE_ENVELOPE_BOUNDS` : 64 Kio par
- * enveloppe, 512 Kio au total, divisé par le nombre d'enveloppes), moins la
- * marge de chiffrement `E2EE_PADDING_CIPHER_OVERHEAD`. Miroir : `E2EEPadding`
- * (MeeshyE2EE).
- */
-export const E2EE_PADDING_TIERS = [256, 1024, 4096, 16384] as const;
-export const E2EE_PADDING_STEP = 16384;
-/**
- * Ce que libsignal ajoute au clair, majoré : un premier message (PreKey, PQXDH
- * avec Kyber1024) ajoute 1 761 à 1 763 octets (mesuré, libsignal 0.105), un
- * message ordinaire 107.
- */
-export const E2EE_PADDING_CIPHER_OVERHEAD = 2048;
-
-const PADDING_ENVELOPE_BYTES = 64 * 1024;
-const PADDING_TOTAL_BYTES = 512 * 1024;
-
-/** Le plus grand clair que `recipients` enveloppes portent sous les deux plafonds. */
-export const e2eePaddingCeiling = (recipients: number): number =>
-  Math.min(PADDING_ENVELOPE_BYTES, Math.floor(PADDING_TOTAL_BYTES / Math.max(recipients, 1))) - E2EE_PADDING_CIPHER_OVERHEAD;
-
-/** La taille d'un clair une fois rempli pour `recipients` enveloppes. Miroir : `E2EEPadding.paddedLength`. */
-export const e2eePaddedLength = (length: number, recipients: number): number => {
-  const ceiling = e2eePaddingCeiling(recipients);
-  if (length > ceiling) return length;
-  const bucket = E2EE_PADDING_TIERS.find((tier) => tier >= length) ?? Math.ceil(length / E2EE_PADDING_STEP) * E2EE_PADDING_STEP;
-  return Math.min(bucket, ceiling);
-};
+export {
+  E2EE_PADDING_TIERS,
+  E2EE_PADDING_STEP,
+  E2EE_PADDING_CIPHER_OVERHEAD,
+  e2eePaddingCeiling,
+  e2eePaddedLength,
+} from './e2ee-protocol.js';
 
 /**
  * Un envoi de signal : les enveloppes libsignal, l'appareil émetteur, ceux de

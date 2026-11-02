@@ -18,6 +18,11 @@ import { sendFailureReason } from '@/lib/send/failure-reason';
 import { plaintextWithheld } from '@/lib/send/served-regime';
 import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import { cachedConversation, directPeerOf, regimeEpochOf } from '@/lib/e2ee/direct-peer';
+import { openedSink } from '@/lib/e2ee/opened-messages';
+import { E2EE_ATTACHMENTS_NOT_YET, E2EE_WEB_UNAVAILABLE } from '@/lib/e2ee/send-codes';
+import { confirmedMessageOf, localMessageOf } from '@/lib/send/local-message';
+
+const LOCAL_BUBBLES = { localMessageOf, confirmedMessageOf } as const;
 
 import type { LocalDelivery } from './message';
 
@@ -152,12 +157,17 @@ export function useSend(params: {
          TEXTE de tête-à-tête part scellé par libsignal ; le reste (pièce, lieu,
          sticker, protection, groupe) est refusé et l'annonce dit pourquoi. */
       if (plaintextWithheld(conversationId, appQueryClient)) {
+        const refuse = (code: string): void => {
+          const language = currentInterfaceLanguage();
+          const reason = sendFailureReason({ ok: false, status: 0, error: '', code }, language);
+          announce(reason === undefined ? translate(language, 'announce.messageNotSent') : translate(language, 'announce.messageNotSent.reason', { reason }));
+        };
         const conversation = cachedConversation((key) => appQueryClient.getQueryData(key), conversationId);
         const peerUserId = directPeerOf(conversation, viewerId);
         const textOnly = attachments.length === 0 && place === null && sticker === null && Object.keys(protection).length === 0 && text.trim() !== '';
         if (peerUserId !== null && textOnly) {
           const regimeEpoch = regimeEpochOf(conversation);
-          void import('@/lib/e2ee/send-action')
+          void import('@/lib/e2ee/e2ee-runtime')
             .then(({ sendEndToEnd }) =>
               sendEndToEnd({
                 conversationId,
@@ -168,14 +178,14 @@ export function useSend(params: {
                 language,
                 replyTo,
                 ...(regimeEpoch === undefined ? {} : { regimeEpoch }),
+                opened: openedSink,
+                bubbles: LOCAL_BUBBLES,
               }),
             )
-            .catch(() => undefined);
+            .catch(() => refuse(E2EE_WEB_UNAVAILABLE));
           return;
         }
-        const language = currentInterfaceLanguage();
-        const reason = sendFailureReason({ ok: false, status: 0, error: '', code: E2EE_PLAINTEXT_WITHHELD }, language);
-        announce(reason === undefined ? translate(language, 'announce.messageNotSent') : translate(language, 'announce.messageNotSent.reason', { reason }));
+        refuse(peerUserId === null ? E2EE_PLAINTEXT_WITHHELD : E2EE_ATTACHMENTS_NOT_YET);
         return;
       }
       void sendAction({
@@ -209,12 +219,15 @@ export function useSend(params: {
       /* #14592 — un envoi chiffré en échec se rescelle : le même texte repart
          par libsignal (session et appareils relus), jamais en clair. */
       const failed = entries.find((entry) => entry.message.id === messageId && entry.delivery === 'failed');
-      const peerUserId = directPeerOf(cachedConversation((key) => appQueryClient.getQueryData(key), conversationId), viewerId);
+      const conversation = cachedConversation((key) => appQueryClient.getQueryData(key), conversationId);
+      const peerUserId = directPeerOf(conversation, viewerId);
+      const regimeEpoch = regimeEpochOf(conversation);
       if (failed !== undefined && peerUserId !== null && plaintextWithheld(conversationId, appQueryClient)) {
-        discardSendAction({ conversationId, clientMessageId: messageId });
-        void import('@/lib/e2ee/send-action')
-          .then(({ sendEndToEnd }) =>
-            sendEndToEnd({
+        /* La bulle en échec ne s'efface qu'une fois la pile chargée : un chunk injoignable la laisse, à réessayer. */
+        void import('@/lib/e2ee/e2ee-runtime')
+          .then(({ sendEndToEnd }) => {
+            discardSendAction({ conversationId, clientMessageId: messageId });
+            return sendEndToEnd({
               conversationId,
               peerUserId,
               viewerId,
@@ -222,8 +235,11 @@ export function useSend(params: {
               text: failed.message.content,
               language: failed.message.originalLanguage,
               replyTo: failed.message.replyTo ?? null,
-            }),
-          )
+              ...(regimeEpoch === undefined ? {} : { regimeEpoch }),
+              opened: openedSink,
+              bubbles: LOCAL_BUBBLES,
+            });
+          })
           .catch(() => undefined);
         return;
       }

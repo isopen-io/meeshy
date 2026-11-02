@@ -1023,6 +1023,7 @@ const pt = {
   'send.failure.tooMany': 'muitas mensagens de uma vez — tente novamente em instantes',
   'send.failure.rejected': 'mensagem recusada',
   'send.failure.gatewayUnavailable': 'o servidor está indisponível',
+  'send.failure.e2eePeerNotEnrolled': 'seu contato ainda não tem um dispositivo criptografado',
   'message.deleted': 'Mensagem excluída',
   'message.expired.a11y': 'Mensagem efêmera expirada',
   'message.story.reply': 'resposta ao story',

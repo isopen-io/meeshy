@@ -673,6 +673,24 @@
         "source": "Mesure du 2026-10-10 (`bun run build` puis gzip -9) : 0,20 Ko -- l'accord a la traduction sur l'appareil (#9898, `lib/device-translation/consent.ts`). Charge par `import()` depuis le fil ET depuis les reglages : un import statique depuis l'un des deux ferait de leurs chunks de route un chunk partage, et son adresse grossirait le point d'entree (budget de premiere peinture). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
       }
     },
+    "e2ee_runtime": {
+      "pattern": "^assets/e2ee-runtime-[A-Za-z0-9_-]{7,8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 11,
+        "status": "CIBLE -- MESUREE PAR #14592, NON ARBITREE",
+        "source": "Mesure du 2026-11-02 sur feat/web-e2ee-libsignal (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 9,73 Ko -- la pile E2EE du navigateur (#14592, `lib/e2ee/e2ee-runtime.ts` : enrolement, coffre IndexedDB scelle, scellement Sesame, ouverture des enveloppes, ecoute de `e2ee:envelope`). Chargee par `import()` depuis `use-end-to-end-thread.ts` (ouverture d'un tete-a-tete chiffre de bout en bout) et `use-send.ts` (envoi d'un texte scelle, `sendEndToEnd`), jamais ailleurs : un seul chunk pour la lecture et l'envoi, un chunk partage entre les deux (« sealer ») apparaissait quand l'envoi avait le sien. Elle n'importe STATIQUEMENT ni `realtime` (accroche par `import()`), ni `opened-messages` ni `local-message` (remis par le fil : les importer fendait le chunk `query` et ajoutait un nom a la carte de prechargement de l'entree), ni un validateur `zod` (constantes lues dans `@meeshy/shared/types/e2ee-protocol`, sans schema). Le binaire WASM de libsignal (610 135 octets bruts, 222 711 gzip -9) n'est PAS compte ici : `measure-weight.mjs` ne collecte que `.js` et `.css`, et le navigateur ne le telecharge qu'au premier `loadLibsignalEngine()`. Arrondi au Ko SUPERIEUR (10) + 1 Ko de marge."
+      }
+    },
+    "libsignal_glue": {
+      "pattern": "^assets/libsignal-[A-Za-z0-9_-]{7,8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #14592, NON ARBITREE",
+        "source": "Mesure du 2026-11-02 sur feat/web-e2ee-libsignal (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 2,66 Ko -- la colle wasm-bindgen de libsignal (`lib/e2ee/libsignal/libsignal.js`, generee par `packages/libsignal-wasm/build.sh`). Chargee par `import()` depuis `libsignal-engine.ts`. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+      }
+    },
     "floating_menus": {
       "pattern": "^assets/floating-menus-",
       "kb": {

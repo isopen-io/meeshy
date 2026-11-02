@@ -40,9 +40,15 @@ export class E2EEDevicesMismatchUnresolved extends Error {
   }
 }
 
-/** Ce que `deliver` lève quand la passerelle répond 409 `E2EE_DEVICES_MISMATCH`. */
+/**
+ * Ce que `deliver` lève quand la passerelle répond 409 `E2EE_DEVICES_MISMATCH`.
+ * L'écart détaillé est facultatif : chaque tentative RELIT l'annuaire (appareils
+ * apparus, générations changées, appareils retirés), ce qui suffit à converger.
+ * Le détail, quand il est là, ne sert qu'à oublier tout de suite les sessions
+ * des appareils retirés ou périmés.
+ */
 export class E2EEDevicesMismatchError extends Error {
-  constructor(readonly mismatch: E2EEDevicesMismatch) {
+  constructor(readonly mismatch: E2EEDevicesMismatch | null) {
     super('e2ee: 409 devices mismatch');
     this.name = 'E2EEDevicesMismatchError';
   }
@@ -133,7 +139,7 @@ export function createMessageSealer(params: {
           return await deliver(sealed);
         } catch (error) {
           if (!(error instanceof E2EEDevicesMismatchError)) throw error;
-          for (const ref of [...error.mismatch.stale, ...error.mismatch.extra]) await cipher.deleteSession(ref);
+          for (const ref of [...(error.mismatch?.stale ?? []), ...(error.mismatch?.extra ?? [])]) await cipher.deleteSession(ref);
         }
       }
       throw new E2EEDevicesMismatchUnresolved();

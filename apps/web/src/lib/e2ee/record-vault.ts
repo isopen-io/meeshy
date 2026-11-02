@@ -210,10 +210,20 @@ export function indexedDbSealedBackend(params: { readonly name: string; readonly
         const existing: unknown = await request(db.transaction(STORE_META).objectStore(STORE_META).get('sealKey'));
         if (existing instanceof CryptoKey) return existing;
         const created = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+        /* `add`, jamais `put` : sans Web Locks, deux onglets peuvent créer chacun
+           une clé ; la seconde écriture échoue au lieu d'écraser la première, et
+           l'onglet perdant relit la gagnante — aucune ligne scellée ne devient
+           illisible. */
         const write = db.transaction(STORE_META, 'readwrite');
-        write.objectStore(STORE_META).put(created, 'sealKey');
-        await done(write);
-        return created;
+        write.objectStore(STORE_META).add(created, 'sealKey');
+        try {
+          await done(write);
+          return created;
+        } catch (error) {
+          const winner: unknown = await request(db.transaction(STORE_META).objectStore(STORE_META).get('sealKey'));
+          if (winner instanceof CryptoKey) return winner;
+          throw error;
+        }
       })()),
     loadAll: async () => {
       const db = await open();

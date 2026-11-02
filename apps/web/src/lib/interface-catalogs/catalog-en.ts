@@ -1019,6 +1019,7 @@ const en = {
   'send.failure.tooMany': 'too many messages at once — try again in a moment',
   'send.failure.rejected': 'message rejected',
   'send.failure.gatewayUnavailable': 'the server is unavailable',
+  'send.failure.e2eePeerNotEnrolled': 'your contact has no encrypted device yet',
   'message.deleted': 'Message deleted',
   'message.expired.a11y': 'Ephemeral message expired',
   'message.story.reply': 'reply to their story',

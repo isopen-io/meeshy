@@ -9,12 +9,8 @@
  * transaction scellée que la composition de ce qui part : une pré-clé publiée
  * a toujours sa clé privée sur l'appareil.
  */
-import {
-  deviceBindingMessage,
-  E2EE_ERROR_CODES,
-  type E2EEEnrollDeviceRequest,
-  type E2EEPublishKeysRequest,
-} from '@meeshy/shared/types/e2ee-directory';
+import type { E2EEEnrollDeviceRequest, E2EEPublishKeysRequest } from '@meeshy/shared/types/e2ee-directory';
+import { deviceBindingMessage, E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-protocol';
 
 import { RECORD_KINDS, type E2EECryptoEngine, type EngineLocalDevice } from './engine';
 import { base64 } from './bytes';

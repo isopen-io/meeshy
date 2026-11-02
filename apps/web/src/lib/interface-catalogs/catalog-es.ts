@@ -1019,6 +1019,7 @@ const es = {
   'send.failure.tooMany': 'demasiados mensajes a la vez — inténtalo de nuevo en un momento',
   'send.failure.rejected': 'mensaje rechazado',
   'send.failure.gatewayUnavailable': 'el servidor no está disponible',
+  'send.failure.e2eePeerNotEnrolled': 'tu contacto aún no tiene un dispositivo cifrado',
   'message.deleted': 'Mensaje eliminado',
   'message.expired.a11y': 'Mensaje efímero caducado',
   'message.story.reply': 'respuesta a su historia',

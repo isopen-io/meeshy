@@ -16,23 +16,24 @@ import type { ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-e
  * écrit un tête-à-tête chiffré de bout en bout (libsignal en WASM, `lib/e2ee/`).
  * La loi partagée en tire le reste : un ANALYST voit le bout en bout disponible
  * en tête-à-tête et « bientôt » pour un groupe, un rôle inférieur ne le voit pas.
+ * Fail-closed : tant que le moteur libsignal n'est pas CHARGÉ sur ce navigateur
+ * (`lib/e2ee/engine-readiness.ts`), ou s'il a échoué, le web se dit incapable.
  *
  * Seul l'écran de création choisit un mode : les autres créations (profil,
  * partage, carte de contact, clavier d'appel, humeur, réponse depuis une
  * notification) n'en envoient aucun, la passerelle pose Serveur.
  */
 
-/** Le web lit et écrit un tête-à-tête chiffré de bout en bout (libsignal en WASM, #14592) ; les groupes suivent la loi partagée. */
-export const WEB_END_TO_END_SUPPORTED = true;
-
 export function webCreationEncryptionOffer(params: {
   readonly platformRole: string | null;
   readonly conversationType: 'direct' | 'group';
+  /** Le moteur libsignal s'est chargé sur ce navigateur (`engineReadiness` = `ready`). */
+  readonly endToEndReady: boolean;
 }): CreationEncryptionOffer {
   return creationEncryptionOffer({
     platformRole: params.platformRole,
     conversationType: params.conversationType,
-    endToEndSupported: WEB_END_TO_END_SUPPORTED,
+    endToEndSupported: params.endToEndReady,
   });
 }
 

@@ -36,6 +36,21 @@ export function forgetOpened(): void {
   openedMessagesStore.setState({ opened: {}, undecryptable: {} });
 }
 
+/**
+ * Ce que la pile chargée à la demande (`e2ee-runtime.ts`)
+ * reçoit pour publier dans la mémoire du fil. Elle ne l'importe pas : ce
+ * module vit avec le fil, et l'importer depuis un chunk différé en ferait un
+ * chunk partagé de plus, nommé dans la carte de préchargement de l'entrée
+ * (`budgets.json › first_paint`).
+ */
+export type OpenedSink = {
+  readonly publishOpened: (messageId: string, opened: OpenedText) => void;
+  readonly publishUndecryptable: (messageId: string) => void;
+  readonly forgetOpened: () => void;
+};
+
+export const openedSink: OpenedSink = { publishOpened, publishUndecryptable, forgetOpened };
+
 const provenance = new WeakSet<object>();
 
 /** Marque un objet comme ouvert ici ; seul ce module en fabrique. */

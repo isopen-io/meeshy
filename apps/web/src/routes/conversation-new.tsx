@@ -16,6 +16,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { candidatesFor, friendsOf } from '@/lib/conversation-new/candidates';
 import { CREATION_FAILED, creationOutcomeOf } from '@/lib/conversation-new/creation';
 import { chosenCreationMode, webCreationEncryptionOffer } from '@/lib/conversation-new/encryption';
+import { engineReadiness } from '@/lib/e2ee/engine-readiness';
 import {
   EMPTY_GROUP_DRAFT,
   GROUP_CREATION_FAILED,
@@ -132,7 +133,16 @@ export default function ConversationNewScreen() {
     enabled: searching,
   });
 
-  const encryptionOffer = useMemo(() => webCreationEncryptionOffer({ platformRole, conversationType: mode }), [platformRole, mode]);
+  /* #14592 — fail-closed : le bout en bout ne s'offre qu'une fois libsignal chargé ICI ; le chargement ne part que pour un rôle à qui la loi le montre. */
+  const endToEndReady = useStore(engineReadiness.store, (state) => state === 'ready');
+  const encryptionOffer = useMemo(
+    () => webCreationEncryptionOffer({ platformRole, conversationType: mode, endToEndReady }),
+    [platformRole, mode, endToEndReady],
+  );
+  const offersEndToEnd = encryptionOffer.choices.some((choice) => choice.mode === 'e2ee');
+  useEffect(() => {
+    if (offersEndToEnd) void engineReadiness.ensure();
+  }, [offersEndToEnd]);
   const encryptionMode = chosenCreationMode(encryptionOffer, pickedEncryption);
 
   const view = candidatesFor({ friends, query, searchResults: searching ? results.data : undefined, viewerId });

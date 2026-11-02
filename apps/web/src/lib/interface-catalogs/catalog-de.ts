@@ -1019,6 +1019,7 @@ const de = {
   'send.failure.tooMany': 'zu viele Nachrichten auf einmal — versuche es gleich erneut',
   'send.failure.rejected': 'Nachricht abgelehnt',
   'send.failure.gatewayUnavailable': 'der Server ist nicht verfügbar',
+  'send.failure.e2eePeerNotEnrolled': 'dein Kontakt hat noch kein verschlüsseltes Gerät',
   'message.deleted': 'Nachricht gelöscht',
   'message.expired.a11y': 'Flüchtige Nachricht abgelaufen',
   'message.story.reply': 'Antwort auf die Story',

@@ -3,6 +3,7 @@ import type { ApiFailure } from '@/lib/api/http';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
+import { E2EE_ATTACHMENTS_NOT_YET, E2EE_PEER_NOT_ENROLLED, E2EE_WEB_UNAVAILABLE } from '@/lib/e2ee/send-codes';
 import { E2EE_PLAINTEXT_REFUSED, GLOBAL_ADULTS_ONLY } from '@/lib/write-restriction';
 
 import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kind-rules';
@@ -42,6 +43,11 @@ export function sendFailureReason(
   const endToEnd = (): string => translate(language, shell ? 'composer.writeRestriction.endToEnd.shell' : 'composer.writeRestriction.endToEnd');
   /* #12986 — le refus LOCAL d'un clair vers une conversation vue chiffrée porte le statut 0 : ce n'est pas une coupure. */
   if (failure.code === E2EE_PLAINTEXT_WITHHELD) return endToEnd();
+  /* #14592 — les refus locaux de l'envoi chiffré par le navigateur (statut 0 aussi) :
+     ce navigateur n'a pas pu sceller, ou ce qui part n'est pas du texte ⇒ « écrivez
+     depuis l'app » ; le correspondant n'a aucun appareil qui chiffre ⇒ sa cause. */
+  if (failure.code === E2EE_WEB_UNAVAILABLE || failure.code === E2EE_ATTACHMENTS_NOT_YET) return endToEnd();
+  if (failure.code === E2EE_PEER_NOT_ENROLLED) return translate(language, 'send.failure.e2eePeerNotEnrolled');
   if (failure.status === 0)
     return translate(language, failure.code === 'TIMEOUT' ? 'send.failure.timeout' : 'send.failure.offline');
   /**

@@ -97,6 +97,28 @@ describe('deux navigateurs échangent de bout en bout à travers une passerelle 
     expect(server.envelopes.map((envelope) => envelope.recipientDeviceId).sort()).toEqual([1, 2]);
   });
 
+  test('un 409 Sesame SANS le détail de l\'écart (le transport ne le porte pas) se résout en relisant l\'annuaire', async () => {
+    const server = fakeE2EEServer();
+    const aliceClient = await browser(server, ALICE).open();
+    await browser(server, BOB).open();
+    const lateBob = browser(server, BOB);
+    let first = true;
+    const messageId = await aliceClient.sealer.sealAndDeliver(e2eeContent({ text: 'x', conversationId: CONVERSATION, sentAt: 1 }), BOB, async (sealed) => {
+      if (first) {
+        first = false;
+        await lateBob.open();
+      }
+      try {
+        return server.relay({ senderUserId: ALICE, peerUserId: BOB, conversationId: CONVERSATION, sealed });
+      } catch (error) {
+        if (error instanceof E2EEDirectoryError && error.code === E2EE_ERROR_CODES.DEVICES_MISMATCH) throw new E2EEDevicesMismatchError(null);
+        throw error;
+      }
+    });
+    expect(typeof messageId).toBe('string');
+    expect(server.envelopes.map((envelope) => envelope.recipientDeviceId).sort()).toEqual([1, 2]);
+  });
+
   test('un correspondant sans appareil chiffré ne reçoit rien, et rien ne part en clair', async () => {
     const server = fakeE2EEServer();
     const aliceClient = await browser(server, ALICE).open();

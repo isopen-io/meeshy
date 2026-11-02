@@ -5,6 +5,7 @@ import { sessionStore } from '@/lib/api/session';
 import type { Conversation, Message } from '@/lib/api/types';
 
 import { directPeerOf } from './direct-peer';
+import { openedSink } from './opened-messages';
 
 const isEndToEndMessage = (message: Message): boolean =>
   message.isEncrypted === true && (message.encryptionMode === 'e2ee' || message.encryptionMetadata?.protocol === 'libsignal-v1');
@@ -25,8 +26,8 @@ export function useEndToEndThread(params: {
   const ids = useMemo(() => params.messages.filter(isEndToEndMessage).map((message) => message.id).join(','), [params.messages]);
   useEffect(() => {
     if (!params.sealed || !direct || viewerId === '') return;
-    void import('./runtime')
-      .then(({ hydrateOpened }) => hydrateOpened(viewerId, ids === '' ? [] : ids.split(',')))
+    void import('./e2ee-runtime')
+      .then(({ hydrateOpened }) => hydrateOpened(viewerId, ids === '' ? [] : ids.split(','), openedSink))
       .catch(() => undefined);
   }, [params.sealed, direct, viewerId, ids]);
 }

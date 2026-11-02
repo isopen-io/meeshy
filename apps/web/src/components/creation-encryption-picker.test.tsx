@@ -40,9 +40,11 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 
-function Host(props: { readonly platformRole: string | null; readonly conversationType: 'direct' | 'group' }) {
+type HostProps = { readonly platformRole: string | null; readonly conversationType: 'direct' | 'group'; readonly endToEndReady?: boolean };
+
+function Host(props: HostProps) {
   const [picked, setPicked] = useState<CreationEncryptionMode | null>(null);
-  const offer = webCreationEncryptionOffer(props);
+  const offer = webCreationEncryptionOffer({ ...props, endToEndReady: props.endToEndReady ?? true });
   return (
     <CreationEncryptionPicker
       offer={offer}
@@ -55,7 +57,7 @@ function Host(props: { readonly platformRole: string | null; readonly conversati
   );
 }
 
-const mount = async (props: { readonly platformRole: string | null; readonly conversationType: 'direct' | 'group' }) => {
+const mount = async (props: HostProps) => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -120,6 +122,13 @@ describe('ce qui est offert, rôle par rôle', () => {
     expect(labelOf(radio('e2ee'))).toBe('Bout en bout');
     expect(radio('e2ee')?.disabled).toBe(false);
     expect(radio('e2ee')?.checked).toBe(true);
+  });
+
+  test('ANALYST, tête-à-tête, moteur libsignal pas (encore) chargé : grisé « Bientôt disponible sur le web », Serveur coché (fail-closed)', async () => {
+    await mount({ platformRole: 'ANALYST', conversationType: 'direct', endToEndReady: false });
+    expect(radio('e2ee')?.disabled).toBe(true);
+    expect(describedText(radio('e2ee'))).toBe('Bientôt disponible sur le web');
+    expect(radio('server')?.checked).toBe(true);
   });
 
   test('ADMIN, groupe : « Bientôt disponible pour les groupes »', async () => {

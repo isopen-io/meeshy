@@ -84,6 +84,7 @@ const frThreadStates = {
   'send.failure.tooMany': 'trop de messages d’un coup — réessayez dans un instant',
   'send.failure.rejected': 'message refusé',
   'send.failure.gatewayUnavailable': 'la passerelle est indisponible',
+  'send.failure.e2eePeerNotEnrolled': 'votre contact n’a encore aucun appareil chiffré',
 
   /* LA PASTILLE DES RÉACTIONS D'UNE PIÈCE (#7894) — valeurs du catalogue iOS
      (`media.reactions.badge.a11y`, `media.reactions.badge.mine.a11y`). */

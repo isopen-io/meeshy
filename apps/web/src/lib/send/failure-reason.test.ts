@@ -69,6 +69,21 @@ describe('sendFailureReason', () => {
     expect(sendFailureReasonIn(failure(0, { code: 'E2EE_PLAINTEXT_WITHHELD' }), 'en')).toBe('End-to-end encrypted conversation: write from the Meeshy app');
   });
 
+  /* #14592 — les refus LOCAUX de l'envoi chiffré par le navigateur portent le statut 0 : jamais « réseau indisponible ». */
+  test('E2EE_PEER_NOT_ENROLLED dit que le correspondant n’a aucun appareil chiffré, dans les sept langues', () => {
+    expect(sendFailureReason(failure(0, { code: 'E2EE_PEER_NOT_ENROLLED' }))).toBe('votre contact n’a encore aucun appareil chiffré');
+    const phrases = SUPPORTED_INTERFACE_LANGUAGES.map((language) => sendFailureReasonIn(failure(0, { code: 'E2EE_PEER_NOT_ENROLLED' }), language));
+    expect(new Set(phrases).size).toBe(SUPPORTED_INTERFACE_LANGUAGES.length);
+    for (const phrase of phrases) expect(phrase).not.toContain('send.failure');
+  });
+
+  test('E2EE_WEB_UNAVAILABLE et E2EE_ATTACHMENTS_NOT_YET renvoient vers l’app, jamais « réseau indisponible »', () => {
+    for (const code of ['E2EE_WEB_UNAVAILABLE', 'E2EE_ATTACHMENTS_NOT_YET']) {
+      expect(sendFailureReason(failure(0, { code }))).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
+      expect(sendFailureReasonIn(failure(0, { code }), 'en')).toBe('End-to-end encrypted conversation: write from the Meeshy app');
+    }
+  });
+
   test('E2EE_PLAINTEXT_REFUSED dit que la conversation est chiffrée, jamais « envoi refusé »', () => {
     expect(sendFailureReason(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }))).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
     expect(sendFailureReasonIn(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }), 'en')).toBe('End-to-end encrypted conversation: write from the Meeshy app');

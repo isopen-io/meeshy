@@ -10,7 +10,8 @@
  * forme scellée, comme la passerelle le sert.
  */
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
-import { E2EE_ERROR_CODES, LIBSIGNAL_PROTOCOL, type E2EEEnvelope } from '@meeshy/shared/types/e2ee-directory';
+import type { E2EEEnvelope } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_ERROR_CODES, LIBSIGNAL_PROTOCOL } from '@meeshy/shared/types/e2ee-protocol';
 import type { StoreApi } from 'zustand/vanilla';
 import type { QueryClient } from '@tanstack/react-query';
 
@@ -18,12 +19,12 @@ import type { ApiFailure, ApiResult, HttpTransport } from '@/lib/api/http';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { messagesQueryKey, projectAck, upsertThreadMessage, type SentMessageAck } from '@/lib/api/messages';
 import type { Message, Participant } from '@/lib/api/types';
-import { confirmedMessageOf, localMessageOf } from '@/lib/send/local-message';
+import type { confirmedMessageOf, localMessageOf } from '@/lib/send/local-message';
 import type { OutboxState } from '@/lib/send/outbox-store';
 
 import { e2eeContent } from './content';
-import { decodeMismatch } from './directory';
-import { publishOpened } from './opened-messages';
+import type { E2EE_PEER_NOT_ENROLLED, E2EE_WEB_UNAVAILABLE } from './send-codes';
+import type { OpenedSink } from './opened-messages';
 import { E2EEDevicesMismatchError, E2EERecipientHasNoDevice, type SealedMessage } from './sealer';
 import type { E2EEClient } from './client';
 
@@ -83,8 +84,7 @@ export async function postEndToEndMessage(params: {
     body: params.body,
   });
   if (!result.ok) {
-    const mismatch = result.code === E2EE_ERROR_CODES.DEVICES_MISMATCH ? decodeMismatch(result.e2eeMismatch) : null;
-    if (mismatch !== null) throw new E2EEDevicesMismatchError(mismatch);
+    if (result.code === E2EE_ERROR_CODES.DEVICES_MISMATCH) throw new E2EEDevicesMismatchError(null);
     throw new EndToEndSendRefused(result);
   }
   const ack = projectAck(result.data);
@@ -92,22 +92,35 @@ export async function postEndToEndMessage(params: {
   return ack;
 }
 
-export const E2EE_ATTACHMENTS_NOT_YET = 'E2EE_ATTACHMENTS_NOT_YET';
-export const E2EE_PEER_NOT_ENROLLED = 'E2EE_PEER_NOT_ENROLLED';
-export const E2EE_WEB_UNAVAILABLE = 'E2EE_WEB_UNAVAILABLE';
-
 export type EndToEndDraft = {
   readonly text: string;
   readonly language: string;
   readonly replyTo: Message | null;
 };
 
+/* Les codes LUS par le fil (`send-codes.ts`) : le compilateur vérifie que ces littéraux sont les siens, sans import
+   à l'exécution — un import en ferait un chunk partagé entre le fil et cette pile chargée à la demande. */
+const PEER_NOT_ENROLLED: typeof E2EE_PEER_NOT_ENROLLED = 'E2EE_PEER_NOT_ENROLLED';
+const WEB_UNAVAILABLE: typeof E2EE_WEB_UNAVAILABLE = 'E2EE_WEB_UNAVAILABLE';
+
 const failureOf = (error: unknown): ApiFailure => {
   if (error instanceof EndToEndSendRefused) return error.failure;
   if (error instanceof E2EERecipientHasNoDevice) {
-    return { ok: false, status: 0, error: 'Votre contact n’a pas encore d’appareil qui chiffre', code: E2EE_PEER_NOT_ENROLLED };
+    return { ok: false, status: 0, error: 'Votre contact n’a pas encore d’appareil qui chiffre', code: PEER_NOT_ENROLLED };
   }
-  return { ok: false, status: 0, error: 'Le chiffrement de bout en bout n’a pas abouti', code: E2EE_WEB_UNAVAILABLE };
+  return { ok: false, status: 0, error: 'Le chiffrement de bout en bout n’a pas abouti', code: WEB_UNAVAILABLE };
+};
+
+/**
+ * La bulle optimiste et sa confirmation, celles de l'envoi en clair
+ * (`lib/send/local-message.ts`). REMISES par le fil, jamais importées : ce
+ * module vit dans le chunk `query`, et l'importer depuis ce chunk différé le
+ * fendait en un chunk partagé de plus, nommé dans la carte de préchargement de
+ * l'entrée (`budgets.json › first_paint`).
+ */
+export type LocalBubbles = {
+  readonly localMessageOf: typeof localMessageOf;
+  readonly confirmedMessageOf: typeof confirmedMessageOf;
 };
 
 /**
@@ -126,12 +139,14 @@ export async function performEndToEndSend(params: {
   readonly transport: HttpTransport;
   readonly queryClient: QueryClient;
   readonly outbox: StoreApi<OutboxState>;
+  readonly opened: OpenedSink;
+  readonly bubbles: LocalBubbles;
   readonly now?: () => number;
 }): Promise<void> {
   const { conversationId, draft, outbox } = params;
   const nowMs = (params.now ?? Date.now)();
   const clientMessageId = newClientMessageId();
-  const local = localMessageOf({
+  const local = params.bubbles.localMessageOf({
     clientMessageId,
     conversationId,
     viewerId: params.viewerId,
@@ -161,8 +176,8 @@ export async function performEndToEndSend(params: {
       }),
     );
     await client.rememberSent(ack.id, content);
-    publishOpened(ack.id, { text: draft.text, language: draft.language, senderUserId: params.viewerId });
-    const confirmed = confirmedMessageOf(local, ack);
+    params.opened.publishOpened(ack.id, { text: draft.text, language: draft.language, senderUserId: params.viewerId });
+    const confirmed = params.bubbles.confirmedMessageOf(local, ack);
     /* La rangée qui entre au cache (rangé sur le disque) : LISTE BLANCHE, sans
        texte, sans langue, sans la citation (qui porte le clair ouvert du message
        cité) — la forme que la passerelle sert. Le fil rend le texte depuis la
