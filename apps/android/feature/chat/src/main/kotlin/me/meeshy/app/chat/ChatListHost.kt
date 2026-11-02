@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.focus.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.selection.MessageSelection
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -274,18 +276,23 @@ internal fun ChatListHost(
     val haptics = rememberMeeshyHaptics()
     val selectionContext = LocalContext.current
     val capReachedMessage = stringResource(R.string.chat_selection_cap_reached)
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val openMessageMenu: (String) -> Unit = { id ->
+        MessageMenuKeyboard.open(id, { focusManager.clearFocus(force = true); keyboardController?.hide() }, actions.onMessageLongPress)
+    }
     val rowActions = remember(actions, bubbleFrames, profileOpener, haptics, capReachedMessage, host.navigation) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
-            onLongPress = { messageId -> actions.onMessageLongPress(messageId) },
+            onLongPress = { messageId -> openMessageMenu(messageId) },
             onReactionClick = { messageId, emoji -> actions.toggleReaction(messageId, emoji) },
             onReactionLongPress = { messageId -> actions.openReactionDetails(messageId) },
             onImageClick = { messageId, index -> actions.openImageViewer(messageId, index) },
             onImageLongPress = { messageId, attachmentId ->
                 val overlay = actions.pieceOverlayFor(messageId, attachmentId)
                 // Message protégé : l'appui long vise le message entier, qui rend sa forme protégée.
-                if (overlay != null) pieceOverlay = overlay else actions.onMessageLongPress(messageId)
+                if (overlay != null) pieceOverlay = overlay else openMessageMenu(messageId)
             },
             onFileClick = { messageId, attachmentId ->
                 val bubble = currentMessages.firstOrNull { it.messageId == messageId }
@@ -366,7 +373,7 @@ internal fun ChatListHost(
             model = overlay,
             accent = remember(state.accentColorHex) { hexColor(state.accentColorHex ?: DEFAULT_PLACE_ACCENT, hexColor(DEFAULT_PLACE_ACCENT)) },
             onReply = { actions.startReply(overlay.messageId) },
-            onWholeMessage = { actions.onMessageLongPress(overlay.messageId) },
+            onWholeMessage = { openMessageMenu(overlay.messageId) },
             onSave = { attachmentId ->
                 // Dès l'API 29 la porte ne demande rien ; en 26–28 elle obtient WRITE_EXTERNAL_STORAGE avant d'écrire.
                 scope.launch {
