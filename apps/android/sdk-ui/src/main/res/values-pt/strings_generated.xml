@@ -41,6 +41,14 @@
     <string name="bubble_contact_card_a11y_on_meeshy">No Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">No Meeshy</string>
     <string name="bubble_contact_card_shared">Contato compartilhado</string>
+    <string name="bubble_joinNotice_joined">%1$s entrou na conversa</string>
+    <string name="bubble_joinNotice_noAccount">sem conta</string>
+    <string name="bubble_joinNotice_rule_files_allowed">pode enviar arquivos</string>
+    <string name="bubble_joinNotice_rule_files_denied">não pode enviar arquivos</string>
+    <string name="bubble_joinNotice_rule_images_allowed">pode enviar fotos</string>
+    <string name="bubble_joinNotice_rule_images_denied">não pode enviar fotos</string>
+    <string name="bubble_joinNotice_rule_messages_allowed">pode escrever mensagens</string>
+    <string name="bubble_joinNotice_rule_messages_denied">não pode escrever mensagens</string>
     <string name="bubble_protection_after_read">Desaparece após a leitura</string>
     <string name="bubble_story_citation_answer">resposta ao story</string>
     <string name="bubble_story_citation_open_hint">Abre o story citado</string>
