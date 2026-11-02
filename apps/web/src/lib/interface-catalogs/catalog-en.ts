@@ -504,6 +504,7 @@ const en = {
 
   'media.video.play': 'Play video',
   'media.video.pause': 'Pause',
+  'media.video.paused': 'Paused',
   'media.video.position': 'Playback position',
   'media.audio.position': 'Playback position',
   'media.audio.speed': 'Playback speed',
