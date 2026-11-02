@@ -50283,53 +50283,6 @@
         }
       }
     },
-    "accessibility.last_message": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "آخر رسالة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "letzte Nachricht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "last message"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "último mensaje"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "dernier message"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ultimo messaggio"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "última mensagem"
-          }
-        }
-      }
-    },
     "accessibility.last_message_preview": {
       "extractionState": "manual",
       "localizations": {
@@ -109184,6 +109137,53 @@
         }
       }
     },
+    "search.posts.opens": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح المحتوى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet den Inhalt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the content"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el contenido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre le contenu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apre il contenuto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre o conteúdo"
+          }
+        }
+      }
+    },
     "settings.security.biometric_unlock": {
       "extractionState": "manual",
       "localizations": {
@@ -113330,100 +113330,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Este story não está mais disponível"
-          }
-        }
-      }
-    },
-    "conversation.summary.hidden": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رسالة واحدة مخفية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 ausgeblendete Nachricht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 hidden message"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensaje oculto"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 message caché"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 messaggio nascosto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensagem oculta"
-          }
-        }
-      }
-    },
-    "conversation.summary.view_once": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رسالة واحدة تُعرض مرة واحدة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 Einmalansicht-Nachricht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 view-once message"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensaje de vista única"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 message vue unique"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 messaggio visualizzabile una volta"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensagem de visualização única"
           }
         }
       }
@@ -170648,43 +170554,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الرسائل والمحادثات والمستخدمون"
+            "value": "الرسائل والمنشورات والمستخدمون"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nachrichten, Unterhaltungen, Benutzer"
+            "value": "Nachrichten, Beiträge, Benutzer"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messages, conversations, users"
+            "value": "Messages, posts, users"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mensajes, conversaciones, usuarios"
+            "value": "Mensajes, publicaciones, usuarios"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messages, conversations, utilisateurs"
+            "value": "Messages, posts, utilisateurs"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messaggi, conversazioni, utenti"
+            "value": "Messaggi, post, utenti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mensagens, conversas, usuários"
+            "value": "Mensagens, posts, usuários"
           }
         }
       }
@@ -199116,6 +199022,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Visualizações"
+          }
+        }
+      }
+    },
+    "tab.posts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المنشورات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beiträge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posts"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posts"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posts"
           }
         }
       }
