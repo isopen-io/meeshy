@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// La fabrique des segments du journal de sous-titres (#11522) : le texte reste
