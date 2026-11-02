@@ -54,7 +54,8 @@ nonisolated struct StoryActionRailPlan: Equatable {
         hasAudibleSound: Bool,
         commentCount: Int,
         hasTranslatableContent: Bool,
-        canCompose: Bool = false
+        canCompose: Bool = false,
+        isRepublishable: Bool = true
     ) -> StoryActionRailPlan {
         StoryActionRailPlan(
             showsReact: !isOwnStory,
@@ -67,7 +68,7 @@ nonisolated struct StoryActionRailPlan: Equatable {
             // le choix, plus l'appartenance au rail. Gater ici sur
             // `isPublicStory` rendait la règle inatteignable : le bouton
             // n'existait pas pour les seules stories qu'elle concerne.
-            showsRepost: !isOwnStory,
+            showsRepost: !isOwnStory && isRepublishable,
             showsViews: isOwnStory,
             showsExport: isOwnStory,
             showsSound: hasAudibleSound,
@@ -79,6 +80,11 @@ nonisolated struct StoryActionRailPlan: Equatable {
             showsTranslations: hasTranslatableContent,
             showsCompose: !isOwnStory && canCompose
         )
+    }
+
+    /// La loi d'audience n'offre RIEN à une story de Sang (RG-18) : pas de bouton pour un choix vide.
+    static func isRepublishable(visibility: String?) -> Bool {
+        !StoryRepostAudience.allowed(fromRawValue: visibility).isEmpty
     }
 }
 
@@ -316,7 +322,8 @@ struct StoryActionSidebarView: View {
             hasAudibleSound: storyHasAudibleSound,
             commentCount: currentStory?.commentCount ?? 0,
             hasTranslatableContent: storyHasTranslatableContent,
-            canCompose: composeTarget != nil
+            canCompose: composeTarget != nil,
+            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility)
         )
     }
 
@@ -584,7 +591,8 @@ struct StoryActionSidebarView: View {
                 hasAudibleSound: storyHasAudibleSound,
                 commentCount: storyCommentCount,
                 hasTranslatableContent: storyHasTranslatableContent,
-                canCompose: railPlan.showsCompose
+                canCompose: railPlan.showsCompose,
+                isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility)
             )
         }
     }
