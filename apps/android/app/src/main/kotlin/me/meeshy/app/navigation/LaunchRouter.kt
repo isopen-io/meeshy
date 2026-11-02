@@ -50,7 +50,7 @@ data class LaunchExtras(
  * `MeeshyApp` wiring a thin layer that only reads extras and calls `navigate`.
  */
 object LaunchRouter {
-    fun route(extras: LaunchExtras): String? = when {
+    fun route(extras: LaunchExtras, signedInUserId: String? = null): String? = when {
         !extras.callId.isNullOrBlank() -> CallRoute.incoming(
             callId = extras.callId,
             conversationId = extras.conversationId.orEmpty(),
@@ -59,8 +59,12 @@ object LaunchRouter {
             autoAnswer = extras.autoAnswer,
             callerId = extras.callerId.orEmpty(),
         )
-        else -> tapRoute(extras) ?: sharedMediaRoute(extras)
+        else -> tapRoute(extras, signedInUserId) ?: sharedMediaRoute(extras)
     }
+
+    /** Une bannière posée pour un autre compte que celui connecté n'ouvre rien : pas de navigation fantôme. */
+    private fun isForAnotherAccount(recipientUserId: String?, signedInUserId: String?): Boolean =
+        recipientUserId != null && signedInUserId != null && recipientUserId != signedInUserId
 
     /** Un média partagé par une autre app s'ouvre dans l'hôte du composeur ; un jeton sans la forme de ceux du store n'ouvre rien. */
     private fun sharedMediaRoute(extras: LaunchExtras): String? =
@@ -71,7 +75,8 @@ object LaunchRouter {
      * Une charge sans type mais avec une conversation (anciennes notifications posees avant les
      * extras du toucher) ouvre toujours sa conversation.
      */
-    private fun tapRoute(extras: LaunchExtras): String? {
+    private fun tapRoute(extras: LaunchExtras, signedInUserId: String?): String? {
+        if (isForAnotherAccount(extras.tap.recipientUserId, signedInUserId)) return null
         val payload = extras.tap.copy(conversationId = extras.conversationId?.takeIf { it.isNotBlank() } ?: extras.tap.conversationId)
         return when (val destination = PushTapDestination.resolve(payload, extras.routeHint)) {
             is PushTapDestination.Conversation -> Routes.chat(destination.conversationId, destination.highlightMessageId)
