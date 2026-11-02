@@ -118,6 +118,22 @@ class PostSceneReadingTest {
     }
 
     @Test
+    fun `a served post of one scene keeps the sound its document declares, across its own re-encoding`() {
+        val post = servedFixture("post-sound-original")
+
+        val replayed = json.decodeFromString(ApiPost.serializer(), json.encodeToString(ApiPost.serializer(), post))
+
+        assertThat(post.storyEffects?.canvas?.sound?.source?.t).isEqualTo("original")
+        assertThat(replayed.storyEffects?.canvas?.sound?.source?.t).isEqualTo("original")
+        assertThat(PostSceneReading.of(replayed.storyEffects)?.scenes).hasSize(1)
+    }
+
+    @Test
+    fun `a served post of one scene without a sound keeps only its flat projection`() {
+        assertThat(servedFixture("minimal-text").storyEffects?.canvas).isNull()
+    }
+
+    @Test
     fun `the first scene stays readable by every consumer of the flat effects`() {
         val post = servedFixture("post-photo-scenes-2")
 

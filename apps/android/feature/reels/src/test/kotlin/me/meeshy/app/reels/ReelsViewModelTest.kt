@@ -30,6 +30,7 @@ import me.meeshy.sdk.post.PostPage
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.feature.reels.R
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
@@ -884,5 +885,31 @@ class ReelsViewModelTest {
 
         assertThat(vm.isOwn(vm.state.value.reels[0])).isTrue()
         assertThat(vm.isOwn(vm.state.value.reels[1])).isFalse()
+    }
+
+    @Test
+    fun `republier monte le compteur au geste et le confirme`() = runTest {
+        coEvery { repository.repost("r1") } returns NetworkResult.Success(ApiPost(id = "rp1"))
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.repost("r1")
+            assertThat(awaitItem()).isEqualTo(FeedbackToastRequest(R.string.reels_toast_reposted, FeedbackKind.Success))
+        }
+        assertThat(vm.state.value.reels.single().repostCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `une republication refusee rend le compteur et le dit`() = runTest {
+        coEvery { repository.repost("r1") } returns NetworkResult.Failure(ApiError("x", httpStatus = 500))
+        val vm = viewModel(thread = listOf(reel("r1")))
+        vm.load()
+
+        vm.toasts.test {
+            vm.repost("r1")
+            assertThat(awaitItem()).isEqualTo(FeedbackToastRequest(R.string.reels_toast_repost_failed, FeedbackKind.Error))
+        }
+        assertThat(vm.state.value.reels.single().repostCount).isEqualTo(0)
     }
 }
