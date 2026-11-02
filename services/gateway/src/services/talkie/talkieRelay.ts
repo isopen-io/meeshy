@@ -7,19 +7,29 @@
  * L'ouverture (`start`) juge tout (`talkieGate.ts`) et compte le débit (limiteur
  * Redis existant). Un fragment, lui, ne touche jamais la base : il vérifie sa
  * session (en mémoire, sur l'instance qui porte la socket de l'émetteur — les
- * fragments arrivent par cette socket-là), ses bornes, et UNE lecture de cache —
- * la coupure posée par un blocage, quelle que soit l'instance qui l'a reçu
- * (`talkieCut.ts`) — puis il repart. Rien n'est stocké : ni fragment, ni copie,
- * ni transcription. La copie en message vocal est l'affaire du client, par le
- * chemin vocal existant, après la prise de parole.
+ * fragments arrivent par cette socket-là), RÉSERVE sa place dans les bornes, fait
+ * UNE lecture de cache — la coupure posée par un blocage, quelle que soit
+ * l'instance qui l'a reçu (`talkieCut.ts`) — puis repart. Rien n'est stocké : ni
+ * fragment, ni copie, ni transcription. La copie en message vocal est l'affaire du
+ * client, par le chemin vocal existant, après la prise de parole.
  *
- * ## Les bornes
+ * ## Les bornes, tenues même en rafale
  *
  * 30 s par prise de parole (une minuterie la ferme même si l'émetteur se tait),
- * 16 Ko par fragment, 512 Ko au total, numéros de séquence strictement
- * croissants. Un fragment hors bornes est IGNORÉ ; dépasser la durée ou le total
- * ferme la prise de parole (`limit`). Une socket n'a qu'une prise de parole
- * ouverte : en ouvrir une autre ferme la précédente.
+ * 16 Ko par fragment, 512 Ko et 300 fragments au total, numéros de séquence
+ * strictement croissants. Séquence, octets et nombre sont RÉSERVÉS avant toute
+ * attente : une rafale arrivée dans le même tour de boucle ne passe pas le
+ * contrôle tout entière. Un fragment hors bornes est IGNORÉ ; dépasser la durée,
+ * le total ou le nombre ferme la prise de parole (`limit`).
+ *
+ * ## Ce qui change pendant qu'on parle
+ *
+ * La prise de parole est REJUGÉE en arrière-plan, au plus toutes les
+ * `REJUDGE_EVERY_MS`, sur l'arrivée d'un fragment : préférence coupée, appel
+ * décroché, Ne pas déranger, conversation passée en chiffrement de bout en bout,
+ * lien redescendu, compte désactivé — elle est coupée (`cut`). La coupure d'un
+ * blocage, elle, vaut dès l'instant où le jugement de l'ouverture a COMMENCÉ :
+ * un blocage acquitté pendant ce jugement ferme aussi la session qui en naît.
  *
  * ## Un blocage coupe, et ne s'annonce pas
  *
@@ -30,6 +40,7 @@ import { randomBytes } from 'node:crypto';
 import {
   TALKIE_ERROR_CODES,
   TALKIE_MAX_CHUNK_BYTES,
+  TALKIE_MAX_CHUNKS,
   TALKIE_MAX_DURATION_MS,
   TALKIE_MAX_TOTAL_BYTES,
   talkieChunkPayloadSchema,
@@ -41,11 +52,12 @@ import {
 } from '@meeshy/shared/types/talkie';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitArgs, ServerEmitIO } from '../../socketio/serverEmit';
-import type { TalkieVerdict } from './talkieGate';
-import { TALKIE_UNAVAILABLE } from './talkieGate';
+import { TALKIE_NOT_ALLOWED, TALKIE_UNAVAILABLE, type TalkieRefusal, type TalkieVerdict } from './talkieGate';
 
 /** La marge laissée au dernier fragment, en transit quand la minuterie tombe. */
 const DURATION_GRACE_MS = 1_000;
+/** Le rejugement d'arrière-plan d'une prise de parole ouverte. */
+export const REJUDGE_EVERY_MS = 2_000;
 
 type Session = {
   readonly talkieId: string;
@@ -54,8 +66,13 @@ type Session = {
   readonly socketId: string;
   readonly codec: TalkieCodec;
   readonly startedAt: number;
+  /** Une coupure posée à partir de cet instant vise la session : celui où son jugement a COMMENCÉ. */
+  readonly cutFrom: number;
   bytes: number;
+  chunks: number;
   lastSeq: number;
+  judgedAt: number;
+  rejudging: boolean;
   timer: ReturnType<typeof setTimeout> | null;
 };
 
@@ -64,19 +81,25 @@ export type TalkieRelayDeps = {
   readonly judge: (fromUserId: string, toUserId: string) => Promise<TalkieVerdict>;
   /** Le débit d'ouverture : `null` quand le compteur est injoignable (fail-closed). */
   readonly withinStartRate: (userId: string) => Promise<boolean | null>;
-  /** L'instant de la DERNIÈRE coupure de la paire orientée, ou `null` (`talkieCut.ts`). */
+  /** L'instant de la DERNIÈRE coupure de la paire orientée, ou `null` ; LÈVE quand le cache partagé est injoignable. */
   readonly cutAt: (fromUserId: string, toUserId: string) => Promise<number | null>;
   readonly now: () => number;
   readonly report: (message: string, error: unknown) => void;
 };
 
-const refusal = (code: string, error: string): TalkieStartAck => ({ success: false, error, code } as TalkieStartAck);
+const refusal = (verdict: TalkieRefusal): TalkieStartAck => ({ success: false, error: verdict.message, code: verdict.code });
+const INVALID: TalkieStartAck = { success: false, error: 'Charge illisible', code: TALKIE_ERROR_CODES.INVALID };
+const RATE_LIMITED: TalkieStartAck = { success: false, error: 'Trop de prises de parole', code: TALKIE_ERROR_CODES.RATE_LIMITED };
 
 const byteLength = (data: Uint8Array | ArrayBuffer): number => data.byteLength;
+const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 export class TalkieRelay {
   private readonly sessions = new Map<string, Session>();
   private readonly bySocket = new Map<string, string>();
+  /** Les sockets dont une ouverture est en cours de jugement, et celles qui sont tombées pendant. */
+  private readonly opening = new Map<string, number>();
+  private readonly lostWhileOpening = new Set<string>();
 
   constructor(private readonly deps: TalkieRelayDeps) {}
 
@@ -87,33 +110,41 @@ export class TalkieRelay {
 
   async start(socketId: string, fromUserId: string, raw: unknown): Promise<TalkieStartAck> {
     const parsed = talkieStartPayloadSchema.safeParse(raw);
-    if (!parsed.success) return refusal(TALKIE_ERROR_CODES.INVALID, 'Charge illisible');
+    if (!parsed.success) return INVALID;
     const toUserId = parsed.data.toUserId.toLowerCase();
+    const cutFrom = this.deps.now();
 
+    this.opening.set(socketId, (this.opening.get(socketId) ?? 0) + 1);
     try {
-      const rate = await this.deps.withinStartRate(fromUserId);
-      if (rate === null) return refusal(TALKIE_UNAVAILABLE.code, TALKIE_UNAVAILABLE.message);
-      if (!rate) return refusal(TALKIE_ERROR_CODES.RATE_LIMITED, 'Trop de prises de parole');
-
-      const verdict = await this.deps.judge(fromUserId, toUserId);
-      if (verdict.ok === false) return refusal(verdict.code, verdict.message);
-    } catch (error) {
-      this.deps.report('Talkie gate failed', error);
-      return refusal(TALKIE_UNAVAILABLE.code, TALKIE_UNAVAILABLE.message);
+      const verdict = await this.admit(fromUserId, toUserId, cutFrom);
+      if (verdict !== null) return verdict;
+      if (this.lostWhileOpening.has(socketId)) return refusal(TALKIE_UNAVAILABLE);
+    } finally {
+      const left = (this.opening.get(socketId) ?? 1) - 1;
+      if (left > 0) this.opening.set(socketId, left);
+      else {
+        this.opening.delete(socketId);
+        this.lostWhileOpening.delete(socketId);
+      }
     }
 
     const previous = this.bySocket.get(socketId);
     if (previous) this.close(previous, 'sender');
 
+    const startedAt = this.deps.now();
     const session: Session = {
       talkieId: randomBytes(12).toString('hex'),
       fromUserId,
       toUserId,
       socketId,
       codec: parsed.data.codec,
-      startedAt: this.deps.now(),
+      startedAt,
+      cutFrom,
       bytes: 0,
+      chunks: 0,
       lastSeq: -1,
+      judgedAt: startedAt,
+      rejudging: false,
       timer: null,
     };
     session.timer = setTimeout(() => this.close(session.talkieId, 'limit'), TALKIE_MAX_DURATION_MS + DURATION_GRACE_MS);
@@ -125,10 +156,28 @@ export class TalkieRelay {
       talkieId: session.talkieId,
       fromUserId,
       codec: session.codec,
-      startedAt: new Date(session.startedAt).toISOString(),
+      startedAt: new Date(startedAt).toISOString(),
       maxDurationMs: TALKIE_MAX_DURATION_MS,
     });
     return { success: true, data: { talkieId: session.talkieId, maxDurationMs: TALKIE_MAX_DURATION_MS, maxChunkBytes: TALKIE_MAX_CHUNK_BYTES } };
+  }
+
+  /** `null` : admis. Le débit, la porte, puis une relecture de la coupure posée PENDANT le jugement. */
+  private async admit(fromUserId: string, toUserId: string, cutFrom: number): Promise<TalkieStartAck | null> {
+    try {
+      const rate = await this.deps.withinStartRate(fromUserId);
+      if (rate === null) return refusal(TALKIE_UNAVAILABLE);
+      if (!rate) return RATE_LIMITED;
+
+      const verdict = await this.deps.judge(fromUserId, toUserId);
+      if (verdict.ok === false) return refusal(verdict);
+
+      const cut = await this.deps.cutAt(fromUserId, toUserId);
+      return cut !== null && cut >= cutFrom ? refusal(TALKIE_NOT_ALLOWED) : null;
+    } catch (error) {
+      this.deps.report('Talkie gate failed', error);
+      return refusal(TALKIE_UNAVAILABLE);
+    }
   }
 
   async chunk(socketId: string, fromUserId: string, raw: unknown): Promise<void> {
@@ -141,10 +190,16 @@ export class TalkieRelay {
     if (size === 0 || size > TALKIE_MAX_CHUNK_BYTES || parsed.data.seq <= session.lastSeq) return;
 
     const receivedAt = this.deps.now();
-    if (receivedAt - session.startedAt > TALKIE_MAX_DURATION_MS + DURATION_GRACE_MS || session.bytes + size > TALKIE_MAX_TOTAL_BYTES) {
+    const overTime = receivedAt - session.startedAt > TALKIE_MAX_DURATION_MS + DURATION_GRACE_MS;
+    if (overTime || session.bytes + size > TALKIE_MAX_TOTAL_BYTES || session.chunks + 1 > TALKIE_MAX_CHUNKS) {
       this.close(session.talkieId, 'limit');
       return;
     }
+    // RÉSERVÉ avant toute attente : un fragment de la même rafale voit déjà ces compteurs.
+    session.lastSeq = parsed.data.seq;
+    session.bytes += size;
+    session.chunks += 1;
+    this.rejudgeIfDue(session, receivedAt);
 
     let cut: number | null;
     try {
@@ -155,13 +210,11 @@ export class TalkieRelay {
       return;
     }
     if (!this.sessions.has(session.talkieId)) return;
-    if (cut !== null && cut >= session.startedAt) {
+    if (cut !== null && cut >= session.cutFrom) {
       this.close(session.talkieId, 'cut', 'recipient');
       return;
     }
 
-    session.bytes += size;
-    session.lastSeq = parsed.data.seq;
     const data = parsed.data.data instanceof ArrayBuffer ? new Uint8Array(parsed.data.data) : parsed.data.data;
     this.sendTo(session.toUserId, SERVER_EVENTS.TALKIE_CHUNK, {
       talkieId: session.talkieId,
@@ -173,6 +226,27 @@ export class TalkieRelay {
     });
   }
 
+  /** Hors du chemin critique : le fragment repart sans l'attendre ; un refus (ou une panne) coupe la suite. */
+  private rejudgeIfDue(session: Session, now: number): void {
+    if (session.rejudging || now - session.judgedAt < REJUDGE_EVERY_MS) return;
+    session.rejudging = true;
+    session.judgedAt = now;
+    this.deps
+      .judge(session.fromUserId, session.toUserId)
+      .then(
+        (verdict) => {
+          if (verdict.ok === false) this.close(session.talkieId, 'cut', 'recipient');
+        },
+        (error: unknown) => {
+          this.deps.report('Talkie rejudge failed', error);
+          this.close(session.talkieId, 'cut', 'recipient');
+        },
+      )
+      .finally(() => {
+        session.rejudging = false;
+      });
+  }
+
   end(socketId: string, fromUserId: string, raw: unknown): void {
     const parsed = talkieEndPayloadSchema.safeParse(raw);
     if (!parsed.success) return;
@@ -182,14 +256,15 @@ export class TalkieRelay {
   }
 
   socketGone(socketId: string): void {
+    if (this.opening.has(socketId)) this.lostWhileOpening.add(socketId);
     const talkieId = this.bySocket.get(socketId);
     if (talkieId) this.close(talkieId, 'cut');
   }
 
-  /** Coupe, SUR CETTE INSTANCE, les prises de parole de `fromUserId` vers `toUserId` — un blocage. */
+  /** Coupe, SUR CETTE INSTANCE, les prises de parole de `fromUserId` vers `toUserId` — un blocage. Casse libre. */
   cutPair(fromUserId: string, toUserId: string): void {
     [...this.sessions.values()]
-      .filter((s) => s.fromUserId === fromUserId && s.toUserId === toUserId)
+      .filter((s) => same(s.fromUserId, fromUserId) && same(s.toUserId, toUserId))
       .forEach((s) => this.close(s.talkieId, 'cut', 'recipient'));
   }
 

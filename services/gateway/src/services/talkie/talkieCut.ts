@@ -16,7 +16,8 @@ import { getCacheStore, type CacheStore } from '../CacheStore';
 import type { TalkieRelay } from './talkieRelay';
 
 const CUT_TTL_SECONDS = Math.ceil(TALKIE_MAX_DURATION_MS / 1000) + 5;
-const cutKey = (fromUserId: string, toUserId: string) => `talkie:cut:${fromUserId}:${toUserId}`;
+/** Casse libre d'un ObjectId : la clé est toujours en minuscules, qui qu'ait écrit l'identifiant. */
+const cutKey = (fromUserId: string, toUserId: string) => `talkie:cut:${fromUserId.toLowerCase()}:${toUserId.toLowerCase()}`;
 
 export type TalkieCutDeps = {
   readonly cache: Pick<CacheStore, 'get' | 'set'>;
@@ -37,7 +38,19 @@ export const talkieCutDepsOf = (): TalkieCutDeps => ({
   now: () => Date.now(),
 });
 
-export async function readTalkieCut(cache: Pick<CacheStore, 'get'>, fromUserId: string, toUserId: string): Promise<number | null> {
+/**
+ * L'instant de la dernière coupure de la paire, ou `null`. Quand un cache PARTAGÉ est
+ * attendu (`requireShared` : Redis configuré) mais injoignable, la lecture LÈVE — le
+ * repli mémoire d'une instance ne voit pas la coupure posée par une autre, et la voix
+ * d'une personne bloquée ne repart pas sur ce doute.
+ */
+export async function readTalkieCut(
+  cache: Pick<CacheStore, 'get' | 'isAvailable'>,
+  fromUserId: string,
+  toUserId: string,
+  options: { readonly requireShared: boolean } = { requireShared: false },
+): Promise<number | null> {
+  if (options.requireShared && !cache.isAvailable()) throw new Error('talkie cut store unavailable');
   const raw = await cache.get(cutKey(fromUserId, toUserId));
   const at = raw === null ? NaN : Number(raw);
   return Number.isFinite(at) ? at : null;

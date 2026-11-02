@@ -259,8 +259,12 @@ describe('#13935 — un blocage coupe immédiatement, et ne s’annonce qu’à 
     expect(of(t, 'talkie:chunk')).toHaveLength(1);
   });
 
-  it('une lecture de coupure qui échoue FERME : la voix s’arrête', async () => {
-    const t = relayWith({ cutAt: async () => { throw new Error('redis'); } });
+  it('une lecture de coupure qui échoue FERME : à l’ouverture rien ne s’ouvre, en cours la voix s’arrête', async () => {
+    const refused = await relayWith({ cutAt: async () => { throw new Error('redis'); } }).relay.start(SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
+    expect(refused).toMatchObject({ success: false, code: 'TALKIE_UNAVAILABLE' });
+
+    let calls = 0;
+    const t = relayWith({ cutAt: async () => { calls += 1; if (calls > 1) throw new Error('redis'); return null; } });
     const talkieId = await open(t);
     await t.relay.chunk(SOCKET, FROM, { talkieId, seq: 0, data: frame() });
 
@@ -275,5 +279,24 @@ describe('#13935 — un blocage coupe immédiatement, et ne s’annonce qu’à 
 
     expect(of(t, 'talkie:ended').map((e) => e.room)).toEqual([`user:${TO}`]);
     expect(t.relay.openCount).toBe(0);
+  });
+});
+
+describe('#14459 (m4, m5) — la coupure partagée', () => {
+  it('un cache partagé attendu mais injoignable FERME la lecture de coupure (le repli mémoire ne la voit pas)', async () => {
+    const { readTalkieCut } = await import('../../../../services/talkie/talkieCut');
+    const down = { get: async () => null, isAvailable: () => false };
+
+    await expect(readTalkieCut(down, FROM, TO, { requireShared: true })).rejects.toThrow();
+    await expect(readTalkieCut(down, FROM, TO, { requireShared: false })).resolves.toBeNull();
+  });
+
+  it('la clé de coupure ne dépend pas de la casse des identifiants', async () => {
+    const { cutTalkiesOnBlock, readTalkieCut } = await import('../../../../services/talkie/talkieCut');
+    const store = new Map<string, string>();
+    const cache = { get: async (k: string) => store.get(k) ?? null, set: async (k: string, v: string) => { store.set(k, v); }, isAvailable: () => true };
+    await cutTalkiesOnBlock({ cache, relay: null, now: () => 42 }, { blockerId: TO.toUpperCase(), blockedId: FROM.toUpperCase(), scope: 'talkie' });
+
+    expect(await readTalkieCut(cache, FROM, TO)).toBe(42);
   });
 });

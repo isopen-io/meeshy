@@ -9,6 +9,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { TALKIE_ERROR_CODES, type TalkieStartAck } from '@meeshy/shared/types/talkie';
 import { getCacheStore } from '../../services/CacheStore';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { judgeTalkie } from '../../services/talkie/talkieGate';
 import { TalkieRelay } from '../../services/talkie/talkieRelay';
 import { readTalkieCut, registerProcessTalkieRelay } from '../../services/talkie/talkieCut';
@@ -91,13 +93,17 @@ export function talkieHandlerDeps(params: {
 }
 
 function createRelay(params: { readonly prisma: PrismaClient; readonly io: ServerEmitIOWithRooms }): TalkieRelay {
-  // Le cache et le limiteur Redis partagé (jamais `socket-rate-limiter`, en mémoire par processus) se
-  // résolvent à la PREMIÈRE prise de parole : la connexion d'une socket n'ouvre rien.
-  let limiter: RateLimiter | null = null;
+  // Le limiteur Redis partagé (jamais `socket-rate-limiter`, en mémoire par processus) suit le
+  // client Redis du moment : un limiteur né sans Redis ne reste pas en mémoire pour la vie du processus.
+  let limiter: { readonly client: unknown; readonly limiter: RateLimiter } | null = null;
   const startLimiter = (): RateLimiter => {
-    limiter ??= createCustomRateLimiter({ ...TALKIE_START_RATE }, getCacheStore().getNativeClient() ?? undefined);
-    return limiter;
+    const client = getCacheStore().getNativeClient();
+    if (!limiter || limiter.client !== client) {
+      limiter = { client, limiter: createCustomRateLimiter({ ...TALKIE_START_RATE }, client ?? undefined) };
+    }
+    return limiter.limiter;
   };
+  const presence = getPresenceVisibilityService(params.prisma);
   return new TalkieRelay({
     io: params.io,
     judge: (fromUserId, toUserId) =>
@@ -106,6 +112,8 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
           prisma: params.prisma,
           now: () => new Date(),
           recipientConnected: async (userId) => (await params.io.in(ROOMS.user(userId)).fetchSockets()).length > 0,
+          presenceServed: async (viewer, targetId) =>
+            (await presence.resolveForTarget({ userId: viewer.userId, role: viewer.role as GlobalUserRoleType }, { id: targetId })).showOnline,
         },
         fromUserId,
         toUserId,
@@ -114,7 +122,7 @@ function createRelay(params: { readonly prisma: PrismaClient; readonly io: Serve
       const info = await startLimiter().consume(userId, 1);
       return info === null ? null : info.retryAfter === undefined;
     },
-    cutAt: (fromUserId, toUserId) => readTalkieCut(getCacheStore(), fromUserId, toUserId),
+    cutAt: (fromUserId, toUserId) => readTalkieCut(getCacheStore(), fromUserId, toUserId, { requireShared: Boolean(process.env.REDIS_URL) }),
     now: () => Date.now(),
     report: (message, error) => logger.warn(message, { error }),
   });

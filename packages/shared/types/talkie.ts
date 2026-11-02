@@ -30,6 +30,8 @@ export const TALKIE_MAX_DURATION_MS = 30_000;
 export const TALKIE_MAX_CHUNK_BYTES = 16_384;
 /** Plafond d'une prise de parole entière : 30 s à 64 kb/s ≈ 240 Ko, doublés. */
 export const TALKIE_MAX_TOTAL_BYTES = 512_000;
+/** Plafond du NOMBRE de fragments d'une prise de parole : 30 s par fragments de 100 ms au plus court. */
+export const TALKIE_MAX_CHUNKS = 300;
 /** Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première). */
 export const TALKIE_CODECS = ['aac-adts'] as const;
 export type TalkieCodec = (typeof TALKIE_CODECS)[number];
