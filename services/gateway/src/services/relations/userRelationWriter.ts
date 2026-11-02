@@ -48,6 +48,15 @@ import {
 
 export type RelationOrigin = 'request' | 'backfill-friend' | 'auto-acquaintance';
 
+/**
+ * Ce qui a causé un passage (#14406, contre-audit #14464 N1/N2) : la Connaissance
+ * AUTOMATIQUE, ou un geste (`explicit`). C'est elle, et jamais l'`origin` de la ligne
+ * (posée à la création, jamais changée), qui dit si une Connaissance est automatique.
+ */
+export type RelationTransitionCause = 'auto-acquaintance' | 'explicit';
+
+type WrittenTransition = RelationTransition & { readonly cause: RelationTransitionCause };
+
 export type UserRelationRow = {
   readonly id: string;
   readonly userLowId: string;
@@ -58,7 +67,7 @@ export type UserRelationRow = {
   readonly cooldownLowUntil?: Date | null;
   readonly cooldownHighUntil?: Date | null;
   readonly origin?: string | null;
-  readonly transitions?: ReadonlyArray<{ readonly actorId?: string; readonly from: string; readonly to: string; readonly at?: Date | null }> | null;
+  readonly transitions?: ReadonlyArray<{ readonly actorId?: string; readonly from: string; readonly to: string; readonly at?: Date | null; readonly cause?: string | null }> | null;
 };
 
 type NewUserRelation = RelationPairKey & {
@@ -66,7 +75,7 @@ type NewUserRelation = RelationPairKey & {
   readonly grantedByHigh: RelationLevel;
   readonly levelSince: Date;
   readonly origin: RelationOrigin;
-  readonly transitions: RelationTransition[];
+  readonly transitions: WrittenTransition[];
   readonly cooldownLowUntil?: Date;
   readonly cooldownHighUntil?: Date;
 };
@@ -85,7 +94,7 @@ export interface UserRelationDb {
         levelSince?: Date;
         cooldownLowUntil?: Date;
         cooldownHighUntil?: Date;
-        transitions?: { push: RelationTransition[] };
+        transitions?: { push: WrittenTransition[] };
       };
     }): PromiseLike<{ count: number }>;
   };
@@ -114,13 +123,54 @@ export const grantedByUser = (row: UserRelationRow, userId: string): RelationLev
   return row.userLowId === userId ? grants.low : grants.high;
 };
 
-const passagesBetween = (pair: RelationPairKey, from: Grants, to: Grants, at: Date): RelationTransition[] =>
+const passagesBetween = (
+  pair: RelationPairKey,
+  from: Grants,
+  to: Grants,
+  at: Date,
+  cause: RelationTransitionCause,
+): WrittenTransition[] =>
   ([
     { side: 'low', actorId: pair.userLowId },
     { side: 'high', actorId: pair.userHighId },
   ] as const)
     .filter(({ side }) => from[side] !== to[side])
-    .map(({ side, actorId }) => ({ actorId, from: from[side], to: to[side], at }));
+    .map(({ side, actorId }) => ({ actorId, from: from[side], to: to[side], at, cause }));
+
+type Passage = NonNullable<UserRelationRow['transitions']>[number];
+
+const lastPassageOf = (row: UserRelationRow, actorId: string): Passage | undefined =>
+  [...(row.transitions ?? [])].reverse().find((t) => t.actorId === actorId);
+
+/**
+ * Un passage de la Connaissance automatique. Un passage écrit AVANT que la cause
+ * existe (sans `cause`) l'est s'il entre en Connaissance depuis PUBLIC sur une ligne
+ * née automatique : c'est ce qu'écrivait la création automatique, et tout passage
+ * postérieur porte sa cause. Une ligne née automatique sans aucun passage d'un côté
+ * (antérieure à l'historique) se lit de même.
+ */
+const isAutomaticPassage = (row: UserRelationRow, passage: Passage | undefined): boolean => {
+  if (!passage) return row.origin === 'auto-acquaintance';
+  if (passage.to !== 'ACQUAINTANCE') return false;
+  if (typeof passage.cause === 'string') return passage.cause === 'auto-acquaintance';
+  return row.origin === 'auto-acquaintance' && passage.from === 'PUBLIC';
+};
+
+/**
+ * Une Connaissance AUTOMATIQUE et restée telle quelle (#14406, contre-audit #14464) :
+ * ACQUAINTANCE des deux côtés, et le DERNIER passage de chacun est celui de la
+ * Connaissance automatique — quelle que soit l'`origin` de la ligne. Une Connaissance
+ * choisie (demande acceptée, redescente d'Ami) ne l'est jamais.
+ */
+export const isAutomaticAcquaintance = (row: UserRelationRow | null): boolean =>
+  row !== null &&
+  row.grantedByLow === 'ACQUAINTANCE' &&
+  row.grantedByHigh === 'ACQUAINTANCE' &&
+  [row.userLowId, row.userHighId].every((actorId) => isAutomaticPassage(row, lastPassageOf(row, actorId)));
+
+/** La paire a-t-elle déjà été Connaissance automatique ? Sa renaissance ne se réannonce pas (contre-audit #14464 N4). */
+export const wasEverAutomatic = (row: UserRelationRow | null): boolean =>
+  row !== null && (row.transitions ?? []).some((passage) => isAutomaticPassage(row, passage));
 
 const isUniqueViolation = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';
@@ -151,7 +201,7 @@ type Creation = 'created' | 'exists';
 async function createRow(
   db: UserRelationDb,
   pair: RelationPairKey,
-  params: { origin: RelationOrigin; at: Date; level: RelationLevel },
+  params: { origin: RelationOrigin; at: Date; level: RelationLevel; cause: RelationTransitionCause },
 ): Promise<Creation> {
   const granted: Grants = { low: params.level, high: params.level };
   try {
@@ -162,7 +212,7 @@ async function createRow(
         grantedByHigh: granted.high,
         levelSince: params.at,
         origin: params.origin,
-        transitions: passagesBetween(pair, { low: 'PUBLIC', high: 'PUBLIC' }, granted, params.at),
+        transitions: passagesBetween(pair, { low: 'PUBLIC', high: 'PUBLIC' }, granted, params.at, params.cause),
       },
     });
     return 'created';
@@ -180,9 +230,10 @@ async function moveTo(
   target: Grants,
   at: Date,
   cooldown: CooldownWrite | null = null,
+  cause: RelationTransitionCause = 'explicit',
 ): Promise<boolean> {
   const current = grantsOf(row);
-  const passages = passagesBetween(pair, current, target, at);
+  const passages = passagesBetween(pair, current, target, at, cause);
   const { count } = await db.userRelation.updateMany({
     where: { id: row.id, grantedByLow: row.grantedByLow, grantedByHigh: row.grantedByHigh },
     data: {
@@ -263,12 +314,14 @@ async function raiseTo(
     level: RelationLevel;
     respectDropsSince?: { acceptedAt: Date | null };
     refuseAfterAnyDrop?: boolean;
+    cause?: RelationTransitionCause;
   },
 ): Promise<RelationWriteOutcome> {
+  const cause = params.cause ?? 'explicit';
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     const row = await readPair(db, pair);
     if (!row) {
-      if ((await createRow(db, pair, params)) === 'created') return 'created';
+      if ((await createRow(db, pair, { ...params, cause })) === 'created') return 'created';
       continue;
     }
     if (params.refuseAfterAnyDrop && hasRecordedDrop(row)) return 'unchanged';
@@ -276,7 +329,7 @@ async function raiseTo(
     const current = grantsOf(row);
     const target = atLeast(current, params.level);
     if (target.low === current.low && target.high === current.high) return 'unchanged';
-    if (await moveTo(db, row, pair, target, params.at)) return 'raised';
+    if (await moveTo(db, row, pair, target, params.at, null, cause)) return 'raised';
   }
   throw new Error('userRelationWriter: la paire change sans cesse, abandon après plusieurs reprises');
 }
@@ -318,7 +371,7 @@ export async function recordAcquaintance(
 ): Promise<RelationWriteOutcome> {
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
-  return raiseTo(db, pair, { origin: 'auto-acquaintance', at: params.at, level: 'ACQUAINTANCE', refuseAfterAnyDrop: true });
+  return raiseTo(db, pair, { origin: 'auto-acquaintance', at: params.at, level: 'ACQUAINTANCE', refuseAfterAnyDrop: true, cause: 'auto-acquaintance' });
 }
 
 /**
@@ -361,9 +414,9 @@ export async function resetFriendship(
  * à PUBLIC, en silence, et SANS rien graver dans l'historique : ce n'est la sortie
  * volontaire de personne, et `hasRecordedDrop` ne doit pas l'attribuer aux deux.
  * L'annulation est donc RÉVERSIBLE : la préférence rallumée, la Connaissance
- * renaît au calcul suivant. Seule une Connaissance née toute seule et restée
- * telle quelle (ACQUAINTANCE des deux côtés) est touchée ; l'écriture est gardée
- * par les accords relus (l'origine, elle, ne change jamais).
+ * renaît au calcul suivant. Seule une Connaissance AUTOMATIQUE et restée telle
+ * quelle est touchée (`isAutomaticAcquaintance` : la cause des derniers passages,
+ * jamais l'`origin`) ; l'écriture est gardée par les accords relus.
  */
 export async function withdrawAutoAcquaintance(
   db: UserRelationDb,
@@ -372,7 +425,7 @@ export async function withdrawAutoAcquaintance(
   const pair = pairOf(params.userA, params.userB);
   if (!pair) return 'ignored';
   const row = await readPair(db, pair);
-  if (!row || row.origin !== 'auto-acquaintance' || row.grantedByLow !== 'ACQUAINTANCE' || row.grantedByHigh !== 'ACQUAINTANCE') return 'unchanged';
+  if (!isAutomaticAcquaintance(row) || !row) return 'unchanged';
   const { count } = await db.userRelation.updateMany({
     where: { id: row.id, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' },
     data: { grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC', levelSince: params.at },

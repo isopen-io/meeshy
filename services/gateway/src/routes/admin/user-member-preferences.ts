@@ -280,7 +280,7 @@ export function registerUserMemberPreferencesRoutes(fastify: FastifyInstance, de
         });
       }
 
-      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true, birthDate: true } });
       if (!userExists) {
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
@@ -325,7 +325,9 @@ export function registerUserMemberPreferencesRoutes(fastify: FastifyInstance, de
       const persisted = (updated as Record<string, unknown>)[category] as PreferenceDocument | null | undefined;
       return sendSuccess(reply, {
         category,
-        preferences: resolveComplete(PREFERENCE_REGISTRY[category].defaults, persisted)
+        preferences: category === 'privacy'
+          ? withEffectiveAutoAcquaintance({ privacy: resolveComplete(PREFERENCE_REGISTRY[category].defaults, persisted) }, userExists.birthDate, new Date()).privacy
+          : resolveComplete(PREFERENCE_REGISTRY[category].defaults, persisted)
       });
     } catch (error) {
       const failure = error as { name?: string; message?: string; issues?: unknown[] };

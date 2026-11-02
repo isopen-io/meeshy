@@ -26,6 +26,12 @@
  *     défait — le défaut ne vaut que pour les créations futures, et ce lot ne
  *     modifie aucun lien existant au déploiement.
  *
+ * Une Connaissance est AUTOMATIQUE par la CAUSE de ses derniers passages
+ * (`isAutomaticAcquaintance`), jamais par l'`origin` de la ligne : une Connaissance
+ * née sur une ligne `request` se retire, une Connaissance choisie jamais. Une
+ * renaissance (la préférence rallumée) ne se réannonce pas : l'autre ne lit pas
+ * les bascules de la préférence dans ses notifications (contre-audit #14464).
+ *
  * Idempotent : rejouée, l'évaluation ne change rien et ne prévient personne deux fois.
  * Une notification perdue ne défait pas le lien.
  */
@@ -39,7 +45,15 @@ import { relationThresholdsFor, type RelationThresholds } from '@meeshy/shared/u
 import { acquaintanceProgress, pairDayFromRow } from '@meeshy/shared/utils/relation-interactions';
 import { isBlockedBetween } from '../../utils/blocking.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { recordAcquaintance, resetFriendship, withdrawAutoAcquaintance, type UserRelationDb } from './userRelationWriter.js';
+import {
+  isAutomaticAcquaintance,
+  recordAcquaintance,
+  resetFriendship,
+  wasEverAutomatic,
+  withdrawAutoAcquaintance,
+  type UserRelationDb,
+  type UserRelationRow,
+} from './userRelationWriter.js';
 
 const logger = enhancedLogger.child({ module: 'AutoAcquaintance' });
 
@@ -84,8 +98,8 @@ async function loadWindow(deps: AutoAcquaintanceDeps, pair: { userLowId: string;
   return rows.map((row) => pairDayFromRow(row as Record<string, unknown>));
 }
 
-export const isOwnAcquaintance = (row: { origin?: string | null; grantedByLow?: string | null; grantedByHigh?: string | null } | null): boolean =>
-  row?.origin === 'auto-acquaintance' && row.grantedByLow === 'ACQUAINTANCE' && row.grantedByHigh === 'ACQUAINTANCE';
+/** Une Connaissance née toute seule et restée telle quelle : la CAUSE de ses derniers passages, jamais l'`origin` (#14406). */
+export const isOwnAcquaintance = (row: UserRelationRow | null): boolean => isAutomaticAcquaintance(row);
 
 async function cancelIfAutomatic<R extends 'blocked' | 'minor'>(
   deps: AutoAcquaintanceDeps,
@@ -182,13 +196,14 @@ export async function evaluateAutoAcquaintance(
   if (!acquaintanceProgress({ days, now, thresholds: deps.thresholds ?? environmentThresholds() }).met) return 'insufficient';
 
   if ((await stanceOf(deps, people)) !== 'open') return 'opted-out';
+  const reborn = wasEverAutomatic(await deps.prisma.userRelation.findUnique({ where: { userLowId_userHighId: pair } }));
   const outcome = await recordAcquaintance(deps.prisma as unknown as UserRelationDb, { userA: pair.userLowId, userB: pair.userHighId, at: now });
   if (outcome === 'created' || outcome === 'raised') {
     if ((await stanceOf(deps, people)) !== 'open') {
       await withdrawIfAutomatic(deps, pair, now);
       return 'opted-out';
     }
-    await announce(deps.notify, pair.userLowId, pair.userHighId);
+    if (!reborn) await announce(deps.notify, pair.userLowId, pair.userHighId);
     return outcome;
   }
   return outcome === 'ignored' ? 'ignored' : 'unchanged';
@@ -216,16 +231,15 @@ const AGE_REVISIT_LIMIT = 5000;
 async function revisitAutoAcquaintancesOf(prisma: AutoAcquaintanceDeps['prisma'], userId: string, now?: () => Date): Promise<void> {
   const rows = await prisma.userRelation.findMany({
     where: {
-      origin: 'auto-acquaintance',
       grantedByLow: 'ACQUAINTANCE',
       grantedByHigh: 'ACQUAINTANCE',
       OR: [{ userLowId: userId }, { userHighId: userId }],
     },
-    select: { userLowId: true, userHighId: true },
+    select: { id: true, userLowId: true, userHighId: true, grantedByLow: true, grantedByHigh: true, origin: true, transitions: true },
     orderBy: { id: 'asc' },
     take: AGE_REVISIT_LIMIT,
   });
-  for (const row of rows) {
+  for (const row of rows.filter((candidate) => isAutomaticAcquaintance(candidate as UserRelationRow))) {
     await evaluateAutoAcquaintance({ prisma, now }, { userA: row.userLowId, userB: row.userHighId });
   }
 }

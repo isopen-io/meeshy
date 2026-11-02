@@ -165,3 +165,12 @@ describe('GET /admin/users/:userId/preferences — la valeur EFFECTIVE de autoAc
     expect(await served({ target: { id: TARGET_ID, role: 'USER', birthDate: MINOR }, preferencesRow: { privacy: { autoAcquaintance: true } } })).toBe(true);
   });
 });
+
+describe('PATCH admin — la réponse sert la valeur EFFECTIVE (contre-audit #14464 N5)', () => {
+  it('mineur sans choix : le GET et la réponse du PATCH d’un réglage voisin disent tous deux false', async () => {
+    const target = { id: TARGET_ID, role: 'USER', birthDate: MINOR };
+    const got = (await call(createMockPrisma({ target }), 'ADMIN', 'GET', prefsUrl)).json().data.privacy.autoAcquaintance;
+    const patched = (await call(createMockPrisma({ target }), 'ADMIN', 'PATCH', `${prefsUrl}/privacy`, { showLastSeen: false })).json().data.preferences.autoAcquaintance;
+    expect({ got, patched }).toEqual({ got: false, patched: false });
+  });
+});

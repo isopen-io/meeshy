@@ -298,6 +298,20 @@ describe('evaluateAutoAcquaintance — la préférence est relue juste avant l�
     expect(store.relations()).toHaveLength(0);
     expect(notify).not.toHaveBeenCalled();
   });
+
+  it('contre-audit N6 — un refus posé PENDANT l’écriture retire le lien juste écrit, sans annonce', async () => {
+    const { store, notify, evaluate } = setup();
+    const read = store.prisma.userPreferences.findMany;
+    let calls = 0;
+    store.prisma.userPreferences.findMany = (args) => {
+      calls += 1;
+      return calls <= 2 ? read(args) : Promise.resolve([choice(HIGH, false)]);
+    };
+
+    expect(await evaluate()).toBe('opted-out');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+    expect(notify).not.toHaveBeenCalled();
+  });
 });
 
 describe('evaluateAutoAcquaintance — elle monte, elle ne baisse jamais', () => {

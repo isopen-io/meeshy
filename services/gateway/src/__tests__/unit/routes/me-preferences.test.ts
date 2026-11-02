@@ -1156,8 +1156,8 @@ describe('écriture de préférences — purge du cache serveur', () => {
 //
 // Un refus EXPLICITE de la Connaissance automatique (`autoAcquaintance: false`,
 // RGPD art. 21) survit à la remise à zéro de la confidentialité : rallumer la
-// création ne se fait que par le geste qui la nomme. Un `true` stocké, lui, est
-// rendu au défaut (qui dépend de l'âge déclaré).
+// création ne se fait que par le geste qui la nomme. Un `true` stocké est
+// gardé de même (`keptWhenUnnamed`, contre-audit #14464 N3).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('DELETE de la confidentialité — un refus de la Connaissance automatique survit', () => {
@@ -1177,8 +1177,18 @@ describe('DELETE de la confidentialité — un refus de la Connaissance automati
     await app.close();
   });
 
-  it('alias : un choix `true` revient au défaut', async () => {
+  it('alias : le choix stocké, quel qu’il soit, reste celui de la personne (contre-audit #14464 N3, comme le Bring)', async () => {
     const prisma = makePrisma({ findUniqueResult: { ...STORED_ALL_PREFS, privacy: { ...STORED_PRIVACY, autoAcquaintance: true } } });
+    const app = await buildCategoryAppWith('privacy', prisma);
+
+    await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    expect(resetWrite(prisma).data).toEqual({ privacy: { autoAcquaintance: true } });
+    await app.close();
+  });
+
+  it('alias : sans choix stocké, la confidentialité revient entière à null', async () => {
+    const prisma = makePrisma();
     const app = await buildCategoryAppWith('privacy', prisma);
 
     await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });

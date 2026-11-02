@@ -110,12 +110,6 @@ export type CategoryStorage = {
   ) => Promise<PreferenceDocument | null>;
   /** Après CHAQUE écriture réussie, une fois le document autoritatif. */
   readonly afterWrite?: (prisma: PrismaClient, userId: string) => Promise<void>;
-  /**
-   * Ce que la RÉINITIALISATION garde du document stocké ; rien ⇒ `null`, les
-   * défauts. Pour `privacy` : un refus explicite de la Connaissance automatique
-   * (#14406, audit #14464 C7) — réinitialiser ne lève pas une opposition.
-   */
-  readonly keptOnReset?: (stored: PreferenceDocument | null) => PreferenceDocument | null;
 };
 
 export type PreferenceEntry = {
@@ -149,13 +143,16 @@ export const PREFERENCE_REGISTRY: Readonly<Record<PreferenceCategory, Preference
     defaults: PRIVACY_PREFERENCE_DEFAULTS,
     storage: {
       readStored: resolveStoredPrivacyPreferences,
-      keptOnReset: (stored) => (stored?.autoAcquaintance === false ? { autoAcquaintance: false } : null),
       // #14406 — un refus de la Connaissance automatique vaut tout de suite.
       afterWrite: async (prisma, userId) => {
         await retireLegacyPrivacyRows(prisma, userId);
         void revisitAutoAcquaintancesOnPrivacyWrite(prisma, { userId });
       },
     },
+    // #14406 (contre-audit #14464 N3) — ni un remplacement qui ne la nomme pas, ni une
+    // réinitialisation ne lèvent un refus de la Connaissance automatique : le choix
+    // stocké reste celui de la personne.
+    keptWhenUnnamed: ['autoAcquaintance'],
   },
   audio: { schema: AudioPreferenceSchema, defaults: AUDIO_PREFERENCE_DEFAULTS },
   message: { schema: MessagePreferenceSchema, defaults: MESSAGE_PREFERENCE_DEFAULTS },
@@ -412,9 +409,9 @@ export async function keepUnnamedKeys(
 /**
  * Ce qu'une RÉINITIALISATION écrit pour une catégorie : `null` (les défauts), sauf les
  * clés `keptWhenUnnamed` stockées, qui survivent — « Réinitialiser les notifications »
- * ne rouvre pas en silence un son qui passe Ne pas déranger (contre-audit #14441, N3) —,
- * et ce que son rangement garde (`keptOnReset`) : « Réinitialiser la confidentialité »
- * ne lève pas un refus de la Connaissance automatique (#14406, audit #14464 C7).
+ * ne rouvre pas en silence un son qui passe Ne pas déranger (contre-audit #14441, N3), et
+ * « Réinitialiser la confidentialité » ne lève pas un refus de la Connaissance automatique
+ * (#14406, contre-audit #14464 N3).
  */
 export async function resetDocumentFor(
   prisma: PrismaClient,
@@ -422,8 +419,5 @@ export async function resetDocumentFor(
   category: PreferenceCategory
 ): Promise<PreferenceDocument | null> {
   const kept = await keepUnnamedKeys(prisma, userId, category, {}, {});
-  const storage = PREFERENCE_REGISTRY[category].storage;
-  const own = storage?.keptOnReset ? storage.keptOnReset(await storage.readStored(prisma, userId)) : null;
-  const document = { ...kept, ...(own ?? {}) };
-  return Object.keys(document).length === 0 ? null : document;
+  return Object.keys(kept).length === 0 ? null : kept;
 }
