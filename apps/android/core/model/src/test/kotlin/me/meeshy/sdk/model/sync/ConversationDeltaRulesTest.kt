@@ -82,7 +82,7 @@ class ConversationDeltaRulesTest {
     @Test fun `le non-lu reste au cache`() = assertThat(fused().unreadCount).isEqualTo(4)
     @Test fun `les preferences restent au cache`() = assertThat(fused().userPreferences.single().isPinned).isTrue()
     @Test fun `le role courant reste au cache`() = assertThat(fused().currentUserRole).isEqualTo("ADMIN")
-    @Test fun `les etiquettes restent au cache`() = assertThat(fused().tags).containsExactly("work")
+    @Test fun `les etiquettes restent au cache`() { assertThat(fused().tags).containsExactly("work") }
 
     @Test
     fun `un groupe sans pair servi garde ses participants`() {
