@@ -52,6 +52,7 @@ type Appel = {
   leftAt?: Date | null;
   bannedAt?: Date | null;
   anonymous?: boolean;
+  activeParticipants?: number;
 };
 
 async function appeler(options: Appel) {
@@ -67,6 +68,7 @@ async function appeler(options: Appel) {
   const prisma = {
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue(membership),
+      count: jest.fn<any>().mockResolvedValue(options.activeParticipants ?? 2),
     },
   };
   let path = '';
@@ -198,5 +200,28 @@ describe('#14653 — dans un tête-à-tête, l\'un OU l\'autre des deux membres 
     const { reply } = await appeler({ conversationRole: 'member', conversationType: 'public' });
     expect(reply.statusCode).toBe(403);
     expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('un contexte anonyme est refusé même si la participation lue est de type user', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct', anonymous: true, participantType: 'user' });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('une directe anormale à trois participations actives est refusée au simple membre, sans écriture', async () => {
+    const { reply, prisma } = await appeler({ conversationRole: 'member', conversationType: 'direct', activeParticipants: 3 });
+    expect(reply.statusCode).toBe(403);
+    expect(obsoleteConversation).not.toHaveBeenCalled();
+    expect(prisma.participant.count.mock.calls[0][0].where).toEqual(expect.objectContaining({ conversationId: CONV, isActive: true }));
+  });
+
+  it('une directe dont l\'autre membre est parti reste effaçable par celui qui reste', async () => {
+    const { reply } = await appeler({ conversationRole: 'member', conversationType: 'direct', activeParticipants: 1 });
+    expect(reply.statusCode).toBe(200);
+  });
+
+  it('l\'administrateur d\'une directe anormale garde la règle de l\'administrateur', async () => {
+    const { reply } = await appeler({ conversationRole: 'admin', conversationType: 'direct', activeParticipants: 3 });
+    expect(reply.statusCode).toBe(200);
   });
 });

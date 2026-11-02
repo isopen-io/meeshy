@@ -6,8 +6,10 @@
  *
  * #14653 (décision porteur du 2026-11-02) — dans un TÊTE-À-TÊTE, l'un OU
  * l'autre des deux membres la rend obsolète : `mayObsoleteAsDirectMember`.
- * Seul un membre inscrit, à participation active, ni partie ni bannie ; les
- * groupes gardent la règle de l'administrateur.
+ * Seul un membre inscrit, à participation active, ni partie ni bannie, d'une
+ * directe qui compte au plus deux participations actives (une directe à trois,
+ * anormale, retombe sous la règle de l'administrateur) ; les groupes gardent
+ * la règle de l'administrateur.
  *
  * Rétrocompatible : la conversation est AUSSI fermée (`isActive: false`,
  * `closedAt`, `conversation:closed`), donc un ancien client qui ne connaît ni
@@ -37,6 +39,8 @@ type ObsoleteMembership = {
   readonly conversation: { readonly type: string } | null;
 };
 
+export const DIRECT_CONVERSATION_MAX_ACTIVE_PARTICIPANTS = 2;
+
 export function mayObsoleteAsDirectMember(
   membership: ObsoleteMembership | null,
   caller: { readonly isAnonymous: boolean; readonly hasRegisteredUser: boolean },
@@ -46,6 +50,17 @@ export function mayObsoleteAsDirectMember(
   if (membership.type !== 'user') return false;
   if (membership.leftAt !== null || membership.bannedAt !== null) return false;
   return membership.conversation?.type === 'direct';
+}
+
+async function directMemberMayObsolete(
+  prisma: PrismaClient,
+  conversationId: string,
+  membership: ObsoleteMembership | null,
+  caller: { readonly isAnonymous: boolean; readonly hasRegisteredUser: boolean },
+): Promise<boolean> {
+  if (!mayObsoleteAsDirectMember(membership, caller)) return false;
+  const activeParticipants = await prisma.participant.count({ where: { conversationId, isActive: true } });
+  return activeParticipants <= DIRECT_CONVERSATION_MAX_ACTIVE_PARTICIPANTS;
 }
 
 export function registerObsoleteConversationRoute(
@@ -103,13 +118,13 @@ export function registerObsoleteConversationRoute(
         where: { conversationId, userId, isActive: true },
         select: { role: true, type: true, leftAt: true, bannedAt: true, conversation: { select: { type: true } } },
       });
-      const allowed = mayObsoleteAsDirectMember(membership, {
-        isAnonymous: authRequest.authContext.isAnonymous,
-        hasRegisteredUser: authRequest.authContext.registeredUser !== undefined,
-      }) || actorHasMinimumRole(
+      const allowed = actorHasMinimumRole(
         { conversationRole: membership?.role, platformRole: authRequest.authContext.registeredUser?.role },
         MemberRole.ADMIN,
-      );
+      ) || await directMemberMayObsolete(prisma, conversationId, membership, {
+        isAnonymous: authRequest.authContext.isAnonymous,
+        hasRegisteredUser: authRequest.authContext.registeredUser !== undefined,
+      });
       if (!allowed) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à rendre cette conversation obsolète');
       }
