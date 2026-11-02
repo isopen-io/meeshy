@@ -61,7 +61,7 @@ struct ConversationPreferencesTab: View {
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xl)
             }
@@ -119,20 +119,20 @@ struct ConversationPreferencesTab: View {
                         // Decorative glyph in a fixed 28×28 badge — kept fixed (86i doctrine:
                         // a scalable glyph would overflow the fixed frame) + hidden (the label carries the meaning).
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(accent)
+                        .foregroundStyle(accent)
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(accent.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Nom personnalisé", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
 
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     TextField(String(localized: "conversation.prefs.custom-name.placeholder", defaultValue: "Donnez un surnom à cette conversation…", bundle: .main), text: $customNameLocal)
                         .textFieldStyle(.plain)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .adaptiveOnChange(of: customNameLocal) { _, newValue in
                             viewModel.setCustomName(newValue)
                         }
@@ -143,7 +143,7 @@ struct ConversationPreferencesTab: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "conversation.prefs.custom-name.clear", defaultValue: "Effacer le nom personnalisé", bundle: .main))
@@ -177,11 +177,11 @@ struct ConversationPreferencesTab: View {
                         } else {
                             Text(String(localized: "conversation.prefs.reaction.none", defaultValue: "Aucune", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                         Image(systemName: "chevron.forward")
                             .font(MeeshyFont.relative(11, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .accessibilityHidden(true)
                     }
                 }
@@ -196,7 +196,7 @@ struct ConversationPreferencesTab: View {
                 settingsRow(icon: "paintpalette.fill", iconColor: accentColor, title: String(localized: "conversation.appearance.entry.title", defaultValue: "Fond de la conversation", bundle: .main)) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(11, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .accessibilityHidden(true)
                 }
             }
@@ -246,13 +246,13 @@ struct ConversationPreferencesTab: View {
                     Image(systemName: "square.grid.2x2.fill")
                         // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(MeeshyColors.info)
+                        .foregroundStyle(MeeshyColors.info)
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.info.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.category", defaultValue: "Catégorie", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
 
                 CategoryPickerField(
@@ -278,13 +278,13 @@ struct ConversationPreferencesTab: View {
                     Image(systemName: "tag.fill")
                         // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(MeeshyColors.info)
+                        .foregroundStyle(MeeshyColors.info)
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.info.opacity(MeeshyOpacity.light)))
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.tags", defaultValue: "Étiquettes", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
 
                 TagInputField(
@@ -338,7 +338,7 @@ struct ConversationPreferencesTab: View {
                     iconColor: MeeshyColors.amber500Hex,
                     title: (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Désarchiver", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archiver", bundle: .main)
                 ) { EmptyView() }
-                .foregroundColor(MeeshyColors.warning)
+                .foregroundStyle(MeeshyColors.warning)
             }
             .buttonStyle(.plain)
 
@@ -350,7 +350,7 @@ struct ConversationPreferencesTab: View {
                     settingsRow(icon: "rectangle.portrait.and.arrow.right", iconColor: MeeshyColors.orange500Hex, title: String(localized: "conversation.prefs.leave-group", defaultValue: "Quitter le groupe", bundle: .main)) {
                         EmptyView()
                     }
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                 }
                 .buttonStyle(.plain)
             }
@@ -362,7 +362,7 @@ struct ConversationPreferencesTab: View {
                 settingsRow(icon: "trash.fill", iconColor: MeeshyColors.errorHex, title: String(localized: "conversation.prefs.delete-for-me", defaultValue: "Supprimer pour moi", bundle: .main)) {
                     EmptyView()
                 }
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
             }
             .buttonStyle(.plain)
 
@@ -374,7 +374,7 @@ struct ConversationPreferencesTab: View {
                     settingsRow(icon: ConversationMenuEntry.obsolete.symbol, iconColor: MeeshyColors.errorHex, title: ConversationMenuEntry.obsolete.label) {
                         EmptyView()
                     }
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("conversation-prefs-make-obsolete")
@@ -409,11 +409,11 @@ struct ConversationPreferencesTab: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                     .accessibilityHidden(true)
                 Text(title.uppercased())
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: color))
+                    .foregroundStyle(Color(hex: color))
                     .tracking(1.2)
                     .accessibilityLabel(title)
                     .accessibilityAddTraits(.isHeader)
@@ -464,13 +464,13 @@ struct ConversationPreferencesTab: View {
             Image(systemName: icon)
                 // Decorative glyph in a fixed 28×28 badge — kept fixed + hidden (86i doctrine).
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: iconColor))
+                .foregroundStyle(Color(hex: iconColor))
                 .frame(width: 28, height: 28)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(Color(hex: iconColor).opacity(MeeshyOpacity.light)))
                 .accessibilityHidden(true)
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             Spacer()
             trailing()
         }

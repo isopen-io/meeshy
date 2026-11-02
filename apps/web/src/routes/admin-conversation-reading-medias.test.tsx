@@ -11,7 +11,7 @@ import { createActMounter } from '@/test-support/act-mount';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { simulateLayout } from '@/test-support/virtualizer-layout';
+import { simulateLayout } from '@/test-support/simulated-layout';
 
 import { AdminConversationReading } from './admin-conversation-reading';
 
@@ -85,15 +85,17 @@ import { AdminConversationReading } from './admin-conversation-reading';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-/** Une boîte de téléphone — happy-dom n'en fait aucune, et sans elle le virtualiseur ne rend rien (`simulateLayout`). */
-const BOITE_SIMULEE = { height: 800, width: 390 } as const;
+/** happy-dom ne fait aucune mise en page, et le virtualiseur ne rend rien sans hauteur. */
+const HAUTEUR_SIMULEE = 800;
+const LARGEUR_SIMULEE = 390;
+
 
 let restaureLaMiseEnPage: (() => void) | null = null;
 
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  restaureLaMiseEnPage = simulateLayout(BOITE_SIMULEE);
+  restaureLaMiseEnPage = simulateLayout({ height: HAUTEUR_SIMULEE, width: LARGEUR_SIMULEE });
   await loadAdminInterfaceCatalog('fr');
 });
 

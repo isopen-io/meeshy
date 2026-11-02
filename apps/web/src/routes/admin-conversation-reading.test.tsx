@@ -12,7 +12,7 @@ import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { receptionOf } from '@/lib/view/ephemeral-reception';
 import { createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { simulateLayout } from '@/test-support/virtualizer-layout';
+import { simulateLayout } from '@/test-support/simulated-layout';
 
 import { AdminConversationReading } from './admin-conversation-reading';
 
@@ -48,15 +48,28 @@ import { AdminConversationReading } from './admin-conversation-reading';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-/** Une boîte de téléphone — happy-dom n'en fait aucune, et sans elle le virtualiseur ne rend rien (`simulateLayout`). */
-const BOITE_SIMULEE = { height: 800, width: 390 } as const;
+/**
+ * **HAPPY-DOM NE FAIT PAS DE MISE EN PAGE, ET LE VIRTUALISEUR NE REND RIEN SANS
+ * ELLE.** `calculateRange` (`@tanstack/virtual-core`) rend `null` dès que
+ * `outerSize === 0`, que happy-dom fixe à `0`, faute de moteur de rendu. Les
+ * dimensions que lit le virtualiseur, et pourquoi le simulacre les pose toutes,
+ * sont dites chez `simulateLayout` (`@/test-support/simulated-layout`).
+ *
+ * Sans ce simulacre, `getVirtualItems()` est VIDE : le témoin mesurerait un
+ * écran sans une seule rangée, et il verdirait sur « pas de Bonjour » aussi
+ * bien que sur « pas de Hola ». On ne simule donc aucun comportement du
+ * produit — on rend la seule chose que happy-dom ne fait pas : une hauteur.
+ */
+const HAUTEUR_SIMULEE = 800;
+const LARGEUR_SIMULEE = 390;
+
 
 let restaureLaMiseEnPage: (() => void) | null = null;
 
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  restaureLaMiseEnPage = simulateLayout(BOITE_SIMULEE);
+  restaureLaMiseEnPage = simulateLayout({ height: HAUTEUR_SIMULEE, width: LARGEUR_SIMULEE });
   // `translateAdmin` LÈVE sur un catalogue non chargé — c'est son contrat, et
   // il vaut aussi pour un témoin.
   await loadAdminInterfaceCatalog('fr');

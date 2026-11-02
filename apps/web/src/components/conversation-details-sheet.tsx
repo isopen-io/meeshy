@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { ADMIN_PERMISSIONS_QUERY_KEY, type AdminIdentity } from '@/lib/api/admin';
 import {
   conversationMembersQueryOptions,
   flattenConversationMembers,
@@ -16,6 +17,7 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translateConversationManage } from '@/lib/i18n-conversation-manage-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { managementOf } from '@/lib/view/conversation-management';
+import { rowConversationActions } from '@/lib/view/row-actions';
 import { shareConversationLink, type ConversationShareOutcome } from '@/lib/view/conversation-share-link';
 import type { PortailPartage } from '@/lib/view/invitation';
 import { canCreateShareLink } from '@/lib/view/share-link-eligibility';
@@ -177,7 +179,21 @@ export function ConversationDetailsSheet({
     },
   });
 
-  const departures = onRequestDeparture === undefined ? [] : departureKindsOf(conversation);
+  /* RENDRE OBSOLÈTE (#14645) — la loi du menu de la ligne (`deleteForAll`), le mot du catalogue de gestion. */
+  const mayObsolete =
+    manageReady &&
+    rowConversationActions({
+      conversation,
+      viewer: {
+        id: viewerId,
+        hasAccount: true,
+        isAnonymous: false,
+        platformRole: queryClient.getQueryData<AdminIdentity>(ADMIN_PERMISSIONS_QUERY_KEY)?.role ?? null,
+      },
+    }).deleteForAll;
+  const departures: readonly DepartureKind[] =
+    onRequestDeparture === undefined ? [] : [...departureKindsOf(conversation), ...(mayObsolete ? (['obsolete'] as const) : [])];
+  const closing = departures.filter((kind) => kind !== 'leave');
   const canLeave = departures.includes('leave');
   const canShare = canCreateShareLink(conversation);
   const [share, setShare] = useState<ShareState>({ busy: false, feedback: null });
@@ -293,9 +309,11 @@ export function ConversationDetailsSheet({
 
         {signedIn ? <ConversationAppearanceEntry conversation={conversation} accent={accent} deps={deps} language={language} /> : null}
 
-        {departures.includes('delete') ? (
-          <div className="flex justify-center px-4 pb-8">
-            <DepartureButton kind="delete" language={language} onPress={() => onRequestDeparture?.('delete')} />
+        {closing.length > 0 ? (
+          <div className="flex flex-wrap justify-center gap-2 px-4 pb-8">
+            {closing.map((kind) => (
+              <DepartureButton key={kind} kind={kind} language={language} onPress={() => onRequestDeparture?.(kind)} />
+            ))}
           </div>
         ) : null}
       </div>
@@ -334,7 +352,9 @@ function DepartureButton({
       <span aria-hidden className="grid place-items-center">
         <GlyphSvg glyph={kind === 'leave' ? SETTINGS_GLYPHS.signOut : CALLS_GLYPHS.trash} size={18} />
       </span>
-      {translate(language, kind === 'leave' ? 'conversation.departure.leave' : 'conversation.departure.delete')}
+      {kind === 'obsolete'
+        ? translateConversationManage(language, 'conversationManage.obsolete')
+        : translate(language, kind === 'leave' ? 'conversation.departure.leave' : 'conversation.departure.delete')}
     </button>
   );
 }
