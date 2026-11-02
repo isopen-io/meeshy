@@ -8,6 +8,7 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
@@ -25,19 +26,23 @@ class VoicePlaybackSessionControllerTest {
 
     private class RecordingForeground : VoicePlaybackForeground {
         val entered = mutableListOf<Notification>()
+        val events = mutableListOf<String>()
         var parked = 0
         var left = 0
 
         override fun enter(notificationId: Int, notification: Notification) {
             entered += notification
+            events += "enter"
         }
 
         override fun park() {
             parked++
+            events += "park"
         }
 
         override fun leave() {
             left++
+            events += "leave"
         }
     }
 
@@ -50,14 +55,44 @@ class VoicePlaybackSessionControllerTest {
         durationMs = 42_000,
     )
 
-    private fun started(bridge: VoicePlaybackSessionBridge, foreground: RecordingForeground): VoicePlaybackSessionController =
+    private fun started(
+        bridge: VoicePlaybackSessionBridge,
+        foreground: RecordingForeground,
+        appInForeground: () -> Boolean = { true },
+        sdkInt: Int = 35,
+        targetSdk: Int = 36,
+    ): VoicePlaybackSessionController =
         VoicePlaybackSessionController(
             context = context,
             bridge = bridge,
             foreground = foreground,
             scope = CoroutineScope(Dispatchers.Unconfined),
             loadArtwork = { null },
+            appInForeground = appInForeground,
+            sdkInt = sdkInt,
+            targetSdk = targetSdk,
         ).also { it.start() }
+
+    /** Une carte parquée (pause de plus de 3 s), l'application hors de l'écran : ce que « Lecture » trouve sur l'écran verrouillé. */
+    private fun parked(
+        bridge: VoicePlaybackSessionBridge,
+        foreground: RecordingForeground,
+        appInForeground: () -> Boolean = { false },
+        sdkInt: Int = 35,
+    ): VoicePlaybackSessionController {
+        val controller = started(bridge, foreground, appInForeground, sdkInt)
+        bridge.publish(card, VoicePlaybackTransportState(positionMs = 0, isPlaying = true))
+        bridge.publish(card, VoicePlaybackTransportState(positionMs = 7_000, isPlaying = false))
+        foreground.events.clear()
+        return controller
+    }
+
+    /** Les ordres que le lecteur reçoit, rangés dans le MÊME journal que les entrées au premier plan. */
+    private fun listening(bridge: VoicePlaybackSessionBridge, foreground: RecordingForeground) {
+        CoroutineScope(Dispatchers.Unconfined).launch {
+            bridge.commands.collect { foreground.events += "command:$it" }
+        }
+    }
 
     private fun actionTitles(notification: Notification): List<String> =
         notification.actions.map { it.title.toString() }
@@ -187,5 +222,107 @@ class VoicePlaybackSessionControllerTest {
             controller.onAction("inconnu")
             expectNoEvents()
         }
+    }
+
+    @Test
+    fun `a play from a parked card on Android 15 takes the foreground before the order reaches the player`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        val controller = parked(bridge, foreground)
+        listening(bridge, foreground)
+
+        controller.onAction(VoicePlaybackSessionController.ACTION_PLAY)
+
+        assertThat(foreground.events).containsExactly("enter", "command:${VoicePlaybackCommand.Play}").inOrder()
+    }
+
+    @Test
+    fun `the foreground entered for a resume carries the parked card`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        val controller = parked(bridge, foreground)
+        val before = foreground.entered.size
+
+        controller.onAction(VoicePlaybackSessionController.ACTION_PLAY)
+
+        val notification = foreground.entered[before]
+        assertThat(notification.extras.getCharSequence(Notification.EXTRA_TITLE)).isEqualTo("Famille — 14/10/2025 09:30")
+        assertThat(actionTitles(notification)).contains(context.getString(me.meeshy.app.R.string.voice_playback_play))
+    }
+
+    @Test
+    fun `a play while the app is on screen asks for the focus directly`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        val controller = parked(bridge, foreground, appInForeground = { true })
+        listening(bridge, foreground)
+
+        controller.onAction(VoicePlaybackSessionController.ACTION_PLAY)
+
+        assertThat(foreground.events).containsExactly("command:${VoicePlaybackCommand.Play}")
+    }
+
+    @Test
+    fun `a play before Android 15 asks for the focus directly`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        val controller = parked(bridge, foreground, sdkInt = 28)
+        listening(bridge, foreground)
+
+        controller.onAction(VoicePlaybackSessionController.ACTION_PLAY)
+
+        assertThat(foreground.events).containsExactly("command:${VoicePlaybackCommand.Play}")
+    }
+
+    @Test
+    fun `a play while the service already holds the foreground does not enter it twice`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        val controller = started(bridge, foreground, appInForeground = { false })
+        bridge.publish(card, VoicePlaybackTransportState(positionMs = 0, isPlaying = true))
+        foreground.events.clear()
+        listening(bridge, foreground)
+
+        controller.onAction(VoicePlaybackSessionController.ACTION_PLAY)
+
+        assertThat(foreground.events).containsExactly("command:${VoicePlaybackCommand.Play}")
+    }
+
+    @Test
+    fun `a play with no card published has no foreground to take`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        val controller = started(bridge, foreground, appInForeground = { false })
+        foreground.events.clear()
+        listening(bridge, foreground)
+
+        controller.onAction(VoicePlaybackSessionController.ACTION_PLAY)
+
+        assertThat(foreground.events).containsExactly("command:${VoicePlaybackCommand.Play}")
+    }
+
+    @Test
+    fun `a pause never takes the foreground`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        val controller = parked(bridge, foreground)
+        listening(bridge, foreground)
+
+        controller.onAction(VoicePlaybackSessionController.ACTION_PAUSE)
+
+        assertThat(foreground.events).containsExactly("command:${VoicePlaybackCommand.Pause}")
+    }
+
+    @Test
+    fun `the foreground is given back when the player refuses and publishes the card as paused`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        val controller = parked(bridge, foreground)
+        controller.onAction(VoicePlaybackSessionController.ACTION_PLAY)
+        foreground.events.clear()
+
+        bridge.publish(card, VoicePlaybackTransportState(positionMs = 7_000, isPlaying = false))
+
+        assertThat(foreground.events).containsExactly("park")
     }
 }
