@@ -160,6 +160,7 @@ import { directoryFriendRequestsRoutes } from './directory/friend-requests';
 import { relationsRoutes } from './relations';
 import { directoryContactsRoutes } from './directory/contacts';
 import { relationsLevelRoutes } from './relations/level';
+import { bringRoutes } from './bring';
 import { contactsResolveRoutes } from './contacts/resolve';
 import { pushTokenRoutes } from './push-tokens';
 import conversationPreferencesRoutes from './conversation-preferences';
@@ -401,6 +402,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'directory-contacts', prefix: `${API_PREFIX}/directory`, module: directoryContactsRoutes },
   // Le niveau EFFECTIF du lien avec une personne (#13998) — lecture seule, niveauEffectif pour seule loi.
   { name: 'relations-level', prefix: `${API_PREFIX}/relations`, module: relationsLevelRoutes },
+  // Le Bring (#13936, D-3) : faire sonner un Ami, un Proche ou un Sang pour l'urgence extrême.
+  { name: 'bring', prefix: `${API_PREFIX}/bring`, module: bringRoutes },
   // La carte de visite partagée (#8101) — vCard → profils publics. Montage
   // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).
   { name: 'contacts-resolve', prefix: `${API_PREFIX}/contacts`, module: contactsResolveRoutes },

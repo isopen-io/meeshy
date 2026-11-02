@@ -21,6 +21,9 @@ export const byUserIdLevel = (userId: string): string => `/api/v1/relations/${en
 /** POST /api/v1/relations/:userId/ritual */
 export const byUserIdRitual = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/ritual`;
 
+/** GET · PUT /api/v1/relations/:userId/settings */
+export const byUserIdSettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/settings`;
+
 /** GET /api/v1/relations/config */
 export const config = '/api/v1/relations/config';
 
