@@ -396,3 +396,17 @@ export async function keepUnnamedKeys(
   const carried = Object.fromEntries(kept.filter((key) => stored && key in stored).map((key) => [key, stored![key]]));
   return { ...document, ...carried };
 }
+
+/**
+ * Ce qu'une RÉINITIALISATION écrit pour une catégorie : `null` (les défauts), sauf les
+ * clés `keptWhenUnnamed` stockées, qui survivent — « Réinitialiser les notifications »
+ * ne rouvre pas en silence un son qui passe Ne pas déranger (contre-audit #14441, N3).
+ */
+export async function resetDocumentFor(
+  prisma: PrismaClient,
+  userId: string,
+  category: PreferenceCategory
+): Promise<PreferenceDocument | null> {
+  const kept = await keepUnnamedKeys(prisma, userId, category, {}, {});
+  return Object.keys(kept).length === 0 ? null : kept;
+}
