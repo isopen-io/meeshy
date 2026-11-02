@@ -122,3 +122,23 @@ export async function pairAccess(
     })
   );
 }
+
+/**
+ * Les mineurs DÉCLARÉS que `senderId` ne peut pas atteindre par `feature` — le
+ * bouclier (`RELATION_MINOR_TARGET_MIN_LEVEL`, RG-21) et lui seul : le blocage
+ * garde sa propre règle. L'âge est lu d'abord ; sans mineur parmi les cibles,
+ * aucune autre lecture (le chemin nominal d'un groupe d'adultes ne coûte rien).
+ */
+export async function minorShieldedAmong(
+  prisma: PairAccessDb,
+  params: { readonly feature: RelationFeature; readonly senderId: string; readonly recipientIds: readonly string[]; readonly now?: Date },
+): Promise<ReadonlySet<string>> {
+  const now = params.now ?? new Date();
+  const ids = [...new Set(params.recipientIds)].filter((id) => id && id !== params.senderId);
+  if (ids.length === 0) return new Set();
+  const ages = await agesOf(prisma, ids, now);
+  const minors = ids.filter((id) => ages.get(id) === 'minor');
+  if (minors.length === 0) return new Set();
+  const verdicts = await pairAccessAmong(prisma, { feature: params.feature, subjectId: params.senderId, otherIds: minors, subjectIs: 'viewer', now });
+  return new Set(minors.filter((id) => verdicts.get(id)?.allowed === false && verdicts.get(id)?.reason === 'level'));
+}

@@ -1887,6 +1887,160 @@
         "reason": "level",
         "requiresConsent": false
       }
+    },
+    {
+      "id": "call-ring-public-between-adults",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-to-self-refused",
+      "matrix": "Soi",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "self",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-acquaintance-adult-to-minor-shielded",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "ACQUAINTANCE",
+        "grantedByTarget": "ACQUAINTANCE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "ACQUAINTANCE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-friend-adult-to-minor-allowed",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "FRIEND",
+        "grantedByTarget": "FRIEND",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "FRIEND",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "call-ring-minor-to-minor-allowed",
+      "matrix": "Bouclier des mineurs",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "minor",
+        "targetMinor": "minor",
+        "viewerRole": "USER",
+        "feature": "call.ring"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "views-identity-community",
+      "matrix": "Communauté",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": true,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "views.identity"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "COMMUNITY",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "views-identity-public-refused",
+      "matrix": "Matrice",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "views.identity"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
     }
   ]
 }

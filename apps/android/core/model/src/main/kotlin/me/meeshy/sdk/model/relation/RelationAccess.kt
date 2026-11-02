@@ -58,6 +58,8 @@ public enum class RelationFeature(
     DM_READ_RECEIPTS("dm.readReceipts", RelationLevel.ACQUAINTANCE),
     DM_TYPING("dm.typing", RelationLevel.ACQUAINTANCE),
     PRESENCE_DND("presence.dnd", RelationLevel.ACQUAINTANCE),
+    CALL_RING("call.ring", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.FRIEND),
+    VIEWS_IDENTITY("views.identity", RelationLevel.COMMUNITY),
     AUDIENCE_ACQUAINTANCES("audience.acquaintances", RelationLevel.ACQUAINTANCE),
     AUDIENCE_CLOSE("audience.close", RelationLevel.CLOSE),
     AUDIENCE_BLOOD("audience.blood", RelationLevel.BLOOD),

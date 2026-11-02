@@ -528,7 +528,7 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
       });
       (prisma as any).user = {
-        findMany: jest.fn<any>().mockRejectedValue(new Error('db down')),
+        findMany: jest.fn<any>(async (args: any) => (args?.select?.birthDate ? [] : Promise.reject(new Error('db down')))),
       };
 
       const { socket, handlers } = makeSocket();

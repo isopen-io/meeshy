@@ -107,6 +107,8 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['dm.readReceipts', 'ACQUAINTANCE'],
     ['dm.typing', 'ACQUAINTANCE'],
     ['presence.dnd', 'ACQUAINTANCE'],
+    ['call.ring', 'PUBLIC'],
+    ['views.identity', 'COMMUNITY'],
     ['audience.acquaintances', 'ACQUAINTANCE'],
     ['audience.close', 'CLOSE'],
     ['audience.blood', 'BLOOD'],
@@ -286,6 +288,14 @@ describe('resolveRelationAccess — le bouclier des mineurs (RG-21)', () => {
     open.forEach((ages) => {
       expect(access({ feature: 'dm.request', ...ages }).allowed).toBe(true);
     });
+  });
+
+  it('un majeur qui n\'est pas Ami ne fait pas sonner un mineur ; un Ami, si', () => {
+    expect(access({ ...both('CLOSE'), feature: 'call.ring', targetMinor: 'minor' }).allowed).toBe(true);
+    expect(access({ ...both('FRIEND'), feature: 'call.ring', targetMinor: 'minor' }).allowed).toBe(true);
+    expect(access({ ...both('ACQUAINTANCE'), feature: 'call.ring', targetMinor: 'minor' })).toMatchObject({ allowed: false, reason: 'level' });
+    expect(access({ feature: 'call.ring', viewerMinor: 'minor', targetMinor: 'minor' }).allowed).toBe(true);
+    expect(access({ feature: 'call.ring' }).allowed).toBe(true);
   });
 
   it('le bouclier ne relève que les features qu\'il nomme', () => {

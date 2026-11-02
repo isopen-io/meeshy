@@ -53,6 +53,8 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case dmReadReceipts = "dm.readReceipts"
     case dmTyping = "dm.typing"
     case presenceDnd = "presence.dnd"
+    case callRing = "call.ring"
+    case viewsIdentity = "views.identity"
     case audienceAcquaintances = "audience.acquaintances"
     case audienceClose = "audience.close"
     case audienceBlood = "audience.blood"
@@ -83,7 +85,8 @@ public enum RelationFeature: String, CaseIterable, Sendable {
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
              .locationLive, .locationHistory, .locationProximity: return .blood
         case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
-        case .acquaintanceAuto, .dmRequest: return .public
+        case .acquaintanceAuto, .dmRequest, .callRing: return .public
+        case .viewsIdentity: return .community
         }
     }
 
@@ -101,7 +104,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// (`RELATION_DIRECTED_FEATURES`).
     public var isDirected: Bool {
         switch self {
-        case .bring, .talkie, .acquaintanceAuto, .dmRequest: return true
+        case .bring, .talkie, .acquaintanceAuto, .dmRequest, .callRing: return true
         default: return false
         }
     }
@@ -112,6 +115,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     public var minorTargetMinimum: RelationLevel? {
         switch self {
         case .dmRequest: return .acquaintance
+        case .callRing: return .friend
         default: return nil
         }
     }
