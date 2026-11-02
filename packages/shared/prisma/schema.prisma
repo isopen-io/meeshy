@@ -2109,11 +2109,11 @@ model PairInteractionDay {
 ///
 /// Les partages que le rituel présente : titre d'écoute, position en direct,
 /// historique de position, alerte de proximité. Les réglages des autres lots du
-/// chantier (talkie, fantôme) s'y ajouteront avec leur lot.
+/// chantier (fantôme) s'y ajouteront avec leur lot.
 ///
-/// Le Bring (#13936, D-3) est l'exception DÉCLARÉE au « faux par défaut » : il est
-/// DISPONIBLE par défaut et `bringBlockedAt` non nul dit que `ownerId` a bloqué le
-/// Bring de `otherId`. Une ligne née d'un tel blocage ne vaut AUCUN consentement
+/// Le Bring (#13936, D-3) et le talkie (#13935) sont l'exception DÉCLARÉE au « faux
+/// par défaut » : des préférences de RÉCEPTION, actives par défaut ; `bringBlockedAt` /
+/// `talkieBlockedAt` non nul dit que `ownerId` les a coupées pour `otherId`. Une ligne née d'un tel blocage ne vaut AUCUN consentement
 /// du rituel : ses quatre partages restent faux.
 /// Index unique posé par `migrations/2026-10-31-relation-feature-setting-indexes.mongodb.js`.
 model RelationFeatureSetting {
@@ -2125,6 +2125,10 @@ model RelationFeatureSetting {
   locationHistoryShared Boolean  @default(false)
   proximityShared       Boolean  @default(false)
   bringBlockedAt        DateTime?
+  /// Non nul = `ownerId` a coupé la réception DIRECTE du talkie de `otherId` (#13935) :
+  /// préférence de réception, active par défaut (spec `talkieDirect @default(true)`,
+  /// écrite en date nullable — aucun couple booléen + horodatage).
+  talkieBlockedAt       DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

@@ -263,7 +263,7 @@ describe('#13936 — le blocage du Bring, par personne', () => {
     await app.close();
 
     expect(reglage.status).toBe(200);
-    expect(reglage.body.data).toEqual({ userId: MOI, bringBlocked: false });
+    expect(reglage.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false });
   });
 
   it('bloqué par le destinataire : 403 BRING_BLOCKED, et le bouton disparaît (available: false, 0 restant)', async () => {
@@ -274,7 +274,7 @@ describe('#13936 — le blocage du Bring, par personne', () => {
     await app.close();
 
     expect(pose.status).toBe(200);
-    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true });
+    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true, talkieBlocked: false });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('BRING_BLOCKED');
     expect(lecture.body.data).toMatchObject({ available: false, remainingToday: 0 });
@@ -452,6 +452,18 @@ describe('#13936 — un blocage utilisateur coupe le Bring en vol', () => {
     const stops = app.emissions.filter((e) => e.event === 'bring:stopped');
     expect(stops.map((e) => e.room).sort()).toEqual([`user:${AUTRE}`, `user:${MOI}`].sort());
     expect(stops[0].payload.reason).toBe('sender');
+  });
+});
+
+describe('#13935 — un blocage utilisateur coupe aussi le talkie, dans les deux sens', () => {
+  it('les deux coupures sont posées à l’instant du blocage', async () => {
+    const app = await appli(niveau('BLOOD'));
+    await app.call('PUT', `/api/v1/directory/blocks/${MOI}`, undefined, AUTRE);
+    await new Promise((r) => setImmediate(r));
+    await app.close();
+
+    expect(cache.get(`talkie:cut:${MOI}:${AUTRE}`)?.value).toBe(String(NOW.getTime()));
+    expect(cache.get(`talkie:cut:${AUTRE}:${MOI}`)?.value).toBe(String(NOW.getTime()));
   });
 });
 
