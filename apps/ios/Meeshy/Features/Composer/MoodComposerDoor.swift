@@ -161,7 +161,7 @@ struct MoodComposerDoor: View {
         recoveredSeed = ComposerMoodSeed(
             emoji: draft.moodEmoji,
             text: draft.content,
-            visibility: PostVisibility(rawValue: draft.visibility),
+            visibility: PostVisibility(served: draft.visibility),
             visibilityUserIds: draft.visibilityUserIds
         )
         recoveredCmid = draft.clientMutationId
