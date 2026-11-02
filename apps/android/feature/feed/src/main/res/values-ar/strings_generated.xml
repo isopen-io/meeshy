@@ -172,7 +172,7 @@
     <string name="status_composer_publish">نشر</string>
     <string name="status_composer_title">الحالة</string>
     <string name="status_composer_visibility_community">المجتمعات</string>
-    <string name="status_composer_visibility_friends">جهات الاتصال</string>
+    <string name="status_composer_visibility_friends">الأصدقاء</string>
     <string name="status_composer_visibility_private">خاص</string>
     <string name="status_composer_visibility_public">عام</string>
     <string name="status_react_error">تعذّر التفاعل مع الحالة</string>

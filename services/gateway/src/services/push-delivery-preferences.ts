@@ -29,6 +29,20 @@ export function isCallPushDataType(type: string | undefined): boolean {
 }
 
 /**
+ * Le BRING (#13936, D-3) — un son FORCÉ pour l'urgence extrême, et son arrêt. Une
+ * catégorie à part, comme l'appel : ni `pushEnabled`, ni Ne pas déranger, ni les
+ * préférences de LIVRAISON (`soundEnabled` qui le rendrait muet, regroupement) ne
+ * le gouvernent. Sa seule gouvernance est la préférence de RÉCEPTION du
+ * destinataire (globale `bringEnabled`, et par personne), appliquée EN AMONT par
+ * `services/bring/bringService.ts` : un push qui arrive ici a déjà été autorisé.
+ */
+const BRING_PUSH_DATA_TYPES: ReadonlySet<string> = new Set(['bring', 'bring_stopped']);
+
+export function isBringPushDataType(type: string | undefined): boolean {
+  return type !== undefined && BRING_PUSH_DATA_TYPES.has(type);
+}
+
+/**
  * GW6 — a call push is any send targeting a `voip` token OR carrying a
  * call-management data type (`call` ring, `call_cancel` / `call_answered_elsewhere`
  * stop-ring). `missed_call` is deliberately NOT in this set: it is a regular
@@ -115,6 +129,7 @@ export async function applyUserPreferences(
 ): Promise<PushNotificationPayload | null> {
   const { userId, payload, bypassDnd } = options;
   if (isNotificationRevocationPush(payload)) return payload;
+  if (isBringPushDataType(payload.data?.type)) return payload;
 
   const isCallPush = isCallRelatedPush(options);
   const notifPrefs = await loadNotifPrefs(prisma, userId);

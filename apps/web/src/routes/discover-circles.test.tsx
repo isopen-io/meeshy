@@ -14,7 +14,9 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { BloodRitualBody, BloodRitualDialog, ritualEventOf } from './blood-ritual-dialog';
 import { CirclesPanel } from './discover-circles';
-import { CircleLinkRow, CircleLinkSheet, CircleRequestRow, CircleSectionHeader, progressText, type CircleRequestHandlers } from './discover-circles-parts';
+import { progressText } from '@/lib/relations/progress-text';
+
+import { CircleLinkRow, CircleLinkSheet, CircleRequestRow, CircleSectionHeader, type CircleRequestHandlers } from './discover-circles-parts';
 
 /**
  * « MES CERCLES » DESSINÉ (#13938) — iso `CirclesTab`, `CircleRowView`,

@@ -39,6 +39,7 @@ import * as apiLegacyUserGroup from './endpoints/api-legacy-user.js';
 import * as appGroup from './endpoints/app.js';
 import * as attachmentsGroup from './endpoints/attachments.js';
 import * as authGroup from './endpoints/auth.js';
+import * as bringGroup from './endpoints/bring.js';
 import * as callsGroup from './endpoints/calls.js';
 import * as communitiesGroup from './endpoints/communities.js';
 import * as contactsGroup from './endpoints/contacts.js';
@@ -102,6 +103,7 @@ export const API_ENDPOINTS = {
   app: appGroup,
   attachments: attachmentsGroup,
   auth: authGroup,
+  bring: bringGroup,
   calls: callsGroup,
   communities: communitiesGroup,
   contacts: contactsGroup,
@@ -374,6 +376,8 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/auth/verification/status',
   '/api/v1/auth/verify-email',
   '/api/v1/auth/verify-phone',
+  '/api/v1/bring/:bringId',
+  '/api/v1/bring/:userId',
   '/api/v1/calls',
   '/api/v1/calls/:callId',
   '/api/v1/calls/:callId/participants',
@@ -677,6 +681,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/relations/:userId',
   '/api/v1/relations/:userId/level',
   '/api/v1/relations/:userId/ritual',
+  '/api/v1/relations/:userId/settings',
   '/api/v1/relations/config',
   '/api/v1/reports',
   '/api/v1/signal/keys',
@@ -1015,6 +1020,8 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/auth/verification/status': ['POST'],
   '/api/v1/auth/verify-email': ['POST'],
   '/api/v1/auth/verify-phone': ['POST'],
+  '/api/v1/bring/:bringId': ['DELETE'],
+  '/api/v1/bring/:userId': ['GET', 'POST'],
   '/api/v1/calls': ['POST'],
   '/api/v1/calls/:callId': ['GET', 'DELETE'],
   '/api/v1/calls/:callId/participants': ['POST'],
@@ -1318,6 +1325,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/relations/:userId': ['GET'],
   '/api/v1/relations/:userId/level': ['POST'],
   '/api/v1/relations/:userId/ritual': ['POST'],
+  '/api/v1/relations/:userId/settings': ['GET', 'PUT'],
   '/api/v1/relations/config': ['GET'],
   '/api/v1/reports': ['POST'],
   '/api/v1/signal/keys': ['POST'],

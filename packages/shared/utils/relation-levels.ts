@@ -103,11 +103,40 @@ export const postCircleAudienceFloor = (visibility: unknown): RelationLevel | nu
     : null;
 
 /**
- * Les features qui exigent un CONSENTEMENT explicite et refusable, à tout âge
- * (§ 1.8) : Bring (à l'entrée en Ami), talkie et catégorie d'écoute (à l'entrée
- * en Proche), titre d'écoute et position (au rituel Sang). La loi dit le
- * PLAFOND ; `RelationFeatureSetting` dit si la personne l'active — les deux sont
- * requis. Ce n'est JAMAIS un refus d'âge.
+ * Deux NATURES derrière l'entrée `consent` de la loi (analyse de conformité #13942,
+ * écart E9, #14407) — la loi les traite de même (refus tant que `consent` ne vaut
+ * pas `'granted'`), l'orchestrateur ne les RÉSOUT pas de même :
+ *
+ * 1. le CONSENTEMENT RGPD de l'ÉMETTEUR (art. 7) — ce que je partage de moi :
+ *    catégorie et titre d'écoute, position, historique, proximité. Recueilli
+ *    explicitement (écran à l'entrée en Proche, rituel du Sang), FAUX par défaut,
+ *    retirable ; `consent: 'granted'` seulement sur un accord stocké ;
+ * 2. la PRÉFÉRENCE DE RÉCEPTION du DESTINATAIRE — ce que j'accepte de recevoir :
+ *    Bring, talkie. Base : l'exécution du contrat (art. 6(1)(b)), pas un
+ *    consentement ; ACTIVE par défaut, coupée par personne ou globalement ;
+ *    l'orchestrateur la traduit en `consent: 'granted'` tant qu'elle n'est pas
+ *    coupée. L'interface la nomme « autorisation », jamais « consentement ».
+ *
+ * La loi dit le PLAFOND ; l'une ou l'autre dit si la personne l'ouvre — les deux
+ * sont requis. Ce n'est JAMAIS un refus d'âge.
+ */
+export const RELATION_RECEPTION_PREFERENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'bring',
+  'talkie',
+]);
+
+export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'listening.category',
+  'listening.title',
+  'location.live',
+  'location.history',
+  'location.proximity',
+]);
+
+/**
+ * Les features dont la loi exige `consent: 'granted'` — l'UNION des deux natures
+ * ci-dessus (témoin : `__tests__/bring-contract.test.ts`). Écrite en LITTÉRAL : les
+ * miroirs Swift et Kotlin relisent cette liste dans ce fichier.
  */
 export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
   'bring',
