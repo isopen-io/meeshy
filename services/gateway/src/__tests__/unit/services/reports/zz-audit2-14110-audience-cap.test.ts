@@ -24,6 +24,8 @@ it('un mineur arrivé 51e dans le groupe rend le signalement prioritaire', async
   const members = [...Array.from({ length: 50 }, (_, i) => ({ userId: hex(100 + i), birthDate: ADULT_BIRTH })), { userId: MINOR, birthDate: MINOR_BIRTH }];
   const prisma = {
     message: { findUnique: async () => ({ senderId: hex(7000), conversationId: CONVERSATION_ID, messageType: 'text' }) },
+    // Adapté (#14627, audit 3 M2) : l'audience ne se compte que hors salons global, public et diffusion — le type se lit.
+    conversation: { findUnique: async () => ({ id: CONVERSATION_ID, type: 'group' }) },
     participant: {
       findUnique: async () => ({ userId: AUTHOR }),
       findMany: async (a: any) => members.slice(0, a.take ?? members.length),

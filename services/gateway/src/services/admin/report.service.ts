@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { priorityFirst } from '../reports/priorityQueue';
+import { OPEN_REPORT_STATUSES, priorityFirst } from '../reports/priorityQueue';
 import type {
   Report,
   CreateReportDTO,
@@ -15,9 +15,27 @@ export class ReportService {
   constructor(private prisma: PrismaClient) {}
 
   /**
-   * Créer un nouveau signalement
+   * Créer un signalement — UN seul ouvert par signalant inscrit et par cible
+   * (#14627, audit 3 M1).
+   *
+   * Sans seuil par cible, un même compte remplissait la file d'autant de lignes
+   * qu'il répétait le geste ; un compte déclaré mineur les rendait toutes
+   * prioritaires et repoussait en page 2 le signalement d'une autre mineure. Le
+   * doublon d'une ligne encore à traiter (`pending`, `under_review`) rend donc
+   * cette ligne, la plus ancienne, sans rien écrire : le signalant reçoit
+   * l'accusé de SON signalement, ce qu'il savait déjà — aucun oracle. Le motif
+   * n'entre pas dans la paire : changer de motif ne fait pas un second
+   * signalement de la même cible. Une ligne close ne retient pas le suivant.
+   *
+   * Un signalant anonyme n'est pas dédoublonné : rien ne l'identifie d'un
+   * signalement à l'autre, et les seuils par appelant le bornent. Deux requêtes
+   * simultanées peuvent encore écrire deux lignes (lecture puis écriture, sans
+   * index unique partiel) : la fenêtre est celle d'un aller-retour.
    */
   async createReport(data: CreateReportDTO): Promise<Report> {
+    const existing = await this.openReportOf(data);
+    if (existing) return existing;
+
     const report = await this.prisma.report.create({
       data: {
         reportedType: data.reportedType,
@@ -34,6 +52,20 @@ export class ReportService {
     });
 
     return report as Report;
+  }
+
+  private async openReportOf(data: CreateReportDTO): Promise<Report | null> {
+    if (!data.reporterId) return null;
+    const report = await this.prisma.report.findFirst({
+      where: {
+        reporterId: data.reporterId,
+        reportedType: data.reportedType,
+        reportedEntityId: data.reportedEntityId,
+        status: { in: [...OPEN_REPORT_STATUSES] },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return report as Report | null;
   }
 
   /**
