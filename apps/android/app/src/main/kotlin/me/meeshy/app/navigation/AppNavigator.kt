@@ -1,6 +1,6 @@
 package me.meeshy.app.navigation
 
-import androidx.compose.foundation.layout.systemGestureExclusion
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember

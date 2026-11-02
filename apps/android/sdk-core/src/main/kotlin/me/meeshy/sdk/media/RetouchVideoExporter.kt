@@ -13,6 +13,7 @@ import androidx.media3.effect.Crop
 import androidx.media3.effect.MatrixTransformation
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.RgbMatrix
+import androidx.media3.effect.TextureOverlay
 import com.google.common.collect.ImmutableList
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
@@ -129,7 +130,7 @@ public object RetouchVideoEffects {
         cropNdc?.let { add(Crop(it[0], it[1], it[2], it[3])) }
         look.rgbMatrix?.let { matrix -> add(RgbMatrix { _, _ -> matrix }) }
         look.placement?.let { place -> add(MatrixTransformation { android.graphics.Matrix().apply { setScale(place.scale, place.scale); postTranslate(place.translateX, place.translateY) } }) }
-        val overlays = listOfNotNull(look.frame, text).map { BitmapOverlay.createStaticBitmapOverlay(it) }
+        val overlays: List<TextureOverlay> = listOfNotNull(look.frame, text).map { BitmapOverlay.createStaticBitmapOverlay(it) }
         if (overlays.isNotEmpty()) add(OverlayEffect(ImmutableList.copyOf(overlays)))
     }
 }

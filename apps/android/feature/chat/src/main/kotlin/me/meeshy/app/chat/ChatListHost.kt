@@ -36,7 +36,7 @@ import androidx.compose.ui.Modifier
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.focus.LocalFocusManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.selection.MessageSelection
