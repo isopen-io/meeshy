@@ -546,7 +546,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     expect(bench.posts[0]?.visibility).toBe('COMMUNITY');
   });
 
-  test('la feuille offre les six, dans l’ordre iOS ; ONLY/EXCEPT sont grisés AVEC leur raison, sans effet', async () => {
+  test('la feuille offre les neuf — l’échelle des cercles comprise (#13939) —, dans l’ordre iOS ; ONLY/EXCEPT sont grisés AVEC leur raison, sans effet', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Un texte');
@@ -554,7 +554,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
 
     expect(dialogOpen()).not.toBeNull();
     const rows = Array.from(document.querySelectorAll<HTMLElement>('dialog[open] [data-audience-choice]'));
-    expect(rows.map((row) => row.getAttribute('data-audience-choice'))).toEqual(['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE']);
+    expect(rows.map((row) => row.getAttribute('data-audience-choice'))).toEqual(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCES', 'FRIENDS', 'CLOSE', 'BLOOD', 'EXCEPT', 'ONLY', 'PRIVATE']);
 
     for (const refused of ['ONLY', 'EXCEPT']) {
       const row = choice(refused)!;
@@ -571,12 +571,14 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     expect(Object.hasOwn(bench.posts[0]!, 'visibility')).toBe(false);
   });
 
-  test('chaque rangée porte SON glyphe — six tracés distincts (PostVisibility.icon)', async () => {
+  test('chaque rangée porte SON icône — six tracés distincts et les trois icônes de cercle (PostVisibility.icon)', async () => {
     const el = mount(harness({}).deps);
     await openSheet(el);
-    const traces = Array.from(document.querySelectorAll('dialog[open] [data-audience-choice]')).map((row) => row.querySelector('svg')?.innerHTML);
-    expect(traces).toHaveLength(6);
-    expect(new Set(traces).size).toBe(6);
+    const rows = Array.from(document.querySelectorAll('dialog[open] [data-audience-choice]'));
+    const icons = rows.map((row) => row.querySelector('svg')?.innerHTML ?? row.querySelector('[data-audience-icon]')?.textContent);
+    expect(icons).toHaveLength(9);
+    expect(new Set(icons).size).toBe(9);
+    expect(rows.filter((row) => row.querySelector('svg') !== null)).toHaveLength(6);
   });
 
   test('rien choisi : la feuille désigne le DÉFAUT comme rangée courante, « par défaut » — la même chose que la pastille', async () => {
@@ -638,7 +640,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     const el = mount(harness({}).deps);
     typeText(el, 'Un texte, pour que le menu soit atteignable');
     act(() => kindToggle(el)!.click());
-    expect(kindChoice('STORY')?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Contacts');
+    expect(kindChoice('STORY')?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Amis');
     expect(kindChoice('POST')?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Public');
     act(() => kindToggle(el)!.click());
 
@@ -646,7 +648,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     act(() => choice('FRIENDS')!.click());
     act(() => kindToggle(el)!.click());
     for (const kind of ['STORY', 'POST', 'REEL'] as const) {
-      expect(kindChoice(kind)?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Contacts');
+      expect(kindChoice(kind)?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Amis');
     }
   });
 
@@ -658,7 +660,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     expect(button.getAttribute('aria-expanded')).toBe('false');
     const describedBy = button.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy!)?.textContent).toBe('Contacts · par défaut');
+    expect(document.getElementById(describedBy!)?.textContent).toBe('Amis · par défaut');
 
     await openSheet(el);
     expect(pastille(el)!.getAttribute('aria-expanded')).toBe('true');
