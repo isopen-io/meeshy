@@ -18,7 +18,10 @@ import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 
 type ReportReads = Pick<PrismaClient['report'], 'findMany' | 'count'>;
 
-const OPEN_URGENT: Prisma.ReportWhereInput = { priority: { gte: 1 }, status: { in: ['pending', 'under_review'] } };
+/** Un signalement encore À TRAITER — la file, et le dédoublonnage d'un signalant (#14627). */
+export const OPEN_REPORT_STATUSES: readonly string[] = ['pending', 'under_review'];
+
+const OPEN_URGENT: Prisma.ReportWhereInput = { priority: { gte: 1 }, status: { in: [...OPEN_REPORT_STATUSES] } };
 
 export type PriorityFirstPage = {
   readonly where: Prisma.ReportWhereInput;

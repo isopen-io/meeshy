@@ -83,15 +83,6 @@ async function participe(
   return false;
 }
 
-async function aCreeLaConversation(prisma: PrismaClient, conversationId: string, qui: Signalant): Promise<boolean> {
-  if (!qui.userId) return false;
-  const ligne = await prisma.participant.findFirst({
-    where: { conversationId, userId: qui.userId, role: 'creator' },
-    select: { id: true },
-  });
-  return ligne !== null;
-}
-
 function estAuteurDuMessage(
   message: { senderId?: string | null; sender?: { userId?: string | null } | null },
   qui: Signalant
@@ -204,8 +195,11 @@ export async function verifierCible(options: {
         select: { id: true },
       });
       if (!conversation) return INTROUVABLE;
-      // #14110 (contre-audit N2) — celui qui a CRÉÉ la conversation ne la signale pas.
-      if (await aCreeLaConversation(prisma, entityId, signalant)) return INACCESSIBLE;
+      // #14626 — une conversation n'a pas d'AUTEUR : celui qui ouvre un
+      // tête-à-tête porte le rôle `creator`, et celui qui hérite d'un groupe
+      // aussi. Le lui refuser retirait le signalement à la mineure qui a écrit
+      // la première à son harceleur. Tout membre actif la signale, comme le
+      // promet `conversation-action-policy` (`report`) aux trois clients.
       return (await participe(prisma, entityId, signalant)) ? ATTEIGNABLE : INACCESSIBLE;
     }
 

@@ -27,19 +27,23 @@ import { verifierCible, type TypeSignale } from './target';
  * > jour où quelqu'un durcit `/admin` en croyant ne toucher qu'à
  * > l'administration.
  *
- * ## Deux seuils, par APPELANT — et aucun par cible
+ * ## Deux seuils, par APPELANT — aucun par cible, un signalement par paire
  *
  * `10/h user:<id>` et `30/h ip:<ip>` bornent l'APPELANT (anti-spam). Il n'y a
- * plus de seuil par CIBLE (#14110, contre-audit N2/N3) : TOUT signalement
- * atteignable s'écrit, et le bruit d'une rafale se regroupe par cible à la
- * LECTURE (la console). Un seuil par cible jetait des signalements légitimes —
- * celui d'une mineure, quatrième de l'heure — et se laissait épuiser par
- * l'auteur du contenu ; un refus distinct (429) ou un accusé fabriqué disait au
- * signalé qu'on l'avait signalé. Rien ne consomme le NOMBRE de signalements
- * d'une cible : une rafale ne coûte que du bruit dans la file.
+ * plus de seuil par CIBLE (#14110, contre-audit N2/N3) : un seuil par cible
+ * jetait des signalements légitimes — celui d'une mineure, quatrième de l'heure
+ * — et se laissait épuiser par l'auteur du contenu ; un refus distinct (429) ou
+ * un accusé fabriqué disait au signalé qu'on l'avait signalé.
  *
- * Signaler ce dont on est l'auteur ou le créateur est refusé pour tous les
- * types (`verifierCible`), avec le même 404 qu'une cible introuvable.
+ * Un signalant inscrit n'a qu'UN signalement ouvert par cible (#14627,
+ * `ReportService.createReport`) : son doublon reçoit l'accusé de la ligne
+ * existante, sans écriture. Plusieurs signalants d'une même cible écrivent
+ * chacun leur ligne, et rien ne les regroupe à la lecture : la console liste
+ * les lignes telles qu'elles sont.
+ *
+ * Signaler ce dont on est l'AUTEUR est refusé (`verifierCible`), avec le même
+ * 404 qu'une cible introuvable. Une conversation n'a pas d'auteur : tout membre
+ * actif la signale, y compris celui qui l'a ouverte ou en a hérité (#14626).
  *
  * ## L'identité du signalant ne vient jamais du corps
  *

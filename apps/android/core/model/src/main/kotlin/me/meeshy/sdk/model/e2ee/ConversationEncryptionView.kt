@@ -5,13 +5,16 @@ import me.meeshy.sdk.model.EndToEndRegime
 /** Les modes qu'une activation propose — les valeurs que la passerelle accepte (`SetEncryptionModeBodySchema`). */
 enum class ConversationEncryptionModeChoice(val wire: String, val isOfferedOnThisPhone: Boolean) {
     /**
-     * Retenu tant que ce téléphone n'est pas un appareil chiffré (#13015) : l'activer ici
-     * couperait l'écriture de l'utilisateur dans sa propre conversation, sans retour (#12949).
+     * Offert depuis que ce téléphone est un appareil chiffré libsignal (#14591) : il écrit et lit le TEXTE d'un
+     * tête-à-tête chiffré de bout en bout, comme iOS. Les pièces et les groupes restent refusés, et l'interface le dit.
      */
-    E2EE("e2ee", isOfferedOnThisPhone = false),
+    E2EE("e2ee", isOfferedOnThisPhone = true),
     SERVER("server", isOfferedOnThisPhone = true),
     HYBRID("hybrid", isOfferedOnThisPhone = true),
     ;
+
+    /** Ce que ce téléphone propose POUR cette conversation : le bout en bout ne se chiffre ici qu'en tête-à-tête (#14591). */
+    fun isOfferedFor(isDirect: Boolean): Boolean = isOfferedOnThisPhone && (this != E2EE || isDirect)
 
     companion object {
         val offeredOnThisPhone: List<ConversationEncryptionModeChoice> get() = values().filter { it.isOfferedOnThisPhone }

@@ -38,13 +38,13 @@ data class ConversationEncryptionUiState(
 
     /**
      * Le passage à un autre mode est prêt : le rôle autorisé, un régime AU REPOS, et un mode choisi
-     * qui n'est pas celui en place et que ce téléphone sait servir (le bout en bout, non : #13015).
+     * qui n'est pas celui en place et que ce téléphone sait servir (le bout en bout : en tête-à-tête seulement, #14591).
      */
     val canSwitchMode: Boolean
         get() {
             val shown = view()
             val offered = (shown.content as? ConversationEncryptionContent.Active)?.offersModeChange == true
-            return offered && !isSwitching && selected.isOfferedOnThisPhone &&
+            return offered && !isSwitching && selected.isOfferedFor(isDirect) &&
                 selected in ConversationEncryptionModeChoice.switchTargets(shown.regime)
         }
 
@@ -98,7 +98,7 @@ class ConversationEncryptionViewModel @Inject constructor(
     }
 
     fun select(mode: ConversationEncryptionModeChoice) {
-        if (mode.isOfferedOnThisPhone) _state.update { it.copy(selected = mode) }
+        if (mode.isOfferedFor(_state.value.isDirect)) _state.update { it.copy(selected = mode) }
     }
 
     fun activate() {

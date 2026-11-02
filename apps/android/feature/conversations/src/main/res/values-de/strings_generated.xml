@@ -150,7 +150,7 @@
     <string name="encryption_create_header">Verschlüsselung</string>
     <string name="encryption_mode_e2ee_description">Nur deine Geräte und die der Teilnehmenden lesen die Nachrichten. Die Übersetzung erfolgt auf deinem Gerät.</string>
     <string name="encryption_mode_e2ee_label">Ende-zu-Ende</string>
-    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt, wie Server. Die doppelte Verschlüsselung durch deine Geräte kommt bald.</string>
+    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt; zwischen kompatiblen Geräten lässt sich mit einer zweiten Schicht prüfen, dass eine Textnachricht unterwegs nicht verändert wurde.</string>
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren.</string>
     <string name="encryption_mode_server_label">Server</string>
