@@ -42,6 +42,7 @@ const ar = {
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'لا يُوقَف التشفير التام بين الطرفين أبدًا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم.',
   'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'لا يُوقَف التشفير التام بين الطرفين أبدًا: تبقى هذه المحادثة الثنائية كذلك. يمكنك دائمًا أن تفتح بجانبها محادثة دون تشفير تام بين الطرفين مع هذا الشخص: كلتاهما في القائمة، وهذه مميّزة بقفل.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'على هذا المتصفح، بعد رؤية هذه المحادثة مشفّرة تمامًا بين الطرفين، لن يكتب حسابك فيها أبدًا دون هذا التشفير، حتى لو عرضها الخادم لاحقًا بشكل مختلف.',
+  'conversationEncryption.fact.webCannotReadYet': 'على الويب، لا يمكن بعد قراءة الرسائل المشفّرة تمامًا بين الطرفين أو كتابتها: افتح هذه المحادثة في تطبيق iOS.',
   'conversationEncryption.plaintextDirect.open': 'فتح محادثة دون تشفير تام بين الطرفين مع {name}',
   'conversationEncryption.plaintextDirect.busy': 'جارٍ الفتح…',
   'conversationEncryption.plaintextDirect.failed': 'تعذّر فتح المحادثة دون تشفير تام بين الطرفين. حاول مجددًا.',

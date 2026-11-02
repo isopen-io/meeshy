@@ -599,7 +599,7 @@ export type SentMessageAck = {
  * `id`/`conversationId`/`createdAt` manquants ⇒ `null` : un accusé sans
  * identifiant n'en est pas un, jamais un confirmé à moitié construit.
  */
-export function projectAck(data: unknown): SentMessageAck | null {
+function projectAck(data: unknown): SentMessageAck | null {
   if (typeof data !== 'object' || data === null) return null;
   const raw = data as Record<string, unknown>;
   const { id, conversationId, createdAt } = raw;

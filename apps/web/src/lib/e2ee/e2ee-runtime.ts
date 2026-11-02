@@ -1,21 +1,21 @@
 /**
  * LA PILE E2EE VIVANTE du compte connecté (#14592) — chargée à la demande, à
- * l'ouverture d'une conversation chiffrée de bout en bout, jamais au démarrage.
+ * l'ouverture d'une conversation chiffrée de bout en bout, jamais au démarrage,
+ * et seulement si un moteur est enregistré (`engine-provider.ts`).
  * Elle enrôle ce navigateur, rattrape les enveloppes en attente, écoute
  * `e2ee:envelope` sur la socket courante (et les suivantes), et publie ce qui
- * s'ouvre dans la mémoire du fil (`opened-messages.ts`). Une autre session (ou
+ * s'ouvre dans la mémoire du fil (`openedMessagesStore`). Une autre session (ou
  * aucune) la défait : plus aucun clair en mémoire.
  */
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { apiDeps } from '@/lib/api/deps';
-import { watchLiveSocket } from '@/lib/api/realtime';
 import { sessionStore } from '@/lib/api/session';
 
 import { openE2EEClient, type E2EEClient } from './client';
 import { decodeServedEnvelope, httpE2EEDirectory } from './directory';
-import { loadLibsignalEngine } from './libsignal-engine';
-import { forgetOpened, publishOpened, publishUndecryptable } from './opened-messages';
+import { loadE2EEEngine } from './engine-provider';
+import { forgetOpened as forgetAll, publishOpened } from './opened-messages';
 import type { OpenOutcome, PlaintextEntry } from './opener';
 import { createRecordVault, defaultRecordLock, e2eeDatabaseName, indexedDbSealedBackend } from './record-vault';
 
@@ -23,19 +23,16 @@ type Running = { readonly userId: string; readonly client: Promise<E2EEClient>; 
 
 let running: Running | null = null;
 
+/** Un message illisible reste scellé : le fil ne montre jamais un clair qu'il n'a pas ouvert. */
 const publishEntry = (messageId: string, entry: PlaintextEntry | null): void => {
-  if (entry === null) return;
-  if (entry.state === 'readable') {
-    publishOpened(messageId, { text: entry.content.text ?? '', language: entry.content.language ?? null, senderUserId: entry.senderUserId });
-  } else if (entry.state === 'undecryptable') {
-    publishUndecryptable(messageId);
-  }
+  if (entry?.state === 'readable') publishOpened(messageId, { text: entry.content.text ?? '', language: entry.content.language ?? null });
 };
 
 const publishOutcome = (outcome: OpenOutcome): void => {
   if (outcome.kind === 'opened') publishEntry(outcome.messageId, outcome.entry);
-  if (outcome.kind === 'undecryptable') publishUndecryptable(outcome.messageId);
 };
+
+const forgetOpened = forgetAll;
 
 /** Un journal SANS contenu : identifiants et types seulement. */
 const warn = (message: string): void => console.warn(message);
@@ -46,9 +43,10 @@ function start(userId: string): Running {
   let unwatch: (() => void) | null = null;
   let stopped = false;
   const client = (async () => {
-    const engine = await loadLibsignalEngine();
+    const engine = await loadE2EEEngine();
     const vault = createRecordVault({ backend: indexedDbSealedBackend({ name: e2eeDatabaseName(userId) }), lock: defaultRecordLock(`meeshy-e2ee-${userId}`) });
     const opened = await openE2EEClient({ engine, vault, directory: httpE2EEDirectory(apiDeps.transport), userId, label: deviceLabel(), warn });
+    const { watchLiveSocket } = await import('@/lib/api/realtime');
     if (stopped) return opened;
     unwatch = watchLiveSocket((socket) => {
       const onEnvelope = (raw: unknown) => {

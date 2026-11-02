@@ -42,6 +42,7 @@ const pt = {
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'A criptografia de ponta a ponta nunca é desativada. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.',
   'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'A criptografia de ponta a ponta nunca é desativada: esta conversa individual continua assim. Você sempre pode abrir ao lado uma conversa sem criptografia de ponta a ponta com esta pessoa: as duas estão na lista, esta marcada com um cadeado.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'Neste navegador, depois de ver esta conversa criptografada de ponta a ponta, sua conta nunca mais escreve nela sem essa criptografia, mesmo que o servidor a apresente de outra forma depois.',
+  'conversationEncryption.fact.webCannotReadYet': 'Na web, as mensagens criptografadas de ponta a ponta ainda não podem ser lidas nem escritas: abra esta conversa no app para iOS.',
   'conversationEncryption.plaintextDirect.open': 'Abrir uma conversa sem criptografia de ponta a ponta com {name}',
   'conversationEncryption.plaintextDirect.busy': 'Abrindo…',
   'conversationEncryption.plaintextDirect.failed': 'Não foi possível abrir a conversa sem criptografia de ponta a ponta. Tente novamente.',

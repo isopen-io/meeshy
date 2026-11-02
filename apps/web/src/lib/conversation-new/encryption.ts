@@ -12,18 +12,18 @@ import type { ConversationEncryptionCatalogKey } from '@/lib/i18n-conversation-e
  * `packages/shared/decisions/2026-11-01-le-mode-de-chiffrement-se-choisit-a-la-creation.md`).
  *
  * La loi est UNE, partagée (`creationEncryptionOffer`, miroirs iOS et Android) ;
- * ce module ne fait que dire ce que le web en est : depuis #14592 il lit et
- * écrit un tête-à-tête chiffré de bout en bout (libsignal en WASM, `lib/e2ee/`).
- * La loi partagée en tire le reste : un ANALYST voit le bout en bout disponible
- * en tête-à-tête et « bientôt » pour un groupe, un rôle inférieur ne le voit pas.
+ * ce module ne fait que dire ce que le web en est : il ne lit ni n'écrit encore
+ * le bout en bout (`fact.webCannotReadYet`, `lib/write-restriction.ts`). Le
+ * bout en bout n'y est donc jamais disponible — un ANALYST le voit « bientôt »,
+ * un rôle inférieur ne le voit pas — et le défaut reste Serveur partout.
  *
  * Seul l'écran de création choisit un mode : les autres créations (profil,
  * partage, carte de contact, clavier d'appel, humeur, réponse depuis une
  * notification) n'en envoient aucun, la passerelle pose Serveur.
  */
 
-/** Le web lit et écrit un tête-à-tête chiffré de bout en bout (libsignal en WASM, #14592) ; les groupes suivent la loi partagée. */
-export const WEB_END_TO_END_SUPPORTED = true;
+/** Le web ne sait pas encore lire ni écrire une conversation chiffrée de bout en bout (#10788). */
+export const WEB_END_TO_END_SUPPORTED = false;
 
 export function webCreationEncryptionOffer(params: {
   readonly platformRole: string | null;

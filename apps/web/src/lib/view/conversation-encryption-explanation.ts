@@ -34,7 +34,7 @@ export type ExplanationFact =
   | 'transitProtected' | 'storedWithoutEncryption' | 'encryptedOnServerServerReads' | 'hybridIsServerToday'
   | 'onlyParticipantsRead' | 'everyServerFeature' | 'translatedOnDevice'
   | 'noServerTranscription' | 'noNotificationPreview' | 'noSearch' | 'noEdit' | 'noForward' | 'noOfflineSending'
-  | 'notYetAttachments' | 'notYetDecryptedNotifications' | 'notYetGroups' | 'groupSendingUnavailable' | 'notYetSafetyNumbers'
+  | 'webCannotReadYet' | 'notYetAttachments' | 'notYetDecryptedNotifications' | 'notYetGroups' | 'groupSendingUnavailable' | 'notYetSafetyNumbers'
   | 'oneKeyPerDevice' | 'deviceLimit' | 'restoredDeviceIsNew'
   | 'whoMayToggle' | 'switchKeepsHistory' | 'switchIsShownInThread' | 'endToEndIsFinal'
   | 'endToEndNeverTurnedOff' | 'endToEndNeverTurnedOffDirect' | 'serverCannotTurnItOff';
@@ -75,7 +75,7 @@ const endToEnd = (isDirect: boolean): readonly ExplanationSection[] => [
   { topic: 'absent', facts: ['noServerTranscription', 'noNotificationPreview', 'noSearch', 'noEdit', 'noForward', 'noOfflineSending'] },
   {
     topic: 'notYet',
-    facts: ['notYetAttachments', 'notYetDecryptedNotifications', 'notYetGroups', ...(isDirect ? [] : ['groupSendingUnavailable' as const]), 'notYetSafetyNumbers'],
+    facts: ['webCannotReadYet', 'notYetAttachments', 'notYetDecryptedNotifications', 'notYetGroups', ...(isDirect ? [] : ['groupSendingUnavailable' as const]), 'notYetSafetyNumbers'],
   },
   { topic: 'devices', facts: ['oneKeyPerDevice', 'deviceLimit', 'restoredDeviceIsNew'] },
   { topic: 'permanence', facts: ['serverCannotTurnItOff'] },
@@ -125,6 +125,7 @@ export const FACT_KEY = {
   noEdit: 'conversationEncryption.fact.noEdit',
   noForward: 'conversationEncryption.fact.noForward',
   noOfflineSending: 'conversationEncryption.fact.noOfflineSending',
+  webCannotReadYet: 'conversationEncryption.fact.webCannotReadYet',
   notYetAttachments: 'conversationEncryption.fact.notYetAttachments',
   notYetDecryptedNotifications: 'conversationEncryption.fact.notYetDecryptedNotifications',
   notYetGroups: 'conversationEncryption.fact.notYetGroups',

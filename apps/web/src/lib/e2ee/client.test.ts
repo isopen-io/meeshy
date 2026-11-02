@@ -7,7 +7,7 @@ import { E2EEDirectoryError, decodeMismatch } from './directory';
 import { createRecordVault, defaultRecordLock, memorySealedBackend } from './record-vault';
 import { E2EEDevicesMismatchError, E2EERecipientHasNoDevice, type SealedMessage } from './sealer';
 import { fakeE2EEServer } from './test-support/fake-server';
-import { testEngine } from './test-support/engine';
+import { transparentEngine } from './test-support/transparent-engine';
 import { rejected } from './test-support/errors';
 
 const ALICE = 'a'.repeat(24);
@@ -18,7 +18,7 @@ function browser(server: ReturnType<typeof fakeE2EEServer>, userId: string) {
   const backend = memorySealedBackend();
   const vault = createRecordVault({ backend, lock: defaultRecordLock(`t-${userId}-${Math.random()}`) });
   const directory = server.clientFor(userId, { deviceId: null });
-  return { backend, vault, directory, open: () => openE2EEClient({ engine: testEngine(), vault, directory, userId, label: 'Web' }) };
+  return { backend, vault, directory, open: () => openE2EEClient({ engine: transparentEngine(), vault, directory, userId, label: 'Web' }) };
 }
 
 /** Le transport d'un envoi : la passerelle de banc relaie, ou rend son 409 Sesame. */
@@ -34,8 +34,14 @@ const deliverer = (server: ReturnType<typeof fakeE2EEServer>, senderUserId: stri
 
 const contains = (haystack: Uint8Array, needle: Uint8Array) => haystack.some((_, start) => needle.every((byte, offset) => haystack[start + offset] === byte));
 
-describe('deux navigateurs échangent de bout en bout à travers une passerelle aveugle', () => {
-  test('Alice écrit, Bob lit au rattrapage, l\'enveloppe s\'efface, et aucun octet clair n\'atteint la passerelle ni le disque', async () => {
+/**
+ * La TUYAUTERIE à deux navigateurs, sur un moteur de banc SANS cryptographie
+ * (`transparent-engine.ts`) : enrôlement, Sesame, accusés, rangement scellé,
+ * attribution. La confidentialité au fil exige un vrai moteur et n'est pas
+ * prouvée ici ; celle du DISQUE l'est (la base scellée est réelle, AES-GCM).
+ */
+describe('deux navigateurs échangent par la tuyauterie E2EE', () => {
+  test('Alice écrit, Bob lit au rattrapage, l\'enveloppe s\'efface, et aucun octet clair n\'atteint le disque d\'aucun des deux', async () => {
     const server = fakeE2EEServer();
     const alice = browser(server, ALICE);
     const bob = browser(server, BOB);
@@ -48,7 +54,6 @@ describe('deux navigateurs échangent de bout en bout à travers une passerelle 
     const messageId = await aliceClient.sealer.sealAndDeliver(content, BOB, deliverer(server, ALICE, BOB));
     await aliceClient.rememberSent(messageId, content);
 
-    expect(server.stored()).not.toContain(sentinel);
     const outcomes = await bobClient.opener.catchUp();
     expect(outcomes).toHaveLength(1);
     const [outcome] = outcomes;

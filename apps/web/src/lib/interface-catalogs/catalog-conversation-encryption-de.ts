@@ -42,6 +42,7 @@ const de = {
   'conversationEncryption.fact.endToEndNeverTurnedOff': 'Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten. Du kannst jederzeit eine weitere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.',
   'conversationEncryption.fact.endToEndNeverTurnedOffDirect': 'Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten: Dieser Einzelchat bleibt so. Du kannst daneben jederzeit eine Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit dieser Person öffnen: Beide stehen in der Liste, diese mit einem Schloss markiert.',
   'conversationEncryption.fact.serverCannotTurnItOff': 'In diesem Browser schreibt dein Konto, sobald diese Unterhaltung als Ende-zu-Ende-verschlüsselt gesehen wurde, nie wieder ohne diese Verschlüsselung darin, selbst wenn der Server sie später anders darstellt.',
+  'conversationEncryption.fact.webCannotReadYet': 'Im Web können Ende-zu-Ende-verschlüsselte Nachrichten noch nicht gelesen oder geschrieben werden: Öffne diese Unterhaltung in der iOS-App.',
   'conversationEncryption.plaintextDirect.open': 'Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit {name} öffnen',
   'conversationEncryption.plaintextDirect.busy': 'Wird geöffnet…',
   'conversationEncryption.plaintextDirect.failed': 'Die Unterhaltung ohne Ende-zu-Ende-Verschlüsselung konnte nicht geöffnet werden. Versuche es erneut.',

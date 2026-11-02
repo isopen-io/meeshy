@@ -9,17 +9,13 @@
  * transaction scellée que la composition de ce qui part : une pré-clé publiée
  * a toujours sa clé privée sur l'appareil.
  */
-import {
-  deviceBindingMessage,
-  E2EE_ERROR_CODES,
-  type E2EEEnrollDeviceRequest,
-  type E2EEPublishKeysRequest,
-} from '@meeshy/shared/types/e2ee-directory';
+import type { E2EEEnrollDeviceRequest, E2EEPublishKeysRequest } from '@meeshy/shared/types/e2ee-directory';
 
 import { RECORD_KINDS, type E2EECryptoEngine, type EngineLocalDevice } from './engine';
 import { base64 } from './bytes';
 import { E2EEDirectoryError, type E2EEDirectoryClient, type E2EEPreKeyStock } from './directory';
 import type { RecordTransaction, RecordVault } from './record-vault';
+import { deviceBindingMessage, E2EE_CODES } from './wire';
 
 /** Les bornes de réapprovisionnement de la spec (§ 3.2), celles de `E2EEPreKeyPolicy`. */
 export const E2EE_PREKEY_POLICY = { batchSize: 100, refillBelow: 20 } as const;
@@ -200,11 +196,11 @@ export function deviceRegistrar(params: {
     try {
       enrolled = await directory.enroll(request);
     } catch (error) {
-      if (codeOf(error) === E2EE_ERROR_CODES.IDENTITY_REVOKED && regenerate) {
+      if (codeOf(error) === E2EE_CODES.IDENTITY_REVOKED && regenerate) {
         await vault.erase();
         return enroll(userId, await currentOrCreateIdentity(), false, false);
       }
-      if (codeOf(error) === E2EE_ERROR_CODES.DEVICE_LIMIT_REACHED) throw new E2EEDeviceLimitReached();
+      if (codeOf(error) === E2EE_CODES.DEVICE_LIMIT_REACHED) throw new E2EEDeviceLimitReached();
       throw error;
     }
     const enrollment: LocalEnrollment = { userId, deviceId: enrolled.deviceId, registrationId: identity.registrationId };
@@ -222,7 +218,7 @@ export function deviceRegistrar(params: {
       await replenish(stock, identity);
       return localOf(recorded, identity);
     } catch (error) {
-      if (codeOf(error) === E2EE_ERROR_CODES.DEVICE_NOT_BOUND) return null;
+      if (codeOf(error) === E2EE_CODES.DEVICE_NOT_BOUND) return null;
       throw error;
     }
   };

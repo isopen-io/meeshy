@@ -114,12 +114,13 @@ describe('ce qui est offert, rôle par rôle', () => {
     expect(offered()).toEqual(['server', 'hybrid']);
   });
 
-  test('ANALYST, tête-à-tête : « Bout en bout » paraît, disponible et coché (le web chiffre, #14592)', async () => {
+  test('ANALYST, tête-à-tête : « Bout en bout » paraît, grisé, « Bientôt disponible sur le web »', async () => {
     await mount({ platformRole: 'ANALYST', conversationType: 'direct' });
     expect(offered()).toEqual(['server', 'hybrid', 'e2ee']);
     expect(labelOf(radio('e2ee'))).toBe('Bout en bout');
-    expect(radio('e2ee')?.disabled).toBe(false);
-    expect(radio('e2ee')?.checked).toBe(true);
+    expect(radio('e2ee')?.disabled).toBe(true);
+    expect(describedText(radio('e2ee'))).toBe('Bientôt disponible sur le web');
+    expect(radio('server')?.checked).toBe(true);
   });
 
   test('ADMIN, groupe : « Bientôt disponible pour les groupes »', async () => {
@@ -142,7 +143,7 @@ describe('toucher un mode le choisit', () => {
   });
 
   test('un mode grisé ne se choisit pas', async () => {
-    await mount({ platformRole: 'ANALYST', conversationType: 'group' });
+    await mount({ platformRole: 'ANALYST', conversationType: 'direct' });
     await act(async () => {
       radio('e2ee')?.click();
     });

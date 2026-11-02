@@ -96,16 +96,9 @@ describe('le bandeau qui remplace le composeur', () => {
   });
 });
 
-describe('le composeur d’une conversation chiffrée de bout en bout (#11216, #14592)', () => {
-  test('e2ee en tête-à-tête : le composeur est là — le texte part scellé par libsignal (#14592)', async () => {
+describe('le composeur d’une conversation chiffrée de bout en bout (#11216)', () => {
+  test('e2ee : aucun champ de saisie, la mention claire à sa place', async () => {
     const host = await mount(<Probe conversation={conversation('c-e2ee', { type: 'direct', encryptionMode: 'e2ee' })} />);
-    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
-    expect(host.querySelector('[data-write-restriction]')).toBeNull();
-    expect(canSendPlaintext({ conversationId: 'c-e2ee', servedMode: 'e2ee' })).toBe(false);
-  });
-
-  test('e2ee en groupe : aucun champ de saisie, la mention claire à sa place', async () => {
-    const host = await mount(<Probe conversation={conversation('c-e2ee-group', { type: 'group', encryptionMode: 'e2ee' })} />);
     expect(host.querySelector('textarea, input, [contenteditable]')).toBeNull();
     const band = host.querySelector('[data-write-restriction]');
     expect(band?.getAttribute('data-write-restriction')).toBe('end-to-end-encrypted');
@@ -148,28 +141,27 @@ describe('une conversation vue chiffrée de bout en bout ne repasse jamais en cl
     }) as unknown as Message;
   const band = (host: Element) => host.querySelector('[data-write-restriction]')?.getAttribute('data-write-restriction');
 
-  test('vue e2ee, puis resservie sans mode par le serveur : un groupe garde son bandeau, un tête-à-tête reste fermé au clair', async () => {
+  test('vue e2ee, puis resservie sans mode par le serveur : aucun champ, le bandeau du bout en bout reste', async () => {
     const id = 'c-downgraded';
-    await mount(<Probe conversation={conversation(id, { type: 'group', encryptionMode: 'e2ee' })} />);
+    await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: 'e2ee' })} />);
     unmountAll();
 
-    const host = await mount(<Probe conversation={conversation(id, { type: 'group', encryptionMode: null })} />);
+    const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} />);
 
     expect(host.querySelector('textarea, input, [contenteditable]')).toBeNull();
     expect(band(host)).toBe('end-to-end-encrypted');
-    expect(canSendPlaintext({ conversationId: id })).toBe(false);
   });
 
   test('le fil montre l’avis d’activation, le serveur sert le clair : fermé, et l’envoi unique l’apprend aussi', async () => {
     const id = 'c-thread-shows';
-    const host = await mount(<Probe conversation={conversation(id, { type: 'group', encryptionMode: null })} messages={[enabledNotice(id), sealedMessage(id)]} />);
+    const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} messages={[enabledNotice(id), sealedMessage(id)]} />);
     expect(host.querySelector('[data-probe-field]')).toBeNull();
     expect(canSendPlaintext({ conversationId: id })).toBe(false);
   });
 
   test('un avis de désactivation affiché en dernier ne rouvre RIEN', async () => {
     const id = 'c-notice-last';
-    const host = await mount(<Probe conversation={conversation(id, { type: 'group', encryptionMode: null })} messages={[enabledNotice(id), sealedMessage(id), disabledNotice(id)]} />);
+    const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} messages={[enabledNotice(id), sealedMessage(id), disabledNotice(id)]} />);
     expect(host.querySelector('[data-probe-field]')).toBeNull();
     expect(band(host)).toBe('end-to-end-encrypted');
   });
@@ -181,15 +173,16 @@ describe('une conversation vue chiffrée de bout en bout ne repasse jamais en cl
     expect(host.querySelector('button')).toBeNull();
   });
 
-  test('un message chiffré de bout en bout affiché, sans régime servi : fermé au clair, et le compte la retient (#12986, option 2)', async () => {
+  test('un message chiffré de bout en bout affiché, sans régime servi : fermé, et le compte la retient (#12986, option 2)', async () => {
     const id = 'c-marked';
     const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} messages={[sealedMessage(id)]} />);
-    expect(band(host)).toBeUndefined();
+    expect(host.querySelector('textarea, input, [contenteditable]')).toBeNull();
+    expect(band(host)).toBe('end-to-end-encrypted');
     expect(canSendPlaintext({ conversationId: id })).toBe(false);
     unmountAll();
 
-    await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} messages={[]} />);
-    expect(canSendPlaintext({ conversationId: id })).toBe(false);
+    const again = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: null })} messages={[]} />);
+    expect(again.querySelector('[data-probe-field]')).toBeNull();
   });
 
   test('une conversation jamais vue chiffrée : le composeur est là', async () => {
@@ -198,7 +191,7 @@ describe('une conversation vue chiffrée de bout en bout ne repasse jamais en cl
   });
 });
 
-describe('un tête-à-tête chiffré sur le web s’écrit dans le fil (#14592, remplace l’état final de #12986)', () => {
+describe('l’état final d’un tête-à-tête chiffré sur le web : lisible, sans boucle ni clair (#12986, #12966)', () => {
   const gesture = (outcome: PlaintextDirectOutcome) => {
     const calls: string[] = [];
     const value: PlaintextDirectGesture = {
@@ -211,14 +204,56 @@ describe('un tête-à-tête chiffré sur le web s’écrit dans le fil (#14592, 
     return { calls, value };
   };
   const action = (host: Element) => host.querySelector<HTMLButtonElement>('[data-write-restriction-open-plaintext]');
+  const status = (host: Element) => host.querySelector('[data-write-restriction-open-plaintext-status]')?.textContent ?? '';
 
-  test('aucun bandeau, aucun geste vers une conversation en clair : le composeur est là', async () => {
+  test('le bandeau dit d’écrire depuis l’app, et offre d’ouvrir la conversation sans chiffrement de bout en bout avec le contact', async () => {
     const id = 'c-direct-sealed';
     const { calls, value } = gesture('opened');
     const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: 'e2ee' })} plaintextDirect={value} />);
-    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
-    expect(action(host)).toBeNull();
-    expect(calls).toEqual([]);
+
+    expect(host.querySelector('textarea, input, [contenteditable]')).toBeNull();
+    expect(host.querySelector('[data-write-restriction]')?.textContent).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
+    expect(action(host)?.textContent).toBe('Ouvrir une conversation sans chiffrement de bout en bout avec Ana');
+
+    await act(async () => {
+      action(host)?.click();
+    });
+    expect(calls).toEqual(['open']);
+  });
+
+  test('l’ouverture échoue ou le réseau manque : le bandeau le dit, rien ne s’ouvre dans ce fil', async () => {
+    for (const [outcome, said] of [
+      ['failed', 'La conversation sans chiffrement de bout en bout n’a pas pu être ouverte. Réessayez.'],
+      ['offline', 'Hors connexion : reconnectez-vous pour ouvrir la conversation sans chiffrement de bout en bout.'],
+    ] as const) {
+      const id = `c-direct-${outcome}`;
+      const { value } = gesture(outcome);
+      const host = await mount(<Probe conversation={conversation(id, { type: 'direct', encryptionMode: 'e2ee' })} plaintextDirect={value} />);
+      await act(async () => {
+        action(host)?.click();
+      });
+      expect(status(host)).toBe(said);
+      expect(host.querySelector('[data-probe-field]')).toBeNull();
+      unmountAll();
+    }
+  });
+
+  test('le fil ouvert pose le geste lui-même, avec le nom du pair servi', async () => {
+    const id = 'c-direct-peer';
+    const served = conversation(id, {
+      type: 'direct',
+      encryptionMode: 'e2ee',
+      participants: [
+        { id: 'p-moi', userId: 'u-moi', displayName: 'Moi' },
+        { id: 'p-bea', userId: 'u-bea', displayName: 'Bea' },
+      ],
+    });
+    const host = await mount(
+      <ThreadWriteLock conversationId={id} conversation={served} viewerId="u-moi" title="Bea">
+        <textarea data-probe-field />
+      </ThreadWriteLock>,
+    );
+    expect(action(host)?.textContent).toBe('Ouvrir une conversation sans chiffrement de bout en bout avec Bea');
   });
 
   test('un groupe chiffré, ou une restriction d’âge : aucun geste, même fourni', async () => {

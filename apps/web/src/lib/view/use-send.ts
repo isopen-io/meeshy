@@ -17,7 +17,6 @@ import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-stor
 import { sendFailureReason } from '@/lib/send/failure-reason';
 import { plaintextWithheld } from '@/lib/send/served-regime';
 import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
-import { cachedConversation, directPeerOf, regimeEpochOf } from '@/lib/e2ee/direct-peer';
 
 import type { LocalDelivery } from './message';
 
@@ -148,31 +147,8 @@ export function useSend(params: {
       place: SharedPlace | null = null,
       sticker: MessageSticker | null = null,
     ) => {
-      /* #13171 — vue chiffrée de bout en bout : aucun clair ne naît. #14592 — un
-         TEXTE de tête-à-tête part scellé par libsignal ; le reste (pièce, lieu,
-         sticker, protection, groupe) est refusé et l'annonce dit pourquoi. */
+      /* #13171 — vue chiffrée de bout en bout : rien ne naît, l'annonce dit où écrire. */
       if (plaintextWithheld(conversationId, appQueryClient)) {
-        const conversation = cachedConversation((key) => appQueryClient.getQueryData(key), conversationId);
-        const peerUserId = directPeerOf(conversation, viewerId);
-        const textOnly = attachments.length === 0 && place === null && sticker === null && Object.keys(protection).length === 0 && text.trim() !== '';
-        if (peerUserId !== null && textOnly) {
-          const regimeEpoch = regimeEpochOf(conversation);
-          void import('@/lib/e2ee/send-action')
-            .then(({ sendEndToEnd }) =>
-              sendEndToEnd({
-                conversationId,
-                peerUserId,
-                viewerId,
-                ...(sender === undefined ? {} : { sender }),
-                text,
-                language,
-                replyTo,
-                ...(regimeEpoch === undefined ? {} : { regimeEpoch }),
-              }),
-            )
-            .catch(() => undefined);
-          return;
-        }
         const language = currentInterfaceLanguage();
         const reason = sendFailureReason({ ok: false, status: 0, error: '', code: E2EE_PLAINTEXT_WITHHELD }, language);
         announce(reason === undefined ? translate(language, 'announce.messageNotSent') : translate(language, 'announce.messageNotSent.reason', { reason }));
@@ -206,30 +182,9 @@ export function useSend(params: {
 
   const retry = useCallback(
     (messageId: string) => {
-      /* #14592 — un envoi chiffré en échec se rescelle : le même texte repart
-         par libsignal (session et appareils relus), jamais en clair. */
-      const failed = entries.find((entry) => entry.message.id === messageId && entry.delivery === 'failed');
-      const peerUserId = directPeerOf(cachedConversation((key) => appQueryClient.getQueryData(key), conversationId), viewerId);
-      if (failed !== undefined && peerUserId !== null && plaintextWithheld(conversationId, appQueryClient)) {
-        discardSendAction({ conversationId, clientMessageId: messageId });
-        void import('@/lib/e2ee/send-action')
-          .then(({ sendEndToEnd }) =>
-            sendEndToEnd({
-              conversationId,
-              peerUserId,
-              viewerId,
-              ...(sender === undefined ? {} : { sender }),
-              text: failed.message.content,
-              language: failed.message.originalLanguage,
-              replyTo: failed.message.replyTo ?? null,
-            }),
-          )
-          .catch(() => undefined);
-        return;
-      }
       void retrySendAction({ conversationId, clientMessageId: messageId, online });
     },
-    [conversationId, online, entries, viewerId, sender],
+    [conversationId, online],
   );
 
   const discard = useCallback(

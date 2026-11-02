@@ -52,12 +52,12 @@ const text = (selector: string) => document.querySelector<HTMLElement>(selector)
 const facts = () => [...document.querySelectorAll<HTMLElement>('[data-conversation-encryption-fact]')].map((node) => node.dataset.conversationEncryptionFact);
 
 describe('la section dit le mode de la conversation ouverte, en mots simples', () => {
-  test('bout en bout : seuls les appareils lisent, et le web ne dit plus qu’il ne lit pas (#14592)', async () => {
+  test('bout en bout : seuls les appareils lisent, et le web dit qu’il ne lit pas encore', async () => {
     await mount({ type: 'direct', encryptionMode: 'e2ee' });
     expect(text('[data-conversation-encryption] h4')).toBe('Chiffrement');
     expect(text('[data-conversation-encryption-summary]')).toBe('Chiffrée de bout en bout : seuls les appareils des participants lisent les messages');
     expect(facts()).toContain('onlyParticipantsRead');
-    expect(facts()).not.toContain('webCannotReadYet');
+    expect(facts()).toContain('webCannotReadYet');
     expect(text('[data-conversation-encryption-fact="noEdit"]')).toBe('Un message envoyé ne peut pas être modifié.');
   });
 
