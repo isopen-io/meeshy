@@ -9,6 +9,7 @@ import { buildLastMessagePreviewTranslations } from '../../routes/conversations/
 import { applyHistoryFloor, HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../personalHistoryFilter';
 import { withoutCaptureNotices } from '../messaging/captureNoticeVisibility';
+import { withOrphanedSenderRepair } from '../messaging/withOrphanedSenderRepair';
 import { keepAliveForReader } from '../messaging/quoteCascade';
 import { appearsInSearch, SEARCH_EXIT_LAW_SELECT } from '../messaging/searchExitLaw';
 import { decodeCursor, encodeCursor, keysetBeforeClause, type CursorData } from '../../utils/keyset-cursor';
@@ -172,20 +173,24 @@ async function scanCandidates(prisma: PrismaClient, scope: Scope, needle: string
     AND: [{ OR: scope.clauses }, ...(cursor ? [keysetBeforeClause(cursor)] : [])],
   });
   const contentTake = limit * 3 + 1;
-  const [contentRows, translationRows] = (await Promise.all([
-    prisma.message.findMany({
-      where: { ...base, content: { contains: needle, mode: 'insensitive' } },
-      select: HIT_SELECT,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: contentTake,
-    }),
-    prisma.message.findMany({
-      where: { ...base, translations: { not: { equals: null } } },
-      select: HIT_SELECT,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: TRANSLATION_SCAN_SIZE,
-    }),
-  ])) as unknown as [HitRow[], HitRow[]];
+  const [contentRows, translationRows] = (await withOrphanedSenderRepair(
+    { prisma, conversationIds: [...scope.participantByConversation.keys()] },
+    () =>
+      Promise.all([
+        prisma.message.findMany({
+          where: { ...base, content: { contains: needle, mode: 'insensitive' } },
+          select: HIT_SELECT,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: contentTake,
+        }),
+        prisma.message.findMany({
+          where: { ...base, translations: { not: { equals: null } } },
+          select: HIT_SELECT,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: TRANSLATION_SCAN_SIZE,
+        }),
+      ])
+  )) as unknown as [HitRow[], HitRow[]];
   const bound = newestBound([boundOf(contentRows, contentTake), boundOf(translationRows, TRANSLATION_SCAN_SIZE)]);
   const seen = new Set<string>();
   const merged = [...contentRows, ...translationRows.filter((row) => translationMatches(row.translations, needle))]

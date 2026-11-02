@@ -17,6 +17,11 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   performanceLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
 }));
 
+const mockRepair = jest.fn(async (_prisma: unknown, _options: { conversationIds: readonly string[] }) => ({ repaired: 1 }));
+jest.mock('../../../services/messaging/repairOrphanedMessageSenders', () => ({
+  repairOrphanedMessageSenders: (prisma: unknown, options: { conversationIds: readonly string[] }) => mockRepair(prisma, options),
+}));
+
 import { registerGlobalMessageSearchRoute } from '../../../routes/search/global-search';
 import { findManyIn, matchesWhere, projected, type Doc } from './where-eval';
 
@@ -80,7 +85,10 @@ type World = {
   readonly encryption?: Record<string, string | null>;
   readonly clearHistoryBefore?: Record<string, Date>;
   readonly languages?: { systemLanguage: string };
+  readonly orphanedSender?: boolean;
 };
+
+const ORPHANED_SENDER_ERROR = 'Inconsistent query result: Field sender is required to return data, got `null` instead.';
 
 function prismaFor(world: World) {
   const participants = world.participants ?? [participation(CONV_MINE)];
@@ -100,7 +108,12 @@ function prismaFor(world: World) {
     },
     userMessageDeletion: { findMany: async () => [] },
     messageStatusEntry: { findMany: async () => [] },
-    message: { findMany: async (args: { where?: Doc; select?: Record<string, unknown>; take?: number }) => findManyIn(world.messages, args) },
+    message: {
+      findMany: async (args: { where?: Doc; select?: Record<string, unknown>; take?: number }) => {
+        if (world.orphanedSender === true && mockRepair.mock.calls.length === 0) throw new Error(ORPHANED_SENDER_ERROR);
+        return findManyIn(world.messages, args);
+      },
+    },
     conversation: {
       findMany: async (args: { where: { id: { in: string[] } } }) =>
         args.where.id.in.map((id) => ({ id, identifier: `conv-${id}`, type: 'group', title: `Groupe ${id.slice(-2)}`, avatar: null, participants: [] })),
@@ -187,6 +200,16 @@ describe('GET /messages/search — portée du lecteur (#14619)', () => {
     const world: World = { messages: [old, recent], clearHistoryBefore: { [CONV_MINE]: recent.createdAt as Date } };
     const { body } = await search(world, 'plage');
     expect(contents(body.data)).toEqual(['plage récente']);
+  });
+
+  it("répare un expéditeur disparu puis rejoue la lecture, au lieu d'un 500", async () => {
+    mockRepair.mockClear();
+    const world: World = { participants: [participation(CONV_MINE), participation(CONV_OTHER)], messages: [message(CONV_MINE, 'plage réparée')], orphanedSender: true };
+    const { status, body } = await search(world, 'plage');
+    expect(status).toBe(200);
+    expect(contents(body.data)).toEqual(['plage réparée']);
+    expect(mockRepair).toHaveBeenCalledTimes(1);
+    expect([...mockRepair.mock.calls[0][1].conversationIds].sort()).toEqual([CONV_MINE, CONV_OTHER].sort());
   });
 
   it('refuse un invité de lien (401) et une requête trop courte (400)', async () => {
