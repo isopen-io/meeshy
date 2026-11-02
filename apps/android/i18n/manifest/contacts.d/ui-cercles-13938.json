@@ -5,14 +5,6 @@
       "resDir": "feature/contacts/src/main/res",
       "entries": [
         {
-          "androidName": "circles_action_request",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_action_request_a11y",
-          "status": "android-only"
-        },
-        {
           "androidName": "circles_empty_action",
           "status": "android-only"
         },
@@ -33,71 +25,11 @@
           "status": "android-only"
         },
         {
-          "androidName": "circles_level_acquaintance",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_level_blood",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_level_close",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_level_community",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_level_friend",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_level_public",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_missing_audio",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_missing_message",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_missing_other",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_missing_post_view",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_missing_reaction",
-          "status": "android-only"
-        },
-        {
           "androidName": "circles_offline_banner",
           "status": "android-only"
         },
         {
           "androidName": "circles_offline_empty",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_pending",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_progress_eligible",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_progress_missing",
-          "status": "android-only"
-        },
-        {
-          "androidName": "circles_progress_weeks",
           "status": "android-only"
         },
         {
@@ -149,6 +81,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "circles_ritual_consent_folding_title",
+          "status": "android-only"
+        },
+        {
           "androidName": "circles_ritual_consent_intro",
           "status": "android-only"
         },
@@ -161,11 +97,19 @@
           "status": "android-only"
         },
         {
+          "androidName": "circles_ritual_consent_listening_title_folding",
+          "status": "android-only"
+        },
+        {
           "androidName": "circles_ritual_consent_location_history",
           "status": "android-only"
         },
         {
           "androidName": "circles_ritual_consent_location_history_detail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_history_folding",
           "status": "android-only"
         },
         {
@@ -177,11 +121,23 @@
           "status": "android-only"
         },
         {
+          "androidName": "circles_ritual_consent_location_live_folding",
+          "status": "android-only"
+        },
+        {
           "androidName": "circles_ritual_consent_location_proximity",
           "status": "android-only"
         },
         {
           "androidName": "circles_ritual_consent_location_proximity_detail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_location_proximity_folding",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_ritual_consent_withdrawal",
           "status": "android-only"
         },
         {
@@ -237,7 +193,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "circles_settings_bring",
+          "androidName": "circles_settings_block_bring",
           "status": "android-only"
         },
         {
@@ -254,6 +210,10 @@
         },
         {
           "androidName": "circles_sheet_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_sheet_settings_none",
           "status": "android-only"
         },
         {

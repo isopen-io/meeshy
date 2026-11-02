@@ -58,8 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.app.contacts.circles.CirclesTab
-import me.meeshy.app.contacts.circles.levelTitle
-import me.meeshy.app.contacts.circles.tint
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.relation.requestedLevel
@@ -68,6 +66,8 @@ import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.circles.levelTitle
+import me.meeshy.ui.component.circles.tint
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.MeeshyPalette

@@ -27,16 +27,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.relation.CirclePerson
+import me.meeshy.sdk.model.relation.CirclePersonSetting
 import me.meeshy.sdk.model.relation.CircleProgressSummary
 import me.meeshy.sdk.model.relation.RelationLink
 import me.meeshy.sdk.model.relation.RelationsConfig
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.component.circles.levelIcon
+import me.meeshy.ui.component.circles.levelTitle
+import me.meeshy.ui.component.circles.summaryText
+import me.meeshy.ui.component.circles.tint
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 
 /**
- * Les réglages PAR PERSONNE — écoute, talkie, Bring, position — n'existent côté serveur qu'au jalon 2
+ * Les réglages PAR PERSONNE — blocage du Bring, talkie, écoute, position, selon ce que le cercle ouvre
+ * ([CirclePersonSetting]) — n'existent côté serveur qu'au jalon 2
  * (`PUT /relations/:userId/settings`, #14229). Tant qu'il n'est pas livré, la fiche les MONTRE désactivés et DIT pourquoi :
  * ni cachés (on chercherait où ils sont), ni simulés (un interrupteur sans effet est un mensonge). Miroir du drapeau iOS
  * `circle_person_settings`, fermé.
@@ -75,6 +82,7 @@ internal fun CircleLinkSheet(
                     name = name,
                     size = 56.dp,
                     containerColor = hexColor(DynamicColorGenerator.colorForName(link.userId)),
+                    presence = rememberPresence(link.userId),
                     imageUrl = person?.avatarUrl,
                 )
                 Spacer(Modifier.width(12.dp))
@@ -101,20 +109,33 @@ internal fun CircleLinkSheet(
                 color = tokens.textPrimary,
                 modifier = Modifier.semantics { heading() },
             )
-            if (!CIRCLE_PERSON_SETTINGS_ENABLED) {
+            val settings = CirclePersonSetting.offered(level)
+            if (settings.isEmpty()) {
                 Text(
-                    text = stringResource(R.string.circles_sheet_settings_unavailable),
+                    text = stringResource(R.string.circles_sheet_settings_none),
                     style = MaterialTheme.typography.bodySmall,
                     color = tokens.textMuted,
                 )
+            } else {
+                if (!CIRCLE_PERSON_SETTINGS_ENABLED) {
+                    Text(
+                        text = stringResource(R.string.circles_sheet_settings_unavailable),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.textMuted,
+                    )
+                }
+                settings.forEach { SettingRow(stringResource(it.titleRes())) }
             }
-            SettingRow(stringResource(R.string.circles_settings_listening))
-            SettingRow(stringResource(R.string.circles_settings_talkie))
-            SettingRow(stringResource(R.string.circles_settings_bring))
-            SettingRow(stringResource(R.string.circles_settings_location))
             Spacer(Modifier.heightIn(min = 16.dp))
         }
     }
+}
+
+private fun CirclePersonSetting.titleRes(): Int = when (this) {
+    CirclePersonSetting.BLOCK_BRING -> R.string.circles_settings_block_bring
+    CirclePersonSetting.TALKIE -> R.string.circles_settings_talkie
+    CirclePersonSetting.LISTENING -> R.string.circles_settings_listening
+    CirclePersonSetting.LIVE_LOCATION -> R.string.circles_settings_location
 }
 
 @Composable

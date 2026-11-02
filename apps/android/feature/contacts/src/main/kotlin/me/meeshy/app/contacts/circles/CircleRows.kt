@@ -44,6 +44,11 @@ import me.meeshy.sdk.model.relation.RelationsConfig
 import me.meeshy.sdk.model.relation.requestedLevel
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.circles.CircleRaiseTrailing
+import me.meeshy.ui.component.circles.levelTitle
+import me.meeshy.ui.component.circles.summaryText
+import me.meeshy.ui.component.circles.tint
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -90,6 +95,7 @@ internal fun CircleLinkRow(
                 name = name,
                 size = 44.dp,
                 containerColor = hexColor(DynamicColorGenerator.colorForName(link.userId)),
+                presence = rememberPresence(link.userId),
                 imageUrl = person?.avatarUrl,
             )
             Spacer(Modifier.width(12.dp))
@@ -114,45 +120,8 @@ internal fun CircleLinkRow(
             }
         }
         Spacer(Modifier.width(8.dp))
-        RaiseTrailing(link = link, name = name, pending = pending, config = config, onRaise = onRaise)
+        CircleRaiseTrailing(link = link, name = name, pending = pending, config = config, onRaise = onRaise)
     }
-}
-
-@Composable
-private fun RaiseTrailing(
-    link: RelationLink,
-    name: String,
-    pending: RelationLevel?,
-    config: RelationsConfig?,
-    onRaise: () -> Unit,
-) {
-    if (pending != null) {
-        Text(
-            text = stringResource(R.string.circles_pending, levelTitle(pending, config)),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.End,
-            modifier = Modifier.widthIn(max = 120.dp),
-        )
-        return
-    }
-    val offer = link.raiseOffer() as? RelationRaiseOffer.Available ?: return
-    val targetTitle = levelTitle(offer.target, config)
-    val a11y = stringResource(R.string.circles_action_request_a11y, targetTitle, name)
-    Text(
-        text = stringResource(R.string.circles_action_request, targetTitle),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = Color.White,
-        modifier = Modifier
-            .heightIn(min = 44.dp)
-            .clip(CircleShape)
-            .background(offer.target.tint())
-            .clickable(role = Role.Button, onClick = onRaise)
-            .semantics { contentDescription = a11y }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-    )
 }
 
 /**
@@ -192,6 +161,7 @@ internal fun CircleRequestRow(
             name = shown,
             size = 44.dp,
             containerColor = hexColor(DynamicColorGenerator.colorForName(otherId.ifBlank { shown })),
+            presence = rememberPresence(otherId),
             imageUrl = avatar,
         )
         Spacer(Modifier.width(12.dp))

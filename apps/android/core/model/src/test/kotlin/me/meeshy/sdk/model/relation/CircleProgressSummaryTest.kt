@@ -96,4 +96,13 @@ class CircleProgressSummaryTest {
         assertThat(RelationRefusal.of("RELATION_RITUAL_LAPSED")).isEqualTo(RelationRefusal.RITUAL_LAPSED)
         assertThat(RelationRefusal.of("HTTP_409")).isNull()
     }
+
+    @Test
+    fun `la fiche ne propose que ce que le cercle ouvre`() {
+        assertThat(CirclePersonSetting.offered(RelationLevel.ACQUAINTANCE)).isEmpty()
+        assertThat(CirclePersonSetting.offered(RelationLevel.FRIEND)).containsExactly(CirclePersonSetting.BLOCK_BRING)
+        assertThat(CirclePersonSetting.offered(RelationLevel.CLOSE))
+            .containsExactly(CirclePersonSetting.BLOCK_BRING, CirclePersonSetting.TALKIE, CirclePersonSetting.LISTENING).inOrder()
+        assertThat(CirclePersonSetting.offered(RelationLevel.BLOOD)).containsExactlyElementsIn(CirclePersonSetting.entries)
+    }
 }

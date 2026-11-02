@@ -98,3 +98,20 @@ public object CirclesLayout {
     private fun sortKey(link: RelationLink, people: Map<String, CirclePerson>): String =
         (people[link.userId]?.name ?: "￿").lowercase() + link.userId
 }
+
+/**
+ * Ce qu'une fiche de lien laisse régler pour CETTE personne, selon ce que le cercle ouvre (spec § 1.3, § 1.5) — miroir de
+ * `CirclePersonSetting` (iOS). Le Bring est disponible par défaut dès Ami (D-3) : son réglage est un BLOCAGE. Le talkie
+ * et l'écoute s'ouvrent à Proche, la position continue au Sang. Une Connaissance n'a rien à régler.
+ */
+public enum class CirclePersonSetting(public val opensAt: RelationLevel) {
+    BLOCK_BRING(RelationLevel.FRIEND),
+    TALKIE(RelationLevel.CLOSE),
+    LISTENING(RelationLevel.CLOSE),
+    LIVE_LOCATION(RelationLevel.BLOOD),
+    ;
+
+    public companion object {
+        public fun offered(level: RelationLevel): List<CirclePersonSetting> = entries.filter { level >= it.opensAt }
+    }
+}

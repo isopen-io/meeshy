@@ -45,6 +45,9 @@ import me.meeshy.sdk.model.relation.RelationLink
 import me.meeshy.ui.component.ConnectionFeedbackHost
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.component.circles.levelIcon
+import me.meeshy.ui.component.circles.levelTitle
+import me.meeshy.ui.component.circles.tint
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**

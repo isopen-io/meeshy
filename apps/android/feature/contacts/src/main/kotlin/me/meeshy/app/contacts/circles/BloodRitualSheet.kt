@@ -33,6 +33,12 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.collapse
+import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -163,8 +169,14 @@ private fun ConsentStep(controller: BloodRitualController, state: BloodRitualSta
                 )
             }
             Text(text = detail, style = MaterialTheme.typography.bodySmall, color = tokens.textMuted)
+            ConsentFolding(stringResource(key.foldingRes(), controller.displayName))
         }
     }
+    Text(
+        text = stringResource(R.string.circles_ritual_consent_withdrawal),
+        style = MaterialTheme.typography.bodySmall,
+        color = tokens.textMuted,
+    )
     Button(
         onClick = controller::proceedFromConsents,
         colors = ButtonDefaults.buttonColors(containerColor = MeeshyPalette.Indigo500),
@@ -172,6 +184,42 @@ private fun ConsentStep(controller: BloodRitualController, state: BloodRitualSta
             .fillMaxWidth()
             .heightIn(min = 44.dp),
     ) { Text(stringResource(R.string.circles_ritual_consent_continue)) }
+}
+
+/**
+ * Le dépliant de chaque partage (#13942 § 6) — iso `BloodRitualConsentCopy` : ce que ça montre, à qui, combien de temps,
+ * comment arrêter. Replié par défaut ; TalkBack annonce l'état déplié / replié et offre l'action inverse.
+ */
+@Composable
+private fun ConsentFolding(text: String) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val title = stringResource(R.string.circles_ritual_consent_folding_title)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 44.dp)
+                .clickable(role = Role.Button) { open = !open }
+                .semantics {
+                    if (open) collapse { open = false; true } else expand { open = true; true }
+                }
+                .padding(vertical = 12.dp),
+        )
+        if (open) {
+            Text(text = text, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
+        }
+    }
+}
+
+private fun RelationRitualConsentKey.foldingRes(): Int = when (this) {
+    RelationRitualConsentKey.LISTENING_TITLE -> R.string.circles_ritual_consent_listening_title_folding
+    RelationRitualConsentKey.LOCATION_LIVE -> R.string.circles_ritual_consent_location_live_folding
+    RelationRitualConsentKey.LOCATION_HISTORY -> R.string.circles_ritual_consent_location_history_folding
+    RelationRitualConsentKey.LOCATION_PROXIMITY -> R.string.circles_ritual_consent_location_proximity_folding
 }
 
 private fun RelationRitualConsentKey.titleRes(): Int = when (this) {
