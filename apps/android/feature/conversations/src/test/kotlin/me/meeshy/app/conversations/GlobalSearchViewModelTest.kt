@@ -19,7 +19,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheClock
-import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiAuthor
+import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
@@ -140,7 +141,7 @@ class GlobalSearchViewModelTest {
     @Test
     fun `tab counts derive from the single shared result`() = runTest(dispatcher) {
         stubSearch(GlobalSearchResults(
-            conversations = listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")),
+            posts = listOf(post("c1"), post("c2")),
             users = listOf(UserSearchResult(id = "u1")),
         ))
         val vm = viewModel()
@@ -148,7 +149,7 @@ class GlobalSearchViewModelTest {
         advanceUntilIdle()
 
         val state = vm.state.value
-        assertThat(state.countFor(GlobalSearchTab.CONVERSATIONS)).isEqualTo(2)
+        assertThat(state.countFor(GlobalSearchTab.POSTS)).isEqualTo(2)
         assertThat(state.countFor(GlobalSearchTab.USERS)).isEqualTo(1)
         assertThat(state.countFor(GlobalSearchTab.MESSAGES)).isEqualTo(0)
         verify(exactly = 1) { repository.search(any(), any(), any(), any()) }
@@ -367,8 +368,10 @@ class GlobalSearchViewModelTest {
         assertThat(vm.state.value.currentUserId).isEqualTo("me")
     }
 
-    private fun conversationPane(vararg ids: String, failed: Boolean = false) = SearchPane(
-        items = ids.map { ApiConversation(id = it) },
+    private fun post(id: String) = ApiPost(id = id, type = "POST", author = ApiAuthor(id = "author-$id"))
+
+    private fun postPane(vararg ids: String, failed: Boolean = false) = SearchPane(
+        items = ids.map(::post),
         failure = SearchPaneFailure.Unreachable.takeIf { failed },
     )
 
@@ -378,21 +381,21 @@ class GlobalSearchViewModelTest {
     fun `local results show at once and the network is revalidated discreetly`() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
         every { repository.search(any(), any(), any(), any()) } returns flow {
-            emit(GlobalSearchSnapshot(conversations = conversationPane("local"), remoteSettled = false))
+            emit(GlobalSearchSnapshot(posts = postPane("local"), remoteSettled = false))
             gate.await()
-            emit(GlobalSearchSnapshot(conversations = conversationPane("net", "local")))
+            emit(GlobalSearchSnapshot(posts = postPane("net", "local")))
         }
         val vm = viewModel()
         vm.setQuery("belva")
         advanceUntilIdle()
 
-        assertThat(vm.state.value.results.conversations.map { it.id }).containsExactly("local")
+        assertThat(vm.state.value.postHits.map { it.postId }).containsExactly("local")
         assertThat(vm.state.value.loadState).isEqualTo(SearchLoadState.CACHED_STALE)
         assertThat(vm.state.value.isSearching).isFalse()
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertThat(vm.state.value.results.conversations.map { it.id }).containsExactly("net", "local").inOrder()
+        assertThat(vm.state.value.postHits.map { it.postId }).containsExactly("net", "local").inOrder()
         assertThat(vm.state.value.loadState).isEqualTo(SearchLoadState.LOADED)
     }
 
@@ -419,36 +422,36 @@ class GlobalSearchViewModelTest {
 
     @Test
     fun `offline the local answer is final and is not an error`() = runTest(dispatcher) {
-        stubSnapshots(GlobalSearchSnapshot(conversations = conversationPane("local"), offline = true))
+        stubSnapshots(GlobalSearchSnapshot(posts = postPane("local"), offline = true))
         val vm = viewModel()
         vm.setQuery("belva")
         advanceUntilIdle()
 
         assertThat(vm.state.value.loadState).isEqualTo(SearchLoadState.OFFLINE)
-        assertThat(vm.state.value.results.conversations).hasSize(1)
+        assertThat(vm.state.value.postHits).hasSize(1)
         assertThat(vm.state.value.failure).isNull()
     }
 
     // Un volet en panne n'est JAMAIS « aucun resultat ».
     @Test
     fun `a failed pane with nothing to show is an error and never an empty result`() = runTest(dispatcher) {
-        stubSnapshots(GlobalSearchSnapshot(conversations = conversationPane(failed = true)))
+        stubSnapshots(GlobalSearchSnapshot(posts = postPane(failed = true)))
         val vm = viewModel()
         vm.setQuery("belva")
         advanceUntilIdle()
 
         val state = vm.state.value
         assertThat(state.loadState).isEqualTo(SearchLoadState.ERROR)
-        assertThat(state.failure).isEqualTo(SearchPaneKind.CONVERSATIONS)
+        assertThat(state.failure).isEqualTo(SearchPaneKind.POSTS)
         assertThat(state.isCurrentTabEmpty).isFalse()
-        assertThat(state.isFailed(GlobalSearchTab.CONVERSATIONS)).isTrue()
+        assertThat(state.isFailed(GlobalSearchTab.POSTS)).isTrue()
     }
 
     @Test
     fun `a failed pane next to served results keeps the list and names the failure`() = runTest(dispatcher) {
         stubSnapshots(
             GlobalSearchSnapshot(
-                conversations = conversationPane("c1"),
+                posts = postPane("c1"),
                 users = SearchPane(failure = SearchPaneFailure.Unreachable),
             ),
         )
@@ -458,13 +461,13 @@ class GlobalSearchViewModelTest {
 
         assertThat(vm.state.value.loadState).isEqualTo(SearchLoadState.LOADED)
         assertThat(vm.state.value.failure).isEqualTo(SearchPaneKind.PEOPLE)
-        assertThat(vm.state.value.results.conversations).hasSize(1)
+        assertThat(vm.state.value.postHits).hasSize(1)
     }
 
     // On ne memorise pas le vide d'une panne : la requete identique repart en reseau.
     @Test
     fun `a failed search is never served from the cache`() = runTest(dispatcher) {
-        stubSnapshots(GlobalSearchSnapshot(conversations = conversationPane(failed = true)))
+        stubSnapshots(GlobalSearchSnapshot(posts = postPane(failed = true)))
         val vm = viewModel()
         vm.setQuery("belva")
         advanceUntilIdle()
@@ -478,18 +481,18 @@ class GlobalSearchViewModelTest {
 
     @Test
     fun `retryLastSearch replays the last launched query at once`() = runTest(dispatcher) {
-        stubSnapshots(GlobalSearchSnapshot(conversations = conversationPane(failed = true)))
+        stubSnapshots(GlobalSearchSnapshot(posts = postPane(failed = true)))
         val vm = viewModel()
         vm.setQuery("belva")
         advanceUntilIdle()
 
-        stubSearch(GlobalSearchResults(conversations = listOf(ApiConversation(id = "c1"))))
+        stubSearch(GlobalSearchResults(posts = listOf(post("c1"))))
         vm.retryLastSearch()
         advanceUntilIdle()
 
         verify(exactly = 2) { repository.search("belva", any(), any(), any()) }
         assertThat(vm.state.value.loadState).isEqualTo(SearchLoadState.LOADED)
-        assertThat(vm.state.value.results.conversations).hasSize(1)
+        assertThat(vm.state.value.postHits).hasSize(1)
     }
 
     @Test
@@ -524,10 +527,10 @@ class GlobalSearchViewModelTest {
         val gate = CompletableDeferred<Unit>()
         every { repository.search("slow", any(), any(), any()) } returns flow {
             gate.await()
-            emit(GlobalSearchSnapshot(conversations = conversationPane("stale")))
+            emit(GlobalSearchSnapshot(posts = postPane("stale")))
         }
         every { repository.search("fast", any(), any(), any()) } returns
-            flowOf(GlobalSearchSnapshot(conversations = conversationPane("fresh")))
+            flowOf(GlobalSearchSnapshot(posts = postPane("fresh")))
         val vm = viewModel()
         vm.setQuery("slow")
         advanceTimeBy(DEBOUNCE_PLUS)
@@ -536,7 +539,7 @@ class GlobalSearchViewModelTest {
         gate.complete(Unit)
         advanceUntilIdle()
 
-        assertThat(vm.state.value.results.conversations.map { it.id }).containsExactly("fresh")
+        assertThat(vm.state.value.postHits.map { it.postId }).containsExactly("fresh")
         assertThat(vm.state.value.resultsQuery).isEqualTo("fast")
     }
 
@@ -606,5 +609,29 @@ class GlobalSearchViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
         assertThat(vm.state.value.readerPrism.first()).isEqualTo("pt")
+    }
+
+    @Test
+    fun `the posts tab shows only what can open, served in the reader language`() = runTest(dispatcher) {
+        signedInUser.value = MeeshyUser(id = "me", username = "me", systemLanguage = "fr")
+        val translated = ApiPost(
+            id = "p1",
+            type = "REEL",
+            content = "Hello",
+            originalLanguage = "en",
+            author = ApiAuthor(id = "a1", displayName = "Ada"),
+            translations = mapOf("fr" to me.meeshy.sdk.model.ApiPostTranslationEntry(text = "Bonjour")),
+        )
+        val status = ApiPost(id = "s1", type = "STATUS", author = ApiAuthor(id = "a2"))
+        stubSearch(GlobalSearchResults(posts = listOf(translated, status)))
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.setQuery("bonjour")
+        advanceUntilIdle()
+
+        val hits = vm.state.value.postHits
+        assertThat(hits.map { it.postId }).containsExactly("p1")
+        assertThat(hits.single().text).isEqualTo("Bonjour")
+        assertThat(vm.state.value.countFor(GlobalSearchTab.POSTS)).isEqualTo(1)
     }
 }

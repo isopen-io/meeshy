@@ -161,11 +161,15 @@
     </plurals>
     <string name="global_search_no_results">Keine Ergebnisse</string>
     <string name="global_search_online">Online</string>
+    <string name="global_search_post_kind_post">Beitrag</string>
+    <string name="global_search_post_kind_reel">Reel</string>
+    <string name="global_search_post_kind_story">Story</string>
     <string name="global_search_recent_clear">Löschen</string>
     <string name="global_search_recent_remove">Entfernen</string>
     <string name="global_search_searching">Suche…</string>
     <string name="global_search_tab_conversations">Unterhaltungen</string>
     <string name="global_search_tab_messages">Nachrichten</string>
+    <string name="global_search_tab_posts">Beiträge</string>
     <string name="invite_customize">Optionen anpassen</string>
     <string name="invite_defaultMessage">Komm dazu — reden wir ohne Filter und ohne Barrieren …</string>
     <string name="links_affiliate_action_copy">Empfehlungslink kopieren</string>

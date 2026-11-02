@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MessagesApiResponse
 import me.meeshy.sdk.model.ReadStatusData
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.search.GlobalMessageSearchHit
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.conditionalApiCall
 import retrofit2.Response
@@ -132,6 +133,17 @@ interface MessageApi {
 
     @DELETE("messages/{id}")
     suspend fun delete(@Path("id") messageId: String): ApiResponse<Unit>
+
+    /**
+     * La recherche des messages de TOUTES mes conversations (#14619) : le serveur sert le texte
+     * élu par le Prisme du lecteur et n'interroge jamais une conversation chiffrée de bout en bout.
+     */
+    @GET("messages/search")
+    suspend fun searchAll(
+        @Query("q") query: String,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null,
+    ): ApiResponse<List<GlobalMessageSearchHit>>
 
     @GET("conversations/{cid}/messages/search")
     suspend fun search(

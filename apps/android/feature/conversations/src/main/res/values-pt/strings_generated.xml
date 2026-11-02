@@ -162,11 +162,15 @@
     </plurals>
     <string name="global_search_no_results">Nenhum resultado</string>
     <string name="global_search_online">Online</string>
+    <string name="global_search_post_kind_post">Publicação</string>
+    <string name="global_search_post_kind_reel">Reel</string>
+    <string name="global_search_post_kind_story">Story</string>
     <string name="global_search_recent_clear">Apagar</string>
     <string name="global_search_recent_remove">Remover</string>
     <string name="global_search_searching">Buscando…</string>
     <string name="global_search_tab_conversations">Conversas</string>
     <string name="global_search_tab_messages">Mensagens</string>
+    <string name="global_search_tab_posts">Posts</string>
     <string name="invite_customize">Personalizar as opções</string>
     <string name="invite_defaultMessage">Junte-se a mim para conversar sem filtros nem barreiras…</string>
     <string name="links_affiliate_action_copy">Copiar o link de indicação</string>

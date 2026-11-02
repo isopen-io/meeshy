@@ -165,11 +165,15 @@
     </plurals>
     <string name="global_search_no_results">لا نتائج</string>
     <string name="global_search_online">متصل</string>
+    <string name="global_search_post_kind_post">منشور</string>
+    <string name="global_search_post_kind_reel">مقطع</string>
+    <string name="global_search_post_kind_story">قصة</string>
     <string name="global_search_recent_clear">مسح</string>
     <string name="global_search_recent_remove">احذف</string>
     <string name="global_search_searching">جارٍ البحث…</string>
     <string name="global_search_tab_conversations">المحادثات</string>
     <string name="global_search_tab_messages">الرسائل</string>
+    <string name="global_search_tab_posts">المنشورات</string>
     <string name="invite_customize">تخصيص الخيارات</string>
     <string name="invite_defaultMessage">انضم إليّ لنتحدّث بلا فلاتر ولا حواجز…</string>
     <string name="links_affiliate_action_copy">نسخ رابط الإحالة</string>

@@ -43,6 +43,7 @@ import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.feed.StatusesViewModel
+import me.meeshy.sdk.model.search.PostSearchDestination
 import me.meeshy.app.stories.StoriesViewModel
 
 /** Liste, recherche, tableau de bord, liens de partage, fil de discussion et messages favoris. */
@@ -94,6 +95,9 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
             ),
             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+            onOpenMessage = { conversationId, messageId ->
+                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
+            },
         )
     }
     sheetComposable(Routes.SHARE_LINK_PICKER, navController) { _, dismiss ->
@@ -108,6 +112,18 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
                 navController.navigate(Routes.chat(conversationId))
+            },
+            onOpenMessage = { conversationId, messageId ->
+                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
+            },
+            onOpenPost = { destination ->
+                navController.navigate(
+                    when (destination) {
+                        is PostSearchDestination.Post -> Routes.postDetail(destination.postId)
+                        is PostSearchDestination.Reel -> Routes.reels(seed = destination.postId)
+                        is PostSearchDestination.Story -> Routes.story(destination.authorId, destination.storyId)
+                    },
+                )
             },
             onOpenUser = rememberProfileOpenerOverSheet(navController),
         )

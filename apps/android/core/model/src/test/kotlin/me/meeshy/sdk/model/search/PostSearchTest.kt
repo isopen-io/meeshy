@@ -1,0 +1,87 @@
+package me.meeshy.sdk.model.search
+
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ApiAuthor
+import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.PostType
+import org.junit.Test
+import java.time.Instant
+
+class PostSearchTest {
+
+    private val now = Instant.parse("2026-11-02T12:00:00Z").toEpochMilli()
+
+    private fun post(
+        id: String = "p1",
+        type: String? = "POST",
+        expiresAt: String? = null,
+        author: ApiAuthor? = ApiAuthor(id = "u1", username = "ada", displayName = "Ada"),
+        translations: Map<String, ApiPostTranslationEntry>? = mapOf("fr" to ApiPostTranslationEntry(text = "Bonjour")),
+        media: List<ApiPostMedia>? = null,
+    ) = ApiPost(
+        id = id,
+        type = type,
+        content = "Hello",
+        originalLanguage = "en",
+        createdAt = "2026-11-02T10:00:00Z",
+        expiresAt = expiresAt,
+        author = author,
+        translations = translations,
+        media = media,
+    )
+
+    @Test
+    fun `a post serves the translation of the first prism language that has one`() {
+        val hit = PostSearch.hitOf(post(), listOf("fr", "en"), now)
+
+        assertThat(hit?.text).isEqualTo("Bonjour")
+        assertThat(hit?.authorName).isEqualTo("Ada")
+        assertThat(hit?.createdAtMillis).isEqualTo(Instant.parse("2026-11-02T10:00:00Z").toEpochMilli())
+    }
+
+    @Test
+    fun `a post serves its original when the reader reads its language first or has no prism`() {
+        assertThat(PostSearch.hitOf(post(), listOf("en", "fr"), now)?.text).isEqualTo("Hello")
+        assertThat(PostSearch.hitOf(post(), emptyList(), now)?.text).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `each kind opens its own surface`() {
+        assertThat(PostSearch.hitOf(post(type = "POST"), emptyList(), now)?.destination)
+            .isEqualTo(PostSearchDestination.Post("p1"))
+        assertThat(PostSearch.hitOf(post(type = "REEL"), emptyList(), now)?.destination)
+            .isEqualTo(PostSearchDestination.Reel("p1"))
+        assertThat(PostSearch.hitOf(post(type = "story", expiresAt = "2026-11-03T10:00:00Z"), emptyList(), now)?.destination)
+            .isEqualTo(PostSearchDestination.Story(authorId = "u1", storyId = "p1"))
+    }
+
+    @Test
+    fun `a status, an unknown kind, an expired publication or one without author never shows`() {
+        assertThat(PostSearch.hitOf(post(type = "STATUS"), emptyList(), now)).isNull()
+        assertThat(PostSearch.hitOf(post(type = "POLL"), emptyList(), now)).isNull()
+        assertThat(PostSearch.hitOf(post(type = null), emptyList(), now)).isNull()
+        assertThat(PostSearch.hitOf(post(type = "STORY", expiresAt = "2026-11-02T11:59:59Z"), emptyList(), now)).isNull()
+        assertThat(PostSearch.hitOf(post(author = null), emptyList(), now)).isNull()
+    }
+
+    @Test
+    fun `the thumbnail is the first media preview, a video file is never shown as an image`() {
+        val video = ApiPostMedia(id = "v", mimeType = "video/mp4", fileUrl = "https://x/v.mp4")
+        val image = ApiPostMedia(id = "i", mimeType = "image/jpeg", fileUrl = "https://x/i.jpg")
+        val poster = ApiPostMedia(id = "w", mimeType = "video/mp4", fileUrl = "https://x/w.mp4", thumbnailUrl = "https://x/w.jpg")
+
+        assertThat(PostSearch.hitOf(post(media = listOf(video, image)), emptyList(), now)?.thumbnailUrl).isEqualTo("https://x/i.jpg")
+        assertThat(PostSearch.hitOf(post(media = listOf(poster)), emptyList(), now)?.thumbnailUrl).isEqualTo("https://x/w.jpg")
+        assertThat(PostSearch.hitOf(post(media = listOf(video)), emptyList(), now)?.thumbnailUrl).isNull()
+    }
+
+    @Test
+    fun `a publication returned twice is shown once`() {
+        val hits = PostSearch.hitsOf(listOf(post(id = "a"), post(id = "a"), post(id = "b", type = "REEL")), emptyList(), now)
+
+        assertThat(hits.map { it.postId }).containsExactly("a", "b").inOrder()
+        assertThat(hits.map { it.kind }).containsExactly(PostType.POST, PostType.REEL).inOrder()
+    }
+}

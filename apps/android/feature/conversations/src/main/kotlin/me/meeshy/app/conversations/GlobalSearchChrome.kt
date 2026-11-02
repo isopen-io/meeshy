@@ -138,12 +138,12 @@ internal fun SearchTabRow(
             val isSelected = tab == current
             val label = when (tab) {
                 GlobalSearchTab.MESSAGES -> stringResource(R.string.global_search_tab_messages)
-                GlobalSearchTab.CONVERSATIONS -> stringResource(R.string.global_search_tab_conversations)
+                GlobalSearchTab.POSTS -> stringResource(R.string.global_search_tab_posts)
                 GlobalSearchTab.USERS -> stringResource(R.string.global_search_tab_users)
             }
             val icon = when (tab) {
                 GlobalSearchTab.MESSAGES -> MeeshyIcons.MessageFilled
-                GlobalSearchTab.CONVERSATIONS -> MeeshyIcons.GroupFilled
+                GlobalSearchTab.POSTS -> MeeshyIcons.GridViewFilled
                 GlobalSearchTab.USERS -> MeeshyIcons.PersonFilled
             }
             val count = countFor(tab)

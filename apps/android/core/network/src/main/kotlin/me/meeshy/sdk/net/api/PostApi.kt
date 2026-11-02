@@ -268,6 +268,19 @@ interface PostApi {
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
 
+    /**
+     * La recherche générale des publications (#14620) : posts, réels et stories dont le texte
+     * (contenu, légende, traduction en clair) correspond, filtrés par la loi de visibilité du fil.
+     * [types] : `POST`, `REEL`, `STORY` séparés par des virgules ; absent, les trois.
+     */
+    @GET("posts/search")
+    suspend fun search(
+        @Query("q") query: String,
+        @Query("types") types: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null,
+    ): ApiResponse<List<ApiPost>>
+
     @POST("posts")
     suspend fun create(
         @Body body: CreatePostRequest,

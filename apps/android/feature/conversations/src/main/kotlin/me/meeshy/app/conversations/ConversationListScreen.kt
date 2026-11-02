@@ -53,8 +53,10 @@ fun ConversationListScreen(
     rowNavigation: ConversationRowNavigation = ConversationRowNavigation.None,
     onOpenSettings: () -> Unit = {},
     onOpenConversationSearch: (String) -> Unit = {},
+    onOpenMessage: (conversationId: String, messageId: String) -> Unit = { conversationId, _ -> onConversationClick(conversationId) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val messageSearch by viewModel.messageSearch.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
     // A tap resolves to navigation only through the ViewModel's one-shot gate: an
@@ -161,17 +163,19 @@ fun ConversationListScreen(
                 .padding(padding),
         ) {
             ConnectionBannerStrip(state.banner)
-            val content = ConversationListContent.of(state)
+            val content = ConversationListContent.of(state, messageSectionShown = messageSearch.showsSection)
             // iOS : le rail puis les filtres sont les premières lignes de la liste, dans tous les états (#13664).
             Box(modifier = Modifier.weight(1f).nestedScroll(searchScrollConnection)) {
                 ConversationListBody(
                     state = state,
                     listState = listState,
                     viewModel = viewModel,
-                    content = ConversationListContent.of(state),
+                    content = content,
                     onNewConversation = onNewConversation,
                     onRefresh = onRefresh,
                     rowNavigation = rowNavigation,
+                    messageSearch = messageSearch,
+                    onOpenMessage = { hit -> onOpenMessage(hit.conversationId, hit.messageId) },
                     header = {
                         ConversationListHead(
                             rail = header,

@@ -22,13 +22,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.model.search.PostSearchDestination
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
  * Recherche globale plein ecran — parite iOS `GlobalSearchView` : pilule de recherche
- * autofocus avec effacement, trois onglets (Messages / Conversations / Utilisateurs) avec
+ * autofocus avec effacement, trois onglets (Messages / Posts / Utilisateurs, #14620) avec
  * compteurs, une seule requete pour les trois volets, etats hors ligne / erreur / panne
  * partielle, et fiche utilisateur en feuille.
  *
@@ -42,6 +43,8 @@ fun GlobalSearchScreen(
     onOpenUser: (String) -> Unit,
     userSheet: (@Composable (userId: String, onDismiss: () -> Unit) -> Unit)? = null,
     viewModel: GlobalSearchViewModel = hiltViewModel(),
+    onOpenMessage: (conversationId: String, messageId: String) -> Unit = { conversationId, _ -> onOpenConversation(conversationId) },
+    onOpenPost: (PostSearchDestination) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val focusRequester = remember { FocusRequester() }
@@ -106,6 +109,14 @@ fun GlobalSearchScreen(
                                 viewModel.onResultTapped()
                                 onOpenConversation(id)
                             },
+                            onOpenMessage = { conversationId, messageId ->
+                                viewModel.onResultTapped()
+                                onOpenMessage(conversationId, messageId)
+                            },
+                            onOpenPost = { destination ->
+                                viewModel.onResultTapped()
+                                onOpenPost(destination)
+                            },
                             onUserTapped = viewModel::onUserTapped,
                         )
                         if (state.isRevalidating) {
@@ -134,9 +145,10 @@ private val ResultsPadding = PaddingValues(
 private fun SearchResults(
     state: GlobalSearchUiState,
     onOpenConversation: (String) -> Unit,
+    onOpenMessage: (conversationId: String, messageId: String) -> Unit,
+    onOpenPost: (PostSearchDestination) -> Unit,
     onUserTapped: (String) -> Unit,
 ) {
-    val nowMillis = remember(state.results) { System.currentTimeMillis() }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = ResultsPadding,
@@ -152,21 +164,15 @@ private fun SearchResults(
                     hit = hit,
                     identity = hit.identity(state.currentUserId),
                     resultsQuery = state.resultsQuery,
-                    onClick = { onOpenConversation(hit.message.conversationId) },
+                    onClick = { onOpenMessage(hit.message.conversationId, hit.message.id) },
                 )
             }
-            GlobalSearchTab.CONVERSATIONS -> items(
-                state.results.conversations,
-                key = { it.id },
-                contentType = { "conversation" },
-            ) { conversation ->
-                ConversationHitRow(
-                    conversation = conversation,
-                    currentUserId = state.currentUserId,
-                    readerPrism = state.readerPrism,
-                    nowMillis = nowMillis,
-                    onClick = { onOpenConversation(conversation.id) },
-                )
+            GlobalSearchTab.POSTS -> items(
+                state.postHits,
+                key = { it.postId },
+                contentType = { "post" },
+            ) { hit ->
+                PostHitRow(hit = hit, onClick = { onOpenPost(hit.destination) })
             }
             GlobalSearchTab.USERS -> items(
                 state.results.users,

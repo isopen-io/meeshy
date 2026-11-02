@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.ReaderPrism
+import me.meeshy.sdk.model.search.PostSearch
+import me.meeshy.sdk.model.search.PostSearchHit
 import me.meeshy.sdk.model.search.SearchLoadState
 import me.meeshy.sdk.model.search.SearchLoadStates
 import me.meeshy.sdk.model.search.SearchPaneKind
@@ -34,8 +36,8 @@ sealed interface GlobalSearchEffect {
     data class OpenUserProfile(val userId: String) : GlobalSearchEffect
 }
 
-/** Les trois volets de la recherche globale — parite iOS `SearchTab`, meme ordre. */
-enum class GlobalSearchTab { MESSAGES, CONVERSATIONS, USERS }
+/** Les trois volets de la recherche globale ; les publications prennent la place des conversations (#14620). */
+enum class GlobalSearchTab { MESSAGES, POSTS, USERS }
 
 data class GlobalSearchUiState(
     val query: String = "",
@@ -52,11 +54,13 @@ data class GlobalSearchUiState(
     /** Ce que l'ecran rend A LA PLACE de la liste ; `LOADING` seulement a froid, sans resultat. */
     val loadState: SearchLoadState = SearchLoadState.IDLE,
     val hasSearched: Boolean = false,
-    /** Le premier volet reseau en echec (conversations, personnes, messages) ; `null` si aucun. */
+    /** Le premier volet reseau en echec (publications, personnes, messages) ; `null` si aucun. */
     val failure: SearchPaneKind? = null,
     /** Les volets en echec individuellement : un volet en panne n'est jamais « aucun resultat ». */
     val failedPanes: Set<SearchPaneKind> = emptySet(),
     val results: GlobalSearchResults = GlobalSearchResults(),
+    /** Les publications de [results] telles que l'onglet Posts les montre : texte du Prisme, expirees exclues. */
+    val postHits: List<PostSearchHit> = emptyList(),
     /**
      * Le LECTEUR : l'interlocuteur d'un direct s'elit contre lui (#11615). Sans lui, une
      * ligne de resultat « conversation » ne pourrait pas nommer l'autre personne et
@@ -72,17 +76,17 @@ data class GlobalSearchUiState(
     val isRevalidating: Boolean get() = loadState == SearchLoadState.CACHED_STALE
 
     val hasDisplayedResults: Boolean
-        get() = results.conversations.isNotEmpty() || results.users.isNotEmpty() || results.messages.isNotEmpty()
+        get() = postHits.isNotEmpty() || results.users.isNotEmpty() || results.messages.isNotEmpty()
 
     fun isFailed(tab: GlobalSearchTab): Boolean = when (tab) {
         GlobalSearchTab.MESSAGES -> SearchPaneKind.MESSAGES
-        GlobalSearchTab.CONVERSATIONS -> SearchPaneKind.CONVERSATIONS
+        GlobalSearchTab.POSTS -> SearchPaneKind.POSTS
         GlobalSearchTab.USERS -> SearchPaneKind.PEOPLE
     } in failedPanes
 
     fun countFor(tab: GlobalSearchTab): Int = when (tab) {
         GlobalSearchTab.MESSAGES -> results.messages.size
-        GlobalSearchTab.CONVERSATIONS -> results.conversations.size
+        GlobalSearchTab.POSTS -> postHits.size
         GlobalSearchTab.USERS -> results.users.size
     }
 
@@ -164,6 +168,7 @@ class GlobalSearchViewModel @Inject constructor(
             _state.update {
                 it.copy(
                     results = GlobalSearchResults(),
+                    postHits = emptyList(),
                     resultsQuery = "",
                     hasSearched = false,
                     loadState = SearchLoadState.IDLE,
@@ -203,6 +208,7 @@ class GlobalSearchViewModel @Inject constructor(
                     loadState = SearchLoadState.LOADED,
                     hasSearched = true,
                     results = cached,
+                    postHits = postHitsOf(cached, it.readerPrism),
                     resultsQuery = query,
                     failure = null,
                     failedPanes = emptySet(),
@@ -226,6 +232,7 @@ class GlobalSearchViewModel @Inject constructor(
         _state.update { current ->
             current.copy(
                 results = snapshot.results,
+                postHits = postHitsOf(snapshot.results, current.readerPrism),
                 resultsQuery = query,
                 failure = if (settled) failure else null,
                 failedPanes = if (settled) failedPanesOf(snapshot) else emptySet(),
@@ -243,10 +250,13 @@ class GlobalSearchViewModel @Inject constructor(
     }
 
     private fun failedPanesOf(snapshot: GlobalSearchSnapshot): Set<SearchPaneKind> = buildSet {
-        if (snapshot.conversations.isFailed) add(SearchPaneKind.CONVERSATIONS)
+        if (snapshot.posts.isFailed) add(SearchPaneKind.POSTS)
         if (snapshot.users.isFailed) add(SearchPaneKind.PEOPLE)
         if (snapshot.messages.isFailed) add(SearchPaneKind.MESSAGES)
     }
+
+    private fun postHitsOf(results: GlobalSearchResults, readerPrism: List<String>): List<PostSearchHit> =
+        PostSearch.hitsOf(results.posts, readerPrism, clock.nowMillis())
 
     fun selectTab(tab: GlobalSearchTab) {
         _effects.trySend(GlobalSearchEffect.Haptic)

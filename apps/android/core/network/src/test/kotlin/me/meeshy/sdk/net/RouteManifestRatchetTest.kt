@@ -103,7 +103,7 @@ class RouteManifestRatchetTest {
          * 205 : plus `GET /messages/search` (8a734141de : la recherche trouve les messages du lecteur), servie par la
          * passerelle ; l'écran de recherche globale d'Android la portera.
          */
-        const val TO_PORT_CEILING = 205
+        const val TO_PORT_CEILING = 204
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
