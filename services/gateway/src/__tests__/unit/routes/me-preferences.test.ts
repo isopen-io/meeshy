@@ -1150,3 +1150,51 @@ describe('écriture de préférences — purge du cache serveur', () => {
     await app.close();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// #14406, audit #14464 C7 — « réinitialiser » ne lève pas une opposition
+//
+// Un refus EXPLICITE de la Connaissance automatique (`autoAcquaintance: false`,
+// RGPD art. 21) survit à la remise à zéro de la confidentialité : rallumer la
+// création ne se fait que par le geste qui la nomme. Un `true` stocké, lui, est
+// rendu au défaut (qui dépend de l'âge déclaré).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('DELETE de la confidentialité — un refus de la Connaissance automatique survit', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const resetWrite = (prisma: { userPreferences: { updateMany: unknown } }) =>
+    (prisma.userPreferences.updateMany as ReturnType<typeof jest.fn>).mock.calls[0][0] as { data: Record<string, unknown> };
+
+  it('alias : le refus stocké est gardé, le reste revient aux défauts', async () => {
+    const prisma = makePrisma({ findUniqueResult: { ...STORED_ALL_PREFS, privacy: { ...STORED_PRIVACY, autoAcquaintance: false } } });
+    const app = await buildCategoryAppWith('privacy', prisma);
+
+    const res = await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    expect(res.statusCode).toBe(200);
+    expect(resetWrite(prisma).data).toEqual({ privacy: { autoAcquaintance: false } });
+    await app.close();
+  });
+
+  it('alias : un choix `true` revient au défaut', async () => {
+    const prisma = makePrisma({ findUniqueResult: { ...STORED_ALL_PREFS, privacy: { ...STORED_PRIVACY, autoAcquaintance: true } } });
+    const app = await buildCategoryAppWith('privacy', prisma);
+
+    await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    expect(resetWrite(prisma).data).toEqual({ privacy: null });
+    await app.close();
+  });
+
+  it('route unifiée : même règle, les autres catégories reviennent à null', async () => {
+    const app = await buildApp({ findUniqueResult: { ...STORED_ALL_PREFS, privacy: { ...STORED_PRIVACY, autoAcquaintance: false } } });
+    const prisma = (app as unknown as { prisma: ReturnType<typeof makePrisma> }).prisma;
+
+    const res = await app.inject({ method: 'DELETE', url: '/me/preferences?categories=privacy,audio', headers: AUTH });
+
+    expect(res.statusCode).toBe(200);
+    expect(resetWrite(prisma).data).toEqual({ privacy: { autoAcquaintance: false }, audio: null });
+    await app.close();
+  });
+});

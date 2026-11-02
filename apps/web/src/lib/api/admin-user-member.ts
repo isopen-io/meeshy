@@ -43,9 +43,13 @@ export type AdminPreferenceValue = boolean | number | string | readonly unknown[
 export type AdminPreferenceDocument = Readonly<Record<string, AdminPreferenceValue>>;
 export type AdminUserPreferences = Readonly<Record<AdminPreferenceCategory, AdminPreferenceDocument>>;
 
-/** Lisibles, jamais écrites par un administrateur : baisser le chiffrement d'autrui est refusé par la passerelle. */
+/**
+ * Lisibles, jamais écrites par un administrateur — miroir de `ADMIN_READ_ONLY_PREFERENCE_KEYS` (passerelle) :
+ * baisser le chiffrement d'autrui, ou rallumer sa Connaissance automatique (#14406). La passerelle sert pour
+ * cette dernière la valeur EFFECTIVE (défaut selon l'âge déclaré compris).
+ */
 export const ADMIN_READ_ONLY_PREFERENCES: Readonly<Partial<Record<AdminPreferenceCategory, readonly string[]>>> = {
-  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted'],
+  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted', 'autoAcquaintance'],
 };
 
 export const adminUserStatsQueryKey = (userId: string) => ['admin', 'user', userId, 'stats'] as const;

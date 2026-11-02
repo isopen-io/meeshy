@@ -57,6 +57,7 @@ export type UserRelationRow = {
   readonly levelSince?: Date | null;
   readonly cooldownLowUntil?: Date | null;
   readonly cooldownHighUntil?: Date | null;
+  readonly origin?: string | null;
   readonly transitions?: ReadonlyArray<{ readonly actorId?: string; readonly from: string; readonly to: string; readonly at?: Date | null }> | null;
 };
 
@@ -352,6 +353,31 @@ export async function resetFriendship(
   params: { userA: string; userB: string; at: Date },
 ): Promise<RelationResetOutcome> {
   return lowerPair(db, { ...params, level: 'PUBLIC' });
+}
+
+/**
+ * La Connaissance AUTOMATIQUE retirée par le SYSTÈME (#14406, audit #14464 C2) :
+ * l'une des deux personnes refuse que Meeshy en crée. Les deux accords reviennent
+ * à PUBLIC, en silence, et SANS rien graver dans l'historique : ce n'est la sortie
+ * volontaire de personne, et `hasRecordedDrop` ne doit pas l'attribuer aux deux.
+ * L'annulation est donc RÉVERSIBLE : la préférence rallumée, la Connaissance
+ * renaît au calcul suivant. Seule une Connaissance née toute seule et restée
+ * telle quelle (ACQUAINTANCE des deux côtés) est touchée ; l'écriture est gardée
+ * par les accords relus (l'origine, elle, ne change jamais).
+ */
+export async function withdrawAutoAcquaintance(
+  db: UserRelationDb,
+  params: { userA: string; userB: string; at: Date },
+): Promise<RelationResetOutcome> {
+  const pair = pairOf(params.userA, params.userB);
+  if (!pair) return 'ignored';
+  const row = await readPair(db, pair);
+  if (!row || row.origin !== 'auto-acquaintance' || row.grantedByLow !== 'ACQUAINTANCE' || row.grantedByHigh !== 'ACQUAINTANCE') return 'unchanged';
+  const { count } = await db.userRelation.updateMany({
+    where: { id: row.id, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' },
+    data: { grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC', levelSince: params.at },
+  });
+  return count > 0 ? 'reset' : 'unchanged';
 }
 
 export type RelationLowerOutcome = 'lowered' | 'unchanged' | 'not-a-drop' | 'ignored';

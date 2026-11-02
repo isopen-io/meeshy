@@ -232,6 +232,74 @@ describe('evaluateAutoAcquaintance — « je refuse que Meeshy crée des Connais
   });
 });
 
+const autoRow = () => ({
+  id: 'aa0000000000000000000099', userLowId: LOW, userHighId: HIGH, grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE',
+  levelSince: new Date('2026-10-20T00:00:00Z'), origin: 'auto-acquaintance', transitions: [],
+});
+
+describe('evaluateAutoAcquaintance — une annulation par la préférence est RÉVERSIBLE (audit #14464 C2, décision du porteur)', () => {
+  it('un majeur qui retire son opposition retrouve sa Connaissance automatique, les échanges restant qualifiants', async () => {
+    const first = setup({ relations: [autoRow()], preferences: [choice(LOW, false)] });
+    expect(await first.evaluate()).toBe('cancelled');
+
+    const second = setup({ relations: first.store.relations() as unknown[], preferences: [choice(LOW, true)] });
+    expect(await second.evaluate()).toBe('raised');
+    expect(second.store.relations()[0]).toMatchObject({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' });
+    expect(second.notify).toHaveBeenCalledTimes(2);
+  });
+
+  it('l’annulation système ne grave aucune sortie : l’historique n’attribue de baisse à personne', async () => {
+    const { store, evaluate } = setup({ relations: [autoRow()], preferences: [choice(HIGH, false)] });
+    await evaluate();
+
+    expect(store.relations()[0].transitions).toEqual([]);
+  });
+
+  it('une sortie VOLONTAIRE reste respectée : la préférence rallumée ne la défait pas', async () => {
+    const dropped = {
+      ...autoRow(), grantedByLow: 'PUBLIC',
+      transitions: [{ actorId: LOW, from: 'ACQUAINTANCE', to: 'PUBLIC', at: new Date('2026-10-25T00:00:00Z') }],
+    };
+    const { store, evaluate } = setup({ relations: [dropped], preferences: [choice(LOW, true)] });
+
+    expect(await evaluate()).toBe('unchanged');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'ACQUAINTANCE' });
+  });
+
+  it('le défaut ne défait RIEN : deux mineurs sans choix gardent la Connaissance automatique née avant ce lot', async () => {
+    const minors = [user(LOW, { birthDate: MINOR }), user(HIGH, { birthDate: MINOR })];
+    const { store, notify, evaluate } = setup({ users: minors, relations: [autoRow()] });
+
+    expect(await evaluate()).toBe('opted-out');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'ACQUAINTANCE', grantedByHigh: 'ACQUAINTANCE' });
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('seul un refus EXPLICITE de l’un des deux défait celle de deux mineurs', async () => {
+    const minors = [user(LOW, { birthDate: MINOR }), user(HIGH, { birthDate: MINOR })];
+    const { store, evaluate } = setup({ users: minors, relations: [autoRow()], preferences: [choice(HIGH, false)] });
+
+    expect(await evaluate()).toBe('cancelled');
+    expect(store.relations()[0]).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
+  });
+});
+
+describe('evaluateAutoAcquaintance — la préférence est relue juste avant l’écriture (audit #14464 C3)', () => {
+  it('un refus posé pendant l’évaluation empêche la naissance, et personne n’est prévenu', async () => {
+    const { store, notify, evaluate } = setup();
+    const read = store.prisma.userPreferences.findMany;
+    let calls = 0;
+    store.prisma.userPreferences.findMany = (args) => {
+      calls += 1;
+      return calls === 1 ? read(args) : Promise.resolve([choice(LOW, false)]);
+    };
+
+    expect(await evaluate()).toBe('opted-out');
+    expect(store.relations()).toHaveLength(0);
+    expect(notify).not.toHaveBeenCalled();
+  });
+});
+
 describe('evaluateAutoAcquaintance — elle monte, elle ne baisse jamais', () => {
   it('relève seulement le côté sous ACQUAINTANCE et ne touche pas un lien déjà plus haut', async () => {
     const mixed = {

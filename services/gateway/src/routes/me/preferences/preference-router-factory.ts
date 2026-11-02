@@ -30,6 +30,7 @@ import {
   applyCategoryWriteEffects,
   readJsonPreferenceColumn,
   resolveComplete,
+  resetDocumentOf,
   submittedFrom,
   type CategoryStorage,
   type PreferenceCategory,
@@ -504,7 +505,7 @@ export function createPreferenceRouter(
           // sans lever, et ne crée aucune ligne vide pour le dire.
           await fastify.prisma.userPreferences.updateMany({
             where: { userId },
-            data: { [category]: null }
+            data: { [category]: await resetDocumentOf(fastify.prisma, userId, category) }
           });
 
           await afterWrite(userId);

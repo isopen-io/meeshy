@@ -110,6 +110,12 @@ export type CategoryStorage = {
   ) => Promise<PreferenceDocument | null>;
   /** Après CHAQUE écriture réussie, une fois le document autoritatif. */
   readonly afterWrite?: (prisma: PrismaClient, userId: string) => Promise<void>;
+  /**
+   * Ce que la RÉINITIALISATION garde du document stocké ; rien ⇒ `null`, les
+   * défauts. Pour `privacy` : un refus explicite de la Connaissance automatique
+   * (#14406, audit #14464 C7) — réinitialiser ne lève pas une opposition.
+   */
+  readonly keptOnReset?: (stored: PreferenceDocument | null) => PreferenceDocument | null;
 };
 
 export type PreferenceEntry = {
@@ -135,10 +141,11 @@ export const PREFERENCE_REGISTRY: Readonly<Record<PreferenceCategory, Preference
     defaults: PRIVACY_PREFERENCE_DEFAULTS,
     storage: {
       readStored: resolveStoredPrivacyPreferences,
+      keptOnReset: (stored) => (stored?.autoAcquaintance === false ? { autoAcquaintance: false } : null),
       // #14406 — un refus de la Connaissance automatique vaut tout de suite.
       afterWrite: async (prisma, userId) => {
         await retireLegacyPrivacyRows(prisma, userId);
-        revisitAutoAcquaintancesOnPrivacyWrite(prisma, { userId });
+        void revisitAutoAcquaintancesOnPrivacyWrite(prisma, { userId });
       },
     },
   },
@@ -372,4 +379,19 @@ export async function applyCategoryWriteEffects(
   for (const category of categories) {
     emitPreferenceCategoryUpdated(fastify, userId, category);
   }
+}
+
+/**
+ * Ce qu'une RÉINITIALISATION écrit pour une catégorie : `null` (les défauts), sauf
+ * ce que son rangement garde (`keptOnReset`, #14406). Une lecture de plus, pour la
+ * seule catégorie qui garde quelque chose.
+ */
+export async function resetDocumentOf(
+  prisma: PrismaClient,
+  userId: string,
+  category: PreferenceCategory
+): Promise<PreferenceDocument | null> {
+  const storage = PREFERENCE_REGISTRY[category].storage;
+  if (!storage?.keptOnReset) return null;
+  return storage.keptOnReset(await storage.readStored(prisma, userId));
 }

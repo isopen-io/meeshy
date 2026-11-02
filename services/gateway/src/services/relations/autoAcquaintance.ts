@@ -15,12 +15,16 @@
  *   dès qu'un âge déclaré après coup les sépare ;
  * - une baisse gravée dans l'historique : la sortie volontaire n'est pas défaite
  *   par la poursuite des échanges (porté par l'écrivain) ;
- * - le REFUS de l'un des deux (`privacy.autoAcquaintance`, #14406, RGPD art. 21) :
- *   rien ne naît ni ne monte, et une Connaissance née toute seule est défaite EN
- *   SILENCE. Sans choix stocké, la préférence est activée pour un majeur ou un âge
- *   inconnu et DÉSACTIVÉE pour un mineur déclaré (`autoAcquaintanceEnabled`). Elle
- *   se lit dans la base à chaque évaluation, jamais dans un cache : un refus vaut
- *   dès la passe suivante.
+ * - la préférence `privacy.autoAcquaintance` (#14406, RGPD art. 21), lue en base à
+ *   chaque évaluation et RELUE juste avant d'écrire puis avant de prévenir :
+ *   - un REFUS EXPLICITE de l'un des deux : rien ne naît ni ne monte, et une
+ *     Connaissance née toute seule est retirée en silence, SANS graver de sortie
+ *     (`withdrawAutoAcquaintance`) — l'annulation est réversible, la préférence
+ *     rallumée la laisse renaître (décision du porteur, audit #14464 C2) ;
+ *   - une préférence qui vaut son DÉFAUT désactivé (mineur déclaré sans choix,
+ *     `autoAcquaintanceEnabled`) : rien ne naît ni ne monte, mais RIEN n'est
+ *     défait — le défaut ne vaut que pour les créations futures, et ce lot ne
+ *     modifie aucun lien existant au déploiement.
  *
  * Idempotent : rejouée, l'évaluation ne change rien et ne prévient personne deux fois.
  * Une notification perdue ne défait pas le lien.
@@ -35,7 +39,7 @@ import { relationThresholdsFor, type RelationThresholds } from '@meeshy/shared/u
 import { acquaintanceProgress, pairDayFromRow } from '@meeshy/shared/utils/relation-interactions';
 import { isBlockedBetween } from '../../utils/blocking.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { recordAcquaintance, resetFriendship, type UserRelationDb } from './userRelationWriter.js';
+import { recordAcquaintance, resetFriendship, withdrawAutoAcquaintance, type UserRelationDb } from './userRelationWriter.js';
 
 const logger = enhancedLogger.child({ module: 'AutoAcquaintance' });
 
@@ -83,7 +87,7 @@ async function loadWindow(deps: AutoAcquaintanceDeps, pair: { userLowId: string;
 export const isOwnAcquaintance = (row: { origin?: string | null; grantedByLow?: string | null; grantedByHigh?: string | null } | null): boolean =>
   row?.origin === 'auto-acquaintance' && row.grantedByLow === 'ACQUAINTANCE' && row.grantedByHigh === 'ACQUAINTANCE';
 
-async function cancelIfAutomatic<R extends 'blocked' | 'minor' | 'opted-out'>(
+async function cancelIfAutomatic<R extends 'blocked' | 'minor'>(
   deps: AutoAcquaintanceDeps,
   pair: ReturnType<typeof relationPairKey>,
   now: Date,
@@ -95,10 +99,16 @@ async function cancelIfAutomatic<R extends 'blocked' | 'minor' | 'opted-out'>(
   return 'cancelled' as const;
 }
 
-async function everyoneAccepts(
-  deps: AutoAcquaintanceDeps,
-  people: ReadonlyArray<{ readonly id: string; readonly ageClass: DeclaredAgeClass }>,
-): Promise<boolean> {
+/**
+ * Ce que la paire dit de la Connaissance automatique : `open` (les deux la
+ * permettent), `refused` (au moins un REFUS stocké), `closed` (personne ne
+ * refuse, mais l'un est au défaut désactivé).
+ */
+type PairStance = 'open' | 'closed' | 'refused';
+
+type Person = { readonly id: string; readonly ageClass: DeclaredAgeClass };
+
+async function stanceOf(deps: AutoAcquaintanceDeps, people: ReadonlyArray<Person>): Promise<PairStance> {
   const documents = await deps.prisma.userPreferences.findMany({
     where: { userId: { in: people.map((person) => person.id) } },
     select: { userId: true, privacy: true },
@@ -107,7 +117,13 @@ async function everyoneAccepts(
     const privacy = documents.find((row) => row.userId === userId)?.privacy;
     return privacy && typeof privacy === 'object' && !Array.isArray(privacy) ? (privacy as Record<string, unknown>).autoAcquaintance : undefined;
   };
-  return people.every((person) => autoAcquaintanceEnabled({ stored: storedChoice(person.id), ageClass: person.ageClass }));
+  if (people.some((person) => storedChoice(person.id) === false)) return 'refused';
+  return people.every((person) => autoAcquaintanceEnabled({ stored: storedChoice(person.id), ageClass: person.ageClass })) ? 'open' : 'closed';
+}
+
+async function withdrawIfAutomatic(deps: AutoAcquaintanceDeps, pair: ReturnType<typeof relationPairKey>, now: Date) {
+  const outcome = await withdrawAutoAcquaintance(deps.prisma as unknown as UserRelationDb, { userA: pair.userLowId, userB: pair.userHighId, at: now });
+  return outcome === 'reset' ? ('cancelled' as const) : ('opted-out' as const);
 }
 
 async function announce(notify: AcquaintanceNotifier | undefined, userA: string, userB: string): Promise<void> {
@@ -154,17 +170,24 @@ export async function evaluateAutoAcquaintance(
   });
   if (verdict.reason === 'blocked') return cancelIfAutomatic(deps, pair, now, 'blocked');
   if (!verdict.allowed) return cancelIfAutomatic(deps, pair, now, 'minor');
-  const accepted = await everyoneAccepts(deps, [
+  const people: Person[] = [
     { id: pair.userLowId, ageClass: lowAge },
     { id: pair.userHighId, ageClass: highAge },
-  ]);
-  if (!accepted) return cancelIfAutomatic(deps, pair, now, 'opted-out');
+  ];
+  const stance = await stanceOf(deps, people);
+  if (stance === 'refused') return withdrawIfAutomatic(deps, pair, now);
+  if (stance === 'closed') return 'opted-out';
 
   const days = await loadWindow(deps, pair, now);
   if (!acquaintanceProgress({ days, now, thresholds: deps.thresholds ?? environmentThresholds() }).met) return 'insufficient';
 
+  if ((await stanceOf(deps, people)) !== 'open') return 'opted-out';
   const outcome = await recordAcquaintance(deps.prisma as unknown as UserRelationDb, { userA: pair.userLowId, userB: pair.userHighId, at: now });
   if (outcome === 'created' || outcome === 'raised') {
+    if ((await stanceOf(deps, people)) !== 'open') {
+      await withdrawIfAutomatic(deps, pair, now);
+      return 'opted-out';
+    }
     await announce(deps.notify, pair.userLowId, pair.userHighId);
     return outcome;
   }
@@ -192,8 +215,14 @@ const AGE_REVISIT_LIMIT = 5000;
 
 async function revisitAutoAcquaintancesOf(prisma: AutoAcquaintanceDeps['prisma'], userId: string, now?: () => Date): Promise<void> {
   const rows = await prisma.userRelation.findMany({
-    where: { origin: 'auto-acquaintance', OR: [{ userLowId: userId }, { userHighId: userId }] },
+    where: {
+      origin: 'auto-acquaintance',
+      grantedByLow: 'ACQUAINTANCE',
+      grantedByHigh: 'ACQUAINTANCE',
+      OR: [{ userLowId: userId }, { userHighId: userId }],
+    },
     select: { userLowId: true, userHighId: true },
+    orderBy: { id: 'asc' },
     take: AGE_REVISIT_LIMIT,
   });
   for (const row of rows) {
@@ -203,11 +232,11 @@ async function revisitAutoAcquaintancesOf(prisma: AutoAcquaintanceDeps['prisma']
 
 /**
  * Une date de naissance vient d'être déclarée (#13932) : chaque Connaissance née
- * toute seule du déclarant est réévaluée TOUT DE SUITE, et défaite en silence si
- * les deux âges sont désormais séparés (`'minor'`) — ou si l'âge déclaré met sa
- * préférence au défaut désactivé (`'opted-out'`, #14406). Le rattrapage ne relit
- * que les paires de la semaine glissante : sans ce site, un lien sans échange
- * récent survivrait à l'âge déclaré. Un lien monté par une demande n'est pas relu.
+ * toute seule du déclarant, et restée telle quelle, est réévaluée TOUT DE SUITE,
+ * et défaite en silence si les deux âges sont désormais séparés (`'minor'`). Le
+ * défaut désactivé qu'un âge mineur donne à la préférence ne défait RIEN (#14406,
+ * audit #14464 C2). Le rattrapage ne relit que les paires de la semaine glissante :
+ * sans ce site, un lien sans échange récent survivrait à l'âge déclaré.
  */
 export function revisitAutoAcquaintancesOnAgeDeclared(
   prisma: AutoAcquaintanceDeps['prisma'],
@@ -220,21 +249,25 @@ export function revisitAutoAcquaintancesOnAgeDeclared(
 
 /**
  * Ses réglages de confidentialité viennent d'être écrits (#14406, RGPD art. 21) :
- * si la Connaissance automatique n'est plus permise pour lui, chacune de ses
- * Connaissances nées toutes seules est défaite TOUT DE SUITE, en silence. Un
- * réglage voisin, la préférence restant activée, ne relit rien : la plupart des
- * écritures de confidentialité ne coûtent qu'une lecture.
+ * s'il a REFUSÉ explicitement la Connaissance automatique, chacune de ses
+ * Connaissances nées toutes seules est retirée TOUT DE SUITE, en silence et de
+ * façon réversible. Une préférence qui vaut son défaut, ou un réglage voisin, ne
+ * relit rien : la plupart des écritures ne coûtent qu'une lecture.
+ *
+ * Rend la promesse de la relecture, qui ne rejette jamais (l'échec est journalisé) :
+ * l'appelant d'une requête ne l'attend pas.
  */
-export function revisitAutoAcquaintancesOnPrivacyWrite(
+export async function revisitAutoAcquaintancesOnPrivacyWrite(
   prisma: AutoAcquaintanceDeps['prisma'],
   params: { userId: string; now?: () => Date },
-): void {
-  const revisit = async () => {
-    const now = (params.now ?? (() => new Date()))();
+): Promise<void> {
+  try {
     const user = await prisma.user.findUnique({ where: { id: params.userId }, select: { id: true, birthDate: true } });
     if (!user) return;
-    if (await everyoneAccepts({ prisma }, [{ id: user.id, ageClass: declaredAgeClass(user.birthDate, now) }])) return;
+    const now = (params.now ?? (() => new Date()))();
+    if ((await stanceOf({ prisma }, [{ id: user.id, ageClass: declaredAgeClass(user.birthDate, now) }])) !== 'refused') return;
     await revisitAutoAcquaintancesOf(prisma, params.userId, params.now);
-  };
-  revisit().catch((error: unknown) => logger.warn('acquaintances not revisited after privacy write', { error }));
+  } catch (error: unknown) {
+    logger.warn('acquaintances not revisited after privacy write', { error });
+  }
 }

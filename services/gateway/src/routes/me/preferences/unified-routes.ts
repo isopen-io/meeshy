@@ -73,6 +73,7 @@ import {
   isPreferenceCategory,
   parseSubmittedKeys,
   resolveComplete,
+  resetDocumentOf,
   resolveCompleteCategories,
   type PreferenceCategory,
   type PreferenceDocument,
@@ -510,7 +511,9 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
         // qui n'a jamais rien écrit, donc qui EST déjà aux valeurs par défaut.
         await fastify.prisma.userPreferences.updateMany({
           where: { userId },
-          data: Object.fromEntries(categories.map((category) => [category, null])),
+          data: Object.fromEntries(
+            await Promise.all(categories.map(async (category) => [category, await resetDocumentOf(fastify.prisma, userId, category)] as const))
+          ),
         });
 
         await applyCategoryWriteEffects(fastify, userId, categories);
