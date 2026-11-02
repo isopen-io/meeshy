@@ -16,8 +16,18 @@ from typing import Dict, Optional
 
 # Import des modèles ZMQ
 from .zmq_models import TranslationTask
+from .zmq_pool.translation_processor import unsupported_language
 
 logger = logging.getLogger(__name__)
+
+
+def _accepted_error_codes(request_data: dict) -> tuple:
+    """Les codes terminaux que la passerelle ANNONCE savoir lire. Une passerelle
+    qui n'annonce rien les compterait comme des erreurs ordinaires."""
+    announced = request_data.get('acceptsErrorCodes')
+    if not isinstance(announced, list):
+        return ()
+    return tuple(code for code in announced if isinstance(code, str))
 
 # Import du service de cache Redis
 CACHE_AVAILABLE = False
@@ -356,7 +366,8 @@ class TranslationHandler:
                 target_languages=request_data.get('targetLanguages', []),
                 conversation_id=request_data.get('conversationId', 'unknown'),
                 model_type=request_data.get('modelType', 'basic'),
-                at_rest=request_data.get('atRest') is True
+                at_rest=request_data.get('atRest') is True,
+                accepted_error_codes=_accepted_error_codes(request_data)
             )
             
             logger.info(f"🔧 [TRANSLATOR] Tâche créée: {task.task_id} pour {task.conversation_id} ({len(task.target_languages)} langues)")
@@ -389,8 +400,10 @@ class TranslationHandler:
     async def _publish_translation_result(self, task_id: str, result: dict, target_language: str):
         """Publie un résultat de traduction via PUB vers la gateway avec informations techniques complètes"""
         try:
-            # DEBUG: Logs réduits de 60% - Suppression des vérifications détaillées
-            
+            if result.get('errorCode') == 'UNSUPPORTED_LANGUAGE':
+                await self._publish_unsupported_language(task_id, result, target_language)
+                return
+
             # Calculer le temps d'attente en queue
             queue_time = time.time() - result.get('created_at', time.time())
             
@@ -511,6 +524,26 @@ class TranslationHandler:
             import traceback
             traceback.print_exc()
     
+    async def _publish_unsupported_language(self, task_id: str, result: dict, target_language: str):
+        """Refus TERMINAL d'une langue sans code NLLB-200 : la passerelle solde
+        cette langue sans relance et sert l'original. Il ne part que vers une
+        passerelle qui l'a annoncé (`acceptsErrorCodes`) : une plus ancienne le
+        compterait à son disjoncteur (`refusal_is_understood`)."""
+        message = {
+            'type': 'translation_error',
+            'taskId': task_id,
+            'messageId': result.get('messageId'),
+            'error': result.get('error'),
+            'errorCode': result.get('errorCode'),
+            'targetLanguage': target_language,
+            'conversationId': result.get('conversationId'),
+        }
+        if not self.pub_socket:
+            logger.error("❌ [TRANSLATOR] Socket PUB non initialisé")
+            return
+        await self.pub_socket.send(json.dumps(message).encode('utf-8'))
+        logger.info(f"🚫 [TRANSLATOR] Langue non traduisible signalée: {task_id} -> {target_language}")
+
     def _is_valid_translation(self, translated_text: str, result: dict) -> bool:
         """
         Vérifie si une traduction est valide et peut être envoyée à la Gateway
@@ -655,6 +688,8 @@ class TranslationHandler:
             if target_lang == source_language:
                 # Pas besoin de traduire vers la langue source
                 continue
+            if unsupported_language(source_language, target_lang) is not None:
+                continue
             try:
                 result = await translation_service.translate_with_structure(
                     text=text,
@@ -664,7 +699,8 @@ class TranslationHandler:
                     source_channel='zmq_story_text_object'
                 )
                 translated = result.get('translated_text') if isinstance(result, dict) else None
-                if translated and translated.strip() and translated != text:
+                failed = isinstance(result, dict) and bool(result.get('error'))
+                if translated and translated.strip() and translated != text and not failed:
                     translations[target_lang] = translated
             except Exception as e:
                 logger.warning(
