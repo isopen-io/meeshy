@@ -115,8 +115,10 @@ describe('le balayage TOMBE sous la mutation qu’il nomme', () => {
     );
     expect(mute).not.toBe(conforme);
 
-    // La réintégration répand `REJOIN_PARTICIPANT_STATE` AVANT `addedMemberFields` (#14107) : le balayage remonte
-    // d'abord ce voisin importé, qui doit donc être dans le bac pour que l'écriture se résolve.
+    // Le rejoin étale `REJOIN_PARTICIPANT_STATE` AVANT `addedMemberFields`
+    // (14bd3038e6) : le balayage remonte cet import chez le voisin, qui doit
+    // donc être dans le bac, verbatim, sans quoi l'écriture rend `non-resolue`
+    // au lieu de nommer la mutation.
     const voisin = 'services/conversations/conversationEntryAdmission.ts';
     const racine = bacAvec({
       'routes/conversations/participants-writes.ts': mute,

@@ -104,6 +104,23 @@ class KeystoreVaultKeyTest {
     }
 
     @Test
+    fun `a new key interrupted before taking its name never locks the vault for good`() {
+        val dir = directory()
+        val master = FakeMaster()
+        KeystoreVaultKey(dir, master).open()
+        master.master = null
+        val killedAfterNewMaster = object : VaultKeyWrapper by master {
+            override fun wrap(raw: ByteArray): ByteArray {
+                master.wrap(raw)
+                throw IllegalStateException("process killed before the wrapped key took its name")
+            }
+        }
+        assertThrows(IllegalStateException::class.java) { KeystoreVaultKey(dir, killedAfterNewMaster).open() }
+
+        assertThat(KeystoreVaultKey(dir, master).open().fresh).isTrue()
+    }
+
+    @Test
     fun `a permanently invalidated master key is discarded and starts a new vault`() {
         val dir = directory()
         val master = FakeMaster()
