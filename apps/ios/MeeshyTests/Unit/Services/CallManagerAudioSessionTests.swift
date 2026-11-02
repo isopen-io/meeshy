@@ -4388,7 +4388,8 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
     /// the call silently dead: the local IP address changes so all existing ICE
     /// candidates become unreachable, but the call state stays `.connected`.
     func test_callManager_interfaceChange_triggersIceRestart() throws {
-        let handlerBody = try startNetworkMonitoringBody(try callManagerSource())
+        let source = try callManagerSource()
+        let handlerBody = try startNetworkMonitoringBody(source)
 
         XCTAssertTrue(
             handlerBody.contains("interfaceChanged"),
@@ -4396,7 +4397,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
             "set a local `interfaceChanged` flag when the active interface type changes."
         )
         XCTAssertTrue(
-            handlerBody.contains(".handoff") && (try callManagerSource()).contains("call.reconnector.attemptReconnection()"),
+            handlerBody.contains(".handoff") && source.contains("call.reconnector.attemptReconnection()"),
             "networkMonitor.pathUpdateHandler must call attemptReconnection() on an " +
             "interface change — stale ICE candidates from the old interface require a " +
             "full ICE restart to re-negotiate valid candidates on the new interface."
