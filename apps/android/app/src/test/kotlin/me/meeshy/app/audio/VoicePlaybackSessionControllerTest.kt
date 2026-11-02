@@ -315,7 +315,8 @@ class VoicePlaybackSessionControllerTest {
 
     @Test
     fun `the foreground is given back when the player refuses and publishes the card as paused`() {
-        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        var now = 0L
+        val bridge = VoicePlaybackSessionBridge(clock = { now++ })
         val foreground = RecordingForeground()
         val controller = parked(bridge, foreground)
         controller.onAction(VoicePlaybackSessionController.ACTION_PLAY)
