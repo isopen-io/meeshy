@@ -357,7 +357,7 @@ fun StoryViewerScreen(
             title = { Text(stringResource(R.string.stories_report_title)) },
             text = {
                 Column {
-                    ReportReason.entries.forEach { reason ->
+                    ReportReason.entries.filterNot { it == ReportReason.FAKE_PROFILE }.forEach { reason ->
                         val label = when (reason) {
                             ReportReason.SPAM -> stringResource(R.string.stories_report_reason_spam)
                             ReportReason.HARASSMENT -> stringResource(R.string.stories_report_reason_harassment)
@@ -365,7 +365,7 @@ fun StoryViewerScreen(
                             ReportReason.VIOLENCE -> stringResource(R.string.stories_report_reason_violence)
                             ReportReason.HATE_SPEECH -> stringResource(R.string.stories_report_reason_hate_speech)
                             ReportReason.IMPERSONATION -> stringResource(R.string.stories_report_reason_impersonation)
-                            ReportReason.OTHER -> stringResource(R.string.stories_report_reason_other)
+                            ReportReason.OTHER, ReportReason.FAKE_PROFILE -> stringResource(R.string.stories_report_reason_other)
                         }
                         Text(
                             text = label,
