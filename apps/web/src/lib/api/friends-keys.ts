@@ -18,3 +18,6 @@ export const FRIENDS_QUERY_PREFIX = ['friends'] as const;
 export const BLOCKED_USERS_QUERY_KEY = [...FRIENDS_QUERY_PREFIX, 'blocked'] as const;
 
 export const FRIENDS_STALE_TIME = 5 * 60_000;
+
+/** « Mes cercles » (#13938, `relations.ts`) — dans la famille : une demande acceptée, refusée ou annulée relit aussi les cercles. */
+export const RELATION_LINKS_QUERY_KEY = [...FRIENDS_QUERY_PREFIX, 'relations'] as const;

@@ -889,7 +889,7 @@ class ReelsViewModelTest {
 
     @Test
     fun `republier monte le compteur au geste et le confirme`() = runTest {
-        coEvery { repository.repost("r1") } returns NetworkResult.Success(ApiPost(id = "rp1"))
+        coEvery { repository.repost("r1", any(), any(), any()) } returns NetworkResult.Success(ApiPost(id = "rp1"))
         val vm = viewModel(thread = listOf(reel("r1")))
         vm.load()
 
@@ -902,7 +902,7 @@ class ReelsViewModelTest {
 
     @Test
     fun `une republication refusee rend le compteur et le dit`() = runTest {
-        coEvery { repository.repost("r1") } returns NetworkResult.Failure(ApiError("x", httpStatus = 500))
+        coEvery { repository.repost("r1", any(), any(), any()) } returns NetworkResult.Failure(ApiError("x", httpStatus = 500))
         val vm = viewModel(thread = listOf(reel("r1")))
         vm.load()
 

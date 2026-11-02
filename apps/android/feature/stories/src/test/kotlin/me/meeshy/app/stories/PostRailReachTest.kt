@@ -13,7 +13,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
-import androidx.compose.ui.test.assertIsDisplayed
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.composer.ComposerFormat
 import androidx.compose.ui.unit.dp
@@ -53,8 +52,8 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * En POST, le « ⋯ » du rail reste joignable au-dessus de « Texte du post » (#14282, recette S8) : le plus court des
- * téléphones, la colonne entière d'outils, et le champ du post au socle.
+ * En POST, le « ⋯ » du rail reste joignable au-dessus du socle (#14282, recette S8) : le plus court des téléphones, la
+ * colonne entière d'outils, « Texte du post » compris (#14457), sans défiler.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -100,7 +99,7 @@ class PostRailReachTest {
     }
 
     @Test
-    fun `le dernier bouton du rail se touche au-dessus du champ du post`() {
+    fun `le dernier bouton du rail se touche au-dessus du socle, le texte du post juste au-dessus de lui`() {
         val vm = postComposer()
         var view: android.view.View? = null
         compose.setContent {
@@ -136,7 +135,10 @@ class PostRailReachTest {
         val more = compose.onNodeWithContentDescription("More options")
         // Sans défiler : sur le S8 rien ne dit que la colonne défile, le « ⋯ » doit se voir tel quel.
         more.assertIsDisplayed()
-        val pill = compose.onNodeWithContentDescription("Post text").getUnclippedBoundsInRoot()
-        assertThat(more.getUnclippedBoundsInRoot().bottom.value).isAtMost(pill.top.value)
+        val option = compose.onNodeWithContentDescription("Post text")
+        option.assertIsDisplayed()
+        val audience = compose.onNodeWithContentDescription("Audience").getUnclippedBoundsInRoot()
+        assertThat(option.getUnclippedBoundsInRoot().bottom.value).isAtMost(more.getUnclippedBoundsInRoot().top.value)
+        assertThat(more.getUnclippedBoundsInRoot().bottom.value).isAtMost(audience.top.value)
     }
 }

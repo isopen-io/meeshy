@@ -12,6 +12,7 @@ enum class FeedNotice(val isError: Boolean) {
     LOAD_FAILED(true),
     LIKE_FAILED(true),
     BOOKMARK_FAILED(true),
+    REPOSTED(false),
     REPOST_FAILED(true),
     PIN_FAILED(true),
     DELETE_FAILED(true),

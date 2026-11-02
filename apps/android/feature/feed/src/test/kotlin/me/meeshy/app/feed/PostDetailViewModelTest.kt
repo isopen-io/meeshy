@@ -55,7 +55,7 @@ class PostDetailViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private val repository: PostRepository = mockk(relaxed = true)
+    private val repository: PostRepository = mockk<PostRepository>(relaxed = true).also { coEvery { it.knownPost(any()) } returns null }
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
@@ -903,7 +903,7 @@ class PostDetailViewModelTest {
     }
 
     @Test
-    fun `a repost failure reverts the reposted flag and surfaces the error`() = runTest {
+    fun `a repost failure reverts the reposted flag and says so in the reader's language`() = runTest {
         val vm = loadedVm()
         coEvery { repository.repost(any(), content = any(), isQuote = any()) } returns
             NetworkResult.Failure(ApiError("repost boom"))
@@ -911,7 +911,7 @@ class PostDetailViewModelTest {
         vm.repost()
 
         assertThat(vm.state.value.isReposted).isFalse()
-        assertThat(vm.state.value.errorMessage).isEqualTo("repost boom")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.REPOST_FAILED)
     }
 
     @Test
@@ -1025,7 +1025,7 @@ class PostDetailViewModelTest {
     }
 
     @Test
-    fun `a submitQuote failure reverts the reposted flag and surfaces the error`() = runTest {
+    fun `a submitQuote failure reverts the reposted flag and says so in the reader's language`() = runTest {
         val vm = loadedVm(loaded = post(id = "p1"))
         coEvery { repository.repost(any(), content = any(), isQuote = any()) } returns
             NetworkResult.Failure(ApiError("quote boom"))
@@ -1035,7 +1035,7 @@ class PostDetailViewModelTest {
         vm.submitQuote()
 
         assertThat(vm.state.value.isReposted).isFalse()
-        assertThat(vm.state.value.errorMessage).isEqualTo("quote boom")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.REPOST_FAILED)
         assertThat(vm.state.value.quoteComposer).isNull()
     }
 

@@ -845,7 +845,7 @@ class StoryRepositoryTest {
 
     @Test
     fun `repost republishes the story as a STORY, the way the iOS rail does`() = runTest {
-        coEvery { api.repost(any(), any()) } returns ApiResponse(success = true, data = Unit)
+        coEvery { api.repost(any(), any()) } returns ApiResponse(success = true, data = ApiPost(id = "rp1", type = "STORY"))
 
         val result = repository().repost("s1")
 
