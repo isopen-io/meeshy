@@ -190,16 +190,19 @@ class FeedViewModel @Inject constructor(
                     val likes = reconciled.likes
                     val bookmarks = reconciled.bookmarks
                     val comments = reconciled.comments
+                    val marks = reconciled.reposts
                     val visibleCache = cachePosts
                         .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
                         .withLikeOverlays(likes)
                         .withBookmarkOverlays(bookmarks)
                         .withCommentOverlays(comments)
+                        .withRepostMarks(marks)
                     val visibleRealtime = reconciled.posts
                         .filterNot { it.id in cacheIds || it.id in removed }
                         .withLikeOverlays(likes)
                         .withBookmarkOverlays(bookmarks)
                         .withCommentOverlays(comments)
+                        .withRepostMarks(marks)
                     latestPosts = visibleRealtime + visibleCache
                     _state.update {
                         it.project(
@@ -474,16 +477,16 @@ class FeedViewModel @Inject constructor(
     }
 
     /**
-     * Repost simple (pas de quote) puis refresh : le repost cree un POST nouveau
+     * Repost simple (pas de quote) puis refresh : le repost cree une publication nouvelle
      * cote serveur, que seul un re-fetch peut faire apparaitre en tete de flux.
      *
-     * Le [RepostCommand] resout la cible : reposter un repost vise sa RACINE, jamais
-     * le partage intermediaire (sinon la nouvelle card embarque une share vide — le
-     * gateway n'hydrate `repostOf` que sur un niveau). Port d'iOS `resolveRepostTargetId`.
+     * Le [RepostCommand] resout la cible et le format : reposter un repost vise sa RACINE,
+     * jamais le partage intermediaire (le gateway n'hydrate `repostOf` que sur un niveau), et
+     * la publication garde le format de la CARTE (iOS `RepostTargeting.target(cardType:)`).
      */
     fun repost(postId: String) {
-        val command = RepostCommand.of(postId, repostOfFor(postId), quote = false, commentary = null)
-        sendRepost(command)
+        val card = cardOf(postId)
+        sendRepost(postId, RepostCommand.of(postId, card?.repostOf, quote = false, commentary = null, cardType = card?.type))
     }
 
     /**
@@ -521,29 +524,54 @@ class FeedViewModel @Inject constructor(
      */
     fun submitQuote() {
         val composer = _state.value.quoteComposer ?: return
+        val card = cardOf(composer.postId)
         val command = RepostCommand.of(
             composer.postId,
-            repostOfFor(composer.postId),
+            card?.repostOf,
             quote = true,
             commentary = composer.text,
+            cardType = card?.type,
         )
         _state.update { it.copy(quoteComposer = null) }
-        sendRepost(command)
+        sendRepost(composer.postId, command)
     }
 
-    private fun repostOfFor(postId: String) =
-        latestPosts.firstOrNull { it.id == postId }?.repostOf
+    private fun cardOf(postId: String): ApiPost? = latestPosts.firstOrNull { it.id == postId }
 
-    private fun sendRepost(command: RepostCommand) {
+    /**
+     * La carte touchée ([cardId]) compte la republication et se marque au geste ; le serveur confirme (« Repartage »,
+     * puis le fil se recharge pour montrer la nouvelle publication) ou refuse, et la carte reprend son état d'avant
+     * avec « Erreur lors du repost ». Un second geste pendant l'envoi n'envoie rien (iOS `FeedView.togglePostRepost`).
+     */
+    private fun sendRepost(cardId: String, command: RepostCommand) {
+        val before = realtimeHead.value.reposts
+        val begun = before.begun(cardId, cardOf(cardId)?.repostCount ?: 0) ?: return
+        realtimeHead.update { it.copy(reposts = begun) }
         viewModelScope.launch {
-            val result = postRepository.repost(
-                command.targetId,
-                content = command.content,
-                isQuote = command.isQuote,
-            )
-            when (result) {
-                is NetworkResult.Success -> postRepository.refresh()
-                is NetworkResult.Failure -> _state.update { it.copy(notice = FeedNotice.REPOST_FAILED) }
+            val confirmed = try {
+                postRepository.repost(
+                    command.targetId,
+                    targetType = command.targetType,
+                    content = command.content,
+                    isQuote = command.isQuote,
+                ) is NetworkResult.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            if (!confirmed) {
+                realtimeHead.update { it.copy(reposts = it.reposts.refused(cardId, before)) }
+                _state.update { it.copy(notice = FeedNotice.REPOST_FAILED) }
+                return@launch
+            }
+            realtimeHead.update { it.copy(reposts = it.reposts.confirmed(cardId)) }
+            _state.update { it.copy(notice = FeedNotice.REPOSTED) }
+            try {
+                postRepository.refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
             }
         }
     }

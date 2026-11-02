@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
@@ -161,7 +162,7 @@ fun ReelsScreen(
             // « Partager » (menu « ⋯ ») : la feuille du système, avec le lien suivi de l'utilisateur.
             onShare = { reel -> shareOut(reel.shareCard(context)) },
         )
-        if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts)
+        if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts, modifier = Modifier.navigationBarsPadding())
     }
 
     val openCommentsReelId = commentsReelId
