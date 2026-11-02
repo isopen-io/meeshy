@@ -74,10 +74,12 @@ data class PostDetailUiState(
      */
     val quoteComposer: QuoteComposerState? = null,
     /**
-     * Optimistic "this post is reposted" flag — set the instant the reader taps repost/quote so
-     * the action reflects instantly, reverted on failure. Mirror of iOS `isPostReposted`.
+     * "This post is reposted": served by the gateway, or set the instant the reader taps repost/quote
+     * so the action reflects instantly, reverted on failure. Mirror of iOS `isPostReposted`.
      */
     val isReposted: Boolean = false,
+    /** A one-shot localized feedback of a repost (« Repartage » / « Erreur lors du repost »), cleared by [PostDetailViewModel.consumeNotice]. */
+    val notice: FeedNotice? = null,
     /** The inline secondary translation under the post text (iOS `PostDetailSecondaryTranslationPanel`). */
     val secondaryTranslation: PostSecondaryTranslation? = null,
     /** The detail's flag strip (iOS `buildAvailableFlags`): without the language read, marking the secondary one. */
@@ -477,7 +479,12 @@ class PostDetailViewModel @Inject constructor(
      */
     fun repost() {
         val post = rawPost.value ?: return
-        sendRepost(RepostCommand.of(post.id, post.repostOf, quote = false, commentary = null))
+        sendRepost(RepostCommand.of(post.id, post.repostOf, quote = false, commentary = null, cardType = post.type))
+    }
+
+    /** The toast for [PostDetailUiState.notice] has been shown. */
+    fun consumeNotice() {
+        status.update { it.copy(notice = null) }
     }
 
     /**
@@ -516,28 +523,40 @@ class PostDetailViewModel @Inject constructor(
     fun submitQuote() {
         val composer = status.value.quoteComposer ?: return
         val post = rawPost.value ?: return
-        val command = RepostCommand.of(composer.postId, post.repostOf, quote = true, commentary = composer.text)
+        val command = RepostCommand.of(composer.postId, post.repostOf, quote = true, commentary = composer.text, cardType = post.type)
         status.update { it.copy(quoteComposer = null) }
         sendRepost(command)
     }
 
+    /**
+     * The open post counts the repost and marks itself at the gesture; the server confirms (« Repartage ») or refuses,
+     * and the post takes back its state from before the gesture with « Erreur lors du repost » — never the raw
+     * technical message. A second gesture while the first is in flight sends nothing (iOS `toggleDetailRepost`).
+     */
     private fun sendRepost(command: RepostCommand) {
-        if (status.value.isRepostInFlight) return
-        status.update { it.copy(isRepostInFlight = true, isReposted = true, error = null) }
+        val post = rawPost.value ?: return
+        val before = status.value.reposts
+        val begun = before.begun(post.id, post.repostCount ?: 0) ?: return
+        status.update { it.copy(reposts = begun) }
         viewModelScope.launch {
-            try {
-                when (val result = postRepository.repost(command.targetId, content = command.content, isQuote = command.isQuote)) {
-                    is NetworkResult.Success ->
-                        status.update { it.copy(isRepostInFlight = false) }
-                    is NetworkResult.Failure ->
-                        status.update {
-                            it.copy(isRepostInFlight = false, isReposted = false, error = result.error.message)
-                        }
-                }
+            val confirmed = try {
+                postRepository.repost(
+                    command.targetId,
+                    targetType = command.targetType,
+                    content = command.content,
+                    isQuote = command.isQuote,
+                ) is NetworkResult.Success
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                status.update { it.copy(isRepostInFlight = false, isReposted = false, error = e.message) }
+            } catch (_: Exception) {
+                false
+            }
+            status.update {
+                if (confirmed) {
+                    it.copy(reposts = it.reposts.confirmed(post.id), notice = FeedNotice.REPOSTED)
+                } else {
+                    it.copy(reposts = it.reposts.refused(post.id, before), notice = FeedNotice.REPOST_FAILED)
+                }
             }
         }
     }
@@ -579,7 +598,7 @@ class PostDetailViewModel @Inject constructor(
         overlay: LiveOverlay,
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = post?.let {
+        val projected = post?.let(st.reposts::applyTo)?.let {
             FeedPostBuilder.build(it, prefs, config.apiBaseUrl, activeLanguageCode = active, currentUserId = user?.id)
         }?.let { presentation ->
             presentation.copy(
@@ -604,7 +623,8 @@ class PostDetailViewModel @Inject constructor(
             canListViewers = post != null &&
                 PublicationViewersAccess.mayList(post.type, projected?.isAuthor == true, user?.role),
             quoteComposer = st.quoteComposer,
-            isReposted = st.isReposted,
+            isReposted = projected?.isReposted == true,
+            notice = st.notice,
             secondaryTranslation = post?.let { PostSecondaryTranslation.of(it, st.secondaryCode, displayedCode) },
             detailLanguageStrip = projected?.let {
                 PostDetailLanguageStrip.of(it.languageStrip, displayedCode, post?.originalLanguage, st.secondaryCode)
@@ -626,7 +646,7 @@ private data class PostDetailStatus(
     val failure: ContentFetchFailure? = null,
     val translating: Set<String> = emptySet(),
     val quoteComposer: QuoteComposerState? = null,
-    val isReposted: Boolean = false,
-    val isRepostInFlight: Boolean = false,
+    val reposts: RepostMarks = RepostMarks(),
+    val notice: FeedNotice? = null,
     val secondaryCode: String? = null,
 )
