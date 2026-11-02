@@ -42,6 +42,7 @@ class RelationsRepositoryTest {
     private val friendList = mockk<FriendListRepository>()
     private val users = mockk<UserRepository>()
     private val outbox = mockk<OutboxRepository>(relaxed = true)
+    private var flushes = 0
 
     @Before fun setUp() { db = inMemoryDatabase() }
 
@@ -55,6 +56,7 @@ class RelationsRepositoryTest {
         friendshipCache = cache,
         outbox = outbox,
         users = users,
+        flush = { flushes++ },
     )
 
     private val friendLink = RelationLinkWire(
@@ -93,6 +95,7 @@ class RelationsRepositoryTest {
 
         assertThat(repository().enqueueRaise("u1", RelationLevel.CLOSE)).isEqualTo("cmid-1")
         coVerify(exactly = 1) { friends.enqueueSendFriendRequest(receiverId = "u1", cmid = any(), message = null, targetLevel = "CLOSE") }
+        assertThat(flushes).isEqualTo(1)
     }
 
     @Test
