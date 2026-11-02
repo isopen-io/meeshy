@@ -19,6 +19,7 @@ import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.OutboxFlushScheduler
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestDirection
 import me.meeshy.sdk.model.MeeshyUser
@@ -91,6 +92,7 @@ class RelationsRepository internal constructor(
     private val friendshipCache: FriendshipCache,
     private val outbox: OutboxRepository,
     private val users: UserRepository,
+    private val flush: OutboxFlushScheduler,
 ) : CirclesGateway {
 
     @Inject
@@ -103,7 +105,8 @@ class RelationsRepository internal constructor(
         friendshipCache: FriendshipCache,
         outbox: OutboxRepository,
         users: UserRepository,
-    ) : this(api, KeyedJsonCache(dao, fence = fence), friends, friendList, friendshipCache, outbox, users)
+        flush: OutboxFlushScheduler,
+    ) : this(api, KeyedJsonCache(dao, fence = fence), friends, friendList, friendshipCache, outbox, users, flush)
 
     override suspend fun cachedLinks(): List<RelationLink>? =
         cache.get(NAMESPACE, LINKS_KEY, LINKS_SERIALIZER)?.value?.map(RelationLinkWire::toLink)
@@ -124,12 +127,14 @@ class RelationsRepository internal constructor(
     override suspend fun pendingRequests(direction: FriendRequestDirection): List<FriendRequest>? =
         (friends.pendingRequests(direction, limit = REQUESTS_PAGE) as? NetworkResult.Success)?.data?.requests
 
+    /** Une ligne mise en file réveille le vidage de l'outbox, comme `ConnectionActionController` : sinon elle attendrait. */
     override suspend fun enqueueRaise(userId: String, target: RelationLevel): String? =
-        friends.enqueueSendFriendRequest(receiverId = userId, targetLevel = target.wire)
+        friends.enqueueSendFriendRequest(receiverId = userId, targetLevel = target.wire)?.also { flush.schedule() }
 
     override suspend fun enqueueRespond(request: FriendRequest, accept: Boolean): String? {
         val cmid = friends.enqueueRespondFriendRequest(request.id, request.senderId, accept) ?: return null
         if (accept) friendshipCache.didAcceptRequest(request.senderId) else friendshipCache.didRejectRequest(request.senderId)
+        flush.schedule()
         return cmid
     }
 
