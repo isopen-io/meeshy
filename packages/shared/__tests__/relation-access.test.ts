@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import casesFile from '../fixtures/relation-access-cases.json';
-import { resolveRelationAccess, type RelationAccessInput, type RelationAgeClass } from '../utils/relation-access';
+import { relationAccessReads, resolveRelationAccess, type RelationAccessInput, type RelationAgeClass } from '../utils/relation-access';
 import {
   RELATION_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
@@ -352,5 +352,20 @@ describe('relation-levels — la config', () => {
     expect(staging.cooldownDays).toBe(RELATION_THRESHOLDS.cooldownDays);
     expect(relationThresholdsFor('production')).toEqual(RELATION_THRESHOLDS);
     expect(relationThresholdsFor(undefined)).toEqual(RELATION_THRESHOLDS);
+  });
+});
+
+describe('relationAccessReads — ce que l\'orchestrateur doit lire pour juger une feature', () => {
+  it('lit l\'âge pour la Connaissance automatique et pour toute feature du bouclier', () => {
+    expect(relationAccessReads('acquaintance.auto').age).toBe(true);
+    expect(relationAccessReads('dm.request').age).toBe(true);
+    expect(relationAccessReads('dm.typing').age).toBe(false);
+  });
+
+  it('lit la communauté seulement quand un plancher de la feature peut s\'atteindre par elle', () => {
+    expect(relationAccessReads('dm.request').community).toBe(true);
+    expect(relationAccessReads('notify.newContent').community).toBe(true);
+    expect(relationAccessReads('dm.typing').community).toBe(false);
+    expect(relationAccessReads('presence.dnd').community).toBe(false);
   });
 });

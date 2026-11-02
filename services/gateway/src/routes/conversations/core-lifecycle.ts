@@ -22,6 +22,12 @@ import {
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
 import { isBlockedBetween } from '../../utils/blocking';
+import {
+  decideDirectOpening,
+  requestRecipientFields,
+  requesterPermissionsFor,
+  type DirectOpening
+} from '../../services/messaging/messageRequests';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { reconcileCommunityMembership } from '../../services/conversations/communityMembershipSync';
@@ -276,6 +282,16 @@ export function registerCreateConversationRoute(
         }
       }
 
+      // #14107 — un tête-à-tête NEUF : direct dès Connaissance, sinon une demande
+      // dans la boîte du destinataire ; le Public n'écrit pas à un mineur (RG-21).
+      const openedAt = new Date();
+      const opening: DirectOpening = type === 'direct' && uniqueParticipantIds.length === 1
+        ? await decideDirectOpening(prisma, { senderId: userId, recipientId: uniqueParticipantIds[0], now: openedAt })
+        : { kind: 'direct' };
+      if (opening.kind === 'refused') {
+        throw createError(ErrorCode.MESSAGE_REQUEST_REFUSED);
+      }
+
       const allUserIds = [userId, ...uniqueParticipantIds];
       const allUsers = await prisma.user.findMany({
         where: { id: { in: allUserIds } },
@@ -321,7 +337,7 @@ export function registerCreateConversationRoute(
                 displayName: creatorUser?.displayName || creatorUser?.username || 'User',
                 role: 'creator',
                 language: languageByUserId.get(userId) ?? 'fr',
-                permissions: defaultPermissions
+                permissions: requesterPermissionsFor(opening, defaultPermissions)
               },
               ...uniqueParticipantIds.map((participantId: string) => {
                 const pUser = userMap.get(participantId);
@@ -331,7 +347,8 @@ export function registerCreateConversationRoute(
                   displayName: pUser?.displayName || pUser?.username || 'User',
                   role: 'member',
                   language: languageByUserId.get(participantId) ?? 'fr',
-                  permissions: defaultPermissions
+                  permissions: defaultPermissions,
+                  ...requestRecipientFields(opening, openedAt)
                 };
               })
             ]

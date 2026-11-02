@@ -46,6 +46,13 @@ const mockSendErrorResponse = jest.fn<any>();
 
 // ─── jest.mock calls (hoisted) ────────────────────────────────────────────────
 
+// #14107 — la boîte de demandes a ses propres témoins (`messageRequests.test.ts`) :
+// ici, un tête-à-tête s'ouvre direct, comme avant le lot.
+jest.mock('../../../services/messaging/messageRequests', () => ({
+  ...jest.requireActual<typeof import('../../../services/messaging/messageRequests')>('../../../services/messaging/messageRequests'),
+  decideDirectOpening: jest.fn(async () => ({ kind: 'direct' })),
+}));
+
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

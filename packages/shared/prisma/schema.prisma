@@ -941,6 +941,17 @@ model Participant {
   /// Permanent personal deletion — conversation hidden forever for this user
   deletedForMe DateTime?
 
+  /// LA BOÎTE DE DEMANDES (#14107, cercles, MSG-01/02) — non nul : ce tête-à-tête
+  /// est une DEMANDE de message en attente pour CE participant depuis cette date
+  /// (l'expéditeur n'était ni Connaissance ni plus). Nul ou absent : conversation
+  /// ordinaire. Posé à l'ouverture d'un DM par `services/messaging/messageRequests.ts`,
+  /// effacé quand le participant accepte ou répond. Aucun rattrapage : un DM
+  /// antérieur n'entre jamais dans la boîte.
+  messageRequestAt DateTime?
+  /// Score de risque de la demande (0-100, MIN-03), calculé à l'ouverture ; au-delà
+  /// du seuil, la demande est rangée parmi les demandes FILTRÉES. Nul hors demande.
+  messageRequestRisk Int?
+
   /// Per-conversation display name override
   nickname String?
 

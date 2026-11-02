@@ -173,3 +173,19 @@ export const resolveRelationAccess = (input: RelationAccessInput): RelationAcces
 
   return input.consent === 'granted' ? verdict(true, level, 'level', true) : verdict(false, level, 'consent', true);
 };
+
+/**
+ * Ce que l'orchestrateur doit LIRE pour que la loi juge `feature` juste : l'âge
+ * déclaré quand la Connaissance automatique ou le bouclier des mineurs la vise,
+ * la communauté quand un plancher possible de la feature (matrice, bouclier,
+ * réglage d'entourage) s'atteint par elle. Ne rien lire d'autre est permis :
+ * une lecture épargnée ne change aucun verdict.
+ */
+export const relationAccessReads = (feature: RelationFeature): { readonly age: boolean; readonly community: boolean } => {
+  const shield = RELATION_MINOR_TARGET_MIN_LEVEL[feature];
+  const floors = [RELATION_FEATURE_MIN_LEVEL[feature], ...(shield ? [shield] : [])];
+  return {
+    age: feature === 'acquaintance.auto' || Boolean(shield),
+    community: RELATION_TUNABLE_FEATURES.has(feature) || floors.some((floor) => compareRelationLevel(floor, 'COMMUNITY') <= 0),
+  };
+};
