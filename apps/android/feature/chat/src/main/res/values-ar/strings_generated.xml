@@ -293,6 +293,8 @@
     <string name="export_card_typeface_plume">ريشة</string>
     <string name="export_card_typeface_rond">مستدير</string>
     <string name="export_card_typeface_systeme">النظام</string>
+    <string name="export_discussion_title">المحادثة</string>
+    <string name="forward_image_discussion">حوِّل المحادثة إلى صورة</string>
     <string name="guest_attach_cancel">إلغاء</string>
     <string name="guest_attach_create_account">أنشئ حسابًا لمشاركة الباقي.</string>
     <string name="guest_attach_inline_audio">ملفات صوتية</string>

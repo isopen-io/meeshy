@@ -71,6 +71,9 @@ internal object BubbleAttachmentBuilder {
                     isSealed = sealed,
                     isOnDevice = attachment.fileUrl.isLocalUri(),
                     contactScope = if (attachment.isContactCard) contactScope.sealedBy(attachment) else ContactCardResolutionScope.Unknown,
+                    thumbnailUrl = if (sealed) null else attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    width = if (sealed) null else attachment.width,
+                    height = if (sealed) null else attachment.height,
                 )
             }
         return BubbleAttachments(

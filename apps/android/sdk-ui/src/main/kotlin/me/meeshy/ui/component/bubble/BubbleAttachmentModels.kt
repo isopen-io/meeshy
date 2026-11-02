@@ -18,6 +18,8 @@ public data class BubbleImage(
      * pour une pièce protégée (#13596). Elle bouge en direct avec `attachment:reaction-added|removed`.
      */
     val reactionLabel: String? = null,
+    /** À vue unique, floutée, éphémère ou retenue par la loi de sortie : la carte d'« Imager » ne la peint jamais (#14330). */
+    val isProtected: Boolean = false,
 )
 
 @Immutable
@@ -36,6 +38,10 @@ public data class BubbleFile(
     val isProtected: Boolean = false,
     /** Où une carte de visite a le droit de résoudre ses identifiants ; FERMÉ par défaut (#13622). */
     val contactScope: ContactCardResolutionScope = ContactCardResolutionScope.Unknown,
+    /** L'image d'attente d'une vidéo, que la carte d'« Imager » peint à sa place (#14330) ; `null` scellée ou sans vignette. */
+    val thumbnailUrl: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
 )
 
 /**

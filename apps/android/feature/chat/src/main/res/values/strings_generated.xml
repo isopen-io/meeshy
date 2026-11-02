@@ -289,6 +289,8 @@
     <string name="export_card_typeface_plume">Quill</string>
     <string name="export_card_typeface_rond">Rounded</string>
     <string name="export_card_typeface_systeme">System</string>
+    <string name="export_discussion_title">Conversation</string>
+    <string name="forward_image_discussion">Picture the conversation</string>
     <string name="guest_attach_cancel">Cancel</string>
     <string name="guest_attach_create_account">Create an account to share everything else.</string>
     <string name="guest_attach_inline_audio">audio</string>

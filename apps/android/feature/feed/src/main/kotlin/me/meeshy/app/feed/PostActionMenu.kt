@@ -12,6 +12,7 @@ enum class PostAction {
     Quote,
     Bookmark,
     Unbookmark,
+    Imager,
     Pin,
     Report,
     Delete,
@@ -23,6 +24,8 @@ data class PostActionContext(
     val isBookmarked: Boolean,
     /** Le post porte du texte : sans lui, « Copier le texte » n'a rien a copier. */
     val hasText: Boolean = true,
+    /** L'œuvre est composée : « Imager » a quelque chose à rendre ([PostImaging]). */
+    val imageable: Boolean = false,
 )
 
 /**
@@ -34,7 +37,8 @@ data class PostActionContext(
  * vise que le contenu D'AUTRUI ; l'epinglage et la suppression ne visent que
  * le SIEN — port fidele d'iOS (`ProfileUserPostsList.swift`/
  * `PostDetailViewModel.swift`, `onPin` gate sur `isOwnPost` exactement comme
- * `onDelete`) ; la suppression ferme la liste, comme toute action destructrice.
+ * `onDelete`) ; la suppression ferme la liste, comme toute action destructrice. « Imager » suit
+ * l'enregistrement, comme iOS (`PostSaveMenuItems`), et n'existe que pour une œuvre composée.
  */
 object PostActionMenu {
     fun actions(ctx: PostActionContext): List<PostAction> = buildList {
@@ -44,6 +48,7 @@ object PostActionMenu {
         add(PostAction.Repost)
         add(PostAction.Quote)
         add(if (ctx.isBookmarked) PostAction.Unbookmark else PostAction.Bookmark)
+        if (ctx.imageable) add(PostAction.Imager)
         if (!ctx.isOwn) {
             add(PostAction.Report)
         }

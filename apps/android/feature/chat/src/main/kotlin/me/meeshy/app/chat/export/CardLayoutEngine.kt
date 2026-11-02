@@ -71,6 +71,7 @@ private class Chrome(
     val quoteBubble: Double,
     val replyBubble: Double,
     val link: Double,
+    val media: Double,
 )
 
 /** JS `Math.round` — la moitié monte, comme sur le web et iOS. */
@@ -80,7 +81,7 @@ private fun replyLineHeight(size: Double) = cardRound(size * CardMetrics.REPLY_L
 private fun quoteLineHeight(size: Double) = cardRound(size * CardMetrics.QUOTE_LEADING)
 
 /**
- * LA MISE EN PAGE D'UNE CARTE — loi pure, miroir (texte, citation, liaison, réponse) de
+ * LA MISE EN PAGE D'UNE CARTE — loi pure, miroir (texte, citation, liaison, réponse, médias dessous) de
  * `MessageCardLayoutEngine.swift`. La mesure est injectée. La lecture de haut en bas est celle du
  * fil : l'en-tête optionnel, la citation en taille réduite, la LIAISON du template, la réponse en
  * grand. Un texte long réduit ses polices pas à pas jusqu'à un plancher ; ce n'est qu'au plancher
@@ -112,6 +113,8 @@ object CardLayoutEngine {
         val budget = maxHeight - 2 * padY
         val authorLine = CardMetrics.AUTHOR_LINE + CardMetrics.AUTHOR_GAP
         val hasReplyText = CardText.nonBlank(input.reply.text) != null
+        val mediaBlock = CardMediaLayout.plan(input.media, textWidth, budget)
+        val mediaGap = if (hasReplyText && mediaBlock.tiles.isNotEmpty()) CardMediaLayout.BLOCK_GAP else 0.0
         val chrome = Chrome(
             header = if (title == null && date == null) 0.0 else
                 (if (title == null) 0.0 else CardMetrics.TITLE_LINE) + (if (date == null) 0.0 else CardMetrics.DATE_LINE) + CardMetrics.HEADER_GAP,
@@ -120,6 +123,7 @@ object CardLayoutEngine {
             quoteBubble = if (geometry.bubbles) 2 * CardMetrics.BUBBLE_PAD_Y else 0.0,
             replyBubble = if (geometry.bubbles && hasReplyText) 2 * CardMetrics.BUBBLE_PAD_Y else 0.0,
             link = geometry.block,
+            media = if (mediaBlock.tiles.isEmpty()) 0.0 else mediaBlock.height + mediaGap,
         )
 
         fun sizeAt(step: Int): Sized {
@@ -138,7 +142,7 @@ object CardLayoutEngine {
         fun contentHeight(sized: Sized): Double {
             val quote = if (hasQuote) chrome.quoteAuthor + sized.quoteLines.size * quoteLineHeight(sized.quoteSize) + chrome.quoteBubble + chrome.link else 0.0
             val reply = chrome.replyAuthor + sized.replyLines.size * replyLineHeight(sized.replySize) + chrome.replyBubble
-            return chrome.header + quote + reply
+            return chrome.header + quote + reply + chrome.media
         }
 
         fun atFloor(sized: Sized) =
@@ -192,10 +196,23 @@ object CardLayoutEngine {
                 val reply = painter.block(input.reply, sized.replyLines, input.replyTime, replyStyle)
                 region(CardPartId.REPLY, reply.top, painter.y)
             }
+            mediaOps(painter)
             val tilt = input.tilt.radians
             val contentOps: List<CardOp> = if (tilt == 0.0 || painter.ops.isEmpty()) painter.ops
             else listOf(CardOp.Group(tilt, width / 2, contentTop + (painter.y - contentTop) / 2, painter.ops.toList()))
             return CardLayout(width, height, headerOps + contentOps, regions, CardLayout.watermark(input.handle), truncated)
+        }
+
+        /** Les médias sous la réponse, dans sa colonne ([CardMediaLayout]). */
+        fun mediaOps(painter: Painter) {
+            if (mediaBlock.tiles.isEmpty()) return
+            painter.y += mediaGap
+            mediaBlock.tiles.forEach { tile ->
+                painter.ops.add(
+                    CardOp.Picture(tile.media, left + tile.x, painter.y + tile.y, tile.width, tile.height, CardMediaLayout.RADIUS, tile.overflow),
+                )
+            }
+            painter.y += mediaBlock.height
         }
 
         fun header(painter: Painter, region: (CardPartId, Double, Double) -> Unit): List<CardOp> {

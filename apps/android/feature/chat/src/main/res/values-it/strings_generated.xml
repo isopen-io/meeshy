@@ -290,6 +290,8 @@
     <string name="export_card_typeface_plume">Piuma</string>
     <string name="export_card_typeface_rond">Tondo</string>
     <string name="export_card_typeface_systeme">Sistema</string>
+    <string name="export_discussion_title">Conversazione</string>
+    <string name="forward_image_discussion">Crea immagine della conversazione</string>
     <string name="guest_attach_cancel">Annulla</string>
     <string name="guest_attach_create_account">Crea un account per condividere il resto.</string>
     <string name="guest_attach_inline_audio">audio</string>

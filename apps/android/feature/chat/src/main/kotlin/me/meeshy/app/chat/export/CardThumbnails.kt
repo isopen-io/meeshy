@@ -22,10 +22,10 @@ class CardThumbnailStore(maxBytes: Int = DEFAULT_BYTES) {
 
     fun cached(key: String): Bitmap? = cache.get(key)
 
-    suspend fun image(key: String, input: CardInput, width: Int): Bitmap {
+    suspend fun image(key: String, input: CardInput, width: Int, pictures: Map<String, Bitmap> = emptyMap()): Bitmap {
         cached(key)?.let { return it }
         return gate.withPermit {
-            cached(key) ?: withContext(Dispatchers.Default) { CardRenderer.thumbnail(input, width) }.also { cache.put(key, it) }
+            cached(key) ?: withContext(Dispatchers.Default) { CardRenderer.thumbnail(input, width, pictures) }.also { cache.put(key, it) }
         }
     }
 

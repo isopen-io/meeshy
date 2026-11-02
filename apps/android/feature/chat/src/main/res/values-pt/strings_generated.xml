@@ -290,6 +290,8 @@
     <string name="export_card_typeface_plume">Pena</string>
     <string name="export_card_typeface_rond">Redonda</string>
     <string name="export_card_typeface_systeme">Sistema</string>
+    <string name="export_discussion_title">Conversa</string>
+    <string name="forward_image_discussion">Criar imagem da conversa</string>
     <string name="guest_attach_cancel">Cancelar</string>
     <string name="guest_attach_create_account">Crie uma conta para compartilhar o resto.</string>
     <string name="guest_attach_inline_audio">áudio</string>
