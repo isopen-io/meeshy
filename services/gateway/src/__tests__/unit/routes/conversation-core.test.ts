@@ -949,7 +949,7 @@ describe('registerCoreRoutes', () => {
       );
     });
 
-    it('excludes an empty direct DM from a non-creator participant list', async () => {
+    it('excludes an empty direct DM — and, since #14644, an empty group — from a non-creator participant list', async () => {
       prisma.conversation.findMany.mockResolvedValue([]);
       const req = makeRequest({ query: {} });
       const reply = makeReply();
@@ -960,7 +960,7 @@ describe('registerCoreRoutes', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             OR: expect.arrayContaining([
-              { type: { not: 'direct' } },
+              { type: { notIn: ['direct', 'group'] } },
               {
                 OR: [
                   { NOT: { firstMessageSentAt: null } },
@@ -2539,7 +2539,7 @@ describe('registerCoreRoutes', () => {
       expect(createInviteNotif).not.toHaveBeenCalled();
     });
 
-    it('still sends invitation notifications for group conversations', async () => {
+    it('a fresh group sends no invitation at creation — it waits for the first message (#14644)', async () => {
       mockValidateSchema.mockReturnValue({ type: 'group', title: 'Team', participantIds: [OTHER_USER_ID] });
       const createInviteNotif = jest.fn().mockResolvedValue(undefined);
       fastify.notificationService = { createConversationInviteNotification: createInviteNotif };
@@ -2553,15 +2553,15 @@ describe('registerCoreRoutes', () => {
 
       await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());
 
-      expect(createInviteNotif).toHaveBeenCalled();
+      expect(createInviteNotif).not.toHaveBeenCalled();
     });
 
-    it('uses username fallback for group invite notification when creator.displayName is null', async () => {
-      // Couvre la branche `creator.displayName || creator.username` (core.ts
-      // ~ligne 1167) : depuis que les directs n'appellent plus jamais
-      // createConversationInviteNotification, seul un `group` peut encore
-      // exercer ce fallback — voir finding de revue post-implémentation.
-      mockValidateSchema.mockReturnValue({ type: 'group', title: 'Team', participantIds: [OTHER_USER_ID] });
+    it('uses username fallback for a public invite notification when creator.displayName is null', async () => {
+      // Couvre la branche `creator.displayName || creator.username` : depuis
+      // #14644, ni un direct ni un groupe neuf n'invitent à la création — seule
+      // une conversation `public` exerce encore ce fallback ici (celui d'un
+      // groupe démarré vit dans `announceStartedGroup`).
+      mockValidateSchema.mockReturnValue({ type: 'public', title: 'Team', participantIds: [OTHER_USER_ID] });
       const createInviteNotif = jest.fn().mockResolvedValue(undefined);
       fastify.notificationService = { createConversationInviteNotification: createInviteNotif };
       prisma.user.findMany.mockResolvedValue([
@@ -2569,7 +2569,7 @@ describe('registerCoreRoutes', () => {
         { id: OTHER_USER_ID, displayName: 'Bob', username: 'bob', avatar: null },
       ]);
       prisma.conversation.create.mockResolvedValue({
-        id: CONV_ID, type: 'group', title: 'Team', createdAt: new Date(), participants: [],
+        id: CONV_ID, type: 'public', title: 'Team', createdAt: new Date(), participants: [],
       });
 
       await getCreateHandler(fastify)(makeRequest({ body: {} }), makeReply());

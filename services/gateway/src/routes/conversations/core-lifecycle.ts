@@ -186,6 +186,13 @@ export function registerCreateConversationRoute(
       const uniqueParticipantIds = [...new Set(participantIds)]
         .filter((id: any) => id && id !== userId && typeof id === 'string' && id.trim().length > 0);
 
+      // #14644 (C) — un groupe peut n'avoir que son créateur (audits, recueils
+      // d'avis extérieurs) : il n'a alors aucun membre dont tirer un titre, il
+      // doit donc en porter un.
+      if (type === 'group' && uniqueParticipantIds.length === 0 && (!title || title.trim() === '')) {
+        throw createError(ErrorCode.MISSING_REQUIRED_FIELD, 'Un groupe sans invité doit avoir un titre');
+      }
+
       // Block enforcement applies to DIRECT conversations only (group / community /
       // public / global / broadcast are never block-enforced). Bidirectional: reject
       // if the creator blocked the other party OR the other party blocked the creator.
@@ -317,6 +324,8 @@ export function registerCreateConversationRoute(
       // Broadcast = announcement channel with admin-only write
       const isBroadcast = type === 'broadcast';
 
+      const silentUntilFirstMessage = type === 'direct' || type === 'group';
+
       const nascent = await nascentRegime(nascentRegimeDeps(prisma), { mode: regime.mode, enabledBy: userId });
 
       const conversation = await prisma.conversation.create({
@@ -333,7 +342,9 @@ export function registerCreateConversationRoute(
           // on ne le posait pas, ce qui le laisserait ABSENT plutôt que
           // `null` — voir Prisme design doc 2026-08-04 (DM vide et silencieux
           // jusqu'au premier message).
-          ...(type === 'direct' ? { firstMessageSentAt: null } : {}),
+          // #14644 (B) — un groupe neuf est silencieux comme un tête-à-tête :
+          // il ne s'annonce à ses invités qu'au premier message.
+          ...(silentUntilFirstMessage ? { firstMessageSentAt: null } : {}),
           participants: {
             create: [
               {
@@ -455,7 +466,9 @@ export function registerCreateConversationRoute(
           // Un direct fraîchement créé (0 message) reste silencieux pour les
           // autres participants — seul le créateur voit sa conversation
           // vide apparaître immédiatement (Prisme design doc 2026-08-04).
-          const emitParticipantIds = type === 'direct' ? [userId] : allParticipantIds;
+          // #14644 — un groupe neuf aussi : ses invités l'apprennent au premier
+          // message (`services/conversations/announceStartedGroup.ts`).
+          const emitParticipantIds = silentUntilFirstMessage ? [userId] : allParticipantIds;
           for (const participantId of emitParticipantIds) {
             io.to(ROOMS.user(participantId)).emit(
               SERVER_EVENTS.CONVERSATION_NEW,
@@ -473,7 +486,7 @@ export function registerCreateConversationRoute(
       // direct fraîchement créé (0 message) : silencieux à la création, voir
       // Prisme design doc 2026-08-04.
       const notificationService = fastify.notificationService;
-      if (notificationService && uniqueParticipantIds.length > 0 && type !== 'direct') {
+      if (notificationService && uniqueParticipantIds.length > 0 && !silentUntilFirstMessage) {
         try {
           // Le créateur est déjà chargé dans userMap (userId ∈ allUserIds) :
           // pas de second aller-retour DB.

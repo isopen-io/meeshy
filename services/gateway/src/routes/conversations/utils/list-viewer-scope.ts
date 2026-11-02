@@ -18,7 +18,9 @@ import { viewerRequestClause, type MessageRequestListMode } from '../../../servi
  * identifiable ⇒ comportement d'avant.
  */
 export const emptyDirectVisibility = (userId: string): Prisma.ConversationWhereInput[] => [
-  { type: { not: 'direct' } },
+  // #14644 — un groupe neuf est silencieux comme un tête-à-tête : `group` est
+  // soumis à la même règle. Un groupe d'avant ce lot n'a pas le champ ⇒ visible.
+  { type: { notIn: ['direct', 'group'] } },
   { OR: [{ NOT: { firstMessageSentAt: null } }, { firstMessageSentAt: { isSet: false } }] },
   { participants: { some: { userId, role: 'creator' } } },
   { participants: { none: { role: 'creator' } } },

@@ -1,0 +1,101 @@
+/**
+ * #14644 (B) — un groupe neuf ne s'annonce aux invités qu'au PREMIER message :
+ * `conversation:new` et la notification d'invitation partent alors, comme à la
+ * réactivation d'un tête-à-tête silencieux. Une demande en attente (#14107) ne
+ * s'annonce pas.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { announceStartedGroup } from '../../../../services/conversations/announceStartedGroup';
+
+const CONV = '507f1f77bcf86cd799439011';
+const CREATOR = '507f1f77bcf86cd799439022';
+const ALICE = '507f1f77bcf86cd799439033';
+const BOB = '507f1f77bcf86cd799439044';
+const CREATED_AT = new Date('2026-11-02T09:00:00.000Z');
+
+function conversation(type: string, title: string | null = 'Équipe') {
+  return {
+    id: CONV,
+    type,
+    title,
+    createdAt: CREATED_AT,
+    participants: [
+      { userId: CREATOR, role: 'creator', messageRequestAt: null, user: { id: CREATOR, displayName: 'Créa', username: 'crea', avatar: 'a.png', firstName: null, lastName: null } },
+      { userId: ALICE, role: 'member', messageRequestAt: null, user: { id: ALICE, displayName: 'Alice', username: 'alice', avatar: null, firstName: null, lastName: null } },
+      { userId: BOB, role: 'member', messageRequestAt: new Date(), user: { id: BOB, displayName: 'Bob', username: 'bob', avatar: null, firstName: null, lastName: null } },
+    ],
+  };
+}
+
+async function annoncer(row: unknown) {
+  const prisma = { conversation: { findUnique: jest.fn<any>().mockResolvedValue(row) } };
+  const emitted: Array<{ room: string; event: string; payload: any }> = [];
+  const io = { to: (room: string) => ({ emit: (event: string, payload: any) => emitted.push({ room, event, payload }) }) };
+  const notificationService = { createConversationInviteNotification: jest.fn<any>().mockResolvedValue(null) };
+  await announceStartedGroup({ prisma: prisma as never, io, notificationService }, CONV);
+  return { prisma, emitted, notificationService };
+}
+
+describe('#14644 — un groupe démarré s\'annonce', () => {
+  it('conversation:new part vers chaque invité, sans le créateur (déjà prévenu à la création)', async () => {
+    const { emitted, prisma } = await annoncer(conversation('group'));
+    expect((prisma.conversation.findUnique.mock.calls[0][0] as any).where).toEqual({ id: CONV });
+    expect(emitted.map((e) => e.room).sort()).toEqual([`user:${ALICE}`, `user:${BOB}`].sort());
+    expect(emitted.every((e) => e.event === SERVER_EVENTS.CONVERSATION_NEW)).toBe(true);
+    expect(emitted[0].payload).toEqual({
+      conversationId: CONV,
+      conversationType: 'group',
+      title: 'Équipe',
+      creatorId: CREATOR,
+      participantIds: [CREATOR, ALICE, BOB],
+      createdAt: CREATED_AT.toISOString(),
+    });
+  });
+
+  it('la notification d\'invitation part vers les invités entrés directement, jamais vers une demande en attente', async () => {
+    const { notificationService } = await annoncer(conversation('group'));
+    expect(notificationService.createConversationInviteNotification).toHaveBeenCalledTimes(1);
+    expect(notificationService.createConversationInviteNotification).toHaveBeenCalledWith({
+      invitedUserId: ALICE,
+      inviterId: CREATOR,
+      inviterUsername: 'Créa',
+      inviterAvatar: 'a.png',
+      conversationId: CONV,
+      conversationTitle: 'Équipe',
+      conversationType: 'group',
+    });
+  });
+
+  it('le nom de l\'inviteur retombe sur son pseudo, et un titre absent se compose des membres', async () => {
+    const row = conversation('group', null);
+    row.participants[0].user.displayName = null as never;
+    const { notificationService, emitted } = await annoncer(row);
+    const call = notificationService.createConversationInviteNotification.mock.calls[0][0] as any;
+    expect(call.inviterUsername).toBe('crea');
+    expect(typeof call.conversationTitle).toBe('string');
+    expect(call.conversationTitle.length).toBeGreaterThan(0);
+    expect(emitted[0].payload.title).toBe(call.conversationTitle);
+  });
+
+  it('un tête-à-tête n\'est pas concerné', async () => {
+    const { emitted, notificationService } = await annoncer(conversation('direct', null));
+    expect(emitted).toEqual([]);
+    expect(notificationService.createConversationInviteNotification).not.toHaveBeenCalled();
+  });
+
+  it('un groupe sans invité n\'annonce rien', async () => {
+    const row = { ...conversation('group'), participants: [conversation('group').participants[0]] };
+    const { emitted, notificationService } = await annoncer(row);
+    expect(emitted).toEqual([]);
+    expect(notificationService.createConversationInviteNotification).not.toHaveBeenCalled();
+  });
+
+  it('une conversation introuvable n\'annonce rien', async () => {
+    const { emitted } = await annoncer(null);
+    expect(emitted).toEqual([]);
+  });
+});
