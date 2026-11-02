@@ -55,7 +55,7 @@ class AppLifecycleRunnerTest {
         assertThat(runner.runForeground()).isNull()
         clock.now += 1
         runner.runForeground()?.join()
-        assertThat(journal).containsExactly("a:fg", "a:fg")
+        assertThat(journal).containsExactly("a:fg", "a:fg").inOrder()
     }
 
     @Test
