@@ -155,7 +155,7 @@ feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryTray.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerFallback.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerHeader.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerSceneLayers.kt
-feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt
+feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerTopBar.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/attachment/AttachmentDisplay.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/CollapsibleSection.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/ConnectionActionChip.kt
