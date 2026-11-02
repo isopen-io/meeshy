@@ -14,6 +14,7 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryTranslationMerge
 import me.meeshy.sdk.model.StoryUpdateMerge
@@ -250,8 +251,9 @@ class StoryRepository @Inject constructor(
     ): NetworkResult<List<ApiPostComment>> =
         apiCall { storyApi.comments(storyId, cursor, limit) }
 
+    /** Republie la story EN STORY (iOS `StoryDirectRepost`) : sans `targetType`, la passerelle en ferait un post. */
     suspend fun repost(storyId: String): NetworkResult<Unit> =
-        apiCall { storyApi.repost(storyId, RepostPostRequest()) }
+        apiCall { storyApi.repost(storyId, RepostPostRequest(targetType = PostType.STORY.name)) }
 
     suspend fun fetchPost(id: String): NetworkResult<ApiPost> =
         apiCall { storyApi.fetchPost(id) }
