@@ -998,10 +998,12 @@ class ChatViewModel @Inject constructor(
      * "Delete for me" — hides the message locally only (WhatsApp-style), never
      * reaching the server. The durable [locallyHiddenStore] emits the new hidden
      * set, which the message stream re-filters, so the bubble disappears at once.
+     * Its end-to-end plaintext leaves the vault for good (#14655).
      */
     fun deleteForMe(messageId: String) {
         _state.update { it.copy(actionMessageId = null) }
         locallyHiddenStore.hide(messageId)
+        viewModelScope.launch { endToEnd.forgetHiddenForMe(listOf(messageId)) }
     }
 
     /** « Pour tous » sur toute une sélection (#13294) : une suppression optimiste par message. */

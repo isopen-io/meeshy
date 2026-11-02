@@ -128,6 +128,20 @@ public interface MessageDao {
     )
     public suspend fun deleteMissingSince(conversationId: String, minCreatedAt: Long, ids: List<String>)
 
+    /** The rows [deleteMissing] would prune, read in the same transaction before it (#14655). */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND id NOT IN (:ids)",
+    )
+    public suspend fun missing(conversationId: String, ids: List<String>): List<MessageEntity>
+
+    /** The rows [deleteMissingSince] would prune, read in the same transaction before it (#14655). */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND createdAt >= :minCreatedAt AND id NOT IN (:ids)",
+    )
+    public suspend fun missingSince(conversationId: String, minCreatedAt: Long, ids: List<String>): List<MessageEntity>
+
     /** Oldest server-acked row — the `before` cursor for backwards pagination. */
     @Query(
         "SELECT * FROM messages WHERE conversationId = :conversationId " +

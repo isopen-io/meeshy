@@ -5,6 +5,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
@@ -39,6 +40,7 @@ class MessageRepository internal constructor(
     private val mutations: MessageMutationWriter,
     private val enrichment: MessageEnrichmentWriter,
     private val receipts: MessageReceiptWriter,
+    private val erasures: PlaintextErasureLedger? = null,
 ) {
     @Inject
     constructor(
@@ -54,8 +56,10 @@ class MessageRepository internal constructor(
         fence: AccountFence? = null,
         /** Les événements arrivés avant leur message : gardés par les écrivains, rejoués par l'ingestion. */
         events: MessageEventBuffer? = null,
+        /** #14655 — la file durable des clairs E2EE à retirer du coffre. */
+        erasures: PlaintextErasureLedger? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
@@ -66,6 +70,7 @@ class MessageRepository internal constructor(
         ),
         enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
         receipts = MessageReceiptWriter(database, messageDao, fence),
+        erasures = erasures,
     )
 
     /**
@@ -252,6 +257,14 @@ class MessageRepository internal constructor(
 
     /** Rollback of a refused deletion: the tombstone falls, the [snapshot] taken before it gives the content back. */
     suspend fun markUndeleted(messageId: String, snapshot: ApiMessage? = null) = mutations.markUndeleted(messageId, snapshot)
+
+    /**
+     * #14656 — the server ACCEPTED the deletion of [messageId]: only now may its end-to-end plaintext leave the vault
+     * (iOS `confirmDeletion`). An optimistic tombstone erases nothing, so a refused deletion comes back readable.
+     */
+    suspend fun confirmDeletion(messageId: String) {
+        erasures?.recordNamed(listOf(messageId))
+    }
 
     /** Removes the named rows (either of their two ids) and their edit history. */
     suspend fun purgeMessages(messageIds: Collection<String>) = mutations.purgeMessages(messageIds)

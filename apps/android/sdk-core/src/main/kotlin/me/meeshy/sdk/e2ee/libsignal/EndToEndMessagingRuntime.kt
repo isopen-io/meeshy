@@ -145,6 +145,18 @@ public class EndToEndMessagingRuntime @Inject internal constructor(
         }.onFailure { Timber.w("e2ee plaintexts not erased: %s", it.javaClass.simpleName) }.isSuccess
     }
 
+    /**
+     * Retire du coffre le clair de chaque message de [conversationId] composé jusqu'à [composedUpTo] (#14655) : une
+     * conversation supprimée ne laisse rien, même des messages que le cache n'a jamais tenus.
+     */
+    public suspend fun eraseConversation(userId: String, conversationId: String, composedUpTo: Long): Boolean {
+        if (!holdsVault()) return true
+        return runCatching {
+            withContext(Dispatchers.IO) { E2eePlaintextVault(vault, owner = userId).removeConversation(conversationId, composedUpTo) }
+            _plaintextVersion.update { it + 1 }
+        }.onFailure { Timber.w("e2ee conversation plaintexts not erased: %s", it.javaClass.simpleName) }.isSuccess
+    }
+
     private fun holdsVault(): Boolean = vaultOpened || File(File(context.noBackupFilesDir, VAULT_DIRECTORY), VAULT_KEY_FILE).isFile
 
     /** Le clair d'UN message (le renvoi d'une bulle en attente). */

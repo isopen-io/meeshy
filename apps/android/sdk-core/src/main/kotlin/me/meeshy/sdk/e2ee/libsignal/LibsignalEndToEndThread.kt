@@ -20,6 +20,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageEntityFactory
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
@@ -48,6 +49,7 @@ internal class LibsignalEndToEndThread @Inject constructor(
     private val messageDao: MessageDao,
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock,
+    private val erasures: PlaintextErasureLedger,
 ) : EndToEndThreadAccess {
 
     override suspend fun sendText(
@@ -90,6 +92,8 @@ internal class LibsignalEndToEndThread @Inject constructor(
         return cid
     }
 
+    override suspend fun forgetHiddenForMe(messageIds: Collection<String>) = erasures.recordNamed(messageIds)
+
     override fun overlay(conversationId: String, stream: Flow<CacheResult<List<LocalMessage>>>): Flow<CacheResult<List<LocalMessage>>> =
         combine(stream, runtime.plaintextVersion) { result, _ -> result }
             .map { result -> project(conversationId, result) }
@@ -106,8 +110,9 @@ internal class LibsignalEndToEndThread @Inject constructor(
     }
 
     /**
-     * Le clair de chaque message à sa place ; et le clair d'un message parti (supprimé, échu, vue unique ouverte) quitte
-     * le coffre au passage — une page REST ou une ligne relue le disent même quand l'événement temps réel a manqué.
+     * Le clair de chaque message à sa place ; et le clair d'un message parti (échu, vue unique ouverte) quitte le coffre
+     * au passage — une ligne relue le dit même quand l'événement temps réel a manqué. Une pierre tombale n'efface rien ici
+     * (#14656) : la suppression CONFIRMÉE passe par la file durable ([PlaintextErasureLedger]).
      */
     private suspend fun projected(userId: String, conversationId: String, messages: List<LocalMessage>): List<LocalMessage> {
         val now = clock.nowMillis()

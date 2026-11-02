@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
@@ -56,9 +57,10 @@ class IncomingMessageIngestBinding internal constructor(
         fence: AccountFence,
         regime: EndToEndRegimeKeeper,
         events: MessageEventBuffer,
+        erasures: PlaintextErasureLedger,
     ) : this(
         socket = socket,
-        pipeline = MessageIngestPipeline(database, regime = regime, events = events),
+        pipeline = MessageIngestPipeline(database, regime = regime, events = events, erasures = erasures),
         clock = clock,
         signal = signal,
         scope = CoroutineScope(SupervisorJob() + io),

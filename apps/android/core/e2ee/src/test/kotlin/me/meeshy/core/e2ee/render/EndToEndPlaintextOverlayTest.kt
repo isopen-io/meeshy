@@ -124,17 +124,27 @@ class EndToEndPlaintextOverlayTest {
     }
 
     @Test
-    fun aDeletedExpiredOrConsumedMessage_yieldsTheKeysToErase() {
+    fun anExpiredOrConsumedMessage_yieldsTheKeysToErase() {
         val now = 1_800_000_000_000L
-        val deleted = served().copy(deletedAt = "2026-11-01T10:00:00Z")
         val expired = served().copy(expiresAt = "2020-01-01T00:00:00Z")
         val consumed = served().copy(isViewOnce = true, consumedByMe = true)
-        val myDeleted = served(id = "m7", author = "me").copy(deletedAt = "2026-11-01T10:00:00Z")
+        val myExpired = served(id = "m7", author = "me").copy(expiresAt = "2020-01-01T00:00:00Z")
 
-        assertThat(EndToEndPlaintextOverlay.erasableKeys(deleted, readerUserId = "bob", nowMillis = now)).containsExactly("m1")
         assertThat(EndToEndPlaintextOverlay.erasableKeys(expired, readerUserId = "bob", nowMillis = now)).containsExactly("m1")
         assertThat(EndToEndPlaintextOverlay.erasableKeys(consumed, readerUserId = "bob", nowMillis = now)).containsExactly("m1")
-        assertThat(EndToEndPlaintextOverlay.erasableKeys(myDeleted, readerUserId = "me", nowMillis = now)).containsExactly("m7", "cid_1")
+        assertThat(EndToEndPlaintextOverlay.erasableKeys(myExpired, readerUserId = "me", nowMillis = now)).containsExactly("m7", "cid_1")
+    }
+
+    /**
+     * #14656 — une pierre tombale se lit sans effacer : celle d'une suppression lancée ICI peut encore être refusée, et le
+     * coffre est la seule copie du clair. L'effacement d'une suppression suit sa CONFIRMATION (réponse, écho, page servie)
+     * par la file durable, jamais la projection.
+     */
+    @Test
+    fun aTombstone_yieldsNothingToErase() {
+        val now = 1_800_000_000_000L
+        val deleted = served(id = "m7", author = "me").copy(deletedAt = "2026-11-01T10:00:00Z")
+        assertThat(EndToEndPlaintextOverlay.erasableKeys(deleted, readerUserId = "me", nowMillis = now)).isEmpty()
     }
 
     @Test

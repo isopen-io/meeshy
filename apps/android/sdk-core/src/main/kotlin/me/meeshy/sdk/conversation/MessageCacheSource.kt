@@ -16,6 +16,7 @@ import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.ConditionalResult
@@ -49,6 +50,8 @@ internal class MessageCacheSource(
     private val regime: EndToEndRegimeKeeper? = null,
     /** Les événements arrivés avant leur message, rejoués à l'ingestion. */
     private val events: MessageEventBuffer? = null,
+    /** #14655 — un message chiffré que la page dit parti, ou qu'elle ne sert plus, inscrit son effacement. */
+    private val erasures: PlaintextErasureLedger? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
@@ -58,7 +61,7 @@ internal class MessageCacheSource(
      * regresses, pending outbox mutations protected, unchanged rows left unwritten — and the
      * echoed `cid_` bridged to its server id, the optimistic bubble replaced in place.
      */
-    private val ingestion = MessageIngestPipeline(database, regime = regime, events = events)
+    private val ingestion = MessageIngestPipeline(database, regime = regime, events = events, erasures = erasures)
 
     /**
      * #5189 — bounded to [historyWindow] rather than the conversation's whole
@@ -205,6 +208,7 @@ internal class MessageCacheSource(
         val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
         database.withTransaction {
             ingestion.mergeInTransaction(messages, now, conversationId)
+            erasures?.recordRemovedRows(pruned(messages, rows))
             if (rows.isEmpty()) {
                 messageDao.deleteMissing(conversationId, emptyList())
             } else {
@@ -216,6 +220,20 @@ internal class MessageCacheSource(
             }
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, newEtag, null))
         }
+    }
+
+    /**
+     * #14655 — les lignes serveur que l'élagage va retirer : celles de la fenêtre que la page ne sert plus, sous aucune de
+     * leurs clés (id, id serveur, `cid_`). Une bulle remplacée par sa jumelle serveur n'en est pas une.
+     */
+    private suspend fun pruned(messages: List<ApiMessage>, rows: List<me.meeshy.core.database.entity.MessageEntity>): List<me.meeshy.core.database.entity.MessageEntity> {
+        val served = messages.flatMap { listOfNotNull(it.id, it.clientMessageId) }.toSet()
+        val doomed = if (rows.isEmpty()) {
+            messageDao.missing(conversationId, emptyList())
+        } else {
+            messageDao.missingSince(conversationId, rows.minOf { it.createdAt }, rows.map { it.id })
+        }
+        return doomed.filter { row -> row.id !in served && row.serverId !in served }
     }
 
     /**

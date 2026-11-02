@@ -28,6 +28,12 @@ public interface EndToEndThreadAccess {
      */
     public fun overlay(conversationId: String, stream: Flow<CacheResult<List<LocalMessage>>>): Flow<CacheResult<List<LocalMessage>>>
 
+    /**
+     * « Supprimer pour moi » (#14655), purement local et irréversible : le clair de ces messages quitte le coffre, comme
+     * le retrait pour moi d'iOS. Sans E2EE, rien à retirer.
+     */
+    public suspend fun forgetHiddenForMe(messageIds: Collection<String>) {}
+
     public companion object {
         /** Aucun E2EE : rien ne part, rien ne se projette (témoins, et tout hôte qui ne l'a pas). */
         public val None: EndToEndThreadAccess = object : EndToEndThreadAccess {

@@ -52,8 +52,10 @@ public object EndToEndPlaintextOverlay {
     }
 
     /**
-     * Les clés à retirer du coffre pour un message supprimé, échu ou vu une fois (#14633) : son clair n'a plus rien à
-     * faire sur l'appareil. Vide pour un message vivant.
+     * Les clés à retirer du coffre pour un message échu ou vu une fois (#14633) : son clair n'a plus rien à faire sur
+     * l'appareil. Vide pour un message vivant, et pour une pierre tombale (#14656) : celle d'une suppression lancée ici
+     * peut encore être refusée par le serveur, et le coffre est la seule copie du clair. Une suppression CONFIRMÉE passe
+     * par la file durable `e2ee_plaintext_erasures`, comme sur iOS (`markDeletedAwaitingConfirmation`).
      */
     public fun erasableKeys(message: ApiMessage, readerUserId: String, nowMillis: Long): List<String> =
         if (isEndToEnd(message) && isGone(message, nowMillis)) keysOf(message, readerUserId) else emptyList()
@@ -62,8 +64,7 @@ public object EndToEndPlaintextOverlay {
         message.isEncrypted == true || EndToEndRegime.isEndToEnd(message.encryptionMode)
 
     private fun isGone(message: ApiMessage, nowMillis: Long): Boolean =
-        message.deletedAt != null ||
-            isoToEpochMillisOrNull(message.expiresAt)?.let { it <= nowMillis } == true ||
+        isoToEpochMillisOrNull(message.expiresAt)?.let { it <= nowMillis } == true ||
             (message.consumedByMe == true && message.effects.has(MessageEffectFlags.VIEW_ONCE))
 
     private fun isInPlace(content: E2eeContent, senderUserId: String, message: ApiMessage, conversationId: String): Boolean {

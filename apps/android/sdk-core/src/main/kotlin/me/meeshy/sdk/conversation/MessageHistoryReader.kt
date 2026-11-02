@@ -13,6 +13,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.cacheFirstFlow
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.rawApiCall
@@ -34,6 +35,8 @@ internal class MessageHistoryReader(
     private val regime: EndToEndRegimeKeeper? = null,
     /** Les événements arrivés avant leur message, rejoués à l'ingestion. */
     private val events: MessageEventBuffer? = null,
+    /** #14655 — la file durable des clairs E2EE à retirer du coffre. */
+    private val erasures: PlaintextErasureLedger? = null,
 ) {
     /**
      * #5189 — the nominal-flow observe window, per conversation: how many of
@@ -123,7 +126,7 @@ internal class MessageHistoryReader(
             throw MessageSyncException(response.error ?: response.message ?: "Unknown error")
         }
         val now = clock.nowMillis()
-        fence.commitOrWrite(ticket) { MessageIngestPipeline(database, regime = regime, events = events).ingest(page, now) } ?: return true
+        fence.commitOrWrite(ticket) { MessageIngestPipeline(database, regime = regime, events = events, erasures = erasures).ingest(page, now) } ?: return true
         // #5189 — grow the observe window by exactly what was just paged in,
         // so these older rows (now cached) are not immediately hidden again
         // by messagesStream's bound.
@@ -145,6 +148,7 @@ internal class MessageHistoryReader(
         fence = fence,
         regime = regime,
         events = events,
+        erasures = erasures,
     )
 
     companion object {

@@ -95,6 +95,23 @@ public class E2eePlaintextVault(private val vault: RecordVault, private val owne
         }
     }
 
+    /**
+     * Retire le clair de chaque message de [conversationId] composé jusqu'à [composedUpTo] (#14655) : une conversation
+     * supprimée ne laisse rien au coffre, même des messages que le cache n'a jamais tenus. Le contenu porte sa
+     * conversation DANS le chiffré : un serveur ne peut pas y faire entrer un message d'une autre.
+     */
+    public fun removeConversation(conversationId: String, composedUpTo: Long) {
+        vault.write { transaction ->
+            if (!serves(transaction) && E2eeEnrollmentRecords.load(transaction) != null) throw E2eeForeignVaultException()
+            transaction.keys(RecordKind.PLAINTEXT)
+                .filter { id ->
+                    val readable = E2eePlaintextRecords.load(id, transaction) as? E2eePlaintextEntry.Readable
+                    readable != null && readable.content.belongsTo(conversationId) && readable.content.sentAt <= composedUpTo
+                }
+                .forEach { transaction.remove(RecordKind.PLAINTEXT, it) }
+        }
+    }
+
     public fun servesItsOwner(): Boolean = vault.read(::serves)
 
     private fun serves(reader: RecordReader): Boolean = owner == null || E2eeEnrollmentRecords.load(reader)?.userId == owner

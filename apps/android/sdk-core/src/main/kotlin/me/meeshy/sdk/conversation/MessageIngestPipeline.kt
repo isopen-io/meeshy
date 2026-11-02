@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.sameStoredContentAs
 import me.meeshy.core.database.entity.MessageEntity
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageMergePolicy
 import me.meeshy.sdk.model.PendingMessageMutations
@@ -32,6 +33,8 @@ internal class MessageIngestPipeline(
     private val regime: EndToEndRegimeKeeper? = null,
     /** Les événements arrivés avant leur message : rejoués ici, à l'arrivée de la ligne (édition, réactions, suppression). */
     private val events: MessageEventBuffer? = null,
+    /** #14655 — un message chiffré que le serveur dit parti (supprimé, échu, vue unique ouverte) inscrit son effacement. */
+    private val erasures: PlaintextErasureLedger? = null,
 ) {
 
     /** Fusionne [messages] dans sa propre transaction ; rend les conversations réellement écrites. */
@@ -86,6 +89,7 @@ internal class MessageIngestPipeline(
         if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
         if (writes.isNotEmpty()) messageDao.upsertAll(writes.values.toList())
         regime?.learnFromServed(latest, conversationId)
+        erasures?.recordServedGone(latest)
         return changed
     }
 
