@@ -115,7 +115,13 @@ describe('le balayage TOMBE sous la mutation qu’il nomme', () => {
     );
     expect(mute).not.toBe(conforme);
 
-    const racine = bacAvec({ 'routes/conversations/participants-writes.ts': mute });
+    // La réintégration répand `REJOIN_PARTICIPANT_STATE` AVANT `addedMemberFields` (#14107) : le balayage remonte
+    // d'abord ce voisin importé, qui doit donc être dans le bac pour que l'écriture se résolve.
+    const voisin = 'services/conversations/conversationEntryAdmission.ts';
+    const racine = bacAvec({
+      'routes/conversations/participants-writes.ts': mute,
+      [voisin]: readFileSync(join(SRC, voisin), 'utf8'),
+    });
 
     expect(producteursHorsSite(racine)).toEqual([
       expect.stringContaining('routes/conversations/participants-writes.ts'),
