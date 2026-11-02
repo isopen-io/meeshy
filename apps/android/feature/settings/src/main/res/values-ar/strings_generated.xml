@@ -93,6 +93,17 @@
     <string name="delete_account_warning_conversations">كل محادثاتك</string>
     <string name="delete_account_warning_messages">كل رسائلك</string>
     <string name="delete_account_warning_preferences">تفضيلاتك وإعداداتك</string>
+    <string name="licenses_agpl_title">نص ترخيص AGPL-3.0</string>
+    <string name="licenses_libsignal_body">مكتبة libsignal والمكتبات التي تتضمنها، مع نص تراخيصها.</string>
+    <string name="licenses_libsignal_title">إشعارات libsignal</string>
+    <string name="licenses_meeshy_body">يُنشر الكود المصدري لـ Meeshy بموجب ترخيص MIT. يتضمن هذا التطبيق مكتبة libsignal ‏(Signal Messenger) المنشورة بموجب ترخيص GNU AGPL-3.0، لذا فإن التطبيق الموزَّع عمل مرخَّص بموجب ترخيص AGPL-3.0 فقط.</string>
+    <string name="licenses_meeshy_body_mit">يُنشر الكود المصدري لـ Meeshy بموجب ترخيص MIT.</string>
+    <string name="licenses_meeshy_title">ترخيص Meeshy</string>
+    <string name="licenses_source_body">الكود المصدري المقابل لهذا الإصدار، بما في ذلك سكربتات البناء، متاح مجانًا.</string>
+    <string name="licenses_source_commit">المراجعة %1$s</string>
+    <string name="licenses_source_open">فتح الكود المصدري</string>
+    <string name="licenses_source_title">الكود المصدري</string>
+    <string name="licenses_text_hint">يعرض النص الكامل للترخيص</string>
     <string name="licenses_title">تراخيص المصدر المفتوح</string>
     <string name="licenses_type_other">أخرى</string>
     <string name="location_map_style_hybrid">مختلط</string>

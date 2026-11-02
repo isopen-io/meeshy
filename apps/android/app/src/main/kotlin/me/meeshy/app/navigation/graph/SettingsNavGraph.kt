@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import me.meeshy.app.navigation.sheetComposable
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import me.meeshy.app.BuildConfig
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.navigation.ProfileRoutes
 import me.meeshy.app.navigation.Routes
@@ -134,7 +135,7 @@ internal fun NavGraphBuilder.settingsNavGraph(
         SupportScreen(onBack = dismiss)
     }
     sheetComposable(Routes.LICENSES, navController) { _, dismiss ->
-        LicensesScreen(onBack = dismiss)
+        LicensesScreen(onBack = dismiss, sourceCommit = BuildConfig.SOURCE_COMMIT)
     }
     sheetComposable(
         route = Routes.LEGAL,

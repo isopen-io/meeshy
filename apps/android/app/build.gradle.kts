@@ -49,6 +49,9 @@ android {
         // 3.x : la native succède sur la fiche aux 2.x de la coque, sans recouvrement de numéros.
         versionName = "3.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // #14628 — le commit EXACT du build, servi par l'offre de source de l'écran Licences (AGPL-3.0 de libsignal).
+        // GitHub Actions pose `GITHUB_SHA` ; un build local n'en a aucun et l'écran renvoie au dépôt.
+        buildConfigField("String", "SOURCE_COMMIT", "\"${providers.environmentVariable("GITHUB_SHA").orElse("").get()}\"")
     }
 
     signingConfigs {
