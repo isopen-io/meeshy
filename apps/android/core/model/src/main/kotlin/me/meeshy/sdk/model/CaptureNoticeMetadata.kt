@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * **L'avis de capture** (#9617) — « Alice a capturé l'éphémère du 07/10/2026 à 14:05 »,
@@ -60,7 +62,9 @@ data class CaptureNoticeMetadata(
             val displayName = rawActor.text("displayName")?.takeIf { it.isNotEmpty() } ?: return null
             val isAnonymous = rawActor.flag("isAnonymous") ?: return null
             val rawUsername = rawActor["username"]
-            if (rawUsername != null && rawUsername !is kotlinx.serialization.json.JsonNull && rawActor.text("username") == null) return null
+            val usernameIsText = rawUsername == null || rawUsername is JsonNull ||
+                (rawUsername is JsonPrimitive && rawUsername.isString)
+            if (!usernameIsText) return null
             val capturedMessageId = metadata.text("capturedMessageId")?.takeIf { it.isNotEmpty() } ?: return null
             val nature = when (metadata.text("nature")) {
                 "timed-flame" -> ContentExitLaw.Nature.TIMED_FLAME
