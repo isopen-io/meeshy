@@ -33,6 +33,10 @@ on:
         description: 'Déploiement progressif (0 < f < 1), seulement avec status=inProgress'
         type: string
         default: ''
+      build_number:
+        description: 'versionCode imposé (optionnel) — au-dessus du plus haut code déjà publié sur la fiche'
+        type: string
+        default: ''
 
 concurrency:
   group: android-native-release
@@ -84,6 +88,16 @@ jobs:
       - name: Numéro de build (D-45)
         run: |
           count="$(git rev-list --count HEAD)"
+          if [ -n "${{ inputs.build_number }}" ]; then
+            case "${{ inputs.build_number }}" in
+              *[!0-9]*) echo "::error::build_number doit être un entier."; exit 1 ;;
+            esac
+            if [ "${{ inputs.build_number }}" -lt "$count" ]; then
+              echo "::error::build_number ${{ inputs.build_number }} < $count (git rev-list --count HEAD) : il ne peut que monter."
+              exit 1
+            fi
+            count="${{ inputs.build_number }}"
+          fi
           if [ "$count" -le 34085 ]; then
             echo "::error::numéro de build $count ≤ 34085 (dernier code de la coque sur la fiche) : Play le refuserait."
             exit 1
