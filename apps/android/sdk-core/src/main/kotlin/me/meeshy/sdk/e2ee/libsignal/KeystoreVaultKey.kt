@@ -23,6 +23,10 @@ import javax.crypto.spec.SecretKeySpec
  * reçoivent un 409 `stale`. **Toute autre erreur** (Keystore occupé, appareil encore verrouillé, défaut du fournisseur,
  * forme enveloppée que la clé maîtresse ne rouvre pas) lève [E2eeVaultLockedException] : rien n'est retiré, rien n'est
  * effacé, et la prochaine ouverture réessaie. Jamais de repli en clair.
+ *
+ * La forme enveloppée d'une clé maîtresse perdue est retirée AVANT que la nouvelle clé maîtresse ne naisse : un processus
+ * tué entre la naissance de celle-ci et le renommage de la nouvelle forme ne laisse jamais une forme que la nouvelle clé
+ * maîtresse ne rouvre pas (elle verrouillerait le coffre pour toujours).
  */
 internal class KeystoreVaultKey(
     private val directory: File,
@@ -37,6 +41,7 @@ internal class KeystoreVaultKey(
         val wrapped = File(directory, WRAPPED_FILE)
         if (wrapped.isFile) {
             reopen(wrapped)?.let { return Opened(SecretKeySpec(it, "AES"), fresh = false) }
+            check(wrapped.delete()) { "e2ee vault lost key could not be retired" }
         }
         val raw = ByteArray(KEY_BYTES).also(SecureRandom()::nextBytes)
         val sealed = master.wrap(raw)
