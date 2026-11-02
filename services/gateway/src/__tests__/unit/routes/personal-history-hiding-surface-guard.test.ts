@@ -340,6 +340,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // qu'il a masqué de sa vue (historique effacé, messages supprimés pour lui)
   // ne lui est pas retraduit. Un invité sans compte n'a rien à masquer.
   'message-translation/ArrivalHistoryBackfill.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #14619 — la recherche des messages du lecteur : ses deux lectures (contenu, traductions) partagent
+  // `scope.clauses`, construites UNE fois par conversation sous applyPersonalHistoryHiding(applyHistoryFloor(…)).
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes

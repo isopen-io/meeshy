@@ -329,6 +329,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'unreadCountsCore.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9630 — les candidats avis de capture du compteur unitaire : identité et marque.
   'unreadCountOfParticipant.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #14619 — la recherche des messages du lecteur charge `sender` sur ses deux lectures (contenu, traductions),
+  // enveloppées par UN withOrphanedSenderRepair sur la portée du lecteur.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   // #6501 — balayage de rétention SANS lecteur, portée GLOBALE par
   // construction (`expiresAt` à travers toute la base, jamais une seule
