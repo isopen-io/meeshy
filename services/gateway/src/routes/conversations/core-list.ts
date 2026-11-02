@@ -226,7 +226,7 @@ export function registerConversationListRoute(
 
       // Visibilité DM vide (Prisme 2026-08-04) et boîte de demandes (#14107) : `utils/list-viewer-scope.ts`.
       whereClause.OR = emptyDirectVisibility(userId);
-      whereClause.AND = withViewerRequests(whereClause.AND, userId, request.query.requests);
+      if (request.query.requests) whereClause.AND = withViewerRequests(whereClause.AND, userId, request.query.requests);
 
       // Pagination par curseur — résolue DANS LE SCOPE DU LECTEUR (#6991).
       //

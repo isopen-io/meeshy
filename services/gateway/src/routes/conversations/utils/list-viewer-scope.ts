@@ -32,9 +32,8 @@ export const emptyDirectVisibility = (userId: string): Prisma.ConversationWhereI
 export const withViewerRequests = (
   and: Prisma.ConversationWhereInput['AND'],
   userId: string,
-  mode: MessageRequestListMode | undefined,
+  mode: MessageRequestListMode,
 ): Prisma.ConversationWhereInput['AND'] => {
-  if (!mode) return and;
   const existing = Array.isArray(and) ? and : and ? [and] : [];
   return [...existing, { participants: { some: { userId, isActive: true, ...viewerRequestClause(mode) } } }];
 };
