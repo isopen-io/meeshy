@@ -94,6 +94,11 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
     private let dialCallBack: @MainActor (CallBackRequest) -> Void
     private let localMarkRead: @MainActor (String) -> Void
+    /// #12655 — la conversation PEUT-elle être verrouillée par PIN sur cet
+    /// appareil ? Oui tant que la liste des verrous n'est pas lue (fail-closed).
+    private let conversationLocks: any ConversationLockProbing
+    /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
+    private let notifyRefusedReply: @MainActor (String?) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
@@ -106,6 +111,13 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let openExternalURL: @MainActor (URL) -> Void
     private let openDeepLink: @MainActor (URL) -> Void
     private let presentNewContact: @MainActor (NotificationContactCard) -> Void
+    /// La loi du fil appliquée à la conversation de la réponse (#12641, #12985).
+    private let destinationGuard: EndToEndDestinationGuard
+    /// Le refus d'une réponse vers une conversation chiffrée se DIT (audit M4),
+    /// et sa bannière ouvre la conversation.
+    private let notifyRefusedEndToEndReply: @MainActor (String, EndToEndSendRefusal) -> Void
+    /// Le coffre libsignal, seul lieu du clair d'une réponse chiffrée (#13067).
+    private let endToEnd: any EndToEndMessagingProviding
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -129,7 +141,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// `messagePersistence` so tests never touch `DependencyContainer.shared`.
     private var prepareReplyQueue: @MainActor () async -> Void {
         injectedPrepareReplyQueue ?? {
-            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.dbPool)
+            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.database.pool)
         }
     }
 
@@ -197,8 +209,20 @@ final class NotificationActionHandler: NotificationActionHandling {
         openDeepLink: @escaping @MainActor (URL) -> Void = { _ = DeepLinkRouter.shared.handle(url: $0) },
         presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
             NotificationContactPresenter.present($0)
-        }
+        },
+        conversationLocks: any ConversationLockProbing = ConversationLockManager.shared,
+        notifyRefusedReply: @escaping @MainActor (String?) -> Void = {
+            NotificationReplyFailure.postRefusedUnderConversationPin(conversationId: $0)
+        },
+        destinationGuard: EndToEndDestinationGuard = EndToEndDestinationGuard(),
+        notifyRefusedEndToEndReply: @escaping @MainActor (String, EndToEndSendRefusal) -> Void = {
+            NotificationReplyFailure.postEndToEndReplyRefused(conversationId: $0, refusal: $1)
+        },
+        endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared
     ) {
+        self.destinationGuard = destinationGuard
+        self.notifyRefusedEndToEndReply = notifyRefusedEndToEndReply
+        self.endToEnd = endToEnd
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
@@ -224,6 +248,8 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.openExternalURL = openExternalURL
         self.openDeepLink = openDeepLink
         self.presentNewContact = presentNewContact
+        self.conversationLocks = conversationLocks
+        self.notifyRefusedReply = notifyRefusedReply
     }
 
     // MARK: - Révocation (features 4/5)
@@ -317,6 +343,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         applyAuthToken(authTokenProvider())
 
         let payload = NotificationPayload(userInfo: userInfo)
+        guard !refusesUnderConversationPin(actionIdentifier, payload: payload, userInfo: userInfo) else { return }
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
@@ -377,6 +404,43 @@ final class NotificationActionHandler: NotificationActionHandling {
             openNotification(userInfo)
             await consumeTapped(payload)
         }
+    }
+
+    // MARK: - Conversation verrouillée par PIN (#12655)
+
+    /// Les gestes qu'une conversation sous PIN refuse depuis l'écran
+    /// verrouillé : ceux qui ÉCRIVENT dans la conversation (répondre, marquer
+    /// lu) et ceux qui AGISSENT sur son contenu (suivre l'invitation, ajouter
+    /// le contact, ouvrir la position dans Plans).
+    static let pinGuardedActions: Set<String> = [
+        MeeshyNotificationAction.reply.rawValue,
+        MeeshyNotificationAction.markRead.rawValue,
+        MeeshyNotificationAction.joinInvite.rawValue,
+        MeeshyNotificationAction.addContact.rawValue,
+        MeeshyNotificationAction.openInMaps.rawValue,
+    ]
+
+    /// Défense en profondeur derrière la catégorie sans action de l'extension :
+    /// une bannière livrée avant le verrou, ou catégorisée par la passerelle
+    /// quand l'extension n'a pas tourné (tuée, hors budget), porte encore ses
+    /// gestes. Sur une conversation verrouillée (ou une charge scellée), rien
+    /// ne part, rien n'est marqué lu, aucun lien n'est suivi : l'app s'ouvre
+    /// sur la conversation, que la porte du routeur garde par le PIN. Une
+    /// réponse, exécutée en arrière-plan, le dit par une notification locale.
+    private func refusesUnderConversationPin(
+        _ actionIdentifier: String,
+        payload: NotificationPayload,
+        userInfo: [AnyHashable: Any]
+    ) -> Bool {
+        guard Self.pinGuardedActions.contains(actionIdentifier) else { return false }
+        let locked = payload.conversationId.map { conversationLocks.mayBeLocked($0) } ?? false
+        guard locked || NSEAttachmentPolicy.isSealedForLockedConversation(userInfo) else { return false }
+        logger.info("notification action refused: conversation locked by PIN")
+        if actionIdentifier == MeeshyNotificationAction.reply.rawValue {
+            notifyRefusedReply(payload.conversationId)
+        }
+        openNotification(userInfo)
+        return true
     }
 
     // MARK: - Détail d'un message (#8858)
@@ -471,17 +535,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             replyToId: payload.messageId
         )
 
-        do {
-            try await messagePersistence.insertOptimistic(
-                MessageRecord.optimisticText(
-                    item: item,
-                    senderId: userId,
-                    replyToId: payload.messageId
-                )
-            )
-        } catch {
-            logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
-        }
+        if await refusesEndToEndReply(item, senderId: userId, in: conversationId) { return }
+        await insertReplyBubble(item, senderId: userId, replyToId: payload.messageId)
 
         await prepareReplyQueue()
         var outboxRowLanded = false
@@ -522,6 +577,31 @@ final class NotificationActionHandler: NotificationActionHandling {
             logger.error("post-reply markRead failed: \(error.localizedDescription, privacy: .public)")
         }
         removeDeliveredForConversation(conversationId)
+    }
+
+    private func insertReplyBubble(_ item: OfflineQueueItem, senderId: String, replyToId: String?) async {
+        do {
+            try await messagePersistence.insertOptimistic(
+                MessageRecord.optimisticText(item: item, senderId: senderId, replyToId: replyToId)
+            )
+        } catch {
+            logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// #12641, #13067 — la réponse ne sait pas sceller : vers une conversation
+    /// chiffrée de bout en bout (loi du fil, #12985), rien ne part ni n'entre
+    /// dans la file, et la garde se lit AVANT toute ligne. Le clair va au
+    /// coffre sous une bulle scellée en échec, d'où le fil le renvoie chiffré ;
+    /// faute de coffre, rien ne s'écrit. Les deux se disent.
+    private func refusesEndToEndReply(_ item: OfflineQueueItem, senderId: String, in conversationId: String) async -> Bool {
+        guard await destinationGuard.seals(conversationId) else { return false }
+        logger.warning("notification reply refused before transport: end-to-end conversation")
+        let refusal = await EndToEndOffThreadReply(endToEnd: endToEnd, persistence: messagePersistence)
+            .keep(item, senderId: senderId)
+        removeDeliveredForConversation(conversationId)
+        notifyRefusedEndToEndReply(conversationId, refusal)
+        return true
     }
 
     // MARK: - Inline comment on social pushes (R3/R4)

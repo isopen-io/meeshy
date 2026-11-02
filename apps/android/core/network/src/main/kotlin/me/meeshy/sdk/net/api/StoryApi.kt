@@ -81,7 +81,7 @@ interface StoryApi {
     suspend fun repost(
         @Path("id") storyId: String,
         @Body body: RepostPostRequest,
-    ): ApiResponse<Unit>
+    ): ApiResponse<ApiPost>
 
     @GET("posts/{id}")
     suspend fun fetchPost(@Path("id") postId: String): ApiResponse<ApiPost>

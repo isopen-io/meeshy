@@ -23,6 +23,8 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
 import { exportReadingActivity } from './export-reading';
+import { relationsExportSchema } from './export-relations';
+import { exportRelations } from '../../services/relations/relationExport';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
@@ -44,11 +46,12 @@ type ExportType =
   | 'game'
   | 'packs'
   | 'readingActivity'
-  | 'calls';
+  | 'calls'
+  | 'relations';
 
 const VALID_TYPES: ExportType[] = [
   'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
-  'readingActivity', 'calls',
+  'readingActivity', 'calls', 'relations',
 ];
 
 type ExportFormat = 'json' | 'csv';
@@ -258,6 +261,17 @@ const packsExportSchema = {
         },
       },
     },
+    // #11327 — le profil partenaire de lens (0 ou 1) : ce qu'il a déclaré et son état, jamais les octets du logo.
+    partnerProfile: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          displayName: { type: 'string' }, website: { type: 'string', nullable: true }, logoSrc: { type: 'string', nullable: true },
+          logoSize: { type: 'integer', nullable: true }, verifiedAt: { type: 'string', nullable: true }, createdAt: { type: 'string' }, updatedAt: { type: 'string' },
+        },
+      },
+    },
     // #10632, #11272 — les packs POSSÉDÉS : domaine, slug, voie (purchase|game|grant|event), raison, prix payé (0 hors achat), date.
     ownerships: {
       type: 'array',
@@ -275,11 +289,11 @@ const packsExportSchema = {
     },
     counts: {
       type: 'object',
-      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' }, ownerships: { type: 'integer' }, appearanceSubmissions: { type: 'integer' }, lensSubmissions: { type: 'integer' } },
+      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' }, ownerships: { type: 'integer' }, appearanceSubmissions: { type: 'integer' }, lensSubmissions: { type: 'integer' }, partnerProfile: { type: 'integer' } },
     },
     hasMore: {
       type: 'object',
-      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' }, ownerships: { type: 'boolean' }, appearanceSubmissions: { type: 'boolean' }, lensSubmissions: { type: 'boolean' } },
+      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' }, ownerships: { type: 'boolean' }, appearanceSubmissions: { type: 'boolean' }, lensSubmissions: { type: 'boolean' }, partnerProfile: { type: 'boolean' } },
     },
   },
 } as const;
@@ -441,8 +455,8 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             types: {
               type: 'string',
               description:
-                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity,calls. ' +
-                'Defaults to all eleven.',
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity,calls,relations. ' +
+                'Defaults to all of them.',
             },
             limit: {
               type: 'string',
@@ -557,6 +571,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                   game: gameExportSchema,
                   packs: packsExportSchema,
                   readingActivity: readingActivityExportSchema,
+                  relations: relationsExportSchema,
                   calls: { type: 'array', items: callExportItemSchema, nullable: true },
                   callsCount: { type: 'integer', nullable: true },
                   callsHasMore: { type: 'boolean', nullable: true },
@@ -810,6 +825,10 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           exportData.readingActivity = await exportReadingActivity(fastify.prisma, userId, page);
         }
 
+        if (requestedTypes.includes('relations')) {
+          exportData.relations = await exportRelations(fastify.prisma, userId, page);
+        }
+
         if (requestedTypes.includes('packs')) {
           const sections = await exportPacks(fastify.prisma, userId, page);
           exportData.packs = {
@@ -819,8 +838,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             ownerships: sections.ownerships.items,
             appearanceSubmissions: sections.appearanceSubmissions.items,
             lensSubmissions: sections.lensSubmissions.items,
-            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total, ownerships: sections.ownerships.total, appearanceSubmissions: sections.appearanceSubmissions.total, lensSubmissions: sections.lensSubmissions.total },
-            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore, ownerships: sections.ownerships.hasMore, appearanceSubmissions: sections.appearanceSubmissions.hasMore, lensSubmissions: sections.lensSubmissions.hasMore },
+            partnerProfile: sections.partnerProfile.items,
+            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total, ownerships: sections.ownerships.total, appearanceSubmissions: sections.appearanceSubmissions.total, lensSubmissions: sections.lensSubmissions.total, partnerProfile: sections.partnerProfile.total },
+            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore, ownerships: sections.ownerships.hasMore, appearanceSubmissions: sections.appearanceSubmissions.hasMore, lensSubmissions: sections.lensSubmissions.hasMore, partnerProfile: sections.partnerProfile.hasMore },
           };
         }
 
@@ -892,7 +912,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
 
           // Les packs : une table par liste ; les éléments d'une proposition voyagent en JSON dans leur cellule.
           const packs = exportData.packs as Record<string, unknown> | undefined;
-          for (const childKey of ['choices', 'library', 'submissions', 'ownerships', 'appearanceSubmissions', 'lensSubmissions'] as const) {
+          for (const childKey of ['choices', 'library', 'submissions', 'ownerships', 'appearanceSubmissions', 'lensSubmissions', 'partnerProfile'] as const) {
             const rows = (packs?.[childKey] ?? []) as Record<string, unknown>[];
             const flat = rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Array.isArray(value) ? JSON.stringify(value) : value])));
             if (flat.length > 0) csvSections[`packs.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
@@ -903,6 +923,13 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           if (calls.length > 0) {
             const flat = calls.map((row) => ({ ...row, analytics: JSON.stringify(row.analytics ?? null), feedback: JSON.stringify(row.feedback ?? null) }));
             csvSections.calls = toCsv(Object.keys(flat[0]), flat);
+          }
+
+          // Les cercles (#14400) : une table par liste ; mes passages voyagent en JSON dans leur cellule.
+          const relations = exportData.relations as Record<string, Record<string, unknown>[]> | undefined;
+          for (const childKey of ['links', 'interactionDays', 'consents'] as const) {
+            const flat = (relations?.[childKey] ?? []).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Array.isArray(value) ? JSON.stringify(value) : value])));
+            if (flat.length > 0) csvSections[`relations.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
           }
 
           exportData.csv = csvSections;

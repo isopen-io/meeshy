@@ -143,20 +143,7 @@ final class NSEPendingMessageConsumer {
             let pending = Self.readPending()
             guard !pending.isEmpty else { return ([], []) }
 
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .custom { decoder in
-                let container = try decoder.singleValueContainer()
-                let dateStr = try container.decode(String.self)
-                // Modern Date.ISO8601FormatStyle supports fractional seconds and
-                // is more efficient than legacy ISO8601DateFormatter.
-                if let date = try? Date(dateStr, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
-                    return date
-                }
-                if let date = try? Date(dateStr, strategy: .iso8601) {
-                    return date
-                }
-                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-            }
+            let decoder = MeeshyCoders.decoder(.api)
 
             var decoded: [DecodedPending] = []
             var corrupt: [URL] = []

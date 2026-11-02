@@ -56,6 +56,15 @@ public data class ComposerLanguageState(
         return copy(detected = result, isLocked = wordCount >= WORD_LOCK_THRESHOLD)
     }
 
+    /**
+     * The draft was REPLACED wholesale (an edit opened or left, a stored draft restored) rather
+     * than typed: the detection of the previous text says nothing about the new one, so it starts
+     * over from [draft] — a manual pick still wins. Without this, leaving an edit kept the pill on
+     * the edited text's language over an empty field (#12484).
+     */
+    public fun onDraftReplaced(draft: String): ComposerLanguageState =
+        if (manualOverride != null) this else ComposerLanguageState().onDraftChanged(draft)
+
     /** Record a language picked from the picker: it wins over detection and freezes analysis. */
     public fun withManualPick(code: String): ComposerLanguageState =
         copy(manualOverride = code, isLocked = true)

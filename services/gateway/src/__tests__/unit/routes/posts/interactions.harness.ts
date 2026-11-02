@@ -195,6 +195,8 @@ export async function buildApp(opts: {
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 2 }),
     },
+    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun ici.
+    user: { findFirst: async () => null },
     post: {
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 2 }),

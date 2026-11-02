@@ -4,6 +4,8 @@
  * Extrait de `core.ts` lors du découpage #4284 ; voir `core.ts` pour le point
  * d'entrée `registerCoreRoutes` qui appelle ce registrar.
  */
+import { lazyKeyring, revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { getEncryptionService } from '../../services/EncryptionService';
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { CONVERSATION_LIST_PAGINATION, conversationListQuerystringSchema } from './list-querystring';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
@@ -401,6 +403,9 @@ export function registerConversationListRoute(
           : [];
       }
       perfTimings.personalPreviewHiding = performance.now() - t0;
+      // #11381 — la ligne d'une conversation `server`/`hybrid` lit le clair.
+      const previewKeyring = lazyKeyring(() => getEncryptionService(prisma));
+      await Promise.all(conversations.map(async (c) => { c.messages = await revealAtRestRows(c.messages, previewKeyring); }));
 
       // Extract current user's participant data from already-fetched participants (take:5 per conv).
       // For DMs and small groups the current user is always in the first 5 — zero extra DB queries.

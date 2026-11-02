@@ -39,7 +39,7 @@ const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
  * Lentille, donc iOS en est la source. Même dispositif que le générateur de
  * jetons, qui va chercher la palette dans `MeeshyColors.swift`.
  */
-const UPSTREAM_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`;
+const UPSTREAM_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Lens/Core/LentilleMetrics.swift`;
 const DOWNSTREAM = `${ROOT}apps/web/src/lib/lens/law.ts`;
 
 /**
@@ -48,7 +48,7 @@ const DOWNSTREAM = `${ROOT}apps/web/src/lib/lens/law.ts`;
  * `src/lib/reading-mode/metrics.ts`, comme `LentilleMetrics.swift` l'est pour
  * `lens/law.ts` ci-dessus. Deux peaux, un seul gate de dérivation.
  */
-const UPSTREAM_FOCAL_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift`;
+const UPSTREAM_FOCAL_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Focal/Core/FocalMetrics.swift`;
 const DOWNSTREAM_FOCAL = `${ROOT}apps/web/src/lib/reading-mode/metrics.ts`;
 
 /**
@@ -70,7 +70,7 @@ const DOWNSTREAM_ELECTION = `${ROOT}apps/web/src/lib/reading-mode/election.ts`;
  * SECONDE source Swift, distincte de `FocalMetrics.swift` (PARTIE 2) :
  * `reading-mode/metrics.ts` et `reading-mode/election.ts` en sont l'aval.
  */
-const UPSTREAM_PERSPECTIVE_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift`;
+const UPSTREAM_PERSPECTIVE_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Focal/Core/FocalScrollPerspective.swift`;
 
 const source = readFileSync(UPSTREAM, 'utf8');
 const derived = readFileSync(DOWNSTREAM, 'utf8');

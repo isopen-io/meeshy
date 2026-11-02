@@ -17,7 +17,7 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(nom)")
+            .appendingPathComponent("Meeshy/Features/Composer/\(nom)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -125,7 +125,7 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
     /// fait pas corriger — elle se fait ignorer, emportant les fois où elle
     /// avait raison.
     func test_surUnePorteeQueLeClientIgnore_onSeTait() {
-        for mode in [PostVisibility.public, .community, .friends] {
+        for mode in [PostVisibility.public, .community, .acquaintances, .friends, .close, .blood] {
             XCTAssertEqual(
                 ComposerAudienceReach.resolve(mentionUserId: "u1", visibility: mode,
                                               audienceUserIds: []),
@@ -152,6 +152,14 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
         XCTAssertTrue(ComposerAudienceSubtitle.subtitle(for: .only, selectedCount: 3).contains("3"))
     }
 
+    /// Chaque cercle DIT qui il sert (#13939) : quatre sous-titres distincts, aucun ne recopie un autre.
+    func test_chaqueCercle_aSonSousTitre() {
+        let circles = [PostVisibility.acquaintances, .friends, .close, .blood]
+            .map { ComposerAudienceSubtitle.subtitle(for: $0, selectedCount: 0) }
+        XCTAssertEqual(Set(circles).count, circles.count)
+        XCTAssertFalse(circles.contains(where: \.isEmpty))
+    }
+
     // MARK: - La porte, et la feuille
 
     /// **L'outil hashtag est dans la liste des outils** — servi par le meuble,
@@ -168,8 +176,9 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
         // publication que sur les autres formats.
         XCTAssertEqual(ComposerRailDoor.hashtag.level(for: .post), .publication)
         XCTAssertFalse(ComposerRailDoor.hashtag.level(for: .post).appearsOnCanvas)
-        XCTAssertTrue(ComposerSceneFloatingRail.lowRow(from: [.hashtag], format: .post).contains(.hashtag))
-        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: [.hashtag], format: .post).contains(.hashtag))
+        XCTAssertTrue(ComposerMoreMenuPolicy.entries(.init(addsSlides: false, backgroundMedia: nil,
+                                                           offeredDoors: [.hashtag], overflow: [])).contains(.hashtags))
+        XCTAssertEqual(ComposerRestChrome.tools(offered: [.hashtag]), [.more])
     }
 
     /// Elle a sa place dans l'ordre appris par les doigts, à côté de la mention

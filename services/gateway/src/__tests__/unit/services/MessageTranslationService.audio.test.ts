@@ -46,6 +46,12 @@ jest.mock('../../../services/posts/PostAudioService', () => ({
   }
 }));
 
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
+
 // ConsentValidationService — instantiated inline
 jest.mock('../../../services/ConsentValidationService', () => ({
   ConsentValidationService: jest.fn().mockImplementation(() => ({

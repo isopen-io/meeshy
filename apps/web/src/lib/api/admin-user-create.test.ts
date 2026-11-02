@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 
-import { createAdminUser, missingCreateFields, type AdminUserCreateInput } from './admin-user-create';
+import { createAdminUser, missingCreateFields, tooShortCreateFields, type AdminUserCreateInput } from './admin-user-create';
 import type { HttpRequest, HttpTransport } from './http';
 
 /**
@@ -97,5 +98,34 @@ describe('missingCreateFields', () => {
   test('nomme les champs requis vides, blancs compris', () => {
     expect(missingCreateFields({ ...SAISIE, username: ' ', email: '' })).toEqual(['username', 'email']);
     expect(missingCreateFields(SAISIE)).toEqual([]);
+  });
+});
+
+/**
+ * LE PLANCHER D'UNE IDENTITÉ CRÉÉE (#13825, directive porteur 2026-10-30) —
+ * l'administration crée une identité comme l'inscription : pseudo à trois
+ * caractères au moins, prénom et nom à deux, rognés.
+ */
+describe('tooShortCreateFields', () => {
+  test('« A » comme prénom ou nom est refusé, « Al » passe', () => {
+    expect(tooShortCreateFields({ ...SAISIE, firstName: 'A', lastName: ' B ' })).toEqual(['firstName', 'lastName']);
+    expect(tooShortCreateFields({ ...SAISIE, firstName: 'Al', lastName: 'Li' })).toEqual([]);
+  });
+
+  test('« Al » comme pseudo est refusé (attend usernameMinLength = 3 du lot partagé)', () => {
+    expect(tooShortCreateFields({ ...SAISIE, username: ' Al ' })).toEqual(['username']);
+    expect(tooShortCreateFields({ ...SAISIE, username: 'a'.repeat(usernameMinLength - 1) })).toEqual(['username']);
+    expect(tooShortCreateFields({ ...SAISIE, username: 'Ali' })).toEqual([]);
+  });
+
+  test('un champ ABSENT n\'est pas « trop court » : missingCreateFields le dit déjà', () => {
+    expect(tooShortCreateFields({ ...SAISIE, username: '', firstName: ' ' })).toEqual([]);
+  });
+
+  test('createAdminUser ne tente rien avec un champ trop court', async () => {
+    const { transport, appels } = transportScenarise({ ok: true, data: MEMBRE_SERVI });
+    const resultat = await createAdminUser({ ...deps(transport), input: { ...SAISIE, firstName: 'A' } });
+    expect(resultat.ok).toBe(false);
+    expect(appels).toEqual([]);
   });
 });

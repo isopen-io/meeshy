@@ -4,7 +4,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.transformLatest
 import me.meeshy.sdk.cache.CacheClock
@@ -21,8 +24,6 @@ import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
-import me.meeshy.sdk.model.ApiResponse
-import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.CreatePostRequest
@@ -31,11 +32,9 @@ import me.meeshy.sdk.net.api.MobileTranscriptionPayload
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.PostLikeRequest
 import me.meeshy.sdk.model.EmojiCatalog
-import me.meeshy.sdk.net.api.PostImpressionsRequest
 import me.meeshy.sdk.net.api.PostTranslationRequest
 import me.meeshy.sdk.net.api.PostViewRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
-import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UpdatePostRequest
 import me.meeshy.sdk.net.api.toUpdateRequest
@@ -52,22 +51,19 @@ import me.meeshy.sdk.model.NearbyDensityCell
 import me.meeshy.sdk.model.NearbyDensityCellSize
 import me.meeshy.sdk.model.PublicationTarget
 import me.meeshy.sdk.net.rawApiCall
+import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.outbox.CommentPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.session.AccountClosedException
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.PerAccountCache
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
-
-/** One cursor page of posts plus the pagination watermark to fetch the next. */
-data class PostPage(
-    val posts: List<ApiPost>,
-    val nextCursor: String?,
-    val hasMore: Boolean,
-)
-
-/** Bookmarked-posts page — the same cursor-page shape as any other post list. */
-typealias BookmarkPage = PostPage
 
 /** Posts, comments, reposts and feed variants — port of PostService (PostService.swift). */
 @Singleton
@@ -76,13 +72,28 @@ class PostRepository @Inject constructor(
     private val translationApi: TranslationApi,
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock = SystemCacheClock,
-) {
-    // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
+    private val fence: AccountFence? = null,
+    private val feedDisk: FeedDiskCache = FeedDiskCache.NONE,
+) : PerAccountCache {
     private val _feedCache = MutableStateFlow<List<ApiPost>?>(null)
     private val _feedSyncedAt = MutableStateFlow<Long?>(null)
 
+    private val diskRestore = FeedDiskRestore(feedDisk)
+    private val detailMemo = PostDetailMemo()
+
     // Cursor pagination state (port of FeedViewModel.nextCursor / hasMore).
+    @Volatile
     private var feedCursor: String? = null
+
+    /**
+     * Ce que chaque geste optimiste a ÉCRIT sur la ligne (état + compteur après la bascule), UNE trace par ligne de la
+     * file d'envoi (#13594, [GestureTraces]) — #13588 n'en gardait qu'une par post. Une ligne
+     * relue du serveur (rafraîchissement du fil) porte l'état du lecteur et efface la trace : rien à défaire. Un écho
+     * `post:updated` n'est pas personnalisé : il réécrit le compteur, jamais l'état du lecteur — le retour arrière rend
+     * alors l'état d'avant le geste et garde le compteur servi.
+     */
+    private val likeFlips = GestureTraces()
+    private val bookmarkFlips = GestureTraces()
     private val _feedHasMore = MutableStateFlow(true)
 
     /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
@@ -105,7 +116,12 @@ class PostRepository @Inject constructor(
     fun feedStream(
         policy: CachePolicy = CachePolicy.Feed,
         onSyncError: (Throwable) -> Unit = {},
-    ): Flow<CacheResult<List<ApiPost>>> =
+    ): Flow<CacheResult<List<ApiPost>>> = flow {
+        restoreFromDisk()
+        emitAll(cacheFirstFeed(policy, onSyncError))
+    }
+
+    private fun cacheFirstFeed(policy: CachePolicy, onSyncError: (Throwable) -> Unit): Flow<CacheResult<List<ApiPost>>> =
         combine(_feedCache, _feedSyncedAt) { data, syncedAt -> data to syncedAt }
             .distinctUntilChanged()
             .transformLatest { (data, syncedAt) ->
@@ -127,6 +143,20 @@ class PostRepository @Inject constructor(
                     }
                 }
             }
+
+    /** Le fil gardé sur le disque et son âge, lus AVANT que le flux ne s'abonne : sa première valeur les porte déjà (#14263). */
+    private suspend fun restoreFromDisk() {
+        if (_feedCache.value != null) return
+        val ticket = fence?.currentTicket()
+        diskRestore.once { kept ->
+            fence.commitOrWrite(ticket) {
+                if (_feedCache.value == null) {
+                    _feedCache.value = kept.value
+                    _feedSyncedAt.value = kept.fetchedAt
+                }
+            }
+        }
+    }
 
     suspend fun refresh() = revalidateFeed()
 
@@ -153,23 +183,54 @@ class PostRepository @Inject constructor(
      * now. Returns `false` only when the post is not in the cache to begin with.
      */
     suspend fun toggleLike(postId: String): Boolean {
-        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val wasLiked = target.isLikedByMe == true
-        applyLike(postId, liked = !wasLiked, likeCount = adjustedCount(target.likeCount, wasLiked))
-
-        outboxRepository.enqueue(
+        val ticket = fence?.currentTicket()
+        val before = rewriteRow(ticket, postId) {
+            val wasLiked = it.isLikedByMe == true
+            it.copy(isLikedByMe = !wasLiked, likeCount = adjustedCount(it.likeCount, wasLiked))
+        }.orClosed() ?: return false
+        val wasLiked = before.isLikedByMe == true
+        enqueueTraced(
+            likeFlips,
+            postId,
             OutboxMutation(
                 kind = if (wasLiked) OutboxKind.UNLIKE_POST else OutboxKind.LIKE_POST,
                 lane = OutboxLanes.SOCIAL,
                 targetId = postId,
                 payload = "",
             ),
+            revertTo = wasLiked,
+            state = !wasLiked,
+            count = adjustedCount(before.likeCount, wasLiked),
         )
         return true
     }
 
+    /** The feed held in memory belongs to the signed-in account: a second account starts cold. */
+    override suspend fun clear() {
+        diskRestore.reset()
+        _feedCache.value = null
+        _feedSyncedAt.value = null
+        detailMemo.clear()
+        feedCursor = null
+        _feedHasMore.value = true
+        likeFlips.clear()
+        bookmarkFlips.clear()
+    }
+
     /** The post as the feed cache holds it, or `null` when it is not there. */
     fun cachedPost(postId: String): ApiPost? = _feedCache.value?.firstOrNull { it.id == postId }
+
+    /**
+     * Ce que l'appareil connaît déjà de ce post, sans réseau (#14467) : la carte du fil, sinon le dernier post qu'un détail
+     * a lu, sinon le fil gardé sur le disque. Ne suspend pas quand la mémoire le tient : le détail se peint dès sa première
+     * image.
+     */
+    suspend fun knownPost(postId: String): ApiPost? {
+        cachedPost(postId)?.let { return it }
+        detailMemo.get(postId)?.let { return it }
+        restoreFromDisk()
+        return cachedPost(postId)
+    }
 
     /**
      * The explicit-state twin of [toggleLike], for a surface that owns the post itself (the
@@ -178,34 +239,28 @@ class PostRepository @Inject constructor(
      * outbox mutation, and mirrors the feed cache when the post sits there and differs.
      */
     suspend fun setLiked(postId: String, liked: Boolean) {
-        cachedPost(postId)
-            ?.takeIf { (it.isLikedByMe == true) != liked }
-            ?.let { applyLike(postId, liked = liked, likeCount = adjustedCount(it.likeCount, wasSet = !liked)) }
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = if (liked) OutboxKind.LIKE_POST else OutboxKind.UNLIKE_POST,
-                lane = OutboxLanes.SOCIAL,
-                targetId = postId,
-                payload = "",
-            ),
+        val flipped = rewriteRow(fence?.currentTicket(), postId) { likeRow(it, liked) }?.before
+        val mutation = OutboxMutation(
+            kind = if (liked) OutboxKind.LIKE_POST else OutboxKind.UNLIKE_POST,
+            lane = OutboxLanes.SOCIAL,
+            targetId = postId,
+            payload = "",
         )
+        if (flipped == null) enqueueAdopting(likeFlips, postId, mutation, liked)
+        else enqueueTraced(likeFlips, postId, mutation, !liked, liked, adjustedCount(flipped.likeCount, wasSet = !liked))
     }
 
     /** The bookmark analogue of [setLiked]. */
     suspend fun setBookmarked(postId: String, bookmarked: Boolean) {
-        cachedPost(postId)
-            ?.takeIf { (it.isBookmarkedByMe == true) != bookmarked }
-            ?.let {
-                applyBookmark(postId, bookmarked = bookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasSet = !bookmarked))
-            }
-        outboxRepository.enqueue(
-            OutboxMutation(
-                kind = if (bookmarked) OutboxKind.BOOKMARK_POST else OutboxKind.UNBOOKMARK_POST,
-                lane = OutboxLanes.SOCIAL,
-                targetId = postId,
-                payload = "",
-            ),
+        val flipped = rewriteRow(fence?.currentTicket(), postId) { bookmarkRow(it, bookmarked) }?.before
+        val mutation = OutboxMutation(
+            kind = if (bookmarked) OutboxKind.BOOKMARK_POST else OutboxKind.UNBOOKMARK_POST,
+            lane = OutboxLanes.SOCIAL,
+            targetId = postId,
+            payload = "",
         )
+        if (flipped == null) enqueueAdopting(bookmarkFlips, postId, mutation, bookmarked)
+        else enqueueTraced(bookmarkFlips, postId, mutation, !bookmarked, bookmarked, adjustedCount(flipped.bookmarkCount, wasSet = !bookmarked))
     }
 
     /**
@@ -215,27 +270,92 @@ class PostRepository @Inject constructor(
      * revert TO (the state before the mutation was enqueued); the count is
      * recomputed as the exact inverse of the delta [toggleLike]'s [applyLike]
      * applied, via the same [adjustedCount] law. A no-op once the post has left
-     * the feed cache, **or once the cache no longer carries the optimistic value
-     * this rollback was meant to undo** — a realtime reconciliation
-     * (`revalidateFeed`, `post:liked`) between the tap and the `EXHAUSTED` verdict
-     * already replaced the optimistic count with the server's own, and applying
-     * the delta a second time would double-count or flip a like the server
-     * actually accepted.
+     * the feed cache, once a refresh replaced the row with the server's own, or once
+     * the row no longer carries the optimistic state this rollback was meant to undo.
+     * When an unpersonalized echo (`post:updated`) rewrote the count in between, the
+     * state is reverted and the served count is kept: applying the delta to it would
+     * double-count (#13588).
      */
-    fun rollbackLike(postId: String, liked: Boolean) {
-        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return
-        if ((target.isLikedByMe == true) != !liked) return
-        applyLike(postId, liked = liked, likeCount = adjustedCount(target.likeCount, wasSet = !liked))
+    suspend fun rollbackLike(postId: String, liked: Boolean, cmid: String? = null) {
+        val refusal = likeFlips.take(postId, cmid, liked)?.takeUnless { it.overridden } ?: return
+        val flip = refusal.trace
+        rewriteRow(fence?.currentTicket(), postId) {
+            when {
+                (it.isLikedByMe == true) != flip.state -> null
+                (it.likeCount ?: 0) == flip.count -> likeRow(it, flip.revertTo)
+                else -> it.copy(isLikedByMe = flip.revertTo)
+            }
+        }
     }
+
+    /** La ligne [cmid] est livrée : la trace de son geste n'a plus de retour arrière à porter. */
+    fun settleGesture(cmid: String) {
+        likeFlips.discard(cmid)
+        bookmarkFlips.discard(cmid)
+    }
+
+    /**
+     * Pose la trace du geste sous le `cmid` de SA ligne, puis la met en file. Une mutation que la file annule par son
+     * contraire ne crée aucune ligne : sa trace sort avec elle, et celles des lignes que la file vient de retirer (annulées
+     * ou remplacées) aussi — une trace orpheline ferait croire à un geste plus récent qui ne partira jamais.
+     */
+    private suspend fun enqueueTraced(
+        traces: GestureTraces,
+        postId: String,
+        mutation: OutboxMutation,
+        revertTo: Boolean,
+        state: Boolean,
+        count: Int,
+    ) {
+        traces.record(mutation.cmid, postId, revertTo, state, count)
+        if (outboxRepository.enqueue(mutation) == null) traces.discard(mutation.cmid)
+        traces.cmidsOf(postId).filter { it != mutation.cmid && outboxRepository.stateOf(it) == null }.forEach(traces::discard)
+    }
+
+    /** Une mutation sans bascule de la ligne : elle hérite de la trace de la ligne que la file vient de remplacer. */
+    private suspend fun enqueueAdopting(traces: GestureTraces, postId: String, mutation: OutboxMutation, state: Boolean) {
+        val cmid = outboxRepository.enqueue(mutation)
+        traces.adopt(cmid, state, traces.cmidsOf(postId).filter { it != cmid && outboxRepository.stateOf(it) == null })
+    }
+
+    private fun likeRow(row: ApiPost, liked: Boolean): ApiPost? =
+        if ((row.isLikedByMe == true) == liked) null
+        else row.copy(isLikedByMe = liked, likeCount = adjustedCount(row.likeCount, wasSet = !liked))
+
+    private fun bookmarkRow(row: ApiPost, bookmarked: Boolean): ApiPost? =
+        if ((row.isBookmarkedByMe == true) == bookmarked) null
+        else row.copy(isBookmarkedByMe = bookmarked, bookmarkCount = adjustedCount(row.bookmarkCount, wasSet = !bookmarked))
+
+    /** Ce qu'une réécriture de ligne a trouvé : la ligne AVANT réécriture, `null` si absente ou [transform] sans effet. */
+    private class RowRewrite(val before: ApiPost?)
+
+    /**
+     * Un geste d'un compte fermé depuis est REFUSÉ par une exception, comme [OutboxRepository.enqueue] le fait : un
+     * `false` se confondrait avec « post absent du fil », que l'hôte (Reels) rabat sur un appel réseau non clôturé.
+     */
+    private fun RowRewrite?.orClosed(): ApiPost? = (this ?: throw AccountClosedException()).before
+
+    /**
+     * Réécrit la ligne [postId] du fil, lue et remplacée dans UN SEUL `update {}` (aucune mise à jour concurrente perdue,
+     * quel que soit le fil d'exécution), sous le compte de [ticket] (celui du geste). `null` : compte fermé, rien n'a été
+     * écrit ; sinon la ligne AVANT réécriture, `null` dedans si la ligne est absente ou [transform] sans effet.
+     */
+    private suspend fun rewriteRow(ticket: AccountTicket?, postId: String, transform: (ApiPost) -> ApiPost?): RowRewrite? =
+        fence.commitOrWrite(ticket) {
+            var before: ApiPost? = null
+            _feedCache.update { rows ->
+                before = null
+                val index = rows?.indexOfFirst { it.id == postId } ?: -1
+                val row = rows?.getOrNull(index)
+                val next = row?.let(transform)
+                if (rows == null || row == null || next == null) rows
+                else rows.toMutableList().also { it[index] = next }.also { before = row }
+            }
+            RowRewrite(before)
+        }
 
     private fun adjustedCount(current: Int?, wasSet: Boolean): Int =
         ((current ?: 0) + if (wasSet) -1 else 1).coerceAtLeast(0)
-
-    private fun applyLike(postId: String, liked: Boolean, likeCount: Int?) {
-        _feedCache.value = _feedCache.value?.map {
-            if (it.id == postId) it.copy(isLikedByMe = liked, likeCount = likeCount) else it
-        }
-    }
 
     /**
      * Optimistic, durable bookmark toggle (ARCHITECTURE.md §4-5), the bookmark
@@ -249,21 +369,24 @@ class PostRepository @Inject constructor(
      * only when the post is not in the cache to begin with.
      */
     suspend fun toggleBookmark(postId: String): Boolean {
-        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val wasBookmarked = target.isBookmarkedByMe == true
-        applyBookmark(
+        val ticket = fence?.currentTicket()
+        val before = rewriteRow(ticket, postId) {
+            val wasBookmarked = it.isBookmarkedByMe == true
+            it.copy(isBookmarkedByMe = !wasBookmarked, bookmarkCount = adjustedCount(it.bookmarkCount, wasBookmarked))
+        }.orClosed() ?: return false
+        val wasBookmarked = before.isBookmarkedByMe == true
+        enqueueTraced(
+            bookmarkFlips,
             postId,
-            bookmarked = !wasBookmarked,
-            bookmarkCount = adjustedCount(target.bookmarkCount, wasBookmarked),
-        )
-
-        outboxRepository.enqueue(
             OutboxMutation(
                 kind = if (wasBookmarked) OutboxKind.UNBOOKMARK_POST else OutboxKind.BOOKMARK_POST,
                 lane = OutboxLanes.SOCIAL,
                 targetId = postId,
                 payload = "",
             ),
+            revertTo = wasBookmarked,
+            state = !wasBookmarked,
+            count = adjustedCount(before.bookmarkCount, wasBookmarked),
         )
         return true
     }
@@ -277,19 +400,15 @@ class PostRepository @Inject constructor(
      * state). [bookmarked] is the value to revert TO; the count is recomputed as
      * the inverse of the delta [toggleBookmark]'s [applyBookmark] applied.
      */
-    fun rollbackBookmark(postId: String, bookmarked: Boolean) {
-        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return
-        if ((target.isBookmarkedByMe == true) != !bookmarked) return
-        applyBookmark(
-            postId,
-            bookmarked = bookmarked,
-            bookmarkCount = adjustedCount(target.bookmarkCount, wasSet = !bookmarked),
-        )
-    }
-
-    private fun applyBookmark(postId: String, bookmarked: Boolean, bookmarkCount: Int?) {
-        _feedCache.value = _feedCache.value?.map {
-            if (it.id == postId) it.copy(isBookmarkedByMe = bookmarked, bookmarkCount = bookmarkCount) else it
+    suspend fun rollbackBookmark(postId: String, bookmarked: Boolean, cmid: String? = null) {
+        val refusal = bookmarkFlips.take(postId, cmid, bookmarked)?.takeUnless { it.overridden } ?: return
+        val flip = refusal.trace
+        rewriteRow(fence?.currentTicket(), postId) {
+            when {
+                (it.isBookmarkedByMe == true) != flip.state -> null
+                (it.bookmarkCount ?: 0) == flip.count -> bookmarkRow(it, flip.revertTo)
+                else -> it.copy(isBookmarkedByMe = flip.revertTo)
+            }
         }
     }
 
@@ -303,16 +422,27 @@ class PostRepository @Inject constructor(
     suspend fun loadMore(): Boolean {
         val cursor = feedCursor
         if (!_feedHasMore.value || cursor == null) return false
-        val current = _feedCache.value ?: return false
+        if (_feedCache.value == null) return false
+        val ticket = fence?.currentTicket()
         return when (val result = rawApiCall { postApi.getFeed(cursor, FEED_PAGE_SIZE) }) {
             is NetworkResult.Success -> {
                 val response = result.data
                 val page = response.data
                 if (!response.success || page == null) return false
-                val existingIds = current.mapTo(HashSet()) { it.id }
-                _feedCache.value = current + page.filter { it.id !in existingIds }
-                feedCursor = response.pagination?.nextCursor
-                _feedHasMore.value = response.pagination?.hasMore ?: false
+                fence.commitOrWrite(ticket) {
+                    // Une page ne prolonge que le fil dont elle suit le curseur : un rafraîchissement arrivé pendant la requête
+                    // a remplacé ce fil, y coudre la page cacherait les posts entre sa fin et l'ancien curseur.
+                    if (feedCursor != cursor) return@commitOrWrite
+                    // Fusionné sur le fil COURANT au moment d'écrire : une mise à jour arrivée pendant la requête survit.
+                    _feedCache.update { current ->
+                        current?.let { rows ->
+                            val existingIds = rows.mapTo(HashSet()) { it.id }
+                            rows + page.filter { it.id !in existingIds }
+                        }
+                    }
+                    feedCursor = response.pagination?.nextCursor
+                    _feedHasMore.value = response.pagination?.hasMore ?: false
+                } ?: return false
                 _feedHasMore.value
             }
             is NetworkResult.Failure -> false
@@ -320,6 +450,7 @@ class PostRepository @Inject constructor(
     }
 
     private suspend fun revalidateFeed(onError: (Throwable) -> Unit = {}) {
+        val ticket = fence?.currentTicket()
         try {
             when (val result = rawApiCall { postApi.getFeed(null, FEED_PAGE_SIZE) }) {
                 is NetworkResult.Success -> {
@@ -329,10 +460,14 @@ class PostRepository @Inject constructor(
                         onError(Exception(response.error ?: response.message ?: "Unknown error"))
                         return
                     }
-                    _feedCache.value = page
-                    _feedSyncedAt.value = clock.nowMillis()
-                    feedCursor = response.pagination?.nextCursor
-                    _feedHasMore.value = response.pagination?.hasMore ?: false
+                    val committed = fence.commitOrWrite(ticket) {
+                        _feedCache.value = page
+                        page.forEach { likeFlips.forgetPost(it.id); bookmarkFlips.forgetPost(it.id) }
+                        _feedSyncedAt.value = clock.nowMillis()
+                        feedCursor = response.pagination?.nextCursor
+                        _feedHasMore.value = response.pagination?.hasMore ?: false
+                    }
+                    if (committed != null) feedDisk.keep(page, ticket)
                 }
                 is NetworkResult.Failure -> onError(Exception(result.error.message))
             }
@@ -427,6 +562,10 @@ class PostRepository @Inject constructor(
     ): NetworkResult<ApiPost> =
         apiCall { postApi.update(postId, UpdatePostRequest(content, visibility, moodEmoji)) }
 
+    /** L'édition d'une story publiée (#13632) : la requête est déjà composée, les champs absents restent ceux du serveur. */
+    suspend fun update(postId: String, request: UpdatePostRequest): NetworkResult<ApiPost> =
+        apiCall { postApi.update(postId, request) }
+
     /** Édition à champs déclarés : seul ce que [PostEditPayload.build] a laissé part sur le fil. */
     suspend fun update(postId: String, draft: PostEditDraft): NetworkResult<ApiPost> =
         apiCall { postApi.update(postId, draft.toUpdateRequest()) }
@@ -434,8 +573,12 @@ class PostRepository @Inject constructor(
     suspend fun delete(postId: String): NetworkResult<Unit> =
         apiCall { postApi.delete(postId) }
 
-    suspend fun getPost(postId: String): NetworkResult<ApiPost> =
-        apiCall { postApi.getPost(postId) }
+    suspend fun getPost(postId: String): NetworkResult<ApiPost> {
+        val ticket = fence?.currentTicket()
+        return apiCall { postApi.getPost(postId) }.also { result ->
+            if (result is NetworkResult.Success) fence.commitOrWrite(ticket) { detailMemo.keep(result.data) }
+        }
+    }
 
     /**
      * **Non-durable.** Hits the network directly with no outbox row — unlike
@@ -525,40 +668,6 @@ class PostRepository @Inject constructor(
     ): NetworkResult<PostPage> =
         foldPostPage(rawApiCall { postApi.getNearby(lat = lat, lng = lng, radiusKm = radiusKm, cursor = cursor, limit = limit) })
 
-    /**
-     * Fold a raw list envelope into a [PostPage]: a transport [NetworkResult.Failure]
-     * passes through; a `success:false`/dataless envelope becomes a [NetworkResult.Failure];
-     * otherwise the posts plus the pagination watermark become a [PostPage] (`hasMore`
-     * defaulting to `false` when the envelope omits pagination). The single page-folding
-     * law shared by every cursor-paginated post list.
-     */
-    private fun foldPostPage(
-        result: NetworkResult<ApiResponse<List<ApiPost>>>,
-    ): NetworkResult<PostPage> =
-        when (result) {
-            is NetworkResult.Success -> {
-                val response = result.data
-                val page = response.data
-                if (!response.success || page == null) {
-                    NetworkResult.Failure(
-                        ApiError(
-                            message = response.error ?: response.message ?: "Unknown error",
-                            code = response.code,
-                        ),
-                    )
-                } else {
-                    NetworkResult.Success(
-                        PostPage(
-                            posts = page,
-                            nextCursor = response.pagination?.nextCursor,
-                            hasMore = response.pagination?.hasMore ?: false,
-                        ),
-                    )
-                }
-            }
-            is NetworkResult.Failure -> result
-        }
-
     suspend fun pinPost(postId: String): NetworkResult<Unit> =
         apiCall { postApi.pin(postId) }
 
@@ -634,10 +743,32 @@ class PostRepository @Inject constructor(
      * blank string, or the translation already matches what is cached (idempotent).
      */
     suspend fun requestOnDemandTranslation(postId: String, targetLanguage: String): Boolean {
+        val ticket = fence?.currentTicket()
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val merged = translatePost(post, targetLanguage) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
-        return true
+        val target = targetLanguage.trim()
+        val translated = translationApi.translateSource(post.content, post.originalLanguage, target) ?: return false
+        // Fusionné sur la ligne COURANTE au moment d'écrire : un « j'aime » posé pendant la traduction survit, et la copie
+        // du compte qui a tapé n'est jamais écrite après la purge (#13577, #13580). Une ligne dont l'auteur a changé le
+        // texte pendant la traduction ne reçoit pas la traduction de l'ANCIEN texte.
+        return fence.commitOrWrite(ticket) {
+            foldIntoCache(postId) { current ->
+                PostTranslationMerge.mergeTranslation(current, target, translated)
+                    .takeIf { current.content == post.content && current.originalLanguage == post.originalLanguage }
+            }
+        } ?: false
+    }
+
+    /** Remplace dans le fil la ligne [postId] COURANTE par [merge] de cette ligne ; `false` : ligne absente ou fusion sans effet. */
+    private fun foldIntoCache(postId: String, merge: (ApiPost) -> ApiPost?): Boolean {
+        var changed = false
+        _feedCache.update { rows ->
+            changed = false
+            val index = rows?.indexOfFirst { it.id == postId } ?: -1
+            val merged = rows?.getOrNull(index)?.let(merge)
+            if (rows == null || merged == null) rows
+            else rows.toMutableList().also { it[index] = merged; changed = true }
+        }
+        return changed
     }
 
     /**
@@ -649,14 +780,13 @@ class PostRepository @Inject constructor(
      *
      * Returns `true` only when the cache actually changed. Inert (`false`, nothing stored)
      * when the post is not in the cache or the merge is a no-op (blank language, blank text,
-     * or the identical entry already present).
+     * or the identical entry already present). Written under the account the event ARRIVED
+     * under ([me.meeshy.sdk.socket.collectArrived]): `false` too once that account closed (#13580).
      */
-    fun applyTranslationUpdate(postId: String, language: String, entry: ApiPostTranslationEntry): Boolean {
-        val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val merged = PostTranslationMerge.mergeTranslation(post, language, entry) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
-        return true
-    }
+    suspend fun applyTranslationUpdate(postId: String, language: String, entry: ApiPostTranslationEntry): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) {
+            foldIntoCache(postId) { PostTranslationMerge.mergeTranslation(it, language, entry) }
+        } ?: false
 
     /**
      * Realtime media caption translation (Prisme, push side, #6280): the gateway
@@ -671,17 +801,26 @@ class PostRepository @Inject constructor(
      * media isn't modeled on Android yet), or the merge is a no-op (blank language,
      * blank text, unknown [mediaId], or the identical entry already present).
      */
-    fun applyMediaCaptionTranslationUpdate(
+    suspend fun applyMediaCaptionTranslationUpdate(
         postId: String,
         mediaId: String,
         commentId: String?,
         language: String,
         entry: ApiMediaCaptionTranslationEntry,
-    ): Boolean {
-        val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val merged = MediaCaptionTranslationMerge.merge(post, mediaId, commentId, language, entry) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
-        return true
+    ): Boolean = fence.commitOrWrite(fence?.currentTicket()) {
+        foldIntoCache(postId) { MediaCaptionTranslationMerge.merge(it, mediaId, commentId, language, entry) }
+    } ?: false
+
+    /**
+     * A post this device published through the outbox (#13417) joins the head of the feed
+     * cache at once, without waiting for a revalidation; a post the cache already holds (the
+     * `post:created` echo got there first) is left as it is. Inert before the feed's first
+     * sync: that sync brings the post itself.
+     */
+    fun adoptPublished(post: ApiPost) {
+        _feedCache.update { cached ->
+            if (cached == null || cached.any { it.id == post.id }) cached else listOf(post) + cached
+        }
     }
 
     /**
@@ -696,12 +835,8 @@ class PostRepository @Inject constructor(
      * when the post is not in the cache, or the merge is a no-op (a re-broadcast, or an
      * edit that changed nothing the reader can see).
      */
-    fun applyPostUpdate(updated: ApiPost): Boolean {
-        val previous = _feedCache.value?.firstOrNull { it.id == updated.id } ?: return false
-        val merged = PostUpdateMerge.merge(previous, updated) ?: return false
-        _feedCache.value = _feedCache.value?.map { if (it.id == updated.id) merged else it }
-        return true
-    }
+    suspend fun applyPostUpdate(updated: ApiPost): Boolean =
+        fence.commitOrWrite(fence?.currentTicket()) { foldIntoCache(updated.id) { PostUpdateMerge.merge(it, updated) } } ?: false
 
     /**
      * On-demand translation for a post the caller already holds (the post-detail
@@ -715,7 +850,7 @@ class PostRepository @Inject constructor(
      */
     suspend fun translatePost(post: ApiPost, targetLanguage: String): ApiPost? {
         val target = targetLanguage.trim()
-        val translated = translateSource(post.content, post.originalLanguage, target) ?: return null
+        val translated = translationApi.translateSource(post.content, post.originalLanguage, target) ?: return null
         return PostTranslationMerge.mergeTranslation(post, target, translated)
     }
 
@@ -730,41 +865,8 @@ class PostRepository @Inject constructor(
      */
     suspend fun translateComment(comment: ApiPostComment, targetLanguage: String): ApiPostComment? {
         val target = targetLanguage.trim()
-        val translated = translateSource(comment.content, comment.originalLanguage, target) ?: return null
+        val translated = translationApi.translateSource(comment.content, comment.originalLanguage, target) ?: return null
         return PostTranslationMerge.mergeTranslation(comment, target, translated)
-    }
-
-    /**
-     * The shared translate law over any Prisme content: reject a blank [target] or blank
-     * [source] before touching the network, then blocking-translate [source] from
-     * [sourceLanguage] into [target]. Returns the non-blank translated text, or `null`
-     * when nothing should be stored (blank target/source, network failure, or a blank
-     * translation). Callers pass an already-trimmed [target] and fold the result into
-     * their own content type via [PostTranslationMerge].
-     */
-    private suspend fun translateSource(
-        source: String?,
-        sourceLanguage: String?,
-        target: String,
-    ): String? {
-        if (target.isEmpty()) return null
-        if (source.isNullOrBlank()) return null
-
-        val translated = when (
-            val result = apiCall {
-                translationApi.translate(
-                    TranslateRequest(
-                        text = source,
-                        sourceLanguage = sourceLanguage?.trim().orEmpty(),
-                        targetLanguage = target,
-                    ),
-                )
-            }
-        ) {
-            is NetworkResult.Success -> result.data.translatedText
-            is NetworkResult.Failure -> return null
-        }
-        return translated.takeUnless { it.isBlank() }
     }
 
     suspend fun viewPost(postId: String, duration: Int? = null): NetworkResult<Unit> =
@@ -791,12 +893,6 @@ class PostRepository @Inject constructor(
     ): NetworkResult<List<ApiPost>> =
         apiCall { postApi.getCommunityPosts(communityId, cursor, limit) }
 
-    suspend fun recordImpressions(
-        postIds: List<String>,
-        source: String = "feed",
-    ): NetworkResult<Unit> =
-        apiCall { postApi.recordImpressions(PostImpressionsRequest(postIds, source)) }
-
     suspend fun getComments(
         postId: String,
         cursor: String? = null,
@@ -810,8 +906,42 @@ class PostRepository @Inject constructor(
         parentId: String? = null,
         effectFlags: Int? = null,
         clientMutationId: String? = null,
+        originalLanguage: String? = null,
+        attachmentIds: List<String>? = null,
     ): NetworkResult<ApiPostComment> =
-        apiCall { postApi.addComment(postId, CreateCommentRequest(content, parentId, effectFlags), clientMutationId) }
+        apiCall {
+            postApi.addComment(
+                postId,
+                CreateCommentRequest(content, parentId, effectFlags, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }),
+                clientMutationId,
+            )
+        }
+
+    /**
+     * Commente [postId] sans écran ouvert (une saisie en ligne de bannière, #13679) : le commentaire entre dans la file
+     * d'envoi durable sous le `cmid` de sa ligne — l'`X-Client-Mutation-Id` qui rend le rejeu sans doublon —, et le
+     * compteur du post, s'il est dans le cache du fil, monte tout de suite. [parentId] `null` = commentaire racine.
+     * Rend le `cmid` de la ligne, ou `null` si la file a refusé l'écriture (compte clos entre-temps).
+     */
+    suspend fun queueComment(postId: String, content: String, parentId: String? = null, originalLanguage: String? = null): String? {
+        val ticket = fence?.currentTicket()
+        val cmid = outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.CREATE_COMMENT,
+                lane = OutboxLanes.COMMENT,
+                targetId = postId,
+                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage)),
+            ),
+            ticket,
+        ) ?: return null
+        rewriteRow(ticket, postId) { it.copy(commentCount = (it.commentCount ?: 0) + 1) }
+        return cmid
+    }
+
+    /** Un commentaire en file a renoncé (refus définitif, tentatives épuisées) : le compteur du post reprend ce qu'il avait ajouté. */
+    suspend fun rollbackQueuedComment(postId: String) {
+        rewriteRow(fence?.currentTicket(), postId) { row -> row.copy(commentCount = ((row.commentCount ?: 0) - 1).coerceAtLeast(0)) }
+    }
 
     suspend fun updateComment(
         postId: String,

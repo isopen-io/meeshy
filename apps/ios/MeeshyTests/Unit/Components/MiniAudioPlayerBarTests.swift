@@ -271,7 +271,7 @@ final class MiniAudioPlayerBarTests: XCTestCase {
     /// floating call pill". The pill already sizes all three of its controls at
     /// 44×44; this pins the two to the same floor so the claim stays true.
     func test_transportControls_matchTheFloatingCallPillPrecedent() throws {
-        let pill = try source("Meeshy/Features/Main/Views/FloatingCallPillView.swift")
+        let pill = try source("Meeshy/Features/Call/Views/FloatingCallPillView.swift")
 
         XCTAssertGreaterThanOrEqual(
             pill.components(separatedBy: ".frame(width: 44, height: 44)").count - 1, 3,

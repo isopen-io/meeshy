@@ -30,6 +30,9 @@ import dagger.hilt.android.EntryPointAccessors
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetSurface
+import me.meeshy.app.widget.kit.WidgetReaderPrismStore
+import me.meeshy.app.widget.kit.widgetEphemeralLabel
 import me.meeshy.app.widget.kit.widgetPreviewLabels
 
 /**
@@ -60,7 +63,13 @@ internal class QuickReplyWidget : GlanceAppWidget() {
         val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
         val labels = widgetPreviewLabels(context)
-        val presentation = QuickReplyWidgetPresentation.from(conversations, currentUserId, labels)
+        val presentation = QuickReplyWidgetPresentation.from(
+            conversations = conversations,
+            currentUserId = currentUserId,
+            previewLabels = labels,
+            preferredLanguages = WidgetReaderPrismStore(context).load(),
+            ephemeralLabel = widgetEphemeralLabel(context),
+        )
 
         provideContent {
             QuickReplyWidgetContent(presentation)
@@ -74,7 +83,7 @@ private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?)
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(WidgetTheme.background)
+            .widgetSurface()
             .padding(12.dp),
     ) {
         Text(

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_repost_audience_kept">Die Story wurde nicht erneut gepostet; ihre Zielgruppe ist jetzt: %1$s</string>
+</resources>

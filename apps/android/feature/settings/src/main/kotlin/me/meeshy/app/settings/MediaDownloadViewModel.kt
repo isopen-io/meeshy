@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.media.CaptureSavePolicyStore
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
+import me.meeshy.sdk.media.OutgoingPhotoLocationStore
 import me.meeshy.sdk.model.AutoDownloadPolicy
 import me.meeshy.sdk.model.MediaDownloadPreferences
 import me.meeshy.sdk.model.MediaKind
@@ -21,6 +22,7 @@ import javax.inject.Inject
 data class MediaDownloadUiState(
     val preferences: MediaDownloadPreferences = MediaDownloadPreferences(),
     val capturePolicy: CaptureSavePolicy = CaptureSavePolicy.Standard,
+    val keepsPhotoLocation: Boolean = OutgoingPhotoLocationStore.STANDARD,
 )
 
 /**
@@ -35,16 +37,17 @@ data class MediaDownloadUiState(
 class MediaDownloadViewModel @Inject constructor(
     private val store: MediaDownloadPreferencesStore,
     private val captureStore: CaptureSavePolicyStore,
+    private val locationStore: OutgoingPhotoLocationStore,
 ) : ViewModel() {
 
     val state: StateFlow<MediaDownloadUiState> =
-        combine(store.preferences, captureStore.policy) { prefs, capture ->
-            MediaDownloadUiState(preferences = prefs, capturePolicy = capture)
+        combine(store.preferences, captureStore.policy, locationStore.keepsLocation) { prefs, capture, keepsLocation ->
+            MediaDownloadUiState(preferences = prefs, capturePolicy = capture, keepsPhotoLocation = keepsLocation)
         }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
-                initialValue = MediaDownloadUiState(store.preferences.value, captureStore.policy.value),
+                initialValue = MediaDownloadUiState(store.preferences.value, captureStore.policy.value, locationStore.keepsLocation.value),
             )
 
     fun setPolicy(kind: MediaKind, policy: AutoDownloadPolicy) {
@@ -73,6 +76,14 @@ class MediaDownloadViewModel @Inject constructor(
             val current = captureStore.policy.value
             if (current.renderedMode == mode) return@launch
             captureStore.setPolicy(current.copy(renderedMode = mode))
+        }
+    }
+
+    /** Réglages › Médias › « Conserver le lieu des photos » : désactivé par défaut, comme iOS (#11247). */
+    fun setKeepsPhotoLocation(enabled: Boolean) {
+        viewModelScope.launch {
+            if (locationStore.keepsLocation.value == enabled) return@launch
+            locationStore.setKeepsLocation(enabled)
         }
     }
 }

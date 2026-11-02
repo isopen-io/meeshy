@@ -45,13 +45,13 @@ class KeyedJsonCacheSourceTest {
     }
 
     @Test fun `Fresh ne revalide pas`() = runTest {
-        cache().put("ns", "k", Doc("disk"), Doc.serializer())
+        cache().put("ns", "k", Doc("disk"), Doc.serializer(), null)
         assertThat(source().results(policy, clock).first()).isInstanceOf(CacheResult.Fresh::class.java)
         assertThat(fetches).isEqualTo(0)
     }
 
     @Test fun `Stale sert la valeur puis revalide`() = runTest {
-        cache().put("ns", "k", Doc("disk"), Doc.serializer())
+        cache().put("ns", "k", Doc("disk"), Doc.serializer(), null)
         clock.now += 5_000
         val results = source().results(policy, clock).take(2).toList()
         assertThat(results[0]).isEqualTo(CacheResult.Stale(Doc("disk"), 5_000L))
@@ -60,13 +60,13 @@ class KeyedJsonCacheSourceTest {
     }
 
     @Test fun `expire est Syncing avec la valeur`() = runTest {
-        cache().put("ns", "k", Doc("disk"), Doc.serializer())
+        cache().put("ns", "k", Doc("disk"), Doc.serializer(), null)
         clock.now += 50_000
         assertThat(source().results(policy, clock).first()).isEqualTo(CacheResult.Syncing(Doc("disk")))
     }
 
     @Test fun `un echec reseau conserve le cache`() = runTest {
-        cache().put("ns", "k", Doc("disk"), Doc.serializer())
+        cache().put("ns", "k", Doc("disk"), Doc.serializer(), null)
         clock.now += 5_000
         val errors = mutableListOf<Throwable>()
         val first = source { throw IOException("offline") }.results(policy, clock) { errors += it }.first()
@@ -82,8 +82,8 @@ class KeyedJsonCacheSourceTest {
     }
 
     @Test fun `deux espaces de noms sont isoles et se purgent seuls`() = runTest {
-        cache().put("a", "k", Doc("A"), Doc.serializer())
-        cache().put("b", "k", Doc("B"), Doc.serializer())
+        cache().put("a", "k", Doc("A"), Doc.serializer(), null)
+        cache().put("b", "k", Doc("B"), Doc.serializer(), null)
         cache().clearNamespace("a")
         assertThat(cache().get("a", "k", Doc.serializer())).isNull()
         assertThat(cache().get("b", "k", Doc.serializer())!!.value).isEqualTo(Doc("B"))

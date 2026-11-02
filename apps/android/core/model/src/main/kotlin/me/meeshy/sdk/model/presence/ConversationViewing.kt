@@ -23,6 +23,14 @@ public enum class ConversationHere {
     public val isFocused: Boolean get() = this == FOCUSED
 }
 
+/** Le « ici » servi, dans le vocabulaire de l'avatar (les deux énumérations se miroitent, valeur pour valeur). */
+public fun ConversationHere.toAvatarHere(): me.meeshy.sdk.model.avatar.ConversationHere = when (this) {
+    ConversationHere.ABSENT -> me.meeshy.sdk.model.avatar.ConversationHere.ABSENT
+    ConversationHere.HERE -> me.meeshy.sdk.model.avatar.ConversationHere.HERE
+    ConversationHere.ACTIVE -> me.meeshy.sdk.model.avatar.ConversationHere.ACTIVE
+    ConversationHere.FOCUSED -> me.meeshy.sdk.model.avatar.ConversationHere.FOCUSED
+}
+
 /** `viewing:start` / `viewing:stop` / `viewing:activity` reçus (`ViewingEvent`, presence.ts). */
 @Serializable
 public data class ViewingChange(

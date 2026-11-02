@@ -107,9 +107,9 @@ final class StoryRendererStickerAnimationTests: XCTestCase {
     func test_templatePose_carriesTheTemplateAnimation() throws {
         let vm = StoryComposerViewModel()
         let cœur = try XCTUnwrap(StickerTemplateCatalog.template(id: StickerTemplateCatalog.ID.loveHeartFrame))
-        let posé = vm.addSticker(template: cœur, slots: [:])
+        let posé = vm.addSticker(template: cœur, slots: [:])!
         XCTAssertEqual(posé.animation, .heartbeat)
-        let emoji = vm.addSticker(emoji: "\u{1F389}", scale: StorySticker.posedScale)
+        let emoji = vm.addSticker(emoji: "\u{1F389}", scale: StorySticker.posedScale)!
         XCTAssertNil(emoji.animation)
     }
 }

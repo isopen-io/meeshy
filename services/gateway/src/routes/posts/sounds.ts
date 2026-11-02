@@ -11,6 +11,7 @@ import { NOT_MUTED_WHERE, NOT_DELETED_SOUND_WHERE } from '../../services/posts/s
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendError } from '../../utils/response';
 import { depreciee } from '../../utils/deprecation';
 import { rankedListingPage } from '../../services/social/listingContext';
+import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 
 /**
  * Forme d'identifiant `Sound`/`Post` (ObjectId Mongo) — exportée pour
@@ -261,18 +262,19 @@ async function sonRetireDeLaBibliotheque(prisma: PrismaClient, soundId: string):
 const SOUND_SCOPE_DEPUIS = '2026-08-30';
 
 /**
- * Qui peut retirer un son de la bibliothèque (#9848) : son auteur, et le rang
- * d'administration (ADMIN, BIGBOSS) pour la modération. FERMÉ par défaut — un
- * rôle absent, inconnu ou inférieur (MODERATOR, AUDIT, ANALYST) ne passe pas.
+ * Qui peut retirer un son de la bibliothèque (#9848) : son auteur, et pour la
+ * modération les rôles de plateforme PRIVILÉGIÉS de la table partagée
+ * (MODERATOR, ADMIN, BIGBOSS — décision porteur du 2026-10-24, #11217, qui
+ * range MODERATOR avec eux). FERMÉ par défaut — un rôle absent, inconnu ou
+ * ordinaire (AUDIT, ANALYST, USER) ne passe pas.
  */
-const SOUND_REMOVAL_ADMIN_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'BIGBOSS']);
 
 export function mayRemoveSound(
   actor: { readonly id: string; readonly role?: unknown },
   sound: { readonly uploaderId: string },
 ): boolean {
   if (typeof actor.id === 'string' && actor.id.length > 0 && actor.id === sound.uploaderId) return true;
-  return typeof actor.role === 'string' && SOUND_REMOVAL_ADMIN_ROLES.has(actor.role);
+  return typeof actor.role === 'string' && isPrivilegedPlatformRole(actor.role);
 }
 
 export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClient, requiredAuth: any) {

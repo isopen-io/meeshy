@@ -14,7 +14,7 @@ extension UserProfileSheet {
         if let postsContent, let userId = resolvedUserId, !userId.isEmpty {
             postsContent(userId)
         } else if let userId = resolvedUserId, !userId.isEmpty {
-            ProfilePostsFallback(userId: userId, accentColor: resolvedAccent)
+            ProfilePostsFallback(userId: userId, accentColor: resolvedAccent, social: dependencies.social)
         } else {
             ProfilePostsEmpty(accentColor: resolvedAccent)
         }
@@ -26,6 +26,7 @@ extension UserProfileSheet {
 private struct ProfilePostsFallback: View {
     let userId: String
     let accentColor: String
+    let social: any ProfileSocialActionsProviding
 
     @ResolvedThemePalette private var theme
     @State private var posts: [APIPost] = []
@@ -61,8 +62,7 @@ private struct ProfilePostsFallback: View {
             didLoad = true
             isLoading = true
             do {
-                let response = try await PostService.shared.getUserPosts(userId: userId)
-                posts = response.data
+                posts = try await social.userPosts(of: userId)
             } catch {}
             isLoading = false
         }

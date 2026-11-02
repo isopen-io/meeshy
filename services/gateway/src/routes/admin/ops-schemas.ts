@@ -78,6 +78,13 @@ const runSchema = {
   },
 } as const;
 
+/** La fenêtre horaire d'une opération (#11452), `null` pour celle qui n'en a pas (la sauvegarde). */
+const windowSchema = {
+  type: 'object',
+  nullable: true,
+  properties: { timeZone: chaine, startHour: nombre, endHour: nombre, open: booleen },
+} as const;
+
 export const serverOperationStatusResponseSchema = {
   type: 'object',
   properties: {
@@ -85,6 +92,7 @@ export const serverOperationStatusResponseSchema = {
     relayInstalled: booleen,
     runs: { type: 'object', properties: { backup: runSchema, 'image-prune': runSchema } },
     availableAt: { type: 'object', properties: { backup: dateNulle, 'image-prune': dateNulle } },
+    windows: { type: 'object', properties: { backup: windowSchema, 'image-prune': windowSchema } },
     backup: backupsSchema,
   },
 } as const;
@@ -99,7 +107,7 @@ export const serverOperationAcceptedResponseSchema = {
   },
 } as const;
 
-/** Le refus 409 porte `data.availableAt` quand c'est le délai qui refuse. */
+/** Le refus 409 porte `data.availableAt` quand c'est le délai ou la fenêtre (#11452) qui refuse. */
 export const operationConflictResponseSchema = {
   type: 'object',
   properties: {

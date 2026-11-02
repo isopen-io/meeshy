@@ -141,7 +141,7 @@ final class CallDetailSheetsJournalSourceGuardTests: XCTestCase {
     }
 
     func test_callManagerHost_bindsTheJournal() throws {
-        let host = try source("Features/Main/Services/CallManagerHost.swift")
+        let host = try source("Features/Call/Services/CallManagerHost.swift")
 
         XCTAssertTrue(host.contains("CallNetworkJournalBinding.shared.bind(candidate)"))
     }

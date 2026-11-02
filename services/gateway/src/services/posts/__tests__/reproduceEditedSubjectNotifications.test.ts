@@ -96,8 +96,10 @@ describe('reproduceEditedSubjectNotifications', () => {
       );
 
       expect(reproduced).toBe(1);
-      expect(updatedData().subtitle).toBe('Votre story : « nouveau texte » · 📷 Photo');
-      expect(updatedData().metadata).toMatchObject({ postPreview: 'nouveau texte' });
+      // #14318 — une ligne d'avant la décision perd son texte : la synthèse
+      // prend la place de l'extrait serti.
+      expect(updatedData().subtitle).toBe('Votre story · Petit message texte · 📷 Photo');
+      expect(updatedData().metadata).toMatchObject({ postPreview: 'Petit message texte' });
     });
 
     /**
@@ -107,7 +109,7 @@ describe('reproduceEditedSubjectNotifications', () => {
      * édité, et c'est ce que la substitution pose. La clé de réécriture reste la
      * chaîne SERTIE, quelle que soit sa langue.
      */
-    it('remplace un extrait TRADUIT par le texte édité, là où il était serti', async () => {
+    it('remplace un extrait TRADUIT par la synthèse du texte édité, là où il était serti (#14318)', async () => {
       seed([
         {
           id: '607f1f77bcf86cd799439009',
@@ -122,8 +124,8 @@ describe('reproduceEditedSubjectNotifications', () => {
         announcer
       );
 
-      expect(updatedData().content).toBe('📷 Photo · Launch day, take two');
-      expect(updatedData().metadata).toMatchObject({ postPreview: 'Launch day, take two' });
+      expect(updatedData().content).toBe('📷 Photo · Petit message texte');
+      expect(updatedData().metadata).toMatchObject({ postPreview: 'Petit message texte' });
     });
 
     /**
@@ -146,7 +148,7 @@ describe('reproduceEditedSubjectNotifications', () => {
         announcer
       );
 
-      expect(updatedData().content).toBe('nouveau commentaire');
+      expect(updatedData().content).toBe('Petit message texte');
       // Le sous-titre décrit le POST, pas le commentaire : il ne doit pas bouger.
       expect(updatedData()).not.toHaveProperty('subtitle');
     });
@@ -172,7 +174,7 @@ describe('reproduceEditedSubjectNotifications', () => {
         announcer
       );
 
-      expect(updatedData().content).toBe('gratuit');
+      expect(updatedData().content).toBe('Petit mot reçu');
     });
 
     /**
@@ -208,8 +210,8 @@ describe('reproduceEditedSubjectNotifications', () => {
       seed([
         {
           id: '607f1f77bcf86cd799439005',
-          content: 'texte',
-          metadata: { postPreview: 'texte' },
+          content: 'Petit mot reçu',
+          metadata: { postPreview: 'Petit mot reçu' },
         },
       ]);
 
@@ -224,18 +226,28 @@ describe('reproduceEditedSubjectNotifications', () => {
       expect(announceNotificationsReproduced).not.toHaveBeenCalled();
     });
 
-    it('tronque le nouvel extrait comme la création le faisait', async () => {
-      seed([{ id: '607f1f77bcf86cd799439006', metadata: { postPreview: 'court' } }]);
+    it('un long texte édité se dit par son palier, compté entier (#14318)', async () => {
+      seed([{ id: '607f1f77bcf86cd799439006', metadata: { postPreview: 'Petit mot reçu' } }]);
 
       await reproduceEditedSubjectNotifications(
         prisma,
-        { subject: { kind: 'post', id: POST_ID }, content: 'x'.repeat(250) },
+        { subject: { kind: 'post', id: POST_ID }, content: Array.from({ length: 250 }, (_, i) => `mot${i}`).join(' ') },
         announcer
       );
 
-      const preview: string = updatedData().metadata.postPreview;
-      expect(preview.length).toBeLessThanOrEqual(101);
-      expect(preview.endsWith('…')).toBe(true);
+      expect(updatedData().metadata.postPreview).toBe('Petit essai texte');
+    });
+
+    it('une synthèse anglaise se recalcule en anglais (#14318)', async () => {
+      seed([{ id: '607f1f77bcf86cd799439007', content: 'Short text message', metadata: { commentPreview: 'Short text message' } }]);
+
+      await reproduceEditedSubjectNotifications(
+        prisma,
+        { subject: { kind: 'comment', id: COMMENT_ID }, content: 'un deux trois quatre cinq six' },
+        announcer
+      );
+
+      expect(updatedData().content).toBe('Text message');
     });
   });
 

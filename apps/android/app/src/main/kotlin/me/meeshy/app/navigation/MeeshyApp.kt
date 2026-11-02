@@ -10,10 +10,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import android.net.Uri
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -21,9 +21,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import androidx.navigation.NavHostController
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoggingOutVeil
+import me.meeshy.app.auth.guest.GuestSessionEndViewModel
+import me.meeshy.app.auth.guest.GuestSessionEndedScreen
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
@@ -31,6 +35,10 @@ import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.onboarding.OnboardingViewModel
+import me.meeshy.app.onboarding.BeneathOnboarding
+import me.meeshy.app.onboarding.hiddenBehindOnboarding
+import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.authNavGraph
 import me.meeshy.app.navigation.graph.callNavGraph
 import me.meeshy.app.navigation.graph.conversationsNavGraph
@@ -41,7 +49,10 @@ import me.meeshy.app.notifications.NotificationBannerHost
 import me.meeshy.app.startup.AppExtensionsViewModel
 import me.meeshy.app.startup.AppOverlayStack
 import me.meeshy.app.startup.ProvideAppLocals
+import me.meeshy.app.upgrade.UpgradeGateHost
+import me.meeshy.app.upgrade.UpgradeRequiredViewModel
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
+import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.net.SessionExpiryNotifier
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -60,8 +71,14 @@ fun MeeshyApp(
     sessionExpiry: SessionExpiryNotifier,
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
+    warmDeepLink: Uri? = null,
+    warmDeepLinkAwaitsAccount: Boolean = false,
+    onWarmDeepLinkHandled: () -> Unit = {},
+    callLink: CallLinkRequest? = null,
+    onCallLinkHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    SheetReturnEffect(navController)
     val authViewModel: AuthViewModel = hiltViewModel()
     val incomingCallViewModel: IncomingCallViewModel = hiltViewModel()
     // Hoisted to the MeeshyApp root → resolved against the Activity's ViewModelStore
@@ -78,7 +95,23 @@ fun MeeshyApp(
     val chromeViewModel: ChromeViewModel = hiltViewModel()
     val extensions = hiltViewModel<AppExtensionsViewModel>().extensions
     val authState by authViewModel.state.collectAsStateWithLifecycle()
-    val callState by callViewModel.state.collectAsStateWithLifecycle()
+    // La passerelle a terminé la session d'un invité de lien : l'appareil est déjà purgé, la racine retombe sur la
+    // connexion (état aligné ci-dessous) et l'écran de fin dit pourquoi, à la place du fil.
+    val guestEndViewModel: GuestSessionEndViewModel = hiltViewModel()
+    val guestEnded by guestEndViewModel.ended.collectAsStateWithLifecycle()
+    LaunchedEffect(guestEnded) {
+        if (guestEnded != null) authViewModel.onExternalSessionOpened()
+    }
+    // Ce binaire est sous le plancher de version (426 REST ou `error` socket) : l'écran « Mettre à jour Meeshy » couvre TOUTE
+    // la racine, sans sortie, et rien dessous n'est plus lu par TalkBack ni touché ([UpgradeGateHost], #13954).
+    val upgradeViewModel: UpgradeRequiredViewModel = hiltViewModel()
+    val upgradeRequirement by upgradeViewModel.requirement.collectAsStateWithLifecycle()
+    // Seule la PHASE de l'appel est lue ici : l'etat complet change chaque seconde (le chrono),
+    // et le lire a la racine recomposerait MeeshyApp et redonnerait au `builder` du NavHost une
+    // identite neuve chaque seconde — le graphe reconstruit pendant tout l'appel. La pastille
+    // lit l'etat vivant dans [MinimizedCallPill].
+    val callStatus by remember(callViewModel) { callViewModel.state.map { it.status }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = callViewModel.state.value.status)
 
     LaunchedEffect(authState.isAuthenticated) {
         chromeViewModel.warmUpIfAuthenticated(authState.isAuthenticated)
@@ -86,18 +119,22 @@ fun MeeshyApp(
 
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
-    val showMenuFab = currentRoute in tabRoutes
-    val leftButtonPosition by floatingButtonPositions.leftPosition.collectAsStateWithLifecycle()
-    val rightButtonPosition by floatingButtonPositions.rightPosition.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
+    // Le calque d'accueil recouvre le contenu et le chrome flottant (iOS `onboardingPresence.isPresented`) : seule la
+    // BOOLÉENNE est lue ici, la racine ne se recompose pas à chaque carte.
+    val onboardingViewModel: OnboardingViewModel = hiltViewModel()
+    val onboardingPresented by remember(onboardingViewModel) {
+        onboardingViewModel.state.map { it.isPresented }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = onboardingViewModel.isPresented)
+    val onboardingCovers = OnboardingRootRules.coversRoot(onboardingPresented, currentRoute)
+    val showMenuFab = floatingChromeVisible(currentRoute, isOnboardingPresented = onboardingCovers)
     val onCallScreen = currentRoute == CallRoute.PATTERN
 
     // Settle a call that ended while minimised: [CallScreen]'s own auto-dismiss only
     // runs while it is composed, so an ended call left in the pill would strand the
     // Activity-scoped FSM in ENDED and block the next call. The pill has already
     // vanished (ENDED is not a pill status); this only resets the state machine.
-    LaunchedEffect(callState.status, onCallScreen) {
-        if (callState.status == CallStatus.ENDED && !onCallScreen) {
+    LaunchedEffect(callStatus, onCallScreen) {
+        if (callStatus == CallStatus.ENDED && !onCallScreen) {
             delay(CALL_ENDED_MINIMISED_SETTLE_MS)
             callViewModel.dismiss()
         }
@@ -110,14 +147,24 @@ fun MeeshyApp(
     // recomposition never re-navigates. An unauthenticated launch defers until
     // sign-in resolves (the route survives in Activity state across the login gate).
     LaunchedEffect(launchRoute, authState.isAuthenticated) {
-        // La validation d'un magic link est la SEULE destination de lancement
-        // legitime hors session : c'est precisement elle qui en ouvre une. Tout le
-        // reste (chat, appel) attend l'authentification.
-        val isMagicLink = launchRoute?.startsWith("auth/magic-link") == true
-        if (launchRoute != null && (authState.isAuthenticated || isMagicLink)) {
+        // Les liens d'e-mail a jeton (connexion, adresse prouvee, nouveau mot de passe) sont les SEULES
+        // destinations de lancement legitimes hors session : ce sont eux qui en ouvrent une ou qui
+        // choisissent le mot de passe. Tout le reste (chat, appel) attend l'authentification.
+        if (launchRoute != null && (authState.isAuthenticated || LaunchRouter.opensWithoutSession(launchRoute))) {
             navController.navigate(launchRoute)
             onLaunchRouteConsumed()
         }
+    }
+
+    // Un lien `meeshy://` / App Link / raccourci d'icône reçu alors que l'app est DÉJÀ ouverte
+    // (MainActivity.onNewIntent) : les navDeepLink du graphe ne sont lus qu'au démarrage, c'est
+    // donc ici qu'on rejoue l'intent, comme le routeur de liens d'iOS (`.onOpenURL`). Il attend la
+    // session, puis la pile se refait avec la liste dessous (le retour revient à la liste).
+    LaunchedEffect(warmDeepLink, authState.isAuthenticated, authState.hasAccount) {
+        val uri = warmDeepLink ?: return@LaunchedEffect
+        if (!WarmDeepLink.mayReplay(authState.isAuthenticated, authState.hasAccount, warmDeepLinkAwaitsAccount)) return@LaunchedEffect
+        WarmDeepLink.open(navController, uri)
+        onWarmDeepLinkHandled()
     }
 
     // App-level ring: a foreground `call:initiated` socket offer navigates into the
@@ -140,6 +187,8 @@ fun MeeshyApp(
         }
     }
 
+    UpgradeGateHost(requirement = upgradeRequirement) {
+    ShareLaunchHost(navController) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -148,8 +197,8 @@ fun MeeshyApp(
             // insets, ce qui laisse le fond de marque plein ecran (edge-to-edge).
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().rootPresentationContent()) {
-                val showsCallPill = CallPillPresenter.shouldShow(callState.status, onCallScreen)
+            Box(modifier = Modifier.fillMaxSize().rootPresentationContent().hiddenBehindOnboarding(onboardingCovers)) {
+                val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
                 // The minimised-call pill PUSHES the destination down instead of floating
                 // over it: pinned under the status bar, it would lie under the system status
                 // window (its controls untappable) and cover the destination's top bar. The
@@ -159,38 +208,45 @@ fun MeeshyApp(
                     // CALL route from the live config; the Activity-scoped [callViewModel] is
                     // reused, so `start()` is inert.
                     if (showsCallPill) {
-                        CallPill(
-                            state = callState,
-                            onClick = {
-                                navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
-                                    launchSingleTop = true
-                                }
-                            },
-                            onToggleMute = callViewModel::toggleMute,
-                            onToggleSpeaker = callViewModel::toggleSpeaker,
-                            onHangUp = callViewModel::hangUp,
+                        MinimizedCallPill(
+                            callViewModel = callViewModel,
+                            navController = navController,
                             modifier = Modifier
                                 .statusBarsPadding()
                                 .padding(vertical = MeeshySpacing.xs),
                         )
                     }
-                    Box(
+                    // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
+                    // la destination, qu'il comprime au lieu de la recouvrir : le ✕ du compositeur reste entier.
+                    ActivationInviteBandHost(
+                        navController = navController,
                         modifier = Modifier
                             .weight(1f)
                             .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
                     ) {
                         ProvideAppLocals(extensions.localsProviders) {
-                            NavHost(
-                                navController = navController,
-                                startDestination = startDestination,
+                            // Le retour interactif depuis le bord (#13364) : UN site, armé par le registre des routes.
+                            EdgeSwipeBackHost(
+                                enabled = NavBackChrome.edgeSwipeBackEnabled(currentRoute),
+                                canGoBack = { navController.previousBackStackEntry != null },
+                                modifier = Modifier.fillMaxSize(),
                             ) {
-                                authNavGraph(navController, authViewModel)
-                                conversationsNavGraph(navController, authViewModel, callState)
-                                feedNavGraph(navController)
-                                callNavGraph(navController, callViewModel)
-                                socialNavGraph(navController)
-                                settingsNavGraph(navController, authViewModel)
-                                extensions.graphContributors.forEach { it.contribute(this, navController) }
+                                NavHost(
+                                    navController = navController,
+                                    startDestination = startDestination,
+                                    enterTransition = { stackEnter() },
+                                    exitTransition = { stackExit() },
+                                    popEnterTransition = { stackPopEnter() },
+                                    popExitTransition = { stackPopExit() },
+                                ) {
+                                    authNavGraph(navController, authViewModel)
+                                    conversationsNavGraph(navController, authViewModel, callStatus)
+                                    feedNavGraph(navController)
+                                    callNavGraph(navController, callViewModel)
+                                    socialNavGraph(navController)
+                                    settingsNavGraph(navController, authViewModel)
+                                    extensions.graphContributors.forEach { it.contribute(this, navController) }
+                                }
                             }
                         }
                     }
@@ -203,27 +259,59 @@ fun MeeshyApp(
                     MeeshyFloatingChrome(
                         navController = navController,
                         currentRoute = currentRoute,
-                        leftButtonPosition = leftButtonPosition,
-                        rightButtonPosition = rightButtonPosition,
-                        onLeftPositionChange = { scope.launch { floatingButtonPositions.setLeftPosition(it) } },
-                        onRightPositionChange = { scope.launch { floatingButtonPositions.setRightPosition(it) } },
+                        floatingButtonPositions = floatingButtonPositions,
                     )
                 }
             }
         }
 
-        // #4457 — la banniere in-app se monte UNE fois, ICI, par-dessus la navigation (une
-        // banniere SUIT le lecteur : une instance par ecran en ferait autant de rivales).
-        NotificationBannerHost(
-            activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
-            activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
-            onOpenConversation = { navController.navigate(Routes.chat(it)) },
-            onOpenPost = { navController.navigate(Routes.postDetail(it)) },
+        // Les calques posés SOUS le parcours d'accueil ne sont ni lus ni atteignables par TalkBack tant qu'il couvre l'écran.
+        BeneathOnboarding(isCovered = onboardingCovers) {
+            // #4457 — la banniere in-app se monte UNE fois, ICI, par-dessus la navigation (une
+            // banniere SUIT le lecteur : une instance par ecran en ferait autant de rivales).
+            NotificationBannerHost(
+                activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
+                activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
+                onOpenConversation = { navController.navigate(Routes.chat(it)) },
+                onOpenPost = { navController.navigate(Routes.postDetail(it)) },
+                onOpenGame = { navController.navigate(GameRoutes.route(it)) },
+            )
+
+            AppOverlayStack(extensions.overlays, navController)
+
+            EngagementRevealHost(navController)
+        }
+
+        CallLinkHost(
+            request = callLink,
+            isAuthenticated = authState.isAuthenticated,
+            onHandled = onCallLinkHandled,
+            navController = navController,
         )
 
-        AppOverlayStack(extensions.overlays, navController)
-
         ArrivalCelebrationHost()
+
+        // Dernier calque du chrome, au-dessus de tout sauf du rideau de démarrage (iOS `.onboardingHost`).
+        OnboardingHost(
+            navController = navController,
+            onboarding = onboardingViewModel,
+            authViewModel = authViewModel,
+            isAuthenticated = authState.isAuthenticated,
+            currentRoute = currentRoute,
+        )
+
+        guestEnded?.let { ended ->
+            GuestSessionEndedScreen(
+                end = ended.end,
+                onNewLink = { identifier ->
+                    guestEndViewModel.dismiss()
+                    navController.navigate(Routes.guestJoin(identifier)) { launchSingleTop = true }
+                },
+                onHome = guestEndViewModel::dismiss,
+            )
+        }
+
+        VisitorContentHost(navController = navController, isAuthenticated = authState.isAuthenticated)
 
         NotificationPermissionOnArrival(isAuthenticated = authState.isAuthenticated)
 
@@ -231,5 +319,31 @@ fun MeeshyApp(
 
         SplashOverlay()
     }
+    }
+    }
 }
 
+
+/** La pastille d'appel reduit : seule a lire l'etat VIVANT (chrono compris), elle seule se recompose chaque seconde. */
+@Composable
+private fun MinimizedCallPill(
+    callViewModel: CallViewModel,
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
+) {
+    val callState by callViewModel.state.collectAsStateWithLifecycle()
+    val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
+    CallPill(
+        state = callState,
+        peerAvatarUrl = callPeerVisual.avatarUrl,
+        onClick = {
+            navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
+                launchSingleTop = true
+            }
+        },
+        onToggleMute = callViewModel::toggleMute,
+        onToggleSpeaker = callViewModel::toggleSpeaker,
+        onHangUp = callViewModel::hangUp,
+        modifier = modifier,
+    )
+}

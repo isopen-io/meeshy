@@ -132,12 +132,9 @@ extension ConversationView {
         }
     }
 
-    /// Encodage PNG et écriture disque, HORS du fil principal, puis l'upload.
-    ///
-    /// La bulle est déjà là : ce qui suit ne se voit pas. Un échec — un encodage
-    /// qui ne rend rien, un disque plein — est un échec d'ENVOI : la bulle
-    /// bascule en échec (`markOptimisticMediaFailed`) au lieu de rester un
-    /// spinner fantôme pour un fichier qui n'existera jamais.
+    /// Encodage PNG et écriture disque, HORS du fil principal, puis l'upload. Un échec d'encodage
+    /// ou d'écriture est un échec d'ENVOI (bulle en échec, jamais un spinner fantôme) ; dans une
+    /// conversation chiffrée, rien ne s'écrit ni ne se téléverse en clair (#11379).
     private func encodeWriteAndSendSticker(
         image: UIImage, original: StickerSendPipeline.OriginalFile?,
         attachmentId: String, directory: URL, localKey: String,
@@ -145,12 +142,13 @@ extension ConversationView {
         relation: MessageRelation,
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
-        let écrit: StickerSendPipeline.WrittenSticker
+        if await EndToEndPieceGuard.refuses([tempId], on: viewModel, toast: { FeedbackToastManager.shared.showError($0) }) { return }
+        let written: StickerSendPipeline.WrittenSticker
         do {
             if let original {
-                écrit = try await StickerSendPipeline.prepare(original, id: attachmentId, directory: directory)
+                written = try await StickerSendPipeline.prepare(original, id: attachmentId, directory: directory)
             } else {
-                écrit = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
+                written = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
             }
         } catch {
             Logger.messages.error("Sticker temp write failed: \(error.localizedDescription, privacy: .public)")
@@ -161,9 +159,9 @@ extension ConversationView {
         // Le cache DISQUE s'amorce EN PARALLÈLE de l'envoi : l'attendre
         // retarderait l'upload d'une seconde écriture des mêmes octets, alors
         // que la bulle peint déjà depuis le cache mémoire.
-        Task { await CacheCoordinator.shared.images.save(écrit.data, for: localKey) }
+        Task { await CacheCoordinator.shared.images.save(written.data, for: localKey) }
         await uploadAndSendSticker(
-            fileURL: écrit.url, data: écrit.data, mimeType: original?.mimeType ?? StickerSendPipeline.pngMimeType,
+            fileURL: written.url, data: written.data, mimeType: original?.mimeType ?? StickerSendPipeline.pngMimeType,
             image: image, tempId: tempId, sticker: sticker,
             relation: relation,
             originalLanguage: originalLanguage, currentUserId: currentUserId, protection: protection

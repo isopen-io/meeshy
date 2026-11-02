@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -52,21 +51,26 @@ internal fun ConversationRowTitleLine(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (isPinned) Glyph(PIN_GLYPH)
-        Text(
-            text = title,
-            fontSize = LentilleMetrics.Name.size,
-            fontWeight = FontWeight.ExtraBold,
-            color = MeeshyTheme.tokens.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        if (isMuted) Glyph(MUTED_GLYPH)
-        if (isLocked) Glyph(LOCK_GLYPH)
-        reaction?.let { Glyph(it) }
-        ConversationRowTagDots(tags)
-        Spacer(Modifier.weight(1f))
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isPinned) Glyph(PIN_GLYPH)
+            Text(
+                text = title,
+                fontSize = LentilleMetrics.Name.size,
+                fontWeight = FontWeight.ExtraBold,
+                color = MeeshyTheme.tokens.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (isMuted) Glyph(MUTED_GLYPH)
+            if (isLocked) Glyph(LOCK_GLYPH)
+            reaction?.let { Glyph(it) }
+            ConversationRowTagDots(tags)
+        }
         if (onJoinCall != null) {
             ConversationRowJoinButton(accent = accent, onClick = onJoinCall)
         } else {

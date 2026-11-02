@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sticker_make">Sticker erstellen</string>
+    <string name="story_sticker_lift_saved">Motiv freigestellt und zu Meine Sticker hinzugefügt</string>
+    <string name="story_sticker_lift_no_subject">Kein Motiv auf diesem Foto gefunden</string>
+    <string name="story_sticker_lift_unreadable">Bild nicht lesbar</string>
+    <string name="story_sticker_image_failed">Dieser Sticker konnte nicht hinzugefügt werden</string>
+</resources>

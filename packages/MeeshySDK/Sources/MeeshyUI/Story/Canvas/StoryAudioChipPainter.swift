@@ -108,35 +108,48 @@ public final class StoryAudioChipPainter {
     /// pour le son de fond, ni hors de `startTime … startTime + duration`.
     /// `respectingWindow: false` montre toutes les puces de premier plan,
     /// comme le composer — c'est la forme de la couverture statique.
+    /// - Parameter excludingBuried: `true` quand l'arbre de calques peint déjà
+    ///   les pastilles ENFOUIES à leur rang (`StoryRenderer`, #13901) : la
+    ///   surcouche ne peint alors que celles qui n'ont rien au-dessus d'elles.
     public static func placements(for slide: StorySlide,
                                   into geometry: CanvasGeometry,
                                   at time: CMTime,
-                                  respectingWindow: Bool = true) -> [StoryAudioChipPlacement] {
-        let audios = slide.effects.audioPlayerObjects ?? []
+                                  respectingWindow: Bool = true,
+                                  excludingBuried: Bool = true) -> [StoryAudioChipPlacement] {
+        let audios = excludingBuried
+            ? SceneAudioStageRule.overlaidAudios(in: slide.effects)
+            : SceneAudioStageRule.stagedAudios(in: slide.effects.audioPlayerObjects ?? [])
         guard !audios.isEmpty else { return [] }
         let seconds = time.seconds.isFinite ? max(0, time.seconds) : 0
         let visibles = respectingWindow
             ? AudioForegroundReaderOverlay.visibleAudios(in: audios, elapsed: seconds,
                                                          slideDuration: slide.computedTotalDuration())
-            : SceneAudioStageRule.stagedAudios(in: audios)
-        let size = geometry.renderSize
-        return visibles.map { audio in
-            StoryAudioChipPlacement(
-                audioId: audio.id,
-                center: CGPoint(x: max(0, min(size.width, audio.x * size.width)),
-                                y: max(0, min(size.height, audio.y * size.height))),
-                unit: size.width / referenceCanvasWidth
-                    * CGFloat(SceneObjectScalePolicy.clamped(audio.scale ?? 1)),
-                display: AudioChipDisplay.display(for: AudioChipDisplay.backgroundAnnouncement(
-                    sound: AudioChipDisplay.borrowedSound(soundId: audio.soundId),
-                    libraryTitle: audio.name,
-                    libraryUsername: audio.soundAuthorUsername,
-                    libraryDuration: nil,
-                    libraryReleasedAt: audio.soundReleaseDate)),
-                rotation: audio.rotation ?? 0,
-                muted: audio.isMuted,
-                elapsed: max(0, seconds - Double(audio.startTime ?? 0)))
+            : audios
+        return visibles.map {
+            placement(for: $0, renderSize: geometry.renderSize,
+                      elapsed: max(0, seconds - Double($0.startTime ?? 0)))
         }
+    }
+
+    /// La pose d'UNE pastille dans une scène rendue à `renderSize`.
+    public static func placement(for audio: StoryAudioPlayerObject,
+                                 renderSize size: CGSize,
+                                 elapsed: TimeInterval) -> StoryAudioChipPlacement {
+        StoryAudioChipPlacement(
+            audioId: audio.id,
+            center: CGPoint(x: max(0, min(size.width, audio.x * size.width)),
+                            y: max(0, min(size.height, audio.y * size.height))),
+            unit: size.width / referenceCanvasWidth
+                * CGFloat(SceneObjectScalePolicy.sanitized(audio.scale ?? 1)),
+            display: AudioChipDisplay.display(for: AudioChipDisplay.backgroundAnnouncement(
+                sound: AudioChipDisplay.borrowedSound(soundId: audio.soundId),
+                libraryTitle: audio.name,
+                libraryUsername: audio.soundAuthorUsername,
+                libraryDuration: nil,
+                libraryReleasedAt: audio.soundReleaseDate)),
+            rotation: audio.rotation ?? 0,
+            muted: audio.isMuted,
+            elapsed: max(0, elapsed))
     }
 
     // MARK: - Peinture
@@ -152,14 +165,21 @@ public final class StoryAudioChipPainter {
                       at time: CMTime,
                       in context: CGContext,
                       respectingWindow: Bool = true,
-                      samplesBackdrop: Bool = true) {
+                      samplesBackdrop: Bool = true,
+                      excludingBuried: Bool = true) {
         let placements = Self.placements(for: slide, into: geometry, at: time,
-                                         respectingWindow: respectingWindow)
+                                         respectingWindow: respectingWindow,
+                                         excludingBuried: excludingBuried)
         guard !placements.isEmpty else { return }
         let deviceScale = Self.deviceScale(of: context)
         for placement in placements {
             paint(placement, in: context, deviceScale: deviceScale, samplesBackdrop: samplesBackdrop)
         }
+    }
+
+    /// Peint UNE pastille — le calque d'une pastille enfouie (`StoryAudioChipLayer`).
+    func paint(_ placement: StoryAudioChipPlacement, in context: CGContext, samplesBackdrop: Bool) {
+        paint(placement, in: context, deviceScale: Self.deviceScale(of: context), samplesBackdrop: samplesBackdrop)
     }
 
     private func paint(_ placement: StoryAudioChipPlacement,

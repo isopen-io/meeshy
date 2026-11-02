@@ -22,7 +22,7 @@ import type { Conversation } from '@/lib/api/types';
  * `liveCall` n'est jamais posé : AUCUNE plateforme du dépôt ne le modélise
  * encore (même garde que `SectionableConversation.liveCall`).
  *
- * Identité des sections — `Lentille/Chrome/LentilleSectionIdentity.swift:54-66` :
+ * Identité des sections — `Lens/Chrome/LentilleSectionIdentity.swift:54-66` :
  * `pinned`, `lentille.live`, `lentille.today`, `lentille.yesterday`,
  * `lentille.thisWeek`, `lentille.older` ; une catégorie est `category:<id>`
  * (iOS prend l'identifiant nu — le préfixe ne sert ici qu'à ce qu'aucun

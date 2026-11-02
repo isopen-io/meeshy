@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { MEMBER_COUNT_DISPLAY_CAP } from '@meeshy/shared/utils/member-visibility';
+import { PRIVILEGED_PLATFORM_ROLES } from '@meeshy/shared/utils/platform-privilege';
 import { emitArrivalsLineUpdate, postGlobalArrival, type GlobalArrivalsDeps } from './globalArrivalsNotice';
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
@@ -211,13 +212,13 @@ export async function ensureGlobalConversationMembership(
 /**
  * Les titres qui ouvrent l'effectif ENTIER, traduits en requête : miroir de
  * `canViewExactMemberCount` (`@meeshy/shared/utils/member-visibility`), le rôle
- * PLATEFORME à partir de MODERATOR OU le rang DANS la conversation à partir
+ * PLATEFORME privilégié (`PRIVILEGED_PLATFORM_ROLES`, MODERATOR et au-dessus)
+ * OU le rang DANS la conversation à partir
  * d'`admin`. Les DEUX casses du rang de conversation sont listées : un `in`
  * Prisma ne connaît pas `mode: 'insensitive'`, et les lignes écrites avant
  * #3875 portent encore `'ADMIN'`/`'CREATOR'` tant que
  * `scripts/migrations/normalize-participant-role-casing.ts` n'a pas tourné.
  */
-const EXACT_COUNT_PLATFORM_ROLES = ['MODERATOR', 'ADMIN', 'BIGBOSS'] as const;
 const EXACT_COUNT_CONVERSATION_ROLES = ['admin', 'creator', 'ADMIN', 'CREATOR'] as const;
 
 /** Borne dure de l'éventail EXACT — un salon ne se lit jamais en entier ici. */
@@ -280,7 +281,7 @@ async function emitMemberCountBestEffort(
               {
                 OR: [
                   { role: { in: [...EXACT_COUNT_CONVERSATION_ROLES] } },
-                  { user: { role: { in: [...EXACT_COUNT_PLATFORM_ROLES] } } },
+                  { user: { role: { in: [...PRIVILEGED_PLATFORM_ROLES] } } },
                 ],
               },
             ],

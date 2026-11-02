@@ -4,8 +4,8 @@
  *
  * Mêmes lecteurs que les statistiques (`loadShareLinkForManagement`, la vraie
  * règle) ; la vraie sérialisation est exercée : une arrivée ne sort qu'avec
- * nom, badge sans compte, pays, langue et date — ce que la ligne PORTE à côté
- * (visage, identifiant, présence, IP, e-mail) ne part pas.
+ * nom, visage, badge sans compte, pays, langue et date — ce que la ligne PORTE
+ * à côté (identifiant, présence, IP, e-mail) ne part pas.
  *
  * @jest-environment node
  */
@@ -144,21 +144,21 @@ describe('arrivées d’un lien — ce qui part', () => {
     const data = (await getArrivals(app)).json().data;
 
     expect(data.arrivals).toEqual([
-      { displayName: 'invité 1', isAnonymous: true, country: 'FR', language: 'fr', joinedAt: '2026-09-24T09:59:00.000Z' },
-      { displayName: 'Ana', isAnonymous: false, country: null, language: 'pt', joinedAt: '2026-09-24T09:58:00.000Z' },
+      { displayName: 'invité 1', avatar: null, isAnonymous: true, country: 'FR', language: 'fr', joinedAt: '2026-09-24T09:59:00.000Z' },
+      { displayName: 'Ana', avatar: null, isAnonymous: false, country: null, language: 'pt', joinedAt: '2026-09-24T09:58:00.000Z' },
     ]);
     await app.close();
   });
 
-  it('rien de ce que la ligne porte à côté ne part : ni identifiant, ni visage, ni présence, ni IP, ni e-mail', async () => {
+  it('rien de ce que la ligne porte à côté ne part : ni identifiant, ni présence, ni IP, ni e-mail — le visage seul est servi (#12571)', async () => {
     const { prisma } = fakePrisma({
       rows: [arrivalRow(1, {
-        avatar: '/api/v1/attachments/file/nova.png',
+        avatar: '2026/09/nova/photo.png',
         isOnline: true,
         lastActiveAt: new Date(),
         ipAddress: '203.0.113.7',
         userId: '507f1f77bcf86cd799439099',
-        user: { systemLanguage: 'fr', email: 'nova@example.org', avatar: '/a.png', isOnline: true },
+        user: { systemLanguage: 'fr', email: 'nova@example.org', avatar: 'compte/a.png', isOnline: true },
       })],
     });
     const app = await buildApp(prisma, CREATOR_ID);
@@ -166,10 +166,26 @@ describe('arrivées d’un lien — ce qui part', () => {
     const res = await getArrivals(app);
     const [arrival] = res.json().data.arrivals;
 
-    expect(Object.keys(arrival).sort()).toEqual(['country', 'displayName', 'isAnonymous', 'joinedAt', 'language']);
-    for (const leak of [rowId(1), 'nova.png', '/a.png', 'isOnline', 'lastActiveAt', '203.0.113.7', 'nova@example.org', '507f1f77bcf86cd799439099']) {
+    expect(Object.keys(arrival).sort()).toEqual(['avatar', 'country', 'displayName', 'isAnonymous', 'joinedAt', 'language']);
+    expect(arrival.avatar).toBe('2026/09/nova/photo.png');
+    for (const leak of [rowId(1), 'compte/a.png', 'isOnline', 'lastActiveAt', '203.0.113.7', 'nova@example.org', '507f1f77bcf86cd799439099']) {
       expect(res.body).not.toContain(leak);
     }
+    await app.close();
+  });
+
+  it('le visage suit la loi partagée : la photo locale, sinon celle du compte, une chaîne blanche ne masque rien', async () => {
+    const { prisma } = fakePrisma({
+      rows: [
+        arrivalRow(1, { type: 'user', avatar: '   ', user: { systemLanguage: 'fr', avatar: '2026/09/ana/photo.png' } }),
+        arrivalRow(2, { type: 'user', avatar: null, user: { systemLanguage: 'fr', avatar: null } }),
+      ],
+    });
+    const app = await buildApp(prisma, CREATOR_ID);
+
+    const data = (await getArrivals(app)).json().data;
+
+    expect(data.arrivals.map((a: { avatar: string | null }) => a.avatar)).toEqual(['2026/09/ana/photo.png', null]);
     await app.close();
   });
 
@@ -181,8 +197,8 @@ describe('arrivées d’un lien — ce qui part', () => {
 
     const args = participantFindMany.mock.calls[0]?.[0] as unknown as { select: Record<string, unknown> };
     expect(args.select).toEqual({
-      id: true, type: true, displayName: true, language: true, joinedAt: true, joinCountry: true,
-      user: { select: { systemLanguage: true } },
+      id: true, type: true, displayName: true, avatar: true, language: true, joinedAt: true, joinCountry: true,
+      user: { select: { systemLanguage: true, avatar: true } },
     });
     await app.close();
   });

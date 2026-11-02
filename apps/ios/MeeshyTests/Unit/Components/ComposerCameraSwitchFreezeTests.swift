@@ -53,7 +53,7 @@ final class ComposerCameraSwitchFreezeTests: XCTestCase {
         let garde = try XCTUnwrap(code.range(of: "guard sync.sync.needsWrite(enabled: mirrorsFrames, epoch: connectionEpoch)"))
         let ecriture = try XCTUnwrap(code.range(of: "previewLayer.connection?.isEnabled"))
         XCTAssertLessThan(garde.lowerBound, ecriture.lowerBound, "l'écriture suit la garde")
-        let apercu = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let apercu = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(apercu.contains("connectionEpoch: session.camera.inputEpoch"))
         let modele = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
         XCTAssertEqual(modele.components(separatedBy: "self.inputEpoch += 1").count - 1, 2,
@@ -76,7 +76,7 @@ final class ComposerCameraSwitchFreezeTests: XCTestCase {
                       "la connexion neuve de la couche prend son état AVANT la validation — jamais une écriture de plus après")
         let proprietaire = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Components/CameraModel.swift"))
         XCTAssertEqual(proprietaire.components(separatedBy: "previewWanted: self.previewMirroring.isWanted").count - 1, 2)
-        let apercu = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let apercu = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(apercu.contains("session.camera.previewMirroring.isWanted = montre"))
     }
 

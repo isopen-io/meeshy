@@ -1,6 +1,6 @@
 @preconcurrency import UserNotifications
 import Foundation
-import MeeshySDK
+import MeeshyCore
 
 /// Le DÉTAIL d'un message sur l'écran verrouillé (#8858) : la carte d'une
 /// position, la vignette d'une vidéo, le corps d'une carte de visite, d'une

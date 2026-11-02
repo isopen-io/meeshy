@@ -9,7 +9,7 @@ final class ComposerCaptureRecetteTests: XCTestCase {
     // MARK: - #10336 — « Aucun » nettement choisi, jamais un cercle
 
     func test_collapsedTriggerWithoutLook_isTheNoneCell_withTheChosenMark_noCircle() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         let debut = try XCTUnwrap(bande.range(of: "private var shutter: some View {"))
         let fin = try XCTUnwrap(bande.range(of: "private var chosenAlone", range: debut.upperBound..<bande.endIndex))
         let declencheur = String(bande[debut.upperBound..<fin.lowerBound])
@@ -30,9 +30,9 @@ final class ComposerCaptureRecetteTests: XCTestCase {
     }
 
     func test_switchVeil_coversTheSceneAndEveryLiveThumbnail() throws {
-        let apercu = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let apercu = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(apercu.contains("ComposerCameraSwitchVeilStyle(switching: editedSource == nil"))
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         XCTAssertEqual(bande.components(separatedBy: ".modifier(ComposerCameraSwitchVeilStyle(switching: switchingCamera))")
                         .count - 1, 2, "la miniature seule et la bande")
     }
@@ -40,7 +40,7 @@ final class ComposerCaptureRecetteTests: XCTestCase {
     // MARK: - #10338 — vignettes arrondies
 
     func test_bandThumbnails_areMaskedToTheCellCorners() throws {
-        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         let surface = try XCTUnwrap(bande.range(of: "ComposerLookStripSurface(tiles: tuiles"))
         let masque = try XCTUnwrap(bande.range(of: ".mask {", range: surface.upperBound..<bande.endIndex))
         let suite = bande[masque.upperBound...].prefix(400)
@@ -56,7 +56,7 @@ final class ComposerCaptureRecetteTests: XCTestCase {
     }
 
     func test_railIsAlignedWithTheCells_inCaptureAndInRetouch() throws {
-        let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertEqual(bas.components(separatedBy: "alignedWithCells: true").count - 1, 2)
         XCTAssertTrue(bas.contains(".padding(.top, ComposerTriggerOutline.outset)"), "en retouche, haut sur haut")
     }
@@ -89,7 +89,7 @@ final class ComposerCaptureRecetteTests: XCTestCase {
     }
 
     func test_soundSitsOverTheVideoBand_withTheSoundIconInsideBeforeTheHandle() throws {
-        let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        let bas = try Self.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("ComposerSoundTrack(session: session, url: trimClip.url, overlaid: true)"))
         XCTAssertTrue(bas.contains(".padding(.horizontal, ComposerTrimTrack.trackInset)"), "entre les deux poignées")
         // #10356 : le son se montre sur la bande par l'OUTIL, sans panneau à lui
@@ -109,7 +109,7 @@ final class ComposerCaptureRecetteTests: XCTestCase {
     }
 
     func test_mount_keepsOnePreview_acrossCaptureAndRetouch() throws {
-        let montage = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureMount.swift"))
+        let montage = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Composer/ComposerCaptureMount.swift"))
         let corps = try XCTUnwrap(montage.range(of: "var body: some View {"))
         let fin = try XCTUnwrap(montage.range(of: "private func rect(", range: corps.upperBound..<montage.endIndex))
         XCTAssertEqual(montage[corps.upperBound..<fin.lowerBound].components(separatedBy: "image(rect:").count - 1, 1,

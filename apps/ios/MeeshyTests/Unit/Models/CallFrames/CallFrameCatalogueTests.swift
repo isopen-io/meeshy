@@ -28,6 +28,34 @@ final class CallFrameCatalogueTests: XCTestCase {
         }
     }
 
+    // MARK: - Les noms dans les sept langues (#13953)
+
+    func test_everyFrameAndDeclination_isNamedInTheSevenLanguages_frenchBeingTheLegacyName() {
+        let languages = ["fr", "en", "es", "pt", "de", "it", "ar"]
+        let named = CallFrameCatalogue.all.flatMap { frame in
+            [(frame.id, frame.name, frame.localizedNames)] + frame.styles.map { ("\(frame.id).\($0.id)", $0.name, $0.localizedNames) }
+        }
+        let missing = named.flatMap { id, _, names in
+            languages.filter { (names[$0] ?? "").trimmingCharacters(in: .whitespaces).isEmpty }.map { "\(id):\($0)" }
+        }
+        XCTAssertEqual(missing, [])
+        XCTAssertEqual(named.filter { $0.2["fr"] != $0.1 }.map(\.0), [])
+    }
+
+    func test_displayName_servesTheInterfaceLanguage_andFallsBackToTheLegacyName() throws {
+        let fete = try XCTUnwrap(CallFrameCatalogue.all.first { $0.id == "jovial.fete.duo" })
+        XCTAssertEqual(fete.displayName(language: "en"), "Party")
+        XCTAssertEqual(fete.displayName(language: "pt-BR"), "Festa")
+        XCTAssertEqual(fete.displayName(language: "ar"), "حفلة")
+        XCTAssertEqual(fete.displayName(language: "ja"), "Fête")
+        XCTAssertEqual(fete.displayName(language: nil), "Fête")
+        let legacy = CallFrameDesign(id: fete.id, motif: fete.motif, mood: fete.mood, name: fete.name, bucket: fete.bucket, look: fete.look)
+        XCTAssertEqual(legacy.displayName(language: "en"), "Fête")
+        let relief = try XCTUnwrap(fete.styles.first)
+        XCTAssertEqual(relief.displayName(language: "it"), "Rilievo")
+        XCTAssertEqual(CallFrameStyleRule.styled(fete, with: relief).displayName(language: "es"), "Fiesta")
+    }
+
     func test_all_isOrderedByMood() {
         let ranks = CallFrameCatalogue.all.map { frame in CallFrameMood.allCases.firstIndex(of: frame.mood) ?? -1 }
         XCTAssertEqual(ranks, ranks.sorted())

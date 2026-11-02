@@ -30,6 +30,8 @@ public object OutboxKindCatalog {
     private fun countsForSyncIndicator(kind: OutboxKind): Boolean = when (kind) {
         OutboxKind.READ_RECEIPT,
         OutboxKind.REPORT_ATTACHMENT_STATUS,
+        OutboxKind.CONSUME_AFTER_READ,
+        OutboxKind.CONSUME_VIEW_ONCE,
         -> false
         OutboxKind.SEND_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
@@ -41,6 +43,7 @@ public object OutboxKindCatalog {
         OutboxKind.UPDATE_PROFILE,
         OutboxKind.UPDATE_SETTINGS,
         OutboxKind.UPDATE_PRIVACY_SETTINGS,
+        OutboxKind.UPDATE_AUDIO_SETTINGS,
         OutboxKind.PUBLISH_STORY,
         OutboxKind.UPLOAD_MEDIA,
         OutboxKind.BLOCK_USER,
@@ -53,6 +56,8 @@ public object OutboxKindCatalog {
         OutboxKind.BOOKMARK_POST,
         OutboxKind.UNBOOKMARK_POST,
         OutboxKind.RESPOND_FRIEND_REQUEST,
+        OutboxKind.CREATE_POST,
+        OutboxKind.CREATE_COMMENT,
         -> true
     }
 
@@ -61,6 +66,8 @@ public object OutboxKindCatalog {
         OutboxKind.REMOVE_REACTION,
         OutboxKind.READ_RECEIPT,
         OutboxKind.REPORT_ATTACHMENT_STATUS,
+        OutboxKind.CONSUME_AFTER_READ,
+        OutboxKind.CONSUME_VIEW_ONCE,
         OutboxKind.MARK_UNREAD,
         OutboxKind.DELETE_MESSAGE,
         OutboxKind.BLOCK_USER,
@@ -80,8 +87,11 @@ public object OutboxKindCatalog {
         OutboxKind.UPDATE_PROFILE,
         OutboxKind.UPDATE_SETTINGS,
         OutboxKind.UPDATE_PRIVACY_SETTINGS,
+        OutboxKind.UPDATE_AUDIO_SETTINGS,
         OutboxKind.PUBLISH_STORY,
         OutboxKind.UPLOAD_MEDIA,
+        OutboxKind.CREATE_POST,
+        OutboxKind.CREATE_COMMENT,
         -> false
     }
 

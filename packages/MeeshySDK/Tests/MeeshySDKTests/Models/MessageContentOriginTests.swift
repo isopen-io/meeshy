@@ -10,8 +10,8 @@ import XCTest
 /// pour un texte que le serveur forge dans une conversation chiffrée, et tout
 /// était scellé après un démarrage à froid (registre en mémoire). Le message
 /// porte désormais `contentOrigin`, que SEUL le déchiffrement sur l'appareil
-/// pose, lié par empreinte au texte qu'il a produit — et qui voyage dans le
-/// cache.
+/// pose, lié par empreinte au texte qu'il a produit. Le clair, lui, ne voyage
+/// pas dans le cache (#12999) : le fil le relit dans le coffre libsignal.
 final class MessageContentOriginTests: XCTestCase {
 
     private func message(content: String = "Q2lwaGVydGV4dGU=", isEncrypted: Bool = true) -> MeeshyMessage {
@@ -87,6 +87,23 @@ final class MessageContentOriginTests: XCTestCase {
     func test_wire_neverVouchesForAnyContent() {
         XCTAssertFalse(MessageContentOrigin.wire.vouches(for: "", messageId: "m1"))
         XCTAssertFalse(MessageContentOrigin.wire.vouches(for: "Salut", messageId: "m1"))
+    }
+
+    /// Une provenance réseau ne couvre rien : elle n'a aucune raison de lire le
+    /// trousseau, et la clé ne s'évalue qu'après le genre (#12721).
+    func test_wire_neverReadsTheDeviceKey() {
+        let probe = DeviceKeyProbe()
+
+        XCTAssertFalse(MessageContentOrigin.wire.vouches(for: "Salut", messageId: "m1", key: probe.read()))
+        XCTAssertEqual(probe.reads, 0)
+    }
+
+    func test_decryptedOrigin_readsTheDeviceKeyToVerify() {
+        let probe = DeviceKeyProbe()
+        let origin = MessageContentOrigin.decrypted("Salut", messageId: "m1", key: probe.key)
+
+        XCTAssertTrue(origin.vouches(for: "Salut", messageId: "m1", key: probe.read()))
+        XCTAssertEqual(probe.reads, 1)
     }
 
     func test_decryptedOrigin_vouchesOnlyForTheTextItProduced() {
@@ -187,7 +204,10 @@ final class MessageContentOriginTests: XCTestCase {
     /// Une ligne dont l'empreinte ne couvre plus le texte (écrite par une
     /// version antérieure, ou abîmée) se relit `.wire`.
     func test_cachedOriginThatNoLongerCoversTheContent_decodesAsWire() throws {
-        var object = try blob(decrypted("oui"))
+        var object = try blob(message())
+        object["contentOrigin"] = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(MessageContentOrigin.decrypted("oui", messageId: "m1"))
+        )
         object["content"] = ""
 
         XCTAssertEqual(try decode(object).contentOrigin, .wire)
@@ -195,11 +215,14 @@ final class MessageContentOriginTests: XCTestCase {
 
     // MARK: - Le cache (rétrocompatible)
 
-    func test_cacheRoundTrip_keepsTheProvenance() throws {
+    /// #12999 — le cache n'est pas le coffre : un clair déchiffré s'y écrit en
+    /// littéral, sans empreinte, et le fil le relit dans le coffre libsignal.
+    func test_cacheRoundTrip_keepsNoClear_theThreadReadsItFromTheVault() throws {
         let restored = try roundTrip(decrypted("Rendez-vous à midi"))
 
-        XCTAssertEqual(restored.content, "Rendez-vous à midi")
-        XCTAssertTrue(restored.isContentDecryptedOnDevice, "un démarrage à froid ne scelle plus ce que l'appareil a déchiffré")
+        XCTAssertEqual(restored.content, E2EEWire.contentPlaceholder)
+        XCTAssertEqual(restored.contentOrigin, .wire)
+        XCTAssertNil(try blob(decrypted("Rendez-vous à midi"))["contentOrigin"])
     }
 
     /// Une ligne écrite avant ce champ se relit `.wire` : rien n'est déclaré
@@ -228,6 +251,82 @@ final class MessageContentOriginTests: XCTestCase {
         XCTAssertNil(try blob(message())["contentOrigin"])
     }
 
+    // MARK: - La clé est un secret de CET appareil (#11402)
+
+    /// L'empreinte de #11382, dont la clé se DÉRIVAIT de l'id du message :
+    /// n'importe qui (passerelle, cache réécrit, sauvegarde) la recalcule.
+    private func idKeyedDigest(of content: String, messageId: String) -> String {
+        let key = SymmetricKey(data: Data(("meeshy.message.contentOrigin.v1:" + messageId).utf8))
+        return HMAC<SHA256>.authenticationCode(for: Data(content.utf8), using: key)
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private func anotherDeviceKey() -> Data {
+        Data(repeating: 0x5A, count: 32)
+    }
+
+    /// Une empreinte que la passerelle peut calculer ne prouve rien : celle
+    /// de CET appareil ne se recalcule pas depuis l'id et le texte.
+    func test_theDigest_isNotComputableFromPublicData() throws {
+        let hex = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("Rendez-vous à midi", messageId: "m1")))
+
+        XCTAssertNotEqual(hex, idKeyedDigest(of: "Rendez-vous à midi", messageId: "m1"))
+    }
+
+    /// Une empreinte scellée par une AUTRE clé (un autre appareil, une
+    /// passerelle qui devine) ne couvre rien ici.
+    func test_aDigestSealedWithAnotherKey_isRefused() {
+        let foreign = MessageContentOrigin.decrypted("Salut", messageId: "m1", key: anotherDeviceKey())
+
+        XCTAssertFalse(foreign.vouches(for: "Salut", messageId: "m1"))
+        XCTAssertTrue(foreign.vouches(for: "Salut", messageId: "m1", key: anotherDeviceKey()),
+                      "la même clé, elle, retrouve son empreinte")
+    }
+
+    func test_aCachedOriginSealedWithAnotherKey_decodesAsWire() throws {
+        let foreign = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("oui", messageId: "m1", key: anotherDeviceKey())))
+        var object = try blob(message())
+        object["content"] = "oui"
+        object["contentOrigin"] = ["kind": "decryptedOnDevice.v2", "digest": foreign]
+
+        let restored = try decode(object)
+        XCTAssertEqual(restored.contentOrigin, .wire)
+        XCTAssertFalse(restored.isContentDecryptedOnDevice)
+        XCTAssertEqual(restored.content, "oui", "le fil s'affiche toujours : seule la provenance tombe")
+    }
+
+    /// Migration douce : une ligne écrite par #11382 (empreinte dérivée de
+    /// l'id, que n'importe qui recalcule) n'est plus vérifiable — elle se relit
+    /// sans provenance, et le texte reste affiché.
+    func test_aLegacyIdKeyedOrigin_inTheCache_decodesAsWire_withoutBreakingTheThread() throws {
+        var object = try blob(message())
+        object["content"] = "Rendez-vous à midi"
+        object["contentOrigin"] = ["kind": "decryptedOnDevice", "digest": idKeyedDigest(of: "Rendez-vous à midi", messageId: "m1")]
+
+        let restored = try decode(object)
+        XCTAssertEqual(restored.contentOrigin, .wire)
+        XCTAssertFalse(restored.isContentDecryptedOnDevice)
+        XCTAssertEqual(restored.content, "Rendez-vous à midi")
+        XCTAssertEqual(restored.id, "m1")
+    }
+
+    /// Une ligne de cache réécrite par un tiers avec une empreinte « v2 »
+    /// recalculée à la manière de #11382 ne passe pas davantage.
+    func test_aForgedV2OriginComputedFromTheMessageId_decodesAsWire() throws {
+        var object = try blob(message(content: "Texte forgé"))
+        object["contentOrigin"] = ["kind": "decryptedOnDevice.v2", "digest": idKeyedDigest(of: "Texte forgé", messageId: "m1")]
+
+        XCTAssertFalse(try decode(object).isContentDecryptedOnDevice)
+    }
+
+    func test_aVouchedOrigin_isEncodedUnderItsVersionedKind() throws {
+        let encoded = try JSONEncoder().encode(MessageContentOrigin.decrypted("oui", messageId: "m1"))
+        let origin = try XCTUnwrap(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+
+        XCTAssertEqual(origin["kind"] as? String, "decryptedOnDevice.v2")
+    }
+
     // MARK: - Le serveur ne peut pas la déclarer
 
     func test_apiMessage_toMessage_isAlwaysWire_evenWhenThePayloadClaimsOtherwise() throws {
@@ -237,11 +336,35 @@ final class MessageContentOriginTests: XCTestCase {
          "createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z",
          "contentOrigin":{"kind":"decryptedOnDevice","digest":"\(validDigest)"}}
         """
-        let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        let api = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
 
         let message = api.toMessage(currentUserId: "me")
 
         XCTAssertEqual(message.contentOrigin, .wire)
         XCTAssertFalse(message.isContentDecryptedOnDevice, "même une empreinte VALIDE du texte forgé ne passe pas le fil")
+    }
+
+    /// Même sous le genre versionné et avec l'empreinte de CET appareil, le
+    /// fil ne déclare rien : `APIMessage` ne décode aucune provenance.
+    func test_apiMessage_toMessage_ignoresAVersionedOriginInThePayload() throws {
+        let deviceDigest = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("Texte forgé", messageId: "m1")))
+        let json = """
+        {"id":"m1","conversationId":"c1","senderId":"u1","content":"Texte forgé","isEncrypted":true,
+         "createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z",
+         "contentOrigin":{"kind":"decryptedOnDevice.v2","digest":"\(deviceDigest)"}}
+        """
+        let api = try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
+
+        XCTAssertFalse(api.toMessage(currentUserId: "me").isContentDecryptedOnDevice)
+    }
+}
+
+private final class DeviceKeyProbe {
+    let key = Data(repeating: 0x5A, count: 32)
+    private(set) var reads = 0
+
+    func read() -> Data {
+        reads += 1
+        return key
     }
 }

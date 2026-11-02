@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.error.rejectedGeneric",
+          "androidName": "signup_error_rejected",
+          "status": "adopted"
+        },
+        {
+          "androidName": "signup_display_name_invalid_characters",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -32,6 +32,8 @@ private fun ApiResponse<*>.toApiError(fallbackMessage: String, fallbackCode: Str
         fieldName = fieldName,
         suggestions = suggestions.orEmpty(),
         violations = violations.orEmpty(),
+        limit = limit,
+        unlinked = unlinked,
     )
 
 /**

@@ -59,6 +59,7 @@ import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conve
 import { registerConversationSettingsSovereignRoutes } from './conversation-settings-sovereign';
 import { logError, logWarn } from '../../utils/logger.js';
 import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
+import { sendZodRefusal } from '../../utils/identity-name-floor';
 
 const userConversationSortSchema = z.object({
   sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
@@ -375,7 +376,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { statusCode: 201, message: 'User created successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        sendBadRequest(reply, 'Invalid input data');
+        sendZodRefusal(reply, 'Invalid input data', error);
         return;
       }
       if (replyIdentifierTaken(reply, error)) return;

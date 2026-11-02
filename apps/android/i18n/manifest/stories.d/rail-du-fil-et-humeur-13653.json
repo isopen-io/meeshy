@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "story.tray.a11y.changeMood",
+          "androidName": "story_tray_a11y_changeMood",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "content.kind.mood",
+          "androidName": "stories_mood_kind",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.repost.by",
+          "androidName": "stories_repost_by",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -44,14 +44,11 @@ import {
   swiftCase,
 } from '../scripts/generate-call-frames-swift';
 
-const WEB_SPEC = join(REPO_ROOT, 'apps/web/src/lib/calls/frames/frame-spec.ts');
-const SWIFT_SPECS = ['CallFrameSpec.swift', 'CallFrameFormatExtension.swift'].map((name) => join(REPO_ROOT, 'apps/ios/Meeshy/Features/Main/Models/CallFrames', name));
+import * as sharedSpec from '../types/capture-frames';
 
-const webList = (source: string, name: string): readonly string[] => {
-  const match = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const`).exec(source);
-  if (match?.[1] === undefined) throw new Error(`${name} introuvable dans frame-spec.ts`);
-  return [...match[1].matchAll(/'([^']+)'/g)].map((found) => found[1] ?? '');
-};
+const WEB_SPEC = join(REPO_ROOT, 'apps/web/src/lib/calls/frames/frame-spec.ts');
+const SWIFT_SPECS = ['CallFrameSpec.swift', 'CallFrameFormatExtension.swift'].map((name) => join(REPO_ROOT, 'apps/ios/Meeshy/Features/Call/Models/CallFrames', name));
+
 
 const swiftCases = (source: string, typeName: string): readonly string[] => {
   const match = new RegExp(`enum ${typeName}: String[^{]*\\{([\\s\\S]*?)\\n\\}`).exec(source);
@@ -136,15 +133,20 @@ describe('le catalogue Swift des cadres de capture', () => {
     expect(renderSwift(readMoodFiles())).toEqual(renderSwift(readMoodFiles()));
   });
 
-  it('les vocabulaires du générateur sont ceux de frame-spec.ts, dans le même ordre', () => {
-    const source = readFileSync(WEB_SPEC, 'utf8');
+  it('les vocabulaires du générateur sont ceux du schéma partagé (types/capture-frames.ts), dans le même ordre (#10169)', () => {
     const lists: Record<string, readonly string[]> = {
       FRAME_MOODS, FRAME_BUCKETS, FRAME_ARRANGEMENTS, SLOT_SHAPES, SLOT_TONES, SLOT_TILTS, FRAME_PATTERNS, FRAME_BORDERS, FRAME_ORNAMENTS,
       FRAME_FONTS, BRAND_MARKS, BRAND_PLACES, TEXT_SIZES, NAME_SHOWS, NAME_STYLES, TITLE_SOURCES, TEXT_EFFECTS,
       SLOT_LOOKS, ORNAMENT_MOTIONS, TEXT_FORMS, ELEMENT_PLACES, WATERMARK_CONTENTS, WATERMARK_ORIENTATIONS, FRAME_SURFACES, FRAME_COSTS,
       SCENE_LAYER_KINDS, SCENE_DEPTHS, BEHAVIOR_TRIGGERS, BEHAVIOR_ACTIONS, BEHAVIOR_CONDITIONS,
     };
-    Object.entries(lists).forEach(([name, list]) => expect(list, name).toEqual(webList(source, name)));
+    Object.entries(lists).forEach(([name, list]) => expect(list, name).toEqual((sharedSpec as Record<string, unknown>)[name]));
+  });
+
+  it('le web ne garde aucune copie du vocabulaire : frame-spec.ts réexporte le schéma partagé (#10169)', () => {
+    const source = readFileSync(WEB_SPEC, 'utf8');
+    expect(source).toContain("export * from '@meeshy/shared/types/capture-frames';");
+    expect(source).not.toMatch(/export const [A-Z_]+ = \[/);
   });
 
   it('les énumérations Swift des clés étendues portent les valeurs brutes du vocabulaire (#9197)', () => {
@@ -201,6 +203,41 @@ describe('le catalogue Swift des cadres de capture', () => {
       ['CallFrameTextEffect', TEXT_EFFECTS],
     ];
     pairs.forEach(([typeName, list]) => expect(swiftCases(swift, typeName), typeName).toEqual(list));
+  });
+
+  it('une image de scène découpée en neuf morceaux écrit sa découpe ; ailleurs, la découpe fait échouer (#12683)', () => {
+    const framed = extendedFile({}, { scene: [{ id: 'moulure', kind: 'image', depth: 'front', src: 'assets/call-frames/elegant/essai/front.webp', slice: 0.18 }] });
+    expect(renderSwift([framed]).map((file) => file.content).join('\n')).toContain('src: "assets/call-frames/elegant/essai/front.webp", preset: nil, color: nil, amount: nil, maxParticles: nil, slice: 0.18)');
+    const misplaced = extendedFile({}, { scene: [{ id: 'braises', kind: 'particles', depth: 'front', preset: 'sparkles', slice: 0.2 }] });
+    expect(() => renderSwift([misplaced])).toThrow(/scene\[0\]\.slice/);
+  });
+
+  it('les déclinaisons d’un motif s’écrivent sur chacune de ses tranches, ne déclarant que leurs clés (#12685)', () => {
+    const declined = extendedFile({
+      styles: [{ id: 'relief', name: 'Relief', look: { scene: [{ id: 'matiere', kind: 'image', depth: 'back', src: 'assets/call-frames/elegant_essai_back.webp' }] } }],
+    });
+    const swift = renderSwift([declined]).map((file) => file.content).join('\n');
+    expect(swift).toContain('styles: [CallFrameStyle(id: "relief", name: "Relief", look: CallFrameLookOverride(scene: [CallFrameSceneLayer(id: "matiere", kind: .image, depth: .back, src: "assets/call-frames/elegant_essai_back.webp", preset: nil, color: nil, amount: nil, maxParticles: nil)]))]');
+  });
+
+  it('le nom d’un motif et de ses déclinaisons s’écrit dans chaque langue, juste après `name` ; sans traduction, rien (#13953)', () => {
+    const named = extendedFile({
+      localizedNames: { fr: 'Essai', en: 'Trial', ar: 'تجربة "١"' },
+      styles: [{ id: 'relief', name: 'Relief', localizedNames: { fr: 'Relief', it: 'Rilievo' }, look: {} }],
+    });
+    const swift = renderSwift([named]).map((file) => file.content).join('\n');
+    expect(swift).toContain('localizedNames: ["fr": "Essai", "en": "Trial", "ar": "تجربة \\"١\\""],');
+    expect(swift).toContain('CallFrameStyle(id: "relief", name: "Relief", localizedNames: ["fr": "Relief", "it": "Rilievo"], look: CallFrameLookOverride())');
+    expect(renderSwift([extendedFile()]).map((file) => file.content).join('\n')).not.toContain('localizedNames');
+    expect(() => renderSwift([extendedFile({ localizedNames: { xx: 'Essai' } })])).toThrow(/localizedNames/);
+    expect(() => renderSwift([extendedFile({ localizedNames: { en: '' } })])).toThrow(/localizedNames\.en/);
+  });
+
+  it('une déclinaison en double ou une clé inconnue fait échouer la génération en nommant le chemin', () => {
+    const twice = extendedFile({ styles: [{ id: 'relief', name: 'Relief', look: {} }, { id: 'relief', name: 'Bis', look: {} }] });
+    expect(() => renderSwift([twice])).toThrow(/styles/);
+    const unknown = extendedFile({ styles: [{ id: 'relief', name: 'Relief', look: { vernis: true } }] });
+    expect(() => renderSwift([unknown])).toThrow(/styles\[0\]\.look/);
   });
 
   it('un motif se déplie en un cadre par variante, la variante surchargeant la base clé par clé', () => {

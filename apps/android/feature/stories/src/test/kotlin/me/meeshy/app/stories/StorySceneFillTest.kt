@@ -34,13 +34,43 @@ class StorySceneFillTest {
     }
 
     @Test
+    fun `the floor of a reel scene is black when it declares no readable background, like iOS`() {
+        assertThat(StorySceneFill.resolve(null, ACCENT, SceneFloor.BLACK)).isEqualTo(StorySceneFill.Black)
+        assertThat(StorySceneFill.resolve(StoryBackgroundValue.Hex("nope"), ACCENT, SceneFloor.BLACK)).isEqualTo(StorySceneFill.Black)
+        assertThat(StorySceneFill.resolve(StoryBackgroundValue.Gradient("FF3B30", "zz"), ACCENT, SceneFloor.BLACK))
+            .isEqualTo(StorySceneFill.Black)
+    }
+
+    @Test
+    fun `a colour the scene declares survives a black floor`() {
+        assertThat(StorySceneFill.resolve(StoryBackgroundValue.Hex("FF3B30"), ACCENT, SceneFloor.BLACK))
+            .isEqualTo(StorySceneFill.Solid("FF3B30"))
+        assertThat(StorySceneFill.resolve(StoryBackgroundValue.Gradient("FF3B30", "007AFF"), ACCENT, SceneFloor.BLACK))
+            .isEqualTo(StorySceneFill.Linear("FF3B30", "007AFF"))
+    }
+
+    @Test
+    fun `the default floor stays the author gradient of the story reader`() {
+        assertThat(StorySceneFill.resolve(null, ACCENT, SceneFloor.AUTHOR_GRADIENT)).isEqualTo(StorySceneFill.AuthorGradient(ACCENT))
+    }
+
+    @Test
     fun `the author colour is the one the story tray gives the author, from the display name then the username`() {
         val named = MeeshyUser(id = "me", username = "demo", displayName = "Demo User")
         val unnamed = MeeshyUser(id = "me", username = "demo", displayName = " ")
 
         assertThat(StorySceneFill.authorAccentHex(named)).isEqualTo(DynamicColorGenerator.colorForName("Demo User"))
         assertThat(StorySceneFill.authorAccentHex(unnamed)).isEqualTo(DynamicColorGenerator.colorForName("demo"))
-        assertThat(StorySceneFill.authorAccentHex(null)).isEqualTo(DynamicColorGenerator.colorForName(""))
+    }
+
+    @Test
+    fun `an author whose identity is not known yet has no colour, and the scene waits on black`() {
+        val nameless = MeeshyUser(id = "me", username = " ", displayName = null)
+
+        assertThat(StorySceneFill.authorAccentHex(null)).isNull()
+        assertThat(StorySceneFill.authorAccentHex(nameless)).isNull()
+        assertThat(StorySceneFill.resolve(null, null)).isEqualTo(StorySceneFill.Black)
+        assertThat(StorySceneFill.resolve(StoryBackgroundValue.Hex("FF3B30"), null)).isEqualTo(StorySceneFill.Solid("FF3B30"))
     }
 
     private companion object {

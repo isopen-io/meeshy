@@ -677,9 +677,9 @@ public actor TusUploadManager {
                 throw TusResumeRetriableError()
 
             default:
-                if let refusal = GuestAttachmentRefusal(statusCode: patchHttp.statusCode, body: responseData) {
+                if let refusal = TusFinalRefusal(statusCode: patchHttp.statusCode, body: responseData) {
                     await store.delete(checkpointKey: checkpointKey)
-                    throw refusal
+                    throw refusal.error
                 }
                 throw URLError(.badServerResponse)
             }

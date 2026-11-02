@@ -13,14 +13,11 @@ extension ConversationView {
     /// AVANT la présentation : un clavier actif mange une partie de l'écran que
     /// le menu doit pouvoir occuper.
     ///
-    /// `cellFrame` (`nil` si la cellule n'est pas matérialisée) vient du SITE
-    /// D'APPEL UIKit (`MessageListViewController.cellFrameInWindow`, même
-    /// patron qu'`onAddReaction`) — **pas** de `frameTracker` (revue
-    /// 2026-08-27) : `MessageFramePreferenceKey` ne traverse la frontière UIKit
-    /// qu'en mode Rivière (`RiverBubbleView`, seul site qui la publie). Il est
-    /// GARDÉ dans `overlayState.overlaySourceFrame` (#11208) : il était reçu
-    /// puis jeté, et l'overlay retombait sur un aperçu reconstruit, centré,
-    /// loin de la cellule pressée.
+    /// `cellFrame` (`nil` si la cellule n'est pas matérialisée), en coordonnées
+    /// de FENÊTRE, vient du SITE D'APPEL — `cellFrameInWindow` côté UIKit, la
+    /// Rivière qui convertit le sien avec sa face (`RiverPressedCell`, #12630) —,
+    /// jamais de `frameTracker`. GARDÉ dans `overlayState.overlaySourceFrame`
+    /// (#11208) : jeté, l'aperçu se reconstruisait loin de la cellule pressée.
     ///
     /// **Ni défilement préalable, ni délai** (#11208). La liste remontait un
     /// message trop bas, puis le menu paraissait 0,3 s plus tard : la liste
@@ -33,7 +30,7 @@ extension ConversationView {
     /// `overlayState.restoreAfterLongPress` et restitué par
     /// `restoreStateAfterLongPressIfNeeded()`, appelée quand le menu se
     /// referme.
-    func presentLongPressMenu(for message: Message, cellFrame: CGRect?, pieceId: String? = nil) {
+    func presentLongPressMenu(for message: Message, cellFrame: CGRect?, pieceId: String? = nil, riverFace: RiverOverlayFace? = nil) {
         overlayState.overlayMessage = message
         // Fail-closed : un message protégé n'ouvre que l'aperçu du message entier.
         let pieceId = MessagePieceTarget.piece(pieceId, in: message)?.id
@@ -44,6 +41,7 @@ extension ConversationView {
         // #9907 — l'aperçu d'une PIÈCE se présente au centre de l'écran,
         // indépendamment de la cellule.
         overlayState.overlaySourceFrame = pieceId == nil ? cellFrame : nil
+        overlayState.overlayRiverFace = pieceId == nil ? riverFace : nil
         overlayState.showOverlayMenu = true
     }
 
@@ -59,6 +57,7 @@ extension ConversationView {
     /// fermeture est le signal que cette action a été prise.
     func restoreStateAfterLongPressIfNeeded() {
         overlayState.overlaySourceFrame = nil
+        overlayState.overlayRiverFace = nil
         guard let saved = overlayState.restoreAfterLongPress else { return }
         overlayState.restoreAfterLongPress = nil
         if composerState.editingMessageId != nil {

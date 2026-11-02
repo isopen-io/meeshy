@@ -52,14 +52,16 @@ final class ComposerCaptureTapRuleTests: XCTestCase {
     }
 
     func test_chrome_focusesOnASingleTap_andPhotographsOnTheSecond() throws {
-        let chrome = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        let chrome = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("SpatialTapGesture(count: 1, coordinateSpace: .global)"))
         XCTAssertTrue(chrome.contains("session.tapAction("))
         XCTAssertFalse(chrome.contains("SpatialTapGesture(count: 2"),
                        "un double à la SwiftUI ferait attendre le toucher simple")
         XCTAssertFalse(chrome.contains("TapGesture().onEnded"))
-        let copie = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraCopy.swift")
-        XCTAssertTrue(copie.contains("defaultValue: \"Puis toucher deux fois : photo\""))
+        let copie = try Self.code("Meeshy/Features/Composer/ComposerSceneCameraCopy.swift")
+        // #13899 : la scène vide ne liste plus ses gestes ; la phrase du viseur
+        // dit toujours que la photo vient du DOUBLE toucher.
+        XCTAssertTrue(copie.contains("defaultValue: \"toucher deux fois pour une photo · maintenir pour filmer\""))
     }
 
     private static func code(_ relative: String) throws -> String {

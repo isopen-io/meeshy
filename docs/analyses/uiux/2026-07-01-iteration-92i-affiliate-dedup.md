@@ -2,7 +2,7 @@
 
 **Date** : 2026-07-01
 **Piste** : iOS (suffixe `i`)
-**Surface** : `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift` — helper `affiliateStatCard`
+**Surface** : `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift` — helper `affiliateStatCard`
 **Type** : Correctif (nettoyage modificateur dupliqué)
 **Base** : `main` HEAD (`8aea0e4e`, post-merge #1234)
 

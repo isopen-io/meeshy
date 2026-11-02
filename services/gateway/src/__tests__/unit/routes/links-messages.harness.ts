@@ -173,8 +173,10 @@ export function makePrisma(overrides: Record<string, any> = {}) {
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue(mockAnonParticipant),
       // Éventail de notifications : résolution de l'identité de l'expéditeur.
+      // #14066 — et l'appartenance ACTIVE de l'expéditeur, sans laquelle il ne
+      // cite personne.
       findUnique: jest.fn<any>().mockResolvedValue({
-        userId: null, displayName: 'anon', avatar: null,
+        userId: null, displayName: 'anon', avatar: null, isActive: true, conversationId: CONV_ID,
       }),
     },
     user: {

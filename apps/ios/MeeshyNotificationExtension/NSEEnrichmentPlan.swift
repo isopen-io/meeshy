@@ -1,5 +1,5 @@
 import Foundation
-import MeeshySDK
+import MeeshyCore
 
 struct NSEAttachmentSource: Sendable, Equatable {
     let url: URL
@@ -65,9 +65,9 @@ struct NSEEnrichmentRequest: Sendable, Equatable {
         }
         guard let url = remoteURL(NotificationDetailPolicy.videoThumbnailURL(userInfo: userInfo), apiBaseURL: apiBaseURL)
         else { return nil }
-        return .videoThumbnail(
-            NSEAttachmentSource(url: url, mimeType: NotificationDetailPolicy.thumbnailMimeType(for: url))
-        )
+        let mimeType = NotificationDetailPolicy.thumbnailMimeType(for: url)
+        guard NSEAttachmentPolicy.mayAttach(mimeType: mimeType, fileSize: nil) else { return nil }
+        return .videoThumbnail(NSEAttachmentSource(url: url, mimeType: mimeType))
     }
 }
 

@@ -3,14 +3,17 @@ import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
 import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
+import { endToEndRegimeLedger, isEndToEndMode } from '@/lib/end-to-end-regime-ledger';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { servedMediaFile } from '@/lib/media/served-media';
 import type { ApiResult } from '@/lib/api/http';
 import { sendMessage } from '@/lib/api/messages';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
 import { createTextPost, publishFromAttachment, repostWithCaption } from '@/lib/api/share-publish';
+import type { TusCheckpointStore } from '@/lib/api/tus-checkpoint';
 
 import type { SendSheetPorts } from './send-sheet-run';
+import { DIRECT_UPLOAD_LIMITS, uploadBatchesOf, type UploadBatch, type UploadBatchLimits } from './upload-batches';
 
 /**
  * LES VRAIS PORTS DU MOTEUR D'ENVOI (#8884) — le branchement de
@@ -30,9 +33,33 @@ export type SendSheetPortsParams = {
   readonly online?: () => boolean;
   /** La préparation des photos avant téléversement (#11310) — le worker d'image par défaut. */
   readonly prepare?: ImagePreparer;
+  /** Les bornes d'une requête directe (#12974) — celles de la passerelle par défaut. */
+  readonly uploadLimits?: UploadBatchLimits;
+  /** Les checkpoints de la reprise — IndexedDB par défaut, `null` pour les témoins. */
+  readonly resumableCheckpoints?: TusCheckpointStore | null;
+};
+
+/**
+ * #12949 — ouvrir un tête-à-tête rend la conversation EXISTANTE (la passerelle
+ * déduplique), avec son régime : un mode e2ee servi est inscrit au registre
+ * avant que le moteur ne téléverse quoi que ce soit vers elle.
+ */
+const learnServedRegime = (conversation: { readonly id: string; readonly encryptionMode?: string | null }): { readonly id: string } => {
+  if (isEndToEndMode(conversation.encryptionMode)) endToEndRegimeLedger.getState().learnEndToEnd(conversation.id);
+  return { id: conversation.id };
 };
 
 const browserOnline = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false;
+
+type UploadRoutes = {
+  readonly deps: ConversationsDeps;
+  readonly media: PostMediaUploadDeps;
+  readonly prepare: ImagePreparer;
+  readonly limits: UploadBatchLimits;
+  readonly checkpoints?: TusCheckpointStore | null;
+};
+
+type Uploaded = ApiResult<{ readonly attachmentIds: readonly string[] }>;
 
 /**
  * `POST attachments.upload` ne rend pas d'erreur par fichier : un fichier
@@ -40,13 +67,40 @@ const browserOnline = (): boolean => typeof navigator === 'undefined' || navigat
  * que de fichiers est un ÉCHEC d'envoi (`UPLOAD_PARTIAL`), jamais un message
  * amputé (même réconciliation que `perform-send.ts`).
  */
-async function uploadFiles(deps: ConversationsDeps, prepare: ImagePreparer, files: readonly File[]): Promise<ApiResult<{ readonly attachmentIds: readonly string[] }>> {
-  const pending = await prepare.prepareUploads(files.map((file) => ({ file })));
-  const result = await uploadAttachments({ ...deps, pending });
+async function uploadBatch(routes: UploadRoutes, files: readonly File[], batch: UploadBatch): Promise<Uploaded> {
+  if (batch.kind === 'resumable') {
+    const file = files[batch.index];
+    if (file === undefined) return { ok: false, status: 0, error: 'Fichier introuvable' };
+    const { uploadMessageAttachment } = await import('@/lib/api/post-media-upload');
+    const sent = await uploadMessageAttachment({ ...routes.media, file, ...(routes.checkpoints === undefined ? {} : { checkpoints: routes.checkpoints }) });
+    return sent.ok ? { ok: true, data: { attachmentIds: [sent.data.attachmentId] } } : sent;
+  }
+  const pending = batch.indexes.flatMap((index) => (files[index] === undefined ? [] : [{ file: files[index] }]));
+  const result = await uploadAttachments({ ...routes.deps, pending });
   const failure = uploadShortfall(pending.map((piece) => piece.file), result);
   if (failure !== null) return failure;
   if (!result.ok) return result;
   return { ok: true, data: { attachmentIds: result.data.attachments.map((attachment) => attachment.id) } };
+}
+
+/**
+ * UN PARTAGE PART EN LOTS (#12974) — jusqu'à 100 fichiers et 5 Go
+ * (`SHARE_LIMITS`), qu'aucune requête unique de la passerelle n'accepte : des
+ * requêtes directes de 30 fichiers et 50 Mo au plus, et la reprise (TUS) pour
+ * chaque fichier plus lourd (`uploadBatchesOf`). Les lots partent l'un après
+ * l'autre, et le premier refus arrête tout : un message ne part jamais amputé.
+ */
+async function uploadFiles(routes: UploadRoutes, files: readonly File[]): Promise<Uploaded> {
+  const pending = await routes.prepare.prepareUploads(files.map((file) => ({ file })));
+  const prepared = pending.map((piece) => piece.file);
+  const batches = uploadBatchesOf(prepared.map((file) => file.size), routes.limits);
+  const ids: string[] = [];
+  for (const batch of batches) {
+    const sent = await uploadBatch(routes, prepared, batch);
+    if (!sent.ok) return sent;
+    ids.push(...sent.data.attachmentIds);
+  }
+  return { ok: true, data: { attachmentIds: ids } };
 }
 
 async function downloadFile(
@@ -73,15 +127,22 @@ export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPor
     online: params.online ?? browserOnline,
     openDirect: async (userId) => {
       const result = await createDirectConversation(deps, userId);
-      return result.ok ? { ok: true, data: { id: result.data.id } } : result;
+      return result.ok ? { ok: true, data: learnServedRegime(result.data) } : result;
     },
     openGroup: async ({ userIds, title }) => {
       const result = await createGroupConversation(deps, { title, participantIds: userIds });
-      return result.ok ? { ok: true, data: { id: result.data.id } } : result;
+      return result.ok ? { ok: true, data: learnServedRegime(result.data) } : result;
     },
     forward: (forward) => forwardMessages({ ...deps, ...forward }),
     sendMessage: (message) => sendMessage({ ...deps, ...message }),
-    uploadFiles: (files) => uploadFiles(deps, prepare, files),
+    uploadFiles: (files) =>
+      uploadFiles({
+        deps,
+        media: mediaDeps,
+        prepare,
+        limits: params.uploadLimits ?? DIRECT_UPLOAD_LIMITS,
+        ...(params.resumableCheckpoints === undefined ? {} : { checkpoints: params.resumableCheckpoints }),
+      }, files),
     fetchFile: (media) => downloadFile(fetchImpl, media),
     uploadMedia: async (file) => {
       const { uploadPostMedia } = await import('@/lib/api/post-media-upload');

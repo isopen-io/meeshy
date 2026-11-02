@@ -1,0 +1,882 @@
+import SwiftUI
+import os
+import PhotosUI
+import UniformTypeIdentifiers
+import MeeshySDK
+import MeeshyUI
+
+// **Ce qui fait ENTRER de la matière** — le `⋯`, les portes des deux rails,
+// les feuilles d'ingestion et les relais qui aiguillent ce qu'elles rendent.
+// Extrait de `MeeshyComposerHost.swift`.
+
+extension MeeshyComposerHost {
+
+    /// **le report du contenu vers la scène, en UN seul endroit.**
+    ///
+    /// Quand la surface montée devient la SCÈNE — que ce soit par l'éventail
+    /// (STORY/RÉEL) ou par une couleur de fond —, le contenu déjà composé
+    /// doit suivre (loi 9). Ce report vivait dans la closure du bouton du
+    /// sélecteur de destination (F1) ; l'éventail ayant remplacé ce sélecteur,
+    /// il n'y a plus de bouton où l'accrocher. Il devient donc une propriété de
+    /// « la scène vient d'être montée », branchée sur `mountedSurface` dans le
+    /// `body` — un site UNIQUE, quel que soit le contrôle qui a déclenché la
+    /// bascule, et qui ne peut plus diverger d'un chip à l'autre.
+    ///
+    /// Idempotent par construction : `applyContentText` ne dirty pas une slide
+    /// dont le contenu ne change pas, et `applyContentMedia` mémorise les
+    /// sources déjà portées — refaire le report à chaque entrée en scène ne
+    /// duplique rien.
+    /// **En Post, chaque média posé devient SA slide (modèle § 3).**
+    ///
+    /// Le modèle dit qu'en profil Post une slide EST un média du post — c'est ce
+    /// qui distingue un CARROUSEL (N slides d'un média) d'une SCÈNE COMPOSÉE
+    /// (une slide, un fond et des premiers plans). Story et Réel ne passent donc
+    /// pas ici : leur report reste `carryContentIntoSceneIfNeeded`, qui pose tout
+    /// sur la slide courante — en Réel il n'y a qu'une slide (le réel EST la
+    /// scène), en Story l'auteur compose sur celle qu'il regarde.
+    ///
+    /// **La première slide est RÉEMPLOYÉE, jamais doublée** : un composer neuf
+    /// naît avec une slide vierge (`slides = [StorySlide()]`), et lui en ajouter
+    /// une pour le premier média aurait laissé un carrousel dont la première vue
+    /// est vide.
+    ///
+    /// Le retrait suit le même index : un média retiré de la bande retire SA
+    /// slide. `removeSlide` refuse de descendre sous une slide — retirer le
+    /// dernier média laisse donc une slide vierge, ce qui est exactement l'état
+    /// d'un post sans média.
+    func syncPostMediaIntoSlides() {
+        // **Le rail de la scène pose sur TOUS les formats.**
+        //
+        // Un guard qui portait le NOM de la fonction — « en Post, chaque média
+        // ingéré devient SA slide » — ne serait juste que tant que la
+        // seule porte média est la rangée du document, qui n'existe qu'en
+        // Post. La porte du RAIL vit sur la SCÈNE : sur une STORY, un tel `return`
+        // rendrait la branche `.sceneRail` du placement ci-dessous entièrement
+        // MORTE — la photo serait ingérée avec le bon mime, et n'atteindrait jamais
+        // le canvas.
+        //
+        // > **Un guard qui reprend le nom de sa fonction vieillit avec lui.**
+        // > « Post » décrit la seule porte d'hier ; la fonction est le site unique
+        // > du placement, et le guard exclurait les formats où la porte du rail vit.
+        //
+        // La condition est PRÉCISE plutôt que retirée : elle demande
+        // s'il reste un média du RAIL à placer. Retirer le guard ferait poser
+        // des slides à des médias arrivés autrement sur une story — un
+        // changement de comportement que rien ici ne mesure.
+        let posePourLaScene = documentContentMedia.contains {
+            mediaRoleByURL[$0.sourceURL] == nil
+                && (railPosedMediaURLs.contains($0.sourceURL) || sceneSeriesMediaURLs.contains($0.sourceURL))
+        }
+        guard selectedFormat == .post || posePourLaScene else { return }
+
+        // **Le SON ne fait pas de slide, et il ne fait pas non plus de BANDE-SON
+        // tout seul.**
+        //
+        // Un son de la liste média du document ne devient pas la bande-son de la
+        // scène : le commutateur de placement de la porte « Vocal » l'interdit. Une
+        // ligne `applyContentAudio(…audio…)` contredirait le texte que l'app affiche
+        // elle-même : « Pièce jointe du post, avec son lecteur » d'un côté, « Son de
+        // fond, 5 secondes » sur la pastille de l'avatar de l'autre — pour le MÊME
+        // son.
+        //
+        // Un son placé en FOND ne passe jamais par ici : `applyCreatedAudio`
+        // l'envoie directement à la scène (`attachPastedAudio`), et
+        // `ingestSoundFiles` fait de même. Ce qui reste dans
+        // `documentContentMedia` est donc TOUJOURS du contenu — une pièce
+        // jointe, qui se joue dans son lecteur et non sous la scène.
+        //
+        // > Une règle écrite avant le contrôle qui la contredit ne rougit
+        // > nulle part : elle continue de s'appliquer, correctement, à une
+        // > question que plus personne ne pose.
+
+        // **Un média posé a un RÔLE, et c'est la PORTE qui le donne.** Chaque
+        // média visuel ouvrirait sa page,
+        // quelle que soit la porte : la rangée haute grossissait d'une tuile
+        // pour une image qu'on venait simplement de POSER sur la scène.
+        //
+        // `ComposerMediaPlacement` tranche, et sa moitié la moins évidente est
+        // celle qui garde la rangée haute d'accord avec le modèle : le rail ne
+        // pose en premier plan que s'il a un fond SUR QUOI poser.
+        var poseeParLeRail: String?
+        for media in documentContentMedia where media.kind != .audio
+            && mediaRoleByURL[media.sourceURL] == nil {
+            let porte: ComposerMediaDoor =
+                sceneSeriesMediaURLs.contains(media.sourceURL) ? .sceneSeries
+                : railPosedMediaURLs.contains(media.sourceURL) ? .sceneRail : .documentRow
+            // **Le MÊME prédicat que `addMediaObject`**, mot pour mot : un fond
+            // de slide est un `mediaObject` résolu OU une image de fond posée
+            // au niveau de la slide. En omettre la seconde moitié ferait
+            // déclarer « fond » un objet que le modèle écrirait en premier
+            // plan — une tuile pour un média qui n'est pas une page.
+            let dejaUnFond = viewModel.currentSlide.effects.resolvedBackgroundMedia != nil
+                || viewModel.slideImages[viewModel.currentSlide.id] != nil
+            let role = ComposerMediaPlacement.role(door: porte,
+                                                   currentSlideHasBackground: dejaUnFond)
+            mediaRoleByURL[media.sourceURL] = role
+            // **Le placement se DIT**. Il se décide UNE fois par média,
+            // et son verdict ne se rejoue jamais : sans cette ligne, un canvas
+            // resté noir n'est attribuable à rien — porte, rôle, slide cible et
+            // format sont les quatre termes qui, ensemble, expliquent où le
+            // média est parti.
+            MeeshyLog.logger(.media).info(
+                "placement: \(media.sourceURL.lastPathComponent, privacy: .public) porte=\(String(describing: porte), privacy: .public) role=\(String(describing: role), privacy: .public) slide=\(viewModel.currentSlide.id, privacy: .public) fond=\(dejaUnFond, privacy: .public) format=\(String(describing: selectedFormat), privacy: .public)"
+            )
+
+            switch role {
+            case .foreground:
+                // Il rejoint la scène COURANTE et n'y fonde rien : pas de
+                // `addSlide`, pas d'entrée dans l'index des fondations, donc
+                // pas de tuile. C'est tout le lot.
+                let poses = viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+                documentMediaObjectIdBySource.merge(poses) { _, neuf in neuf }
+                // **Poser par le rail SÉLECTIONNE** : l'image posée
+                // montre ses sous-outils à droite, comme le texte et le
+                // sticker. Le dernier de la sélection l'emporte.
+                if porte == .sceneRail, let id = poses[media.sourceURL] { poseeParLeRail = id }
+
+            case .background:
+                let target: String
+                // **Ce que le RAIL a posé reste sur la scène COURANTE.** Une
+                // porte du rail ajoute « en additif » ; créer une page est le
+                // geste de `[+]`, et lui seul.
+                // La rangée du document, elle, garde la doctrine de la vue
+                // `1g` — en Post, une slide est UN média.
+                if porte == .sceneRail {
+                    target = viewModel.currentSlide.id
+                } else if porte == .sceneSeries, !dejaUnFond,
+                          (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
+                    // La série remplit d'abord la scène courante si elle n'a
+                    // pas de fond ; chaque média suivant fonde la sienne.
+                    target = viewModel.currentSlide.id
+                } else if porte != .sceneSeries, slideIdByMediaURL.isEmpty,
+                   (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
+                    target = viewModel.currentSlide.id
+                } else if viewModel.canAddSlide {
+                    viewModel.addSlide()
+                    target = viewModel.currentSlide.id
+                } else {
+                    // Le cap de dix slides est un REFUS, pas une pose sur la
+                    // dixième : `addSlide()` y est un no-op, et lire
+                    // `currentSlide.id` ensuite fabriquerait une seconde
+                    // entrée de `slideIdByMediaURL` sur le même id.
+                    FeedbackToastManager.shared.showError(ComposerDocumentCopy.mediaCapReached)
+                    continue
+                }
+                documentMediaObjectIdBySource.merge(
+                    viewModel.applyContentMedia([media], intoSlideId: target)
+                ) { _, neuf in neuf }
+                slideIdByMediaURL[media.sourceURL] = target
+            }
+        }
+
+        let present = Set(documentContentMedia.filter { $0.kind != .audio }.map(\.sourceURL))
+        for (url, slideId) in slideIdByMediaURL where !present.contains(url) {
+            if let index = viewModel.slides.firstIndex(where: { $0.id == slideId }) {
+                viewModel.removeSlide(at: index)
+            }
+            slideIdByMediaURL.removeValue(forKey: url)
+        }
+        // **Le rôle s'oublie avec le média**, sinon un fichier re-choisi après
+        // un retrait serait sauté en silence : la mémoire des rôles sert AUSSI
+        // de garde d'idempotence, et une garde qui survit à son objet refuse la
+        // pose suivante.
+        for (url, _) in mediaRoleByURL where !present.contains(url) {
+            mediaRoleByURL.removeValue(forKey: url)
+        }
+
+        // **La pré-montée part d'ICI, à la fin de la dérivation** (vue
+        // `4c`). C'est le seul moment où l'état du document est ARRÊTÉ : les
+        // objets sont posés, leurs fichiers copiés, leurs URL locales écrites.
+        //
+        // Un appel posé sur chaque porte d'entrée aurait exigé de les
+        // énumérer — cinq, dont une née d'un GESTE et absente de tout
+        // inventaire. Ici, une sixième porte hérite de la
+        // pré-montée sans que personne n'ait à y penser.
+        if let poseeParLeRail, !replaceBackgroundIfPending(with: poseeParLeRail) { sceneSelectionRelay.selectSceneItem(poseeParLeRail) }
+        startPendingPreUploads()
+    }
+
+
+    /// **Quel média le rail doit CERCLER.**
+    ///
+    /// L'index `slideIdByMediaURL` est lu à l'ENVERS : il relie une URL à une
+    /// slide, on cherche l'URL dont la slide est la courante. Passer par lui
+    /// plutôt que par l'ordre des tableaux est ce qui tient quand un média est
+    /// retiré au milieu — l'ordre ment alors, l'index non.
+    ///
+    /// `nil` quand rien ne correspond : un document sans média, une slide qui
+    /// n'est celle d'aucun média (le cas du fond de COULEUR seul). Aucun anneau
+    /// est la bonne réponse dans les deux cas — jamais un anneau par défaut sur
+    /// la première vignette, qui affirmerait une position fausse.
+    var selectedSlideMediaURL: URL? {
+        let current = viewModel.currentSlide.id
+        return slideIdByMediaURL.first(where: { $0.value == current })?.key
+    }
+
+    /// La scène est peinte dès qu'il y a QUELQUE CHOSE à peindre — un fond
+    /// choisi, un média devenu slide, ou un objet POSÉ dessus. La lier au seul
+    /// `documentBackground` (Phase 2) la réservait aux fonds de COULEUR, donc
+    /// laissait un post de photos sans aucune scène ; la lier aux seules
+    /// FONDATIONS la démontait dès que la dernière tuile partait, en emportant
+    /// hors de vue les objets de premier plan que la slide gardait.
+    var documentHasScene: Bool {
+        ComposerScenePresence.hasScene(
+            backgroundHex: documentBackground,
+            foundedSlides: slideIdByMediaURL.count,
+            sceneObjectCount: viewModel.currentSlide.sceneObjects.count
+        )
+    }
+
+    func carryContentIntoSceneIfNeeded() {
+        // E1 — la scène prend la langue DÉCLARÉE au composer comme défaut de
+        // tout objet posé.
+        viewModel.declaredContentLanguage = documentLanguage
+        // B1 — le texte ET le média déjà composés SUIVENT dans la scène.
+        viewModel.applyContentText(documentText)
+        documentMediaObjectIdBySource.merge(
+            viewModel.applyContentMedia(documentContentMedia)
+        ) { _, neuf in neuf }
+    }
+
+    /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
+    /// inline** — `FeedNearbyDiscoverability.offers(hasPlace:visibility:)`,
+    /// APPELÉE et jamais recopiée (`hasPlace && visibility == .public`) : une
+    /// condition réécrite ici diverge de l'originale au premier ajustement de
+    /// l'une des deux, exactement le défaut que ce type existe pour fermer.
+    var documentOffersNearbyDiscoverability: Bool {
+        FeedNearbyDiscoverability.offers(
+            hasPlace: documentLocation != nil,
+            visibility: composerVisibility
+        )
+    }
+
+    /// **Semer la première unité d'histoire.** Appelé au changement de format
+    /// et au montage ; la règle décide, pas ce corps — c'est elle qui porte la
+    /// raison de ne pas se fier à l'initialisation d'un autre module.
+    func seedStoryCanvasIfNeeded() {
+        guard ComposerStoryCanvas.needsSeedSlide(format: selectedFormat,
+                                                 slideCount: viewModel.slides.count) else { return }
+        viewModel.addSlide()
+    }
+
+    /// Le rappel de la rangée, aiguillé sur l'EFFET et non sur l'outil.
+    ///
+    /// Aiguiller sur l'outil aurait rouvert exactement ce que `effect` referme :
+    /// des branches muettes pour les outils que la rangée ne sert pas, et la
+    /// dérive silencieuse le jour où l'une d'elles cesserait de correspondre à
+    /// ce que la rangée sert. Ici, `nil` est le seul cas inatteignable, et il
+    /// l'est par construction — un outil sans effet n'arrive jamais à l'écran.
+    ///
+    /// **`.attachesLocalMedia` porte UNE valeur associée (T2.3)**, jamais trois
+    /// cas distincts sur `tool.effect` — `.photoLibrary`/`.camera`/`.files`
+    /// restent une question posée au SÉLECTEUR à ouvrir
+    /// (`presentMediaIntake`), jamais une seconde question posée à l'outil.
+    /// Une porte du rail délègue au chemin d'ingestion EXISTANT — le rail est
+    /// une autre GÉOGRAPHIE, pas un second pipeline. Y écrire un chemin neuf
+    /// ferait diverger la porte de la rangée qui fait déjà la même chose.
+    /// **Rendre le clavier, où qu'il soit accroché**.
+    ///
+    /// Le premier répondant peut être le champ de la légende, celui du corps du
+    /// post ou un éditeur inline du canvas — trois propriétaires, trois états
+    /// privés. Les fermer un par un depuis ici demanderait de les connaître
+    /// tous ; renvoyer le répondant courant le fait sans en nommer aucun, et
+    /// chacun se referme ensuite par sa propre règle (le calque de description
+    /// écoute déjà la perte de focus pour se ranger).
+    func dismissTextEditing() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+
+    func handleRailDoor(_ door: ComposerRailDoor) {
+        // **Choisir un outil fait tomber le clavier.**
+        // Une porte qui ne prend pas de texte n'a aucune raison de
+        // laisser le clavier occuper la moitié de l'écran : ses réglages y
+        // passeraient dessous, et l'auteur devrait le renvoyer lui-même avant de
+        // voir ce qu'il vient d'ouvrir.
+        //
+        // Le prédicat vit sur la PORTE (`keepsKeyboard`), pas ici : c'est elle
+        // qui sait si elle écrit, et une onzième porte héritera du bon défaut
+        // sans que ce site ait à changer.
+        if !door.keepsKeyboard { dismissTextEditing() }
+        switch door {
+        case .media:
+            // **L'intention se pose AVEC le sélecteur, jamais avant**.
+            // `presentMediaSources` peut ne RIEN présenter — la règle des
+            // sources peut en offrir zéro, un cas que son propre doc-comment
+            // déclare traitable plutôt qu'impossible à écrire. Une intention
+            // armée devant une feuille qui n'apparaît pas n'a plus aucune
+            // sortie : ni consommation, ni annulation à laquelle se raccrocher.
+            // La faire DÉPENDRE de la présentation supprime le cas au lieu de
+            // lui ajouter une branche défensive que rien n'exécute.
+            railPosesNextMedia = presentMediaSources()
+        case .sound:   presentSoundSources()
+        case .mention: handleDocumentTool(.mention)
+        case .place:   handleDocumentTool(.place)
+        case .hashtag:
+            // **La jumelle de `.mention`, et par le même mécanisme** :
+            // elle ouvre un sélecteur dont le résultat s'écrit dans le TEXTE de
+            // la publication. Aucun objet n'est posé sur la scène — un hashtag
+            // classe ce qui part, il ne s'y voit pas.
+            HapticFeedback.light()
+            presentedPortal = .hashtag
+        case .background:
+            // **la porte FOND déplie la bande `.palette`**, celle-là
+            // même que le menu `⋯` ouvrait en dépannage.
+            //
+            // Elle BASCULE, comme le dessin et pour la même raison : la bande
+            // occupe ≈ 170 pt de la zone basse, et une porte qui ne saurait
+            // qu'ouvrir les rendrait à sens unique. C'est le geste exact de
+            // `ComposerOverflowEntry.pickBackground`, déplacé du menu au rail —
+            // le même effet par un chemin qu'on trouve sans le chercher.
+            // Avec un média de fond, la même porte ouvre le CADRE.
+            HapticFeedback.light()
+            let bande = ComposerSceneBand.forBackgroundDoor(hasBackgroundMedia: sceneHasBackgroundMedia)
+            if bande == .palette { presentedPortal = .background } else { requestedSceneBand = requestedSceneBand == bande ? nil : bande }
+        case .description:
+            // La SEULE façon d'ouvrir la description sur la scène incrustée :
+            // aucun champ permanent ne l'affiche dès qu'un texte existe.
+            HapticFeedback.light()
+            // **Ouvrir l'une FERME l'autre**. Les deux zones s'ancrent
+            // en bas : ouvertes ensemble, elles se recouvriraient, et l'auteur
+            // taperait dans celle qu'il ne regarde pas. Le `body` le rend déjà
+            // impossible à l'affichage ; le fermer ICI garde l'ÉTAT d'accord
+            // avec ce qui est peint, sans quoi refermer la description
+            // rouvrirait le contenu par surprise.
+            editsPostContent = false
+            openSceneDescriptionEditing()
+        case .content:
+            // **Le CORPS du post** — jamais la légende, que
+            // `.description` ouvre juste au-dessus. Deux portes voisines, deux
+            // textes réellement distincts : c'est la table de
+            // `ComposerSlideTextRole`, rendue atteignable.
+            HapticFeedback.light()
+            editsSceneDescription = false
+            editsPostContent = true
+        case .drawing:
+            // **Une porte à BASCULE, la seule du rail.** Les six autres font
+            // entrer quelque chose et se referment ; celle-ci ouvre un MODE qui
+            // dure, et il faut pouvoir en sortir par là où l'on est entré —
+            // sinon le seul moyen de reprendre la main sur les objets serait de
+            // quitter l'écran.
+            //
+            // La bande suit le mode et n'est pas un état parallèle : deux
+            // booléens auraient permis « je dessine mais la bande est fermée »,
+            // c'est-à-dire un doigt qui trace sans qu'aucun réglage ne soit
+            // atteignable.
+            HapticFeedback.light()
+            if viewModel.isDrawingActive {
+                viewModel.endDrawing()
+            } else {
+                // `beginDrawing()` et non `enterDrawingEditingMode()` : le
+                // second n'ouvre que le mode LISTE de l'atelier, et laisse
+                // `activeTool` intact — donc la couche de capture n'est jamais
+                // montée et le doigt trace dans le vide. Défaut mesuré au
+                // simulateur : la bande paraissait, le trait
+                // jamais.
+                viewModel.beginDrawing()
+                // **Les commandes de l'outil paraissent EN DIRECT** (« la rangée
+                // canonique du bas disparaît pour mettre en place les commandes d'outils
+                // directement en direct »).
+                //
+                // `MeeshyToolOptionsPanel` ne rend quelque chose que si un outil
+                // est DÉPLIÉ : ouvrir le dessin laissait la zone basse VIDE
+                // jusqu'à ce qu'une bulle du rail soit tapée — un geste de plus
+                // avant le premier réglage, sur un écran qui vient précisément
+                // de libérer cette place. Le pinceau est le premier réglage ; la
+                // scène le porte déjà dans sa barre de dessin (#13839).
+                if mountedComposerView != .scene { viewModel.setExpandedDrawingTool(.tool) }
+            }
+        case .text:
+            // **Poser PUIS saisir SUR LA SCÈNE, dans le même geste** (« plutôt que
+            // d'ouvrir l'édition de texte, affiche la liste des options directement à
+            // droite du bouton »). Le clavier monte sur le texte posé, et ses options
+            // s'accrochent à ce rail, à la place des portes. Le double-toucher et
+            // « Modifier » ouvrent la MÊME saisie.
+            //
+            // La porte BASCULE, comme le dessin : retouchée pendant la saisie,
+            // elle la termine. La coquille restée vide est supprimée par
+            // `exitTextEditingMode`, donc « poser » n'engage à rien.
+            HapticFeedback.light()
+            if viewModel.textEditingMode.activeTextId != nil {
+                viewModel.exitTextEditingMode()
+            } else if let objet = viewModel.addText() {
+                beginSceneTextEditing(objet.id)
+            }
+        case .sticker:
+            // **Le portail vit sur le MEUBLE**, comme les six autres :
+            // la feuille est montée au-dessus de l'aiguillage des surfaces, pas
+            // sur l'une d'elles. Poser le booléen ici et le lire ailleurs est
+            // précisément la chaîne que l'inventaire de
+            // `ComposerIntakePortalsTests` tient.
+            HapticFeedback.light()
+            presentedPortal = .sticker
+        }
+    }
+
+    /// **Le rail délègue au VIEWMODEL, jamais au canvas.** Muter la slide par
+    /// le modèle est ce qui garde publication, reader et export d'accord ; le
+    /// meuble n'a d'ailleurs aucune référence à la vue UIKit.
+    func handleTrailingRailAction(_ action: StoryCanvasContextAction) {
+        guard let id = selectedSceneItemId else { return }
+        switch action {
+        case .duplicate: viewModel.duplicateElement(id: id)
+        case .delete:
+            retractMedia(objectIds: [id])
+            selectedSceneItemId = nil
+            selectedSceneItemKind = nil
+        case .setAsBackground, .replaceBackground: makeSceneBackground(id)
+        case .trim:
+            // **« Rogner » ouvre l'ÉDITEUR sur ses bornes.** La première vue n'édite
+            // pas, et les bornes de lecture vivent à `.media(.trim)`.
+            //
+            // Pas de bascule : une bascule n'existerait que si la bande RESTAIT
+            // visible à côté de son contrôleur, donc s'il fallait un geste pour la
+            // ranger. Un écran modal se referme par son propre en-tête.
+            openObjectEditor(id, section: .media(.trim))
+            HapticFeedback.light()
+        case .edit, .leaveScene, .bringForward, .sendBackward:
+            // Injoignables DEPUIS LE RAIL, et pour trois raisons distinctes que
+            // le `switch` exhaustif oblige à relire quand on les sert — l'empilement
+            // se fait au TOUCHER (#13918).
+            //
+            // `edit` a son chemin — l'appui long et l'action
+            // VoiceOver « Modifier », câblés par `onItemEdit` — mais
+            // pas ici : le rail *trailing* règle les DIMENSIONS d'un objet et
+            // l'histoire de la publication.
+            // « Modifier » n'est pas une dimension ; l'y ajouter donnerait deux
+            // portes au même geste, ce que la règle « une porte n'a pas de
+            // jumelle » interdit.
+            //
+            // `leaveScene` attend, elle, qu'une règle dise ce que l'objet
+            // DEVIENT une fois dehors — une décision produit, pas un
+            // câblage.
+            break
+        }
+    }
+
+    func handleDocumentTool(_ tool: ComposerDocumentTool) {
+        switch tool.effect {
+        case .insertsEmojiIntoText:
+            HapticFeedback.light()
+            presentedPortal = .emoji
+        case .opensReferencePicker:
+            HapticFeedback.light()
+            presentedPortal = .reference
+        case .attachesLocalMedia(let intake):
+            HapticFeedback.light()
+            // **La rangée du document n'est pas le rail**. Une intention
+            // du rail restée armée — sa feuille de choix annulée, sa photothèque
+            // refermée — poserait sur la scène courante le média que l'auteur
+            // vient de demander À LA RANGÉE. Les deux portes DISENT donc leur
+            // géographie au même endroit : `handleRailDoor(.media)` arme, celle-ci
+            // désarme.
+            abandonRailPosing()
+            presentMediaIntake(intake)
+        case .attachesLocation:
+            HapticFeedback.light()
+            presentedPortal = .location
+        case .composesTextScene:
+            openTextScene()
+        case .attachesTranscribedAudio:
+            HapticFeedback.light()
+            // **La MÊME feuille que « Ajouter un son ».** Ce qui
+            // distingue les deux portes n'est pas le geste — les deux
+            // enregistrent, importent et empruntent — mais la DESTINATION du
+            // résultat. Elle se choisit dans la feuille ; l'entrée ne
+            // fait que POSER le défaut qui lui correspond.
+            openSoundSheet(placement: .foreground)
+        case .none:
+            break
+        }
+    }
+
+    /// Quel sélecteur ouvrir pour la famille d'ingestion demandée — la seule
+    /// question que `ComposerMediaIntake` pose. `handleDocumentTool` ne la
+    /// pose jamais lui-même : il reste aiguillé sur l'EFFET, cette fonction
+    /// sur l'INTAKE.
+    /// **La porte média ouvre les TROIS sources, pas la photothèque seule.**
+    ///
+    /// Elle allait droit à `handleDocumentTool(.photo)` : dès qu'une scène
+    /// existait, la caméra et l'import de fichier — deux des sept entrées de la
+    /// rangée canonique — quittaient l'écran. Le commentaire d'à côté disait
+    /// pourtant que le rail « n'a qu'UNE porte pour les trois sources » et que
+    /// `allowsCapture` gouvernerait « le SÉLECTEUR, en aval » ; ce sélecteur
+    /// n'existait pas.
+    ///
+    /// **Une source unique se présente DIRECTEMENT.** Une feuille de choix à un
+    /// seul élément demande un geste pour zéro décision — et le cas n'est pas
+    /// théorique : il n'a simplement pas de producteur aujourd'hui, la règle
+    /// n'ôtant que la caméra. Le rendre impossible à écrire coûterait plus que
+    /// de le traiter.
+    /// **Un contrôleur d'outil a été tapé** — on déplie son panneau, ou on le
+    /// replie s'il l'était déjà.
+    ///
+    /// L'identifiant porte sa famille en préfixe (`drawing.` / `text.`), et
+    /// c'est ce qui permet à cette fonction de rester une seule : le rail ne
+    /// connaît pas les deux énumérés du SDK, et le meuble n'a pas à se demander
+    /// dans quel mode il est — l'identifiant le dit.
+    func handleRailToolControl(_ control: ComposerToolControl) {
+        HapticFeedback.light()
+        if let brut = control.id.split(separator: ".", maxSplits: 1).last.map(String.init) {
+            if control.id.hasPrefix("drawing."), let outil = DrawingEditTool(rawValue: brut) {
+                // Régler le PINCEAU, jamais un trait déjà posé : la sélection
+                // par-trait est un autre geste, et laisser les deux ouverts
+                // ferait régler l'un en croyant régler l'autre.
+                viewModel.selectStroke(nil)
+                viewModel.setExpandedDrawingTool(control.isExpanded ? nil : outil)
+            } else if control.id.hasPrefix("text."), let outil = TextEditTool(rawValue: brut) {
+                viewModel.setExpandedTool(control.isExpanded ? nil : outil)
+            }
+        }
+    }
+
+    /// **Le `(x)`** — termine l'outil en cours, quel qu'il soit, et rend le rail
+    /// à ses portes. Il ne détruit rien : ce qui a été posé reste sur la scène.
+    func handleRailExitTool() {
+        HapticFeedback.light()
+        if viewModel.isDrawingActive {
+            viewModel.endDrawing()
+        } else if viewModel.textEditingMode.activeTextId != nil {
+            viewModel.exitTextEditingMode()
+        }
+    }
+
+    /// Rend VRAI si un sélecteur est effectivement à l'écran — c'est ce que la
+    /// porte du rail lit pour savoir si son intention a une sortie.
+    /// La porte va droit à la photothèque : aucune feuille de choix.
+    @discardableResult
+    func presentMediaSources() -> Bool {
+        HapticFeedback.light()
+        presentMediaIntake(ComposerMediaSourcePolicy.railDoorIntake)
+        return true
+    }
+
+    /// **La porte son ouvre l'ÉTAGÈRE autant que le micro.**
+    ///
+    /// Elle allait droit à `handleDocumentTool(.microphone)` : le composer
+    /// unifié n'avait aucun chemin vers `SoundLibraryPicker`, alors que le
+    /// socle affiche déjà un crédit de son de fond. Les deux provenances ne
+    /// posent pas le même objet — un son emprunté DEVIENT le fond, une note
+    /// vocale ne l'est jamais (doctrine de la vue `2c`) —, donc le choix ne
+    /// peut pas être deviné : il se demande.
+    /// **Annuler — et ce que le meuble n'a PAS à faire ensuite.**
+    ///
+    /// L'atelier fait suivre `restoreCanvas(from:)` et
+    /// `loadCurrentSlideIntoTimeline()` : deux effets de PRÉSENTATION dus à sa
+    /// coquille, qui tient un état canvas local et une timeline chargée. Le
+    /// plateau n'a ni l'un ni l'autre — `EmbeddedSceneCanvas` lit la slide par
+    /// un `Binding` sur `viewModel.currentSlide`, donc appliquer l'instantané
+    /// SUFFIT à redessiner. Recopier les deux appels ici aurait couplé le
+    /// meuble à des helpers qu'il n'a pas, pour un effet déjà obtenu.
+    ///
+    /// Le retour de `undoGlobal()` est GARDÉ : `false` veut dire « rien à
+    /// défaire », et faire vibrer l'appareil pour un geste sans effet est
+    /// exactement le retour trompeur que la loi 4 combat.
+    func performHistoryUndo() {
+        guard viewModel.undoGlobal() else { return }
+        HapticFeedback.light()
+    }
+
+    func performHistoryRedo() {
+        guard viewModel.redoGlobal() else { return }
+        HapticFeedback.light()
+    }
+
+    /// **Une porte, une feuille.** Elle ouvrait un choix à deux options
+    /// dont les branches n'atterrissaient pas au même endroit : emprunter posait
+    /// un son SUR LA SCÈNE, enregistrer le versait dans `documentLocalMedia` —
+    /// la liste du DOCUMENT. Un vocal enregistré depuis une scène n'atteignait
+    /// donc jamais cette scène.
+    func presentSoundSources() {
+        HapticFeedback.light()
+        // La porte du rail n'a pas d'avis sur le placement : ce que l'auteur a
+        // choisi la fois d'avant tient. `nil` le dit ; `.background` l'imposerait.
+        openSoundSheet(placement: nil)
+    }
+
+    /// Les provenances SECONDAIRES, offertes sous le micro dans la feuille.
+    /// `.record` n'y figure pas : c'est la surface principale, pas une porte.
+    /// **La provenance décide du MÉCANISME de présentation, pas seulement de la
+    /// destination**. `ComposerSoundHandoff` porte la règle : un portail
+    /// se remplace, un sélecteur système exige que la feuille se ferme d'abord.
+    ///
+    /// Une branche `.files` qui poserait `showsFileImporter = true` en laissant
+    /// `presentedPortal = .sound` monté ferait deux présentations sur le même
+    /// corps de vue, dont iOS n'honore que la première. Le bouton serait INERTE.
+    func presentSoundSource(_ source: ComposerSoundSource) {
+        switch ComposerSoundHandoff.handoff(for: source) {
+        case .portal:
+            presentedPortal = .soundLibrary
+        case .systemImporterAfterDismiss:
+            // Le son se pose sur la SCÈNE, pas dans la liste média du document :
+            // `railPosesNextMedia` ne le concerne donc pas.
+            fileImportIntent = .sound
+            pendingFileImport = true
+            presentedPortal = nil
+        case .sheetSurface:
+            break
+        }
+    }
+
+    /// **La reprise, à la fermeture EFFECTIVE de la feuille**.
+    ///
+    /// Le drapeau retombe avant l'ouverture : un `pendingFileImport` resté vrai
+    /// rouvrirait l'importateur à la prochaine fermeture de n'importe quel
+    /// portail — la même classe de défaut que `railPosesNextMedia` documente
+    /// deux cents lignes plus haut.
+    ///
+    /// **Elle sert DEUX présentations** : la feuille d'audience doit elle aussi
+    /// se fermer avant
+    /// d'ouvrir le sélecteur de personnes, sous peine de reproduire à
+    /// l'identique le défaut du bouton « Fichiers ». Une seule reprise, un seul
+    /// `onDismiss`, aucune chance qu'une troisième s'en dispense en silence.
+    func resumePendingPresentation() {
+        if pendingFileImport {
+            pendingFileImport = false
+            showsFileImporter = true
+            return
+        }
+        if let mode = pendingAudiencePicker {
+            pendingAudiencePicker = nil
+            audiencePickerMode = mode
+        }
+    }
+
+
+    func presentMediaIntake(_ intake: ComposerMediaIntake) {
+        switch intake {
+        case .photoLibrary:
+            openingPickFoundsScenes = false
+            showsPhotoPicker = true
+        case .camera:
+            presentCamera(mode: .photo)
+        case .files:
+            showsFileImporter = true
+        }
+    }
+
+    /// La photothèque. `PhotosPickerItem` ne porte ni URL ni octets
+    /// tant qu'on ne les charge pas : `loadTransferable` les matérialise, et
+    /// `supportedContentTypes` porte le type DÉCLARÉ par la photothèque.
+    ///
+    /// Le mime et la durée passent tous
+    /// deux par `ComposerMediaProbe` — jamais un repli `?? "application/octet-stream"`
+    /// recalculé ici (`.mime`, qui seul sait retomber sur la table par
+    /// EXTENSION avant ce repli terminal), jamais une vidéo sélectionnée
+    /// figée `durationMs: nil` (`.durationMs`, sans quoi `ReelComposition`
+    /// la classerait `.post` au lieu de `.reel`).
+    /// Marque les médias que l'ingestion va poser comme venant du RAIL, puis
+    /// retombe. Un drapeau qui resterait vrai ferait poser sur la scène
+    /// courante le média suivant, même arrivé par la rangée du document.
+    func consumeRailPosing(_ urls: [URL]) {
+        guard railPosesNextMedia else { return }
+        railPosedMediaURLs.formUnion(urls)
+        railPosesNextMedia = false
+    }
+
+    /// **Jumelle de `consumeRailPosing` : elle JETTE l'intention au lieu de la
+    /// poser**.
+    ///
+    /// Une intention encore armée quand un média arrive par une AUTRE porte est
+    /// forcément périmée : la porte du rail présente son sélecteur dans la même
+    /// instruction qu'elle arme (`handleRailDoor(.media)`), donc rien ne peut
+    /// s'intercaler tant que ce sélecteur est à l'écran. Si quelque chose s'est
+    /// intercalé, c'est que le sélecteur est parti sans rien rendre.
+    ///
+    /// C'est le même geste que `disarmSceneCamera` fait déjà pour le viseur —
+    /// « quitter sans prendre RETIRE la marque ». Le chemin du sélecteur n'avait
+    /// pas son équivalent : le bouton d'annulation de la feuille de choix a un
+    /// corps VIDE, et refermer la photothèque ne produit aucun signal.
+    func abandonRailPosing() {
+        railPosesNextMedia = false
+        backgroundReplacementId = nil
+    }
+
+    /// **LE site unique où une porte d'ingestion écrit dans
+    /// `documentLocalMedia` — et il marque le rail AVANT d'écrire**.
+    ///
+    /// ## Le défaut qu'il ferme
+    ///
+    /// Une photo ajoutée par le rail de la scène n'y arrivait jamais. Elle était
+    /// pourtant bien ingérée — la surface Post la montrait — et apparaissait
+    /// après un aller-retour de format. Reproduit deux fois au simulateur.
+    ///
+    /// `syncPostMediaIntoSlides` est branchée sur `documentLocalMedia` et lit
+    /// `railPosedMediaURLs` pour choisir la porte du média. Les quatre sites
+    /// d'ingestion ÉCRIVAIENT d'abord et marquaient ensuite : au moment où
+    /// l'observateur tournait, l'ensemble était encore vide. Le média était donc
+    /// classé « rangée du document » — une slide à lui — au lieu d'être posé sur
+    /// la scène courante.
+    ///
+    /// Le verdict est DÉFINITIF : la boucle ne considère que les médias sans
+    /// rôle (`mediaRoleByURL[url] == nil`). Un rôle mal attribué ne se rejoue
+    /// jamais, et c'est pourquoi le symptôme survivait à tout rafraîchissement.
+    ///
+    /// > **Un drapeau consommé APRÈS l'observateur qui le lit ne vaut rien** —
+    /// > et il échoue du côté silencieux : ni erreur, ni journal, un média
+    /// > correctement ingéré rangé au mauvais endroit.
+    ///
+    /// ## Deux propriétés, et la seconde n'est pas cosmétique
+    ///
+    /// **Un seul écrivain** : tant que quatre sites écrivaient, l'ordre était une
+    /// discipline ; il est désormais une propriété, et un cinquième site ne peut
+    /// plus le rejouer.
+    ///
+    /// **Une seule notification** : les boucles appelaient `append` par item,
+    /// donc rejouaient la dérivation autant de fois qu'il y avait de fichiers,
+    /// chaque fois sur un état différent — la place d'un média dépendait de son
+    /// RANG dans la sélection.
+    ///
+    /// `medias` vide ⇒ rien, pas même la consommation du drapeau : une
+    /// ingestion qui n'a rien produit ne doit pas déclarer que le rail a servi.
+    /// **Le fichier de la graine rejoint la voie DOCUMENT — sans être posé une
+    /// seconde fois sur le canvas**.
+    ///
+    /// La graine a déjà fait son travail à la construction du ViewModel : son
+    /// objet est sur la scène, et l'auteur le voit. Ce qui manquait est
+    /// ailleurs — dans `documentLocalMedia`, la liste que
+    /// `enqueuePostMedia(sourceMediaURLs:)` téléverse. Sans elle, publier par la
+    /// voie document emportait un `storyEffects` qui référence un chemin local,
+    /// et le média n'arrivait nulle part.
+    ///
+    /// ## Les trois écritures, et pourquoi aucune n'est optionnelle
+    ///
+    /// - `mediaRoleByURL` — c'est le GATE D'IDEMPOTENCE de `syncPostMediaIntoSlides`
+    ///   (`mediaRoleByURL[url] == nil`). Le poser AVANT l'entrée dans la liste
+    ///   est ce qui empêche la mécanique de placement de reposer sur le canvas
+    ///   un média qui y est déjà : sans lui, la scène porterait l'objet EN
+    ///   DOUBLE, et le second par-dessus le premier.
+    /// - `slideIdByMediaURL` — l'index des FONDATIONS, que `ComposerHeaderTiles`
+    ///   lit pour décider qui gagne une tuile. Un fond en a une ; un son n'en a
+    ///   pas, et c'est `Plan.foundsScene` qui tranche.
+    /// - `documentMediaObjectIdBySource` — le pont `URL source → objet de
+    ///   canvas`, dont dépendent les légendes, les alternatives et
+    ///   `mediaObjectIds`. La vidéo nomme son objet ; l'image ne le peut pas
+    ///   (son identité naît dans `init(seeding:)`), alors on la RELIT sur la
+    ///   slide plutôt que de l'inventer.
+    ///
+    /// L'ordre est load-bearing : les trois cartes sont posées AVANT l'append,
+    /// parce que `documentLocalMedia` déclenche `syncPostMediaIntoSlides` par
+    /// `adaptiveOnChange` — écrire la liste d'abord ferait courir la mécanique
+    /// sur des cartes vides.
+    /// La porte du fil ouvre « Texte du post », clavier levé (#13864).
+    func openPostTextAtDoorIfDue() {
+        guard !postTextOpenedAtDoor,
+              ComposerPostTextPill.opensOnAppear(
+                  opening: profile.opensWith, format: selectedFormat,
+                  picksFirst: ComposerScenePicking.opensOnPicker(origin: intent.origin, compositionIsEmpty: compositionIsEmpty))
+        else { return }
+        postTextOpenedAtDoor = true
+        editsSceneDescription = false
+        editsPostContent = true
+    }
+
+    func ingestSeedIntoDocumentIfNeeded() {
+        guard !seedIngestedIntoDocument,
+              let plan = ComposerSeedIngestion.plan(for: mediaSeed) else { return }
+        seedIngestedIntoDocument = true
+
+        mediaRoleByURL[plan.media.url] = plan.foundsScene ? .background : .foreground
+        if plan.foundsScene {
+            slideIdByMediaURL[plan.media.url] = viewModel.currentSlide.id
+        }
+        // L'objet que la graine NOMME, sinon celui qu'elle a posé en fond — et
+        // rien du tout si elle n'a rien posé : une carte qui pointerait un objet
+        // inexistant ferait voyager des légendes vers un identifiant mort.
+        if let objectId = plan.objectId
+            ?? viewModel.currentSlide.effects.resolvedBackgroundMedia?.id {
+            documentMediaObjectIdBySource[plan.media.url] = objectId
+        }
+        ecrireDansLaListeDuDocument([plan.media], rail: .roleDejaPose)
+    }
+
+    /// **LE site unique où quoi que ce soit écrit dans `documentLocalMedia`.**
+    ///
+    /// Un doc-comment qui déclare « LE site unique » sans l'imposer laisse
+    /// plusieurs écrivains — ici deux, et deux dans `+Sound.swift`, que la garde
+    /// ne lirait même pas. Les deux portes son ne toucheraient pas l'intention
+    /// du rail : ni la consommer, ni la jeter. Elles n'auraient rien fait de mal —
+    /// **la règle vivrait dans un fichier qu'elles n'ouvrent pas.**
+    ///
+    /// L'entonnoir remplace la discipline par une QUESTION que le compilateur
+    /// pose : `ComposerRailPosing` n'a pas de `default`, donc une porte neuve
+    /// ne peut pas hériter en silence d'une intention qu'elle n'a pas posée.
+    ///
+    /// L'ordre est load-bearing, et c'est le défaut d'origine : `documentLocalMedia`
+    /// déclenche `syncPostMediaIntoSlides` par `adaptiveOnChange`, et cet
+    /// observateur LIT `railPosedMediaURLs`. Marquer après l'écriture le
+    /// laisserait vide au moment du verdict — le média serait classé « rangée du
+    /// document », une slide à lui, au lieu d'être posé sur la scène courante.
+    func ecrireDansLaListeDuDocument(_ medias: [ComposerDocumentMedia],
+                                     rail: ComposerRailPosing) {
+        guard !medias.isEmpty else { return }
+        switch rail {
+        case .consomme:
+            consumeRailPosing(medias.map(\.url))
+        case .abandonne:
+            abandonRailPosing()
+        case .roleDejaPose:
+            break
+        }
+        documentLocalMedia.append(contentsOf: medias)
+    }
+
+    func ingestIntoDocument(_ medias: [ComposerDocumentMedia]) {
+        ecrireDansLaListeDuDocument(medias, rail: .consomme)
+    }
+
+    // MARK: - Ce qui entre par un GESTE du meuble
+
+    // **Extraits de `MeeshyComposerHost.swift`**, même découpe que
+    // `+Surfaces` : le viseur et la graine de mood font tous deux ENTRER de la
+    // matière dans la composition — c'est la responsabilité que ce fichier
+    // déclare en tête. Les laisser sur le type reviendrait à y ranger des
+    // gestes parce qu'ils y sont nés, pas parce qu'ils y appartiennent.
+
+    /// **Le SEUL site qui ouvre le viseur** — et il porte son mode.
+    ///
+    /// Le mode voyage par un état du meuble plutôt que par le portail :
+    /// `ComposerPortal` est la clé d'un `.sheet(item:)`, et lui donner une
+    /// valeur associée changerait son identité — deux ouvertures de la caméra
+    /// dans deux modes deviendraient deux feuilles distinctes aux yeux de
+    /// SwiftUI, qui n'en honore qu'une.
+    ///
+    /// Il est REPOSÉ à chaque ouverture, jamais seulement à la fermeture : une
+    /// mémoire de mode qui survit rendrait tout appui suivant sur la porte
+    /// média dépendant de la façon dont le composer a été ouvert — un
+    /// comportement que rien à l'écran n'annoncerait.
+    func presentCamera(mode: CameraCaptureMode) {
+        pendingCameraMode = mode
+        presentedPortal = .camera
+    }
+
+    /// La graine entre par la RÈGLE, jamais par quatre affectations écrites
+    /// ici : `ComposerMoodSeeding.adopt` est éprouvable sans monter une vue, et
+    /// c'est elle qui tient l'invariant « une graine ne remplace jamais ce que
+    /// l'auteur a posé ».
+    /// Le `guard` n'est pas une redite de la règle : `adopt(nil, …)` rend la
+    /// composition intacte, mais la RÉÉCRIRE déclencherait une passe de rendu
+    /// pour rien à chaque apparition d'un composer de création — celui qui ne
+    /// sème jamais rien.
+    ///
+    /// L'état COURANT est relu au moment de l'adoption, jamais capturé plus tôt.
+    /// C'est ce qui rend l'ordre indifférent avec le sélecteur d'audience de la
+    /// surface : qu'il ait déjà appliqué la mémoire du format (loi 10) ou non,
+    /// une graine muette sur l'audience rend ce qu'elle trouve.
+    func adoptMoodSeed(_ graine: ComposerMoodSeed?) {
+        guard let graine else { return }
+        let adoptee = ComposerMoodSeeding.adopt(
+            graine,
+            into: ComposerMoodComposition(
+                emoji: moodEmoji,
+                text: documentText,
+                visibility: composerVisibility,
+                visibilityUserIds: composerVisibilityUserIds
+            )
+        )
+        moodEmoji = adoptee.emoji
+        documentText = adoptee.text
+        composerVisibility = adoptee.visibility
+        composerVisibilityUserIds = adoptee.visibilityUserIds
+    }
+}

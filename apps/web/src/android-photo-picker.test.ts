@@ -62,4 +62,16 @@ describe('la coque ouvre le sélecteur de photos du système (#10087)', () => {
     expect(creation).toContain('registerForActivityResult(');
     expect(code).toMatch(/onReceiveValue\(/);
   });
+
+  /**
+   * #12744 — Capacitor range chaque prise de `capture` dans
+   * `getExternalFilesDir(Pictures)` sans jamais la supprimer. La création
+   * balaie, hors du fil principal, les prises d'avant (`CaptureSweepRules`,
+   * JUnit), comme Chrome nettoie les siennes.
+   */
+  test('la création balaie, hors du fil principal, les prises de l’appareil photo d’avant', () => {
+    const creation = corpsDe(code, 'protected void onCreate(Bundle savedInstanceState)');
+    expect(creation).toContain('CaptureSweepRules.sweep(getExternalFilesDir(Environment.DIRECTORY_PICTURES), System.currentTimeMillis())');
+    expect(creation).toMatch(/new Thread\(\(\) -> CaptureSweepRules\.sweep\(/);
+  });
 });

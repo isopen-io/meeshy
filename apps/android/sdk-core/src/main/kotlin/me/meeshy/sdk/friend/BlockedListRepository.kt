@@ -12,6 +12,9 @@ import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.friend.BlockedUser
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.commitOrWrite
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,7 +35,11 @@ class BlockedListRepository @Inject constructor(
     private val database: MeeshyDatabase,
     private val blockedUserDao: BlockedUserDao,
     private val syncMetaDao: SyncMetaDao,
+    private val fence: AccountFence? = null,
 ) {
+
+    /** Le compte auquel appartient une requête qui part MAINTENANT (#13560) ; `null` sans garde. */
+    fun ticket(): AccountTicket? = fence?.ticket()
 
     suspend fun cachedSnapshot(): List<BlockedUser>? {
         val rows = blockedUserDao.observeAll().first()
@@ -41,7 +48,7 @@ class BlockedListRepository @Inject constructor(
         return rows.map { MeeshyApi.json.decodeFromString<BlockedUser>(it.payload) }
     }
 
-    suspend fun persist(users: List<BlockedUser>) {
+    suspend fun persist(users: List<BlockedUser>, ticket: AccountTicket?) {
         val now = SystemCacheClock.nowMillis()
         val rows = users.mapIndexed { index, user ->
             BlockedUserEntity(
@@ -51,14 +58,16 @@ class BlockedListRepository @Inject constructor(
                 cachedAt = now,
             )
         }
-        database.withTransaction {
-            if (rows.isEmpty()) {
-                blockedUserDao.clear()
-            } else {
-                blockedUserDao.upsertAll(rows)
-                blockedUserDao.deleteNotIn(rows.map { it.userId })
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                if (rows.isEmpty()) {
+                    blockedUserDao.clear()
+                } else {
+                    blockedUserDao.upsertAll(rows)
+                    blockedUserDao.deleteNotIn(rows.map { it.userId })
+                }
+                syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
             }
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
         }
     }
 

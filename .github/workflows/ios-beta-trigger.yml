@@ -1,4 +1,4 @@
-name: iOS (beta) → Xcode Cloud
+name: iOS · bêta Xcode Cloud
 
 # DEPUIS LE 2026-09-24 (#7791) : chaque merge dans `main` démarre le build
 # Xcode Cloud de lui-même — `branchStartCondition` du workflow « TestFlight

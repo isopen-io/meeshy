@@ -38,7 +38,7 @@ afterEach(() => {
 
 type Sent = Parameters<DeclineReplyDeps['send']>[0];
 
-const mount = () => {
+const mount = (options: { readonly canReply?: boolean } = {}) => {
   const events: string[] = [];
   const sent: Sent[] = [];
   let closed = 0;
@@ -48,6 +48,7 @@ const mount = () => {
       events.push('send');
       sent.push(message);
     },
+    ...(options.canReply === undefined ? {} : { canReply: () => options.canReply === true }),
   };
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -129,3 +130,20 @@ describe('CallDeclineSheet — le retour matériel', () => {
   });
 });
 
+
+/**
+ * #13171 — CONVERSATION VUE CHIFFRÉE DE BOUT EN BOUT : la feuille n'offre aucune
+ * réponse (le web ne scelle pas), dit où écrire, et « Annuler » rend l'écran
+ * entrant intact — rien n'est refusé, rien n'est envoyé.
+ */
+describe('CallDeclineSheet — conversation chiffrée de bout en bout', () => {
+  test('aucune réponse offerte, la raison est dite, « Annuler » ne refuse rien', () => {
+    const { events, closed } = mount({ canReply: false });
+    expect(container.querySelectorAll('[data-call-decline-reply]').length).toBe(0);
+    expect(container.querySelector('[data-call-decline-custom]')).toBeNull();
+    expect(container.querySelector('[data-call-decline-end-to-end]')?.textContent).toContain('chiffrée de bout en bout');
+    act(() => buttonNamed('Annuler').click());
+    expect(events).toEqual([]);
+    expect(closed()).toBe(1);
+  });
+});

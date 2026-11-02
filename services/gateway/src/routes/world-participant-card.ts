@@ -72,13 +72,14 @@ const cardResponseSchema = {
       type: 'object',
       additionalProperties: false,
       required: [
-        'participantId', 'participantType', 'displayName', 'username', 'conversationRole', 'accountRole',
+        'participantId', 'participantType', 'displayName', 'avatar', 'username', 'conversationRole', 'accountRole',
         'languages', 'country', 'client', 'joinedAt', 'shareLink', 'status', 'accountDetailsWithheld',
       ],
       properties: {
         participantId: { type: 'string' },
         participantType: { type: 'string', enum: ['anonymous', 'user', 'bot'] },
         displayName: { type: 'string' },
+        avatar: { ...nullableString, description: 'Référence de média du visage affiché dans le fil — null sans photo' },
         username: nullableString,
         conversationRole: { type: 'string', description: 'Rang dans World Wide : creator · admin · moderator · member' },
         accountRole: { ...nullableString, description: 'Rôle GLOBAL du compte — null pour un invité' },

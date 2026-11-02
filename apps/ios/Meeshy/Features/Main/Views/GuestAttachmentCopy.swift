@@ -50,7 +50,7 @@ enum GuestAttachmentCopy {
     }
 
     static var maxSize: String {
-        ByteCountFormatter.string(fromByteCount: GuestAttachmentAllowance.maxBytes, countStyle: .file)
+        MediaFormat.bytes(GuestAttachmentAllowance.maxBytes)
     }
 
     /// Le refus d'un fichier CHOISI, nommé.

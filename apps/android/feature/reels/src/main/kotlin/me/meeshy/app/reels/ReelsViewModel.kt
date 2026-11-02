@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.ReelThreadOrder
+import me.meeshy.sdk.model.PostType
+import me.meeshy.app.feed.RepostCommand
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
@@ -29,6 +31,14 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastRequest
+import me.meeshy.feature.reels.R
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import javax.inject.Inject
 
 data class ReelsUiState(
@@ -40,6 +50,11 @@ data class ReelsUiState(
     val loadFailure: ContentFetchFailure? = null,
     /** Faux jusqu'a la fin du premier chargement : distingue froid / vide / echec. */
     val hasLoadedOnce: Boolean = false,
+    /**
+     * Cause pour laquelle le reel DEMANDE (notification, lien) n'a pas pu s'ouvrir. Tant qu'elle est
+     * posee, le lecteur dit la cause au lieu d'atterrir sur un autre reel (iOS `ReelOpenFailureView`).
+     */
+    val seedFailure: ContentFetchFailure? = null,
 )
 
 @HiltViewModel
@@ -50,6 +65,7 @@ class ReelsViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val clock: CacheClock,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val reportRepository: ReportRepository,
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
 ) : ViewModel() {
 
@@ -58,6 +74,10 @@ class ReelsViewModel @Inject constructor(
         .map { emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emojiUsageStore.top(EmojiCatalog.defaultQuickReactions.size))
 
+
+    /** Les retours du menu « … » (épingler, supprimer, signaler) : un toast à la fois, jamais perdu. */
+    private val toastChannel = Channel<FeedbackToastRequest>(Channel.BUFFERED)
+    val toasts: Flow<FeedbackToastRequest> = toastChannel.receiveAsFlow()
 
     private val _state = MutableStateFlow(ReelsUiState())
     val state: StateFlow<ReelsUiState> = _state.asStateFlow()
@@ -133,7 +153,7 @@ class ReelsViewModel @Inject constructor(
         _state.update {
             // Une relecture garde ce que le lecteur affiche deja : l'ordre ne bouge que par refreshed.
             val shown = if (cached.isEmpty()) it.reels else cached
-            it.copy(reels = shown, isLoading = shown.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = shown.isNotEmpty())
+            it.copy(reels = shown, isLoading = shown.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = shown.isNotEmpty(), seedFailure = null)
         }
 
         if (seed != null && !seedInCache) loadSeedAndPrepend(seed)
@@ -184,6 +204,10 @@ class ReelsViewModel @Inject constructor(
     private fun loadSeedAndPrepend(seedId: String) {
         viewModelScope.launch {
             val result = postRepository.getPost(seedId)
+            if (result is NetworkResult.Failure) {
+                _state.update { it.copy(seedFailure = result.error.toContentFetchFailure()) }
+                return@launch
+            }
             if (result !is NetworkResult.Success) return@launch
             val seedReel = ReelBuilder.build(listOf(result.data), config.apiBaseUrl, sessionRepository.currentUser.value).firstOrNull() ?: return@launch
             _state.update { current ->
@@ -402,25 +426,88 @@ class ReelsViewModel @Inject constructor(
         }
     }
 
-    /** Repost simple : compteur optimiste, rollback si echec. */
+    /**
+     * Repost simple, EN RÉEL et vers l'original quand ce réel en republie un autre (iOS `ReelsViewModel.repost`,
+     * #14443, #14456) : compteur et marque au geste, confirmés ou rendus, et l'issue dite. Un second geste pendant
+     * l'envoi n'envoie rien.
+     */
     fun repost(reelId: String) {
         val before = _state.value.reels.firstOrNull { it.id == reelId } ?: return
-        updateReel(reelId) { it.copy(repostCount = before.repostCount + 1) }
+        if (!repostsInFlight.add(reelId)) return
+        val command = RepostCommand.of(reelId, before.repostOf, quote = false, commentary = null, cardType = PostType.REEL.name)
+        updateReel(reelId) { it.copy(repostCount = it.repostCount + 1, isReposted = true) }
         viewModelScope.launch {
-            if (postRepository.repost(reelId) is NetworkResult.Failure) {
-                updateReel(reelId) { it.copy(repostCount = before.repostCount) }
+            val refused = try {
+                postRepository.repost(command.targetId, targetType = command.targetType) is NetworkResult.Failure
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                true
+            }
+            repostsInFlight.remove(reelId)
+            if (refused) {
+                updateReel(reelId) {
+                    it.copy(repostCount = (it.repostCount - 1).coerceAtLeast(0), isReposted = before.isReposted)
+                }
+                toast(R.string.reels_toast_repost_failed, FeedbackKind.Error)
+            } else {
+                toast(R.string.reels_toast_reposted, FeedbackKind.Success)
             }
         }
     }
 
-    /** Comptabilise un partage — l'intent systeme est parti sans attendre le reseau. */
-    fun recordShare(reelId: String) {
-        viewModelScope.launch { postRepository.share(reelId) }
-    }
+    private val repostsInFlight = mutableSetOf<String>()
 
     private fun updateReel(reelId: String, transform: (ReelPresentation) -> ReelPresentation) {
         _state.update { state ->
             state.copy(reels = state.reels.map { if (it.id == reelId) transform(it) else it })
         }
+    }
+
+    /** Le reel est celui de l'utilisateur connecté : son menu propose épingler et supprimer, jamais signaler. */
+    fun isOwn(reel: ReelPresentation): Boolean =
+        reel.authorId != null && reel.authorId == sessionRepository.currentUserId
+
+    /** Suppression optimiste : le reel quitte le pager aussitôt, et revient à sa place si le serveur refuse. */
+    fun delete(reelId: String) {
+        val index = _state.value.reels.indexOfFirst { it.id == reelId }
+        if (index < 0) return
+        val removed = _state.value.reels[index]
+        _state.update { it.copy(reels = it.reels.filterNot { reel -> reel.id == reelId }) }
+        viewModelScope.launch {
+            when (postRepository.delete(reelId)) {
+                is NetworkResult.Success -> toast(R.string.reels_toast_deleted, FeedbackKind.Success)
+                is NetworkResult.Failure -> {
+                    _state.update { state ->
+                        if (state.reels.any { it.id == reelId }) state
+                        else state.copy(reels = state.reels.toMutableList().apply { add(index.coerceAtMost(size), removed) })
+                    }
+                    toast(R.string.reels_toast_delete_failed, FeedbackKind.Error)
+                }
+            }
+        }
+    }
+
+    fun pin(reelId: String) {
+        viewModelScope.launch {
+            when (postRepository.pinPost(reelId)) {
+                is NetworkResult.Success -> toast(R.string.reels_toast_pinned, FeedbackKind.Success)
+                is NetworkResult.Failure -> toast(R.string.reels_toast_pin_failed, FeedbackKind.Error)
+            }
+        }
+    }
+
+    /** Signalement direct, motif « inapproprié » comme sur iOS (`reportPost`). */
+    fun report(reelId: String) {
+        viewModelScope.launch {
+            when (reportRepository.reportPost(reelId, ReportReason.INAPPROPRIATE, details = null)) {
+                is NetworkResult.Success -> toast(R.string.reels_toast_reported, FeedbackKind.Success)
+                else -> toast(R.string.reels_toast_report_failed, FeedbackKind.Error)
+            }
+        }
+    }
+
+    private fun toast(messageRes: Int, kind: FeedbackKind) {
+        toastChannel.trySend(FeedbackToastRequest(messageRes, kind))
     }
 }

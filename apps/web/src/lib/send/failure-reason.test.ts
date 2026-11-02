@@ -64,9 +64,14 @@ describe('sendFailureReason', () => {
 
   /* #9928 — un mineur qui écrit dans Global (état périmé) : la cause dit
      quand Global s'ouvrira, jamais un refus générique. */
+  test('E2EE_PLAINTEXT_WITHHELD (refus local, statut 0) dit la conversation chiffrée, jamais « réseau indisponible » (audit #12986)', () => {
+    expect(sendFailureReason(failure(0, { code: 'E2EE_PLAINTEXT_WITHHELD' }))).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
+    expect(sendFailureReasonIn(failure(0, { code: 'E2EE_PLAINTEXT_WITHHELD' }), 'en')).toBe('End-to-end encrypted conversation: write from the Meeshy app');
+  });
+
   test('E2EE_PLAINTEXT_REFUSED dit que la conversation est chiffrée, jamais « envoi refusé »', () => {
-    expect(sendFailureReason(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }))).toBe('Conversation chiffrée de bout en bout : le web ne peut pas encore y écrire');
-    expect(sendFailureReasonIn(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }), 'en')).toBe('End-to-end encrypted conversation: the web app can’t write here yet');
+    expect(sendFailureReason(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }))).toBe('Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy');
+    expect(sendFailureReasonIn(failure(400, { code: 'E2EE_PLAINTEXT_REFUSED' }), 'en')).toBe('End-to-end encrypted conversation: write from the Meeshy app');
   });
 
   test('GLOBAL_ADULTS_ONLY dit que Global s’ouvre à l’écriture à 18 ans', () => {
@@ -154,6 +159,18 @@ describe('sendFailureReason — le format refusé (W9)', () => {
       const reason = sendFailureReasonIn(failure(200, { code: 'UPLOAD_FORMAT_REFUSED' }), language);
       expect(reason).toContain('HEIC');
       expect(reason).not.toBe(french);
+    }
+  });
+
+  test('dans la coque Android, un clair refusé renvoie vers un appareil chiffré, jamais vers l’app où l’on se trouve (#13066)', () => {
+    for (const code of ['E2EE_PLAINTEXT_WITHHELD', 'E2EE_PLAINTEXT_REFUSED']) {
+      const refused = failure(code === 'E2EE_PLAINTEXT_WITHHELD' ? 0 : 400, { code });
+      expect(sendFailureReasonIn(refused, 'fr', { shell: true })).toBe(
+        'Conversation chiffrée de bout en bout : écrivez depuis un de vos appareils chiffrés',
+      );
+      for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+        expect(sendFailureReasonIn(refused, language, { shell: true })).not.toBe(sendFailureReasonIn(refused, language));
+      }
     }
   });
 });

@@ -21,7 +21,7 @@ final class StoryOverlayWidthPinGuardTests: XCTestCase {
 
     /// L'UNITÉ du canvas : les couches flottantes vivent dans `StoryViewerView+Canvas+Layers.swift`.
     private func canvasSource() throws -> String {
-        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView+Canvas.swift")
     }
 
     /// Retire les commentaires : plusieurs d'entre eux CITENT le motif

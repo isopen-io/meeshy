@@ -408,7 +408,7 @@ final class ConversationMediaDoorTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MediaComposerDoor.swift")
+            .appendingPathComponent("Meeshy/Features/Composer/MediaComposerDoor.swift")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 

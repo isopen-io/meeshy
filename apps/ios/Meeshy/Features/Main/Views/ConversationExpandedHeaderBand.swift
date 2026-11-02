@@ -328,7 +328,12 @@ struct ConversationHeaderTagsRow: View {
     let accentColor: String
     let successColor: Color
 
-    private var isEncrypted: Bool { conversation?.encryptionMode != nil }
+    /// #11374 — « de bout en bout » pour `e2ee` seul, « sur le serveur » pour `server`/`hybrid`.
+    private var encryptionBadge: ConversationEncryptionBadge? {
+        ConversationEncryptionBadge(encryptionMode: conversation?.encryptionMode)
+    }
+
+    private var isEncrypted: Bool { encryptionBadge != nil }
 
     private var hasTags: Bool {
         section != nil || !(conversation?.tags.isEmpty ?? true) || isEncrypted
@@ -339,7 +344,7 @@ struct ConversationHeaderTagsRow: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.xs) {
                     if showsEngagement { engagementBadge }
-                    if isEncrypted { lockIcon }
+                    if let encryptionBadge { encryptionChip(encryptionBadge) }
                     if let section { sectionChip(section) }
                     if let conversation {
                         ForEach(conversation.tags) { tag in tagChip(name: tag.name, hex: tag.color) }
@@ -359,11 +364,17 @@ struct ConversationHeaderTagsRow: View {
         )
     }
 
-    private var lockIcon: some View {
-        Image(systemName: "lock.fill")
-            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-            .foregroundColor(successColor)
-            .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Conversation chiffrée", bundle: .main))
+    private func encryptionChip(_ badge: ConversationEncryptionBadge) -> some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            Image(systemName: badge.systemImage)
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                .accessibilityHidden(true)
+            Text(badge.localizedLabel)
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
+        }
+        .foregroundColor(badge == .endToEnd ? successColor : Color(hex: accentColor))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(badge.localizedLabel))
     }
 
     private func sectionChip(_ section: ConversationSection) -> some View {
@@ -454,7 +465,7 @@ struct ConversationHeaderState {
 /// et le cache se repeignent à `user:updated`, pas elle. Cette loi repeint la
 /// conversation AFFICHÉE par la loi de la ligne d'un direct
 /// (`ConversationStore.merging(_:withUserUpdate:)`) — aucune règle parallèle —
-/// et `ConversationView.admitPeerUpdate` en fait l'override de l'écran. Les
+/// et `ConversationView.admitRepainted` en fait l'override de l'écran. Les
 /// annonces successives se replient donc d'elles-mêmes, chacune sur la
 /// précédente.
 enum DirectPeerRepaint {
@@ -471,5 +482,17 @@ enum DirectPeerRepaint {
                 || repainted.participantBanner != displayed.participantBanner
         else { return nil }
         return repainted
+    }
+}
+
+private extension ConversationEncryptionBadge {
+    /// Le libellé du catalogue de l'application, une clé LITTÉRALE par régime.
+    var localizedLabel: String {
+        switch self {
+        case .endToEnd:
+            return String(localized: "conversation.encryption.endToEnd", defaultValue: "Chiffré de bout en bout", bundle: .main)
+        case .server:
+            return String(localized: "conversation.encryption.server", defaultValue: "Chiffré sur le serveur", bundle: .main)
+        }
     }
 }

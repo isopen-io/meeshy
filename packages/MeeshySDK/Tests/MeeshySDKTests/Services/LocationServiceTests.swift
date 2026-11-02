@@ -80,4 +80,13 @@ final class LocationServiceTests: XCTestCase {
         XCTAssertNotNil(service.liveLocationUpdated)
         XCTAssertNotNil(service.liveLocationStopped)
     }
+
+    func test_liveLocationPublishers_returnTheSameInstanceOnEveryRead() {
+        let service = LocationService.shared
+        XCTAssertTrue(service.liveLocationStarted === service.liveLocationStarted)
+        XCTAssertTrue(service.liveLocationUpdated === service.liveLocationUpdated)
+        XCTAssertTrue(service.liveLocationStopped === service.liveLocationStopped)
+        let provider: LocationServiceProviding = service
+        XCTAssertTrue(provider.liveLocationStarted === service.liveLocationStarted)
+    }
 }

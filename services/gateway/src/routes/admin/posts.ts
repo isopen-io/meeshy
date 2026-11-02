@@ -16,6 +16,7 @@ import { requirePermission } from '../../middleware/authorize';
 import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
 import { ADMIN_POST_STATES, adminPostStateOf, type AdminPostState } from '@meeshy/shared/types/admin-publications';
 import { adminPostStateWhere } from './post-state-filter';
+import { POST_VISIBILITIES } from '@meeshy/shared/types/post';
 
 /**
  * Ligne de la liste d'administration des posts.
@@ -481,7 +482,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
           search: { type: 'string', description: 'Search in post content' },
           type: { type: 'string', enum: ['POST', 'REEL', 'STORY', 'STATUS'], description: 'Filter by post type' },
-          visibility: { type: 'string', enum: ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY'], description: 'Filter by visibility' },
+          visibility: { type: 'string', enum: [...POST_VISIBILITIES], description: 'Filter by visibility' },
           authorId: { type: 'string', description: 'Filter by author user ID' },
           period: { type: 'string', enum: ['today', 'week', 'month'], description: 'Filter by time period' },
           isDeleted: { type: 'string', enum: ['true', 'false'], description: 'Filter by deletion status (default: non-deleted only)' },

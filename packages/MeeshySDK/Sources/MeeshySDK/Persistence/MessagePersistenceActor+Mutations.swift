@@ -67,7 +67,7 @@ extension MessagePersistenceActor {
             affectedConversationId = existing.conversationId
             try db.execute(
                 sql: """
-                    UPDATE messages SET content = ?, callSummaryJson = ?,
+                    UPDATE messages SET \(EndToEndContentSeal.sealedContentAssignment), callSummaryJson = ?,
                     updatedAt = ?, changeVersion = changeVersion + 1
                     WHERE localId = ? OR serverId = ?
                     """,
@@ -78,20 +78,6 @@ extension MessagePersistenceActor {
         if didApply, let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
         }
-    }
-
-    /// `true` when `incoming` decodes as a LIVE call summary (`kind:
-    /// 'call-live'`) for the SAME call whose stored summary is already
-    /// TERMINAL — i.e. a REST snapshot serialized while the call was still
-    /// ongoing that landed AFTER the terminal edit. Applying it would regress
-    /// the bubble to "en cours" forever. Any other combination returns `false`.
-    static func isStaleLiveCallSnapshot(existing: Data?, incoming: Data?) -> Bool {
-        guard
-            let existing, let incoming,
-            let stored = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: existing, field: "callSummaryJson(stored)"),
-            let candidate = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: incoming, field: "callSummaryJson(incoming)")
-        else { return false }
-        return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
     }
 
     /// Retirer des messages du stockage local, LIGNES COMPRISES.
@@ -117,6 +103,11 @@ extension MessagePersistenceActor {
     /// observateurs de `MessageStore` filtrent par `conversationId`, et un lot
     /// peut traverser plusieurs fils.
     public func purgeMessages(ids: [String]) async throws {
+        try await purgeMessages(ids: ids, origin: .announced)
+    }
+
+    /// `.announced` (retrait annoncé par la passerelle) garde le clair E2EE au coffre (#13060).
+    public func purgeMessages(ids: [String], origin: PlaintextErasureOrigin) async throws {
         guard !ids.isEmpty else { return }
         let affectedConvIds: Set<String> = try await dbWriter.write { db -> Set<String> in
             let matching = MessageRecord.filter(
@@ -128,20 +119,9 @@ extension MessagePersistenceActor {
             // sur l'identifiant reçu — c'est pourquoi elles se purgent depuis
             // les lignes retrouvées, jamais depuis `ids`.
             let localIds = rows.map { $0.localId }
-            let placeholders = localIds.map { _ in "?" }.joined(separator: ",")
-            let childArgs = StatementArguments(localIds)
-            for table in ["message_translations", "message_transcriptions", "message_audio_translations"] {
-                try db.execute(
-                    sql: "DELETE FROM \(table) WHERE messageLocalId IN (\(placeholders))",
-                    arguments: childArgs
-                )
-            }
-            for table in ["pending_ids", "send_attempts"] {
-                try db.execute(
-                    sql: "DELETE FROM \(table) WHERE localId IN (\(placeholders))",
-                    arguments: childArgs
-                )
-            }
+            try MessageChildRows.delete(ofLocalIds: localIds, in: db)
+            try MessagePlaintextErasures.record(localIds, cause: .removedForMe, in: db)
+            if origin == .authenticated { try MessagePlaintextErasures.authenticate(localIds, cause: .removedForMe, in: db) }
             _ = try matching.deleteAll(db)
             return Set(rows.map { $0.conversationId })
         }
@@ -160,6 +140,7 @@ extension MessagePersistenceActor {
             affectedConversationId = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
+            try MessagePlaintextErasures.cancelDeletion(of: localId, now: Date(), in: db)
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = NULL,
@@ -329,7 +310,7 @@ extension MessagePersistenceActor {
             try db.execute(
                 sql: """
                     UPDATE messages
-                    SET content = ?,
+                    SET \(EndToEndContentSeal.sealedContentAssignment),
                     attachmentsJson = COALESCE(?, attachmentsJson),
                     reactionsJson = COALESCE(?, reactionsJson),
                     pinnedAt = ?, pinnedBy = ?,

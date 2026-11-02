@@ -17,7 +17,10 @@ final class AvatarRingStrokeStyleRenderTests: XCTestCase {
     private func alpha(_ design: AvatarRingDesign, x: Int, y: Int) throws -> UInt8 {
         let renderer = ImageRenderer(content: AvatarRingView(design: design, animates: false).frame(width: 100, height: 100))
         renderer.scale = 1
-        let cg = try XCTUnwrap(renderer.cgImage)
+        return try alpha(of: XCTUnwrap(renderer.cgImage), x: x, y: y)
+    }
+
+    private func alpha(of cg: CGImage, x: Int, y: Int) throws -> UInt8 {
         var data = [UInt8](repeating: 0, count: 4)
         let context = try XCTUnwrap(CGContext(data: &data, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
                                               space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
@@ -33,5 +36,18 @@ final class AvatarRingStrokeStyleRenderTests: XCTestCase {
 
     func test_solid_paintsTheBaseRing() throws {
         XCTAssertGreaterThan(try alpha(try ring("solid"), x: 50, y: 4), 200)
+    }
+
+    /// Le direct et l'export d'une story peignent LE même dessin (`AvatarRingRenderer`) : l'image
+    /// fixe que grave l'export s'accorde avec la vue, trait de base comme ornement.
+    func test_stillImage_matchesTheView() throws {
+        for style in ["solid", "none"] {
+            let design = try ring(style)
+            let still = try XCTUnwrap(AvatarRingRenderer.stillImage(design, side: 100))
+            for (x, y) in [(50, 4), (50, 50), (20, 20)] {
+                XCTAssertEqual(Double(try alpha(of: still, x: x, y: y)), Double(try alpha(design, x: x, y: y)),
+                               accuracy: 12, "\(style) en (\(x), \(y))")
+            }
+        }
     }
 }

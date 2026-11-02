@@ -36,7 +36,6 @@ final class ConversationViewModelCacheTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
             dependencies: ConversationDependencies(
-                dbPool: pool,
                 persistence: MessagePersistenceActor(dbWriter: pool)
             )
         )
@@ -260,7 +259,6 @@ final class ConversationViewModelCacheTests: XCTestCase {
             reportService: MockReportService(),
             messageSocket: MockMessageSocket(),
             dependencies: ConversationDependencies(
-                dbPool: pool,
                 persistence: MessagePersistenceActor(dbWriter: pool)
             )
         )

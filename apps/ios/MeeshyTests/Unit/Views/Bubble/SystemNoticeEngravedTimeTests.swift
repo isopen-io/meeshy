@@ -105,7 +105,7 @@ final class SystemNoticeEngravedTimeTests: XCTestCase {
     // MARK: - Mode Script — FocalSystemNoticeRow (repli générique)
 
     func test_focalGenericNotice_engravesTimeFirst() throws {
-        let code = try strippedSource("Features/Main/Focal/Row/FocalSystemRows.swift")
+        let code = try strippedSource("Features/Focal/Row/FocalSystemRows.swift")
         let body = try structBody(named: "FocalSystemNoticeRow", in: code, until: "struct FocalCallNoticeRow")
 
         let timeRange = try XCTUnwrap(
@@ -124,7 +124,7 @@ final class SystemNoticeEngravedTimeTests: XCTestCase {
     }
 
     func test_focalDispatch_passesThreadTime_toGenericNotice() throws {
-        let code = try strippedSource("Features/Main/Focal/Row/FocalSystemRows.swift")
+        let code = try strippedSource("Features/Focal/Row/FocalSystemRows.swift")
         let call = try XCTUnwrap(
             code.range(of: "FocalSystemNoticeRow(text:").map { String(code[$0.lowerBound...].prefix(while: { $0 != ")" })) },
             "L'appel `FocalSystemNoticeRow(text:` a disparu du dispatch — re-pointer cette garde."

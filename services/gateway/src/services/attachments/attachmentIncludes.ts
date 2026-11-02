@@ -131,6 +131,9 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   // sur l'attachement livré par la LISTE de messages pour décider si publier
   // demande confirmation. Absent d'ici, la garde ne se déclenche jamais.
   capturedInApp: true,
+  // #11327 — la lens qui a produit le média : le média reçu affiche « Lens par X »
+  // (`GET /lens/credits`). En clair, E2EE compris (décision #11251).
+  lensSlug: true,
   // BUG2 A' — réactions par-image (agrégées au mapping en reactionSummary + currentUserReactions)
   reactions: { select: { emoji: true, participantId: true } },
 });
@@ -303,6 +306,7 @@ export const attachmentServiceRowSelect = Prisma.validator<Prisma.MessageAttachm
   createdAt: true,
   isForwarded: true,
   capturedInApp: true,
+  lensSlug: true,
   isViewOnce: true,
   viewOnceCount: true,
   isBlurred: true,
@@ -349,22 +353,7 @@ export const attachmentTranslateSelect = Prisma.validator<Prisma.MessageAttachme
   },
 });
 
-/**
- * L'ORDRE des pièces d'un message (#9776) — UN site, toute lecture qui sert
- * les pièces d'un message le passe en `orderBy`.
- *
- * `rank` est l'ordre de `attachmentIds` dans la requête de création (l'ordre
- * du composeur), écrit par `associateAttachmentsToMessage`. `createdAt` seul
- * ne le dit pas : c'est l'heure de FIN d'un téléversement, et ils partent en
- * parallèle. Un message d'avant le rang n'en porte pas — MongoDB range un
- * champ absent EN TÊTE d'un tri ascendant, et `createdAt` puis `id` lui
- * gardent l'ordre stable qu'il avait.
- */
-export const MESSAGE_ATTACHMENT_ORDER: Prisma.MessageAttachmentOrderByWithRelationInput[] = [
-  { rank: 'asc' },
-  { createdAt: 'asc' },
-  { id: 'asc' },
-];
+export { MESSAGE_ATTACHMENT_ORDER } from './attachmentOrder';
 
 /**
  * #9915 — le nombre de TUILES (photos et vidéos) du message CITÉ, compté en

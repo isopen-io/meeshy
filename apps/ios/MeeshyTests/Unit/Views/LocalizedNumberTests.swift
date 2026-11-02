@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 /// **Un nombre appartient à la locale de son lecteur — chiffres, groupement,
 /// glyphe de pourcentage et espacement compris.**
@@ -112,24 +113,20 @@ final class LocalizedNumberTests: XCTestCase {
     /// ici est ce qui les DISTINGUE, pas une chaîne CLDR.
     func test_duration_minuteSecond_doesNotPadTheMinute() {
         XCTAssertEqual(
-            LocalizedNumber.duration(seconds: 125, locale: english), "2:05"
+            MediaFormat.duration(125, locale: english), "2:05"
         )
     }
 
     func test_duration_paddedMinuteSecond_padsTheMinuteToTwoDigits() {
         XCTAssertEqual(
-            LocalizedNumber.duration(
-                seconds: 125, clock: .paddedMinuteSecond, locale: english
-            ),
+            MediaFormat.duration(125, style: .paddedClock, locale: english),
             "02:05"
         )
     }
 
     func test_duration_hourMinuteSecond_carriesThreeFields() {
         XCTAssertEqual(
-            LocalizedNumber.duration(
-                seconds: 3_900, clock: .hourMinuteSecond, locale: english
-            ),
+            MediaFormat.duration(3_900, style: .hourClock, locale: english),
             "1:05:00"
         )
     }
@@ -140,13 +137,13 @@ final class LocalizedNumberTests: XCTestCase {
     /// évite qu'un changement de motif la fasse apparaître en silence sur les
     /// minuteries média.
     func test_duration_minuteSecond_accumulatesMinutesPastAnHour() {
-        let past = LocalizedNumber.duration(seconds: 3_695, locale: english)
+        let past = MediaFormat.duration(3_695, locale: english)
         XCTAssertEqual(
             past.split(separator: ":").count, 2,
             "L'horloge minute:seconde n'a que deux champs — obtenu « \(past) »."
         )
         XCTAssertNotEqual(
-            past, LocalizedNumber.duration(seconds: 95, locale: english),
+            past, MediaFormat.duration(95, locale: english),
             "1 h 1 min 35 s et 1 min 35 s ne peuvent pas rendre la même horloge : "
             + "laisser tomber les heures est précisément le défaut que "
             + "`CallManager` a corrigé de son côté."
@@ -156,7 +153,7 @@ final class LocalizedNumberTests: XCTestCase {
     /// **Le défaut.** `String(format: "%d:%02d", …)` grave les chiffres latins,
     /// quelle que soit la locale du lecteur.
     func test_duration_arabicUsesItsOwnDigits() {
-        let rendered = LocalizedNumber.duration(seconds: 125, locale: arabic)
+        let rendered = MediaFormat.duration(125, locale: arabic)
         XCTAssertFalse(
             rendered.contains("2") || rendered.contains("0") || rendered.contains("5"),
             "En arabe, la durée ne doit pas s'écrire en chiffres latins — obtenu « \(rendered) »."
@@ -171,13 +168,13 @@ final class LocalizedNumberTests: XCTestCase {
     func test_duration_survivesTheValuesAVPlayerActuallyEmits() {
         for hostile in [TimeInterval.nan, .infinity, -.infinity, -42, 1e30] {
             XCTAssertFalse(
-                LocalizedNumber.duration(seconds: hostile, locale: english).isEmpty,
+                MediaFormat.duration(hostile, locale: english).isEmpty,
                 "\(hostile) doit rendre une durée, pas une chaîne vide."
             )
         }
         XCTAssertEqual(
-            LocalizedNumber.duration(seconds: TimeInterval.nan, locale: english),
-            LocalizedNumber.duration(seconds: 0, locale: english)
+            MediaFormat.duration(TimeInterval.nan, locale: english),
+            MediaFormat.duration(0, locale: english)
         )
     }
 
@@ -185,8 +182,8 @@ final class LocalizedNumberTests: XCTestCase {
     /// 1,9 s ne doit pas sauter à « 0:02 ».
     func test_duration_truncatesTowardZero() {
         XCTAssertEqual(
-            LocalizedNumber.duration(seconds: 90.9, locale: english),
-            LocalizedNumber.duration(seconds: 90, locale: english)
+            MediaFormat.duration(90.9, locale: english),
+            MediaFormat.duration(90, locale: english)
         )
     }
 
@@ -200,8 +197,8 @@ final class LocalizedNumberTests: XCTestCase {
     func test_spokenDuration_isNeverTheClockSpelling() {
         for locale in [french, english, arabic] {
             XCTAssertNotEqual(
-                LocalizedNumber.spokenDuration(seconds: 272, locale: locale),
-                LocalizedNumber.duration(seconds: 272, locale: locale),
+                MediaFormat.duration(272, style: .spoken, locale: locale),
+                MediaFormat.duration(272, locale: locale),
                 "Ce que VoiceOver ENTEND ne peut pas être l'horloge que l'écran MONTRE."
             )
         }
@@ -212,14 +209,14 @@ final class LocalizedNumberTests: XCTestCase {
     /// appliqué du tout.
     func test_spokenDuration_carriesNoClockSeparator() {
         XCTAssertFalse(
-            LocalizedNumber.spokenDuration(seconds: 272, locale: english).contains(":")
+            MediaFormat.duration(272, style: .spoken, locale: english).contains(":")
         )
     }
 
     func test_spokenDuration_followsTheReadersLocale() {
         XCTAssertNotEqual(
-            LocalizedNumber.spokenDuration(seconds: 272, locale: french),
-            LocalizedNumber.spokenDuration(seconds: 272, locale: english)
+            MediaFormat.duration(272, style: .spoken, locale: french),
+            MediaFormat.duration(272, style: .spoken, locale: english)
         )
     }
 
@@ -229,7 +226,7 @@ final class LocalizedNumberTests: XCTestCase {
     func test_spokenDuration_zeroIsStillSpoken() {
         for locale in [french, english, arabic] {
             XCTAssertFalse(
-                LocalizedNumber.spokenDuration(seconds: 0, locale: locale).isEmpty,
+                MediaFormat.duration(0, style: .spoken, locale: locale).isEmpty,
                 "Une durée nulle doit s'annoncer, pas disparaître."
             )
         }
@@ -240,7 +237,7 @@ final class LocalizedNumberTests: XCTestCase {
     func test_spokenDuration_survivesTheValuesAVPlayerActuallyEmits() {
         for hostile in [TimeInterval.nan, .infinity, -1, 1e30] {
             XCTAssertFalse(
-                LocalizedNumber.spokenDuration(seconds: hostile, locale: english).isEmpty
+                MediaFormat.duration(hostile, style: .spoken, locale: english).isEmpty
             )
         }
     }
@@ -251,7 +248,7 @@ final class LocalizedNumberTests: XCTestCase {
         for seconds in [0, 45, 272, 3_900] {
             XCTAssertEqual(
                 CallManager.spokenDuration(TimeInterval(seconds), locale: french),
-                LocalizedNumber.spokenDuration(seconds: seconds, locale: french)
+                MediaFormat.duration(seconds, style: .spoken, locale: french)
             )
         }
     }

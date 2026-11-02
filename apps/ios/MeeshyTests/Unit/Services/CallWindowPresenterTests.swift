@@ -521,7 +521,7 @@ final class CallReturnPointTests: XCTestCase {
         let window = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootLayers/CallWindowPresenter.swift"))
         XCTAssertTrue(window.contains("CallBubbleView(callManager: callManager"), "La fenêtre remet à la bulle la pile qu'elle observe.")
 
-        let bubble = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallBubbleView.swift"))
+        let bubble = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallBubbleView.swift"))
         XCTAssertTrue(bubble.contains("CallReturnPoint.showsBubble("), "La bulle se montre selon la règle du point de retour, pastille couverte comprise.")
         XCTAssertTrue(bubble.contains("CallReturnPointFrameKey.self"), "La bulle remonte son cadre touchable à la fenêtre passe-plat.")
     }

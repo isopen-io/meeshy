@@ -184,6 +184,18 @@ data class AttachmentUpdatedEvent(
 )
 
 /**
+ * `conversation:encryption-changed` (#12522) — la bascule du régime d'une conversation. Aucun
+ * contenu n'y voyage. L'Android natif n'en retient que l'ACTIVATION du bout en bout (#12956) : une
+ * rétrogradation annoncée est ignorée (#12949).
+ */
+@Serializable
+data class ConversationEncryptionChangedSocketEvent(
+    val conversationId: String,
+    val mode: String? = null,
+    val epoch: Int? = null,
+)
+
+/**
  * `conversation:updated` — métadonnées (titre, avatar…) ET groupe « dernier message » en clés plates
  * `lastMessage*` (#7545, #7548), miroir de `ConversationUpdatedEvent` (iOS).
  *

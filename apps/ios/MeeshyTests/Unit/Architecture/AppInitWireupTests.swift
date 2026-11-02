@@ -258,7 +258,7 @@ final class AppInitWireupTests: XCTestCase {
     /// que de présentations. Elle cesse seulement d'exiger qu'elles vivent dans
     /// le MÊME fichier, ce qu'aucune règle du produit n'a jamais demandé.
     private static let storyComposerPresentationUnits = [
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost"
+        "Meeshy/Features/Composer/MeeshyComposerHost"
     ]
 
     // MARK: - V3-2 : la porte de création monte le MEUBLE, pas l'atelier nu
@@ -286,7 +286,7 @@ final class AppInitWireupTests: XCTestCase {
     /// `MeeshyComposerHostGuardTests.test_theHost_hasAtLeastOneProductionCaller`
     /// ferme la dernière issue.
     func test_theStoryCreationDoor_mountsTheComposerHost_andLetsItPoseTheProviders() throws {
-        let path = "Meeshy/Features/Main/Views/StoryTrayActions.swift"
+        let path = "Meeshy/Features/Stories/Views/StoryTrayActions.swift"
         let src = try appSource(path)
 
         XCTAssertEqual(
@@ -337,17 +337,17 @@ final class AppInitWireupTests: XCTestCase {
     /// qu'on y cherche — d'où le montage attendu, écrit fichier par fichier.
     /// Un maillon qui l'oublie retombe sur `PostVisibility.friends` sans un mot.
     private static let storyComposerCreationMounts: [(path: String, mount: String)] = [
-        ("Meeshy/Features/Main/Views/StoryTrayActions.swift", "MeeshyComposerHost("),
+        ("Meeshy/Features/Stories/Views/StoryTrayActions.swift", "MeeshyComposerHost("),
         // Lot 5 — la porte du média REÇU est le second site qui monte une
         // SCÈNE, et l'audience y traverse les mêmes deux maillons. Elle entre
         // ici plutôt que dans une garde à elle : le jour où un troisième site
         // ouvre l'atelier, c'est cette liste qu'on relira.
-        ("Meeshy/Features/Main/Composer/MediaComposerDoor.swift", "MeeshyComposerHost("),
+        ("Meeshy/Features/Composer/MediaComposerDoor.swift", "MeeshyComposerHost("),
         // #4102 — `composerSurface`, qui MONTE l'atelier, a suivi le découpage du
         // meuble vers `+Surfaces`. L'adresse suit le montage, jamais le nom
         // du type : laissée sur le fichier principal, la garde aurait rougi
         // « le maillon a disparu » pour un maillon simplement déménagé.
-        ("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift", "StoryComposerView(")
+        ("Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift", "StoryComposerView(")
     ]
 
     func test_everyCreationComposerPresentation_passesTheMemorisedAudience() throws {
@@ -384,7 +384,7 @@ final class AppInitWireupTests: XCTestCase {
                 "\(path) : une racine, un montage."
             )
         }
-        for path in ["Meeshy/Features/Main/Views/StoryTrayView.swift",
+        for path in ["Meeshy/Features/Stories/Views/StoryTrayView.swift",
                      "Meeshy/Features/Main/Views/RootViewComponents.swift",
                      "Meeshy/Features/Main/Views/FeedView.swift",
                      "Meeshy/Features/Main/Views/ConversationListView.swift"] {

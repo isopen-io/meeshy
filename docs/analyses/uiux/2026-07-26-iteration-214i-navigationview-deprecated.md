@@ -3,7 +3,7 @@
 **Date** : 2026-07-26
 **Surfaces** :
 - `apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift`
+- `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift`
 - `apps/ios/MeeshyShareExtension/ShareViewController.swift`
 
 **Axe** : Intégration plateforme native / HIG — conteneur de navigation déprécié

@@ -58,10 +58,9 @@ final class EditParityInventoryTests: XCTestCase {
         .deletingLastPathComponent()   // apps/ios
 
     private static let feuille = "Meeshy/Features/Main/Components/EditPostSheet.swift"
-    private static let surfaceDocument = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
     /// La PORTE du document, sortie de la surface au découpage `70b04d2aeb`.
     /// C'est elle qui poste le brouillon — donc elle qui porte `originalLanguage`.
-    private static let porteDuDocument = "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift"
+    private static let porteDuDocument = "Meeshy/Features/Composer/DocumentComposerDoor.swift"
     private static let gardeQuiLitLaFeuille = "MeeshyTests/Unit/Views/SheetToolbarSemanticsTests.swift"
 
     private func lire(_ relativePath: String) throws -> String {
@@ -109,7 +108,9 @@ final class EditParityInventoryTests: XCTestCase {
         // C'est le mode d'échec le plus cher d'une extraction : la garde ne dit
         // pas « j'ai perdu mon sujet », elle dit « la capacité a disparu » — et
         // envoie chercher une régression qui n'existe pas.
-        let sourceDuDocument = try code(Self.surfaceDocument)
+        // #13864 : la surface document est partie, un post se compose sur la
+        // scène du meuble — la mesure lit donc l'unité du MEUBLE.
+        let sourceDuDocument = try AppSourceGuard.stripComments(AppSourceGuard.composerHostSource())
             + code(Self.porteDuDocument)
 
         // 1 — CHAMP CONTENU + VALIDITE.

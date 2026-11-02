@@ -71,6 +71,11 @@ extension StoryComposerViewModel {
         // slides » dans l'atelier, dont le chemin de reprise passe par le
         // picker de l'atelier et non par `applyContentMedia`.
         carriedContentSources = []
+        // La teinte de l'outil se tire AVANT la slide neuve : son `didSet`
+        // l'écrit sur la slide courante, et l'écrire après posait une couleur
+        // au hasard sur la scène effacée (#13839, défaut 28b — une scène rose
+        // au lieu de la scène neutre de l'ouverture).
+        backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
         slides = [StorySlide()]
         currentSlideIndex = 0
         slideImages = [:]
@@ -83,7 +88,6 @@ extension StoryComposerViewModel {
         activeBrushSmoothing = .raw
         drawingEditingMode = .inactive
         isDrawingImmersive = false
-        backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
         openingEffect = nil
         closingEffect = nil
         retiredImages = [:]

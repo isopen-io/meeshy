@@ -95,7 +95,7 @@ final class GameFicheHierarchyTests: XCTestCase {
         XCTAssertFalse(fiche.hasWhere, "« Où j'en suis » redisait ta lumière et le prix : il disparaît")
         let card = ProgressionConceptModel.card(.points, progress: progress(game, wallet), game: game)
         XCTAssertFalse(card.facts.contains(.mintPrice) || card.facts.contains(.mintMissing))
-        let page = try? String(contentsOf: Self.source("Game/ProgressionConceptPage.swift"), encoding: .utf8)
+        let page = try? String(contentsOf: Self.source("../Game/ProgressionConceptPage.swift"), encoding: .utf8)
         XCTAssertTrue(page?.contains("GameFicheCopy.toHeritage") ?? false, "la fiche des Étincelles mène à l'Héritage")
     }
 
@@ -232,7 +232,7 @@ final class GameFicheHierarchyTests: XCTestCase {
     // MARK: - Aucun calcul sur une fiche
 
     func test_noSheet_doesArithmetic() throws {
-        let frame = try String(contentsOf: Self.source("Game/GameMintPreviewView.swift"), encoding: .utf8)
+        let frame = try String(contentsOf: Self.source("../Game/GameMintPreviewView.swift"), encoding: .utf8)
         for calculation in ["GameMintCostCopy.costLine", "GameMintCostCopy.levelPassage", "GameSpendRows", "afterStanding", "→"] {
             XCTAssertFalse(frame.contains(calculation), "le cadre de la frappe calcule encore : « \(calculation) »")
         }

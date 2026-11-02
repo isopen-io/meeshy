@@ -16,11 +16,13 @@
  *     `expiresAt` futur) et `GET /api/v1/conversations` intercepté (corps de
  *     `core-list.ts:916-937`, 45 conversations sur DEUX pages, page 1
  *     RETARDÉE de 800 ms) : SIX `[data-skeleton-row]` de 84 px sont peints
- *     AVANT la résolution, TRENTE `[data-row]` APRÈS — et le premier
- *     `offsetTop` ne bouge PAS entre les deux (la géométrie du squelette est
- *     celle de la rangée réelle, F5). Défiler jusqu'à la queue charge la
- *     page 2 (45 rangées, UNE requête par page, `#6195`) et le pied passe à
- *     « tout chargé ».
+ *     AVANT la résolution, TRENTE conversations portées par la liste APRÈS
+ *     (`data-row-count` du défileur : la liste est virtualisée, #11228, elle
+ *     n'en monte qu'une fenêtre) — et le premier `offsetTop` ne bouge PAS
+ *     entre les deux (la géométrie du squelette est celle de la rangée
+ *     réelle, F5). Défiler jusqu'à la queue charge la page 2 (45 rangées,
+ *     UNE requête par page, `#6195`), sa dernière rangée se monte une fois
+ *     amenée à l'écran, et le pied passe à « tout chargé ».
  *  2b. Une page 2 en ÉCHEC (500) rend le pied « Réessayer », qui recharge la
  *     même page (#6195).
  *  2c. Tirer la liste depuis le haut refait la page 1 + les stories/humeurs
@@ -44,6 +46,7 @@ import { pathToFileURL } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { checkVisitor } from './lib/check-visitor.mjs';
 import { allFiles } from './lib/files.mjs';
+import { awaitCarriedRows, carriedRowCount, listedRowCount, revealRow } from './lib/reveal-row.mjs';
 import { FIXTURE_MARKERS } from './lib/fixture-markers.mjs';
 import { screenRoutes } from './lib/v31-routes.mjs';
 
@@ -363,10 +366,15 @@ async function main() {
     );
 
     await page.waitForSelector('[data-row]', { timeout: 5000 });
-    const rowCount = await page.locator('[data-row]').count();
+    /* La liste est virtualisée (#11228) : elle ne monte que les rangées
+       visibles. Le total CHARGÉ se lit sur le défileur (`data-row-count`), et
+       les nœuds montés plus les cales doivent lui rendre le même compte. */
+    const rowCount = await carriedRowCount(page);
     const rowFirstTop = await page.locator('[data-row]').first().evaluate((e) => e.getBoundingClientRect().top);
 
-    check(rowCount === 30, `trente [data-row] APRÈS la résolution — page 1 (obtenu : ${rowCount})`);
+    check(rowCount === 30, `trente conversations portées par la liste APRÈS la résolution — page 1 (data-row-count : ${rowCount})`);
+    const listedAtPage1 = await listedRowCount(page);
+    check(listedAtPage1 === rowCount, `les rangées montées et les cales rendent le total porté (montées + cales : ${listedAtPage1}, data-row-count : ${rowCount})`);
     check(
       Math.round(rowFirstTop) === Math.round(skeletonFirstTop),
       `AUCUN saut : offsetTop de la première rangée identique avant/après (squelette ${skeletonFirstTop}, réel ${rowFirstTop})`,
@@ -381,7 +389,7 @@ async function main() {
     });
     check(
       populatedFirstSectionOffset !== null,
-      'corpus PEUPLÉ : aucune [data-section] trouvée pour mesurer le décalage du rail + des filtres',
+      'corpus PEUPLÉ : une [data-section] est montée pour mesurer le décalage du rail + des filtres',
     );
 
     /**
@@ -396,13 +404,18 @@ async function main() {
       const el = document.getElementById('contenu');
       el?.scrollTo({ top: el.scrollHeight });
     });
-    await page.waitForFunction(() => document.querySelectorAll('[data-row]').length === 45, undefined, { timeout: 10_000 });
-    const rowCountAfterScroll = await page.locator('[data-row]').count();
-    check(rowCountAfterScroll === 45, `45 [data-row] après le défilement infini (obtenu : ${rowCountAfterScroll})`);
+    /* `.catch` : une page 2 qui ne vient pas doit RAPPORTER son échec
+       ci-dessous, jamais abattre le gate avant son résumé. */
+    await awaitCarriedRows(page, { exactly: 45 }, { timeout: 10_000 }).catch(() => undefined);
+    const rowCountAfterScroll = await carriedRowCount(page);
+    check(rowCountAfterScroll === 45, `45 conversations portées après le défilement infini (data-row-count : ${rowCountAfterScroll})`);
     check(
       block2Counts.get('') === 1 && block2Counts.get('c-gw-29') === 1,
       `une requête par page (obtenu : ${JSON.stringify([...block2Counts.entries()])})`,
     );
+    const listedAfterScroll = await listedRowCount(page);
+    check(listedAfterScroll === 45, `les rangées montées et les cales portent les 45 (obtenu : ${listedAfterScroll})`);
+    check(await revealRow(page, 'c-gw-44'), 'la dernière conversation de la page 2 (c-gw-44) se monte une fois amenée à l’écran');
     const footerState = await page.getAttribute('[data-pagination-footer]', 'data-pagination-footer').catch(() => null);
     check(footerState === 'exhausted', `le pied de pagination est « exhausted » après 45 rangées (obtenu : ${footerState})`);
     const footerText = await page.locator('[data-pagination-footer="exhausted"]').textContent().catch(() => null);
@@ -450,7 +463,7 @@ async function main() {
 
     await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-row]', { timeout: 5000 });
-    check((await page.locator('[data-row]').count()) === 30, 'page 2b : la page 1 rend bien 30 rangées avant le défilement');
+    check((await carriedRowCount(page)) === 30, 'page 2b : la page 1 porte bien 30 rangées avant le défilement');
 
     await page.evaluate(() => {
       const el = document.getElementById('contenu');
@@ -465,7 +478,7 @@ async function main() {
     const errorText = await page.locator('[data-pagination-footer="error"]').textContent();
     check(errorText.includes('Impossible de charger plus'), `le pied « error » porte le texte attendu (obtenu : ${JSON.stringify(errorText)})`);
     check(
-      (await page.locator('[data-row]').count()) === 30,
+      (await carriedRowCount(page)) === 30,
       'page 2b : les 30 rangées déjà chargées RESTENT après l’échec de la page 2',
     );
 
@@ -474,8 +487,9 @@ async function main() {
     block2bStillFailing = false;
     await retryButton.click();
 
-    await page.waitForFunction(() => document.querySelectorAll('[data-row]').length === 45, undefined, { timeout: 10_000 });
-    check((await page.locator('[data-row]').count()) === 45, 'page 2b : Réessayer charge bien la page 2 (45 rangées)');
+    await awaitCarriedRows(page, { exactly: 45 }, { timeout: 10_000 }).catch(() => undefined);
+    check((await carriedRowCount(page)) === 45, 'page 2b : Réessayer charge bien la page 2 (45 rangées)');
+    check(await revealRow(page, 'c-gw-44'), 'page 2b : la dernière conversation de la page 2 (c-gw-44) se monte une fois amenée à l’écran');
     check(
       (block2bCounts.get('c-gw-29') ?? 0) === attemptsBeforeManualRetry + 1,
       'page 2b : Réessayer ne fait QU’UNE requête de plus (pas de doublon) ' +
@@ -519,7 +533,7 @@ async function main() {
 
     await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-row]', { timeout: 5000 });
-    check((await page.locator('[data-row]').count()) === 30, 'page 2c : 30 rangées avant le tirer');
+    check((await carriedRowCount(page)) === 30, 'page 2c : 30 rangées avant le tirer');
     check(block2cCounts.get('') === 1, 'page 2c : une seule requête de conversations avant le tirer');
 
     /**
@@ -536,6 +550,7 @@ async function main() {
     await page.click('nav[data-list-filters] button[data-list-filter="pinned"]');
     await page.waitForFunction(() => document.querySelectorAll('[data-row]').length === 0, undefined, { timeout: 3000 });
     await page.waitForTimeout(1200);
+    check((await carriedRowCount(page)) === 0, `page 2c : sous « Épinglés », la liste ne porte AUCUNE rangée (data-row-count : ${await carriedRowCount(page)})`);
     check(
       block2cCounts.size === 1 && block2cCounts.get('') === 1,
       `page 2c : un filtre à ZÉRO rangée ne demande AUCUNE page de plus (obtenu : ${JSON.stringify([...block2cCounts.entries()])})`,
@@ -558,8 +573,8 @@ async function main() {
     // retour sur « Tous » rend les 45 rangées que la cascade a chargées — ce
     // qui doit RAPPORTER un échec, pas faire expirer une attente et abattre le
     // gate avant son résumé (mesuré en falsifiant la garde).
-    await page.waitForFunction(() => document.querySelectorAll('[data-row]').length >= 30, undefined, { timeout: 3000 });
-    const rowsBackOnAll = await page.locator('[data-row]').count();
+    await awaitCarriedRows(page, { atLeast: 30 }, { timeout: 3000 });
+    const rowsBackOnAll = await carriedRowCount(page);
     check(rowsBackOnAll === 30, `page 2c : retour sur « Tous » rend les 30 rangées de la page 1 (obtenu : ${rowsBackOnAll})`);
 
     /**
@@ -619,7 +634,7 @@ async function main() {
     check(storiesRequests === 2, `page 2c : le tirer refait la requête stories (obtenu : ${storiesRequests})`);
     check(statusesRequests === 2, `page 2c : le tirer refait la requête statuses (obtenu : ${statusesRequests})`);
     check(!skeletonSeenDuringRefresh, 'page 2c : aucun squelette pendant le tirer (fetch-then-replace, cache non vide)');
-    check((await page.locator('[data-row]').count()) === 30, 'page 2c : 30 rangées après le tirer (page 1 seule, curseur reset)');
+    check((await carriedRowCount(page)) === 30, 'page 2c : 30 rangées après le tirer (page 1 seule, curseur reset)');
     check(
       (await page.locator('[data-load-more-sentinel]').count()) === 1,
       'page 2c : la sentinelle de défilement infini est de retour après le tirer',

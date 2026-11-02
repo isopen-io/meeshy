@@ -16,7 +16,10 @@
  *    pack), son remplissage, ses effets et le pire contraste mesuré à l'export
  *    contre les pixels réellement dessous ;
  *  - une mise en page de Mee et Meo porte DEUX ancres (`mee`, `meo`) ou UNE
- *    seule (`pair`, un sticker à deux oiseaux), jamais les deux.
+ *    seule (`pair`, un sticker à deux oiseaux), jamais les deux ; un cadre en
+ *    déclare plusieurs (#10277), chacune avec le verdict du détecteur
+ *    (`birds.validated`, à côté de `layouts` pour qu'un client d'avant, qui lit
+ *    chaque mise en page en objet strict, la lise encore).
  *
  * Séparé de `glory-frame-pack.ts` pour que la boutique (qui ne lit que les
  * vignettes et les noms) n'embarque pas ce schéma.
@@ -24,6 +27,7 @@
 import * as z from 'zod/mini';
 import { PackAssetRefSchema } from './content-pack-index.js';
 import type { PackAssetRef } from './content-pack.js';
+import { GLORY_DECOR_KEY_PATTERN, GLORY_DECOR_LIVE_DATA } from './glory-frame-decor-vocabulary.js';
 
 /** Les polices des cadres, embarquées par les clients : un pack les RÉFÉRENCE, jamais il ne les transporte (§ 5.6). */
 export const GLORY_FRAME_FONTS = ['Manrope', 'Cinzel', 'Cinzel Decorative', 'Cormorant Garamond', 'Fraunces', 'Caveat'] as const;
@@ -50,6 +54,16 @@ const STACK_TOKEN = /^(?:photo|decor|crest|plate|birds|text|banner|grade:\d{1,2}
 const STICKER_ID = /^(?:mee|meo|duo)-[a-z0-9-]+$/;
 const SLOT_KEY = /^[a-z][a-z0-9]*(?:\.[0-9]{1,3})?$/;
 const MAX_TEXT_LENGTH = 400;
+
+/**
+ * Le CHEMIN de la fenêtre photo (#10254) : sa grammaire est FERMÉE — sous-chemins `M x y`, pas relatifs `h`/`v`
+ * entiers, `Z`. Le générateur (`docs/product/cadres-de-gloire/generateur/lib/window-path.mjs`) l'écrit sur la grille
+ * des pixels, chaque contour tournant la fenêtre à sa droite : un `clip` le rend au pixel près du masque, et aucun
+ * tracé SVG arbitraire (courbe, arc, commande inconnue) n'atteint jamais un `Path2D`.
+ */
+export const GLORY_FRAME_WINDOW_PATH_PATTERN = /^(?:M\d+ \d+(?:[hv]-?\d+)+Z)+$/;
+/** Le plus long chemin mesuré (`egypte.ambassadeur-5`, 23 833 caractères au 2026-10-25), avec sa marge. */
+export const GLORY_FRAME_WINDOW_PATH_MAX_LENGTH = 64_000;
 
 const finite = z.number().check(z.refine(Number.isFinite));
 const nonNegative = finite.check(z.minimum(0));
@@ -113,6 +127,10 @@ const textSlot = z.object({
   contrast: nonNegative,
   /** Le texte d'exemple de l'export (le français des planches) ; les emplacements vivants le remplacent. */
   sample: z.string().check(z.maxLength(MAX_TEXT_LENGTH)),
+  /** Un texte de décor TRADUIT (#10256) : sa clé dans les chaînes du pack, que le peintre peint à la place de `sample`. */
+  i18n: z.optional(z.string().check(z.regex(GLORY_DECOR_KEY_PATTERN))),
+  /** Un texte de décor VIVANT (#10256) : la donnée du moment que le peintre remplit (L14, #10167). */
+  live: z.optional(z.enum(GLORY_DECOR_LIVE_DATA)),
 });
 
 const layer = z.intersection(PackAssetRefSchema, z.object({ box }));
@@ -125,6 +143,12 @@ const anchor = z.object({
   rotate: finite,
   flip: z.boolean(),
   opacity: unit,
+  /**
+   * Où le DESSIN de la pose tient dans la boîte carrée `box` (unités de la boîte, 0 à 1 : x, y, largeur, hauteur) :
+   * l'image du générateur y est ajustée sans déformation (#10277). Un peintre y cale le contenu de son propre sticker ;
+   * absent d'un contrat d'avant #10277, le dessin occupe toute la boîte.
+   */
+  art: z.optional(z.tuple([unit, unit, unit, unit])),
 });
 
 const isPrefixed = (anchorOf: z.infer<typeof anchor>, prefix: 'mee-' | 'meo-'): boolean => anchorOf.sticker.startsWith(prefix);
@@ -143,10 +167,29 @@ const layoutKeys = Object.fromEntries(GLORY_FRAME_BIRD_LAYOUTS.map((name) => [na
   [L in GloryFrameBirdLayout]: z.ZodMiniOptional<typeof birds>;
 };
 
+/**
+ * Le verdict du détecteur d'empiètement du générateur (`lib/overlap.mjs`, prompt § 5.7) sur UNE mise en page, à
+ * l'échelle de design (540×960) : pixels de photo recouverts, profondeur maximale dans la fenêtre, pixels de visage.
+ */
+const layoutVerdict = z.object({ overlap: nonNegative, depth: nonNegative, face: nonNegative });
+
+const validatedKeys = Object.fromEntries(GLORY_FRAME_BIRD_LAYOUTS.map((name) => [name, z.optional(layoutVerdict)])) as {
+  [L in GloryFrameBirdLayout]: z.ZodMiniOptional<typeof layoutVerdict>;
+};
+
 const formatObject = z.object({
   size: z.tuple([z.int().check(z.minimum(1)), z.int().check(z.minimum(1))]),
-  /** La fenêtre photo, masque sans perte adressé par contenu ; `path` vectoriel au suivi #10254. */
-  window: z.object({ box, mask: layer, veilMaxAlpha: unit }),
+  /**
+   * La fenêtre photo : sa boîte, son CHEMIN (#10254) que le peintre découpe sans décoder d'image, et son masque sans
+   * perte adressé par contenu, que garde le client d'avant le chemin. Un contrat sans `path` reste lisible : le
+   * peintre découpe alors au rectangle, puis au masque.
+   */
+  window: z.object({
+    box,
+    path: z.optional(z.string().check(z.maxLength(GLORY_FRAME_WINDOW_PATH_MAX_LENGTH), z.regex(GLORY_FRAME_WINDOW_PATH_PATTERN))),
+    mask: layer,
+    veilMaxAlpha: unit,
+  }),
   stack: z.array(z.string().check(z.regex(STACK_TOKEN))).check(z.minLength(2), z.maxLength(24)),
   layers: z.object({
     decor: layer,
@@ -158,7 +201,12 @@ const formatObject = z.object({
   crest: z.nullable(z.object({ box })),
   text: z.record(z.string().check(z.regex(SLOT_KEY)), textSlot),
   birds: z
-    .object({ default: z.enum(GLORY_FRAME_BIRD_LAYOUTS), layouts: z.object(layoutKeys) })
+    .object({
+      default: z.enum(GLORY_FRAME_BIRD_LAYOUTS),
+      layouts: z.object(layoutKeys),
+      /** Le verdict de chaque mise en page déclarée (#10277) ; absent d'un contrat d'avant, que le client lit encore. */
+      validated: z.optional(z.object(validatedKeys)),
+    })
     .check(z.refine((value) => value.layouts[value.default] !== undefined)),
   banner: z.nullable(z.object({ box })),
 });
@@ -188,11 +236,28 @@ export type GloryFrameLayer = z.infer<typeof layer>;
 export type GloryFrameGradeLayer = z.infer<typeof gradeLayer>;
 export type GloryFrameBirdAnchor = z.infer<typeof anchor>;
 export type GloryFrameBirds = z.infer<typeof birds>;
+export type GloryFrameLayoutVerdict = z.infer<typeof layoutVerdict>;
 export type GloryFrameFormat = z.infer<typeof GloryFrameFormatSchema>;
+
+const refOf = ({ src, bytes, sha256 }: GloryFrameLayer): PackAssetRef => ({ src, bytes, sha256 });
+
+/** Les couches peintes d'un format, sans le masque de la fenêtre. */
+function paintedLayers(format: GloryFrameFormat): readonly PackAssetRef[] {
+  const { decor, windowFill, grade, front, plate } = format.layers;
+  const optional = [front['under-birds'], front['over-birds'], plate.plain, plate.message].filter((ref): ref is GloryFrameLayer => ref !== undefined);
+  return [decor, windowFill, ...grade, ...optional].map(refOf);
+}
 
 /** Tous les fichiers qu'un format référence : masque, couches, passes — ce que le magasin doit pouvoir servir. */
 export function gloryFrameFormatAssets(format: GloryFrameFormat): readonly PackAssetRef[] {
-  const { decor, windowFill, grade, front, plate } = format.layers;
-  const optional = [front['under-birds'], front['over-birds'], plate.plain, plate.message].filter((ref): ref is GloryFrameLayer => ref !== undefined);
-  return [format.window.mask, decor, windowFill, ...grade, ...optional].map(({ src, bytes, sha256 }) => ({ src, bytes, sha256 }));
+  return [refOf(format.window.mask), ...paintedLayers(format)];
+}
+
+/**
+ * Ce qu'un PEINTRE qui découpe au chemin de la fenêtre (#10254) doit lire du magasin : tout le format, sauf le
+ * masque quand le chemin est là. Le pack, lui, sert toujours le masque (`gloryFrameFormatAssets`) : un client
+ * d'avant le chemin le lit encore.
+ */
+export function gloryFramePainterAssets(format: GloryFrameFormat): readonly PackAssetRef[] {
+  return format.window.path === undefined ? gloryFrameFormatAssets(format) : paintedLayers(format);
 }

@@ -159,5 +159,15 @@ internal fun rememberOnboardingReduceMotion(): Boolean {
  * À poser sur le contenu de la racine pendant que le calque est présenté : TalkBack ne peut plus
  * y aller. Le trait modal à lui seul n'isole rien.
  */
-internal fun Modifier.hiddenBehindOnboarding(isPresented: Boolean): Modifier =
+fun Modifier.hiddenBehindOnboarding(isPresented: Boolean): Modifier =
     if (isPresented) clearAndSetSemantics {} else this
+
+/**
+ * Les calques posés SOUS le parcours (bannière in-app, célébrations, hôtes de la racine) : tant que le parcours couvre
+ * l'écran ([isCovered]) ils sont retirés de l'arbre d'accessibilité avec le contenu — TalkBack ne doit pas lire, ni
+ * rendre atteignable, ce qu'on ne voit pas.
+ */
+@Composable
+fun BeneathOnboarding(isCovered: Boolean, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().hiddenBehindOnboarding(isCovered)) { content() }
+}

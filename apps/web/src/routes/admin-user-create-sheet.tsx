@@ -2,9 +2,11 @@ import { useState } from 'react';
 
 import { AdminCheckbox, AdminFormActions, AdminFormError, AdminFormSheet, AdminSelect, AdminTextInput } from '@/components/admin/form';
 import type { AdminDeps } from '@/lib/api/admin';
-import { createAdminUser, missingCreateFields, type AdminUserCreateInput } from '@/lib/api/admin-user-create';
+import { createAdminUser, missingCreateFields, tooShortCreateFields, type AdminUserCreateInput } from '@/lib/api/admin-user-create';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
+import { NAME_MIN_LENGTH, USERNAME_MIN_LENGTH } from '@/lib/identity-bounds';
+import { translate } from '@/lib/i18n-catalog';
 import { interpretRole } from '@/lib/admin/interpret/enums';
 import { ADMIN_ROLES } from '@/lib/admin/user-list';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
@@ -83,6 +85,11 @@ export function AdminUserCreateSheet({
     if (envoi) return;
     if (missingCreateFields(saisie).length > 0) {
       setRefus({ champ: null, texte: translateAdmin(language, 'admin.create.missing') });
+      return;
+    }
+    const court = tooShortCreateFields(saisie)[0];
+    if (court !== undefined) {
+      setRefus({ champ: court, texte: translate(language, 'signup.username.tooShort', { min: String(court === 'username' ? USERNAME_MIN_LENGTH : NAME_MIN_LENGTH) }) });
       return;
     }
     setEnvoi(true);

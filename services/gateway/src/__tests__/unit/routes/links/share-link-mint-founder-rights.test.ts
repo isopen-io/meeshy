@@ -24,6 +24,12 @@ jest.mock('../../../../routes/links/utils/link-helpers', () => ({
   ensureUniqueShareLinkIdentifier: jest.fn<any>().mockResolvedValue('mshy_unique'),
 }));
 
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
+
 import { mintConversationShareLink } from '../../../../routes/links/utils/share-link-mint';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../../../services/participantRights';
 

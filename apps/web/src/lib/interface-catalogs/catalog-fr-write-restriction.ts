@@ -8,7 +8,8 @@
  */
 const frWriteRestriction = {
   'composer.writeRestriction.minorGlobal': 'Global s’ouvre à l’écriture à tes 18 ans',
-  'composer.writeRestriction.endToEnd': 'Conversation chiffrée de bout en bout : le web ne peut pas encore y écrire',
+  'composer.writeRestriction.endToEnd': 'Conversation chiffrée de bout en bout : écrivez depuis l’app Meeshy',
+  'composer.writeRestriction.endToEnd.shell': 'Conversation chiffrée de bout en bout : écrivez depuis un de vos appareils chiffrés',
   'age.blocked.title': 'Meeshy est réservé aux 13 ans et plus',
   'age.blocked.body': 'Ce compte ne peut pas être utilisé avant tes 13 ans.',
   'age.blocked.confirm': 'Compris',

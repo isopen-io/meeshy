@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_offline_banner">Sin conexión: las publicaciones que ya viste siguen visibles.</string>
+    <string name="feed_offline_empty_title">Sin conexión</string>
+    <string name="feed_offline_empty_detail">El feed aún no se ha cargado en este dispositivo. Aparecerá en cuanto vuelva la red.</string>
+</resources>

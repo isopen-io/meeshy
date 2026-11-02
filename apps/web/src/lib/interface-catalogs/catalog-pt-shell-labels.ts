@@ -10,6 +10,8 @@ const ptShellLabels = {
   'thread.header.back.unread.one': 'Voltar — {count} mensagem não lida em outro lugar',
   'thread.header.back.unread.other': 'Voltar — {count} mensagens não lidas em outro lugar',
   'thread.header.details': 'Detalhes da conversa',
+  'thread.header.encryption.endToEnd': 'Criptografia de ponta a ponta',
+  'thread.header.encryption.server': 'Criptografado no servidor',
   'thread.scrollToBottom': 'Rolar até o fim',
   'thread.scrollToBottom.unread.one': '{count} mensagem não lida, Rolar até o fim',
   'thread.scrollToBottom.unread.other': '{count} mensagens não lidas, Rolar até o fim',

@@ -1,5 +1,6 @@
 package me.meeshy.sdk.story
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
@@ -14,10 +15,12 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryTranslationMerge
 import me.meeshy.sdk.model.StoryUpdateMerge
 import me.meeshy.sdk.model.StoryViewer
+import me.meeshy.sdk.model.postTypeFromWire
 import me.meeshy.sdk.model.toStoryViewer
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
@@ -38,6 +41,7 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
+import me.meeshy.sdk.session.commitOrWrite
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -53,6 +57,7 @@ class StoryRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     private val translationApi: TranslationApi,
     private val archiveCache: MyStoriesArchiveCache = InMemoryMyStoriesArchiveCache(),
+    private val fence: me.meeshy.sdk.session.AccountFence? = null,
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -60,6 +65,7 @@ class StoryRepository @Inject constructor(
         syncMetaDao = syncMetaDao,
         storyApi = storyApi,
         clock = SystemCacheClock,
+        fence = fence,
     )
 
     /**
@@ -85,8 +91,32 @@ class StoryRepository @Inject constructor(
      * published story on success). The next revalidation stays authoritative.
      */
     suspend fun adoptPublished(story: ApiPost) {
-        cacheSource.upsertLocal(story)
+        cacheSource.upsertLocal(story, cacheSource.ticket())
     }
+
+    /**
+     * Folds a realtime `story:created` into the tray cache: an unknown story joins at once,
+     * a story already held is left untouched — append-dedup, iOS
+     * `insertOrMergeStoryGroups(replacingExisting: false)`. Re-writing a held row with the
+     * broadcast payload would wipe the reader's monotone seen state (the payload carries no
+     * `isViewedByMe`) and, for our own echoed publish, the copy already adopted. Returns
+     * whether the cache changed.
+     */
+    suspend fun adoptAnnounced(story: ApiPost): Boolean {
+        val ticket = cacheSource.ticket()
+        if (cacheSource.findLocal(story.id) != null) return false
+        cacheSource.upsertLocal(story, ticket)
+        return true
+    }
+
+    /**
+     * Folds a realtime `post:reposted` into the tray cache (#14466): the gateway announces a
+     * republication only by `post:reposted`, never by `story:created`, to the reposter's
+     * visibility-filtered audience. A repost served as a story joins the tray like an announced
+     * story ([adoptAnnounced]); a repost into the feed stays out. Returns whether the cache changed.
+     */
+    suspend fun adoptAnnouncedRepost(repost: ApiPost): Boolean =
+        postTypeFromWire(repost.type) == PostType.STORY && adoptAnnounced(repost)
 
     /**
      * Folds a realtime `story:deleted` into the authoritative Room cache so the tray
@@ -95,8 +125,19 @@ class StoryRepository @Inject constructor(
      * for the Room-backed tray. Port of iOS `StoryViewModel.storyDeleted → purgeDeadStories`.
      */
     suspend fun removeCachedStory(storyId: String) {
-        cacheSource.deleteLocal(storyId)
+        cacheSource.deleteLocal(storyId, cacheSource.ticket())
     }
+
+    /** [removeCachedStory] sous [ticket], pris AVANT la requête dont la réponse retire la story (#13560). */
+    suspend fun removeCachedStory(storyId: String, ticket: me.meeshy.sdk.session.AccountTicket?) {
+        cacheSource.deleteLocal(storyId, ticket)
+    }
+
+    /**
+     * Le compte auquel appartient un geste qui part MAINTENANT (#13560) : à prendre AVANT la requête dont la réponse
+     * écrit l'archive « Mes stories » ([persistMyStories]) ou retire une story ([removeCachedStory]).
+     */
+    suspend fun ticket(): me.meeshy.sdk.session.AccountTicket? = cacheSource.ticket()
 
     /**
      * Folds a realtime `story:updated` into the authoritative Room cache so the tray stream
@@ -112,10 +153,11 @@ class StoryRepository @Inject constructor(
         engagementReset: Boolean,
         currentUserId: String?,
     ): Boolean {
+        val ticket = cacheSource.ticket()
         val previous = cacheSource.findLocal(updated.id) ?: return false
         val isOwnStory = currentUserId != null && updated.author?.id == currentUserId
         val merged = StoryUpdateMerge.merge(previous, updated, engagementReset, isOwnStory) ?: return false
-        cacheSource.upsertLocal(merged)
+        cacheSource.upsertLocal(merged, ticket)
         return true
     }
 
@@ -144,6 +186,7 @@ class StoryRepository @Inject constructor(
      * drained. A drain that returned nothing never overwrites a non-empty cache.
      */
     suspend fun drainMyStories(limit: Int = 50, maxPages: Int = MAX_ARCHIVE_PAGES): NetworkResult<List<ApiPost>> {
+        val ticket = cacheSource.ticket()
         val collected = LinkedHashMap<String, ApiPost>()
         var cursor: String? = null
         repeat(maxPages) { page ->
@@ -151,26 +194,34 @@ class StoryRepository @Inject constructor(
             val paged = when (result) {
                 is NetworkResult.Success -> result.data
                 is NetworkResult.Failure ->
-                    return if (page == 0) result else finishDrain(collected)
+                    return if (page == 0) result else finishDrain(collected, ticket)
             }
             val before = collected.size
             paged.data.forEach { collected.putIfAbsent(it.id, it) }
             val stagnant = paged.data.isEmpty() || collected.size == before
             val next = paged.pagination?.nextCursor
-            if (stagnant || paged.pagination?.hasMore != true || next.isNullOrEmpty()) return finishDrain(collected)
+            if (stagnant || paged.pagination?.hasMore != true || next.isNullOrEmpty()) return finishDrain(collected, ticket)
             cursor = next
         }
-        return finishDrain(collected)
+        return finishDrain(collected, ticket)
     }
 
-    private suspend fun finishDrain(collected: Map<String, ApiPost>): NetworkResult<List<ApiPost>> {
+    private suspend fun finishDrain(
+        collected: Map<String, ApiPost>,
+        ticket: me.meeshy.sdk.session.AccountTicket?,
+    ): NetworkResult<List<ApiPost>> {
         val posts = collected.values.toList()
-        if (posts.isNotEmpty()) archiveCache.write(posts)
+        if (posts.isNotEmpty()) fence.commitOrWrite(ticket) { archiveCache.write(posts) }
         return NetworkResult.Success(posts)
     }
 
-    /** Persists the screen's current « Mes stories » list so a delete or republish survives a restart. */
-    suspend fun persistMyStories(posts: List<ApiPost>) = archiveCache.write(posts)
+    /**
+     * Persists the screen's current « Mes stories » list so a delete or republish survives a restart — under [ticket],
+     * taken at the gesture BEFORE its request (#13560): A's answer never writes B's archive.
+     */
+    suspend fun persistMyStories(posts: List<ApiPost>, ticket: me.meeshy.sdk.session.AccountTicket?) {
+        fence.commitOrWrite(ticket) { archiveCache.write(posts) }
+    }
 
     /** `POST posts/{id}/republish` — the same story, fresh dates, zeroed engagement. */
     suspend fun republish(storyId: String): NetworkResult<ApiPost> =
@@ -188,9 +239,10 @@ class StoryRepository @Inject constructor(
     }
 
     private suspend fun markViewedLocally(storyId: String) {
+        val ticket = cacheSource.ticket()
         val cached = cacheSource.findLocal(storyId) ?: return
         if (cached.isViewedByMe == true) return
-        cacheSource.upsertLocal(cached.copy(isViewedByMe = true))
+        cacheSource.upsertLocal(cached.copy(isViewedByMe = true), ticket)
     }
 
     suspend fun delete(storyId: String): NetworkResult<Unit> =
@@ -210,8 +262,31 @@ class StoryRepository @Inject constructor(
     ): NetworkResult<List<ApiPostComment>> =
         apiCall { storyApi.comments(storyId, cursor, limit) }
 
+    /**
+     * Republie la story EN STORY (iOS `StoryDirectRepost`) : sans `targetType`, la passerelle en ferait un post. La story
+     * que la passerelle rend en 201 rejoint aussitôt la barre (#14458) : une republication ne s'annonce que par
+     * `post:reposted`, jamais par `story:created`, et rien d'autre ne l'apporterait avant la revalidation suivante.
+     */
     suspend fun repost(storyId: String): NetworkResult<Unit> =
-        apiCall { storyApi.repost(storyId, RepostPostRequest()) }
+        when (val result = apiCall { storyApi.repost(storyId, RepostPostRequest(targetType = PostType.STORY.name)) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> {
+                adoptRepost(result.data)
+                NetworkResult.Success(Unit)
+            }
+        }
+
+    /** Une republication faite ne devient pas un échec parce que le cache local a refusé l'écriture. */
+    private suspend fun adoptRepost(story: ApiPost) {
+        if (postTypeFromWire(story.type) != PostType.STORY) return
+        try {
+            adoptPublished(story)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "story repost: tray adoption failed")
+        }
+    }
 
     suspend fun fetchPost(id: String): NetworkResult<ApiPost> =
         apiCall { storyApi.fetchPost(id) }
@@ -230,8 +305,11 @@ class StoryRepository @Inject constructor(
      *   gate the publish on multiple offline uploads at once.
      * @return the queued row's `cmid` (drives optimistic-rollback observation).
      */
-    suspend fun enqueuePublish(request: CreateStoryRequest, dependsOn: List<String> = emptyList()): String? =
-        outboxRepository.enqueue(
+    suspend fun enqueuePublish(request: CreateStoryRequest, dependsOn: List<String> = emptyList()): String? {
+        // A story reopened from « Publications non envoyées » (#13500) waits on the uploads of its first
+        // publication: one that gave up is revived — the author publishes again — never sent a second time.
+        dependsOn.filter { outboxRepository.stateOf(it) == OutboxState.EXHAUSTED }.forEach { outboxRepository.retry(it) }
+        return outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.PUBLISH_STORY,
                 lane = OutboxLanes.STORY,
@@ -240,6 +318,7 @@ class StoryRepository @Inject constructor(
                 dependsOn = dependsOn.toSet(),
             ),
         )
+    }
 
     /**
      * A published canvas may only designate media the post owns (#5280): a canvas
@@ -312,10 +391,12 @@ class StoryRepository @Inject constructor(
 
     /**
      * Revives an exhausted publish for a user-initiated retry — back to the live
-     * queue with a fresh attempt budget. The caller kicks the drain worker.
+     * queue with a fresh attempt budget, the uploads it waits on with it (#13417: an
+     * upload that gave up keeps its bytes now, so the retry can actually run). The
+     * caller kicks the drain worker.
      * @return `false` when the row no longer exists.
      */
-    suspend fun retryPublish(cmid: String): Boolean = outboxRepository.retry(cmid)
+    suspend fun retryPublish(cmid: String): Boolean = outboxRepository.retryWithPrerequisites(cmid)
 
     /** Permanently discards an exhausted publish the user no longer wants to retry. */
     suspend fun discardPublish(cmid: String) = outboxRepository.discard(cmid)

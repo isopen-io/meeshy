@@ -23437,14 +23437,14 @@
       }
     },
     {
-      "_label": "réalisation du jour « 2026-02-29 »",
+      "_label": "réalisation du jour « 2028-02-29 »",
       "input": {
         "law": "photo-moment",
-        "dayKey": "2026-02-29"
+        "dayKey": "2028-02-29"
       },
       "expected": {
-        "id": "day:2026-02-29",
-        "day": "2026-02-29"
+        "id": "day:2028-02-29",
+        "day": "2028-02-29"
       }
     },
     {

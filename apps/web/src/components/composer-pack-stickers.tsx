@@ -4,13 +4,13 @@ import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { stickerPackTemplateId } from '@meeshy/shared/types/sticker-pack';
 import type { StickerPackDetail, StickerPackItem } from '@meeshy/shared/types/sticker-pack';
 
-import { attachmentSrc } from '@/lib/api/media-url';
 import { translate } from '@/lib/i18n-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { RasterizeSvg } from '@/lib/mee/png';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import { packStickerFile } from '@/lib/sticker-packs/file';
+import { stickerPackFileSrc } from '@/lib/sticker-packs/src';
 import { packSlotsFor, renderInstantSvg } from '@/lib/sticker-packs/render';
 import type { PackSlots } from '@/lib/sticker-packs/render';
 
@@ -149,7 +149,7 @@ export function PackStickerPanel({
 
 /** L'image d'un sticker de pack : l'image seule, ou l'Instant avec son texte. */
 export function PackStickerArt({ item, slots, uid }: { readonly item: StickerPackItem; readonly slots: PackSlots; readonly uid: string }) {
-  const src = attachmentSrc(item.fileUrl);
+  const src = stickerPackFileSrc(item);
   if (item.kind !== 'instant') {
     return <img src={src} alt="" loading="lazy" decoding="async" crossOrigin={mediaImageCrossOrigin(src)} className="h-full w-full object-contain" />;
   }

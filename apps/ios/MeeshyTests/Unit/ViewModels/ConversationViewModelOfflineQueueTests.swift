@@ -90,7 +90,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             systemLanguage: userSystemLanguage
         )
         auth.simulateLoggedIn(user: user)
-        let deps = ConversationDependencies(dbPool: pool, persistence: persistence)
+        let deps = ConversationDependencies(persistence: persistence)
         let sut = ConversationViewModel(
             conversationId: conversationId,
             authManager: auth,

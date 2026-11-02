@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_sticker_make">Make a sticker</string>
+    <string name="story_sticker_lift_saved">Subject lifted and added to My stickers</string>
+    <string name="story_sticker_lift_no_subject">No subject found in this photo</string>
+    <string name="story_sticker_lift_unreadable">Unreadable image</string>
+    <string name="story_sticker_image_failed">Couldn\'t add that sticker</string>
+</resources>

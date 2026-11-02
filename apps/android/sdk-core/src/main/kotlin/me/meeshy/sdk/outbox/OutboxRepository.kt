@@ -11,6 +11,9 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.model.ObjectIdGuard
+import me.meeshy.sdk.session.AccountClosedException
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.AccountTicket
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +28,7 @@ class OutboxRepository @Inject constructor(
     private val database: MeeshyDatabase,
     private val outboxDao: OutboxDao,
     private val ownerSource: OutboxOwnerSource = OutboxOwnerSource { null },
+    private val fence: AccountFence? = null,
 ) {
     private val _outcomes = MutableSharedFlow<OutboxOutcome>(extraBufferCapacity = 128)
 
@@ -36,14 +40,19 @@ class OutboxRepository @Inject constructor(
 
     /**
      * Enqueues [mutation], coalescing it against the pending lane.
+     *
+     * The row belongs to the account of [ticket] — the account the user acted under, taken when the write began
+     * (#13555). Once that account has closed ([AccountFence.close]) the row is never written: [AccountClosedException]
+     * instead, so a write begun under A and finished after B signed in can never leave as B.
+     *
      * @return the persisted row's `cmid`, or `null` if it annihilated existing rows.
      */
-    suspend fun enqueue(mutation: OutboxMutation): String? {
-        val incoming = mutation.toEntity(now(), ownerSource.currentOwnerId())
-        val decision = database.withTransaction {
-            val pending = outboxDao.deliverableForLane(incoming.lane)
-                .filter { it.stateEnum == OutboxState.PENDING }
-            OutboxCoalescer.decide(incoming, pending).also { apply(it) }
+    suspend fun enqueue(mutation: OutboxMutation, ticket: AccountTicket? = null): String? {
+        val decision = if (fence == null) {
+            write(mutation.toEntity(now(), ticket?.ownerId ?: ownerSource.currentOwnerId()))
+        } else {
+            val owner = ticket ?: fence.currentTicket()
+            fence.commit(owner) { write(mutation.toEntity(now(), owner.ownerId)) } ?: throw AccountClosedException()
         }
         return when (decision) {
             is CoalesceDecision.Enqueue -> decision.row.cmid
@@ -202,6 +211,20 @@ class OutboxRepository @Inject constructor(
         return true
     }
 
+    /**
+     * #13820 — the message lane [lane] waits for its conversation's mode behind [cmid]: every row not waiting yet waits since
+     * [cmid] does (or since it was queued, if later), so N queued messages fail together, never one bound after the other.
+     */
+    suspend fun waitBehind(lane: String, cmid: String, reason: String) {
+        val since = outboxDao.find(cmid)?.waitingSince ?: now()
+        outboxDao.waitBehind(lane, cmid, since, reason, now())
+    }
+
+    /** #13820 — [cmid] waited for its conversation's mode ([reason]) and is now admitted: the wait starts over next time. */
+    suspend fun endWait(cmid: String, reason: String) {
+        outboxDao.endWait(cmid, reason, now())
+    }
+
     /** Reclaims rows left `INFLIGHT` for longer than [staleAfterMs] (a worker killed mid-send). */
     suspend fun reclaimStaleInflight(staleAfterMs: Long = STALE_INFLIGHT_MS): Int {
         val at = now()
@@ -221,6 +244,10 @@ class OutboxRepository @Inject constructor(
         outboxDao.observePendingTargets(kinds.map { it.name })
             .map { it.toSet() }
             .distinctUntilChanged()
+
+    /** La file vue par la notification d'envoi : types et prérequis seulement, sans les `payload`. */
+    fun observeActivityItems(): Flow<List<me.meeshy.sdk.model.ongoing.OutboxActivityItem>> =
+        outboxDao.observeAll().map(OutboxActivityProjection::project).distinctUntilChanged()
 
     /** Rows the "Synchronisation…" indicator counts, live. */
     fun observeSyncIndicatorCount(): Flow<Int> =
@@ -260,6 +287,25 @@ class OutboxRepository @Inject constructor(
     }
 
     /**
+     * [retry] for a row that waits on prerequisites (a publication behind its uploads, #13417):
+     * every EXHAUSTED prerequisite is revived first, otherwise the revived row would meet the
+     * same dead dependency and be cascade-exhausted on the very next pass. A prerequisite that
+     * is gone (delivered) or still queued is left as it is.
+     *
+     * @return `false` when [cmid] no longer exists.
+     */
+    suspend fun retryWithPrerequisites(cmid: String): Boolean {
+        val row = outboxDao.find(cmid) ?: return false
+        OutboxDependencyKey.decode(row.dependsOn)
+            .filter { outboxDao.find(it)?.stateEnum == OutboxState.EXHAUSTED }
+            .forEach { retry(it) }
+        return retry(cmid)
+    }
+
+    /** The queued row [cmid], or `null` once it is gone (delivered or discarded). */
+    suspend fun row(cmid: String): OutboxEntity? = outboxDao.find(cmid)
+
+    /**
      * Removes a row outright — a user **discarding** a permanently-failed mutation
      * (e.g. an exhausted story publish they no longer want to retry). Unknown
      * `cmid`s are a no-op. Unlike [markSucceeded] this signals no outcome: it is a
@@ -269,24 +315,33 @@ class OutboxRepository @Inject constructor(
         outboxDao.deleteAll(listOf(cmid))
     }
 
+    /** The still-queued rows that wait on [prerequisiteCmid] (an upload's message, #12956). */
+    suspend fun dependentsOf(prerequisiteCmid: String): List<OutboxEntity> =
+        outboxDao.findDependents(OutboxDependencyKey.likePattern(prerequisiteCmid))
+            .filter { it.stateEnum != OutboxState.EXHAUSTED }
+
     /**
      * Grafts a delivered prerequisite's outcome into its still-queued dependents
      * (ARCHITECTURE.md §5) — the second half of the durable upload→publish chain.
-     * For every **`PENDING`** row whose `dependsOn` is [prerequisiteCmid], [rewrite]
-     * is applied to its payload; a non-`null` result is persisted, a `null` result
-     * (no-op) leaves the row untouched. `INFLIGHT`/`EXHAUSTED` dependents are skipped
-     * — only a row that has not yet started delivery can safely have its payload
-     * rewritten. The generic `(payload) -> payload?` shape keeps the queue agnostic
+     * For every row whose `dependsOn` is [prerequisiteCmid] and that is not `INFLIGHT`,
+     * [rewrite] is applied to its payload; a non-`null` result is persisted, a `null`
+     * result (no-op) leaves the row untouched. Only an in-flight dependent is skipped —
+     * its request is already on the wire. An `EXHAUSTED` one is rewritten too (#13417):
+     * a publication that gave up before its upload landed keeps the real id for its retry. The generic `(payload) -> payload?` shape keeps the queue agnostic
      * of any one mutation's payload format.
      *
      * @return how many dependents were actually rewritten.
      */
-    suspend fun rewriteDependents(prerequisiteCmid: String, rewrite: (String) -> String?): Int {
+    suspend fun rewriteDependents(prerequisiteCmid: String, rewrite: (String) -> String?): Int =
+        rewriteDependentRows(prerequisiteCmid) { rewrite(it.payload) }
+
+    /** [rewriteDependents], handing [rewrite] the whole dependent row (its kind picks the write-back). */
+    suspend fun rewriteDependentRows(prerequisiteCmid: String, rewrite: (OutboxEntity) -> String?): Int {
         val dependents = outboxDao.findDependents(OutboxDependencyKey.likePattern(prerequisiteCmid))
-            .filter { it.stateEnum == OutboxState.PENDING }
+            .filter { it.stateEnum != OutboxState.INFLIGHT }
         var changed = 0
         for (row in dependents) {
-            val newPayload = rewrite(row.payload) ?: continue
+            val newPayload = rewrite(row) ?: continue
             outboxDao.updatePayload(row.cmid, newPayload, now())
             changed++
         }
@@ -295,6 +350,21 @@ class OutboxRepository @Inject constructor(
 
     /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
     suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
+
+    /**
+     * The account a write beginning NOW belongs to (#13555) — taken by a caller when the user ACTS, before any work that
+     * suspends, and handed back to [enqueue]; `null` when this repository is not fenced.
+     */
+    fun ticket(): AccountTicket? = fence?.ticket()
+
+    /** The ticket of the work running here — the one installed at the gesture ([me.meeshy.sdk.session.withAccountTicket]) when there is one (#13558). */
+    suspend fun currentTicket(): AccountTicket? = fence?.currentTicket()
+
+    private suspend fun write(incoming: OutboxEntity): CoalesceDecision = database.withTransaction {
+        val pending = outboxDao.deliverableForLane(incoming.lane)
+            .filter { it.stateEnum == OutboxState.PENDING }
+        OutboxCoalescer.decide(incoming, pending).also { apply(it) }
+    }
 
     private suspend fun apply(decision: CoalesceDecision) {
         when (decision) {

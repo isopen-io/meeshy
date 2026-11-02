@@ -106,19 +106,28 @@ describe('historyFloorFor — (i-bis) un administrateur ou BIGBOSS de la PLATEFO
     ).toBeNull();
   });
 
-  it('replie la casse du rôle plateforme', () => {
+  it('lit le rôle plateforme EXACTEMENT, comme la table des rôles privilégiés (#11217) — `User.role` est un enum en majuscules', () => {
     expect(
       historyFloorFor(
         { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'admin' } },
         null,
       ),
-    ).toBeNull();
+    ).toEqual(JOINED);
   });
 
-  it('ne fait PAS d’un MODERATOR plateforme un bypass — seuls ADMIN/BIGBOSS voient tout', () => {
+  it('fait d’un MODERATOR plateforme un bypass, comme ADMIN/BIGBOSS (décision porteur du 2026-10-24, #11217)', () => {
     expect(
       historyFloorFor(
         { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'MODERATOR' } },
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  it.each(['AUDIT', 'ANALYST'])('ne fait PAS de %s plateforme un bypass — ils restent ordinaires', (role) => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role } },
         null,
       ),
     ).toEqual(JOINED);

@@ -213,9 +213,12 @@ struct StoryCanvasMediaMuteOverlays: View {
     /// courante. Le binding écrit en retour dans `viewModel.currentEffects`
     /// — ce qui resync la slide via `currentSlide.didSet` et propage au canvas.
     private var foregroundAudioBindings: [Binding<StoryAudioPlayerObject>] {
-        let audios = viewModel.currentEffects.audioPlayerObjects ?? []
+        let effects = viewModel.currentEffects
+        let audios = effects.audioPlayerObjects ?? []
         return audios.enumerated().compactMap { idx, obj -> Binding<StoryAudioPlayerObject>? in
-            guard SceneAudioStageRule.isStaged(obj) else { return nil }
+            // Une puce enfouie se peint dans le canvas, à son rang (#13901).
+            guard SceneAudioStageRule.isStaged(obj),
+                  !SceneAudioStageRule.isBuried(obj, in: effects) else { return nil }
             return Binding<StoryAudioPlayerObject>(
                 get: {
                     let list = viewModel.currentEffects.audioPlayerObjects ?? []

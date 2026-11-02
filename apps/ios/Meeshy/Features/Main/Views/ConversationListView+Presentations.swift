@@ -26,6 +26,15 @@ struct ConversationListCreationSheets: ViewModifier {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+            .sheet(item: $sheetTargets.settings) { conversation in
+                ConversationSettingsView(
+                    conversation: conversation,
+                    currentUserRole: ConversationRowMenuCapabilities.settingsRole(of: conversation, currentUser: AuthManager.shared.currentUser),
+                    onUpdated: { _ in sheetTargets.settings = nil },
+                    onLeft: { sheetTargets.settings = nil }
+                )
+                .presentationDragIndicator(.visible)
+            }
             .sheet(item: $sheetTargets.inviteSheet) { conversation in
                 InviteFriendsSheet(conversation: conversation)
                     .presentationDetents([.medium, .large])

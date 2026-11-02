@@ -222,6 +222,8 @@ public enum MessageActionPolicy {
     // MARK: - Verdicts
 
     /// `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client.
+    /// Un régime au repos (`server`/`hybrid`) ne retire plus « Modifier » (décision porteur) : la
+    /// passerelle rescelle le texte modifié. Seul le bout en bout le retire ; une ligne servie scellée n'a pas de texte.
     private static func editVerdict(_ context: MessageActionContext) -> EditVerdict? {
         let flags = context.content.flags
         let offered = context.live && context.registered && context.hasText

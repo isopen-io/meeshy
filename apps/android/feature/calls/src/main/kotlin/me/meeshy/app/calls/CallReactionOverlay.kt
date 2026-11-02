@@ -81,10 +81,7 @@ private fun FloatingReaction(
         progress.animateTo(1f, tween(CallReactionOverlayLaw.RISE_MILLIS, easing = LinearEasing))
         onFinished(reaction.id)
     }
-    val fadeIn = (progress.value * CallReactionOverlayLaw.RISE_MILLIS / CallReactionOverlayLaw.FADE_MILLIS).coerceAtMost(1f)
-    val fadeOut = ((1f - progress.value) * CallReactionOverlayLaw.RISE_MILLIS / CallReactionOverlayLaw.FADE_MILLIS).coerceAtMost(1f)
     val laneX = (widthPx * (reaction.lane + 1) / (CallReactionOverlayLaw.LANES + 1)).roundToInt()
-    val y = if (reduceMotion) (heightPx * 0.7f).roundToInt() else (heightPx * (1f - 0.7f * progress.value)).roundToInt()
     val description = stringResource(R.string.call_reaction_from, reaction.emoji.glyph)
     Box(Modifier.fillMaxSize()) {
         Text(
@@ -92,8 +89,16 @@ private fun FloatingReaction(
             fontSize = 36.sp,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .offset { IntOffset(laneX, y) }
-                .graphicsLayer { alpha = minOf(fadeIn, fadeOut) }
+                .offset {
+                    val rise = if (reduceMotion) 0.3f else 0.7f * progress.value
+                    IntOffset(laneX, (heightPx * (1f - rise)).roundToInt())
+                }
+                .graphicsLayer {
+                    val ratio = CallReactionOverlayLaw.RISE_MILLIS.toFloat() / CallReactionOverlayLaw.FADE_MILLIS
+                    val fadeIn = (progress.value * ratio).coerceAtMost(1f)
+                    val fadeOut = ((1f - progress.value) * ratio).coerceAtMost(1f)
+                    alpha = minOf(fadeIn, fadeOut)
+                }
                 .semantics { contentDescription = description },
         )
     }

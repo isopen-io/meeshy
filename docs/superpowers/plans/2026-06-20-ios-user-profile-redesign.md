@@ -53,7 +53,7 @@
 - Modify `.../Profile/UserProfileSheet.swift` — container : header collapse + barre onglets épinglée + switch + cache touch/SWR
 - Create `apps/ios/Meeshy/Features/Main/Views/UserProfileSheet+PostsContent.swift` — fournit le rendu `FeedPostCard` injecté + migration call-sites
 - Modify call-sites (`RootView.swift`, `PostDetailView.swift`, …) — passer le rendu posts
-- Modify `apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift` — toggle « rendre public »
+- Modify `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift` — toggle « rendre public »
 - Modify `apps/ios/Meeshy/Localizable.xcstrings` (+ SDK `Localizable.xcstrings` si clés SDK) — clés onglets/actions/motifs/stats/vocal
 - Modify `apps/ios/Meeshy.xcodeproj/project.pbxproj` — nouveaux fichiers
 - Test `apps/ios/MeeshyTests/Unit/ProfileHeaderMetricsTests.swift`
@@ -700,7 +700,7 @@ git commit -m "feat(ios): UserProfileSheet recomposé — header collapse, ongle
 ### Task E1: Toggle « rendre mon profil vocal public » (réglages)
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift` (+ son ViewModel)
+- Modify: `apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift` (+ son ViewModel)
 
 **Interfaces:**
 - Consumes: chemin de mise à jour profil existant (`UserService.updateProfile`/équivalent envoyant `voicePublic`).
@@ -715,7 +715,7 @@ git commit -m "feat(ios): UserProfileSheet recomposé — header collapse, ongle
 - [ ] **Step 4: Build + test** → OK ; **Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift apps/ios/Meeshy/Features/Main/ViewModels
+git add apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift apps/ios/Meeshy/Features/Main/ViewModels
 git commit -m "feat(ios): réglage 'rendre mon profil vocal public' (réutilise updateProfile)"
 ```
 

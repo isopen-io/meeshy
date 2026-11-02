@@ -16,6 +16,6 @@
     android:updatePeriodMillis="1800000"
     android:description="@string/widget_recent_conversations_description"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:previewImage="@mipmap/ic_launcher"
+    android:previewImage="@drawable/widget_preview_recent"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen" />

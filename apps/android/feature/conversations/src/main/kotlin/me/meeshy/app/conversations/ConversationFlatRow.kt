@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.displayedAvatar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,10 +51,12 @@ internal fun ConversationFlatRow(
             name = title,
             accent = accent,
             secondary = secondary,
-            presence = ConversationRowPrecedence.presence(model.presence, isTyping = line2 == RowLine2.TYPING),
+            peerUserId = model.peerUserId,
+            isTyping = line2 == RowLine2.TYPING,
             storyRing = model.storyRing,
             moodEmoji = model.moodEmoji,
             here = model.here,
+            imageUrl = model.conversation.displayedAvatar(model.currentUserId),
         )
         Column(
             modifier = Modifier.weight(1f),

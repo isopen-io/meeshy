@@ -212,7 +212,6 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   '__tests__/unit/routes/posts/interactions2.test.ts': 1039,
   '__tests__/unit/routes/communities-presence-gate.test.ts': 1038,
   '__tests__/unit/services/PostService.test.ts': 1028,
-  'socketio/handlers/__tests__/ConversationHandler.test.ts': 1026,
   '__tests__/unit/services/AttachmentService.direct.test.ts': 1023,
   'routes/uploads/__tests__/tus-handler.test.ts': 1017,
   '__tests__/unit/services/VoiceAnalysisService.test.ts': 1015,

@@ -14,6 +14,12 @@ jest.mock('../../../../utils/logger', () => ({
   logError: jest.fn(),
 }));
 
+// Directive porteur du 2026-11-01 : une conversation naît chiffrée au repos,
+// sous une clé obtenue avant sa création.
+jest.mock('../../../../services/EncryptionService', () => ({
+  getEncryptionService: jest.fn(async () => ({ activationKeyId: async () => 'server-key' })),
+}));
+
 jest.mock('../../../../utils/sanitize', () => ({
   SecuritySanitizer: {
     sanitizeText: jest.fn((t: string) => t),
@@ -91,7 +97,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
       create: jest.fn<any>().mockResolvedValue({ id: CONV_ID, title: 'New Conv' }),
     },
     participant: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: 'part-1' }),
+      // `Participant.role` est une colonne REQUISE : une ligne sans rang n'existe
+      // pas, et la loi d'autorité lit son absence comme « aucune ligne » (#11217).
+      findFirst: jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'member' }),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
     user: {

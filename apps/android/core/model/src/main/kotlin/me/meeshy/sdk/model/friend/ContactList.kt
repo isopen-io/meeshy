@@ -2,7 +2,6 @@ package me.meeshy.sdk.model.friend
 
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
@@ -36,13 +35,11 @@ val FriendRequestUser.resolvedName: String
     }
 
 /**
- * The three-state presence dot for a friend row at the caller's reference clock
- * [nowEpochMillis]. Bridges the roster record (whose `isOnline` is a nullable flag)
- * to the pure [UserPresence.state] SSOT: a null flag is treated as offline, so an
- * unknown-presence friend shows no dot rather than a false green one.
+ * La présence que la ligne du carnet a SERVIE (`isOnline` + `lastActiveAt`), ou `null` quand elle
+ * n'en porte aucune : rien n'est fabriqué, la ligne ne donne alors aucun point. La surface la passe
+ * à `rememberPresence`, qui la recoupe avec la carte vivante et la fait décroître avec l'horloge.
  */
-fun FriendRequestUser.presenceState(nowEpochMillis: Long): PresenceState =
-    UserPresence(isOnline = isOnline == true, lastActiveAt = lastActiveAt).state(nowEpochMillis)
+fun FriendRequestUser.servedPresence(): UserPresence? = UserPresence.served(isOnline, lastActiveAt)
 
 /**
  * The friend counts shown as a badge on each selectable Contacts filter chip

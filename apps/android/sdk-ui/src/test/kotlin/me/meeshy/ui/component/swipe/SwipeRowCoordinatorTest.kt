@@ -28,6 +28,16 @@ class SwipeRowCoordinatorTest {
     }
 
     @Test
+    fun `l'etat observable suit l'ouverture et la fermeture pour effacer les boutons flottants`() {
+        val coordinator = SwipeRowCoordinator()
+        assertThat(coordinator.isRowOpen).isFalse()
+        coordinator.rowDidOpen("a") { }
+        assertThat(coordinator.isRowOpen).isTrue()
+        coordinator.closeOpenRow()
+        assertThat(coordinator.isRowOpen).isFalse()
+    }
+
+    @Test
     fun `une ligne autre que l'ouverte ne peut pas liberer le coordinateur`() {
         val coordinator = SwipeRowCoordinator()
         coordinator.rowDidOpen("a") { }

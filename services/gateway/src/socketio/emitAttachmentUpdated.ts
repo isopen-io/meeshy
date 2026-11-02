@@ -9,6 +9,7 @@ import { enqueueForOfflineParticipants, type OfflineParticipantQueueDeps } from 
 import { readerSignedPlanForMessageId, type ReaderSignedPlan } from './readerSignedDelivery';
 import { serializeAttachmentForSocket, type SocketAttachmentRow } from './serializeAttachmentForSocket';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { queuedEventSealsAtRest } from '../services/messaging/serverAtRest';
 
 const logger = enhancedLogger.child({ module: 'emitAttachmentUpdated' });
 
@@ -110,10 +111,18 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
     });
   }
 
+  // #12822 — la transcription et ses traductions sont du texte du message :
+  // une conversation chiffrée au repos les range scellés dans la file. Un
+  // régime illisible n'enfile RIEN plutôt que de risquer le clair dans Redis ;
+  // la relecture de la conversation sert la pièce enrichie.
+  const atRest = await attachmentEventSealsAtRest(prisma, messageId);
+  if (atRest === 'unknown') return;
+
   await enqueueForOfflineParticipants(
     { deliveryQueue, prisma, connectedUsers },
     {
       conversationId,
+      atRest,
       // No actor to exclude: Whisper and NLLB are not people, and the author of
       // the voice note is precisely one of the participants whose own copy
       // carries no transcription at send time.
@@ -126,6 +135,22 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
       ...(participants.length > 0 ? { participants: [...participants] } : {}),
     },
   );
+}
+
+async function attachmentEventSealsAtRest(
+  prisma: Pick<PrismaClient, 'message'>,
+  messageId: string,
+): Promise<boolean | 'unknown'> {
+  try {
+    const row = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { encryptionMode: true, conversation: { select: { encryptionMode: true } } },
+    });
+    return row ? queuedEventSealsAtRest(row) : 'unknown';
+  } catch (error) {
+    logger.warn('attachment-updated regime lookup failed — not queued for offline participants', { messageId, error });
+    return 'unknown';
+  }
 }
 
 async function loadActiveParticipants(

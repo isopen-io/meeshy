@@ -63,24 +63,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     // pagination. The serial queue + single reused decoder are race-free; the value
     // is smuggled back through an unchecked box so callers keep plain `Decodable`
     // (non-Sendable) response types.
-    private static let offMainDecoder: JSONDecoder = makeAPIPayloadDecoder()
+    private static let offMainDecoder: JSONDecoder = MeeshyCoders.decoder(.api)
 
-    /// Décodeur canonique des payloads REST du gateway : le serveur émet des
-    /// dates ISO 8601 AVEC fractions de seconde (`2026-07-29T10:00:00.000Z`),
-    /// que la stratégie `.iso8601` de Foundation REFUSE
-    /// (`dataCorrupted("Expected date string to be ISO8601-formatted")`).
-    /// `public` : les tests ET l'app (consommateur NSE, #7809) décodent avec la
-    /// stratégie de PRODUCTION au lieu d'en réinventer une.
-    public nonisolated static func makeAPIPayloadDecoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = WireDate.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
-        return decoder
-    }
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.api.decode", qos: .userInitiated)
     private struct DecodeBox<V>: @unchecked Sendable { let value: V }
 
@@ -278,7 +262,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     /// `URLProtocol` et observent ce qui part sur le fil (#10463).
     init(urlSession: URLSession) {
         self.urlSession = urlSession
-        self.decoder = Self.makeAPIPayloadDecoder()
+        self.decoder = MeeshyCoders.decoder(.api)
     }
 
     /// T15b — purge le cache HTTP de la session (bodies ETag/304 des réponses
@@ -475,13 +459,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         return try await stringRequest(endpoint: endpoint, queryItems: queryItems)
     }
 
-    // MARK: - JSON Encoder (shared, ISO 8601 dates)
+    // MARK: - JSON Encoder (shared, wire dates to the millisecond)
 
-    private static let jsonEncoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }()
+    private static let jsonEncoder: JSONEncoder = MeeshyCoders.encoder(.api)
 
     // MARK: - POST with Encodable body
 

@@ -20,6 +20,7 @@ import {
   type MessageMenuContext,
   type MessageMenuItem,
 } from './message-actions';
+import { deleteOfferOf } from './message-deletion';
 
 /**
  * #11210 — LE MENU D'UN MESSAGE EST UNE PROJECTION DE `messageActionsFor`.
@@ -313,6 +314,40 @@ describe('menuViewerOf — le lecteur explicite, composé une fois pour l’écr
     expect(viewer).toMatchObject({ hasAccount: false, isAnonymous: true, platformRole: null, canSendMessages: false, participantId: 'p-guest' });
   });
 
+  test('#11415 — une ligne de participation servie INACTIVE ne fait plus un membre : pas de « Supprimer pour moi »', () => {
+    const viewerWith = (line: { readonly isActive?: boolean; readonly leftAt?: Date | string | null }) =>
+      menuViewerOf({
+        viewer: { id: 'u-viewer', isAnonymous: false },
+        participants: [{ id: 'p-1', userId: 'u-viewer', role: 'member', ...line }],
+        conversation: { currentUserRole: 'member' },
+        platformRole: 'USER',
+      });
+    expect(viewerWith({ isActive: true }).isActiveMember).toBe(true);
+    expect(viewerWith({ isActive: false }).isActiveMember).toBe(false);
+    expect(viewerWith({ isActive: false, leftAt: '2026-10-20T11:00:00.000Z' }).isActiveMember).toBe(false);
+    // La passerelle ne lit que `isActive: true` (`user-deletions.ts`) : un `leftAt` resté
+    // sur une ligne active (rejoindre l'efface) ne retire pas ce qu'elle admet.
+    expect(viewerWith({ isActive: true, leftAt: '2026-10-20T11:00:00.000Z' }).isActiveMember).toBe(true);
+
+    const group = menuConversationOf({ type: 'group', encryptionMode: null, isActive: true });
+    const departed: ActionScope = { viewer: viewerWith({ isActive: false }), conversation: group };
+    const member: ActionScope = { viewer: viewerWith({ isActive: true }), conversation: group };
+    expect(deleteOfferOf([row()], departed, { now: NOW }).forMe).toBe(false);
+    expect(ids(messageMenuItems(ctxOf(row(), departed)))).not.toContain('delete');
+    expect(deleteOfferOf([row()], member, { now: NOW }).forMe).toBe(true);
+    expect(ids(messageMenuItems(ctxOf(row(), member)))).toContain('delete');
+  });
+
+  test('#11415 — le serveur qui DIT « pas membre » l’emporte sur une ligne restée en cache', () => {
+    const viewer = menuViewerOf({
+      viewer: { id: 'u-viewer', isAnonymous: false },
+      participants: [{ id: 'p-1', userId: 'u-viewer', role: 'member', isActive: true }],
+      conversation: { currentUserRole: 'member', isMember: false },
+      platformRole: 'USER',
+    });
+    expect(viewer.isActiveMember).toBe(false);
+  });
+
   test('aucune conversation lue : ni membre, ni rôle — fermé par défaut', () => {
     expect(menuViewerOf({ viewer: { id: null, isAnonymous: true }, participants: undefined, conversation: undefined, platformRole: null })).toMatchObject({
       id: '',
@@ -324,10 +359,14 @@ describe('menuViewerOf — le lecteur explicite, composé une fois pour l’écr
 });
 
 describe('audit #11372 — ce que le web ne sait pas servir honnêtement ne s’offre pas', () => {
-  test('B1 — un MODERATOR de plateforme ne MODIFIE pas le message d’un autre : la réécriture serait silencieuse', () => {
+  test('#11375 — un MODERATOR de plateforme MODIFIE le message d’un autre : la passerelle l’enregistre et tous le lisent', () => {
     const ctx = ctxOf(row(), scopeOf({ viewer: { platformRole: 'MODERATOR' } }), { canEdit: true });
     expect(ctx.actions?.verdicts.edit?.asModerator).toBe(true);
-    expect(ids(messageMenuItems(ctx))).not.toContain('edit');
+    expect(ids(messageMenuItems(ctx))).toContain('edit');
+  });
+
+  test('#11375 — un utilisateur ordinaire ne modifie toujours pas le message d’un autre', () => {
+    expect(ids(messageMenuItems(ctxOf(row(), scopeOf(), { canEdit: true })))).not.toContain('edit');
   });
 
   test('B1 — l’auteur garde « Modifier » sur son propre message', () => {

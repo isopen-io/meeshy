@@ -1,6 +1,7 @@
 package me.meeshy.sdk.call
 
 import android.content.Context
+import android.media.projection.MediaProjection
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,13 +10,17 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
+import me.meeshy.sdk.call.screen.CallScreenFeeds
+import me.meeshy.sdk.call.screen.CallScreenShareRoute
+import me.meeshy.sdk.call.screen.ScreenFeedFactory
+import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.IceCandidateLine
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.CandidateRoute
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.DescriptionType
 import me.meeshy.sdk.model.call.RemoteDescriptionGuard.Verdict
 import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.model.call.WebRtcSdpRules
 import org.webrtc.AudioTrack
@@ -24,17 +29,16 @@ import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.IceCandidate
-import org.webrtc.MediaConstraints
+import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
-import org.webrtc.SdpObserver
+import org.webrtc.RtpSender
 import org.webrtc.SessionDescription
 import org.webrtc.VideoTrack
 import org.webrtc.audio.JavaAudioDeviceModule
+import java.util.concurrent.CopyOnWriteArraySet
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /** La pile WebRTC native : le contexte EGL et la fabrique de pairs, nés ENSEMBLE au premier appel. */
 internal class WebRtcStack(val eglBase: EglBase, val factory: PeerConnectionFactory)
@@ -53,22 +57,31 @@ class WebRtcEngine internal constructor(
     appContext: Context,
     stackProvider: () -> WebRtcStack,
     private val activityGate: CallActivityGate,
+    screenFeeds: ScreenFeedFactory? = null,
 ) {
     @Inject
     constructor(
         @ApplicationContext appContext: Context,
         activityGate: CallActivityGate,
-    ) : this(appContext, { buildStack(appContext) }, activityGate)
+        microphoneSamples: CallMicrophoneSamples,
+    ) : this(appContext, { buildStack(appContext, microphoneSamples) }, activityGate)
 
     private val stack = lazy(stackProvider)
     private val media = CallMediaSources(appContext, stack)
     private val engineEvents = CallEngineEvents(onRemoteDataChannel = ::adoptRemoteDataChannel)
     private val remoteDescriptions = RemoteDescriptionGuard()
     private val dataMessages = MutableSharedFlow<ByteArray>(extraBufferCapacity = 64)
+    private val screenShare = CallScreenShareRoute(screenFeeds ?: CallScreenFeeds(appContext, stack))
+    private val renegotiations = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
 
     private var peerConnection: PeerConnection? = null
+    private val previewPeers = CopyOnWriteArraySet<CallPreviewPeer>()
+    private val meshPeers = CopyOnWriteArraySet<CallMeshPeer>()
     private var configuration: PeerConnection.RTCConfiguration? = null
     private var dataChannel: CallDataChannel? = null
+    private var groupVideoCeiling: CallVideoBudget? = null
+    private var cameraBudget: CallVideoBudget = CallVideoBudget.CAMERA
+    private var cameraFrozen: Boolean = false
 
     /** Le contexte EGL partagé ; le lire avant tout appel construit la pile (rendu vidéo). */
     val eglBase: EglBase get() = stack.value.eglBase
@@ -91,6 +104,15 @@ class WebRtcEngine internal constructor(
     /** Canal de données, renégociation, état de connexion complet. */
     val events: SharedFlow<CallEngineEvent> = engineEvents.events
 
+    /**
+     * Le pair doit recevoir une offre : la direction de l'émetteur vidéo a changé (partage d'écran d'un
+     * appel audio). Le négociateur de l'appel l'émet, comme iOS `screenShareNeedsRenegotiation`.
+     */
+    val renegotiationRequests: SharedFlow<Unit> = renegotiations.asSharedFlow()
+
+    /** Vrai tant que la piste d'écran occupe l'émetteur vidéo. */
+    val isScreenSharing: Boolean get() = screenShare.isSharing
+
     /** Trames reçues sur le canal de données « transcription », brutes (bye, ping, sous-titres). */
     val dataChannelMessages: SharedFlow<ByteArray> = dataMessages.asSharedFlow()
 
@@ -105,13 +127,7 @@ class WebRtcEngine internal constructor(
      */
     fun createConnection(iceServers: List<SocketIceServer>, enableVideo: Boolean = false) {
         close()
-        val config = PeerConnection.RTCConfiguration(iceServers.map { it.toIceServer() }).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
-            bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
-            rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
-            iceCandidatePoolSize = ICE_CANDIDATE_POOL_SIZE
-        }
+        val config = rtcConfiguration(iceServers, ICE_CANDIDATE_POOL_SIZE)
         val peer = stack.value.factory.createPeerConnection(config, engineEvents.observer)
             ?: throw WebRtcError.ConfigureFailed("PeerConnectionFactory returned no peer connection")
         peerConnection = peer
@@ -164,6 +180,75 @@ class WebRtcEngine internal constructor(
 
     fun setVideoEnabled(enabled: Boolean) = media.setVideoEnabled(enabled)
 
+    /** Les effets de ma caméra (flou du fond, lissage, teinte), sur l'image envoyée ; aucune renégociation. */
+    fun setVideoEffects(config: VideoFilterConfig) = media.setVideoEffects(config)
+
+    fun switchCamera(onSwitched: (isFront: Boolean?) -> Unit) = media.switchCamera(onSwitched)
+
+    /**
+     * Partage l'écran de [projection] à la place de ma caméra (#13332), sans renégocier quand l'émetteur
+     * vidéo émettait déjà. @throws WebRtcError.NoPeerConnection hors appel, WebRtcError.ConfigureFailed si
+     * la capture est refusée.
+     */
+    fun beginScreenShare(projection: MediaProjection) {
+        val peer = peerConnection ?: throw WebRtcError.NoPeerConnection()
+        if (screenShare.begin(peer, projection, media.localVideoTrack)) renegotiations.tryEmit(Unit)
+        meshPeers.forEach { it.setScreenTrack(screenShare.track) }
+    }
+
+    /**
+     * Arrête le partage : l'émetteur vidéo retrouve la caméra (et ses effets) ou repasse en réception, sur le pair de
+     * l'appel comme sur chaque lien du maillage — avant que la piste d'écran ne soit libérée.
+     */
+    fun endScreenShare() {
+        meshPeers.forEach { it.setScreenTrack(null) }
+        if (peerConnection == null) return screenShare.release()
+        if (screenShare.end()) renegotiations.tryEmit(Unit)
+        applyCameraEncoding()
+    }
+
+    /**
+     * Le palier de la caméra (#13767, iOS `applyVideoQuality`) : réécrit tout de suite sur l'émetteur vidéo, puis à
+     * chaque négociation. [frozen] = plancher de survie, que le plafond du maillage ne touche pas (iOS
+     * `applySurvivalFloorEncoding`). Pendant un partage d'écran, l'écran garde son encodage ; la caméra retrouve ce
+     * palier à l'arrêt.
+     */
+    fun setCameraVideoBudget(budget: CallVideoBudget, frozen: Boolean = false) {
+        cameraBudget = budget
+        cameraFrozen = frozen
+        applyCameraEncoding()
+    }
+
+    /**
+     * Dans un appel de groupe, le pair de l'appel est un encodage parmi d'autres (#13752, iOS `setGroupVideoCeiling`) :
+     * le maillage lui pose la même part du débit montant qu'à ses liens ; `null` lui rend son budget entier.
+     */
+    fun setGroupVideoCeiling(ceiling: CallVideoBudget?) {
+        if (groupVideoCeiling == ceiling) return
+        groupVideoCeiling = ceiling
+        applyCameraEncoding()
+    }
+
+    /** La caméra sur l'émetteur vidéo du pair de l'appel, sous le plafond du maillage ; l'écran partagé garde le sien. */
+    private fun applyCameraEncoding() {
+        if (screenShare.isSharing) return
+        val sender = primaryVideoSender() ?: return
+        val camera = cameraBudget
+        val budget = if (cameraFrozen) camera else groupVideoCeiling?.capping(camera) ?: camera
+        runCatching { VideoSenderEncoding.apply(sender, budget) }
+    }
+
+    private fun primaryVideoSender(): RtpSender? {
+        val peer = peerConnection ?: return null
+        val video = runCatching { peer.transceivers }.getOrDefault(emptyList())
+            .filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO && !it.isStopped }
+        val cameraId = media.localVideoTrack?.id()
+        return (video.firstOrNull { cameraId != null && it.sender.track()?.id() == cameraId } ?: video.firstOrNull())?.sender
+    }
+
+    /** Le zoom de ma caméra (pincement, objectifs, retour à 1×). */
+    val cameraZoom: me.meeshy.sdk.call.camera.CallCameraZoom get() = media.zoom
+
     suspend fun createOffer(): SessionDescription = createSdp(isOffer = true)
 
     suspend fun createAnswer(): SessionDescription = createSdp(isOffer = false)
@@ -171,27 +256,16 @@ class WebRtcEngine internal constructor(
     private suspend fun createSdp(isOffer: Boolean): SessionDescription {
         if (isOffer) {
             peerConnection?.let { media.attachForOffer(it) }
+            applyCameraEncoding()
             ensureDataChannel()
         }
-        val created = suspendCancellableCoroutine<SessionDescription> { cont ->
-            val pc = peerConnection ?: return@suspendCancellableCoroutine cont.resumeWithException(
-                WebRtcError.NoPeerConnection(),
-            )
-            val observer = object : SdpObserver {
-                override fun onCreateSuccess(desc: SessionDescription) = cont.resume(desc)
-                override fun onCreateFailure(error: String?) =
-                    cont.resumeWithException(WebRtcError.FailedToCreateSdp(error.orEmpty()))
-                override fun onSetSuccess() = Unit
-                override fun onSetFailure(error: String?) = Unit
-            }
-            val constraints = MediaConstraints()
-            if (isOffer) pc.createOffer(observer, constraints) else pc.createAnswer(observer, constraints)
-        }
-        return localSdpTransformer.transform(created)
+        val pc = peerConnection ?: throw WebRtcError.NoPeerConnection()
+        return localSdpTransformer.transform(pc.awaitCreate(isOffer))
     }
 
     suspend fun setLocalDescription(desc: SessionDescription) {
         applyDescription(desc, local = true)
+        applyCameraEncoding()
         if (desc.type == SessionDescription.Type.OFFER) remoteDescriptions.onLocalOfferSet()
     }
 
@@ -211,24 +285,17 @@ class WebRtcEngine internal constructor(
         if (remoteDescriptions.judge(type, desc.description) != Verdict.Apply) return
         applyDescription(desc, local = false)
         val pc = peerConnection ?: return
-        if (type == DescriptionType.Offer) media.attachForAnswer(pc)
+        if (type == DescriptionType.Offer) {
+            media.attachForAnswer(pc)
+            applyCameraEncoding()
+        }
         remoteDescriptions.onApplied(type, desc.description).forEach { pc.addIceCandidate(it.toIceCandidate()) }
     }
 
-    private suspend fun applyDescription(desc: SessionDescription, local: Boolean): Unit =
-        suspendCancellableCoroutine { cont ->
-            val pc = peerConnection ?: return@suspendCancellableCoroutine cont.resumeWithException(
-                WebRtcError.NoPeerConnection(),
-            )
-            val observer = object : SdpObserver {
-                override fun onCreateSuccess(desc: SessionDescription?) = Unit
-                override fun onCreateFailure(error: String?) = Unit
-                override fun onSetSuccess() = cont.resume(Unit)
-                override fun onSetFailure(error: String?) =
-                    cont.resumeWithException(WebRtcError.SetDescriptionFailed(error.orEmpty()))
-            }
-            if (local) pc.setLocalDescription(observer, desc) else pc.setRemoteDescription(observer, desc)
-        }
+    private suspend fun applyDescription(desc: SessionDescription, local: Boolean) {
+        val pc = peerConnection ?: throw WebRtcError.NoPeerConnection()
+        pc.awaitApply(desc, local)
+    }
 
     /** Candidat du pair : refusé hors bornes, gardé tant que la description distante manque, sinon posé. */
     fun addIceCandidate(candidate: IceCandidate) {
@@ -248,9 +315,55 @@ class WebRtcEngine internal constructor(
         peerConnection?.restartIce()
     }
 
+    /**
+     * Ouvre un lien d'aperçu avant décroché, À CÔTÉ du pair de l'appel (qu'il ne touche jamais). Chez
+     * l'appelant, ses pistes sont tirées des sources de l'appel en cours ; un lien en réception seule
+     * n'en tire aucune et survit à [close] (au décroché, il tient jusqu'à la connexion du vrai lien).
+     * @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
+     */
+    fun openPreviewPeer(config: CallPreviewPeerConfig, listener: CallPreviewPeerListener): CallPreviewPeer {
+        val peer = CallPreviewPeer(
+            factory = stack.value.factory,
+            config = config,
+            listener = listener,
+            audioSource = media.sharedAudioSource,
+            videoSource = media.sharedVideoSource,
+            onClosed = { previewPeers.remove(it) },
+        )
+        previewPeers += peer
+        return peer
+    }
+
+    /**
+     * Ouvre une connexion du maillage d'un appel de groupe (#13740), À CÔTÉ du pair de l'appel : ses pistes
+     * sont tirées des sources de l'appel en cours (micro, caméra s'il y en a une, l'écran s'il est partagé —
+     * #13755), et [close] la ferme avant elles. @throws WebRtcError.ConfigureFailed si la fabrique ne rend pas de pair.
+     */
+    fun openMeshPeer(config: CallMeshPeerConfig, listener: CallMeshPeerListener): CallMeshPeer {
+        val peer = CallMeshPeer(
+            factory = stack.value.factory,
+            config = config,
+            listener = listener,
+            audioSource = media.sharedAudioSource,
+            videoSource = media.sharedVideoSource,
+            screenTrack = screenShare.track,
+            onClosed = { meshPeers.remove(it) },
+        )
+        meshPeers += peer
+        return peer
+    }
+
     fun close() {
+        // Les liens du maillage tirent leurs pistes des sources de l'appel : ils meurent AVANT elles.
+        meshPeers.forEach { it.close() }
+        // Un aperçu qui émet tire ses pistes des sources de l'appel : il meurt AVANT elles.
+        previewPeers.filter { it.usesCallSources }.forEach { it.close() }
         dataChannel?.close()
         dataChannel = null
+        screenShare.release()
+        groupVideoCeiling = null
+        cameraBudget = CallVideoBudget.CAMERA
+        cameraFrozen = false
         remoteDescriptions.reset()
         configuration = null
         media.releaseVideo()
@@ -264,24 +377,19 @@ class WebRtcEngine internal constructor(
         activityGate.setActive(false)
     }
 
-    private fun SocketIceServer.toIceServer(): PeerConnection.IceServer =
-        PeerConnection.IceServer.builder(urls)
-            .setUsername(username.orEmpty())
-            .setPassword(credential.orEmpty())
-            .createIceServer()
-
     private companion object {
         const val ICE_CANDIDATE_POOL_SIZE = 4
 
         @Volatile
         private var globalInitDone = false
 
-        fun buildStack(context: Context): WebRtcStack {
+        fun buildStack(context: Context, microphoneSamples: CallMicrophoneSamples): WebRtcStack {
             ensureGlobalInit(context)
             val egl = EglBase.create()
             val audioDevice = JavaAudioDeviceModule.builder(context)
                 .setUseHardwareAcousticEchoCanceler(true)
                 .setUseHardwareNoiseSuppressor(true)
+                .setSamplesReadyCallback(microphoneSamples.callback)
                 .createAudioDeviceModule()
             val factory = PeerConnectionFactory.builder()
                 .setAudioDeviceModule(audioDevice)

@@ -18,54 +18,51 @@ import MeeshySDK
 /// règle de chaîne de caractères n'a rien à faire sur l'acteur principal — ses
 /// tests non plus.
 /// **QUAND une frappe `@` interroge le RÉSEAU — la loi, écrite une fois**
-/// (directive porteur 2026-09-05).
+/// (directive porteur, #14053, qui remplace celle de #7847).
 ///
-/// > « Il faut déclencher la remontée après `@` avec les amis/contacts
-/// > (normalement existant en local et en cache) ; ensuite lorsqu'on tape la
-/// > première lettre ça filtre parmi ses amis et contacts LOCALEMENT ; c'est
-/// > au bout de la DEUXIÈME lettre qu'on recherche via API. Ce système doit
-/// > être général pour tous les emplacements où on doit mentionner un
-/// > utilisateur. »
+/// > « "@" déclenche TOUJOURS d'abord la liste du cache local de contacts,
+/// > filtrée par la saisie. Le réseau n'est appelé qu'à partir du 3ᵉ
+/// > caractère, pour faire remonter les autres personnes du contexte. Sauf si
+/// > les 2 premières lettres n'ont aucune correspondance locale : alors réseau
+/// > dès la 2ᵉ lettre. »
 ///
-/// ## Les trois régimes, et ce que chacun coûte
+/// Miroir de `mentionLookupStage` (`packages/shared/utils/mention-lookup.ts`),
+/// que le web consomme et qu'Android (`MentionLookupLaw`) reflète aussi.
+///
+/// ## Les régimes, et ce que chacun coûte
 ///
 /// | frappe | ce qui répond | coût réseau |
 /// |---|---|---|
-/// | `@` | les amis / contacts, en entier | **zéro** — cache |
+/// | `@` | les contacts, en entier | **zéro** — cache |
 /// | `@a` | les mêmes, filtrés | **zéro** — filtre local |
-/// | `@al` et au-delà | les mêmes + l'annuaire | un appel, débattu |
+/// | `@al`, au moins une correspondance locale | les mêmes, filtrés | **zéro** |
+/// | `@al`, aucune correspondance locale | l'annuaire / le contexte | un appel, débattu |
+/// | `@ali` et au-delà | les locaux, puis le serveur | un appel, débattu |
 ///
-/// La raison du seuil n'est pas l'économie d'octets : **une lettre ne
-/// discrimine pas.** `@a` rend des dizaines de comptes sans rapport avec ce
-/// que l'auteur tape, et les pousse DEVANT ses propres amis dans une bande qui
-/// n'en montre que trois ou quatre. Le premier caractère utile est le second.
+/// Deux lettres discriminent mal, mais pas toujours : quand le cache local a
+/// déjà quelqu'un à proposer, attendre la troisième lettre ne coûte rien à
+/// l'auteur ; quand il n'a personne, attendre le laisserait devant une liste
+/// vide.
 ///
 /// ## Pourquoi une règle et pas une constante par site
 ///
 /// Le dépôt a DEUX familles de résolveurs de mention — `MentionComposerController`
 /// (conversation, commentaires de post, brouillon du composer) et
 /// `MentionSuggestionsModel` (mood, éditeur de texte de story, sélecteur de
-/// mention) — montées sur NEUF sites. Chacune portait son propre seuil : `0`
-/// pour la première (elle appelait donc dès le `@` nu), « non vide » pour la
-/// seconde (dès la première lettre). Trois régimes différents pour un même
-/// geste, selon l'écran où le doigt se trouvait.
+/// mention). Chacune portait autrefois son propre seuil, donc trois régimes
+/// différents pour un même geste selon l'écran où le doigt se trouvait.
 ///
 /// > Une constante recopiée dans deux familles n'est pas une règle partagée :
 /// > c'est deux règles qui se ressemblent aujourd'hui.
 public nonisolated enum MentionLookupRule {
 
-    /// Le nombre de caractères, APRÈS le `@`, à partir duquel une recherche
-    /// distante est justifiée.
-    public static let minimumRemoteQueryLength = 2
+    /// À partir de ce nombre de caractères APRÈS le `@`, le réseau part
+    /// toujours (`MENTION_REMOTE_MIN_CHARS`).
+    public static let remoteMinimumLength = 3
 
-    /// `true` ⇔ cette requête mérite un aller-retour.
-    ///
-    /// Les blancs sont retirés d'abord : un `@ ` n'ouvre pas un handle, et
-    /// compter l'espace ferait partir un appel sur une requête vide.
-    public static func queriesRemote(_ query: String) -> Bool {
-        query.trimmingCharacters(in: .whitespacesAndNewlines).count
-            >= minimumRemoteQueryLength
-    }
+    /// À ce nombre de caractères, le réseau part SI le cache local n'a aucune
+    /// correspondance (`MENTION_REMOTE_EARLY_CHARS`).
+    public static let remoteEarlyLength = 2
 }
 
 public nonisolated enum ComposerMentionQuery {

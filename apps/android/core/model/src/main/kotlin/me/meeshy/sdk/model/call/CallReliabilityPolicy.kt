@@ -60,7 +60,7 @@ enum class ReconnectTriggerOutcome {
 /**
  * Pure, total, side-effect-free reliability decisions for a 1:1 call — the
  * Android SSOT ported from iOS `CallReliabilityPolicy`
- * (`Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift`).
+ * (`Meeshy/Features/Call/Services/WebRTC/WebRTCTypes.swift`).
  *
  * Every function is a deterministic pure function of its arguments, so the
  * ICE-restart reconnection story (network-change recovery, half-open self-heal,

@@ -33,7 +33,6 @@ feature/calls/src/main/kotlin/me/meeshy/app/calls/CallPillModel.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallPillPanel.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallQualityFeedbackSheet.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallRemoteVideoSurfaceView.kt
-feature/calls/src/main/kotlin/me/meeshy/app/calls/CallScreen.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallStage.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallTypeBadge.kt
 feature/calls/src/main/kotlin/me/meeshy/app/calls/CallWaitingBanner.kt
@@ -42,7 +41,6 @@ feature/calls/src/test/kotlin/me/meeshy/app/calls/CallActionDispatcherTest.kt
 feature/calls/src/test/kotlin/me/meeshy/app/calls/CallControlsPillSemanticsTest.kt
 feature/calls/src/test/kotlin/me/meeshy/app/calls/CallPillModelTest.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/AddParticipantSheet.kt
-feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatComposer.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatHeaderHost.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatListRows.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/ChatListSeparators.kt
@@ -97,7 +95,6 @@ feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ShareLinkDetai
 feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ShareLinkPickerScreen.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/BookmarksScreen.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/CommentMoreMenu.kt
-feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedComposerSheet.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedHeader.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedMediaCarousel.kt
 feature/feed/src/main/kotlin/me/meeshy/app/feed/FeedPostCardActions.kt
@@ -118,7 +115,6 @@ feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileActions.kt
 feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileScreen.kt
 feature/profile/src/main/kotlin/me/meeshy/app/profile/ProfileShareSheet.kt
 feature/profile/src/main/kotlin/me/meeshy/app/profile/ReportUserScreen.kt
-feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelCommentsSheet.kt
 feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelEmptyStates.kt
 feature/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt
 feature/settings/src/main/kotlin/me/meeshy/app/settings/AboutScreen.kt
@@ -146,13 +142,11 @@ feature/settings/src/main/kotlin/me/meeshy/app/settings/TwoFactorSetupContent.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerControlsLayer.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerMediaRows.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerSettingsRows.kt
-feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerSlideStrip.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerStickerLayer.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerTextElementLayer.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerTextToolbar.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/ComposerToolRow.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryActionRail.kt
-feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryCommentsSheet.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerScreen.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryDrawingLayer.kt
 feature/stories/src/main/kotlin/me/meeshy/app/stories/StoryRingCell.kt
@@ -177,8 +171,8 @@ sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleAudioPlayer.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleBlurReveal.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleFooterRow.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubblePinnedIndicator.kt
+sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/BubbleStoryReplyPreview.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/EphemeralCountdownBadge.kt
-sdk-ui/src/main/kotlin/me/meeshy/ui/component/bubble/MessageBubble.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/FloatingGradientFab.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/chrome/MeeshyMenuFab.kt
 sdk-ui/src/main/kotlin/me/meeshy/ui/component/fullscreen/FullscreenChromeDisc.kt

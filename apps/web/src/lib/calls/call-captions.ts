@@ -17,7 +17,8 @@ import type { CallTranscriptDataChannelMessage, CallTranscriptionSegmentEvent } 
 export type CaptionsMode = 'off' | 'translated' | 'original';
 
 /** `idle` : rien à capter · `listening` : mon micro est transcrit · `unsupported` : le navigateur ne sait pas · `denied` : refusé. */
-export type TranscriptionState = 'idle' | 'listening' | 'unsupported' | 'denied';
+/** `sealed` : la conversation est chiffrée de bout en bout, ou son régime ne se lit pas — rien ne se capte ni ne part (#13720). */
+export type TranscriptionState = 'idle' | 'listening' | 'unsupported' | 'denied' | 'sealed';
 
 export type CaptionLanguagePair = { readonly from: string; readonly to: string };
 

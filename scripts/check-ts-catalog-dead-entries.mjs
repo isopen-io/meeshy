@@ -490,7 +490,49 @@ export const callersIn = (contents, nsNames) => {
 // ce signal (#11585), iOS dans son lot. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le
 // 2026-10-22 en CI (Quality, run 39754795559) et en local en diffant les entrées mortes entre origin/dev
 // (275) et la branche de #11538 (276) : une seule entrée nouvelle.
-const BASELINE_DEAD_ENTRIES = 276;
+// 276 -> 277 (#11329, 2026-10-23) : `attachments.byAttachmentIdSubtitlesByLang`, la jumelle TS de l'entrée
+// Swift relevée le même jour (sous-titres WebVTT d'une pièce, servis depuis la fusion de #12375). Le lecteur
+// vidéo web la lira dans #9275. Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le 2026-10-23 en
+// local sur origin/dev : une seule entrée nouvelle.
+// 277 -> 276 (#10175, 2026-10-25) : `notifications.readByTypes` (`POST /api/v1/notifications/read-by-types`) a son
+// appelant web — `apps/web/src/lib/api/notifications.ts`, qui éteint « moments à immortaliser » quand le carnet
+// s'ouvre à froid, sans liste de notifications en cache. Valeur MESURÉE le 2026-10-25 en CI (Gardes du dépôt, run
+// 40172020147, « AMÉLIORATION NON ENREGISTRÉE ») et en local.
+// 276 -> 277 (#13142, 2026-10-26) : `e2Ee.conversationsByConversationIdSignals` (`POST
+// /api/v1/e2ee/conversations/:conversationId/signals`, la route unique des signaux chiffrés d'une
+// conversation e2ee). La passerelle la sert, iOS l'appelle ; le web l'appellera quand il parlera
+// libsignal (#13201, décision #12975). Entrée PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE
+// le 2026-10-26 en CI (Gardes du dépôt, PR #13207) : une seule entrée nouvelle.
+// 277 -> 281 (#13933, 2026-10-31) : `relations.byUserIdLevel`, `byUserIdRitual`, `config`, `root`, les quatre routes
+// des cercles que la passerelle sert et que les clients appelleront avec l'écran des cercles (#13933, ui-cercles).
+// Entrées PRÉMATURÉES, pas de faux morts (#5427). Valeur MESURÉE en CI (Gardes du dépôt, PR #14082) : quatre nouvelles.
+// ENTRÉES EN ATTENTE DE CLIENT — déclarées, jamais comptées dans la référence.
+//
+// Une route que la passerelle sert AVANT que son client n'existe n'est pas une
+// promesse rompue (#4889) : c'est une promesse datée, dont l'issue nomme qui la
+// tiendra. Relever BASELINE_DEAD_ENTRIES l'aurait noyée dans la dette générale
+// sans dire quand elle se solde ; la déclarer ici l'attache à son issue, et
+// `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
+// arrive — la déclaration doit alors partir dans le même commit.
+const PENDING_CLIENT_ENTRIES = {
+  // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
+  // bulle et la caméra du web liront (#14095).
+  'lens.credits': { issue: 14095, reason: 'GET /lens/credits — le crédit des médias reçus, lu par la bulle web' },
+  'lens.partnersByPartnerIdLogo': { issue: 14095, reason: 'GET /lens/partners/:partnerId/logo — le logo du double filigrane' },
+  'lens.usageBySlug': { issue: 14095, reason: 'POST /lens/usage/:slug — le ping d’usage de la caméra web (le GET suit #14097)' },
+  // … et le profil partenaire, la file de vérification et ses deux gestes, que la console web portera (#14097).
+  'lens.partnersMe': { issue: 14097, reason: 'GET|PUT /lens/partners/me — le profil du partenaire, écrit depuis le web' },
+  'lens.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — la file de vérification de la console' },
+  'lens.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — vérifier l’état vu' },
+  'lens.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — retirer une vérification' },
+  // Le Bring et les réglages par personne (#13936, servis par la PR #14441) : le sous-lot web
+  // `proche-bring@web` les appellera (bouton, compteur, blocage par personne).
+  'bring.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot web' },
+  'bring.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring, sous-lot web' },
+  'relations.byUserIdSettings': { issue: 13936, reason: 'GET|PUT /relations/:userId/settings — bloquer le Bring de quelqu’un, sous-lot web' },
+};
+
+const BASELINE_DEAD_ENTRIES = 279;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
@@ -529,6 +571,14 @@ export const applyKnownLiveExceptions = (dead, exceptions) => {
 };
 
 const RESULT = Object.freeze({ OK: 'ok', REGRESSION: 'regression', UNRECORDED_IMPROVEMENT: 'unrecorded-improvement' });
+
+// Une entrée EN ATTENTE DE CLIENT n'existe que sous l'issue qui portera son
+// appelant : une déclaration sans numéro d'issue, ou sans raison écrite, est
+// refusée — elle redeviendrait la « liste qui se périme en silence ».
+export const pendingClientProblems = (pending) =>
+  Object.entries(pending)
+    .filter(([, why]) => !Number.isInteger(why?.issue) || why.issue <= 0 || typeof why?.reason !== 'string' || why.reason.length < 20)
+    .map(([entry]) => entry);
 
 export const evaluateRatchet = (deadCount, baseline) => {
   if (deadCount > baseline) return RESULT.REGRESSION;
@@ -624,7 +674,18 @@ const selfTest = () => {
     return 1;
   }
 
-  console.log('self-test : 9/9 vérifications passées (comptage, cliquet à deux sens, lecture des modules de groupe, deux formes d’appelant, exceptions #5427).');
+  // Une entrée en attente de client sans issue ni raison est refusée.
+  const problems = pendingClientProblems({
+    'foo.ok': { issue: 1, reason: 'le client web la lira dans son lot' },
+    'foo.noIssue': { reason: 'le client web la lira dans son lot' },
+    'foo.noReason': { issue: 2, reason: '' },
+  });
+  if (JSON.stringify(problems) !== JSON.stringify(['foo.noIssue', 'foo.noReason'])) {
+    console.error(`AVEUGLE : une entrée en attente sans issue ou sans raison doit être refusée, obtenu ${JSON.stringify(problems)}.`);
+    return 1;
+  }
+
+  console.log('self-test : 10/10 vérifications passées (comptage, cliquet à deux sens, lecture des modules de groupe, deux formes d’appelant, exceptions #5427, entrées en attente de client).');
   return 0;
 };
 
@@ -632,12 +693,18 @@ const main = () => {
   if (process.argv.includes('--self-test')) return selfTest();
 
   const world = readWorld(REPO_ROOT);
-  const { filtered, stale } = applyKnownLiveExceptions(deadEntries(world), KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE);
+  const unanchored = pendingClientProblems(PENDING_CLIENT_ENTRIES);
+  if (unanchored.length > 0) {
+    console.error(`ENTRÉE EN ATTENTE SANS ISSUE : ${unanchored.join(', ')} — chaque entrée de PENDING_CLIENT_ENTRIES nomme l'issue qui portera son appelant et sa raison.`);
+    return 1;
+  }
+  const exceptions = new Set([...KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE, ...Object.keys(PENDING_CLIENT_ENTRIES)]);
+  const { filtered, stale } = applyKnownLiveExceptions(deadEntries(world), exceptions);
 
   if (stale.length > 0) {
     console.error(
       `EXCEPTION PÉRIMÉE (#5427) : ${stale.join(', ')} ne figure(nt) plus parmi les entrées sans appelant — ` +
-        'a/ont regagné un appelant réel, ou disparu du catalogue. Retirez cette entrée de KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE.',
+        'a/ont regagné un appelant réel, ou disparu du catalogue. Retirez cette entrée de KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE ou de PENDING_CLIENT_ENTRIES (son issue a livré l’appelant).',
     );
     return 1;
   }

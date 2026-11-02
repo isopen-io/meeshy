@@ -4,13 +4,15 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StorySticker
+import me.meeshy.sdk.model.scene.LayeredScale
+import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 
 /**
  * Un sticker posé sur une story, projeté pour le lecteur. [sideFraction] est le côté du
  * sticker en fraction de la LARGEUR de la scène — iOS `CanvasGeometry.stickerFontSize`
- * (`baseSize × scale` sur une scène de 1080) —, [x]/[y] son centre normalisé.
+ * (`baseSize × scale` sur une scène de 1080), sans plafond ni plancher (#14298) —, [x]/[y] son centre normalisé.
  */
 @Immutable
 data class StoryStickerView(
@@ -25,9 +27,16 @@ data class StoryStickerView(
     val duration: Double = 0.0,
     val fadeIn: Double = 0.0,
     val fadeOut: Double = 0.0,
+    val zIndex: Int = 0,
+    /** Le gabarit qui le dessine (#13847) et ses emplacements ; vide : l'emoji ou l'image. */
+    val templateId: String = "",
+    val slots: Map<String, String> = emptyMap(),
 ) {
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
+
+    /** [sideFraction] coupé entre la mise en page (au plus quatre largeurs de scène) et le calque qui agrandit au-delà. */
+    val drawnSide: LayeredScale get() = LayeredScale.of(sideFraction, SceneObjectNumbers.MAX_STICKER_LAYOUT_FRACTION)
 
     fun opacity(atSeconds: Float): Double = StoryMediaFadeResolver.fadeOpacity(
         fadeIn = fadeIn.takeIf { it > 0.0 },
@@ -51,6 +60,8 @@ data class StoryAudioChipView(
     val waveform: List<Float>,
     val startTime: Double = 0.0,
     val duration: Double = 0.0,
+    /** Son rang dans l'ordre unique de la scène (#13852) ; sans rang, la pastille reste au-dessus de tout, comme avant la pile. */
+    val zIndex: Int = Int.MAX_VALUE,
 ) {
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
@@ -66,42 +77,52 @@ object StorySceneObjectsProjection {
     const val GENERIC_CREDIT: String = "♫ —"
 
     fun stickers(effects: StoryEffects?, mediaUrlOf: (String) -> String?): List<StoryStickerView> =
-        effects?.stickerObjects.orEmpty()
-            .sortedBy { it.zIndex }
-            .mapNotNull { it.toView(mediaUrlOf) }
+        SceneObjectNumbers.capped(
+            effects?.stickerObjects.orEmpty()
+                .sortedBy { it.zIndex }
+                .mapNotNull { it.toView(mediaUrlOf) },
+        )
 
     fun audioChips(effects: StoryEffects?): List<StoryAudioChipView> =
         effects?.audioPlayerObjects.orEmpty()
             .filterNot { it.isBackground == true }
             .sortedBy { it.zIndex ?: 0 }
             .map { it.toChip() }
+            .let(SceneObjectNumbers::capped)
 
     private fun StorySticker.toView(mediaUrlOf: (String) -> String?): StoryStickerView? {
         val image = postMediaId.takeIf { it.isNotBlank() }?.let(mediaUrlOf)
-        if (image == null && emoji.isBlank()) return null
+        if (image == null && emoji.isBlank() && templateId.isBlank()) return null
         return StoryStickerView(
             id = id,
             emoji = emoji,
             imageUrl = image,
-            x = x,
-            y = y,
-            rotation = rotation,
-            sideFraction = (baseSize.coerceAtLeast(0.0) * scale.coerceAtLeast(0.0)) / DESIGN_CANVAS_WIDTH,
-            startTime = startTime ?: 0.0,
-            duration = duration ?: 0.0,
-            fadeIn = fadeIn ?: 0.0,
-            fadeOut = fadeOut ?: 0.0,
+            x = SceneObjectNumbers.position(x),
+            y = SceneObjectNumbers.position(y),
+            rotation = SceneObjectNumbers.rotation(rotation),
+            sideFraction = SceneObjectNumbers.stickerSideFraction(baseSize, scale),
+            startTime = SceneObjectNumbers.seconds(startTime ?: 0.0),
+            duration = SceneObjectNumbers.seconds(duration ?: 0.0),
+            fadeIn = SceneObjectNumbers.seconds(fadeIn ?: 0.0),
+            fadeOut = SceneObjectNumbers.seconds(fadeOut ?: 0.0),
+            zIndex = zIndex,
+            templateId = templateId,
+            slots = slots,
         )
     }
 
+    /** La pastille d'un son posé sur la scène, telle que le lecteur la peint — le compositeur peint la même. */
+    fun audioChip(track: StoryAudioPlayerObject): StoryAudioChipView = track.toChip()
+
     private fun StoryAudioPlayerObject.toChip(): StoryAudioChipView = StoryAudioChipView(
         id = id,
-        x = x,
-        y = y,
+        x = SceneObjectNumbers.position(x),
+        y = SceneObjectNumbers.position(y),
         credit = soundId?.let { creditLine(name, soundAuthorUsername) ?: GENERIC_CREDIT },
         waveform = waveformSamples,
-        startTime = startTime?.toDouble() ?: 0.0,
-        duration = duration?.toDouble() ?: 0.0,
+        startTime = SceneObjectNumbers.seconds(startTime?.toDouble() ?: 0.0),
+        duration = SceneObjectNumbers.seconds(duration?.toDouble() ?: 0.0),
+        zIndex = zIndex ?: Int.MAX_VALUE,
     )
 
     private fun creditLine(title: String?, username: String?): String? =

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.viewer.action.send", "androidName": "stories_action_send", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.viewer.action.views", "androidName": "stories_action_views", "status": "adopted" }
+      ]
+    }
+  }
+}

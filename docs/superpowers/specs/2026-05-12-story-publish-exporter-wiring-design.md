@@ -188,7 +188,7 @@ Le callback reçoit `0.0...1.0` (mappable directement sur `AVAssetExportSession.
 | Fichier | Rôle |
 |---------|------|
 | `packages/MeeshySDK/Sources/MeeshySDK/Models/StorySlide+ExportTrigger.swift` | `StorySlide.needsVideoExport` extension (SDK target, no UIKit) |
-| `apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift` | Orchestrator : décide export vs asset, drive StoryExporter, surface progress, gère cleanup tmp files. Vit côté app (besoin de UIImage pour fallback). |
+| `apps/ios/Meeshy/Features/Stories/Services/StoryVideoExportService.swift` | Orchestrator : décide export vs asset, drive StoryExporter, surface progress, gère cleanup tmp files. Vit côté app (besoin de UIImage pour fallback). |
 | `apps/ios/MeeshyTests/Integration/StoryPublishExporterIntegrationTests.swift` | Tests end-to-end : story avec video → export → upload mocked → POST /stories — vérifier la phase chain |
 | `packages/MeeshySDK/Tests/MeeshySDKTests/Models/StorySlideExportTriggerTests.swift` | Couvre `needsVideoExport` (matrice complète des triggers) |
 
@@ -196,11 +196,11 @@ Le callback reçoit `0.0...1.0` (mappable directement sur `AVAssetExportSession.
 
 | Fichier | Changement |
 |---------|------------|
-| `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` | `publishStorySingle` + `launchUploadTask` branchent sur `StoryVideoExportService` quand `slide.needsVideoExport`. Nouvelle phase `.exporting` exposée. |
-| `apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift` | `StoryPublishExecutor.executeQueuedPublish` route via export quand `item.videoExportURL` est nil + slide nécessite export. Resume si URL présente. |
+| `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` | `publishStorySingle` + `launchUploadTask` branchent sur `StoryVideoExportService` quand `slide.needsVideoExport`. Nouvelle phase `.exporting` exposée. |
+| `apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift` | `StoryPublishExecutor.executeQueuedPublish` route via export quand `item.videoExportURL` est nil + slide nécessite export. Resume si URL présente. |
 | `packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueueItem.swift` | Ajouter `videoExportURL: URL?` + sérialisation Codable. |
 | `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExporter.swift` | Ajouter param `progress: ((Double) -> Void)?` à `export(_:to:)`. Wire à `AVAssetExportSession.progress` via Timer poll 10Hz. |
-| `apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift` | Render `.exporting` phase avec progress numerique |
+| `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift` | Render `.exporting` phase avec progress numerique |
 
 ### 4.3 Backend (gateway) — possibly no changes
 

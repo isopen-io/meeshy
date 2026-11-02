@@ -1,4 +1,5 @@
 import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
+import { STORY_LIMITS } from '@meeshy/shared/utils/story-limits';
 import { sceneBackdropOf, sceneFitModeOf } from '@/lib/canvas/backdrop';
 import { isStoryFilter, type StoryFilterId } from '@/lib/canvas/media-filter';
 import { isSceneTransition } from '@/lib/canvas/scene-transition';
@@ -216,6 +217,13 @@ export function studioMediaCount(draft: StudioDraft): number {
   return draft.pages.reduce((sum, page) => sum + pageMediaCount(page), 0);
 }
 
+/** Le refus d'un texte de plus (#13590) : la scène courante en porte déjà
+ * `STORY_LIMITS.maxTextsPerScene`. `withAddedText` rend alors le MÊME brouillon ;
+ * l'hôte lit ce verdict pour DIRE pourquoi rien n'est apparu. */
+export function studioTextRefusal(draft: StudioDraft): 'text-max' | null {
+  return currentStudioPage(draft).texts.length >= STORY_LIMITS.maxTextsPerScene ? 'text-max' : null;
+}
+
 export type StudioPlaceRefusal = 'door' | 'media-max';
 
 /** Le refus AVANT de poser un fichier — la porte (mauvais MIME) ou le
@@ -235,6 +243,7 @@ export function studioPlaceRefusal(draft: StudioDraft, door: StudioDoor, mimeTyp
 export const selectedTextLayer = (draft: StudioDraft): StudioTextLayer | null => selectedTextLayerOf(currentStudioPage(draft));
 
 export function withAddedText(draft: StudioDraft, language: string): StudioDraft {
+  if (studioTextRefusal(draft) !== null) return draft;
   const textId = nextTextLayerId(allTexts(draft));
   return withCurrentPageChange(draft, (page) => pageWithAddedText(page, textId, language));
 }

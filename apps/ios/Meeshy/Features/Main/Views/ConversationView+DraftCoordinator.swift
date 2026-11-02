@@ -14,6 +14,11 @@ struct ConversationDraftCoordinator {
     let isDirect: Bool
     let participantUserId: String?
 
+    /// Un brouillon d'une conversation chiffrée de bout en bout est un clair :
+    /// il ne s'écrit pas sur le disque hors du coffre (#12999). Il vit le temps
+    /// de la rédaction, et un brouillon laissé par une version antérieure part.
+    var keepsDraftsOnDisk: Bool { !viewModel.endToEndSealer.requiresSeal }
+
     /// Ce que la reprise rend à la vue : le composeur repeint, et les pièces dont
     /// la vue régénère les vignettes (hors du MainActor, #7006) — `nil` quand le
     /// brouillon n'en portait aucune.
@@ -27,6 +32,7 @@ struct ConversationDraftCoordinator {
     /// the app is killed mid-sentence. Empty drafts are purged from
     /// `UserDefaults` by `DraftStore.save(_:for:)`.
     func persist(text: String, attachmentRefs: [DraftAttachmentRef]? = nil, composerState: ConversationComposerState) {
+        guard keepsDraftsOnDisk else { return DraftStore.shared.remove(for: viewModel.conversationId) }
         let ref = composerState.pendingReplyReference
         // Les refs de pièces jointes sont l'autorité du handler background
         // (copie durable) : une frappe intermédiaire les PRÉSERVE au lieu de
@@ -50,6 +56,7 @@ struct ConversationDraftCoordinator {
     /// puis re-save du brouillon avec leurs références. Rebuild complet à
     /// chaque background : une pièce retirée du tray ne ressuscite jamais.
     func persistAttachmentsForBackground(text: String, composerState: ConversationComposerState) {
+        guard keepsDraftsOnDisk else { return DraftStore.shared.remove(for: viewModel.conversationId) }
         guard let userId = AuthManager.shared.currentUser?.id else { return }
         let refs = MessageDraftMediaStore.persist(
             attachments: composerState.pendingAttachments, files: composerState.pendingMediaFiles,
@@ -65,6 +72,10 @@ struct ConversationDraftCoordinator {
     /// remet en lecture et n'écrit que si une reprise a eu lieu (`nil` ⇒ rien à
     /// écrire, aucune invalidation inutile à chaque `onAppear`).
     func restore(from current: ConversationComposerState, composerText: ConversationComposerTextModel) -> Restoration? {
+        guard keepsDraftsOnDisk else {
+            DraftStore.shared.remove(for: viewModel.conversationId)
+            return nil
+        }
         guard composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) else { return nil }
         var composerState = current
         composerText.text = draft.text

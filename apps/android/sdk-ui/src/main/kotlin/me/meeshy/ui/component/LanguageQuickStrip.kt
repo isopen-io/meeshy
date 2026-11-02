@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -29,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -69,6 +71,7 @@ fun LanguageQuickStrip(
     activeCode: String? = null,
     highlightedIndex: Int? = null,
     onTileBounds: ((Int, Rect) -> Unit)? = null,
+    onOpenAll: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -87,6 +90,28 @@ fun LanguageQuickStrip(
                 onBounds = onTileBounds?.let { report -> { rect -> report(index, rect) } },
             )
         }
+        if (onOpenAll != null) MoreLanguagesTile(onOpenAll)
+    }
+}
+
+/** The pinned « + » of the bar (iOS `StoryLanguageQuickBar.plusChip`): opens the full language list. */
+@Composable
+private fun MoreLanguagesTile(onClick: () -> Unit) {
+    val label = stringResource(R.string.language_strip_more)
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = MeeshyIcons.Add,
+            contentDescription = null,
+            tint = MeeshyPalette.White.copy(alpha = 0.9f),
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

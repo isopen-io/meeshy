@@ -112,7 +112,7 @@ mode-de-lecture du tour 1 (`decision.ts` 172 + `catalog.ts` 113 + `store.ts` 143
 
 ## 1. Sources lues
 
-**iOS** : `apps/ios/Meeshy/Features/Main/Focal/Summary/` en entier (11 fichiers, 1 477 l),
+**iOS** : `apps/ios/Meeshy/Features/Focal/Summary/` en entier (11 fichiers, 1 477 l),
 `Focal/Core/{LivingSummaryModels,AgentAssistContracts,ReadingModeOrchestrator,FocalMetrics}.swift`,
 `Focal/Lens/ReadingModeLensSheet.swift`, `Views/ConversationView.swift:1516-1575`,
 `Views/Bubble/MessageDayLabel.swift`, et les sept fichiers de témoins

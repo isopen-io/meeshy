@@ -32,6 +32,7 @@ android {
 dependencies {
     implementation(project(":sdk-core"))
     implementation(project(":sdk-ui"))
+    implementation(project(":feature:feed"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

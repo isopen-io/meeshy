@@ -444,15 +444,15 @@ final class BackgroundSoundSingleCreditTests: XCTestCase {
         for path in ["Meeshy/Features/Main/Views/ReelPageView+Info.swift",
                      "Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
                      "Meeshy/Features/Main/Views/PostSceneSoundHeader.swift",
-                     "Meeshy/Features/Main/Views/StoryViewerView+Header.swift"] {
+                     "Meeshy/Features/Stories/Views/StoryViewerView+Header.swift"] {
             XCTAssertFalse(try source(path).contains("muteIconName("), "\(path) monte encore un baffle")
         }
         XCTAssertFalse(try source("Meeshy/Features/Main/Views/PostDetailView.swift")
             .contains("muteIconName(isMuted: isCanvasMuted)"))
-        let story = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let story = try source("Meeshy/Features/Stories/Views/StoryViewerView.swift")
         XCTAssertTrue(story.contains("StoryAudioAvailability.needsSoundButton("),
                       "le rail de la story n'affiche son baffle que pour un AUTRE son que le fond")
-        let header = try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift")
+        let header = try source("Meeshy/Features/Stories/Views/StoryViewerView+Header.swift")
         XCTAssertTrue(header.contains("isMuted: isGlobalMuted"))
         XCTAssertTrue(header.contains("StoryGlobalMute.toggle($isGlobalMuted)"),
                       "la note de la story bascule le MÊME muet que le rail")

@@ -52,16 +52,28 @@ final class StickerSizeParityTests: XCTestCase {
 
     // MARK: - Bornes
 
-    func test_tinyStickerNeverCollapsesBelowTheLegibilityFloor() {
+    /// **Aucun plancher de rendu** (#14299) : le plancher de 5 px est une règle
+    /// du GESTE. Le rendu restitue la taille stockée, sinon un sticker réduit
+    /// à 5 px se lirait à 8 pt chez le lecteur et dans la vignette.
+    func test_aTinySticker_rendersAtItsStoredSize() {
+        XCTAssertEqual(CanvasGeometry.stickerFontSize(baseSize: 140, scale: 5.0 / 140, canvasWidth: 1080),
+                       5, accuracy: 0.001)
         XCTAssertEqual(CanvasGeometry.stickerFontSize(baseSize: 1, scale: 0.1, canvasWidth: 100),
-                       8, accuracy: 0.001)
+                       0.1 * 100 / 1080, accuracy: 0.0001)
+    }
+
+    func test_aHugeSticker_rendersWithoutCeiling() {
+        XCTAssertEqual(CanvasGeometry.stickerFontSize(baseSize: 140, scale: 100, canvasWidth: 1080),
+                       14000, accuracy: 0.001)
     }
 
     func test_degenerateInputsDoNotProduceNegativeOrNaNSizes() {
         XCTAssertEqual(CanvasGeometry.stickerFontSize(baseSize: -50, scale: 1, canvasWidth: 1080),
-                       8, accuracy: 0.001)
+                       0, accuracy: 0.001)
         XCTAssertEqual(CanvasGeometry.stickerFontSize(baseSize: 140, scale: -2, canvasWidth: 1080),
-                       8, accuracy: 0.001)
+                       0, accuracy: 0.001)
+        XCTAssertEqual(CanvasGeometry.stickerFontSize(baseSize: 140, scale: .nan, canvasWidth: 1080),
+                       0, accuracy: 0.001)
         XCTAssertEqual(CanvasGeometry.stickerFontSize(baseSize: 140, scale: 1, canvasWidth: 0),
                        0, accuracy: 0.001)
     }

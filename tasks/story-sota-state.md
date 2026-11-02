@@ -40,9 +40,9 @@
 - `.../Story/StoryReaderRepresentable.swift` — wrapper UIKit ; resolver `postMediaId → URL`.
 - `apps/ios/Meeshy/Features/Main/Views/StoryViewerView*.swift` — viewer plein écran (carte
   arrondie ↔ plein écran, `StoryCanvasFraming`), câblage timer/prefetch/markViewed.
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift` — hub d'entrée : groupe en
+- `apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift` — hub d'entrée : groupe en
   cache → rendu immédiat ; sinon `loadStories(forceNetwork:true)` BLOQUANT + spinner (lacune R4).
-- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` — `loadStories` cache-first
+- `apps/ios/Meeshy/Features/Stories/ViewModels/StoryViewModel.swift` — `loadStories` cache-first
   SWR (`CacheCoordinator.stories`, clé unique `recent_tray_v2`), prefetch (`prefetchAllStoryMedia`
   8 groupes), markViewed optimiste, sinks realtime, publish (voir Édition).
 - `.../MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift` + `StoryMediaLayer.swift` —
@@ -61,7 +61,7 @@
 - `.../MeeshySDK/Persistence/StoryPublishQueue.swift` — actor, JSON persisté
   (`Documents/meeshy_cache/story_publish_queue.json`), retry 5×, hash-check médias, drain au
   reconnect + boot. `StoryOfflineQueue` = adaptateur mince legacy.
-- `apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift` — orchestration + toasts.
+- `apps/ios/Meeshy/Features/Stories/Services/StoryPublishService.swift` — orchestration + toasts.
 - `.../MeeshySDK/Networking/TusUploadManager.swift` — upload résumable, checkpoints GRDB
   (`tus_upload_checkpoint`), reprise après kill VÉRIFIÉE (Wave 2 R-OB5).
 - `.../MeeshySDK/Models/StoryEffects+Sanitization.swift` — strip `file://` au boundary SDK.
@@ -1261,7 +1261,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   texte FR source lui-même contenait déjà un mot anglais (« Bake ») — coquille d'auteur en
   plus du défaut de localisation.
 - Root cause : contrairement à it.95-it.102 (bugs SDK/MeeshyUI), ce fichier
-  (`apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift`) est APP-side — pas de
+  (`apps/ios/Meeshy/Features/Stories/Views/StoryExportShareSheet.swift`) est APP-side — pas de
   piège `bundle: .module` ici. Cause unique : `story.export.share.subtitle` était
   ABSENTE à 100 % du catalogue APP alors que ses 4 clés sœurs du même écran
   (`.title`, `.errorTitle`, `.languageLabel`, `.languageOriginal`) étaient déjà

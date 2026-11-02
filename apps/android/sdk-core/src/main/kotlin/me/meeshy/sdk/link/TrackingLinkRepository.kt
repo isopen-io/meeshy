@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.CreateTrackingLinkRequest
 import me.meeshy.sdk.model.TrackingLink
 import me.meeshy.sdk.model.TrackingLinkStats
 import me.meeshy.sdk.model.TrackingShortLinkResult
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TrackingLinkApi
 import me.meeshy.sdk.net.apiCall
@@ -19,6 +20,14 @@ public class TrackingLinkRepository @Inject constructor(
 
     public suspend fun listLinks(offset: Int = 0, limit: Int = 50): NetworkResult<List<TrackingLink>> =
         apiCall { api.listMine(offset, limit) }.map { it.trackingLinks }
+
+    /** Crée un lien de suivi et rend le lien ENVELOPPÉ ; une charge sans lien est un échec, jamais un lien inventé. */
+    public suspend fun createLink(request: CreateTrackingLinkRequest): NetworkResult<TrackingLink> =
+        when (val result = apiCall { api.create(request) }) {
+            is NetworkResult.Success -> result.data.trackingLink?.let { NetworkResult.Success(it) }
+                ?: NetworkResult.Failure(ApiError(message = "tracking link missing from response", code = "UNAVAILABLE"))
+            is NetworkResult.Failure -> result
+        }
 
     /** L'adresse courte de [url], ou une erreur typée portant [url] comme repli : jamais une adresse inventée. */
     public suspend fun createTracking(

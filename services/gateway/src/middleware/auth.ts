@@ -3,6 +3,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantType, ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { resolveParticipantRights } from '../services/participantRights';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { PRIVILEGED_PLATFORM_ROLES } from '@meeshy/shared/utils/platform-privilege';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
@@ -18,6 +19,7 @@ import { ActivationBlockedError, resolveAccountActivation } from '../services/au
 import { AccountDeletedError, accountIsDeleted, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
+import { rejectBelowAppVersionFloor } from './app-version-floor';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
 
@@ -709,6 +711,10 @@ export function createUnifiedAuthMiddleware(
         });
       }
 
+      // D-5 (#13954) — la session est admise : un client sous le plancher de
+      // sa plateforme n'ouvre pas la requête, même sur une route facultative.
+      if (authContext.isAuthenticated && isRegisteredUser(authContext) && rejectBelowAppVersionFloor(request, reply)) return reply;
+
       (request as UnifiedAuthRequest).authContext = authContext;
 
       // Legacy compat: dynamic property assignment on typed Fastify request requires `any`
@@ -928,7 +934,7 @@ export function requireRole(allowedRoles: string | string[]) {
 }
 
 export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
-export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
+export const requireModerator = requireRole([...PRIVILEGED_PLATFORM_ROLES]);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
 export {

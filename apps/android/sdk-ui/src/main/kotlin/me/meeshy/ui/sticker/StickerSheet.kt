@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,7 +55,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 /**
  * Le contenu de la feuille de stickers — poignée exclue (la pose [StickerSheetHost]) : fond dégradé indigo,
  * en-tête (marque, « Stickers », croix), barre d'onglets capsule, puis UNE liste paresseuse à en-têtes de
- * section. Changer d'onglet repart du haut ; l'onglet choisi retombe sur le premier s'il disparaît (un pack
+ * section. Les pages injectées (packs, Personnalisés, Boutique) posent par [LocalStickerSheetPicker]. Changer d'onglet repart du haut ; l'onglet choisi retombe sur le premier s'il disparaît (un pack
  * retiré). La [destination] décide ce que devient un choix ; poser alimente les récents.
  *
  * [accent] est l'accent du contexte (celui de la conversation, passé en paramètre — jamais calculé ici).
@@ -100,6 +101,16 @@ public fun StickerSheet(
             haptics = haptics,
         )
     }
+    val picker = remember(actions) {
+        StickerSheetPicker(
+            pick = { choice ->
+                choice.usageEntry?.let(usage::noteUse)
+                destination.place(choice)
+                onDismiss()
+            },
+            actions = actions,
+        )
+    }
 
     Column(
         modifier = modifier
@@ -110,22 +121,24 @@ public fun StickerSheet(
         StickerSheetTabBar(entries, selected, onSelect = { chosenId = it.id })
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             val packContent = capabilities.packContent
-            when {
-                selected is StickerSheetPage.Pack && packContent != null -> packContent(selected.slug)
-                selected == StickerSheetPage.Fixed(StickerSheetTab.CUSTOM) && capabilities.custom != null -> capabilities.custom.invoke()
-                selected == StickerSheetPage.Shop && capabilities.shop != null -> capabilities.shop.invoke()
-                else -> StickerSheetGrid(
-                    page = selected,
-                    capabilities = capabilities,
-                    actions = actions,
-                    recents = recents,
-                    favorites = favorites,
-                    query = query,
-                    onQueryChange = { query = it },
-                    packEntries = entries.filter { it.page.isPack },
-                    onSelectPage = { chosenId = it.id },
-                    accent = accent,
-                )
+            CompositionLocalProvider(LocalStickerSheetPicker provides picker) {
+                when {
+                    selected is StickerSheetPage.Pack && packContent != null -> packContent(selected.slug)
+                    selected == StickerSheetPage.Fixed(StickerSheetTab.CUSTOM) && capabilities.custom != null -> capabilities.custom.invoke()
+                    selected == StickerSheetPage.Shop && capabilities.shop != null -> capabilities.shop.invoke()
+                    else -> StickerSheetGrid(
+                        page = selected,
+                        capabilities = capabilities,
+                        actions = actions,
+                        recents = recents,
+                        favorites = favorites,
+                        query = query,
+                        onQueryChange = { query = it },
+                        packEntries = entries.filter { it.page.isPack },
+                        onSelectPage = { chosenId = it.id },
+                        accent = accent,
+                    )
+                }
             }
         }
     }

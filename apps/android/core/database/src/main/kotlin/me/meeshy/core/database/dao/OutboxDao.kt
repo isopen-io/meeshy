@@ -52,6 +52,13 @@ public interface OutboxDao {
     @Query("SELECT DISTINCT targetId FROM outbox WHERE kind IN (:kinds) AND state != 'EXHAUSTED'")
     public fun observePendingTargets(kinds: List<String>): Flow<List<String>>
 
+    /**
+     * One-shot twin of [observePendingTargets]: the anchors of the rows of [kinds] still on their
+     * way, read inside the caller's transaction (a message snapshot must not undo them).
+     */
+    @Query("SELECT DISTINCT targetId FROM outbox WHERE kind IN (:kinds) AND state != 'EXHAUSTED'")
+    public suspend fun pendingTargets(kinds: List<String>): List<String>
+
     @Query("SELECT * FROM outbox WHERE state = :state ORDER BY createdAt ASC")
     public suspend fun byState(state: String): List<OutboxEntity>
 
@@ -135,6 +142,23 @@ public interface OutboxDao {
 
     @Query("UPDATE outbox SET nextAttemptAt = NULL, waitingSince = NULL, lastError = NULL, cancelRequestedAt = NULL WHERE cmid = :cmid")
     public suspend fun resetSchedule(cmid: String)
+
+    /**
+     * #13820 — la ligne attendait le mode de sa conversation ([reason]) et vient d'être admise : son attente repart de zéro.
+     * Une attente d'une autre nature (l'origine d'un transfert) garde son horloge.
+     */
+    @Query("UPDATE outbox SET nextAttemptAt = NULL, waitingSince = NULL, lastError = NULL, updatedAt = :now WHERE cmid = :cmid AND lastError = :reason")
+    public suspend fun endWait(cmid: String, reason: String, now: Long)
+
+    /**
+     * #13820 — la file d'une conversation entre en attente de son mode derrière [cmid] : chaque ligne qui n'attend pas encore
+     * attend depuis [since], ou depuis sa mise en file si elle est plus récente. La borne court pour toute la file à la fois.
+     */
+    @Query(
+        "UPDATE outbox SET waitingSince = MAX(createdAt, :since), lastError = :reason, updatedAt = :now " +
+            "WHERE lane = :lane AND cmid != :cmid AND state = 'PENDING' AND waitingSince IS NULL",
+    )
+    public suspend fun waitBehind(lane: String, cmid: String, since: Long, reason: String, now: Long)
 
     @Query("UPDATE outbox SET lastError = :error, updatedAt = :now WHERE cmid = :cmid")
     public suspend fun recordError(cmid: String, error: String?, now: Long)

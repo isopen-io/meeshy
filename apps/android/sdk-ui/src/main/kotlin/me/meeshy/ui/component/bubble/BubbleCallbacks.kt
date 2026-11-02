@@ -1,0 +1,63 @@
+package me.meeshy.ui.component.bubble
+
+import androidx.compose.runtime.Immutable
+
+/**
+ * Every callback a [MessageBubble] can raise, bundled in one immutable value so that adding a
+ * gesture is one more field with a neutral default — never one more parameter on the bubble.
+ *
+ * A null callback is the neutral value AND a rendering decision: the matching element is then not
+ * interactive at all (no click target, no button role), exactly as the bubble behaved when each
+ * callback was its own nullable parameter. [None] is the fully inert set, used by non-interactive
+ * render sites such as the long-press preview.
+ */
+@Immutable
+public data class BubbleCallbacks(
+    /** Long press on the bubble body (opens the action menu). */
+    val onLongPress: (() -> Unit)? = null,
+    /** Tap on a reaction chip, with its emoji. */
+    val onReactionClick: ((String) -> Unit)? = null,
+    /** Long press on a reaction chip. */
+    val onReactionLongPress: (() -> Unit)? = null,
+    /** Tap on an image of the grid, with its index. */
+    val onImageClick: ((Int) -> Unit)? = null,
+    /** Long press on one image of the grid, with its index: that piece alone is previewed (#13461). */
+    val onImageLongClick: ((Int) -> Unit)? = null,
+    /** Tap on a shared location that has coordinates. */
+    val onLocationClick: ((BubbleLocation) -> Unit)? = null,
+    /** Tap on a playable audio attachment. */
+    val onAudioClick: ((BubbleAudio) -> Unit)? = null,
+    /** Tap on a word of the transcript of the voice note being played: seek it to that word's start, in seconds. */
+    val onAudioSeek: ((BubbleAudio, Double) -> Unit)? = null,
+    /** Tap on a file attachment that has a url. */
+    val onFileClick: ((BubbleFile) -> Unit)? = null,
+    /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */
+    val onReplyPreviewClick: (() -> Unit)? = null,
+    /** Tap on the citation card of a quoted story (only wired when the story still opens, #13296). */
+    val onStoryCitationClick: (() -> Unit)? = null,
+    /** Tap on a language flag of the Prisme strip, with its language code. */
+    val onFlagTap: ((String) -> Unit)? = null,
+    /** Tap sur le smiley d'ajout du dernier message reçu : le sélecteur d'emoji. */
+    val onAddReaction: (() -> Unit)? = null,
+    /** Tap sur la bande orange d'un envoi échoué (iOS `BubbleFailedRetryBar`) : renvoyer. */
+    val onRetry: (() -> Unit)? = null,
+    /** Tap sur l'avatar de l'auteur dans le pied d'identité (et « Voir le profil » de son menu). */
+    val onSenderTap: (() -> Unit)? = null,
+    /**
+     * The TalkBack actions of the bubble body, in order. The host passes exactly what the
+     * message's law offers (#12760): an empty list exposes none.
+     */
+    val accessibilityActions: List<BubbleAccessibilityAction> = emptyList(),
+) {
+    public companion object {
+        /** No callback at all: a purely decorative bubble. */
+        public val None: BubbleCallbacks = BubbleCallbacks()
+    }
+}
+
+/** One named TalkBack action of a bubble: its spoken [label] and what it does. */
+@Immutable
+public data class BubbleAccessibilityAction(
+    val label: String,
+    val onAction: () -> Unit,
+)

@@ -5,7 +5,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.VisitorReachQueue
@@ -50,6 +49,15 @@ class VisitorReachReporterTest {
     }
 
     private fun view(id: String) = SocialEvent.View(id)
+
+    /**
+     * Le vidage programmé vit dans `backgroundScope`, qu'advanceUntilIdle n'attend jamais : on
+     * franchit donc le délai de groupement explicitement.
+     */
+    private fun TestScope.passTheFlushDelay() {
+        advanceTimeBy(VisitorReachReporter.FLUSH_DELAY_MILLIS + 1)
+        runCurrent()
+    }
 
     @Test
     fun `l'envoi part 2 s apres le premier evenement et pas avant`() = runTest {
@@ -99,7 +107,7 @@ class VisitorReachReporterTest {
         env.sender.next = { VisitorReachDelivery.FAILED }
         val reporter = env.reporter()
         reporter.record(listOf(view("a")))
-        advanceUntilIdle()
+        passTheFlushDelay()
         assertThat(reporter.pendingCount).isEqualTo(1)
         assertThat(env.storage.json).isNotNull()
         env.sender.next = { VisitorReachDelivery.ACKNOWLEDGED }
@@ -115,7 +123,7 @@ class VisitorReachReporterTest {
         }
         val reporter = env.reporter()
         reporter.record(listOf(SocialEvent.Impression("i", "feed"), view("v")))
-        advanceUntilIdle()
+        passTheFlushDelay()
         assertThat(reporter.pendingCount).isEqualTo(1)
         assertThat(VisitorReachQueue.restore(env.storage.json).entries.single().stamped.event)
             .isInstanceOf(SocialEvent.Impression::class.java)
@@ -127,7 +135,7 @@ class VisitorReachReporterTest {
         env.sender.next = { VisitorReachDelivery.REFUSED_PERMANENTLY }
         val reporter = env.reporter()
         reporter.record(listOf(view("a")))
-        advanceUntilIdle()
+        passTheFlushDelay()
         assertThat(reporter.pendingCount).isEqualTo(0)
     }
 
@@ -146,11 +154,11 @@ class VisitorReachReporterTest {
         val env = Env(this)
         env.sender.next = { VisitorReachDelivery.FAILED }
         env.reporter().record(listOf(view("a")))
-        advanceUntilIdle()
+        passTheFlushDelay()
         env.sender.next = { VisitorReachDelivery.ACKNOWLEDGED }
         val restarted = env.reporter()
         assertThat(restarted.pendingCount).isEqualTo(1)
-        advanceUntilIdle()
+        passTheFlushDelay()
         assertThat(restarted.pendingCount).isEqualTo(0)
     }
 
@@ -159,7 +167,7 @@ class VisitorReachReporterTest {
         val env = Env(this, signedIn = true)
         val reporter = env.reporter()
         reporter.record(listOf(view("a")))
-        advanceUntilIdle()
+        passTheFlushDelay()
         assertThat(reporter.pendingCount).isEqualTo(0)
         assertThat(env.sender.sent).isEmpty()
     }
@@ -170,7 +178,7 @@ class VisitorReachReporterTest {
         env.sender.next = { VisitorReachDelivery.FAILED }
         val reporter = env.reporter()
         reporter.record(listOf(view("a")))
-        advanceUntilIdle()
+        passTheFlushDelay()
         env.tokens = emptyList()
         reporter.flushNow()
         assertThat(reporter.pendingCount).isEqualTo(0)
@@ -182,7 +190,7 @@ class VisitorReachReporterTest {
         val env = Env(this)
         env.sender.next = { VisitorReachDelivery.FAILED }
         env.reporter().record(listOf(view("a")))
-        advanceUntilIdle()
+        passTheFlushDelay()
         assertThat(env.storage.json).doesNotContain("visitor_k")
     }
 }

@@ -55,6 +55,50 @@ public struct AvatarRingOrnamentPath: Codable, Hashable, Sendable {
     }
 }
 
+/// Les CALQUES ILLUSTRÉS d'un contour (#13960, miroir de `AvatarRingDecorSchema`) : un film `back`
+/// DERRIÈRE l'avatar, un film `front` AU-DESSUS, chacun carré, centré sur l'avatar, de côté
+/// `reach ×` la boîte du contour — il DÉBORDE sans grandir la mise en page. L'anneau fixe
+/// (`stroke` + `ornament`) reste l'image de repli et celle de « Réduire les animations ».
+public struct AvatarRingDecor: Codable, Hashable, Sendable {
+    /// Le débordement maximal : un film de côté 1,5 × la boîte du contour (`RING_DECOR_MAX_REACH`).
+    public static let maxReach: Double = 1.5
+
+    public let reach: Double
+    public let back: PackAssetRef?
+    public let front: PackAssetRef?
+
+    private enum CodingKeys: String, CodingKey { case reach, back, front }
+
+    public init?(reach: Double, back: PackAssetRef?, front: PackAssetRef?) {
+        guard (1...Self.maxReach).contains(reach), back != nil || front != nil else { return nil }
+        self.reach = reach
+        self.back = back
+        self.front = front
+    }
+
+    /// Fail-closed : hors bornes ou sans film, le calque ne se lit pas (le contour, lui, reste).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let reach = try c.decode(Double.self, forKey: .reach)
+        let back = (try? c.decodeIfPresent(PackAssetRef.self, forKey: .back)) ?? nil
+        let front = (try? c.decodeIfPresent(PackAssetRef.self, forKey: .front)) ?? nil
+        guard let decor = AvatarRingDecor(reach: reach, back: back, front: front) else {
+            throw DecodingError.dataCorruptedError(forKey: .reach, in: c, debugDescription: "calque illustré hors bornes ou sans film")
+        }
+        self = decor
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(reach, forKey: .reach)
+        try c.encodeIfPresent(back, forKey: .back)
+        try c.encodeIfPresent(front, forKey: .front)
+    }
+
+    /// Le côté d'un film dans une boîte de contour de côté `box` (miroir de `ringDecorCanvas`).
+    public func side(forBox box: Double) -> Double { box * reach }
+}
+
 public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
     /// Le rayon du cercle de l'avatar dans le viewBox 0 0 100 100.
     public static let avatarRadius: Double = 42
@@ -70,20 +114,23 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
     public let gradients: [FrameGradient?]
     /// Les mouvements déclarés (#10932) ; un mouvement inconnu ou hors bornes est ignoré.
     public let motion: [FrameMotion]
+    /// Les calques illustrés (#13960) ; illisibles ⇒ ignorés, l'anneau fixe reste.
+    public let decor: AvatarRingDecor?
 
     public var id: String { key }
 
-    private enum CodingKeys: String, CodingKey { case key, stroke, ornament, lottie, gradients, motion }
+    private enum CodingKeys: String, CodingKey { case key, stroke, ornament, lottie, gradients, motion, decor }
     private enum OrnamentKeys: String, CodingKey { case paths }
 
     public init(key: String, stroke: AvatarRingStroke, ornament: [AvatarRingOrnamentPath] = [], lottie: PackAssetRef? = nil,
-                gradients: [FrameGradient?] = [], motion: [FrameMotion] = []) {
+                gradients: [FrameGradient?] = [], motion: [FrameMotion] = [], decor: AvatarRingDecor? = nil) {
         self.key = key
         self.stroke = stroke
         self.ornament = ornament
         self.lottie = lottie
         self.gradients = gradients
         self.motion = motion
+        self.decor = decor
     }
 
     /// Fail-closed : un contour sans couleur, ou dont un trait désigne une couleur absente, ne se lit pas.
@@ -103,6 +150,7 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
         lottie = (try? c.decodeIfPresent(PackAssetRef.self, forKey: .lottie)) ?? nil
         gradients = FrameGradient.list(from: c, forKey: .gradients, colorCount: stroke.colors.count)
         motion = FrameMotion.list(from: c, forKey: .motion)
+        decor = (try? c.decodeIfPresent(AvatarRingDecor.self, forKey: .decor)) ?? nil
         guard ornament.allSatisfy({ $0.color >= 0 && $0.color < stroke.colors.count }) else {
             throw DecodingError.dataCorruptedError(forKey: .ornament, in: c, debugDescription: "un trait désigne une couleur absente")
         }
@@ -121,6 +169,7 @@ public struct AvatarRingDesign: Codable, Hashable, Sendable, Identifiable {
         let readable = gradients.compactMap { $0 }
         if !readable.isEmpty, readable.count == gradients.count { try c.encode(readable, forKey: .gradients) }
         if !motion.isEmpty { try c.encode(motion, forKey: .motion) }
+        try c.encodeIfPresent(decor, forKey: .decor)
     }
 }
 

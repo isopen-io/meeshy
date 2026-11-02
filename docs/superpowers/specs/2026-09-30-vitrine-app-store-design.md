@@ -24,7 +24,7 @@ Inventaire croisé le 2026-09-30 entre le code iOS, le serveur et les documents 
 | 4 | Voir et entendre l'appelant avant de décrocher (1:1) | inédit | `apps/ios/Meeshy/Features/Main/Views/CallPreviewViews.swift` — **dans dev, pas dans le build 1863** |
 | 5 | Meeshy Global, rejoint à l'inscription | aucun salon mondial ailleurs | `services/gateway/src/services/conversations/ensureGlobalConversationMembership.ts` |
 | 6 | Rejoindre par lien sans compte, dans sa langue | les autres exigent un compte | `packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/` |
-| 7 | Progression : série, niveaux, élans, badges, succès, Meesh frappés | absente des messageries | `apps/ios/Meeshy/Features/Main/Views/ProgressionHub.swift` |
+| 7 | Progression : série, niveaux, élans, badges, succès, Meesh frappés | absente des messageries | `apps/ios/Meeshy/Features/Profile/Views/ProgressionHub.swift` |
 | 8 | Composeur à scènes et timeline ; stories, posts et réels traduits | un outil de création type TikTok dans une messagerie | `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift` |
 | 9 | Exports traduits : « Imagine » (message → image, GIF, vidéo) | boucle virale multilingue | `apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet.swift` |
 | 10 | Capture d'appel en montages (Polaroïd, BD…) | un photomaton d'appel | `apps/ios/Meeshy/Features/Main/Services/CallMontageRecorder.swift` |

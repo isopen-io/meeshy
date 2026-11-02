@@ -14,27 +14,19 @@
  *   ce que le balayage du worker aurait déjà repris) ;
  * - un rendu raté passe la pièce et ses copies à `failed`, jamais `pending`.
  */
-import { enhancedLogger } from '../../../utils/logger-enhanced.js';
-import type { MediaJob } from './jobs';
+import { renderAndNotify, type LocalRenderPorts } from './local-render';
 import type { MediaJobQueue } from './queue';
 import { pendingMediaJobs, type SweepPorts } from './sweep';
-
-const logger = enhancedLogger.child({ module: 'media-gateway-sweep' });
 
 export const GATEWAY_SWEEP_AGE_MS = 15 * 60 * 1000;
 export const GATEWAY_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 export const GATEWAY_SWEEP_BATCH = 5;
 export const GATEWAY_SWEEP_LEASE_KEY = 'meeshy:media-gateway-sweep:lease';
 
-export type GatewaySweepPorts = {
+export type GatewaySweepPorts = LocalRenderPorts & {
   readonly queue: MediaJobQueue | null;
   readonly lease: { holds(): Promise<boolean> };
   readonly listPending: SweepPorts['listPending'];
-  /** Rend la pièce (et ses copies) ; rend les ids écrits, ou `[]` si elle a disparu. */
-  readonly render: (job: MediaJob) => Promise<readonly string[]>;
-  /** La passe la pièce (et ses copies) à `failed` ; rend leurs ids. */
-  readonly fail: (job: MediaJob) => Promise<readonly string[]>;
-  readonly notify: (job: MediaJob, recordIds: readonly string[]) => Promise<void>;
 };
 
 export async function sweepPendingInGateway(
@@ -50,14 +42,7 @@ export async function sweepPendingInGateway(
     compatRenditionEnabled: options.compatRenditionEnabled,
   });
 
-  let handled = 0;
-  for (const job of jobs.slice(0, GATEWAY_SWEEP_BATCH)) {
-    const recordIds = await ports.render(job).catch(async (error: unknown) => {
-      logger.error('Pièce en attente non rendue par la passerelle : failed', { recordId: job.recordId, error });
-      return ports.fail(job).catch(() => [] as readonly string[]);
-    });
-    if (recordIds.length > 0) await ports.notify(job, recordIds).catch(() => undefined);
-    handled += 1;
-  }
-  return handled;
+  const batch = jobs.slice(0, GATEWAY_SWEEP_BATCH);
+  for (const job of batch) await renderAndNotify(ports, job);
+  return batch.length;
 }

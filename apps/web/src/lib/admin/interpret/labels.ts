@@ -42,18 +42,6 @@ export function personSecondary(username: string | null | undefined): string | n
   return name === '' ? null : `@${name}`;
 }
 
-export function personInitials(label: string): string {
-  const words = label
-    .replace(/^@/, '')
-    .split(/\s+/)
-    .filter((word) => word !== '');
-  const initials = words
-    .slice(0, 2)
-    .map((word) => Array.from(word)[0] ?? '')
-    .join('');
-  return initials === '' ? '?' : initials.toLocaleUpperCase();
-}
-
 export type ConversationNameFields = {
   readonly title?: string | null;
   readonly type?: string | null;

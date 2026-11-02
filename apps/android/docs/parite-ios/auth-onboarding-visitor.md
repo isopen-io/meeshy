@@ -149,7 +149,7 @@ Transposition Android : textContentType oneTimeCode -> autofillHints SMS/OTP + K
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`
+- `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthService.swift`
 
@@ -567,7 +567,7 @@ Transposition Android : fullScreenCover iOS -> destination Navigation Compose pl
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift`
+- `apps/ios/Meeshy/Features/Auth/Views/WelcomeView.swift`
 
 </details>
 
@@ -1162,7 +1162,7 @@ Transposition Android : TextField secure + Keychain autofill -> OutlinedTextFiel
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`
+- `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`
 
 </details>
@@ -1189,7 +1189,7 @@ Transposition Android : contextMenu iOS -> appui long + DropdownMenu ; Keychain 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`
+- `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`
 
 </details>
 
@@ -1215,7 +1215,7 @@ Transposition Android : sheet iOS -> ModalBottomSheet ; Timer Task -> coroutine 
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`
+- `apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift`
 
 </details>
 
@@ -1412,7 +1412,7 @@ Transposition Android : targetEnvironment(simulator) -> BuildConfig.DEBUG (confi
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`
+- `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`
 
 </details>
 

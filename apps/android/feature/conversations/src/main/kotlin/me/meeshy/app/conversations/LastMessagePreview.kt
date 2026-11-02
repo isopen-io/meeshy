@@ -24,6 +24,10 @@ data class LastMessagePreviewLabels(
     val viewOnce: String = "",
     /** The bare « Draft » a text-less draft says (iOS `draft.label`); blank falls back to [draftPrefix]. */
     val draftLabel: String = "",
+    /** « Message chiffré » : a message this device cannot open (#13110); blank falls back to [none]. */
+    val encrypted: String = "",
+    /** « Sticker » (iOS `attachment.sticker`, #14389); blank falls back to the media-type label. */
+    val sticker: String = "",
 )
 
 /**
@@ -76,7 +80,7 @@ fun lastMessagePreview(
     resolvedContent: String? = null,
 ): String {
     if (message == null) return labels.none
-    val body = (resolvedContent ?: message.content)?.trim().orEmpty().ifEmpty {
+    val body = stickerBody(message, labels) ?: (resolvedContent ?: message.content)?.trim().orEmpty().ifEmpty {
         when (message.messageType) {
             "image" -> labels.photo
             "video" -> labels.video
@@ -93,6 +97,17 @@ fun lastMessagePreview(
         else -> message.senderName?.takeIf { it.isNotBlank() }
     }
     return if (sender == null) body else labels.senderFormat.format(sender, body)
+}
+
+/**
+ * A sticker leaves as an `image` carrying `metadata.sticker`, which the gateway hoists onto the row
+ * (`lastMessage.sticker`, #10752): its presence alone tells it from a photo. Like iOS
+ * `ConversationPreviewBody.of`, the row says the sticker's alternative text, else « Sticker ».
+ */
+private fun stickerBody(message: ApiConversationLastMessage, labels: LastMessagePreviewLabels): String? {
+    if (message.sticker == null && message.messageType != "sticker") return null
+    val alt = message.attachments?.firstOrNull()?.alt?.trim()
+    return alt?.takeIf { it.isNotEmpty() } ?: labels.sticker.takeIf { it.isNotBlank() }
 }
 
 /**
@@ -141,6 +156,10 @@ fun messageSummaryLine(
         )
         MessageSummaryKind.VIEW_ONCE -> SummaryLine(
             text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.viewOnce),
+            kind = kind,
+        )
+        MessageSummaryKind.ENCRYPTED -> SummaryLine(
+            text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.encrypted.ifBlank { labels.none }),
             kind = kind,
         )
     }

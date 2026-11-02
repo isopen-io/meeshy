@@ -16,11 +16,11 @@
 ## Tâche 1 : Fix AsyncImage → CachedAsyncImage dans StoryViewerView+Content.swift
 
 **Fichiers:**
-- Modifier: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:98-139`
+- Modifier: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:98-139`
 
 ### Step 1: Localiser le bug
 
-Lire `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` lignes 98–139.
+Lire `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` lignes 98–139.
 Confirmer que `mediaOverlay()` utilise `AsyncImage`.
 
 ### Step 2: Remplacer AsyncImage par CachedAsyncImage
@@ -71,7 +71,7 @@ Ouvrir une story avec image — elle doit apparaître INSTANTANÉMENT si déjà 
 ### Step 5: Commit
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "fix(ios): story media — AsyncImage → CachedAsyncImage pour affichage instantané"
 ```
 
@@ -80,8 +80,8 @@ git commit -m "fix(ios): story media — AsyncImage → CachedAsyncImage pour af
 ## Tâche 2 : Préchargement des images de story adjacentes
 
 **Fichiers:**
-- Modifier: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` (fonctions `crossFadeStory()` et `onAppear`)
-- Modifier: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (`.onAppear` du viewer)
+- Modifier: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift` (fonctions `crossFadeStory()` et `onAppear`)
+- Modifier: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift` (`.onAppear` du viewer)
 
 **Contexte:** `MediaCacheManager.shared.prefetch(_ urlString: String)` démarre un chargement fire-and-forget. Le viewer a accès à `groups`, `currentGroupIndex`, `currentStoryIndex`.
 
@@ -163,8 +163,8 @@ Attendu : BUILD SUCCEEDED.
 ### Step 5: Commit
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "feat(ios): préchargement des images de story adjacentes pour affichage instantané"
 ```
 
@@ -250,7 +250,7 @@ git commit -m "feat(sdk): StoryTransitionEffect enum + champs opening/closing da
 ## Tâche 4 : Appliquer les effets de transition dans StoryViewerView+Content.swift
 
 **Fichiers:**
-- Modifier: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:354–407`
+- Modifier: `apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift:354–407`
 
 **Contexte:** `currentStory?.storyEffects?.opening` = effet de la nouvelle story. `outgoingStory?.storyEffects?.closing` = effet sortant.
 
@@ -411,8 +411,8 @@ Tester visuellement avec une story ayant `storyEffects.opening = "fade"` (ou cr�
 ### Step 5: Commit
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift
 git commit -m "feat(ios): appliquer StoryTransitionEffect (fade/zoom/slide/reveal) dans crossFadeStory"
 ```
 
@@ -812,7 +812,7 @@ currentStory?.resolvedContent(preferredLanguage: AuthManager.shared.currentUser?
 ```bash
 git add packages/MeeshySDK/Sources/MeeshySDK/Models/PostModels.swift
 git add packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift
-git add apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift
+git add apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Content.swift
 git commit -m "feat(sdk): décoder Post.translations + appliquer Prisme Linguistique sur le texte des stories"
 ```
 

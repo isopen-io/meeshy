@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "conversation.info.manage_members", "androidName": "row_menu_manage_members", "status": "adopted"}
+      ]
+    }
+  }
+}

@@ -38,7 +38,7 @@ final class StoryGroupIntroPolicyTests: XCTestCase {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+GroupIntro.swift"),
             encoding: .utf8
         )
         guard let range = source.range(of: "func presentGroupIntroIfNeeded() {") else {
@@ -61,7 +61,7 @@ final class StoryGroupIntroPolicyTests: XCTestCase {
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView.swift"),
             encoding: .utf8
         )
         // L'apparition vit dans `viewerDidAppear()` (`+Lifecycle`), montée par `.onAppear { viewerDidAppear() }`.
@@ -71,7 +71,7 @@ final class StoryGroupIntroPolicyTests: XCTestCase {
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Lifecycle.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+Lifecycle.swift"),
             encoding: .utf8
         )
         guard let onAppear = source.range(of: ".onAppear { viewerDidAppear() }"),
@@ -123,7 +123,7 @@ final class StoryAuthorIdentityCardLayoutTests: XCTestCase {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryAuthorIdentityCard.swift"),
             encoding: .utf8
         )
     }
@@ -210,7 +210,7 @@ final class StoryGroupIntroDismissAnimationTests: XCTestCase {
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryViewerView+GroupIntro.swift"),
             encoding: .utf8
         )
         // Ancré sur le NOM + la parenthèse ouvrante, pas sur la signature
@@ -252,7 +252,7 @@ final class StoryGroupIntroTouchGuardTests: XCTestCase {
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryGroupIntroOverlay.swift"),
+                .appendingPathComponent("Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift"),
             encoding: .utf8
         )
         guard let start = source.range(of: "struct StoryGroupIntroOverlay") else {

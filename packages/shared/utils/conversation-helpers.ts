@@ -4,6 +4,7 @@
  */
 import { normalizeLanguageCode, normalizeLanguageForDedup } from './language-normalize.js';
 import { OBJECT_ID_REGEX } from './object-id.js';
+import { isPrivilegedPlatformRole } from './platform-privilege.js';
 
 /**
  * Options de résolution de langue. La locale appareil intervient en 4e priorité
@@ -545,7 +546,7 @@ export function isValidMongoId(id: string): boolean {
  *  - web    : `hooks/use-message-interactions` (`twentyFourHoursInMs`)
  *
  * Un utilisateur normal dispose de 24 heures ; le contournement de la fenêtre
- * est un privilège de rôle GLOBAL (MODERATOR/ADMIN/BIGBOSS), jamais un rôle de
+ * est un privilège de rôle GLOBAL (`PRIVILEGED_PLATFORM_ROLES`), jamais un rôle de
  * conversation (admin/moderator/member) — comparé en majuscules car la DB peut
  * stocker le rôle en minuscules. Un `createdAt` invalide (Date → NaN) ne bloque
  * jamais : `NaN > window` est faux, exactement comme les trois sites ci-dessus.
@@ -554,7 +555,7 @@ export function canEditMessage(
   createdAt: Date | string,
   userRole: string = 'USER'
 ): { canEdit: boolean; reason?: string } {
-  if (['MODERATOR', 'ADMIN', 'BIGBOSS'].includes(userRole.toUpperCase())) {
+  if (isPrivilegedPlatformRole(userRole.toUpperCase())) {
     return { canEdit: true };
   }
 

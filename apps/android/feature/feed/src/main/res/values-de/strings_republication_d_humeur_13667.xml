@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="status_repost_audience_refused">Dieser Status kann nicht für ein größeres Publikum als das Original geteilt werden. Wähle dasselbe oder ein kleineres Publikum.</string>
+</resources>

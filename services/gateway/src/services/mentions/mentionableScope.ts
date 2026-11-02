@@ -1,40 +1,21 @@
 /**
  * Qui peut-on mentionner dans une conversation ? UNE seule réponse, lue par
  * la recherche (`getUserSuggestionsForConversation`) ET par la validation à
- * l'envoi (`validateMentionPermissions`) — #7852.
+ * l'envoi (`validateMentionPermissions`) — #7852. La table vit dans
+ * `@meeshy/shared/utils/mention-lookup` (#14071) : les trois clients la lisent
+ * aussi, pour ne jamais afficher une suggestion que l'envoi ignorerait.
  *
- * Les deux fonctions tenaient chacune leur règle : la recherche proposait amis
- * et annuaire dans un groupe, que la validation refusait ensuite ; la
- * validation rejetait un broadcast que la recherche servait. Une suggestion
- * qu'on refuse à l'envoi est un contrôle qui ment.
- *
- *   interlocutor  conversation directe : l'autre participant, seul
- *   members       groupe : tout membre actif, et personne d'autre
- *   directory     public, global, broadcast : membres et amis d'abord, puis
- *                 tout l'annuaire
+ * Quelle que soit la portée, seul un MEMBRE actif cite quelqu'un (#14066) :
+ * l'appartenance se vérifie au site (recherche, envoi), jamais par la portée.
  */
-export type MentionableScope = 'interlocutor' | 'members' | 'directory';
+import { mentionableScope, type MentionableScope } from '@meeshy/shared/utils/mention-lookup';
 
-export function mentionableScope(conversationType: string): MentionableScope | null {
-  switch (conversationType) {
-    case 'direct':
-      return 'interlocutor';
-    case 'group':
-      return 'members';
-    case 'public':
-    case 'global':
-    case 'broadcast':
-      return 'directory';
-    default:
-      return null;
-  }
-}
+export { mentionableScope, type MentionableScope };
 
 /**
- * Une portée fermée (directe, groupe) ne se liste qu'à ses membres : sans
- * cette garde, tout compte authentifié énumérait les membres de n'importe quel
- * groupe en passant son identifiant.
+ * Une portée FERMÉE (directe, groupe) ne propose que les membres ; une portée
+ * ouverte propose aussi connaissances, contacts et annuaire.
  */
-export function scopeRequiresMembership(scope: MentionableScope): boolean {
+export function scopeIsClosed(scope: MentionableScope): boolean {
   return scope !== 'directory';
 }

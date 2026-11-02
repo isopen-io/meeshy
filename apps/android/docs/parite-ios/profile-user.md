@@ -78,7 +78,7 @@ Transposition Android : `OfflineQueue` + `outcomeStream(for:)` → outbox Room +
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift`
+- `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+DetailsTab.swift`
 
@@ -192,10 +192,10 @@ Transposition Android : `Menu` → `DropdownMenu` ; `alert` → `AlertDialog` ; 
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryActionMenu.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryActionMenu.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteConfirmation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
 
 </details>
 
@@ -222,10 +222,10 @@ Transposition Android : `RelativeDateTimeFormatter` → `DateUtils.getRelativeTi
 
 <details><summary>Sources iOS (4)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryCard.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryCardModelRules.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryActionBar.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryCard.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryCardModelRules.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryActionBar.swift`
 
 </details>
 
@@ -253,9 +253,9 @@ Transposition Android : `Picker(.segmented)` → `SingleChoiceSegmentedButtonRow
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesTab.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesSheetTargets.swift`
 
 </details>
 
@@ -281,8 +281,8 @@ Transposition Android : `SocialSocketManager` → manager socket social Android 
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift`
+- `apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift`
 
 </details>
 
@@ -381,7 +381,7 @@ Transposition Android : `PhotosPicker` → Photo Picker ; `AvatarRingDesign`/`Ap
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfileDecorSheet.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileDecorSheet.swift`
 
 </details>
 
@@ -405,7 +405,7 @@ Transposition Android : `@Environment(\.meeshyMoodEmojiResolver)` → `Compositi
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfileOwnAvatar.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileOwnAvatar.swift`
 
 </details>
 
@@ -430,8 +430,8 @@ Transposition Android : Tuiles → `Row` de trois `MeeshyGlassSurface` cliquable
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift`
+- `apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift`
 
 </details>
 
@@ -509,7 +509,7 @@ Transposition Android : `SettingsActionQueue` → outbox `UPDATE_PROFILE` Room +
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 
 </details>
 
@@ -540,7 +540,7 @@ Transposition Android : `CacheCoordinator.profiles/stats` → Room (`ProfileCach
 - `packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileSheetLoader.swift`
 - `packages/MeeshySDK/Sources/MeeshyUI/Profile/ProfileLoading.swift`
 - `apps/ios/Meeshy/Features/Profile/LiveProfileLoading.swift`
-- `apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift`
+- `apps/ios/Meeshy/Features/Profile/ViewModels/UserProfileViewModel.swift`
 
 </details>
 
@@ -648,7 +648,7 @@ Transposition Android : Keychain → Android Keystore + `EncryptedSharedPreferen
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/AccountSwitcherSheet.swift`
+- `apps/ios/Meeshy/Features/Auth/Views/AccountSwitcherSheet.swift`
 - `apps/ios/Meeshy/Core/AccountDataRetention.swift`
 
 </details>
@@ -707,9 +707,9 @@ Transposition Android : `StoryPublishQueue` → outbox Room + WorkManager exista
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesQueueRows.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift`
+- `apps/ios/Meeshy/Features/Stories/Views/MyStoryCardPresentation.swift`
 
 </details>
 
@@ -735,7 +735,7 @@ Transposition Android : `PhotosPicker` → Photo Picker `PickVisualMedia` (déj�
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 
 </details>
 
@@ -764,7 +764,7 @@ Transposition Android : `CollapsibleHeader` → `LargeTopAppBar` avec `scrollBeh
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfileView.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift`
 
 </details>
 
@@ -792,8 +792,8 @@ Transposition Android : `LazyVStack` imbriqué → éléments `LazyColumn` du m�
 <details><summary>Sources iOS (3)</summary>
 
 - `packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+PostsTab.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsViewModel.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift`
+- `apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift`
 
 </details>
 
@@ -871,8 +871,8 @@ Transposition Android : Swift Charts (`LineMark`/`AreaMark`) → Canvas Compose 
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/StatsTimelineChart.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/UserStatsView.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/StatsService.swift`
 
 </details>
@@ -944,7 +944,7 @@ Transposition Android : `ReelsPresenter.shared` → navigation `Routes.reels(see
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ProfilePostOpening.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ProfilePostOpening.swift`
 
 </details>
 

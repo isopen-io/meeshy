@@ -80,6 +80,8 @@ const itStudioChrome = {
   'story.studio.background.cameraHold': 'Tieni premuto: apri la fotocamera',
   'story.studio.camera.close': 'Torna alla scena',
   'story.studio.camera.flip': 'Cambia fotocamera',
+  'story.studio.camera.frames': 'Cornici',
+  'story.studio.camera.frames.none': 'Nessuna cornice',
   'story.studio.camera.flash': 'Flash',
   'story.studio.camera.shutter.photo': 'Scatta una foto',
   'story.studio.camera.shutter.start': 'Avvia la registrazione',
@@ -145,6 +147,10 @@ const itStudioChrome = {
   'story.studio.edit.saving': 'Salvataggio…',
   'story.studio.edit.cancel': 'Annulla le modifiche',
   'story.studio.publish.as.storyAndReel': 'Pubblica storia e reel',
+  'story.studio.unsent': 'Pubblicazione non inviata.',
+  'story.studio.unsent.retry': 'Riprova',
+  'story.studio.unsent.discard': 'Elimina',
+  'story.studio.volatile': 'Questo dispositivo non conserva i tuoi media: non ricaricare la pagina prima di pubblicare.',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;

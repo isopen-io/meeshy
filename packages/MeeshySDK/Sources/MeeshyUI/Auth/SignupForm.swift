@@ -77,7 +77,7 @@ public struct SignupForm: Equatable {
     /// apostrophes droite ET typographiques (le clavier iOS insère `’`), points
     /// et tirets ; au moins une lettre ; `displayNameMaxLength` caractères au plus.
     ///
-    /// Un nom FOURNI tient le pattern et la borne ; un champ VIDE est valide,
+    /// Un nom FOURNI tient le pattern, le minimum d'`IdentityRules` et la borne ; un champ VIDE est valide,
     /// parce qu'il est LÉGITIME (#6441, suite de #6424) — la passerelle le
     /// DÉRIVE alors de la partie locale de l'adresse (`displayNameDepuisEmail`,
     /// `services/gateway/src/services/auth/registration-identity.ts`). C'est le
@@ -88,6 +88,7 @@ public struct SignupForm: Equatable {
     public static func isDisplayNameValid(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return true }
+        guard IdentityRules.meetsMinimum(trimmed, for: .displayName) else { return false }
         guard trimmed.count <= displayNameMaxLength else { return false }
         guard trimmed.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) }) else { return false }
         let allowed = CharacterSet.letters
@@ -99,8 +100,9 @@ public struct SignupForm: Equatable {
     /// Les bornes d'un pseudo — miroir de `usernameMinLength` /
     /// `usernameMaxLength` (`packages/shared/types/api-schemas/auth.ts`), LES
     /// valeurs que le schéma Ajv de `POST /auth/register` applique (#8082).
-    /// Lues sur `RegistrationIdentity`, qui dérive le pseudo sous la même borne.
-    public static let usernameMinLength = RegistrationIdentity.pseudoMin
+    /// Le minimum est lu sur `IdentityRules`, la source unique des bornes
+    /// d'identité, que `RegistrationIdentity` lit aussi pour dériver le pseudo.
+    public static let usernameMinLength = IdentityRules.pseudoMin
     public static let usernameMaxLength = RegistrationIdentity.pseudoMax
 
     /// Pourquoi un pseudo serait refusé — miroir de `UsernameRefusal`
@@ -122,6 +124,7 @@ public struct SignupForm: Equatable {
     /// avant les caractères (le premier défaut à corriger) ; elle se compte en
     /// points de code, comme Ajv.
     public static func usernameRefusal(_ value: String) -> UsernameRefusal? {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let length = value.unicodeScalars.count
         if length < usernameMinLength { return .tooShort }
         if length > usernameMaxLength { return .tooLong }
@@ -169,6 +172,12 @@ public struct SignupForm: Equatable {
     /// qui décide si la clé part dans la charge.
     public static func hasDisplayName(_ value: String) -> Bool {
         !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// `true` quand un nom affiché a été TAPÉ et reste sous le minimum — le
+    /// moment où l'écran le dit. Le vide, légitime, n'est pas « trop court ».
+    public static func isDisplayNameTooShort(_ value: String) -> Bool {
+        IdentityRules.isTooShort(value, for: .displayName)
     }
 
     public var isDisplayNameValid: Bool { Self.isDisplayNameValid(displayName ?? "") }

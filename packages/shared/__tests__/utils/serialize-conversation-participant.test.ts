@@ -228,3 +228,30 @@ describe('serializeConversationParticipant — ce qui ne doit PAS sortir', () =>
     expect(serializeConversationParticipant(anonymousRow())).not.toHaveProperty('autoTranslateEnabled');
   });
 });
+
+/**
+ * `permissions.canModerateContent` est un champ de CONTRAT : il dit si le
+ * participant modère le contenu. Depuis la décision porteur du 2026-10-24
+ * (#11217), MODERATOR de plateforme modère partout, d'UNE table ; le champ la
+ * lit, faute de quoi il annoncerait `false` à côté d'une passerelle qui admet.
+ * Les autres champs (console, analytics, journaux) restent au rang
+ * d'administration — d'autres décisions.
+ */
+describe('serializeConversationParticipant — canModerateContent lit la table des rôles privilégiés (#11217)', () => {
+  const withRole = (role: string) => {
+    const row = registeredRow();
+    return serializeConversationParticipant({ ...row, user: { ...row.user, role } });
+  };
+
+  it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('%s de la plateforme modère le contenu', (role) => {
+    expect(withRole(role).permissions.canModerateContent).toBe(true);
+  });
+
+  it.each(['USER', 'AUDIT', 'ANALYST', 'moderator'])('%s ne modère pas', (role) => {
+    expect(withRole(role).permissions.canModerateContent).toBe(false);
+  });
+
+  it('MODERATOR n’obtient pas pour autant la console', () => {
+    expect(withRole('MODERATOR').permissions.canAccessAdmin).toBe(false);
+  });
+});

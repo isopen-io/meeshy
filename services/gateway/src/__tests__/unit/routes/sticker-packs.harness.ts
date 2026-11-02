@@ -12,8 +12,10 @@
  * qui accepte un argument impossible rend vert le test qu'il sert.
  *
  * Il lit les formes que le moteur écrit : égalité, `null`, `{ in }`,
- * `{ not: null }`, `{ isSet: false }` et `OR` — l'idiome Mongo d'un champ
- * nullable qui peut aussi être ABSENT (`packages/shared/CLAUDE.md`).
+ * `{ not: null }`, `{ isSet: false }`, l'intervalle de chaînes `{ gt | gte, lt }` (`prefixRange`) et `OR` —
+ * l'idiome Mongo d'un champ nullable qui peut aussi être ABSENT
+ * (`packages/shared/CLAUDE.md`). Une ligne d'item ne sort que par la projection
+ * demandée (`select`) : un `select` qui oublie une colonne la perd ici aussi.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -42,6 +44,12 @@ function fieldMatches(row: Row, key: string, expected: unknown): boolean {
         return operand === (key in row && actual !== undefined);
       case 'lte':
         return actual instanceof Date && operand instanceof Date && actual.getTime() <= operand.getTime();
+      case 'gt':
+        return typeof actual === 'string' && typeof operand === 'string' && actual > operand;
+      case 'gte':
+        return typeof actual === 'string' && typeof operand === 'string' && actual >= operand;
+      case 'lt':
+        return typeof actual === 'string' && typeof operand === 'string' && actual < operand;
       default:
         throw new Error(`double Prisma : opérateur « ${operator} » non modélisé sur « ${key} »`);
     }
@@ -108,6 +116,24 @@ export function memoryPrisma() {
     },
   };
 
+  const project = (row: Row, select?: Record<string, boolean>): Row =>
+    select === undefined ? row : (Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, row[key]])) as Row);
+
+  const stickerPackItem = {
+    findMany: async ({ where, select, orderBy, take }: { where?: Where; select?: Record<string, boolean>; orderBy?: Record<string, 'asc' | 'desc'>; take?: number }) => {
+      if (orderBy !== undefined && Object.keys(orderBy).join() !== 'id') throw new Error('double Prisma : tri d’items non modélisé');
+      const hits = items.filter((i) => matches(i, where));
+      const ordered = orderBy === undefined ? hits : [...hits].sort((a, b) => (a.id < b.id ? -1 : 1));
+      return ordered.slice(0, take ?? ordered.length).map((row) => project(row, select));
+    },
+    update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const i = items.findIndex((it) => it.id === where.id);
+      if (i === -1) throw Object.assign(new Error('Record to update not found'), { code: 'P2025' });
+      items[i] = { ...items[i], ...data } as Row;
+      return items[i];
+    },
+  };
+
   const sameKey = (row: Row, userId: unknown, packSlug: unknown) => row.userId === userId && row.packSlug === packSlug;
 
   const userStickerPack = {
@@ -140,5 +166,5 @@ export function memoryPrisma() {
     },
   };
 
-  return { prisma: { stickerPack, userStickerPack } as unknown as PrismaClient, packs, items, choices };
+  return { prisma: { stickerPack, stickerPackItem, userStickerPack } as unknown as PrismaClient, packs, items, choices };
 }

@@ -344,3 +344,65 @@ struct ProtectedFormChip: View {
         .accessibilityLabel(label)
     }
 }
+
+// MARK: - Ce que l'aperçu laisse toucher (#11339)
+
+/// **L'aperçu d'appui long LIT les vocaux et les vidéos, dans les TROIS modes**
+/// (#11339, décision porteur, option B).
+///
+/// L'aperçu reste une image de la cellule : seul le BOUTON de lecture / pause
+/// d'une pièce lisible se touche (celui du vocal, celui de la vidéo) ; partout ailleurs,
+/// le toucher ferme et le glissement réduit l'aperçu, comme avant. La face suit
+/// le mode de lecture (#11208), la zone ne le suit pas : Bulles, Script et
+/// Focal lisent ensemble, jamais un seul.
+///
+/// L'aperçu ne lit jamais ce que le fil retient : une forme protégée (vue
+/// unique, flou — du message ou d'une pièce —, chiffré scellé, échu) ne rend
+/// pas la cellule, et n'offre donc aucune zone. Un éphémère VIVANT se lit dans
+/// le fil : il se lit aussi dans l'aperçu.
+struct MessageOverlayPreviewTouch: Equatable {
+    let kind: MessageOverlayPreviewKind
+    /// Les pièces dont la zone de lecture se touche. Vide ⇒ l'aperçu est inerte.
+    let playableAttachmentIds: Set<String>
+
+    var offersPlayback: Bool { !playableAttachmentIds.isEmpty }
+
+    static func resolve(message: Message, readingMode: ConversationReadingMode, now: Date = Date()) -> MessageOverlayPreviewTouch {
+        MessageOverlayPreviewTouch(
+            kind: MessageOverlayPreviewKind.resolve(readingMode: readingMode),
+            playableAttachmentIds: playableAttachmentIds(for: message, now: now))
+    }
+
+    static func playableAttachmentIds(for message: Message, now: Date = Date()) -> Set<String> {
+        guard OverlayPreviewProtection.form(for: message, now: now) == .clear else { return [] }
+        return Set(message.attachments.filter(isPlayable).map(\.id))
+    }
+
+    static func isPlayable(_ attachment: MessageAttachment) -> Bool {
+        (attachment.type == .audio || attachment.type == .video) && !attachment.fileUrl.isEmpty
+    }
+
+    /// **Un vocal se lance depuis l'aperçu** quand la loi le laisse lire : un
+    /// vocal du message, sous aucune forme protégée, avec un fichier.
+    static func mayPlayVoice(attachmentId: String, in message: Message, now: Date = Date()) -> Bool {
+        playableAttachmentIds(for: message, now: now).contains(attachmentId)
+            && message.attachments.contains { $0.id == attachmentId && $0.type == .audio }
+    }
+
+    /// **La fermeture arrête ce que l'aperçu a lancé, et seulement cela** : la
+    /// piste lancée depuis l'aperçu, si c'est encore elle qui joue. Une lecture
+    /// partie du fil avant l'appui long, ou une autre piste lancée depuis, continue.
+    static func stopsOnClose(previewPlayedAttachmentId: String?, activeAttachmentId: String?) -> Bool {
+        guard let played = previewPlayedAttachmentId else { return false }
+        return played == activeAttachmentId
+    }
+
+    /// **Les trous du masque** : les zones de lecture des pièces lisibles,
+    /// ramenées au cadre de l'aperçu. Une zone hors du cadre ne perce rien.
+    static func holes(zones: [(attachmentId: String, frame: CGRect)], playable: Set<String>, in bounds: CGRect) -> [CGRect] {
+        zones
+            .filter { playable.contains($0.attachmentId) }
+            .map { $0.frame.intersection(bounds) }
+            .filter { !$0.isNull && !$0.isEmpty }
+    }
+}

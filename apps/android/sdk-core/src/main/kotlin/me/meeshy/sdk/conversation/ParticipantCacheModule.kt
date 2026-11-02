@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import me.meeshy.core.database.dao.KeyedJsonCacheDao
 import me.meeshy.sdk.cache.KeyedJsonCache
+import me.meeshy.sdk.session.AccountFence
 import javax.inject.Singleton
 
 @Module
@@ -20,8 +21,9 @@ internal object ParticipantCacheModule {
     fun participantCache(
         dao: KeyedJsonCacheDao,
         conversations: ConversationRepository,
+        fence: AccountFence,
     ): ParticipantCacheRepository = ParticipantCacheRepository(
-        cache = KeyedJsonCache(dao),
+        cache = KeyedJsonCache(dao, fence = fence),
         fetchPage = { id, cursor, limit -> conversations.participants(id = id, cursor = cursor, limit = limit) },
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     )

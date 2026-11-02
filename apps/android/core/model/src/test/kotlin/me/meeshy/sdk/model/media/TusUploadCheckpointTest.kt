@@ -132,3 +132,40 @@ class TusResumePlannerTest {
         )
     }
 }
+
+class TusResumeReconcileTest {
+
+    private val location = "https://gate/uploads/abc"
+
+    @Test
+    fun `a session the server still holds resumes at the offset the SERVER reports`() {
+        val decision = TusResumePlanner.reconcile(location, TusServerProbe.Offset(6_000L), totalBytes = 10_000L)
+
+        assertThat(decision).isEqualTo(TusResumeDecision.Resume(location, 6_000L))
+    }
+
+    @Test
+    fun `the server being ahead of the checkpoint is trusted not the checkpoint`() {
+        val decision = TusResumePlanner.reconcile(location, TusServerProbe.Offset(9_000L), totalBytes = 10_000L)
+
+        assertThat(decision).isEqualTo(TusResumeDecision.Resume(location, 9_000L))
+    }
+
+    @Test
+    fun `a session the server forgot starts over instead of failing forever`() {
+        assertThat(TusResumePlanner.reconcile(location, TusServerProbe.Gone, totalBytes = 10_000L))
+            .isEqualTo(TusResumeDecision.Fresh)
+    }
+
+    @Test
+    fun `a session already complete server side starts over because its finish answer is lost`() {
+        assertThat(TusResumePlanner.reconcile(location, TusServerProbe.Offset(10_000L), totalBytes = 10_000L))
+            .isEqualTo(TusResumeDecision.Fresh)
+    }
+
+    @Test
+    fun `a session at offset zero resumes from zero without a new session`() {
+        assertThat(TusResumePlanner.reconcile(location, TusServerProbe.Offset(0L), totalBytes = 10_000L))
+            .isEqualTo(TusResumeDecision.Resume(location, 0L))
+    }
+}

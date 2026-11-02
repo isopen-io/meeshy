@@ -20,7 +20,8 @@ import me.meeshy.ui.theme.hexColor
 /**
  * Horizontally scrollable filter tabs mirroring the iOS conversation filter bar.
  * Each chip carries its iOS accent colour ([ConversationFilter.colorHex]) so the
- * selected state stays visually coherent across platforms.
+ * selected state stays visually coherent across platforms. Pleine largeur comme la `ScrollView` d'iOS : aucune réserve
+ * latérale pour les disques flottants (#13664).
  */
 @Composable
 fun ConversationFilterBar(

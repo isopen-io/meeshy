@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.permission
 
 import android.app.Application
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -13,6 +14,7 @@ import me.meeshy.sdk.model.PermissionExplainReason
 import me.meeshy.sdk.model.PermissionFlowState
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.permission.PermissionRequestHistory
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -31,6 +33,17 @@ class PermissionFlowTest {
 
     private val application: Application = ApplicationProvider.getApplicationContext()
     private val microphone = AndroidPermissions.RECORD_AUDIO
+
+    /**
+     * [PermissionFlow.state] est un état Compose écrit ici HORS composition : l'écriture poste la
+     * notification d'instantané global sur le Looper principal. Robolectric vide cette file entre
+     * deux tests ; un message jeté laisse le répartiteur Compose de la sandbox « déjà planifié »
+     * à jamais, et tout test Compose suivant n'atteint plus l'inactivité. On draine donc le Looper.
+     */
+    @After
+    fun drainMainLooper() {
+        shadowOf(Looper.getMainLooper()).idle()
+    }
 
     private class InMemoryHistory : PermissionRequestHistory {
         val requested = mutableSetOf<String>()

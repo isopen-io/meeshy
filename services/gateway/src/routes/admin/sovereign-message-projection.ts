@@ -72,7 +72,7 @@
  * modale ne rend ces accusés. Un champ calculé que personne n'affiche est le
  * défaut « une LOI qui calcule une valeur que personne ne lit » ; le jour où
  * une surface les demande, l'ajout est d'une ligne (`loadMessageReadStatusMap`,
- * exporté par `messages-list-query.ts`) — et il devra venir avec son lecteur.
+ * exporté par `messages-list-reader-state.ts`) — et il devra venir avec son lecteur.
  */
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
@@ -176,6 +176,7 @@ export const sovereignAttachmentSelect = {
   uploadedBy: true,
   isAnonymous: true,
   capturedInApp: true,
+  lensSlug: true,
   createdAt: true,
   transcription: true,
   translations: true,
@@ -416,6 +417,9 @@ export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: 
     // elle, désarme la confirmation de publication chez tout hôte qui rend la
     // vraie vue conversation (`attachmentIncludes.ts` le dit sur place).
     capturedInApp: piece.capturedInApp,
+    // La lens qui a produit le média (#11327) : provenance, en clair même en
+    // E2EE (#11251) — elle ne restitue rien du contenu.
+    lensSlug: piece.lensSlug ?? null,
     createdAt: piece.createdAt,
     isViewOnce: piece.isViewOnce,
     isBlurred: piece.isBlurred,
@@ -573,6 +577,7 @@ export const sovereignAttachmentSchema = {
     uploadedBy: { type: 'string', nullable: true },
     isAnonymous: { type: 'boolean', nullable: true },
     capturedInApp: { type: 'boolean', nullable: true },
+    lensSlug: { type: 'string', nullable: true },
     createdAt: { type: 'string', format: 'date-time', nullable: true },
     isViewOnce: { type: 'boolean', nullable: true },
     isBlurred: { type: 'boolean', nullable: true },

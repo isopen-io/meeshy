@@ -67,8 +67,14 @@ type Deps = {
   userAuditService: UserAuditService;
 };
 
+/**
+ * Lisibles, jamais écrites par un administrateur au nom d'un membre : la famille chiffrement
+ * (baisser le chiffrement d'autrui), et « Recevoir des Bring » (#13936, contre-audit #14441
+ * N2) — rouvrir la réception d'un son qui passe Ne pas déranger est le geste du membre seul.
+ */
 export const ADMIN_READ_ONLY_PREFERENCE_KEYS: Readonly<Partial<Record<PreferenceCategory, readonly string[]>>> = {
-  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted']
+  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted'],
+  notification: ['bringEnabled'],
 };
 
 const readOnlyKeysIn = (category: PreferenceCategory, submitted: PreferenceDocument): string[] =>

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "call.openConversation",
+          "androidName": "call_open_conversation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.openConversation.hint",
+          "androidName": "call_open_conversation_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

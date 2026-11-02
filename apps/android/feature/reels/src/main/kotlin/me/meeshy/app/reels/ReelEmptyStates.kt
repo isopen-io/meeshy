@@ -54,3 +54,26 @@ internal fun ReelEmptyStates(state: ReelsUiState, onRetry: () -> Unit, modifier:
         }
     }
 }
+
+/**
+ * L'echec d'ouverture du reel DEMANDE (iOS `ReelOpenFailureView`, #6508) : la cause, avec la
+ * phrase partagee par le detail et la cible story, « Reessayer » seulement si reessayer peut
+ * aboutir, et « Retour ». Jamais un autre reel a la place de celui qu'on attendait.
+ */
+@Composable
+internal fun ReelOpenFailure(
+    failure: ContentFetchFailure,
+    onRetry: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MeeshyTheme(darkTheme = true) {
+        ContentFetchFailureView(
+            failure = failure,
+            modifier = modifier,
+            onRetry = onRetry,
+            secondaryLabel = stringResource(R.string.reels_open_failure_back),
+            onSecondary = onClose,
+        )
+    }
+}

@@ -10,6 +10,8 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { createLegacyHybridRequest } from './utils/link-helpers';
 import { getConversationMessagesWithDetails, countConversationMessages } from './utils/prisma-queries';
 import { formatLinkMessageWithDetails } from './utils/message-formatters';
+import { revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { loadQuotedEphemeralReaders } from '../conversations/ephemeralReaderDeadlines';
 import { mapMessageProtectionFields } from '../conversations/messageProtectionProjection';
 import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
@@ -212,7 +214,9 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
         deadlines: await loadQuotedEphemeralReaders(fastify.prisma, readerPage.alive, async () => readerParticipantId),
         now
       };
-      const formattedMessages = readerPage.alive.map((message) => withInheritedExpiry(
+      // #12822 — le participant du lien lit le clair d'un message `server`/`hybrid` et de ses traductions.
+      const openedPage = await revealAtRestRows(readerPage.alive, gatewayKeyring(fastify.prisma));
+      const formattedMessages = openedPage.map((message) => withInheritedExpiry(
         {
           ...formatLinkMessageWithDetails(message, readers),
           expiresAt: mapMessageProtectionFields(message, readerPage.deadlines.get(message.id)).expiresAt

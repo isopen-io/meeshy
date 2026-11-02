@@ -30,6 +30,7 @@ data class ProfileHeaderPresentation(
     val regionalLanguage: String?,
     val country: String?,
     val timezone: String?,
+    val voiceSample: ProfileVoiceSample? = null,
 )
 
 object ProfileHeaderBuilder {
@@ -60,6 +61,7 @@ object ProfileHeaderBuilder {
             regionalLanguage = user.regionalLanguage?.takeIf { it.isNotBlank() },
             country = user.registrationCountry?.takeIf { it.isNotBlank() },
             timezone = user.timezone?.takeIf { it.isNotBlank() },
+            voiceSample = ProfileVoiceVisibility.sample(user.voicePublic, user.voiceSampleUrl, user.voiceSampleDurationMs),
         )
     }
 }

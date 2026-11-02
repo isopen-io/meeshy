@@ -67,6 +67,11 @@ export function transformTranslationsToArray(
     // décodé d'un bloc, **de la page entière de messages**. Une ligne
     // malformée vidait une conversation.
     .filter(([, data]) => typeof data?.text === 'string' && data.text.length > 0)
+    // #12822 — UNE ENTRÉE ENCORE CHIFFRÉE N'EST PAS UN TEXTE. Seul le chiffrement
+    // au repos (`server`/`hybrid`) en écrit ; une surface qui l'ouvre
+    // (`revealAtRest`) la rend `isEncrypted: false`. Celle qui l'a oubliée ne
+    // sert plus du base64 comme traduction : elle n'en sert aucune.
+    .filter(([, data]) => data.isEncrypted !== true)
     .map(([lang, data]) => ({
       id: `${messageId}-${lang}`, // ID synthétique pour compatibilité
       messageId,

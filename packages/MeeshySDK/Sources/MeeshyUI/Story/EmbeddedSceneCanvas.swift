@@ -128,6 +128,8 @@ public struct EmbeddedSceneCanvas: View {
     /// L'éditeur d'objet l'opte : le texte en saisie se déplace, se zoome et
     /// se tourne au doigt (retour porteur 2026-09-28).
     public var inlineEditYieldsToManipulation: Bool
+    /// La barre collée au clavier et le panneau d'options de l'hôte (#13839, L4).
+    public var inlineEditInputLink: StoryInlineEditInputLink?
 
     /// **Le canvas doit RETIRER son calque de dessin persisté pendant qu'une
     /// surface de dessin est active** (#4092).
@@ -208,8 +210,10 @@ public struct EmbeddedSceneCanvas: View {
         onItemTrimRequested: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
         onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil,
         localMediaAliases: [String: URL] = [:],
-        inlineEditYieldsToManipulation: Bool = false
+        inlineEditYieldsToManipulation: Bool = false,
+        inlineEditInputLink: StoryInlineEditInputLink? = nil
     ) {
+        self.inlineEditInputLink = inlineEditInputLink
         self.localMediaAliases = localMediaAliases
         self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         self.timelineBridge = timelineBridge
@@ -291,14 +295,13 @@ public struct EmbeddedSceneCanvas: View {
                 loadedImages: loadedImages,
                 loadedStickerAnimations: loadedStickerAnimations,
                 loadedImagesVersion: loadedImagesVersion,
-                // Rayon compensé par l'échelle : la carte est rendue à sa taille
-                // de référence PUIS réduite, donc un rayon UIKit de
-                // `cornerRadius / scale` atterrit bien à `cornerRadius` à l'écran
-                // (même compensation que `canvasComposerLayer`).
+                // Rayon compensé : la carte est rendue à sa taille de référence PUIS
+                // réduite (même compensation que `canvasComposerLayer`).
                 canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0,
                 timelineBridge: timelineBridge,
                 localMediaAliases: localMediaAliases,
-                inlineEditYieldsToManipulation: inlineEditYieldsToManipulation
+                inlineEditYieldsToManipulation: inlineEditYieldsToManipulation,
+                inlineEditInputLink: inlineEditInputLink
             )
             // **Le canvas cesse de recevoir les touches pendant qu'un calque
             // les capture** — sinon le doigt qui trace déplacerait aussi

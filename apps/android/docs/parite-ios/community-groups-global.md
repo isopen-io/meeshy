@@ -257,8 +257,8 @@ Transposition Android : RTCPeerConnection iOS vers org.webrtc.PeerConnection (un
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/GroupCallMeshCoordinator.swift`
-- `apps/ios/Meeshy/Features/Main/Services/GroupCallMeshContracts.swift`
+- `apps/ios/Meeshy/Features/Call/Services/GroupCallMeshCoordinator.swift`
+- `apps/ios/Meeshy/Features/Call/Services/GroupCallMeshContracts.swift`
 - `apps/ios/Meeshy/Features/Main/Services/GroupSignalRouting.swift`
 
 </details>
@@ -283,7 +283,7 @@ Transposition Android : struct Equatable vers data class immuable ; with(...) ve
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Services/GroupCallRoster.swift`
+- `apps/ios/Meeshy/Features/Call/Services/GroupCallRoster.swift`
 
 </details>
 
@@ -311,8 +311,8 @@ Transposition Android : LazyVGrid avec GridItem fixe vers Layout personnalisé o
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/GroupCallStageView.swift`
-- `apps/ios/Meeshy/Features/Main/Services/GroupCallGridLayout.swift`
+- `apps/ios/Meeshy/Features/Call/Views/GroupCallStageView.swift`
+- `apps/ios/Meeshy/Features/Call/Services/GroupCallGridLayout.swift`
 
 </details>
 
@@ -399,8 +399,8 @@ Transposition Android : adaptiveGlass sur le bouton (+) vers surface semi-transp
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/AffiliateView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/AffiliateService.swift`
 
 </details>
@@ -481,8 +481,8 @@ Transposition Android : ShareLink vers Intent.createChooser(ACTION_SEND) ; UIPas
 
 <details><summary>Sources iOS (3)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/CommunityLinksView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift`
 - `packages/MeeshySDK/Sources/MeeshySDK/Services/CommunityLinkService.swift`
 
 </details>
@@ -562,7 +562,7 @@ Transposition Android : contextMenu vers combinedClickable(onLongClick) + Dropdo
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/GroupCallStageView+Moderation.swift`
+- `apps/ios/Meeshy/Features/Call/Views/GroupCallStageView+Moderation.swift`
 
 </details>
 
@@ -895,8 +895,8 @@ Transposition Android : presentationDetents medium/large vers ModalBottomSheet p
 
 <details><summary>Sources iOS (2)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ParticipantProfileLoader.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift`
+- `apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileLoader.swift`
 
 </details>
 
@@ -922,7 +922,7 @@ Transposition Android : Stepper vers boutons +/- ou Slider discret ; Picker menu
 
 <details><summary>Sources iOS (1)</summary>
 
-- `apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift`
+- `apps/ios/Meeshy/Features/Links/Views/CreateShareLinkView.swift`
 
 </details>
 

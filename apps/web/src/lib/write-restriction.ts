@@ -3,6 +3,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { ViewerWriteRestriction } from '@meeshy/shared/types/conversation';
 
 import type { Conversation } from '@/lib/api/types';
+import { isEndToEndMode } from '@/lib/end-to-end-regime-ledger';
 import type { OutboxState } from '@/lib/send/outbox-store';
 
 /**
@@ -27,12 +28,9 @@ export const GLOBAL_ADULTS_ONLY = 'GLOBAL_ADULTS_ONLY';
  */
 export const E2EE_PLAINTEXT_REFUSED = 'E2EE_PLAINTEXT_REFUSED';
 
-const isEndToEnd = (conversation: Conversation | undefined): boolean =>
-  typeof conversation?.encryptionMode === 'string' && conversation.encryptionMode.toLowerCase() === 'e2ee';
-
 export function servedWriteRestriction(conversation: Conversation | undefined): WriteRestriction | null {
   if (conversation?.viewerWriteRestriction === 'minor-global') return 'minor-global';
-  return isEndToEnd(conversation) ? 'end-to-end-encrypted' : null;
+  return isEndToEndMode(conversation?.encryptionMode) ? 'end-to-end-encrypted' : null;
 }
 
 /** Les conversations qu'un refus a fermées pendant CETTE session — mémoire seule. */
@@ -52,12 +50,21 @@ export const createWriteRestrictionStore = (): StoreApi<WriteRestrictionState> =
 
 export const writeRestrictionStore = createWriteRestrictionStore();
 
+/**
+ * #12949 — `sealed` : la conversation est VUE chiffrée de bout en bout
+ * (`end-to-end-regime-ledger.ts`). Elle reste fermée comme un mode servi, même
+ * quand le serveur la sert ensuite sans mode : le bout en bout ne se désactive
+ * pas, et aucune rétrogradation servie ne rouvre le composeur.
+ */
 export function writeRestrictionOf(
   conversation: Conversation | undefined,
   learned: WriteRestrictionState['learned'],
+  sealed = false,
 ): WriteRestriction | null {
   const served = servedWriteRestriction(conversation);
-  if (served !== null || conversation === undefined) return served;
+  if (served !== null) return served;
+  if (sealed) return 'end-to-end-encrypted';
+  if (conversation === undefined) return null;
   return learned[conversation.id] ?? null;
 }
 

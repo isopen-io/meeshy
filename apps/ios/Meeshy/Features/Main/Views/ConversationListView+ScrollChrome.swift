@@ -88,7 +88,7 @@ struct ConversationListScrollChrome: ViewModifier {
     /// mesure, et il ne défile pas avec les rangs. `LentilleFocusElectionHost`
     /// reste purement observationnel : il ne rend rien de visible et
     /// n'intercepte aucun geste — c'est `LentilleFocusCardHost` (I-071,
-    /// `Lentille/Mode/LentilleFocusCard.swift`) qui peint la carte à la
+    /// `Lens/Mode/LentilleFocusCard.swift`) qui peint la carte à la
     /// position qu'il publie, dans le MÊME overlay, sur le magasin
     /// `focusElection` passé par référence (ce body ne lit jamais l'élu
     /// lui-même — l'hôte de la carte le lit dans SON fichier à lui).
@@ -107,7 +107,7 @@ struct ConversationListScrollChrome: ViewModifier {
             // .magnification`), seule position d'où elle peut à la fois
             // porter des pastilles actionnables et laisser à la rangée son
             // swipe, son glisser-déposer et son appui long. Voir l'en-tête de
-            // `Lentille/Mode/LentilleFocusCard.swift`.
+            // `Lens/Mode/LentilleFocusCard.swift`.
             // Scène (2026-08-21) : un consommateur de plus du MÊME relais —
             // niveau d'activité lu par les rangées et par la carte.
             LentilleSceneActivityHost(relay: scrollOffsetRelay, scene: sceneActivity)

@@ -61,4 +61,26 @@ final class QuickEmojiExpansionTests: XCTestCase {
     func test_contentOffset_atRest_isTheScroll() {
         XCTAssertEqual(QuickEmojiExpansion.contentOffset(scroll: -12, bandWidth: resting, restingWidth: resting), -12)
     }
+
+    // MARK: - #12440 : la bande élargie reste ouverte tant qu'on n'a rien choisi
+
+    func test_heldWidth_afterRelease_keepsTheBandWideWithoutAChoice() {
+        let band = width(wide, travel: 60)
+        let held = QuickEmojiExpansion.heldWidth(after: .released(bandWidth: band), restingWidth: resting)
+        XCTAssertEqual(width(wide, travel: QuickEmojiExpansion.leftwardTravel(held: held, gestureTravel: 0)), band,
+                       "relâcher le défilement ne replie pas la bande : le champ reste où le doigt l'a laissé")
+    }
+
+    func test_heldWidth_textTouched_returnsTheFieldToItsPosition() {
+        XCTAssertEqual(QuickEmojiExpansion.heldWidth(after: .textTouched, restingWidth: resting), 0)
+    }
+
+    func test_heldWidth_emojiChosen_returnsTheFieldToItsPosition() {
+        XCTAssertEqual(QuickEmojiExpansion.heldWidth(after: .emojiChosen, restingWidth: resting), 0)
+    }
+
+    func test_leftwardTravel_aNewGesture_startsFromTheHeldBand_andTheFingerComingBackShrinksIt() {
+        XCTAssertEqual(QuickEmojiExpansion.leftwardTravel(held: 60, gestureTravel: 20), 80)
+        XCTAssertEqual(width(wide, travel: QuickEmojiExpansion.leftwardTravel(held: 60, gestureTravel: -20)), resting + 40)
+    }
 }

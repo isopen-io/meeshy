@@ -3,7 +3,7 @@
  * Fonctions utilitaires pour le client ZMQ
  */
 
-import { promises as fs } from 'fs';
+import { readStoredFile } from '../../attachments/atRest/atRestFiles';
 import { existsSync, statSync } from 'fs';
 import path from 'path';
 import { AUDIO_BASE64_SIZE_THRESHOLD } from '../types';
@@ -18,6 +18,8 @@ export interface AudioBinaryData {
   buffer: Buffer;
   mimeType: string;
   size: number;
+  /** #13102 — l'audio venait d'un fichier scellé au repos : sa tâche part `atRest`. */
+  sealed?: boolean;
 }
 
 /**
@@ -45,8 +47,9 @@ export async function loadAudioAsBinary(audioPath?: string): Promise<AudioBinary
       return null;
     }
 
-    // Lire le buffer brut (pas d'encodage base64!)
-    const buffer = await fs.readFile(audioPath);
+    // Lire le buffer brut (pas d'encodage base64!) — #13100 : le CLAIR d'un
+    // fichier scellé au repos, déchiffré en mémoire pour les trames binaires.
+    const { bytes: buffer, sealed } = await readStoredFile(audioPath, { uploadRoot: process.env.UPLOAD_PATH || '/app/uploads' });
 
     // Déterminer le mime type
     const ext = path.extname(audioPath).toLowerCase();
@@ -61,9 +64,9 @@ export async function loadAudioAsBinary(audioPath?: string): Promise<AudioBinary
     };
     const mimeType = mimeTypes[ext] || 'audio/wav';
 
-    logger.debug('Audio chargé en binaire', { sizeKB: (stats.size / 1024).toFixed(1), mimeType });
+    logger.debug('Audio chargé en binaire', { sizeKB: (buffer.length / 1024).toFixed(1), mimeType });
 
-    return { buffer, mimeType, size: stats.size };
+    return { buffer, mimeType, size: buffer.length, ...(sealed ? { sealed: true } : {}) };
   } catch (error) {
     logger.warn('Erreur lecture fichier audio', error as Error);
     return null;

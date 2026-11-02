@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 import AVFoundation
 import CoreLocation
@@ -28,7 +29,6 @@ extension UniversalComposerBar {
 
     func attachmentChip(_ attachment: ComposerAttachment) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            // Type icon
             Image(systemName: attachment.type.glyph)
                 .font(.caption)
                 .foregroundColor(Color(hex: attachment.thumbnailColor))
@@ -39,12 +39,11 @@ extension UniversalComposerBar {
                 .frame(maxWidth: 120)
 
             if let size = attachment.size {
-                Text(formatFileSize(size))
+                Text(MediaFormat.bytes(Int64(size)))
                     .font(.caption2)
                     .opacity(0.6)
             }
 
-            // Remove button
             Button {
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
@@ -500,11 +499,5 @@ extension UniversalComposerBar {
         )
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.bottom, MeeshySpacing.xs)
-    }
-
-    // MARK: - Helpers
-
-    func formatFileSize(_ bytes: Int) -> String {
-        Int64(bytes).formatted(.byteCount(style: .file))
     }
 }

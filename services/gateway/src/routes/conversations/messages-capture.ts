@@ -26,9 +26,9 @@ import { recordContentCapture, type ContentCaptureDeps } from '../../services/me
 import { captureNoticeDeliveryThrough } from '../../socketio/captureNoticeDelivery';
 import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../../services/messaging/messageEditAdmission';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response.js';
+import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendSuccess } from '../../utils/response.js';
 import { getSocketRateLimiter } from '../../utils/socket-rate-limiter';
-import { resolveCallerParticipant } from './utils/access-control';
+import { resolveCallerParticipant, refuserCommeIntrouvable } from './utils/access-control';
 import { logger } from './messages-shared';
 
 export type MessageCaptureRouteOptions = Partial<Pick<ContentCaptureDeps, 'dedup' | 'limiter' | 'mayRead' | 'now'>>;
@@ -77,7 +77,7 @@ export function registerMessageCaptureRoutes(
 
       const conversationId = await resolveConversationId(prisma, request.params.id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       const authContext = (request as UnifiedAuthRequest).authContext;

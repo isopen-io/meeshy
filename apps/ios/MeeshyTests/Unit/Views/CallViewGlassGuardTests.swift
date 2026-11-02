@@ -28,7 +28,7 @@ final class CallViewGlassGuardTests: XCTestCase {
 
     func test_buttonFill_activeIsWhite_endIsRed_restIsTranslucent() throws {
         let glass = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallControlGlass.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift")
         )
         let fill = try block("enum CallButtonFill {", until: "\n}\n", in: glass)
         XCTAssertTrue(fill.contains("case .active: return .white"))
@@ -64,7 +64,7 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// porte le `glassEffect` et le repli matériau).
     func test_controlsGlass_isRealAdaptiveGlass() throws {
         let glass = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallControlGlass.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift")
         )
         let modifier = try block("func callControlsGlass<S: Shape>(in shape: S) -> some View {", until: "\n    }\n", in: glass)
         XCTAssertTrue(modifier.contains(".adaptiveGlass(in: shape)"))
@@ -79,7 +79,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(rows.contains("CallPillRow("))
         XCTAssertFalse(code.contains("glassEffectID"), "Plus de morphing : les actions naissent dans le bloc qui grandit")
         let row = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallPillRow.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallPillRow.swift")
         )
         XCTAssertTrue(row.contains("ScrollView(.horizontal, showsIndicators: false)"))
         XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Un lancer va aussi loin qu'il porte (#8736)")
@@ -91,10 +91,11 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// — balayés par GLOB, jamais par liste : un nouveau carrousel est gardé
     /// dès qu'il existe.
     private func horizontalScrollerSources() throws -> [String: String] {
-        let anchor = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/CallModeCarousel.swift").first)
+        let anchor = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Call/Views/CallModeCarousel.swift").first)
         let directory = anchor.deletingLastPathComponent()
+        let filtersPanel = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/VideoFiltersPanel.swift").first)
         let horizontal = try NSRegularExpression(pattern: #"ScrollView\([^)]*\.horizontal"#)
-        return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        return try (FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) + [filtersPanel])
             .filter { url in
                 let name = url.lastPathComponent
                 return url.pathExtension == "swift"
@@ -134,10 +135,10 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// repos, jamais un défilement programmé contre le doigt.
     func test_carouselAndRows_followTheFingerWithoutBlocking() throws {
         let carousel = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift")
         )
         let row = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallPillRow.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallPillRow.swift")
         )
         for (file, code) in [("CallModeCarousel", carousel), ("CallPillRow", row)] {
             XCTAssertTrue(code.contains(".viewAligned(limitBehavior: .never)"), "\(file) : l'accroche par défaut raccourcit le lancer")
@@ -161,7 +162,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(code.contains("CallEffectsPanel("), "Le panneau Effets empilé a laissé place au mode")
         XCTAssertFalse(code.contains("CallCapturePanel("), "Le panneau Capture empilé a laissé place au mode")
         let controls = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeControls.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
         )
         let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
         XCTAssertTrue(effects.contains("if showsSettings {"), "Réglages REMPLACE le carrousel")
@@ -171,7 +172,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertEqual(montage.components(separatedBy: "CallModeCarousel(").count - 1, 1)
         XCTAssertEqual(montage.components(separatedBy: "CallModeActionBar(").count - 1, 1)
         let carousel = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift")
         )
         XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Le carrousel s'accroche")
         XCTAssertTrue(carousel.contains(".scrollPosition(id: $centred, anchor: .center)"), "L'élément choisi se pose au centre")
@@ -183,10 +184,10 @@ final class CallViewGlassGuardTests: XCTestCase {
     func test_mode_shootsFromTheSelectedStyle_withoutAShutter() throws {
         let code = try callViewCode()
         let controls = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeControls.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
         )
         let carousel = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallModeCarousel.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift")
         )
         XCTAssertFalse(controls.contains("CallModeShutter"), "Le déclencheur a quitté Effets et Montage")
         XCTAssertFalse(carousel.contains("struct CallModeShutter"))
@@ -208,7 +209,7 @@ final class CallViewGlassGuardTests: XCTestCase {
             XCTAssertFalse(code.contains("capture.\(published)"), "capture.\(published) se lit dans une vue feuille, jamais dans CallView")
         }
         let service = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallCaptureController.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCaptureController.swift")
         )
         let host = try block("final class CallCaptureHost: ObservableObject {", until: "final class CallCaptureController", in: service)
         XCTAssertFalse(host.contains("@Published"), "Le propriétaire ne publie rien")
@@ -256,7 +257,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(rail.contains("alignment: .trailing"), "Le rail vertical de droite a laissé place à la rangée du haut")
         XCTAssertTrue(code.contains("cameraRail\n"), "Le rail est monté dans l'appel établi")
         let stage = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/GroupCallStageView.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift")
         )
         XCTAssertTrue(stage.contains(".callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)"))
         XCTAssertTrue(stage.contains("GroupCallSpotlight.featuresLocal(focus)"))

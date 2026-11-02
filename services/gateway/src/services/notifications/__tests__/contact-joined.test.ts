@@ -83,6 +83,7 @@ function monde(options: {
         (args.where.userId.in as string[]).map((userId) => ({ userId, privacy: { hideProfileFromSearch: (options.hiding ?? []).includes(userId) } }))),
     },
     userPreference: { findMany: jest.fn<any>(async () => []) },
+    userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
     friendRequest: {
       findMany: jest.fn<any>(async () => (options.friends ?? []).map((id) => ({ senderId: MARIE, receiverId: id }))),
     },

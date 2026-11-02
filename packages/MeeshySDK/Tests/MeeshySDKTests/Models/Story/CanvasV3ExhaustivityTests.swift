@@ -125,6 +125,9 @@ struct CanvasV3ExhaustivityTests {
         // compris : leur clé v3 `payload.adjustments` n'est partagée avec rien.
         // #9498 — et les effets (bloom, grain), dans le même sac.
         media.adjustments = ImageAdjustments(exposure: 0.5, contrast: 1.25, vignette: 0.75, bloom: 0.5, grain: 0.25)
+        // #13840 — le look de la retouche, réglage de brouillon.
+        media.look = StoryMediaLook(filterPreset: "warm", frameId: "classic:polaroid", faceEffect: "angel",
+                                    framing: StoryMediaFraming(centerX: 0.4, centerY: 0.6, scale: 1.5))
         return media
     }
 

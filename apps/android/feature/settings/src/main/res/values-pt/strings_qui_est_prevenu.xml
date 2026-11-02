@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_circle_notify_title">Quem é avisado</string>
+    <string name="settings_circle_notify_intro">Escolha, ação por ação, qual círculo das suas pessoas recebe uma notificação.</string>
+    <string name="settings_circle_notify_family_publication">Minhas publicações</string>
+    <string name="settings_circle_notify_family_on_my_content">A atividade dos outros no meu conteúdo</string>
+    <string name="settings_circle_notify_family_elsewhere">Minha atividade em outros lugares</string>
+    <string name="settings_circle_notify_summary_mixed">Depende da ação</string>
+    <string name="settings_circle_notify_choice_nobody">Ninguém</string>
+    <string name="settings_circle_notify_explain_nobody">Ninguém do seu círculo é avisado.</string>
+    <string name="settings_circle_notify_explain_community">Todos os seus vínculos, de Sangue a Conhecido, e os membros das comunidades que você compartilha.</string>
+    <string name="settings_circle_notify_explain_public">As mesmas pessoas que Comunidade: o Meeshy não tem seguidores, nenhum desconhecido é avisado.</string>
+    <string name="settings_circle_notify_action_post">Publicação</string>
+    <string name="settings_circle_notify_action_reel">Reel</string>
+    <string name="settings_circle_notify_action_story">Story</string>
+    <string name="settings_circle_notify_action_mood">Humor</string>
+    <string name="settings_circle_notify_action_repost">Republicação</string>
+    <string name="settings_circle_notify_action_share">Compartilhamento</string>
+    <string name="settings_circle_notify_action_comment">Comentário</string>
+    <string name="settings_circle_notify_action_reaction">Reação</string>
+    <string name="settings_circle_notify_action_quote">Citação</string>
+    <string name="settings_circle_notify_action_reference">Referência</string>
+    <string name="settings_circle_notify_action_mention">Menção</string>
+    <string name="settings_circle_notify_choice_blood">Sangue</string>
+    <string name="settings_circle_notify_choice_close">Próximo</string>
+    <string name="settings_circle_notify_choice_friend">Amigo</string>
+    <string name="settings_circle_notify_choice_acquaintance">Conhecido</string>
+    <string name="settings_circle_notify_choice_community">Comunidade</string>
+    <string name="settings_circle_notify_choice_public">Público</string>
+</resources>

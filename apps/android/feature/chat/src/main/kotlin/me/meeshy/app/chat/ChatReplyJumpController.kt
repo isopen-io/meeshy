@@ -97,6 +97,16 @@ internal class ChatReplyJumpController(private val state: ChatStateAccess) {
         state.update { it.copy(scrollToMessageId = messageId, isPinnedSheetOpen = false) }
     }
 
+    /**
+     * "Take me to that message" from the Living Summary (a face of the ramp, an episode):
+     * request the scroll when the target is among the loaded messages; a message paged out of
+     * the window, deleted or unknown is inert.
+     */
+    fun scrollToMessage(messageId: String) {
+        if (state.value.messages.none { it.messageId == messageId }) return
+        state.update { it.copy(scrollToMessageId = messageId) }
+    }
+
     /** The pending reply-jump scroll has been performed by the screen. */
     fun onScrollHandled() {
         state.update { it.copy(scrollToMessageId = null) }

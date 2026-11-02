@@ -209,6 +209,8 @@ const makePrisma = (): any => ({
   participant: {
     findFirst: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),
+    // #14066 — l'auteur de l'édition est un membre ACTIF : sinon il ne cite personne.
+    findUnique: jest.fn().mockResolvedValue({ userId: USER_ID, isActive: true, conversationId: CONV_ID }),
   },
   // Lues par `MessageReadStatusService`, à qui `GET /conversations/:id/status`
   // délègue désormais son résumé d'accusés et son filtre d'opt-out.
@@ -391,7 +393,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns 404 when message not found', async () => {
@@ -2016,7 +2018,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
         expect(prisma.message.findFirst).toHaveBeenCalledWith(
           expect.objectContaining({
-            include: expect.objectContaining({ attachments: { select: { id: true } } }),
+            include: expect.objectContaining({ attachments: { select: expect.objectContaining({ id: true }) } }),
           })
         );
       });
@@ -2035,7 +2037,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
@@ -2045,7 +2047,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns empty reactions array when no reactions', async () => {
@@ -2233,7 +2235,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
@@ -2243,7 +2245,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
     });
 
     it('returns empty statuses when no messages', async () => {

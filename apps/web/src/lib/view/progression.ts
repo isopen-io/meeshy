@@ -1,6 +1,6 @@
 import type { EngagementAchievementKey, EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { ENGAGEMENT_ACHIEVEMENT_LABELS, ENGAGEMENT_AXIS_LABELS } from '@meeshy/shared/utils/engagement-labels';
-import type { EngagementScaleProgress } from '@meeshy/shared/utils/engagement-progress';
+import type { EngagementScaleProgress, EngagementTier } from '@meeshy/shared/utils/engagement-progress';
 import { achievementLabel } from '@meeshy/shared/utils/achievement-labels';
 import type { AchievementFamily, AchievementSection } from '@meeshy/shared/types/achievement-catalog';
 import { formatGameNumber, translateGame } from '@/lib/i18n-game-catalog';
@@ -127,6 +127,29 @@ export function reachedAtLabel(reachedAt: string | null, language: InterfaceLang
   if (reachedAt === null) return null;
   if (Number.isNaN(new Date(reachedAt).getTime())) return null;
   return translateGame(language, 'game.detail.earned_on', { date: awardedDate(reachedAt, language) });
+}
+
+/**
+ * LE NOM ACCESSIBLE DE LA LISTE DE PASTILLES — « Paliers de {axe} » (« Tiers of
+ * {axis} »), dans la langue d'INTERFACE (iter-78w). Le lecteur d'écran annonce la
+ * liste dans la langue du lecteur, jamais en français figé.
+ */
+export const tierListLabel = (axis: string, language: InterfaceLanguage = currentInterfaceLanguage()): string =>
+  translateGame(language, 'game.progression.tier.list', { axis });
+
+/**
+ * LE NOM ACCESSIBLE D'UNE PASTILLE — « Palier N atteint [le DATE] » ou « Palier N
+ * à atteindre » selon l'état du palier, dans la langue d'INTERFACE (iter-78w). La
+ * date GRAVÉE n'apparaît que lorsqu'une trace existe ; sinon « atteint » seul.
+ */
+export function tierDotLabel(tier: EngagementTier, language: InterfaceLanguage = currentInterfaceLanguage()): string {
+  const threshold = String(tier.threshold);
+  if (!tier.reached) return translateGame(language, 'game.progression.tier.pending', { threshold });
+  const date =
+    tier.reachedAt !== null && !Number.isNaN(new Date(tier.reachedAt).getTime()) ? awardedDate(tier.reachedAt, language) : null;
+  return date === null
+    ? translateGame(language, 'game.progression.tier.reached', { threshold })
+    : translateGame(language, 'game.progression.tier.reached_on', { threshold, date });
 }
 
 /**

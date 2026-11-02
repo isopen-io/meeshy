@@ -26,6 +26,7 @@ enum class BlockedFeedback(val isError: Boolean) { Unblocked(false), UnblockFail
 data class BlockedListUiState(
     val blocked: List<BlockedUser> = emptyList(),
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val hasLoaded: Boolean = false,
     val errorMessage: String? = null,
     /** Ids with an unblock in flight — guards the button + double-taps. */
@@ -74,6 +75,18 @@ class BlockedListViewModel @Inject constructor(
         }
     }
 
+    /** Pull-to-refresh (iOS `.refreshable { loadBlocked(forceNetwork: true) }`). */
+    fun refresh() {
+        viewModelScope.launch {
+            _state.update { it.copy(isRefreshing = true) }
+            try {
+                revalidate()
+            } finally {
+                _state.update { it.copy(isRefreshing = false) }
+            }
+        }
+    }
+
     /**
      * Cache-first cold paint (ARCHITECTURE.md §4): if nothing is on screen yet,
      * replay the last-persisted blocklist from Room so the tab shows blocked
@@ -91,6 +104,7 @@ class BlockedListViewModel @Inject constructor(
     }
 
     private suspend fun revalidate() {
+        val ticket = blockedListRepository.ticket()
         when (val result = blockRepository.listBlocked()) {
             is NetworkResult.Success -> {
                 _state.update {
@@ -101,7 +115,7 @@ class BlockedListViewModel @Inject constructor(
                         errorMessage = null,
                     )
                 }
-                blockedListRepository.persist(result.data)
+                blockedListRepository.persist(result.data, ticket)
             }
             is NetworkResult.Failure ->
                 _state.update {
@@ -116,11 +130,12 @@ class BlockedListViewModel @Inject constructor(
 
     fun unblock(userId: String) {
         if (userId in _state.value.pendingIds) return
+        val ticket = blockedListRepository.ticket()
         val snapshot = _state.value.blocked
         if (snapshot.none { it.id == userId }) return
         val updated = snapshot.filterNot { it.id == userId }
         _state.update { it.copy(blocked = updated, pendingIds = it.pendingIds + userId) }
-        viewModelScope.launch { blockedListRepository.persist(updated) }
+        viewModelScope.launch { blockedListRepository.persist(updated, ticket) }
         viewModelScope.launch {
             try {
                 val cmid = blockRepository.setBlockedDurably(userId, blocked = false)
@@ -134,7 +149,7 @@ class BlockedListViewModel @Inject constructor(
                 // retry. A toast says so; the list stays on screen (errorMessage is the LOAD's).
                 _state.update { it.copy(blocked = snapshot, pendingIds = it.pendingIds - userId) }
                 _feedback.tryEmit(BlockedFeedback.UnblockFailed)
-                blockedListRepository.persist(snapshot)
+                blockedListRepository.persist(snapshot, ticket)
             }
         }
     }

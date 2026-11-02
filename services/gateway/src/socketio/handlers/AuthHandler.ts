@@ -1,4 +1,5 @@
 import type { MeeshySocket as Socket } from '../typed-socket';
+import { joinE2EEDeviceRoom } from '../../services/e2ee/device-room';
 import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
@@ -33,6 +34,7 @@ import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { LIVE_CALL_PARTICIPATION } from '../../services/calls/liveCallParticipations';
 import { PresenceForeground } from '../presence-foreground';
+import { refuseSocketBelowAppVersionFloor } from '../../middleware/app-version-floor';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -262,6 +264,8 @@ export class AuthHandler {
     const decoded = jwt.verify(token, jwtSecret) as Pick<SessionBoundTokenPayload, 'userId' | 'exp' | 'sid'>;
     const userId = decoded.userId;
 
+    if (refuseSocketBelowAppVersionFloor(socket)) return;
+
     // #10493 — la loi du REST (#10328) : la session NOMMÉE par le jeton doit
     // vivre. Inconnue, révoquée, échue ⇒ refus ; jeton sans `sid` ⇒ butoir
     // daté de #4264, fermé ; charge d'usage (`action`, `aud`) ⇒ refus. Posée
@@ -405,6 +409,8 @@ export class AuthHandler {
     // On range l'IDENTIFIANT, jamais le jeton : le clair n'a aucune raison de
     // survivre à cette ligne.
     await this._attachSessionId(socket, user.id, decoded.sid);
+    // #3706 — la room de l'appareil E2EE lié à CETTE session : ses seules enveloppes y arrivent.
+    await joinE2EEDeviceRoom(socket, this.prisma, { userId: user.id, sessionId: decoded.sid });
 
     await this._joinUserConversations(socket, user.id, false);
 

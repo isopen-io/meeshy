@@ -2,7 +2,8 @@ import * as z from 'zod/mini';
 
 import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
 import * as stickerPacksEndpoints from '@meeshy/shared/api/endpoints/sticker-packs';
-import { PACK_DOMAINS, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
+import { PACK_DOMAINS, type PackAssetRef, type PackDomain, type PackLanguage, type PackNames } from '@meeshy/shared/types/content-pack';
+import { isStickerPackAssetRef } from '@meeshy/shared/types/sticker-pack-asset';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import type { PackRequirementPreview } from '@meeshy/shared/types/pack-unlock';
 
@@ -27,6 +28,8 @@ export type ShopPack = {
   readonly description: string;
   readonly author: string;
   readonly coverUrl: string | null;
+  /** La couverture d'un pack de stickers de tiers dans le magasin adressé (#10188) ; absente ⇒ `coverUrl`. */
+  readonly cover?: PackAssetRef;
   readonly itemCount: number;
   readonly installed: boolean;
   /** En Meeshes ; `null` = gratuit. */
@@ -64,6 +67,7 @@ const WirePack = z.object({
   builtin: z.optional(z.boolean()),
   names: z.optional(z.record(z.string(), z.unknown())),
   requirementPreview: z.optional(z.unknown()),
+  cover: z.optional(z.unknown()),
 });
 
 const RANK_KEYS = GLORY_RANKS.map((rank) => rank.key) as [string, ...string[]];
@@ -107,6 +111,7 @@ export const decodeShopPack = (domain: PackDomain) => (raw: unknown): ShopPack |
     description: wire.description ?? '',
     author: wire.author ?? '',
     coverUrl: wire.coverUrl ?? null,
+    ...(domain === 'sticker' && isStickerPackAssetRef(wire.cover) ? { cover: wire.cover } : {}),
     itemCount: wire.itemCount ?? 0,
     installed: wire.installed,
     price,
@@ -143,6 +148,12 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
     installed: packsEndpoints.gloryFrameInstalled,
     bySlug: packsEndpoints.gloryFrameBySlug,
     install: packsEndpoints.gloryFrameBySlugInstall,
+  },
+  'capture-frame': {
+    catalogue: packsEndpoints.captureFrame,
+    installed: packsEndpoints.captureFrameInstalled,
+    bySlug: packsEndpoints.captureFrameBySlug,
+    install: packsEndpoints.captureFrameBySlugInstall,
   },
   wallpaper: {
     catalogue: packsEndpoints.wallpaper,
@@ -181,9 +192,9 @@ const CATALOGUED_ROUTES: Partial<Record<PackDomain, DomainRoutes>> = {
 };
 
 /**
- * Un domaine que la passerelle ne monte pas encore (`capture-frame`) garde la
- * forme `/packs/<domaine>` : il répond 404, que `absentMeansEmpty` lit comme
- * une vitrine vide. La racine se déduit du catalogue, jamais d'un littéral.
+ * Un domaine que le catalogue généré ne porte pas encore garde la forme
+ * `/packs/<domaine>` : un ancien serveur répond 404, que `absentMeansEmpty` lit
+ * comme une vitrine vide. La racine se déduit du catalogue, jamais d'un littéral.
  */
 const PACKS_ROOT = packsEndpoints.shop.slice(0, -'/shop'.length);
 

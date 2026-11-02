@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {"androidName": "chat_action_export_card", "status": "android-only"},
+        {"androidName": "chat_action_history", "status": "android-only"},
+        {"androidName": "chat_action_select", "status": "android-only"},
+        {"androidName": "chat_action_sentiment", "status": "android-only"},
+        {"androidName": "chat_action_views", "status": "android-only"},
+        {"catalog": "app", "iosKey": "composer.a11y.startRecording", "androidName": "composer_shell_minimized_mic", "status": "candidate"},
+        {"androidName": "composer_shell_minimized_write", "status": "android-only"},
+        {"androidName": "starred_clear_confirm_message", "status": "android-only"},
+        {"androidName": "starred_clear_confirm_title", "status": "android-only"}
+      ]
+    }
+  }
+}

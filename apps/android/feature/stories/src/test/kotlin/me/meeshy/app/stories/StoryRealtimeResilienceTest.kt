@@ -165,7 +165,7 @@ class StoryRealtimeResilienceTest {
 
     private fun tray(
         repo: StoryRepository,
-    ) = StoriesViewModel(repo, session, MeeshyConfig(), mockk<WorkManager>(relaxed = true), socialSocket)
+    ) = StoriesViewModel(repo, session, MeeshyConfig(), mockk<WorkManager>(relaxed = true), socialSocket, mockk(relaxed = true))
 
     private fun trayRepo(stream: kotlinx.coroutines.flow.Flow<CacheResult<List<ApiPost>>>): StoryRepository =
         mockk<StoryRepository>(relaxed = true).also {

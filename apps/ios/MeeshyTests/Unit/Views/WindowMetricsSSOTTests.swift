@@ -47,8 +47,8 @@ final class WindowMetricsSSOTTests: XCTestCase {
     private static let convergedFiles = [
         "Meeshy/Features/Main/Views/ConversationView.swift",
         "Meeshy/Features/Main/Views/ConversationListView.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
+        "Meeshy/Features/Stories/Views/StoryViewerView.swift",
+        "Meeshy/Features/Stories/Views/StoryViewerView+Content.swift",
         "Meeshy/Features/Main/Views/ReelFeedCard.swift",
         "Meeshy/Features/Main/Views/AudioFullscreenView.swift",
         "Meeshy/Features/Main/Views/RootView.swift",
@@ -263,7 +263,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
         let deliberate: Set<String> = [
             "DeviceLayout.swift",  // the single resolution
-            "CallManager+SystemMonitoring.swift"    // screen-capture probe: genuinely about every scene
+            "CallAppStateObserver.swift"    // screen-capture probe: genuinely about every scene
         ]
 
         var found: Set<String> = []
@@ -294,7 +294,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// scene picked out of an unordered Set, and set a popover `sourceView` with
     /// no `sourceRect` — so it would have anchored at the view's corner on iPad.
     func test_storyViewer_hasNoOrphanedActivitySheet() throws {
-        let code = codeLines(try source("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"))
+        let code = codeLines(try source("Meeshy/Features/Stories/Views/StoryViewerView+Content.swift"))
 
         XCTAssertFalse(
             code.contains("func shareStory()"),
@@ -318,7 +318,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// (« Thread stack size exceeded »). The whole unit — the type and its
     /// extensions — measures the inset by layout instead.
     func test_storyViewer_neverReadsWindowSafeAreaDuringBody() throws {
-        let code = codeLines(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        let code = codeLines(try AppSourceGuard.unit("Meeshy/Features/Stories/Views/StoryViewerView.swift"))
 
         XCTAssertFalse(
             code.contains("DeviceLayout.safeArea"),

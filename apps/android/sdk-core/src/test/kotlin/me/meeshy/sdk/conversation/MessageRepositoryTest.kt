@@ -43,7 +43,9 @@ import org.robolectric.RobolectricTestRunner
 private class FakeMessageApi(
     var response: ApiResponse<List<ApiMessage>>,
     var olderResponse: ApiResponse<List<ApiMessage>> = ApiResponse(success = false, error = "no older page"),
+    var aroundResponse: ApiResponse<List<ApiMessage>> = ApiResponse(success = false, error = "no around page"),
 ) : MessageApi {
+    val aroundCalls: MutableList<Triple<String, String, Int>> = mutableListOf()
     var lastBefore: String? = null
     var lastLimit: Int? = null
     var listCalls: Int = 0
@@ -77,6 +79,23 @@ private class FakeMessageApi(
     // exercises and asserts against, so their SECOND `refresh()` call (once
     // Room holds a high-water mark from the first) still reaches the
     // response the test actually set up.
+    override suspend fun listMedia(
+        conversationId: String,
+        view: String,
+        limit: Int,
+        includeReplies: Boolean,
+        includeTranslations: Boolean,
+        kinds: String?,
+        query: String?,
+        before: String?,
+        languages: String?,
+    ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
+    override suspend fun listAround(conversationId: String, messageId: String, limit: Int): ApiResponse<List<ApiMessage>> {
+        aroundCalls += Triple(conversationId, messageId, limit)
+        return aroundResponse
+    }
+
     override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
         me.meeshy.sdk.model.MessagesApiResponse(success = false)
 
@@ -92,6 +111,10 @@ private class FakeMessageApi(
         ApiResponse<Unit>(success = true)
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = true)
+    override suspend fun consumeAfterRead(conversationId: String, body: me.meeshy.sdk.net.api.ConsumeAfterReadRequest) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
+    override suspend fun consumeViewOnce(conversationId: String, messageId: String, body: kotlinx.serialization.json.JsonObject) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
 }
 
 /**
@@ -133,6 +156,21 @@ private class EtagAwareMessageApi(
     // holds a high-water mark from the first — fall back to the SAME
     // full-window/[listConditional] path every existing test using this fake
     // already exercises.
+    override suspend fun listMedia(
+        conversationId: String,
+        view: String,
+        limit: Int,
+        includeReplies: Boolean,
+        includeTranslations: Boolean,
+        kinds: String?,
+        query: String?,
+        before: String?,
+        languages: String?,
+    ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
+    override suspend fun listAround(conversationId: String, messageId: String, limit: Int) =
+        ApiResponse<List<ApiMessage>>(success = false)
+
     override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
         me.meeshy.sdk.model.MessagesApiResponse(success = false)
 
@@ -148,6 +186,10 @@ private class EtagAwareMessageApi(
         ApiResponse<Unit>(success = false)
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = false)
+    override suspend fun consumeAfterRead(conversationId: String, body: me.meeshy.sdk.net.api.ConsumeAfterReadRequest) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
+    override suspend fun consumeViewOnce(conversationId: String, messageId: String, body: kotlinx.serialization.json.JsonObject) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
 }
 
 /**
@@ -193,6 +235,21 @@ private class GapAwareMessageApi(
         return retrofit2.Response.success(ApiResponse(success = true, data = served))
     }
 
+    override suspend fun listMedia(
+        conversationId: String,
+        view: String,
+        limit: Int,
+        includeReplies: Boolean,
+        includeTranslations: Boolean,
+        kinds: String?,
+        query: String?,
+        before: String?,
+        languages: String?,
+    ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
+    override suspend fun listAround(conversationId: String, messageId: String, limit: Int) =
+        ApiResponse<List<ApiMessage>>(success = false)
+
     override suspend fun listAfter(conversationId: String, after: String, limit: Int?): me.meeshy.sdk.model.MessagesApiResponse {
         listAfterCalls += AfterCall(after, limit)
         val afterMillis = Instant.parse(after).toEpochMilli()
@@ -224,6 +281,10 @@ private class GapAwareMessageApi(
         ApiResponse<Unit>(success = false)
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = false)
+    override suspend fun consumeAfterRead(conversationId: String, body: me.meeshy.sdk.net.api.ConsumeAfterReadRequest) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
+    override suspend fun consumeViewOnce(conversationId: String, messageId: String, body: kotlinx.serialization.json.JsonObject) =
+        ApiResponse<kotlinx.serialization.json.JsonElement>(success = false)
 }
 
 private class FakeTranslationApi(
@@ -290,7 +351,10 @@ class MessageRepositoryTest {
         api: MessageApi,
         translationApi: TranslationApi = FakeTranslationApi(),
         clock: me.meeshy.sdk.cache.CacheClock = SystemCacheClock,
-    ) = MessageRepository(api, translationApi, db, db.messageDao(), db.syncMetaDao(), outbox, clock)
+    ) = MessageRepository(
+        api, translationApi, db, db.messageDao(), db.syncMetaDao(), outbox, clock,
+        EndToEndRegimeKeeper(me.meeshy.sdk.e2ee.EndToEndRegimeLedger.None, db),
+    )
 
     private suspend fun streamedMessages(repo: MessageRepository, conversationId: String = "c1") =
         db.messageDao().observeForConversation(conversationId).first()
@@ -665,7 +729,19 @@ class MessageRepositoryTest {
     @Test
     fun `a malformed after response falls back to the full window in the same call`() = runTest {
         val api = object : MessageApi by GapAwareMessageApi(served = emptyList()) {
-            override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
+            override suspend fun listMedia(
+        conversationId: String,
+        view: String,
+        limit: Int,
+        includeReplies: Boolean,
+        includeTranslations: Boolean,
+        kinds: String?,
+        query: String?,
+        before: String?,
+        languages: String?,
+    ): me.meeshy.sdk.model.MessagesApiResponse = error("listMedia is not used by this fake")
+
+    override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
                 me.meeshy.sdk.model.MessagesApiResponse(success = true, data = emptyList(), cursorPagination = null)
             override suspend fun listConditional(conversationId: String, ifNoneMatch: String?) =
                 retrofit2.Response.success(
@@ -1200,6 +1276,72 @@ class MessageRepositoryTest {
         assertThat(applied).isFalse()
         assertThat(cachedMessage(cmid).pinnedAt).isNull()
         assertThat(outbox.deliverable(OutboxLanes.PIN)).isEmpty()
+    }
+
+    @Test
+    fun `refreshMessage reads ONE message by its id and merges the forward preview the socket payload lacked`() = runTest {
+        val socketCopy = apiMessage("m9", createdAt = T2).copy(forwardedFromId = "src")
+        val served = socketCopy.copy(
+            forwardedFrom = me.meeshy.sdk.model.ApiForwardedFrom(id = "src", content = "original"),
+        )
+        val api = FakeMessageApi(
+            response = ApiResponse(success = true, data = listOf(socketCopy)),
+            aroundResponse = ApiResponse(success = true, data = listOf(served)),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+        assertThat(cachedApiMessage("m9").forwardedFrom).isNull()
+
+        val merged = repo.refreshMessage("c1", "m9")
+
+        assertThat(merged).isTrue()
+        assertThat(api.aroundCalls).containsExactly(Triple("c1", "m9", 1))
+        assertThat(cachedApiMessage("m9").forwardedFrom?.content).isEqualTo("original")
+        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m9")
+        assertThat(api.listCalls).isEqualTo(1)
+    }
+
+    @Test
+    fun `refreshMessage never replaces the cached message with a later socket copy that lacks the preview`() = runTest {
+        val served = apiMessage("m9", createdAt = T2).copy(
+            forwardedFromId = "src",
+            forwardedFrom = me.meeshy.sdk.model.ApiForwardedFrom(id = "src", content = "original"),
+        )
+        val api = FakeMessageApi(
+            response = ApiResponse(success = true, data = listOf(served.copy(forwardedFrom = null))),
+            aroundResponse = ApiResponse(success = true, data = listOf(served)),
+        )
+        val repo = repository(api)
+
+        assertThat(repo.refreshMessage("c1", "m9")).isTrue()
+        repo.refresh("c1")
+
+        assertThat(cachedApiMessage("m9").forwardedFrom?.content).isEqualTo("original")
+    }
+
+    @Test
+    fun `refreshMessage answers false and changes nothing when the server refuses`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(success = true, data = listOf(apiMessage("m1", createdAt = T1))),
+            aroundResponse = ApiResponse(success = false, error = "down"),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+
+        assertThat(repo.refreshMessage("c1", "m9")).isFalse()
+        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m1")
+    }
+
+    @Test
+    fun `refreshMessage answers false when the page does not carry the asked message`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(success = true, data = emptyList()),
+            aroundResponse = ApiResponse(success = true, data = emptyList()),
+        )
+        val repo = repository(api)
+
+        assertThat(repo.refreshMessage("c1", "m9")).isFalse()
+        assertThat(streamedMessages(repo)).isEmpty()
     }
 
     @Test

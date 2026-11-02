@@ -1,3 +1,4 @@
+import { clampStoryText, STORY_LIMITS } from '@meeshy/shared/utils/story-limits';
 import { clampMediaCrop, isFullMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
 
 import type { ApiFailure } from '@/lib/api/http';
@@ -37,6 +38,7 @@ export type StudioFailureKey =
   | 'story.studio.failure.tooLarge'
   | 'story.studio.failure.fileRefused'
   | 'story.studio.failure.rateLimited'
+  | 'story.studio.failure.onlyUnlinked'
   | 'story.studio.failure.refused'
   | 'story.studio.failure.unavailable';
 
@@ -164,6 +166,7 @@ export const selectedTextLayerOf = (page: StudioPage): StudioTextLayer | null =>
 /** `textId` est calculé par l'appelant contre TOUTES les pages (même raison
  * que `emptyStudioPage`). */
 export function pageWithAddedText(page: StudioPage, textId: string, language: string): StudioPage {
+  if (page.texts.length >= STORY_LIMITS.maxTextsPerScene) return page;
   const layer = newTextLayer({ id: textId, language });
   return { ...page, texts: [...page.texts, layer], selected: layer.id };
 }
@@ -189,7 +192,7 @@ export function pageWithTextLayer(page: StudioPage, id: string, change: (layer: 
 }
 
 export function pageWithText(page: StudioPage, id: string, text: string): StudioPage {
-  return pageWithTextLayer(page, id, (layer) => ({ ...layer, text }));
+  return pageWithTextLayer(page, id, (layer) => ({ ...layer, text: clampStoryText(text) }));
 }
 
 /* ── LES TROIS PORTES, sur une page ──────────────────────────────────────── */
@@ -346,6 +349,14 @@ export function readyAssetOf(
  * LA CAUSE D'UN ÉCHEC, dans le vocabulaire d'une STORY — `null` ⇒ rien à
  * dire : une annulation vient de l'auteur lui-même (retrait, remplacement).
  */
+/**
+ * LE PLAFOND DES PERSONNES CHOISIES SANS LIEN (#14105, #14169) — un 429 qui
+ * n'est pas une cadence : attendre une minute n'y change rien, l'auteur doit
+ * retirer ces personnes ou revenir demain. Le studio ne rejoue jamais un
+ * échec ; ce refus-là se dit avec sa cause, pas « réessayez dans un instant ».
+ */
+const ONLY_UNLINKED_RECIPIENTS_LIMIT = 'ONLY_UNLINKED_RECIPIENTS_LIMIT';
+
 export function studioFailureKey(failure: ApiFailure, stage: 'upload' | 'publish'): StudioFailureKey | null {
   if (failure.code === 'ABORTED') return null;
   if (failure.code === 'CANVAS_INVALID' || failure.code === 'MEDIA_NOT_CLAIMED') return 'story.studio.failure.refused';
@@ -354,6 +365,7 @@ export function studioFailureKey(failure: ApiFailure, stage: 'upload' | 'publish
   if (failure.status === 401) return 'story.studio.failure.session';
   if (failure.status === 403) return 'story.studio.failure.forbidden';
   if (failure.status === 413) return 'story.studio.failure.tooLarge';
+  if (failure.code === ONLY_UNLINKED_RECIPIENTS_LIMIT) return 'story.studio.failure.onlyUnlinked';
   if (failure.status === 429) return 'story.studio.failure.rateLimited';
   if (failure.status === 400 && stage === 'upload') return 'story.studio.failure.fileRefused';
   if (failure.status >= 400 && failure.status < 500) return 'story.studio.failure.refused';

@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.composer.ComposerPlateStyle
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
@@ -17,20 +18,24 @@ import me.meeshy.ui.theme.MeeshySpacing
  * La plaque de verre UNIQUE de la barre de composition : bandeaux, plateau, rails, barre d'outils
  * et rangée de saisie y vivent ensemble (iOS `ComposerBarSlot`). Le flou (API 31+) ou le repli
  * opaque est celui de [MeeshyGlassSurface] ; la forme suit [ComposerPlateStyle]. L'hôte peut poser
- * un [foldSlot] (chevron de repli) dans l'angle haut droit.
+ * un [foldSlot] (chevron de repli) dans l'angle haut droit. Une protection armée voile toute la
+ * plaque de sa teinte ([protectionTint]) ; la recette liquid glass ajoute reflet et liseré.
  */
 @Composable
 internal fun ComposerGlassPlate(
     modifier: Modifier = Modifier,
     foldSlot: (@Composable () -> Unit)? = null,
+    protectionTint: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(ComposerPlateStyle.CORNER_RADIUS_DP.dp)
     MeeshyGlassSurface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = MeeshySpacing.sm),
+            .padding(start = MeeshySpacing.sm, end = MeeshySpacing.sm, bottom = MeeshySpacing.xs),
         shape = shape,
+        tint = protectionTint,
+        liquid = true,
     ) {
         Column(Modifier.fillMaxWidth()) { content() }
         if (foldSlot != null) ComposerFoldSlot(Modifier.align(Alignment.TopEnd), foldSlot)

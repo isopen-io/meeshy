@@ -91,6 +91,20 @@ describe('runStudioPublish — séquentiel, dans l’ordre, arrêt à la premiè
     expect(outcome).toEqual({ kind: 'failed', failure: 'story.studio.failure.rateLimited', published: 2, total: 3 });
   });
 
+  test('le plafond des personnes choisies sans lien (429 ONLY_UNLINKED_RECIPIENTS_LIMIT, #14169) arrête l’envoi sans le rejouer', async () => {
+    const plan = readyPlan(['page-1', 'page-2']);
+    const calls: string[] = [];
+    const publish = async (input: StudioPublication): Promise<ApiResult<{ readonly id: string }>> => {
+      calls.push(input.pageIds[0]!);
+      return { ok: false, status: 429, error: 'Trop de personnes choisies sans lien', code: 'ONLY_UNLINKED_RECIPIENTS_LIMIT' };
+    };
+
+    const outcome = await runStudioPublish({ plan, publish });
+
+    expect(outcome).toEqual({ kind: 'failed', failure: 'story.studio.failure.onlyUnlinked', published: 0, total: 2 });
+    expect(calls).toEqual(['page-1']);
+  });
+
   test('une requête ANNULÉE (sans cause propre) se dit « réseau indisponible » — jamais un échec muet', async () => {
     const plan = readyPlan(['page-1']);
     const publish = async (): Promise<ApiResult<{ readonly id: string }>> => ({ ok: false, status: 0, error: 'annulée', code: 'ABORTED' });

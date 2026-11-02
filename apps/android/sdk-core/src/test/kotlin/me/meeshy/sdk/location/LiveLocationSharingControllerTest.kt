@@ -66,6 +66,22 @@ class LiveLocationSharingControllerTest {
     }
 
     @Test
+    fun `la fin de session arrete le partage du compte parti sans plus rien emettre ni garder le service`() = runTest {
+        val rig = Rig(this)
+        rig.controller.start("c1", LiveLocationDuration.ONE_HOUR)
+        advanceTimeBy(1)
+
+        val teardown: me.meeshy.sdk.session.PerAccountCache = rig.controller
+        teardown.clear()
+        rig.stream.emit(LiveLocationFix(49.0, 3.0))
+        advanceTimeBy(LiveLocationDuration.ONE_HOUR.durationMillis)
+
+        assertThat(rig.log).containsExactly("start:c1:60")
+        assertThat(rig.controller.state.value).isEqualTo(LiveLocationSharingState.Idle)
+        assertThat(rig.hostEvents).containsExactly("on", "off").inOrder()
+    }
+
+    @Test
     fun `manual stop emits stop and cancels the expiry`() = runTest {
         val rig = Rig(this)
         rig.controller.start("c1", LiveLocationDuration.ONE_HOUR)

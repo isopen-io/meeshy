@@ -18,7 +18,8 @@ public enum StorySlideRenderer {
         bgImage: UIImage?,
         loadedImages: [String: UIImage] = [:],
         size: CGSize = CGSize(width: 100, height: 178),
-        scale: CGFloat? = nil
+        scale: CGFloat? = nil,
+        soundMarker: ((StoryAudioPlayerObject, CGSize) -> Void)? = nil
     ) -> UIImage? {
         // Default ~100x178 (9:16) is enough for a ThumbHash (~32x32 avg colours).
         // Callers needing a crisp preview — the story-tray cover thumbnail that must
@@ -134,47 +135,36 @@ public enum StorySlideRenderer {
                 }
             }
 
-            // 3. Text overlays
-            for textObj in slide.effects.textObjects {
-                drawTextObject(textObj, in: size, ctx: cgCtx)
-            }
-
-            // 4. Foreground media — EXCLUT le média de fond (résolu en 2b), sinon
-            //    double-dessin + occlusion du texte (cf. 2b). Dessine tout média
-            //    foreground qui a une frame chargée : IMAGE **et VIDÉO** (poster frame
-            //    dans `loadedImages`), à parité avec `SlideMiniPreview` (qui ne filtre
-            //    pas par kind). Sans la vidéo foreground, un clip placé sur le slide
-            //    manquait au thumbnail/thumbHash. L'audio (pas de frame chargée) est
-            //    naturellement ignoré (le `if let img` échoue).
-            for obj in slide.effects.resolvedForegroundMediaObjects {
-                // Le filtre et les réglages PROPRES à une IMAGE (#8474, #9175),
-                // cuits par la même fonction que le player — qui ne les peint
-                // pas sur une vidéo.
-                // La VIGNETTE d'une vidéo posée porte ses réglages (#9169), par
-                // la même chaîne que sa lecture.
-                if let img = loadedImages[obj.id] {
+            // 3. Les objets de PREMIER PLAN, à leur rang (#14181) — l'ordre du
+            //    moteur de scène (`SceneAudioStageRule.stackedObjects`) : texte,
+            //    média, sticker, lieu, et la pastille de son qu'un objet
+            //    recouvre, chacun à sa place dans l'empilement. À rang égal,
+            //    l'ordre des familles reste celui d'avant.
+            //    - Média : EXCLUT le fond (résolu en 2b). IMAGE **et VIDÉO**
+            //      (poster frame dans `loadedImages`) ; le filtre et les réglages
+            //      PROPRES à une image (#8474, #9175) par la même fonction que le
+            //      player, ceux d'une vidéo par la chaîne de sa lecture (#9169).
+            //    - Sticker : image intégrée si son bitmap est chargé (sous l'id
+            //      d'ÉLÉMENT), glyphe sinon.
+            //    - Lieu : la même `StoryLocationLayer` que le canvas et l'export.
+            //    - Son : peint par l'hôte qui le demande (`soundMarker`) ; le
+            //      composite du ThumbHash et des couvertures n'en peint aucun.
+            for objet in SceneAudioStageRule.stackedObjects(in: slide.effects) {
+                switch objet {
+                case .text(let textObj):
+                    drawTextObject(textObj, in: size, ctx: cgCtx)
+                case .media(let obj):
+                    guard let img = loadedImages[obj.id] else { continue }
                     let peinte = obj.kind == .image ? StoryMediaLayer.filtered(img, for: obj) ?? img
                         : StoryVideoAdjustmentsProcessor.poster(img, for: obj)
                     drawMediaObject(obj, image: MediaCropPresentation.keptPart(peinte, of: obj), in: size, ctx: cgCtx)
-                }
-            }
-
-            // 5. Stickers — image intégrée si son bitmap est chargé, glyphe sinon.
-            //    Le bitmap arrive par le MÊME `loadedImages` que les autres
-            //    médias (étapes 2b et 4), sous l'id d'ÉLÉMENT.
-            if let stickers = slide.effects.stickerObjects {
-                for sticker in stickers {
+                case .sticker(let sticker):
                     drawSticker(sticker, image: loadedImages[sticker.id], in: size, renderScale: format.scale, ctx: cgCtx)
+                case .place(let location):
+                    drawLocationObject(location, in: size, renderScale: format.scale, ctx: cgCtx)
+                case .audio(let son):
+                    soundMarker?(son, size)
                 }
-            }
-
-            // 5b. Pastilles de lieu — même source de vérité que le canvas et
-            //     l'export : on configure une `StoryLocationLayer` puis on la
-            //     rend dans le contexte. Redessiner le badge à la main ici
-            //     rejouerait la divergence déjà payée sur les stickers (taille
-            //     codée en dur, `baseSize` ignoré).
-            for location in slide.locationObjects {
-                drawLocationObject(location, in: size, renderScale: format.scale, ctx: cgCtx)
             }
 
             // 6. Drawing layer — TOPMOST (modern strokes preferred, legacy PKDrawing

@@ -5,9 +5,15 @@ import java.time.Instant
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiTextTranslation
+import kotlinx.serialization.decodeFromString
+import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.ReactionPayload
 import me.meeshy.sdk.outbox.kindEnum
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -45,6 +51,17 @@ class MessageMutationWriterTest {
         assertThat(queued.targetId).isEqualTo("m1")
         assertThat(queued.payload).contains("❤️")
     }
+
+    @Test
+    fun `a queued reaction names its conversation, so the plaintext guard keeps it even once its message leaves Room`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(message(conversationId = "c-7"))
+
+            writer(harness).toggleReactionOptimistic("m1", "❤️", isAdding = true)
+
+            val payload = harness.outbox.deliverable(OutboxLanes.REACTION).single().payload
+            assertThat(MeeshyApi.json.decodeFromString<ReactionPayload>(payload).conversationId).isEqualTo("c-7")
+        }
 
     @Test
     fun `removing a reaction decrements it and drops the emoji at zero`() = runHarnessTest { harness ->
@@ -116,6 +133,70 @@ class MessageMutationWriterTest {
         assertThat(queued.kindEnum).isEqualTo(OutboxKind.EDIT_MESSAGE)
         assertThat(queued.targetId).isEqualTo("m1")
         assertThat(queued.payload).contains("bonjour")
+    }
+
+    @Test
+    fun `an edit keeps the replaced text as a numbered revision stamped at the clock`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        val ledgerWriter = MessageMutationWriter(
+            harness.updater, harness.outbox, harness.clock,
+            EditRevisionLedger(harness.database.editRevisionDao(), harness.clock),
+        )
+
+        ledgerWriter.editOptimistic("m1", "bonjour")
+        harness.clock.now += 1_000
+        ledgerWriter.editOptimistic("m1", "bonsoir")
+
+        val kept = harness.database.editRevisionDao().forMessage("m1")
+        assertThat(kept.map { it.revision to it.content }).containsExactly(1 to "salut", 2 to "bonjour").inOrder()
+        assertThat(kept[1].editedAt - kept[0].editedAt).isEqualTo(1_000)
+    }
+
+    @Test
+    fun `deleting an edited message erases its past versions`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        val ledgerWriter = MessageMutationWriter(
+            harness.updater, harness.outbox, harness.clock,
+            EditRevisionLedger(harness.database.editRevisionDao(), harness.clock),
+        )
+        ledgerWriter.editOptimistic("m1", "bonjour")
+
+        ledgerWriter.deleteOptimistic("m1")
+
+        assertThat(harness.database.editRevisionDao().forMessage("m1")).isEmpty()
+    }
+
+    @Test
+    fun `the ledger keeps the thirty most recent versions of a message`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+        val ledgerWriter = MessageMutationWriter(
+            harness.updater, harness.outbox, harness.clock,
+            EditRevisionLedger(harness.database.editRevisionDao(), harness.clock),
+        )
+
+        (1..32).forEach { n ->
+            harness.clock.now += 1
+            ledgerWriter.editOptimistic("m1", "version $n")
+        }
+
+        val kept = harness.database.editRevisionDao().forMessage("m1")
+        assertThat(kept).hasSize(EditRevisionLedger.MAX_REVISIONS_PER_MESSAGE)
+        assertThat(kept.last().content).isEqualTo("version 31")
+        assertThat(kept.map { it.content }).doesNotContain("salut")
+    }
+
+    @Test
+    fun `the ledger forgets the least recently edited messages beyond two hundred`() = runHarnessTest { harness ->
+        val ledger = EditRevisionLedger(harness.database.editRevisionDao(), harness.clock)
+
+        (0..EditRevisionLedger.MAX_TRACKED_MESSAGES).forEach { n ->
+            harness.clock.now += 1
+            ledger.record("m$n", "avant", "après", null)
+        }
+
+        assertThat(harness.database.editRevisionDao().forMessage("m0")).isEmpty()
+        assertThat(harness.database.editRevisionDao().forMessage("m1")).hasSize(1)
+        assertThat(harness.database.editRevisionDao().forMessage("m${EditRevisionLedger.MAX_TRACKED_MESSAGES}")).hasSize(1)
     }
 
     @Test
@@ -208,5 +289,35 @@ class MessageMutationWriterTest {
         assertThat(
             after.copy(payload = before.payload, contentText = before.contentText, changeVersion = before.changeVersion),
         ).isEqualTo(before)
+    }
+
+    // --- message:edited : la version serveur remplace la copie locale ------
+
+    private fun callNotice(kind: String, outcome: String? = null) = buildJsonObject {
+        put("kind", kind)
+        if (outcome != null) put("outcome", outcome)
+    }
+
+    @Test
+    fun `a server edit turning a live call notice terminal rewrites the cached metadata`() = runHarnessTest { harness ->
+        harness.seedSynced(message().copy(content = "Appel audio en cours", metadata = callNotice("call-live")))
+
+        val applied = writer(harness).applyServerEdit(
+            message().copy(content = "Appel audio manqué", metadata = callNotice("call", outcome = "missed")),
+        )
+
+        assertThat(applied).isTrue()
+        val cached = harness.cachedMessage("m1")
+        assertThat(cached.content).isEqualTo("Appel audio manqué")
+        assertThat(cached.metadata?.get("kind")?.jsonPrimitive?.content).isEqualTo("call")
+        assertThat(cached.metadata?.get("outcome")?.jsonPrimitive?.content).isEqualTo("missed")
+    }
+
+    @Test
+    fun `a server edit of a message this device never cached writes nothing`() = runHarnessTest { harness ->
+        val applied = writer(harness).applyServerEdit(message("unknown"))
+
+        assertThat(applied).isFalse()
+        assertThat(harness.database.messageDao().find("unknown")).isNull()
     }
 }

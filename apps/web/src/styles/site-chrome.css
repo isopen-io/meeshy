@@ -241,7 +241,8 @@
 }
 
 /* LE TÉLÉPHONE ÉTROIT (320–480 px) : la barre tient en DEUX rangées — la
- * marque et la langue, puis les deux portes côte à côte —
+ * marque et la langue, puis la porte (« Mes conversations », seule depuis
+ * #12500) —
  * plutôt que trois, qui mangeaient un cinquième de l'écran sous un en-tête
  * collant. Chaque porte tient sur UNE ligne (#10124) : elle prend la largeur
  * de son libellé, l'espace qui reste se partage. À parts égales, « Join

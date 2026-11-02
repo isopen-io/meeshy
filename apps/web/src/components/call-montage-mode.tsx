@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 
+import { frameDisplayName } from '@meeshy/shared/types/frame-name';
 import { browserCanvas, captureDrawn, captureFaces, captureMontage, MONTAGE_DATE, saveCaptures, type CaptureEnv, type CaptureFile, type SaveOutcome } from '@/lib/calls/call-capture';
 import type { ClipEnv } from '@/lib/calls/call-capture-live';
 import { visibleTiles } from '@/lib/calls/call-capture-tiles';
@@ -17,7 +18,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
-import { browserCircle, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader } from './use-montage-frames';
+import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader, type ShelfLoader } from './use-montage-frames';
 
 /**
  * **LE MODE MONTAGE** (#8552, #8578, #8580) — « Capturer » (rangée L'appel)
@@ -90,6 +91,8 @@ type ModeProps = {
   /** L'atelier des cadres, dans son chunk — sans lui, les classiques seuls. */
   readonly loadFrames?: FrameStudioLoader;
   readonly circleOf?: CircleOf;
+  /** Les ambiances installées (#10169) : seules leurs puces se proposent. */
+  readonly loadShelf?: ShelfLoader;
 };
 
 const NO_AUDIO = (): readonly MediaStream[] => [];
@@ -123,10 +126,10 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle }: ModeProps) {
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
-  const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language });
+  const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language, loadShelf });
   const people = circle?.people.length ?? 0;
   const frame = frames === null || frameId === null ? null : frames.reconcile(frameId, people);
   const shelf: Shelf = frame?.mood ?? CLASSICS;
@@ -269,7 +272,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     const at = Math.max(0, offered.findIndex((option) => option.id === chosenId));
     return offered.map((option, index) => ({
       id: option.id,
-      label: option.name,
+      label: frameDisplayName(option, language),
       detail: frameUsageText(language, atelier.usageLabel(option)),
       visual:
         Math.abs(index - at) <= FRAME_THUMB_WINDOW ? (
@@ -305,7 +308,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     setFrameId(next?.id ?? null);
   };
 
-  const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frame.name });
+  const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frameDisplayName(frame, language) });
 
   return (
     <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage">

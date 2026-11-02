@@ -45,7 +45,7 @@ final class ViewOnceOpenedPersistenceTests: XCTestCase {
     }
 
     private func decode(_ json: String) throws -> APIMessage {
-        try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
+        try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
     }
 
     private func persistedMessage() throws -> MeeshyMessage {

@@ -1,5 +1,6 @@
 import { forwardBodyOf, type ForwardResult, type ForwardSource } from '@/lib/api/forward';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
+import { canSendPlaintext, E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import type { SendMessageBody, SentMessageAck } from '@/lib/api/messages';
 import type { PublishedPost } from '@/lib/api/share-publish';
 
@@ -233,9 +234,15 @@ export function createSendRun(params: {
     return settled.data;
   };
 
+  /* #12949 — toute étape vers une conversation (texte, fichiers, transfert)
+     la résout ici, AVANT de téléverser ou d'envoyer : une conversation vue
+     chiffrée de bout en bout ne reçoit rien en clair. */
   const conversationOf = (key: string): string => {
     const id = conversations.get(key);
     if (id === undefined) throw new StepFailed({ kind: 'refused', status: 0, message: 'Conversation introuvable' });
+    if (!canSendPlaintext({ conversationId: id })) {
+      throw new StepFailed({ kind: 'refused', status: 0, message: 'Conversation chiffrée de bout en bout', code: E2EE_PLAINTEXT_WITHHELD });
+    }
     return id;
   };
 
@@ -243,6 +250,7 @@ export function createSendRun(params: {
     need(ports.sendMessage({ conversationId: conversationOf(key), body: { ...body, originalLanguage: language, clientMessageId: clientIdFor(slot) } }));
 
   async function sendFiles(key: string, slot: string, step: Extract<SendStep, { kind: 'send-files' }>): Promise<void> {
+    conversationOf(key);
     const all = await ensureFiles();
     const picked = all === null ? null : step.indexes.map((index) => all[index]).filter((file): file is File => file !== undefined);
     if (picked === null || picked.length !== step.indexes.length) throw new StepFailed({ kind: 'download' });

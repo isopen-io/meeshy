@@ -16,7 +16,7 @@ import org.junit.Test
  * plus `SavedAccount` (`shortName == displayName ?? username`,
  * `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift`) and `LoginView`'s
  * `showPicker` (`!savedAccounts.isEmpty && !showNormalLogin`,
- * `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`).
+ * `apps/ios/Meeshy/Features/Auth/Views/LoginView.swift`).
  *
  * Every assertion is on observable behaviour through the public API — the derived
  * short name, the sorted order, the upsert/remove/find transforms, and the picker

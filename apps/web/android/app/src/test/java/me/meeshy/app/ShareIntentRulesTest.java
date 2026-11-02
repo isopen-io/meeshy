@@ -22,8 +22,8 @@ public class ShareIntentRulesTest {
 
     @Test
     public void theBoundsAreTheSharedLimits() {
-        assertEquals(20, ShareIntentRules.MAX_FILES);
-        assertEquals(500L * 1024 * 1024, ShareIntentRules.MAX_TOTAL_BYTES);
+        assertEquals(100, ShareIntentRules.MAX_FILES);
+        assertEquals(5L * 1024 * 1024 * 1024, ShareIntentRules.MAX_TOTAL_BYTES);
     }
 
     @Test

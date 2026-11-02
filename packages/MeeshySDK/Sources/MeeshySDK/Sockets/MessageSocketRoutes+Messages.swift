@@ -8,6 +8,8 @@ extension MessageSocketRoutes {
         [
             m.route(.messageNew, APIMessage.self) { $0.messageReceived.send($1) }
                 .observing { [weak m] data in m?.logMessageArrival(data) },
+            // #3707 — l'enveloppe libsignal de cet appareil : un chiffré opaque, ouvert par `MeeshyE2EE`.
+            m.route(.e2eeEnvelope, E2EEServedEnvelope.self) { _, envelope in E2EEEnvelopeChannel.shared.received.send(envelope) },
             // Les réactions d'un message hors du cache de la conversation active sont ignorées ici : à l'ouverture,
             // le `reactionSummary` servi avec le message fait foi.
             m.route(.reactionAdded, ReactionUpdateEvent.self) { $0.reactionAdded.send($1) }
@@ -25,6 +27,7 @@ extension MessageSocketRoutes {
             m.route(.readStatusUpdated, ReadStatusUpdateEvent.self) { $0.readStatusUpdated.send($1) },
             m.route(.attachmentStatusUpdated, AttachmentStatusUpdatedEvent.self) { $0.attachmentStatusUpdated.send($1) },
             m.route(.messagePendingDelivered, PendingMessagesDeliveredEvent.self) { $0.pendingMessagesDelivered.send($1) },
+            m.route(.attachmentDeleted, AttachmentDeletedEvent.self) { $0.attachmentDeleted.send($1) },
             m.route(.messageAttachmentUpdated, AttachmentUpdatedEvent.self) { $0.attachmentUpdated.send($1) },
         ]
     }

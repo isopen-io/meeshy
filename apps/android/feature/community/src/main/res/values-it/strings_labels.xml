@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Libellés de communauté que le catalogue iOS laisse en anglais en français (et en partie en es/it) : traduits ici, la source iOS reste à corriger (#13358). -->
+<resources>
+    <string name="community_add_channel_title">Aggiungi un canale</string>
+    <string name="community_detail_action_channel">Canale</string>
+    <string name="community_detail_channel_fallback_name">Canale</string>
+    <string name="community_detail_channels_empty_action">Crea un canale</string>
+    <string name="community_detail_channels_empty_subtitle">Le conversazioni appariranno qui</string>
+    <string name="community_detail_channels_empty_title">Ancora nessun canale</string>
+    <string name="community_detail_posts_empty_subtitle">Il feed della community apparirà qui</string>
+    <string name="community_detail_posts_empty_title">Ancora nessun post</string>
+    <string name="community_detail_stats_channels">Canali</string>
+    <string name="community_detail_stats_members">Membri</string>
+    <string name="community_detail_tab_channels">Canali</string>
+    <string name="community_detail_tab_feed">Bacheca</string>
+    <string name="community_invite_button">Invita</string>
+    <string name="community_invite_empty_subtitle">Prova con un altro termine di ricerca</string>
+    <string name="community_invite_empty_title">Nessun utente trovato</string>
+    <string name="community_invite_recently_invited">Invitati di recente</string>
+    <string name="community_invite_search_placeholder">Cerca utenti...</string>
+    <string name="community_invite_title">Invita membri</string>
+    <string name="community_members_empty_action">Invita</string>
+    <string name="community_members_empty_subtitle">Invita persone a unirsi a questa community</string>
+    <string name="community_members_empty_title">Nessun membro</string>
+    <string name="community_members_remove">Rimuovi</string>
+    <string name="community_members_section_admin">Admin</string>
+    <string name="community_members_title">Membri</string>
+    <string name="community_members_unknown_user">Sconosciuto</string>
+</resources>

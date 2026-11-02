@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_preview">Pré-visualização</string>
+    <string name="composer_more_pick_background">Escolher um fundo</string>
+    <string name="composer_more_remove_background">Remover o fundo da cena</string>
+    <string name="composer_more_clear_all">Apagar tudo</string>
+    <string name="composer_clear_all_title">Apagar tudo?</string>
+    <string name="composer_clear_all_message">Todos os slides recomeçam vazios, sobre o fundo neutro. Desfazer restaura os slides.</string>
+    <string name="composer_clear_all_cancel">Cancelar</string>
+    <string name="composer_media_from_library">Fototeca</string>
+    <string name="composer_media_from_files">Dos arquivos</string>
+    <string name="composer_media_sources">Escolher uma fonte</string>
+    <string name="composer_preview_close">Fechar a pré-visualização</string>
+    <string name="composer_preview_previous">Slide anterior</string>
+    <string name="composer_preview_next">Próximo slide</string>
+</resources>

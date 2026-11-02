@@ -4,9 +4,9 @@
  * `core.ts` lors du découpage #4284 ; voir `core.ts` pour le point d'entrée
  * `registerCoreRoutes` qui appelle ces registrars.
  */
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { isMemberCreator, MemberRole } from '@meeshy/shared/types/role-types';
-import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ErrorCode } from '@meeshy/shared/types';
@@ -22,7 +22,8 @@ import {
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
 import { isBlockedBetween } from '../../utils/blocking';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { refuserCommeIntrouvable } from './utils/access-control';
 import { reconcileCommunityMembership } from '../../services/conversations/communityMembershipSync';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
@@ -44,6 +45,17 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
+import { directLookupWheres, firstFound } from '../../services/conversations/directPair';
+import {
+  decideCreationRegime,
+  directReopeningFor,
+  nascentRegime,
+  nascentRegimeDeps,
+  sealReopenedDirect,
+  type CreationRegimeRefusal,
+} from '../../services/conversations/creationRegime';
+import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest';
+import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import {
   composeConversationUpdate,
   broadcastConversationUpdated,
@@ -73,7 +85,8 @@ export function registerCreateConversationRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
-        500: errorResponseSchema
+        500: errorResponseSchema,
+        503: errorResponseSchema
       }
     },
     preValidation: [optionalAuth]
@@ -86,7 +99,7 @@ export function registerCreateConversationRoute(
         'create-conversation'
       );
 
-      const { type, title: rawTitle, description: rawDescription, participantIds = [], communityId, identifier } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string };
+      const { type, title: rawTitle, description: rawDescription, participantIds = [], communityId, identifier, plaintext, encryptionMode: requestedMode } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string; plaintext?: boolean; encryptionMode?: 'server' | 'hybrid' | 'e2ee' };
       const title = rawTitle !== undefined ? SecuritySanitizer.sanitizeText(rawTitle) : undefined;
       const description = rawDescription !== undefined ? SecuritySanitizer.sanitizeText(rawDescription) : undefined;
 
@@ -97,6 +110,14 @@ export function registerCreateConversationRoute(
       }
 
       const userId = authContext.userId;
+
+      // Directive porteur du 2026-11-01 — le mode se choisit à la création, et
+      // une conversation ne naît jamais sans mode (`creationRegime.ts`).
+      const regimeRequest = { requestedMode, plaintext: plaintext === true, platformRole: authContext.registeredUser.role, conversationType: type };
+      const regime = decideCreationRegime(regimeRequest);
+      if (regime.kind === 'refused') {
+        return refuseCreationRegime(reply, regime.refusal);
+      }
 
       // Prevent creating conversation with oneself
       if (type === 'direct' && participantIds.length === 1 && participantIds[0] === userId) {
@@ -171,14 +192,19 @@ export function registerCreateConversationRoute(
         // (200) au lieu d'en créer une deuxième. Les archivées comptent —
         // recréer la DM d'un contact archivé doit la ROUVRIR, pas la
         // dupliquer. Groupes : jamais dédupliqués (même-membres légitime).
-        const existingDirect = await prisma.conversation.findFirst({
-          where: {
-            type: 'direct',
-            AND: [
-              { participants: { some: { userId, isActive: true } } },
-              { participants: { some: { userId: uniqueParticipantIds[0], isActive: true } } }
-            ]
-          },
+        //
+        // #12966 — une paire a au plus UN tête-à-tête `e2ee` et au plus UN
+        // que le serveur lit. Sans précision, le chiffré d'abord, puis le plus
+        // récemment actif (inchangé tant qu'une paire n'a qu'un régime) ;
+        // `plaintext: true` ne rouvre que le lisible, et en crée un à côté du
+        // chiffré s'il n'y en a pas.
+        const reopening = directReopeningFor(regimeRequest);
+        const lookups = directLookupWheres(
+          { userId, peerId: uniqueParticipantIds[0] },
+          { plaintext: reopening === 'readable', endToEnd: reopening === 'end-to-end' },
+        );
+        const existingDirect = await firstFound(lookups, (where) => prisma.conversation.findFirst({
+          where,
           // Des doublons historiques existent (5 DM atabeth↔jcnm datant
           // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
           // arbitraire — sinon l'utilisateur retombe sur une DM morte.
@@ -198,7 +224,7 @@ export function registerCreateConversationRoute(
               }
             }
           }
-        });
+        }));
         if (existingDirect) {
           const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
           const creatorParticipant = existingDirect.participants.find((p: any) => isMemberCreator(p.role ?? 'member'));
@@ -240,8 +266,11 @@ export function registerCreateConversationRoute(
             }
           }
 
+          const sealed = await sealReopenedDirect(prisma, nascentRegimeDeps(prisma), { conversation: existingDirect, enabledBy: userId });
+
           return sendSuccess(reply, {
             ...existingDirect,
+            ...(sealed ?? {}),
             title: existingDirect.title || null
           }, { statusCode: 200 });
         }
@@ -267,8 +296,12 @@ export function registerCreateConversationRoute(
       // Broadcast = announcement channel with admin-only write
       const isBroadcast = type === 'broadcast';
 
+      const nascent = await nascentRegime(nascentRegimeDeps(prisma), { mode: regime.mode, enabledBy: userId });
+
       const conversation = await prisma.conversation.create({
         data: {
+          id: nascent.conversationId,
+          ...nascent.data,
           identifier: finalIdentifier,
           type,
           title,
@@ -453,8 +486,28 @@ export function registerCreateConversationRoute(
       }, { statusCode: 201 });
 
     } catch (error) {
+      if (isServerAtRestUnavailable(error)) {
+        logger.error('conversation not created: server encryption unavailable', { reason: error.reason });
+        return sendError(reply, 503, error.message, { code: error.code });
+      }
       sendErrorResponse(reply, error as Error, 'create-conversation');
     }
+  });
+}
+
+function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusal) {
+  if (refusal === 'end-to-end-direct-only') {
+    return sendError(reply, 400, 'End-to-end encryption can only be chosen at creation for a direct conversation for now', {
+      code: 'ENCRYPTION_MODE_UNSUPPORTED',
+    });
+  }
+  if (refusal === 'plaintext-with-end-to-end') {
+    return sendError(reply, 400, 'A conversation cannot be both readable by the server and end-to-end encrypted', {
+      code: 'ENCRYPTION_MODE_CONFLICT',
+    });
+  }
+  return sendForbidden(reply, 'End-to-end encryption can only be chosen by a platform staff role (ANALYST or above) for now', {
+    code: ENCRYPTION_ACTIVATION_RESTRICTED_CODE,
   });
 }
 
@@ -528,7 +581,7 @@ export function registerUpdateConversationRoute(
       // identifiant lisible. Toutes les routes voisines résolvent d'abord.
       const conversationId = id === 'meeshy' ? id : await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier les permissions d'administration
@@ -661,7 +714,7 @@ export function registerUpdateConversationRoute(
           include: conversationInclude
         });
         if (!unchanged) {
-          return sendNotFound(reply, 'Conversation not found');
+          return refuserCommeIntrouvable(reply);
         }
         return sendSuccess(reply, {
           ...unchanged,

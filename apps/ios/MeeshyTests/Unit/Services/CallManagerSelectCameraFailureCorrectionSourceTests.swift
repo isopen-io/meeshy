@@ -28,7 +28,7 @@ final class CallManagerSelectCameraFailureCorrectionSourceTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/\(filename)")
+            .appendingPathComponent("Meeshy/Features/Call/Services/\(filename)")
         guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
             XCTFail("Could not read \(filename)", file: file, line: line)
             return ""
@@ -50,25 +50,25 @@ final class CallManagerSelectCameraFailureCorrectionSourceTests: XCTestCase {
 
     func test_callManager_selectCamera_revertsOptimisticStateOnFailure() {
         guard let fn = body(
-            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
+            ((try? AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")) ?? ""),
             from: "func selectCamera(id: String) {",
-            to: "var videoFilters: VideoFilterPipeline"
+            to: "\n}\n\n/// Déclaré après le type"
         ) else { return }
         XCTAssertTrue(
-            fn.contains("let previousSelectedCameraId = selectedCameraId"),
+            fn.contains("let previousSelectedCameraId = call.selectedCameraId"),
             "selectCamera must capture the pre-switch selectedCameraId before mutating it optimistically."
         )
         XCTAssertTrue(
-            fn.contains("let previousFrontCamera = isUsingFrontCamera"),
+            fn.contains("let previousFrontCamera = call.isUsingFrontCamera"),
             "selectCamera must capture the pre-switch mirroring state before mutating it optimistically."
         )
         XCTAssertTrue(
-            fn.contains("self.selectedCameraId = previousSelectedCameraId"),
+            fn.contains("call.selectedCameraId = previousSelectedCameraId"),
             "selectCamera must revert selectedCameraId when the underlying camera switch fails — " +
             "otherwise the camera picker points at a camera that never activated for the rest of the call."
         )
         XCTAssertTrue(
-            fn.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            fn.contains("call.isUsingFrontCamera = previousFrontCamera"),
             "selectCamera must revert isUsingFrontCamera when the underlying camera switch fails — " +
             "otherwise the self-preview mirrors the wrong way for the rest of the call with no correction path."
         )

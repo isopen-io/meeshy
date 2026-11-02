@@ -346,4 +346,66 @@ final class LocalizationCatalogGuardTests: XCTestCase {
         XCTAssertEqual(formatSpecifiers("Aucun marqueur ici"), [])
         XCTAssertEqual(formatSpecifiers("100 % de réussite"), [], "Un « % » isolé n'est pas un marqueur")
     }
+
+    // MARK: - Chiffrement au repos (#11374, #11381)
+
+    /// `server` et `hybrid` sont chiffrés AU REPOS : le serveur lit et traduit.
+    /// L'écran d'activation présentait `hybrid` comme « E2EE + serveur » — la
+    /// promesse de sécurité était fausse au moment même où l'on choisit.
+    func test_lesModesAuReposNePromettentJamaisLeBoutEnBout() throws {
+        let forbidden = ["E2EE", "bout en bout", "end-to-end", "Ende-zu-Ende", "extremo a extremo", "ponta a ponta", "تام"]
+        let keys = [
+            "conversation.encryption.mode.server.label", "conversation.encryption.mode.server.description",
+            "conversation.encryption.mode.hybrid.label", "conversation.encryption.mode.hybrid.description",
+        ]
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        for key in keys {
+            let byLang = try XCTUnwrap(app.strings[key], "Clé absente du catalogue : \(key)")
+            XCTAssertEqual(byLang.count, 7, "\(key) doit exister dans les sept langues")
+            for (lang, value) in byLang {
+                for word in forbidden {
+                    XCTAssertFalse(value.localizedCaseInsensitiveContains(word), "\(key) [\(lang)] promet le bout en bout : « \(value) »")
+                }
+            }
+        }
+        let sheet = repoRoot().appendingPathComponent("apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift")
+        let source = try String(contentsOf: sheet, encoding: .utf8)
+        XCTAssertFalse(source.contains("E2EE + serveur"), "La valeur par défaut du libellé hybride promet encore le bout en bout")
+    }
+
+    // MARK: - Le mode se choisit à la création (directive porteur du 2026-11-01)
+
+    /// Les clés de l'écran de création existent dans les sept langues, sous les
+    /// noms que les miroirs Android et web relisent.
+    func test_lesClesDuChoixALaCreationExistentDansLesSeptLangues() throws {
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        for key in [
+            "conversation.encryption.create.header",
+            "conversation.encryption.create.e2ee.soonGroups",
+            "conversation.encryption.create.footer",
+        ] {
+            let byLang = try XCTUnwrap(app.strings[key], "Clé absente du catalogue : \(key)")
+            XCTAssertEqual(byLang.count, 7, "\(key) doit exister dans les sept langues")
+        }
+    }
+
+    /// L'utilisateur lit ce que le mode fait de ses messages, jamais qui détient
+    /// une clé ni un nom d'algorithme : « Meeshy peut lire » et « AES-256-GCM »
+    /// quittent la fiche.
+    func test_laFicheChiffrementNeDitNiQuiLitNiLAlgorithme() throws {
+        let app = try XCTUnwrap(try catalogs().first { $0.name == "app" })
+        let keys = [
+            "conversation.encryption.mode.server.label", "conversation.encryption.mode.hybrid.label",
+            "conversation.encryption.mode.e2ee.label", "conversation.encryption.mode.server.description",
+            "conversation.encryption.mode.hybrid.description", "conversation.encryption.summary.server",
+            "conversation.encryption.summary.hybrid", "conversation.encryption.fact.encryptedOnServerServerReads",
+            "conversation.encryption.fact.storedWithoutEncryption", "conversation.encryption.fact.onlyParticipantsRead",
+        ]
+        for key in keys {
+            let fr = try XCTUnwrap(app.strings[key]?["fr"], "Clé absente du catalogue : \(key)")
+            for word in ["Meeshy peut", "Meeshy n’a pas", "AES-256", "en clair"] {
+                XCTAssertFalse(fr.contains(word), "\(key) dit encore « \(word) » : « \(fr) »")
+            }
+        }
+    }
 }

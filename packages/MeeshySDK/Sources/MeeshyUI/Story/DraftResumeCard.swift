@@ -37,6 +37,7 @@ public struct DraftResumeCard: View {
     let updatedAt: Date?
     let onResume: () -> Void
     let onDiscard: () -> Void
+    @Environment(\.composerFormatWording) private var formatWording
 
     public init(cover: UIImage?,
                 slideCount: Int,
@@ -87,8 +88,7 @@ public struct DraftResumeCard: View {
             }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(String(localized: "story.draft.resume.title",
-                            defaultValue: "Reprendre votre story ?", bundle: .module))
+                Text(formatWording.draftResumeTitle)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -148,8 +148,6 @@ public struct DraftResumeCard: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "story.draft.resume.a11y",
-                                   defaultValue: "Brouillon de story, \(slideCount) slide(s)",
-                                   bundle: .module))
+        .accessibilityLabel(formatWording.draftResumeAccessibility(slideCount: slideCount))
     }
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_more_preview">Vorschau</string>
+    <string name="composer_more_pick_background">Hintergrund wählen</string>
+    <string name="composer_more_remove_background">Szenenhintergrund entfernen</string>
+    <string name="composer_more_clear_all">Alles löschen</string>
+    <string name="composer_clear_all_title">Alles löschen?</string>
+    <string name="composer_clear_all_message">Alle Folien beginnen leer auf dem neutralen Hintergrund. Rückgängig stellt die Folien wieder her.</string>
+    <string name="composer_clear_all_cancel">Abbrechen</string>
+    <string name="composer_media_from_library">Mediathek</string>
+    <string name="composer_media_from_files">Aus Dateien</string>
+    <string name="composer_media_sources">Quelle wählen</string>
+    <string name="composer_preview_close">Vorschau schließen</string>
+    <string name="composer_preview_previous">Vorherige Folie</string>
+    <string name="composer_preview_next">Nächste Folie</string>
+</resources>
