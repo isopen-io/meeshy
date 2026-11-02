@@ -5,7 +5,7 @@
  * clés triées, aucun champ absent écrit. Tout ce qui part à côté du corps (la
  * langue, la citation, la conversation, l'auteur) voyage DEDANS.
  */
-import { e2eePaddedLength } from './wire';
+import { e2eePaddedLength } from '@meeshy/shared/types/e2ee-signals';
 
 export const E2EE_CONTENT_VERSION = 1;
 

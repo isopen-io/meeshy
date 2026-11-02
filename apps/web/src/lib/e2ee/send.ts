@@ -4,28 +4,28 @@
  * aucun `content`, aucune langue sur le fil — le texte, la langue et la
  * citation ne voyagent QUE dans les enveloppes.
  *
- * Le clair ne naît qu'en MÉMOIRE (l'outbox, `openedMessagesStore`) et dans la
+ * Le clair ne naît qu'en MÉMOIRE (l'outbox, `opened-messages.ts`) et dans la
  * base scellée : ni la ligne de liste optimiste ni le cache de requêtes
  * (rangés sur le disque) ne le reçoivent. Le message confirmé y entre sous sa
  * forme scellée, comme la passerelle le sert.
  */
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
-import type { E2EEEnvelope } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_ERROR_CODES, LIBSIGNAL_PROTOCOL, type E2EEEnvelope } from '@meeshy/shared/types/e2ee-directory';
 import type { StoreApi } from 'zustand/vanilla';
 import type { QueryClient } from '@tanstack/react-query';
 
 import type { ApiFailure, ApiResult, HttpTransport } from '@/lib/api/http';
 import { newClientMessageId } from '@/lib/api/client-message-id';
-import { messagesQueryKey, upsertThreadMessage } from '@/lib/api/messages';
+import { messagesQueryKey, projectAck, upsertThreadMessage, type SentMessageAck } from '@/lib/api/messages';
 import type { Message, Participant } from '@/lib/api/types';
 import { confirmedMessageOf, localMessageOf } from '@/lib/send/local-message';
 import type { OutboxState } from '@/lib/send/outbox-store';
 
 import { e2eeContent } from './content';
+import { decodeMismatch } from './directory';
 import { publishOpened } from './opened-messages';
 import { E2EEDevicesMismatchError, E2EERecipientHasNoDevice, type SealedMessage } from './sealer';
 import type { E2EEClient } from './client';
-import { E2EE_CODES, LIBSIGNAL_PROTOCOL } from './wire';
 
 /** Le corps d'un envoi libsignal : par construction, il n'a pas de champ pour un clair. */
 export type EndToEndSendBody = {
@@ -72,33 +72,22 @@ export class EndToEndSendRefused extends Error {
   }
 }
 
-type EndToEndAck = { readonly id: string; readonly createdAt: string };
-
-/** L'accusé, fail-closed : sans identifiant ni date, ce n'en est pas un. */
-const ackOf = (data: unknown): EndToEndAck | null => {
-  if (typeof data !== 'object' || data === null) return null;
-  const id: unknown = Reflect.get(data, 'id');
-  const createdAt: unknown = Reflect.get(data, 'createdAt');
-  return typeof id === 'string' && typeof createdAt === 'string' ? { id, createdAt } : null;
-};
-
 export async function postEndToEndMessage(params: {
   readonly transport: HttpTransport;
   readonly conversationId: string;
   readonly body: EndToEndSendBody;
-}): Promise<EndToEndAck> {
+}): Promise<SentMessageAck> {
   const result: ApiResult<unknown> = await params.transport.request<unknown>({
     method: 'POST',
     path: conversationsEndpoints.byIdMessages(params.conversationId),
     body: params.body,
   });
   if (!result.ok) {
-    /* L'écart Sesame n'a pas besoin d'être lu : la passe suivante relit les
-       appareils et rouvre toute session qui vise une autre génération. */
-    if (result.code === E2EE_CODES.DEVICES_MISMATCH) throw new E2EEDevicesMismatchError({ missing: [], extra: [], stale: [] });
+    const mismatch = result.code === E2EE_ERROR_CODES.DEVICES_MISMATCH ? decodeMismatch(result.e2eeMismatch) : null;
+    if (mismatch !== null) throw new E2EEDevicesMismatchError(mismatch);
     throw new EndToEndSendRefused(result);
   }
-  const ack = ackOf(result.data);
+  const ack = projectAck(result.data);
   if (ack === null) throw new EndToEndSendRefused({ ok: false, status: 0, error: 'Accusé illisible' });
   return ack;
 }
@@ -172,8 +161,8 @@ export async function performEndToEndSend(params: {
       }),
     );
     await client.rememberSent(ack.id, content);
-    publishOpened(ack.id, { text: draft.text, language: draft.language });
-    const confirmed = confirmedMessageOf(local, { ...ack, conversationId });
+    publishOpened(ack.id, { text: draft.text, language: draft.language, senderUserId: params.viewerId });
+    const confirmed = confirmedMessageOf(local, ack);
     /* La rangée qui entre au cache (rangé sur le disque) : LISTE BLANCHE, sans
        texte, sans langue, sans la citation (qui porte le clair ouvert du message
        cité) — la forme que la passerelle sert. Le fil rend le texte depuis la

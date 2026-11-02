@@ -42,7 +42,7 @@ describe('chaque mode dit qui lit et ce qui fonctionne', () => {
 
   test('bout en bout : seuls les appareils lisent, ce qui manque, ce qui n’est pas livré, et le web le dit', () => {
     const e2ee = facts('e2ee');
-    for (const fact of ['onlyParticipantsRead', 'translatedOnDevice', 'noServerTranscription', 'noNotificationPreview', 'noSearch', 'noEdit', 'noForward', 'noOfflineSending', 'webCannotReadYet', 'notYetAttachments', 'notYetDecryptedNotifications', 'notYetGroups', 'notYetSafetyNumbers', 'oneKeyPerDevice', 'deviceLimit', 'restoredDeviceIsNew', 'endToEndNeverTurnedOffDirect', 'serverCannotTurnItOff'] as const) {
+    for (const fact of ['onlyParticipantsRead', 'translatedOnDevice', 'noServerTranscription', 'noNotificationPreview', 'noSearch', 'noEdit', 'noForward', 'noOfflineSending', 'notYetAttachments', 'notYetDecryptedNotifications', 'notYetGroups', 'notYetSafetyNumbers', 'oneKeyPerDevice', 'deviceLimit', 'restoredDeviceIsNew', 'endToEndNeverTurnedOffDirect', 'serverCannotTurnItOff'] as const) {
       expect({ fact, present: e2ee.includes(fact) }).toEqual({ fact, present: true });
     }
     expect(e2ee).not.toContain('everyServerFeature');

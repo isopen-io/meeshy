@@ -1,9 +1,9 @@
 /**
- * LE MOTEUR CRYPTOGRAPHIQUE du bout en bout web (#14592) : le contrat qu'une
- * implémentation AUDITÉE de PQXDH (X25519 + ML-KEM-1024), du Double Ratchet et
- * de XEdDSA doit remplir, compatible au fil avec libsignal (l'iOS). Aucune
- * primitive n'est écrite côté TypeScript, et aucun moteur n'est embarqué tant
- * que le choix de la bibliothèque n'est pas tranché (`engine-provider.ts`).
+ * LE MOTEUR CRYPTOGRAPHIQUE du bout en bout web (#14592) : le contrat que
+ * libsignal (compilé en WASM, `libsignal-engine.ts`) remplit. Aucune primitive
+ * n'est écrite côté TypeScript : PQXDH (X25519 + ML-KEM-1024), Double Ratchet
+ * et XEdDSA sont ceux du crate `libsignal-protocol` du tag épinglé
+ * (`packages/LibSignalClient/LIBSIGNAL_VERSION`, le même que l'iOS).
  *
  * Le moteur est SANS ÉTAT : chaque opération lit les enregistrements par
  * `read` et rend ses écritures, que l'appelant range dans UNE transaction

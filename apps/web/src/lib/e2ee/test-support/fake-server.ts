@@ -10,7 +10,7 @@ import {
 import { fromBase64 } from '../bytes';
 import { E2EEDirectoryError, type E2EEDirectoryClient } from '../directory';
 import type { SealedMessage } from '../sealer';
-import { transparentEngine } from './transparent-engine';
+import { testEngine } from './engine';
 
 type Device = {
   userId: string;
@@ -41,7 +41,7 @@ export function fakeE2EEServer() {
 
   const clientFor = (userId: string, session: { deviceId: number | null }): E2EEDirectoryClient => ({
     enroll: async (request: E2EEEnrollDeviceRequest) => {
-      const engine = transparentEngine();
+      const engine = testEngine();
       const message = new TextEncoder().encode(deviceBindingMessage({ userId, registrationId: request.registrationId, identityKey: request.identityKey, timestamp: request.binding.timestamp }));
       if (!engine.verify(fromBase64(request.identityKey), message, fromBase64(request.binding.signature))) throw refuse(400, E2EE_ERROR_CODES.BINDING_INVALID);
       [request.signedPreKey, request.kyberLastResort, ...(request.kyberPreKeys ?? [])].forEach((key) => {

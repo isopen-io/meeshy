@@ -3,6 +3,7 @@ import { endToEndRegimeLedger, endToEndSealed as conversationSealed, isEndToEndM
 import { endToEndShownSince, threadHoldsSend, threadShowsEndToEnd } from '@/lib/end-to-end-thread-signal';
 import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 import { authoredOf, clearPrintOf } from '@/lib/clear-print';
+import { markOpenedOnDevice, openedOnDevice, type OpenedText } from '@/lib/e2ee/opened-messages';
 
 /**
  * UN MESSAGE QUE LE SERVEUR NE LIT PAS EST SCELLÉ POUR LE WEB (#12983).
@@ -17,11 +18,13 @@ import { authoredOf, clearPrintOf } from '@/lib/clear-print';
  * mode de la conversation reste hors de la question, comme côté passerelle :
  * un message en clair antérieur au chiffrement reste lisible.
  *
- * Le jour où le web aura sa pile, ce verdict cédera la place à la provenance
- * du clair déchiffré sur l'appareil, jamais à la forme du texte.
+ * Depuis #14592, le navigateur a sa pile libsignal : un message que libsignal
+ * a ouvert ICI cesse d'être scellé, et la preuve en est la PROVENANCE de
+ * l'objet (`openedOnDevice`), jamais la forme du texte ni un champ servi.
  */
 export const endToEndSealed = (message: Pick<Message, 'isEncrypted' | 'encryptionMode'>): boolean =>
   message.isEncrypted === true &&
+  !openedOnDevice(message) &&
   !sharedTranslationServerReadsMessage({
     conversationEncryptionMode: null,
     messageIsEncrypted: message.isEncrypted,
@@ -217,5 +220,22 @@ function sealedRow(message: Message, regime: EndToEndRegimeView): Message {
 export function sealForgedPlaintext(messages: readonly Message[], regime: EndToEndRegimeView): readonly Message[] {
   if (!regime.sealed) return messages;
   const shown = messages.map((message) => sealedRow(message, regime));
+  return shown.every((message, index) => message === messages[index]) ? messages : shown;
+}
+
+/**
+ * **LE CLAIR OUVERT SUR CE NAVIGATEUR** (#14592) — après la loi du clair forgé :
+ * un message chiffré de bout en bout dont libsignal a ouvert l'enveloppe ICI se
+ * rend avec ce texte et sa langue, sans traduction servie (le serveur n'en a
+ * aucune). Seul un message qui SE DIT chiffré de bout en bout est remplacé :
+ * un clair servi ne prend jamais le texte d'un autre. Rien à ouvrir ⇒ le MÊME
+ * tableau.
+ */
+export function withOpenedTexts(messages: readonly Message[], opened: Readonly<Record<string, OpenedText>>): readonly Message[] {
+  const shown = messages.map((message) => {
+    const text = opened[message.id];
+    if (text === undefined || !endToEndSealed(message)) return message;
+    return markOpenedOnDevice({ ...message, content: text.text, originalLanguage: text.language ?? message.originalLanguage, translations: [] });
+  });
   return shown.every((message, index) => message === messages[index]) ? messages : shown;
 }

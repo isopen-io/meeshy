@@ -1,0 +1,11 @@
+[package]
+name = "meeshy-protoc-shim"
+version = "0.1.0"
+edition = "2021"
+[[bin]]
+name = "protoc"
+path = "src/main.rs"
+[dependencies]
+protox = "0.9"
+prost = "0.14"
+[workspace]

@@ -22,15 +22,22 @@ export const GLOBAL_ADULTS_ONLY = 'GLOBAL_ADULTS_ONLY';
 
 /**
  * #11216 — la passerelle refuse tout texte en clair dans une conversation
- * chiffrée de bout en bout (`E2EE_PLAINTEXT_REFUSED`), et le web ne chiffre
- * pas : le composeur s'y efface au lieu d'échouer à chaque envoi. Les modes
- * `server` et `hybrid` restent ouverts — la passerelle y chiffre elle-même.
+ * chiffrée de bout en bout (`E2EE_PLAINTEXT_REFUSED`). Depuis #14592 le web
+ * chiffre un tête-à-tête ; un groupe chiffré garde son composeur effacé. Les
+ * modes `server` et `hybrid` restent ouverts — la passerelle y chiffre elle-même.
  */
 export const E2EE_PLAINTEXT_REFUSED = 'E2EE_PLAINTEXT_REFUSED';
 
+/**
+ * #14592 — le navigateur chiffre de bout en bout un TÊTE-À-TÊTE (libsignal en
+ * WASM, `lib/e2ee/`) : son composeur reste ouvert, et l'envoi part scellé. Un
+ * groupe chiffré reste fermé (Sender Keys, puis MLS, ne sont pas encore là).
+ */
+const webWritesEndToEnd = (conversation: Conversation | undefined): boolean => conversation?.type === 'direct';
+
 export function servedWriteRestriction(conversation: Conversation | undefined): WriteRestriction | null {
   if (conversation?.viewerWriteRestriction === 'minor-global') return 'minor-global';
-  return isEndToEndMode(conversation?.encryptionMode) ? 'end-to-end-encrypted' : null;
+  return isEndToEndMode(conversation?.encryptionMode) && !webWritesEndToEnd(conversation) ? 'end-to-end-encrypted' : null;
 }
 
 /** Les conversations qu'un refus a fermées pendant CETTE session — mémoire seule. */
@@ -63,7 +70,7 @@ export function writeRestrictionOf(
 ): WriteRestriction | null {
   const served = servedWriteRestriction(conversation);
   if (served !== null) return served;
-  if (sealed) return 'end-to-end-encrypted';
+  if (sealed && !webWritesEndToEnd(conversation)) return 'end-to-end-encrypted';
   if (conversation === undefined) return null;
   return learned[conversation.id] ?? null;
 }
