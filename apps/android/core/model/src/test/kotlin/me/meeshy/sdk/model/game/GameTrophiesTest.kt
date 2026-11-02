@@ -18,6 +18,8 @@ class GameTrophiesTest {
         TrophyRecord(it.obj()["key"].text(), it.obj()["awardedAt"].text())
     }
 
+    private fun kotlinx.serialization.json.JsonElement?.textOrNull(): String? = if (this == null || this is JsonNull) null else text()
+
     private fun specOf(o: JsonObject): TrophySpec = when (o["kind"].text()) {
         "league-cup" -> TrophySpec.LeagueCupTrophy(
             period = o["weekKey"]?.let { LeagueCupPeriod.Week(it.text()) } ?: LeagueCupPeriod.Month(o["monthKey"].text()),
@@ -32,7 +34,7 @@ class GameTrophiesTest {
     @Test
     fun `les cles et leur lecture rejouent les vecteurs partages`() {
         GameLawVectors.cases("trophy-key").forEach {
-            assertWithMessage(it.label).that(GameTrophies.key(specOf(it.input["spec"].obj()))).isEqualTo(it.expected["key"].text())
+            assertWithMessage(it.label).that(GameTrophies.key(specOf(it.input["spec"].obj()))).isEqualTo(it.expected["key"].textOrNull())
         }
         GameLawVectors.cases("trophy-parse").forEach {
             val expected = it.expected["spec"]
@@ -79,10 +81,10 @@ class GameTrophiesTest {
     @Test
     fun `le visiteur ne recoit que le mois et les coupes d'un meme mois se reunissent`() {
         GameLawVectors.cases("trophy-month").forEach {
-            assertWithMessage(it.label).that(GameTrophies.visitorAwardedMonth(it.str("awardedAt"))).isEqualTo(it.expected["month"].text())
+            assertWithMessage(it.label).that(GameTrophies.visitorAwardedMonth(it.str("awardedAt"))).isEqualTo(it.expected["month"].textOrNull())
         }
         GameLawVectors.cases("trophy-visitor-key").forEach {
-            assertWithMessage(it.label).that(GameTrophies.visitorKey(it.str("key"), it.str("awardedMonth"))).isEqualTo(it.expected["key"].text())
+            assertWithMessage(it.label).that(GameTrophies.visitorKey(it.str("key"), it.str("awardedMonth"))).isEqualTo(it.expected["key"].textOrNull())
         }
         GameLawVectors.cases("showcase-visitor").forEach {
             val shown = GameTrophies.visitorShowcase(records(it), it.input["order"].array().map { k -> k.text() })
