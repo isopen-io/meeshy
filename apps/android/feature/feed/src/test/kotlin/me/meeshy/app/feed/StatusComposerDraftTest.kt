@@ -1,6 +1,7 @@
 package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StatusComposerDraftSnapshot
 import me.meeshy.sdk.model.StatusEntry
 import org.junit.Test
 
@@ -253,10 +254,44 @@ class StatusComposerDraftTest {
     }
 
     @Test
-    fun `a republish of a friends original offers friends and private only`() {
+    fun `a republish of a friends original offers friends, the tighter circles and private`() {
         val draft = StatusComposerDraft.republish(sourceWith("FRIENDS"))
 
-        assertThat(draft.offeredVisibilities).containsExactly(StatusVisibility.FRIENDS, StatusVisibility.PRIVATE).inOrder()
+        assertThat(draft.offeredVisibilities)
+            .containsExactly(StatusVisibility.FRIENDS, StatusVisibility.CLOSE, StatusVisibility.BLOOD, StatusVisibility.PRIVATE)
+            .inOrder()
+    }
+
+    @Test
+    fun `a circle narrows toward a tighter circle, never toward friends from acquaintances`() {
+        assertThat(StatusComposerDraft.republish(sourceWith("ACQUAINTANCES")).offeredVisibilities)
+            .containsExactly(StatusVisibility.ACQUAINTANCES, StatusVisibility.CLOSE, StatusVisibility.BLOOD, StatusVisibility.PRIVATE)
+            .inOrder()
+        assertThat(StatusComposerDraft.republish(sourceWith("CLOSE")).offeredVisibilities)
+            .containsExactly(StatusVisibility.CLOSE, StatusVisibility.BLOOD, StatusVisibility.PRIVATE)
+            .inOrder()
+    }
+
+    @Test
+    fun `a blood mood is never republished, not even privately`() {
+        assertThat(StatusRepostAudience.allowed("BLOOD")).isEmpty()
+        assertThat(StatusRepostAudience.isRepublishable("BLOOD")).isFalse()
+        assertThat(StatusRepostAudience.isRepublishable("CLOSE")).isTrue()
+    }
+
+    @Test
+    fun `a stored draft whose audience this client does not know reopens restricted, never public`() {
+        val restored = StatusComposerDraftSnapshot(emoji = "🔥", text = "", visibility = "MOON", updatedAtMillis = 0L).toComposerDraft()
+
+        assertThat(restored.visibility).isEqualTo(StatusVisibility.PRIVATE)
+    }
+
+    @Test
+    fun `a fresh draft offers the circles ladder`() {
+        assertThat(StatusComposerDraft().offeredVisibilities).containsExactly(
+            StatusVisibility.PUBLIC, StatusVisibility.COMMUNITY, StatusVisibility.ACQUAINTANCES, StatusVisibility.FRIENDS,
+            StatusVisibility.CLOSE, StatusVisibility.BLOOD, StatusVisibility.PRIVATE,
+        ).inOrder()
     }
 
     @Test
