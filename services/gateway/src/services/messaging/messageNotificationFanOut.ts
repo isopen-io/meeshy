@@ -363,6 +363,22 @@ async function listeningRegularRecipients(
  * envoi réussi en 500. `onError` laisse l'appelant journaliser dans le contexte
  * de sa requête.
  */
+/**
+ * #13114 — le seul chiffré qui voyage sur le fil push est l'enveloppe qu'un
+ * APPAREIL a scellée (`e2ee`), que la NSE ouvre avec ses propres clés. En
+ * `server` et `hybrid`, `encryptedContent` est le chiffré AU REPOS, sous la clé
+ * de conversation que seule la passerelle détient : il ne quitte pas le
+ * serveur. Le mode de la LIGNE décide, celui de la conversation ne supplée
+ * qu'une ligne héritée qui n'en porte aucun.
+ */
+export function deviceEnvelopeForPush(
+  message: Pick<FanOutMessage, 'encryptedContent' | 'encryptionMode'>,
+  conversationMode: string | null | undefined,
+): string | undefined {
+  if (!message.encryptedContent) return undefined;
+  return isEndToEndMode(message.encryptionMode ?? conversationMode) ? message.encryptedContent : undefined;
+}
+
 export async function notifyMessageRecipients(params: {
   prisma: FanOutPrisma;
   notificationService: MessageNotificationTarget | null | undefined;
@@ -758,7 +774,7 @@ export async function notifyMessageRecipients(params: {
           messageId: message.id,
           conversationId,
           messagePreview: notificationPreviewForPush,
-          encryptedContent: message.encryptedContent || undefined,
+          encryptedContent: deviceEnvelopeForPush(message, conversation.encryptionMode),
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
