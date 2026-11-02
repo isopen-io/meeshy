@@ -16,9 +16,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.TypingEvent
-import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.socket.TypingPresenceRelay
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -44,7 +42,6 @@ class ConversationListObserversTypingTest {
                 every { typingStopped } returns MutableSharedFlow()
                 every { messageReceived } returns received
             },
-            typingPresenceRelay = mockk<TypingPresenceRelay> { every { forcedOnline } returns MutableSharedFlow<UserStatusEvent>() },
             categoryRepository = mockk(relaxed = true),
             categorySocketManager = mockk(relaxed = true),
             storyRepository = mockk(relaxed = true) { every { storiesStream(any(), any()) } returns emptyFlow() },
