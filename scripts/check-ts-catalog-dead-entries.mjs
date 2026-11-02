@@ -535,10 +535,6 @@ const PENDING_CLIENT_ENTRIES = {
   'bring.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot web' },
   'bring.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring, sous-lot web' },
   'relations.byUserIdSettings': { issue: 13936, reason: 'GET|PUT /relations/:userId/settings — bloquer le Bring de quelqu’un, sous-lot web' },
-  // La recherche (8a734141de) : la passerelle sert les messages et les posts trouvés avant que la liste et la recherche
-  // générale du web ne les appellent ; leurs issues portent les trois clients.
-  'messages.search': { issue: 14619, reason: 'GET /messages/search — les messages trouvés depuis la liste des conversations (web)' },
-  'posts.search': { issue: 14620, reason: 'GET /posts/search — posts, réels et stories dans la recherche générale (web)' },
 };
 
 const BASELINE_DEAD_ENTRIES = 279;
