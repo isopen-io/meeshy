@@ -20,6 +20,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +62,12 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Un seul retour par fil : la fin de la conversation (#14645) peut arriver deux fois — la feuille
+    // d'infos qui l'a rendue obsolète, puis l'événement socket — et un second pop sortirait de la liste.
+    val leave = remember(onBack, state.conversationId) { OnceAction(onBack) }
+    val endController = remember(viewModel) { viewModel.controllers.find<ConversationEndController>() }
+    val conversationEnded by (endController?.ended ?: NOT_ENDED).collectAsStateWithLifecycle()
+    LaunchedEffect(conversationEnded) { if (conversationEnded) leave() }
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
     val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 
@@ -113,7 +120,7 @@ fun ChatScreen(
         accentColor = accentColor,
         actions = actions,
         navigation = ChatNavigationActions(
-            onBack = onBack,
+            onBack = leave,
             onStartCall = onStartCall,
             onRejoinCall = onRejoinCall,
             onCreateShareLink = onCreateShareLink,
@@ -245,3 +252,15 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
         }
     }.getOrNull()
 
+private val NOT_ENDED: kotlinx.coroutines.flow.StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+/** Une action qui ne s'exécute qu'une fois : le retour d'un fil qui se ferme (#14645). */
+internal class OnceAction(private val action: () -> Unit) : () -> Unit {
+    private var done = false
+
+    override fun invoke() {
+        if (done) return
+        done = true
+        action()
+    }
+}

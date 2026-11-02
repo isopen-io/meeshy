@@ -15,7 +15,9 @@ import { galleryMediaEssence, type GallerySaver } from './gallery-saver';
  *    « éphémère après lecture »), flou, vue unique, chiffré — lu au niveau du
  *    MESSAGE comme de la PIÈCE, les deux niveaux qui le déclarent ;
  *  - images et vidéos seulement ;
- *  - un interrupteur des réglages médias, actif par défaut.
+ *  - « Sauvegarder média » (`privacy.saveMediaToGallery`, #14641), le réglage
+ *    synchronisé qu'iOS montre au même endroit — coupé par défaut, et INCONNU
+ *    (préférences pas encore lues) vaut coupé.
  *
  * Tout accès au stockage est rattrapé : une fenêtre privée ou un quota plein
  * rendent l'état par défaut, jamais une exception dans le puits du socket.
@@ -129,24 +131,6 @@ export function createGalleryRegistry(params: { readonly storage: GalleryStorage
   };
 }
 
-const SETTING_KEY = 'meeshy.gallery.autoSave';
-
-export function galleryAutoSaveEnabled(storage: GalleryStorage): boolean {
-  try {
-    return storage.getItem(SETTING_KEY) !== 'off';
-  } catch {
-    return true;
-  }
-}
-
-export function setGalleryAutoSaveEnabled(storage: GalleryStorage, enabled: boolean): void {
-  try {
-    storage.setItem(SETTING_KEY, enabled ? 'on' : 'off');
-  } catch {
-    return;
-  }
-}
-
 export type GalleryAutoSaveDeps = {
   readonly isAndroidShell: () => boolean;
   readonly saver: () => GallerySaver | null;
@@ -159,7 +143,9 @@ export type GalleryAutoSaveDeps = {
  * pièce n'est notée qu'une fois enregistrée, et deux échos simultanés d'un
  * même message ne partent qu'une fois (pièces en vol).
  */
-export function createGalleryAutoSave(deps: GalleryAutoSaveDeps): (message: GalleryMessage, viewerId: string) => void {
+export type GalleryAutoSave = (message: GalleryMessage, viewerId: string, saveMediaToGallery: boolean) => void;
+
+export function createGalleryAutoSave(deps: GalleryAutoSaveDeps): GalleryAutoSave {
   const inFlight = new Set<string>();
 
   const saveOne = async (saver: GallerySaver, registry: GalleryRegistry, attachment: GalleryAttachment): Promise<void> => {
@@ -168,7 +154,7 @@ export function createGalleryAutoSave(deps: GalleryAutoSaveDeps): (message: Gall
       if (blob === null) return;
       const mimeType = blob.type !== '' ? blob.type : attachment.mimeType;
       const outcome = await saver.save({ blob, fileName: attachment.originalName ?? `meeshy-${attachment.id}`, mimeType });
-      if (outcome === 'saved') registry.mark(attachment.id);
+      if (outcome === 'saved' || outcome === 'already-saved') registry.mark(attachment.id);
     } catch {
       return;
     } finally {
@@ -176,11 +162,11 @@ export function createGalleryAutoSave(deps: GalleryAutoSaveDeps): (message: Gall
     }
   };
 
-  return (message, viewerId) => {
-    if (!deps.isAndroidShell()) return;
+  return (message, viewerId, saveMediaToGallery) => {
+    if (!saveMediaToGallery || !deps.isAndroidShell()) return;
     const saver = deps.saver();
     const storage = deps.storage();
-    if (saver === null || !saver.available || storage === null || !galleryAutoSaveEnabled(storage)) return;
+    if (saver === null || !saver.available || storage === null) return;
     const registry = createGalleryRegistry({ storage, readerId: viewerId });
     const pending = galleryCandidates(message, viewerId).filter((attachment) => !inFlight.has(attachment.id) && !registry.has(attachment.id));
     for (const attachment of pending) {

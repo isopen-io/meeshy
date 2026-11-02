@@ -183,6 +183,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #7377 — la liste des favoris de message charge `sender` pour chaque ligne
   // servie ; sa portée est connue (les conversations des étoiles de la page).
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #14619 — la recherche de la liste des conversations : ses deux lectures
+  // (contenu, traductions) chargent `sender` pour la ligne de résultat, et un
+  // seul `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée =
+  // les conversations du lecteur.
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
   // `conversationId`) et la garde d'admission d'écriture de
@@ -329,9 +334,6 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'unreadCountsCore.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9630 — les candidats avis de capture du compteur unitaire : identité et marque.
   'unreadCountOfParticipant.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
-  // #14619 — la recherche des messages du lecteur charge `sender` sur ses deux lectures (contenu, traductions),
-  // enveloppées par UN withOrphanedSenderRepair sur la portée du lecteur.
-  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   // #6501 — balayage de rétention SANS lecteur, portée GLOBALE par
   // construction (`expiresAt` à travers toute la base, jamais une seule

@@ -57,7 +57,10 @@ public class EndToEndMessagingRuntime @Inject internal constructor(
     private val preparation = Mutex()
     @Volatile private var ready: Ready? = null
 
-    private val vault: RecordVault by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { openVault() }
+    @Volatile private var vaultOpened = false
+
+    /** Un coffre verrouillé (#14634) lève ici ; la prochaine lecture réessaie, rien n'est effacé. */
+    private val vault: RecordVault by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { openVault().also { vaultOpened = true } }
 
     private val _opened = MutableSharedFlow<E2eeOpenOutcome>(extraBufferCapacity = 64)
 
@@ -130,6 +133,20 @@ public class EndToEndMessagingRuntime @Inject internal constructor(
         }
     }
 
+    /**
+     * Retire du coffre le clair de messages supprimés, échus ou vus une fois (#14633), pour [userId] seulement. Un appareil
+     * qui n'a jamais ouvert de coffre n'a rien à retirer : aucun coffre n'est créé pour cela.
+     */
+    public suspend fun erase(userId: String, messageIds: Collection<String>): Boolean {
+        if (messageIds.isEmpty() || !holdsVault()) return true
+        return runCatching {
+            withContext(Dispatchers.IO) { E2eePlaintextVault(vault, owner = userId).remove(messageIds) }
+            _plaintextVersion.update { it + 1 }
+        }.onFailure { Timber.w("e2ee plaintexts not erased: %s", it.javaClass.simpleName) }.isSuccess
+    }
+
+    private fun holdsVault(): Boolean = vaultOpened || File(File(context.noBackupFilesDir, VAULT_DIRECTORY), VAULT_KEY_FILE).isFile
+
     /** Le clair d'UN message (le renvoi d'une bulle en attente). */
     public suspend fun plaintext(userId: String, messageId: String): E2eePlaintextEntry? = plaintexts(userId, listOf(messageId))[messageId]
 
@@ -164,22 +181,16 @@ public class EndToEndMessagingRuntime @Inject internal constructor(
         outcomes.forEach { _opened.tryEmit(it) }
     }
 
-    /**
-     * Le coffre : la clé enveloppée par le Keystore, la base dédiée. Une clé neuve rend l'ancienne base illisible : elle
-     * est effacée avant d'être rouverte. Sans Keystore utilisable, un coffre en mémoire — rien n'est écrit sur le disque,
-     * et l'installation se réenrôlera au prochain lancement.
-     */
+    /** Le coffre : la clé enveloppée par le Keystore, la base dédiée ([EndToEndVaultOpening] dit quand on efface). */
     private fun openVault(): RecordVault {
         val directory = File(context.noBackupFilesDir, VAULT_DIRECTORY)
-        return runCatching {
-            val key = KeystoreVaultKey(directory).open()
-            val database = File(directory, VAULT_DATABASE)
-            if (key.fresh) context.deleteDatabase(database.absolutePath)
-            TransactionalRecordVault(SealedRecordBackend(SqliteRecordBackend(context, database), RecordSealer(key.key)))
-        }.getOrElse {
-            Timber.e("e2ee vault unavailable, kept in memory: %s", it.javaClass.simpleName)
-            TransactionalRecordVault(InMemoryRecordBackend())
-        }
+        val database = File(directory, VAULT_DATABASE)
+        return EndToEndVaultOpening.open(
+            key = { KeystoreVaultKey(directory).open() },
+            wipe = { context.deleteDatabase(database.absolutePath) },
+            sealed = { key -> TransactionalRecordVault(SealedRecordBackend(SqliteRecordBackend(context, database), RecordSealer(key))) },
+            memory = { TransactionalRecordVault(InMemoryRecordBackend()) },
+        )
     }
 
     private companion object {
@@ -187,5 +198,6 @@ public class EndToEndMessagingRuntime @Inject internal constructor(
         const val DEVICE_LABEL = "Android"
         const val VAULT_DIRECTORY = "e2ee"
         const val VAULT_DATABASE = "vault.db"
+        const val VAULT_KEY_FILE = "vault.key"
     }
 }

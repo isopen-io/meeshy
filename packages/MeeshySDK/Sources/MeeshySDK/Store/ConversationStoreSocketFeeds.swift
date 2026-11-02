@@ -4,6 +4,7 @@ struct ConversationStoreSocketFeeds {
     let conversationUpdated: AnyPublisher<ConversationUpdatedEvent, Never>
     let conversationDeleted: AnyPublisher<ConversationDeletedSocketEvent, Never>
     let conversationRestored: AnyPublisher<ConversationRestoredSocketEvent, Never>
+    let conversationObsoleted: AnyPublisher<ConversationObsoletedEvent, Never>
     let participantLeft: AnyPublisher<ParticipantLeftEvent, Never>
     let participantBanned: AnyPublisher<ParticipantBannedEvent, Never>
     let userPreferencesUpdated: AnyPublisher<UserPreferencesConversationUpdatedSocketEvent, Never>

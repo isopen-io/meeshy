@@ -12,12 +12,15 @@ struct ConversationPreferencesTab: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
+    /// La liste de la fenêtre : « Rendre obsolète » y retire la ligne d'un geste (#14645).
+    @Environment(\.meeshyConversationList) private var conversationList
 
     @StateObject private var viewModel: ConversationOptionsViewModel
 
     @State private var showArchiveConfirm: Bool = false
     @State private var showLeaveConfirm: Bool = false
     @State private var showDeleteConfirm: Bool = false
+    @State private var showObsoleteConfirm: Bool = false
     @State private var showEmojiPicker: Bool = false
     @State private var showAppearanceSheet: Bool = false
     @State private var customNameLocal: String = ""
@@ -30,6 +33,12 @@ struct ConversationPreferencesTab: View {
     private var accent: Color { Color(hex: accentColor) }
 
     private var canLeave: Bool { !isDirect && !isCreator }
+
+    /// La porte de la passerelle (#14645), lue sur la même loi que le menu de la liste.
+    private var canMakeObsolete: Bool {
+        conversationList != nil
+            && ConversationRowMenuCapabilities.make(conversation: conversation, currentUser: AuthManager.shared.currentUser).obsolete
+    }
 
     init(conversation: Conversation, accentColor: String) {
         self.conversation = conversation
@@ -91,6 +100,12 @@ struct ConversationPreferencesTab: View {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
             Text(String(localized: "conversation.prefs.delete.message", defaultValue: "Cette conversation sera retirée de votre liste. Les autres membres ne seront pas affectés.", bundle: .main))
+        }
+        .confirmationDialog(ConversationObsolescence.confirmationTitle, isPresented: $showObsoleteConfirm, titleVisibility: .visible) {
+            Button(ConversationMenuEntry.obsolete.label, role: .destructive) { makeObsolete() }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+        } message: {
+            Text(ConversationObsolescence.confirmationMessage(conversationName: conversation.name))
         }
     }
 
@@ -350,6 +365,35 @@ struct ConversationPreferencesTab: View {
                 .foregroundColor(MeeshyColors.error)
             }
             .buttonStyle(.plain)
+
+            if canMakeObsolete {
+                Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
+                Button {
+                    showObsoleteConfirm = true
+                } label: {
+                    settingsRow(icon: ConversationMenuEntry.obsolete.symbol, iconColor: MeeshyColors.errorHex, title: ConversationMenuEntry.obsolete.label) {
+                        EmptyView()
+                    }
+                    .foregroundColor(MeeshyColors.error)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("conversation-prefs-make-obsolete")
+            }
+        }
+    }
+
+    /// Optimiste par la liste : la ligne part au geste, la feuille se referme ;
+    /// l'écran ouvert se ferme à la réception de `conversation:obsoleted`.
+    private func makeObsolete() {
+        guard let conversationList else { return }
+        HapticFeedback.heavy()
+        let conversationId = conversation.id
+        Task {
+            if await ConversationObsolescence(list: conversationList).perform(conversationId: conversationId) {
+                dismiss()
+            } else {
+                FeedbackToastManager.shared.showError(ConversationObsolescence.failureMessage)
+            }
         }
     }
 

@@ -227,6 +227,33 @@ final class ConversationMenuCatalogTests: XCTestCase {
         XCTAssertFalse(menu.entries.contains(.adminOpen))
     }
 
+    // MARK: - Rendre obsolète (#14645)
+
+    func test_make_groupAdmin_departsLastByMakingObsolete() {
+        let menu = catalog(makeInput(makeConversation(currentUserRole: "admin")))
+        XCTAssertEqual(menu.departure.last, .obsolete, "l'administrateur d'un groupe peut tout effacer pour tous, en dernier")
+    }
+
+    func test_make_groupMember_hasNoObsolete() {
+        let menu = catalog(makeInput(makeConversation(currentUserRole: "member")))
+        XCTAssertFalse(menu.entries.contains(.obsolete), "un membre n'efface pas le contenu des autres")
+    }
+
+    func test_make_direct_hasNoObsolete() {
+        let menu = catalog(makeInput(makeDirect()))
+        XCTAssertFalse(menu.entries.contains(.obsolete))
+    }
+
+    func test_make_globalForPlatformAdmin_hasNoObsolete() {
+        let menu = catalog(makeInput(makeConversation(type: .global, currentUserRole: "member"), user: makeUser(role: "BIGBOSS")))
+        XCTAssertFalse(menu.entries.contains(.obsolete), "la passerelle refuse Global en 403")
+    }
+
+    func test_obsolete_isDestructiveAndHeavy() {
+        XCTAssertTrue(ConversationMenuEntry.obsolete.isDestructive)
+        XCTAssertEqual(ConversationMenuEntry.obsolete.haptic, .heavy)
+    }
+
     func test_make_direct_departsByDeleting_andBlocks() {
         let menu = catalog(makeInput(makeDirect(), isPeerBlocked: false))
         XCTAssertEqual(menu.departure, [.delete])
@@ -308,7 +335,7 @@ final class ConversationMenuCatalogTests: XCTestCase {
 
     func test_onlyRemovals_areDestructive() {
         let destructive = ConversationMenuEntry.allCases.filter(\.isDestructive)
-        XCTAssertEqual(Set(destructive), [.block, .leave, .delete, .hide])
+        XCTAssertEqual(Set(destructive), [.block, .leave, .delete, .hide, .obsolete])
     }
 
     func test_submenus_areReadingModeFavoriteAndMove() {
@@ -340,6 +367,7 @@ final class ConversationMenuCatalogDispatchTests: XCTestCase {
             onArchive: { recorder.calls.append("archive") },
             onBlock: { recorder.calls.append("block") },
             onDelete: { recorder.calls.append("delete") },
+            onObsolete: { recorder.calls.append("obsolete") },
             onLeave: { recorder.calls.append("leave") },
             onReport: { recorder.calls.append("report") },
             onOpenAdmin: { recorder.calls.append("adminOpen") },

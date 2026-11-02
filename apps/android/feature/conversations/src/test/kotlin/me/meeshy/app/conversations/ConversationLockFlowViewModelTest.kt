@@ -65,6 +65,7 @@ class ConversationLockFlowViewModelTest {
             every { conversationDeleted } returns MutableSharedFlow()
             every { conversationRestored } returns MutableSharedFlow()
             every { conversationClosed } returns MutableSharedFlow()
+            every { conversationObsoleted } returns MutableSharedFlow()
             every { participantLeft } returns MutableSharedFlow()
             every { participantBanned } returns MutableSharedFlow()
             every { participantJoined } returns MutableSharedFlow()

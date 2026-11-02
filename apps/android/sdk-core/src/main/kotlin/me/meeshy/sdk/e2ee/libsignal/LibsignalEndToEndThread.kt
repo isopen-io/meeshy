@@ -90,26 +90,34 @@ internal class LibsignalEndToEndThread @Inject constructor(
         return cid
     }
 
-    override fun overlay(stream: Flow<CacheResult<List<LocalMessage>>>): Flow<CacheResult<List<LocalMessage>>> =
+    override fun overlay(conversationId: String, stream: Flow<CacheResult<List<LocalMessage>>>): Flow<CacheResult<List<LocalMessage>>> =
         combine(stream, runtime.plaintextVersion) { result, _ -> result }
-            .map { result -> project(result) }
+            .map { result -> project(conversationId, result) }
             .flowOn(Dispatchers.IO)
 
-    private suspend fun project(result: CacheResult<List<LocalMessage>>): CacheResult<List<LocalMessage>> {
+    private suspend fun project(conversationId: String, result: CacheResult<List<LocalMessage>>): CacheResult<List<LocalMessage>> {
         val userId = session.currentUserId ?: return result
         return when (result) {
-            is CacheResult.Fresh -> result.copy(value = projected(userId, result.value))
-            is CacheResult.Stale -> result.copy(value = projected(userId, result.value))
-            is CacheResult.Syncing -> result.copy(value = result.value?.let { projected(userId, it) })
+            is CacheResult.Fresh -> result.copy(value = projected(userId, conversationId, result.value))
+            is CacheResult.Stale -> result.copy(value = projected(userId, conversationId, result.value))
+            is CacheResult.Syncing -> result.copy(value = result.value?.let { projected(userId, conversationId, it) })
             CacheResult.Empty -> result
         }
     }
 
-    private suspend fun projected(userId: String, messages: List<LocalMessage>): List<LocalMessage> {
+    /**
+     * Le clair de chaque message à sa place ; et le clair d'un message parti (supprimé, échu, vue unique ouverte) quitte
+     * le coffre au passage — une page REST ou une ligne relue le disent même quand l'événement temps réel a manqué.
+     */
+    private suspend fun projected(userId: String, conversationId: String, messages: List<LocalMessage>): List<LocalMessage> {
+        val now = clock.nowMillis()
+        val gone = messages.flatMap { EndToEndPlaintextOverlay.erasableKeys(it.message, userId, now) }.toSet()
         val candidates = messages.filter { EndToEndPlaintextOverlay.isCandidate(it.message) }
-        if (candidates.isEmpty()) return messages
-        val entries = runtime.plaintexts(userId, candidates.flatMap { EndToEndPlaintextOverlay.keysOf(it.message) })
+        val keys = (candidates.flatMap { EndToEndPlaintextOverlay.keysOf(it.message, userId) } + gone).distinct()
+        if (keys.isEmpty()) return messages
+        val entries = runtime.plaintexts(userId, keys)
         if (entries.isEmpty()) return messages
-        return messages.map { local -> local.copy(message = EndToEndPlaintextOverlay.apply(local.message, entries)) }
+        entries.keys.filter { it in gone }.takeIf { it.isNotEmpty() }?.let { runtime.erase(userId, it) }
+        return messages.map { local -> local.copy(message = EndToEndPlaintextOverlay.apply(local.message, entries, conversationId, userId)) }
     }
 }

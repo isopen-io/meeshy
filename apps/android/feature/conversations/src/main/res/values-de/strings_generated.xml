@@ -310,7 +310,7 @@
     <string name="my_share_links_status_inactive">Inaktiv</string>
     <string name="my_share_links_title">Freigabelinks</string>
     <string name="my_share_links_toggle">Aktiv</string>
-    <string name="new_conversation_back">Zurück</string>
+    <string name="new_conversation_close">Schließen</string>
     <string name="new_conversation_contacts_empty_subtitle">Suche nach einer Person, um eine Unterhaltung zu beginnen.</string>
     <string name="new_conversation_contacts_empty_title">Keine Kontakte</string>
     <string name="new_conversation_contacts_loading">Kontakte werden geladen</string>

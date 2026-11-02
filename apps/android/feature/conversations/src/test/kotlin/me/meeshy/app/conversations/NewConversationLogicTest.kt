@@ -21,9 +21,25 @@ class NewConversationLogicTest {
     }
 
     @Test
-    fun cannot_create_with_no_participants() {
-        assertThat(NewConversationLogic.canCreate(0)).isFalse()
-        assertThat(NewConversationLogic.canCreate(1)).isTrue()
+    fun cannot_create_with_no_participants_and_no_title() {
+        assertThat(NewConversationLogic.canCreate(0, rawTitle = "")).isFalse()
+        assertThat(NewConversationLogic.canCreate(0, rawTitle = "   ")).isFalse()
+        assertThat(NewConversationLogic.canCreate(1, rawTitle = "")).isTrue()
+    }
+
+    @Test
+    fun a_group_of_myself_alone_is_allowed_once_it_has_a_title() {
+        assertThat(NewConversationLogic.conversationType(0)).isEqualTo(NewConversationLogic.TYPE_GROUP)
+        assertThat(NewConversationLogic.canCreate(0, rawTitle = "Mes notes")).isTrue()
+    }
+
+    @Test
+    fun a_group_of_myself_alone_leaves_as_a_titled_group_without_invitees() {
+        val request = NewConversationLogic.request(emptyList(), rawTitle = "  Mes notes  ", CreationEncryptionMode.SERVER)
+
+        assertThat(request.type).isEqualTo(NewConversationLogic.TYPE_GROUP)
+        assertThat(request.title).isEqualTo("Mes notes")
+        assertThat(request.participantIds).isEmpty()
     }
 
     @Test

@@ -22,8 +22,11 @@ public interface EndToEndThreadAccess {
         replyToId: String?,
     ): String
 
-    /** Le fil projeté : chaque message e2ee dont le coffre tient le clair se rend lisible, en mémoire. */
-    public fun overlay(stream: Flow<CacheResult<List<LocalMessage>>>): Flow<CacheResult<List<LocalMessage>>>
+    /**
+     * Le fil projeté de [conversationId] : chaque message e2ee dont le coffre tient le clair À SA PLACE se rend lisible,
+     * en mémoire (#14631) ; le clair d'un message supprimé, échu ou vu une fois quitte le coffre (#14633).
+     */
+    public fun overlay(conversationId: String, stream: Flow<CacheResult<List<LocalMessage>>>): Flow<CacheResult<List<LocalMessage>>>
 
     public companion object {
         /** Aucun E2EE : rien ne part, rien ne se projette (témoins, et tout hôte qui ne l'a pas). */
@@ -37,7 +40,10 @@ public interface EndToEndThreadAccess {
                 replyToId: String?,
             ): String = throw IllegalStateException("end-to-end encryption unavailable")
 
-            override fun overlay(stream: Flow<CacheResult<List<LocalMessage>>>): Flow<CacheResult<List<LocalMessage>>> = stream
+            override fun overlay(
+                conversationId: String,
+                stream: Flow<CacheResult<List<LocalMessage>>>,
+            ): Flow<CacheResult<List<LocalMessage>>> = stream
         }
     }
 }

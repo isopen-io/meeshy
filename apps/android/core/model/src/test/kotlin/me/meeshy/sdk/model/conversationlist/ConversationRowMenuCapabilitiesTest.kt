@@ -238,4 +238,22 @@ class ConversationRowMenuCapabilitiesTest {
         assertThat(ConversationRowMenuCapabilities.adminConsoleUrl("c1", "https://meeshy.me"))
             .isEqualTo("https://meeshy.me/admin/conversations/c1")
     }
+
+    // ── Rendre obsolète (#14645) ──
+
+    @Test
+    fun `an admin of a group, a public conversation or a channel may make it obsolete, a moderator may not`() {
+        listOf("group", "public", "broadcast").forEach { type ->
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "admin"), user()).obsolete).isTrue()
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "creator"), user()).obsolete).isTrue()
+            assertWithMessage(type).that(caps(conversation(type = type, currentUserRole = "moderator"), user()).obsolete).isFalse()
+        }
+    }
+
+    @Test
+    fun `Global, a direct and an ended conversation are never made obsolete`() {
+        assertThat(caps(conversation(type = "global", currentUserRole = "creator"), user(role = "ADMIN")).obsolete).isFalse()
+        assertThat(caps(conversation(type = "direct", currentUserRole = "creator", peerUserId = "peer"), user()).obsolete).isFalse()
+        assertThat(caps(conversation(currentUserRole = "creator", isActive = false), user()).obsolete).isFalse()
+    }
 }

@@ -173,8 +173,6 @@ async function scanCandidates(prisma: PrismaClient, scope: Scope, needle: string
     AND: [{ OR: scope.clauses }, ...(cursor ? [keysetBeforeClause(cursor)] : [])],
   });
   const contentTake = limit * 3 + 1;
-  // HIT_SELECT charge la relation REQUISE `sender` : un seul expéditeur disparu ferait rejeter la recherche
-  // ENTIÈRE (#6501). Les deux lectures partagent la portée du lecteur, réparée et rejouée une fois (#6516).
   const [contentRows, translationRows] = (await withOrphanedSenderRepair(
     { prisma, conversationIds: [...scope.participantByConversation.keys()] },
     () =>
@@ -191,7 +189,7 @@ async function scanCandidates(prisma: PrismaClient, scope: Scope, needle: string
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: TRANSLATION_SCAN_SIZE,
         }),
-      ]),
+      ])
   )) as unknown as [HitRow[], HitRow[]];
   const bound = newestBound([boundOf(contentRows, contentTake), boundOf(translationRows, TRANSLATION_SCAN_SIZE)]);
   const seen = new Set<string>();

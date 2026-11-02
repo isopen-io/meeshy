@@ -38,6 +38,8 @@ class Media3AudioPlaybackEngineTest {
         port.prepare(durationMs)
     }
 
+    private fun Rig.playWhenReady(value: Boolean) = port.playWhenReady(value)
+
     @Test fun `jouer un vocal le charge, puis la preparation lance la lecture`() = runTest {
         val rig = rig(this)
 
@@ -151,10 +153,10 @@ class Media3AudioPlaybackEngineTest {
     @Test fun `un redemarrage du lecteur pendant un appel est recoupe`() = runTest {
         val rig = rig(this)
         rig.playing("a")
-        rig.port.playWhenReady(false)
+        rig.playWhenReady(false)
         rig.call = true
 
-        rig.port.playWhenReady(true)
+        rig.playWhenReady(true)
 
         assertThat(rig.engine.state.value.isPlaying).isFalse()
         assertThat(rig.port.playing).isFalse()
@@ -164,9 +166,9 @@ class Media3AudioPlaybackEngineTest {
         val rig = rig(this)
         rig.playing("a")
 
-        rig.port.playWhenReady(false)
+        rig.playWhenReady(false)
         assertThat(rig.engine.state.value.isPlaying).isFalse()
-        rig.port.playWhenReady(true)
+        rig.playWhenReady(true)
 
         assertThat(rig.engine.state.value.isPlaying).isTrue()
     }
@@ -177,7 +179,7 @@ class Media3AudioPlaybackEngineTest {
 
         rig.engine.cycleSpeed()
         assertThat(rig.engine.state.value.speed).isEqualTo(PlaybackSpeed.X1_25)
-        assertThat(rig.port.currentSpeed).isEqualTo(1.25f)
+        assertThat(rig.port.speed).isEqualTo(1.25f)
 
         rig.engine.play("b", "https://cdn/b.mp3")
         assertThat(rig.port.loads.last().third).isEqualTo(1.25f)

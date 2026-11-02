@@ -61,6 +61,25 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertFalse(caps.rename)
     }
 
+    // MARK: - Rendre obsolète (#14645) — même porte que la passerelle
+
+    func test_make_groupAdmin_canMakeObsolete() {
+        XCTAssertTrue(capabilities(makeConversation(currentUserRole: "admin"), user: makeUser()).obsolete)
+    }
+
+    func test_make_groupModerator_cannotMakeObsolete() {
+        XCTAssertFalse(capabilities(makeConversation(currentUserRole: "moderator"), user: makeUser()).obsolete)
+    }
+
+    func test_make_platformAdminMemberOfGroup_canMakeObsolete() {
+        XCTAssertTrue(capabilities(makeConversation(currentUserRole: "member"), user: makeUser(role: "ADMIN")).obsolete)
+    }
+
+    func test_make_direct_cannotMakeObsolete() {
+        let caps = capabilities(makeConversation(type: .direct, currentUserRole: "creator", participantUserId: "peer"), user: makeUser())
+        XCTAssertFalse(caps.obsolete)
+    }
+
     // MARK: - Inviter et lien de partage
 
     func test_make_groupCreator_hasInviteAndShareLink() {
@@ -309,6 +328,7 @@ final class ConversationContextMenuAccessibilityTests: XCTestCase {
             onArchive: { recorder.calls.append("archive") },
             onBlock: { recorder.calls.append("block") },
             onDelete: { recorder.calls.append("delete") },
+            onObsolete: { recorder.calls.append("obsolete") },
             onLeave: { recorder.calls.append("leave") },
             onReport: { recorder.calls.append("report") },
             onOpenAdmin: { recorder.calls.append("adminOpen") },

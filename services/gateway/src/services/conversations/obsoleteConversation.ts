@@ -16,6 +16,13 @@
  *    `jobs/obsolete-conversation-purge.ts`, désarmé sans interrupteur.
  *
  * Une conversation déjà obsolète ne se réécrit pas : sa purge ne recule pas.
+ *
+ * LA COURSE AVEC UN ENVOI. Un message admis avant la transaction mais écrit
+ * pendant elle échappe à son `updateMany` (l'instantané ne le voit pas). Deux
+ * verrous la ferment ensemble : l'effacement est REJOUÉ après la validation, et
+ * chaque site d'écriture relit `Conversation.deletedAt` après avoir écrit
+ * (`sealMessageIfConversationObsoleted`). Un message écrit avant le rejeu est
+ * effacé par lui ; un message écrit après voit `deletedAt` validé.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
@@ -151,6 +158,11 @@ export async function obsoleteConversation(
   }
 
   const purgeAfter = new Date(now.getTime() + OBSOLETE_PURGE_DELAY_MS);
+  const eraseLiveMessages = () =>
+    prisma.message.updateMany({
+      where: { conversationId, ...unsetOrNull('deletedAt') },
+      data: { deletedAt: now },
+    });
   const [obsoleted] = await prisma.$transaction([
     prisma.conversation.update({
       where: { id: conversationId },
@@ -158,11 +170,9 @@ export async function obsoleteConversation(
       include: { participants: { select: { id: true, userId: true, isActive: true } } },
     }),
     deactivateShareLinksOnClose(prisma, conversationId),
-    prisma.message.updateMany({
-      where: { conversationId, ...unsetOrNull('deletedAt') },
-      data: { deletedAt: now },
-    }),
+    eraseLiveMessages(),
   ]);
+  await eraseLiveMessages();
 
   await retractConversationNotifications(prisma, conversationId, announcer);
 

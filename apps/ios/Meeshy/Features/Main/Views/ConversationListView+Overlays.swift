@@ -640,6 +640,7 @@ extension ConversationRowMenuActions {
             onDelete: {
                 list.sheetTargets.deleteTarget = conversation
             },
+            onObsolete: { list.sheetTargets.obsoleteTarget = conversation },
             onLeave: { list.sheetTargets.leaveTarget = conversation },
             onReport: { list.sheetTargets.reportTarget = conversation },
             onOpenAdmin: { openAdminConsole(for: conversation) },

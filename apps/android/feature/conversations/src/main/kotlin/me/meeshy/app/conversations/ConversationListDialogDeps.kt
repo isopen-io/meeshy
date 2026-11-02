@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.conversation.ConversationObsoleting
 import me.meeshy.sdk.friend.BlockActionCoordinator
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.model.report.ReportReason
@@ -45,15 +46,19 @@ internal class CoordinatedPeerBlocker(
 class ConversationListDialogDeps(
     val blocker: ConversationPeerBlocker,
     val reporter: ConversationReporter,
+    /** « Rendre obsolète » (#14645) ; [detached] le laisse inerte. */
+    val obsoleter: ConversationObsoleting = ConversationObsoleting.Unavailable,
 ) {
     @Inject
     constructor(
         coordinator: BlockActionCoordinator,
         cache: BlockCache,
         reports: ReportRepository,
+        obsoleter: ConversationObsoleting,
     ) : this(
         blocker = CoordinatedPeerBlocker(coordinator, cache),
         reporter = ConversationReporter { id, reason, details -> reports.reportConversation(id, reason, details) },
+        obsoleter = obsoleter,
     )
 
     companion object {

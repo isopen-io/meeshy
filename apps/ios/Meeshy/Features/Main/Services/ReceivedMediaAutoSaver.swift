@@ -49,7 +49,7 @@ enum ReceivedMediaAutoSavePolicy {
 // MARK: - Seams
 
 /// L'interrupteur « Enregistrer dans Photos » — **coupé par défaut** (#14640,
-/// directive porteur 2026-11-02). Sa seule source de vérité est la préférence
+/// directive porteur). Sa seule source de vérité est la préférence
 /// SERVEUR `privacy.saveMediaToGallery` : Réglages › Médias et Réglages ›
 /// Confidentialité l'écrivent, l'enregistrement automatique la lit.
 @MainActor
