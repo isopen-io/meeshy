@@ -501,6 +501,7 @@ const fr = {
 
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',
+  'media.video.paused': 'En pause',
   'media.video.position': 'Position de lecture',
   'media.audio.position': 'Position de lecture',
   'media.audio.speed': 'Vitesse de lecture',

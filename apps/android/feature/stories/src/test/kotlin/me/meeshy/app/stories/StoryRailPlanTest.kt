@@ -75,4 +75,10 @@ class StoryRailPlanTest {
         assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false).pinsCommentComposer).isTrue()
         assertThat(StoryRailPlan.resolve(isOwnStory = true, hasTranslatableContent = false).pinsCommentComposer).isFalse()
     }
+
+    @Test
+    fun `une story de Sang chez autrui n'offre pas de republication`() {
+        assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false, isRepublishable = false).showsRepost).isFalse()
+        assertThat(StoryRailPlan.resolve(isOwnStory = false, hasTranslatableContent = false, isRepublishable = true).showsRepost).isTrue()
+    }
 }

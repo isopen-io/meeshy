@@ -1,28 +1,27 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.StoryVisibility
+import me.meeshy.sdk.model.composer.StoryRepostAudience
+
 /**
- * The audience law of a republication: **the same audience, or a narrower one, NEVER a wider one**.
- * Mirror of `allowedRepostVisibilities` (`packages/shared/utils/repost-audience.ts`) and of iOS
- * `StoryRepostAudience` — the gateway enforces it (403 `REPOST_AUDIENCE_WIDENING`,
- * `PostService.repostPost` / `createPost`); this only caps the picker so the author is never offered a
- * choice the server will refuse.
+ * The audience law of a mood republication — the PROJECTION of [StoryRepostAudience] (the one Kotlin mirror of
+ * `allowedRepostVisibilities`, `packages/shared/utils/repost-audience.ts`) onto the audiences a mood can carry. The
+ * gateway enforces it (403 `REPOST_AUDIENCE_WIDENING`); this only caps the picker.
  *
- * The six audiences are not a total order (`COMMUNITY` and `FRIENDS` are incomparable), so the table
- * is deliberately conservative: from `PUBLIC` everything, from `PRIVATE` itself, from any other
- * audience itself and `PRIVATE`. `EXCEPT` / `ONLY` cannot be expressed by this composer (no user
- * picker), so they reduce to `PRIVATE`; an absent or unknown audience reads as the most restrictive
- * one, never as the backend's `PUBLIC` default.
+ * `EXCEPT` / `ONLY` cannot be expressed by this composer (no user picker), so an original under them reduces to
+ * `PRIVATE`; an absent or unknown audience reads as the most restrictive one, never as the backend's `PUBLIC` default. A
+ * `BLOOD` mood is never republished (RG-18): no audience at all.
  */
 internal object StatusRepostAudience {
 
-    /** The audiences a republisher may choose; the first is the widest, hence the initial one. */
+    /** The audiences a republisher may choose; the first is the widest, hence the initial one. Empty: not republishable. */
     fun allowed(original: String?): List<StatusVisibility> {
         val source = StatusVisibility.entries.firstOrNull { it.wire == original?.uppercase() }
             ?: return listOf(StatusVisibility.PRIVATE)
-        return when (source) {
-            StatusVisibility.PUBLIC -> StatusVisibility.entries
-            StatusVisibility.PRIVATE -> listOf(StatusVisibility.PRIVATE)
-            else -> listOf(source, StatusVisibility.PRIVATE)
-        }
+        return StoryRepostAudience.allowed(StoryVisibility.fromWire(source.wire))
+            .mapNotNull { allowed -> StatusVisibility.entries.firstOrNull { it.wire == allowed.wire } }
     }
+
+    /** A republication with no audience to choose is not offered at all: no button for an empty choice. */
+    fun isRepublishable(original: String?): Boolean = allowed(original).isNotEmpty()
 }

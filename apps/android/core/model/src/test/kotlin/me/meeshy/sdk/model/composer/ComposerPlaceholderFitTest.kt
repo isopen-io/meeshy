@@ -23,3 +23,26 @@ class ComposerPlaceholderFitTest {
         assertThat(ComposerPlaceholderFit.scale(naturalWidth = 140, availableWidth = 0)).isEqualTo(1f)
     }
 }
+
+class ComposerPlaceholderFitMeasuredTest {
+
+    /** Une police réelle n'est pas linéaire : à 86 % de sa taille, le mot garde 4 px d'approche et de crénage. */
+    private fun measuredAt(natural: Int): (Float) -> Int = { scale -> (natural * scale).toInt() + if (scale < 1f) 4 else 0 }
+
+    @Test fun `l'échelle retenue est celle dont la MESURE tient, pas celle du simple rapport`() {
+        val measure = measuredAt(natural = 140)
+        val scale = ComposerPlaceholderFit.fit(availableWidth = 120, measureAt = measure)
+        assertThat(measure(scale)).isAtMost(120)
+        assertThat(scale).isLessThan(120f / 140f)
+        assertThat(scale).isAtLeast(ComposerPlaceholderFit.MIN_SCALE)
+    }
+
+    @Test fun `une invite qui tient n'est pas mesurée deux fois et garde sa taille`() {
+        assertThat(ComposerPlaceholderFit.fit(availableWidth = 120, measureAt = measuredAt(natural = 100))).isEqualTo(1f)
+    }
+
+    @Test fun `trop large même au plancher, elle s'arrête au plancher`() {
+        assertThat(ComposerPlaceholderFit.fit(availableWidth = 120, measureAt = measuredAt(natural = 400)))
+            .isEqualTo(ComposerPlaceholderFit.MIN_SCALE)
+    }
+}

@@ -304,7 +304,15 @@ Chaque lot a **une** issue (milestone #215) : `rel-modele` #13926, `rel-loi-acce
 | `ui-audience` | — | ● | ● | ● |
 | `ui-profil-cercles` | — | ● | ● | ● |
 
-**Jalon 2 — Proche et Sang en direct**
+**Jalon 1 bis — les cercles gouvernent l'existant.** Ce sont des features MVP du classeur qu'aucun lot ne portait, relevées le 2026-11-01.
+
+| Clé | Serveur | iOS | Web | Android |
+|---|---|---|---|---|
+| `cercles-messagerie` #14107 (MSG-01/02/03/04/05, PRE-07, MIN-03) | ● | ● | ● | ● |
+| `cercles-appels-interactions` #14108 (CAL-01/02, INT-01/02, POS-07) | ● | ● | ● | ● |
+| `cercles-moderation-mineurs` #14110 (SEC-06, MIN-04, PRO-01) | ● | — | — | — |
+
+**Jalon 2 — Proche et Sang en direct**, dans cet ordre : Bring, talkie, écoute, position temporaire, position Sang. Le Bring, le plus simple, valide la chaîne de push sur les trois plateformes ; la position Sang, la plus risquée, passe en dernier. `position-temporaire` #14109 (LOC-01/02/06/12) en est le socle : l'émetteur iOS et le lecteur web y naissent.
 
 | Clé | Serveur | iOS | Web | Android |
 |---|---|---|---|---|
@@ -314,6 +322,19 @@ Chaque lot a **une** issue (milestone #215) : `rel-modele` #13926, `rel-loi-acce
 | `sang-position-historique` (flag) | ● | ● | ● lecture | ● |
 | `sang-recette-reelle` | recette sur deux téléphones, résultats rendus par le porteur | | | |
 | `conformite-cercles` | AIPD, **bloque la production** | | | |
+| `entitlements-apple` #14112 | action du porteur : PushToTalk et Critical Alerts auprès d'Apple, avec un brouillon de justification | | | |
+
+**Position temporaire — compléments du porteur (2026-11-01, #14109).**
+- **« Jusqu'à l'arrivée »** : l'émetteur choisit une destination. L'ETA et la distance restante sont calculées sur son appareil. Chez le destinataire, une **notification dynamique** affiche « X arrive — 12 min · 2,4 km », mise à jour par push et close à l'arrivée ou à l'arrêt.
+  - **iOS** : une Live Activity (ActivityKit, push `liveactivity`), qui ajoute un coordinateur à `LiveActivityBackend.swift` ; quatre coordinateurs y existent déjà, pour l'appel, l'enregistrement vocal, la lecture vocale et l'envoi.
+  - **Android** : les Live Updates d'Android 16 (notification en cours promue, `ProgressStyle`), et une notification en cours classique avant l'API 36.
+  - **Web** : un bandeau dans l'onglet ouvert, sans rien simuler.
+- **Carte des positions** : la carte des posts d'« À proximité » (iOS `FeedPostsMapView.swift`, en `MKMapView` avec regroupement ; Android `TileMapView.kt`) est **réutilisée** pour les positions des proches. On n'ajoute pas de seconde carte ; « Mon univers », au lot `sang-position-historique`, est la même.
+  - Les épingles portent l'avatar, l'accent de la conversation, l'anneau de présence servie et un cercle de flou selon la précision. Elles se regroupent.
+  - Elles sont **chargées selon l'emprise visible** (`GET /relations/locations?bbox=`). Une position n'apparaît que si son partage est actif pour le lecteur **et** que le cercle l'autorise, à la précision du cercle.
+  - Le web n'a aujourd'hui aucune carte ; la créer est justifié.
+
+**Jalon 3 — production** : `prod-promotion` #14111. Le code passe d'abord, puis le rattrapage `UserRelation` sur feu vert et après une sauvegarde vérifiée, puis `MIN_APP_VERSION`, relevé seulement quand les versions sont dans les stores.
 
 **Matrice des cas** : chaque ligne est jouée par un témoin serveur et par la recette.
 
@@ -363,6 +384,8 @@ Plateformes : iOS 16 → 26 et iPad, Android API cible, navigateurs courants, r�
 | Sonnerie | iOS `Ringtone.caf` (30 s), `RingbackTonePlayer.swift` ; Android `CallToneController.kt`, canal d'appel `IncomingCallNotificationPresenter.kt:50-71` | Bring : réutilisés ; Android : un canal `USAGE_ALARM` |
 | Audio | `MessageHandler.ts:461`, `upload.ts:87`, `audio-normalization.ts`, `MediaSessionCoordinator.swift:576`, `CallAudioRouteService.swift`, `VoicePlaybackService.kt`, `mini-audio-player.tsx` | talkie réutilise ce pipeline |
 | Écoute | iOS `ConversationAudioCoordinator+NowPlaying.swift` ; Android `VoicePlaybackSessionController.kt` ; web `web-now-playing.ts` | source Meeshy ; Apple Music, Spotify et MediaSession **à créer** (rien n'existe) |
+| Carte | iOS `FeedPostsMapView.swift` (187 l, `MKMapView` avec regroupement, « À proximité »), `NearbyDensityOverlay.swift`, SDK `AdaptiveMap.swift` ; Android `TileMapView.kt` ; web : aucune | **réutilisée** pour les positions des proches et « Mon univers » |
+| Notifications dynamiques | iOS `LiveActivityBackend.swift` + quatre coordinateurs, `MeeshyWidgets` ; Android `CallOngoingNotificationFactory.kt`, `OutboxOngoingNotifications.kt` | + Live Activity et Live Update « X arrive » |
 | Position | `LocationHandler.ts` (registre mémoire, audience = room de conversation), iOS `LocationService.swift` (aucun appelant), Android `LiveLocation*` (émetteur complet, pas de background), web rien | étendre au scope Sang ; historique TTL ; émetteur iOS et lecture web à créer |
 | Chiffrement au repos | `utils/secret-at-rest.ts` (`sealSecret` :97) | coordonnées de l'historique |
 | Flags | aucun système serveur ; locaux `MeeshyFeatureFlags.swift`, `LentilleFeatureFlagsStore.kt` | `GET /me/features` (env + liste blanche), justifié |
@@ -383,3 +406,28 @@ Tranchées par le porteur le 2026-10-31 (second passage) :
 | D-3 (#13945) | Critical Alerts pour le Bring ? | **Oui, on le demande** : le Bring force un son pour l'urgence extrême. Quotas par jour : Ami 1, Proche 3, Sang 30, Atome illimité. Bring disponible par défaut, bloquable par personne |
 
 Aucune décision du chantier n'est encore ouverte.
+
+## 9. La suite du MVP
+
+Les features V2 et V3 du classeur ont chacune leur issue, réparties dans des milestones nommés par leur résultat. Elles ne démarrent qu'une fois le MVP recetté. Les échéances sont proposées.
+
+| Milestone | Features | Issues |
+|---|---|---|
+| [#218 Un parent accompagne ses enfants sans les surveiller en secret](https://github.com/isopen-io/meeshy/milestone/218) | REL-08, REL-12, LOC-05, PAR-01, PAR-02, PAR-03, PAR-04, PAR-05, PAR-06, PAR-07, PAR-08, PAR-09 | #14113–#14124 |
+| [#219 Chaque lien se règle, se met en pause et garde son histoire](https://github.com/isopen-io/meeshy/milestone/219) | PRO-02, PRO-05, REL-11, REL-13, REL-14, REL-15, CONF-05, NOT-04, NOT-05 | #14125–#14133 |
+| [#220 Entre Proches et Sangs, des contenus et des souvenirs rien qu'à nous](https://github.com/isopen-io/meeshy/milestone/220) | POS-04, POS-05, POS-06, MSG-07, MSG-08, MSG-09, MSG-11, GAM-04, GAM-05, GAM-06, GAM-09, TRA-02, PRE-02, PRE-05 | #14134–#14147 |
+| [#221 En cas de danger, mes Sangs le savent tout de suite](https://github.com/isopen-io/meeshy/milestone/221) | SEC-01, SEC-02, LOC-08 | #14148–#14150 |
+| [#222 Les projets et les contextes rassemblent sans ouvrir l'intimité](https://github.com/isopen-io/meeshy/milestone/222) | PRJ-01, PRJ-02, PRJ-03, PRJ-04, PRJ-05, PRJ-06 | #14151–#14156 |
+| [#223 Les cercles vivent tout seuls : détection, énergie et rituels avancés](https://github.com/isopen-io/meeshy/milestone/223) | MSG-10, INT-05, PRE-03, PRE-06, LOC-09, SEC-03, SEC-04, GAM-07, GAM-08, GAM-10 | #14157–#14166 |
+
+LOC-10 (journal des consultations) et SEC-05 (détection de contrôle) sont V2 dans le classeur, mais le porteur les a mises dans le MVP (§ 1.7) : elles restent dans `sang-position-historique`. PRJ-01 et PRJ-02 sont MVP dans le classeur, mais aucun lot du prompt du porteur ne les porte : elles sont dans le milestone des projets, et peuvent remonter sur décision.
+
+## 10. Lancer un tour
+
+Le workflow est `.claude/workflows/meeshy-cercles-et-sang.js`.
+
+- **Jalon 1 (et 1 bis)** : `{ jalon: 1, tours: 2 }`. Les lots déjà fusionnés sont reconnus `deja-livre` au cadrage.
+- **Jalon 2** : `{ jalon: 2, tours: 2, flag_position: false }`, de préférence en `poste: 'mac'`. La NSE, PushToTalk, la position en arrière-plan et les captures exigent Xcode et le simulateur. En `poste: 'cloud'`, iOS et Android ne se prouvent que par la CI des PR.
+- **Conformité seule** : `{ lots: ['conformite-cercles'] }`.
+- **Recette staging à deux comptes** : `{ lots: [...], valider: true, poste: 'mac' }`, car staging est injoignable depuis un conteneur cloud.
+- **Production** : `{ livrer_main: true }`, seulement sur feu vert du porteur, et seulement une fois la conformité rendue et non bloquante.

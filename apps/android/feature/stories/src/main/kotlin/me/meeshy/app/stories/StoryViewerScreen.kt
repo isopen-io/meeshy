@@ -102,6 +102,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
@@ -213,6 +214,7 @@ fun StoryViewerScreen(
         canReply = StoryReplyRules.canReply(state.isOwnStory, state.currentStoryId, state.authorUserId),
         canCompose = onComposeStory != null && state.canCompose,
         commentCount = commentCount,
+        isRepublishable = StoryRepostAudience.isRepublishable(currentItem?.visibility),
     )
     val cover = StoryViewerCover(
         sheet = showViewers || showComments || showReply || showSendTo || state.languageExplorer != null,
