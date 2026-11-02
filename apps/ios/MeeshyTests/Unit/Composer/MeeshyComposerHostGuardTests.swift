@@ -2473,9 +2473,9 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "La story part sous l'audience choisie AU SOCLE, avec ses personnes nommées."
         )
         XCTAssertTrue(
-            corps.contains("ifaccepted{discardAutosavedDraft();onDismiss()}"),
+            corps.contains("ifaccepted,closing{discardAutosavedDraft();onDismiss()}"),
             "La sortie — et l'effacement du brouillon autosauvegardé (#8848) — n'est acquise que sur une "
-                + "ACCEPTATION, comme `publishDocument`."
+                + "ACCEPTATION, comme `publishDocument` ; un geste de plusieurs formats la décide seul (#13920)."
         )
     }
 
