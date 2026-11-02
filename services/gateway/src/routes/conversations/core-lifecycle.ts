@@ -353,7 +353,7 @@ export function registerCreateConversationRoute(
                   role: 'member',
                   language: languageByUserId.get(participantId) ?? 'fr',
                   permissions: defaultPermissions,
-                  ...requestRecipientFields(openingOf(participantId), openedAt)
+                  ...requestRecipientFields(openingOf(participantId), openedAt, userId)
                 };
               })
             ]

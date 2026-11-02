@@ -244,7 +244,7 @@ export function registerInviteRoute(
         // défaut `"en"` du schéma.
         language: recipientLanguage(userToInvite, 'fr'),
         permissions: { ...NEW_MEMBER_PERMISSIONS },
-        ...requestRecipientFields(opening, new Date())
+        ...requestRecipientFields(opening, new Date(), inviterId)
       };
 
       // La mise en garde qui vivait ici — « ne rien charger qu'aucune surface ne

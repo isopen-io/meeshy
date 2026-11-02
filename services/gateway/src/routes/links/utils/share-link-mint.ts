@@ -278,7 +278,7 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
             userId: memberId, type: 'user',
             displayName: memberUser.displayName || memberUser.username || 'User',
             role: 'member', language: languageByMemberId.get(memberId) ?? 'fr', permissions: defaultPerms,
-            ...requestRecipientFields(openings.get(memberId) ?? { kind: 'direct' }, openedAt)
+            ...requestRecipientFields(openings.get(memberId) ?? { kind: 'direct' }, openedAt, userId)
           });
         }
       }

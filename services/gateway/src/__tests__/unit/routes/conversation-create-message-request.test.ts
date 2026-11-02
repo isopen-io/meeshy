@@ -79,11 +79,12 @@ describe('POST /conversations — la boîte de demandes (#14107)', () => {
     expect(destinataire?.messageRequestAt).toBeInstanceOf(Date);
     expect(typeof destinataire?.messageRequestRisk).toBe('number');
     expect(participants.find((p) => p.userId === MOI)).not.toHaveProperty('messageRequestAt');
+    expect(destinataire).toMatchObject({ messageRequestFromId: MOI });
   });
 
   it('une Connaissance écrit directement : aucune demande', async () => {
     const { participants } = await ouvrir(CONNAISSANCE, [[MOI, CONNAISSANCE, 'ACQUAINTANCE']]);
-    expect(participants.find((p) => p.userId === CONNAISSANCE)).not.toHaveProperty('messageRequestAt');
+    expect(participants.find((p) => p.userId === CONNAISSANCE)?.messageRequestAt).toBeNull();
   });
 
   it('vers un mineur, la porte répond comme vers un majeur (audit B2) : 201, demande contenue, expéditeur sans média', async () => {
@@ -105,8 +106,15 @@ describe('POST /conversations — la boîte de demandes (#14107)', () => {
     expect(created.find((p) => p.userId === MINEUR)?.messageRequestAt).toBeInstanceOf(Date);
   });
 
-  it('vers un majeur, l\'expéditeur garde ses droits fondateurs', async () => {
-    const { participants } = await ouvrir(INCONNU);
+  it('vers un majeur comme vers un mineur, l\'expéditeur d\'une demande n\'envoie aucun média : rien ne distingue l\'âge (contre-audit C1)', async () => {
+    const versMajeur = (await ouvrir(INCONNU)).participants.find((p) => p.userId === MOI)?.permissions;
+    const versMineur = (await ouvrir(MINEUR)).participants.find((p) => p.userId === MOI)?.permissions;
+    expect(versMajeur).toEqual(versMineur);
+    expect(versMajeur).toMatchObject({ canSendMessages: true, canSendImages: false, canSendFiles: false, canSendVideos: false, canSendAudios: false });
+  });
+
+  it('vers une Connaissance, l\'expéditeur garde ses droits fondateurs', async () => {
+    const { participants } = await ouvrir(CONNAISSANCE, [[MOI, CONNAISSANCE, 'ACQUAINTANCE']]);
     expect(participants.find((p) => p.userId === MOI)?.permissions).toEqual({ ...FOUNDING_MEMBER_PERMISSIONS });
   });
 });

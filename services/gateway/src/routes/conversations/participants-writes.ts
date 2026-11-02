@@ -291,7 +291,7 @@ export function registerParticipantWriteRoutes(
       // un arbitrage produit, pas un correctif de Prisme.
       language: recipientLanguage(userToAdd, 'en'),
       permissions: { ...NEW_MEMBER_PERMISSIONS },
-      ...requestRecipientFields(opening, new Date())
+      ...requestRecipientFields(opening, new Date(), currentUserId ?? '')
     };
 
     // Partagé par l'écriture et l'emit, comme `leftAt` sur le chemin du
@@ -450,7 +450,8 @@ export function registerParticipantWriteRoutes(
       }
     }
 
-    const notificationService = fastify.notificationService;
+    // #14107 (contre-audit E2) — une entrée par la boîte de demandes ne s'annonce pas.
+    const notificationService = opening.kind === 'direct' ? fastify.notificationService : undefined;
     if (notificationService) {
       notificationService.createAddedToConversationNotification({
         recipientUserId: userId,
