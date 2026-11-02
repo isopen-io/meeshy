@@ -33,6 +33,19 @@ class Media3AudioPlaybackEngineTest {
 
     private fun rig(scope: TestScope) = Rig(scope)
 
+    /**
+     * Le moteur tourne sur l'horloge virtuelle du test : son ticker de position (une boucle `delay`) ne s'arrête qu'à la
+     * libération. Sans elle, la fin de `runTest`, qui avance jusqu'au repos, avançait ce ticker sans fin.
+     */
+    private fun engineTest(body: suspend TestScope.(Rig) -> Unit) = runTest {
+        val rig = rig(this)
+        try {
+            body(rig)
+        } finally {
+            rig.engine.release()
+        }
+    }
+
     private fun Rig.playing(id: String = "a", durationMs: Long = 30_000L) {
         engine.play(id, "https://cdn/$id.mp3")
         port.prepare(durationMs)
@@ -40,8 +53,7 @@ class Media3AudioPlaybackEngineTest {
 
     private fun Rig.playWhenReady(value: Boolean) = port.playWhenReady(value)
 
-    @Test fun `jouer un vocal le charge, puis la preparation lance la lecture`() = runTest {
-        val rig = rig(this)
+    @Test fun `jouer un vocal le charge, puis la preparation lance la lecture`() = engineTest { rig ->
 
         rig.engine.play("a", "https://cdn/a.mp3")
         assertThat(rig.engine.state.value.isLoading).isTrue()
@@ -55,8 +67,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.port.playing).isTrue()
     }
 
-    @Test fun `jouer B pendant que A joue arrete A et bascule l'identifiant atomiquement`() = runTest {
-        val rig = rig(this)
+    @Test fun `jouer B pendant que A joue arrete A et bascule l'identifiant atomiquement`() = engineTest { rig ->
         rig.playing("a")
 
         rig.engine.play("b", "https://cdn/b.mp3")
@@ -67,8 +78,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.port.stops).isAtLeast(1)
     }
 
-    @Test fun `la preparation d'un chargement remplace est ignoree`() = runTest {
-        val rig = rig(this)
+    @Test fun `la preparation d'un chargement remplace est ignoree`() = engineTest { rig ->
         rig.engine.play("a", "https://cdn/a.mp3")
         val staleGeneration = rig.port.lastGeneration
         rig.engine.play("b", "https://cdn/b.mp3")
@@ -80,8 +90,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.attachmentId).isEqualTo("b")
     }
 
-    @Test fun `la position du vocal remplace est sauvee au changement de piste`() = runTest {
-        val rig = rig(this)
+    @Test fun `la position du vocal remplace est sauvee au changement de piste`() = engineTest { rig ->
         rig.playing("a", durationMs = 30_000L)
         rig.port.position = 12_000L
 
@@ -90,8 +99,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.store.map["a"]?.positionMs).isEqualTo(12_000L)
     }
 
-    @Test fun `une position collee au bord n'est pas memorisee et efface la precedente`() = runTest {
-        val rig = rig(this)
+    @Test fun `une position collee au bord n'est pas memorisee et efface la precedente`() = engineTest { rig ->
         rig.store.save("a", 5_000L, 1L)
         rig.playing("a", durationMs = 30_000L)
         rig.port.position = 500L
@@ -101,8 +109,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.store.map).doesNotContainKey("a")
     }
 
-    @Test fun `la lecture reprend a la position memorisee avant de jouer`() = runTest {
-        val rig = rig(this)
+    @Test fun `la lecture reprend a la position memorisee avant de jouer`() = engineTest { rig ->
         rig.store.save("a", 10_000L, 1L)
 
         rig.playing("a", durationMs = 30_000L)
@@ -111,8 +118,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.currentTimeMs).isEqualTo(10_000L)
     }
 
-    @Test fun `la consommation servie comble l'absence locale mais pas celle d'une autre piece jointe`() = runTest {
-        val rig = rig(this)
+    @Test fun `la consommation servie comble l'absence locale mais pas celle d'une autre piece jointe`() = engineTest { rig ->
         rig.engine.setServedConsumption("a", MeeshyMediaConsumption(lastPlayPositionMs = 8_000))
 
         rig.playing("b", durationMs = 30_000L)
@@ -122,8 +128,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.port.seeks).containsExactly(8_000L)
     }
 
-    @Test fun `un appel actif refuse le demarrage mais jamais l'arret`() = runTest {
-        val rig = rig(this)
+    @Test fun `un appel actif refuse le demarrage mais jamais l'arret`() = engineTest { rig ->
         rig.playing("a")
         rig.call = true
 
@@ -137,8 +142,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.hasTrack).isFalse()
     }
 
-    @Test fun `un appel actif bloque la reprise`() = runTest {
-        val rig = rig(this)
+    @Test fun `un appel actif bloque la reprise`() = engineTest { rig ->
         rig.playing("a")
         rig.engine.pause()
         rig.call = true
@@ -150,8 +154,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.port.playing).isFalse()
     }
 
-    @Test fun `un redemarrage du lecteur pendant un appel est recoupe`() = runTest {
-        val rig = rig(this)
+    @Test fun `un redemarrage du lecteur pendant un appel est recoupe`() = engineTest { rig ->
         rig.playing("a")
         rig.playWhenReady(false)
         rig.call = true
@@ -162,8 +165,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.port.playing).isFalse()
     }
 
-    @Test fun `le focus rendu reprend ce que l'interruption avait suspendu`() = runTest {
-        val rig = rig(this)
+    @Test fun `le focus rendu reprend ce que l'interruption avait suspendu`() = engineTest { rig ->
         rig.playing("a")
 
         rig.playWhenReady(false)
@@ -173,8 +175,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.isPlaying).isTrue()
     }
 
-    @Test fun `le cycle de vitesse boucle et persiste d'une piste a l'autre`() = runTest {
-        val rig = rig(this)
+    @Test fun `le cycle de vitesse boucle et persiste d'une piste a l'autre`() = engineTest { rig ->
         rig.playing("a")
 
         rig.engine.cycleSpeed()
@@ -188,16 +189,14 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.speed).isEqualTo(PlaybackSpeed.X1_0)
     }
 
-    @Test fun `un fichier local se joue par la meme voie`() = runTest {
-        val rig = rig(this)
+    @Test fun `un fichier local se joue par la meme voie`() = engineTest { rig ->
 
         rig.engine.playLocal("tmp", "file:///cache/voice.m4a")
 
         assertThat(rig.port.loads.last().first).isEqualTo(AudioSource.Local("file:///cache/voice.m4a"))
     }
 
-    @Test fun `une source illisible remet le chargement a faux sans planter et libere la file`() = runTest {
-        val rig = rig(this)
+    @Test fun `une source illisible remet le chargement a faux sans planter et libere la file`() = engineTest { rig ->
         val finished = mutableListOf<AudioEngineEvent>()
         val collector = backgroundScope.launchCollect(rig.engine.events, finished)
         runCurrent()
@@ -212,8 +211,7 @@ class Media3AudioPlaybackEngineTest {
         collector.cancel()
     }
 
-    @Test fun `un chargement refuse par le lecteur n'echappe pas`() = runTest {
-        val rig = rig(this)
+    @Test fun `un chargement refuse par le lecteur n'echappe pas`() = engineTest { rig ->
         rig.port.failNextLoad = true
 
         rig.engine.play("a", "https://cdn/a.mp3")
@@ -221,15 +219,13 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.isLoading).isFalse()
     }
 
-    @Test fun `une url vide ne charge rien`() = runTest {
-        val rig = rig(this)
+    @Test fun `une url vide ne charge rien`() = engineTest { rig ->
 
         assertThat(rig.engine.play("a", "  ")).isFalse()
         assertThat(rig.port.loads).isEmpty()
     }
 
-    @Test fun `la progression n'est echantillonnee que pendant la lecture`() = runTest {
-        val rig = rig(this)
+    @Test fun `la progression n'est echantillonnee que pendant la lecture`() = engineTest { rig ->
         rig.playing("a")
 
         rig.port.position = 3_000L
@@ -242,8 +238,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.currentTimeMs).isEqualTo(3_000L)
     }
 
-    @Test fun `la fin naturelle rapporte complete une seule fois, efface la reprise et annonce la fin`() = runTest {
-        val rig = rig(this)
+    @Test fun `la fin naturelle rapporte complete une seule fois, efface la reprise et annonce la fin`() = engineTest { rig ->
         val finished = mutableListOf<AudioEngineEvent>()
         val collector = backgroundScope.launchCollect(rig.engine.events, finished)
         runCurrent()
@@ -264,8 +259,7 @@ class Media3AudioPlaybackEngineTest {
         collector.cancel()
     }
 
-    @Test fun `en boucle la fin naturelle rejoue sans liberer le lecteur`() = runTest {
-        val rig = rig(this)
+    @Test fun `en boucle la fin naturelle rejoue sans liberer le lecteur`() = engineTest { rig ->
         rig.playing("a")
         rig.engine.setLoop(true)
 
@@ -276,8 +270,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.port.playing).isTrue()
     }
 
-    @Test fun `un saut de curseur coupe l'ecoute en deux plages`() = runTest {
-        val rig = rig(this)
+    @Test fun `un saut de curseur coupe l'ecoute en deux plages`() = engineTest { rig ->
         rig.playing("a", durationMs = 30_000L)
         rig.port.position = 4_000L
 
@@ -291,8 +284,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(stretches.last().startMs).isEqualTo(20_000)
     }
 
-    @Test fun `changer de vocal en cours d'ecoute rapporte une ecoute abandonnee`() = runTest {
-        val rig = rig(this)
+    @Test fun `changer de vocal en cours d'ecoute rapporte une ecoute abandonnee`() = engineTest { rig ->
         rig.playing("a")
         rig.port.position = 6_000L
 
@@ -304,8 +296,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(body.stretches!!.single().endedBy).isEqualTo(StretchEnd.DISMISSED)
     }
 
-    @Test fun `l'origine d'une commande n'exempte pas de la garde d'appel`() = runTest {
-        val rig = rig(this)
+    @Test fun `l'origine d'une commande n'exempte pas de la garde d'appel`() = engineTest { rig ->
         rig.call = true
 
         PlaybackCommandOrigin.entries.forEach { origin ->
