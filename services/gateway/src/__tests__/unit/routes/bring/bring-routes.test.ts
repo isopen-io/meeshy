@@ -263,7 +263,7 @@ describe('#13936 — le blocage du Bring, par personne', () => {
     await app.close();
 
     expect(reglage.status).toBe(200);
-    expect(reglage.body.data).toEqual({ userId: MOI, bringBlocked: false });
+    expect(reglage.body.data).toEqual({ userId: MOI, bringBlocked: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
   });
 
   it('bloqué par le destinataire : 403 BRING_BLOCKED, et le bouton disparaît (available: false, 0 restant)', async () => {
@@ -274,7 +274,7 @@ describe('#13936 — le blocage du Bring, par personne', () => {
     await app.close();
 
     expect(pose.status).toBe(200);
-    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true });
+    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: true, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('BRING_BLOCKED');
     expect(lecture.body.data).toMatchObject({ available: false, remainingToday: 0 });

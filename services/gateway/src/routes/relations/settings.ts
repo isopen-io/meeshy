@@ -1,5 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { relationPersonSettingsUpdateSchema, type RelationPersonSettings } from '@meeshy/shared/types/bring';
+import {
+  RELATION_RITUAL_SHARES,
+  RELATION_RITUAL_SHARE_WITHDRAWN_AT,
+  relationPersonSettingsUpdateSchema,
+  type RelationPersonSettings,
+  type RelationRitualShare,
+} from '@meeshy/shared/types/bring';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { stopBringsOnBlock } from '../../services/bring/bringService';
 import { logError } from '../../utils/logger';
@@ -10,9 +16,11 @@ import { bringDepsOf, bringQuotaOf } from '../bring';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
 
 /**
- * Un réglage ne s'écrit que pour une personne qui EXISTE et avec qui un lien existe
- * (Connaissance au moins, jugé par la loi) : aucune ligne pour un identifiant
- * quelconque. Inconnu, désactivé, sans lien ou bloqué : le même 404.
+ * BLOQUER le Bring ne s'écrit que pour une personne qui EXISTE et avec qui un lien
+ * existe (Connaissance au moins, jugé par la loi) : aucune ligne pour un identifiant
+ * quelconque. Inconnu, désactivé, sans lien ou bloqué : le même 404. Un RETRAIT de
+ * partage ou un déblocage ne demandent aucun lien : ils ne touchent que MA ligne
+ * existante, et ne la créent jamais (audit #14535 constat 1).
  */
 async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<boolean> {
   const [other, level] = await Promise.all([
@@ -33,16 +41,64 @@ async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, 
   }).allowed;
 }
 
+const shareFlags = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, { type: 'boolean' }])) as Record<
+  (typeof RELATION_RITUAL_SHARES)[number],
+  { type: 'boolean' }
+>;
+
+/**
+ * Un partage ne se règle qu'à `false` : `enum` SANS `type`, pour qu'AJV ne coerce pas
+ * `"false"`, `null` ou `0` en `false` avant zod (audit #14535 constat 4).
+ */
+const withdrawalFlags = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, { enum: [false] }]));
+
 const settingsSchema = {
   type: 'object',
-  properties: { success: { type: 'boolean' }, data: { type: 'object', properties: { userId: { type: 'string' }, bringBlocked: { type: 'boolean' } } } },
+  properties: {
+    success: { type: 'boolean' },
+    data: { type: 'object', properties: { userId: { type: 'string' }, bringBlocked: { type: 'boolean' }, ...shareFlags } },
+  },
 } as const;
+
+const SETTINGS_SELECT = {
+  bringBlockedAt: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true,
+} as const;
+
+type SettingsRow = { readonly bringBlockedAt: Date | null } & Readonly<Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>>;
+
+/** Ce que JE règle pour l'autre : son Bring bloqué ou non, et ce que je lui partage depuis le rituel. */
+const servedSettings = (userId: string, row: SettingsRow | null): RelationPersonSettings => ({
+  userId,
+  bringBlocked: Boolean(row?.bringBlockedAt),
+  ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
+});
+
+/**
+ * Ce qu'un retrait écrit (audit #14535 constat 3) : chaque partage ENCORE allumé passe à
+ * `false` avec sa date de retrait ; un partage déjà éteint garde la sienne.
+ */
+const withdrawalOf = (current: SettingsRow | null, shares: readonly RelationRitualShare[], at: Date): Record<string, boolean | Date> =>
+  Object.fromEntries(
+    shares
+      .filter((share) => current?.[share] === true)
+      .flatMap((share) => [[share, false], [RELATION_RITUAL_SHARE_WITHDRAWN_AT[share], at]]),
+  );
+
+const readSettings = (prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<SettingsRow | null> =>
+  prisma.relationFeatureSetting.findUnique({ where: { ownerId_otherId: { ownerId, otherId } }, select: SETTINGS_SELECT });
 
 /**
  * Les RÉGLAGES PAR PERSONNE (#13936, spec § 4) : ce que JE règle pour quelqu'un —
- * `GET|PUT /relations/:userId/settings`. À ce lot, le seul réglage est
- * `bringBlocked` (D-3 : le Bring est disponible par défaut, bloquable par
- * personne) ; `talkieDirect` et les suivants s'y ajouteront avec leur lot. Un
+ * `GET|PUT /relations/:userId/settings`. `bringBlocked` (D-3 : le Bring est
+ * disponible par défaut, bloquable par personne), et le RETRAIT des partages
+ * consentis au rituel du Sang (#14401, RGPD art. 7(3)) : chacun se coupe à `false`,
+ * un par un, sans quitter le Sang, et ne s'accorde jamais ici. Le retrait vaut tout
+ * de suite : la ligne est écrite avant la réponse, datée par partage
+ * (`*WithdrawnAt`), et tout relais de partage lit le consentement par
+ * `relationConsentOf`, sans cache, à chaque émission. Le retrait et le Bring d'un
+ * même corps partent en UNE écriture. Il se fait même quand le lien est tombé (aucun contrôle de lien,
+ * aucune ligne créée : seule MA ligne existante change). `talkieDirect` et les
+ * suivants s'y ajouteront avec leur lot. Un
  * corps qui nomme un réglage inconnu est REFUSÉ (400) plutôt qu'ignoré : un
  * client ne doit jamais croire qu'il a réglé ce que le serveur ne sait pas tenir.
  *
@@ -57,7 +113,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, reads.middleware()],
     schema: {
-      description: 'What I set for this person: bringBlocked (my Bring is available to them by default).',
+      description: 'What I set for this person: bringBlocked (my Bring is available to them by default) and the shares I consented to at the Blood ritual.',
       tags: ['relations'],
       summary: 'Per-person settings',
       params: userIdParams,
@@ -69,12 +125,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const otherId = otherUserOf(request, reply);
       if (otherId === null) return reply;
       const userId = otherId.toLowerCase();
-      const row = await fastify.prisma.relationFeatureSetting.findUnique({
-        where: { ownerId_otherId: { ownerId: request.user!.userId, otherId: userId } },
-        select: { bringBlockedAt: true },
-      });
-      const served: RelationPersonSettings = { userId, bringBlocked: Boolean(row?.bringBlockedAt) };
-      return sendSuccess(reply, served);
+      return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, request.user!.userId, userId)));
     } catch (error) {
       logError(fastify.log, 'Read relation settings error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -85,11 +136,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, writes.middleware()],
     schema: {
-      description: 'Set what I allow this person: { bringBlocked }. Unknown settings are refused (400).',
+      description: 'Set what I allow this person: { bringBlocked?, listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can only be withdrawn (false). Unknown settings are refused (400).',
       tags: ['relations'],
       summary: 'Update per-person settings',
       params: userIdParams,
-      body: { type: 'object', required: ['bringBlocked'], properties: { bringBlocked: { type: 'boolean' } } },
+      body: { type: 'object', minProperties: 1, properties: { bringBlocked: { type: 'boolean' }, ...withdrawalFlags } },
       response: { 200: settingsSchema, ...errorResponses },
       security: [{ bearerAuth: [] }],
     },
@@ -102,20 +153,32 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
 
       const ownerId = request.user!.userId;
       const userId = otherId.toLowerCase();
-      if (!(await linkedPerson(fastify.prisma, ownerId, userId))) return sendNotFound(reply, 'Personne introuvable');
-      const bringBlockedAt = parsed.data.bringBlocked ? new Date() : null;
-      await fastify.prisma.relationFeatureSetting.upsert({
-        where: { ownerId_otherId: { ownerId, otherId: userId } },
-        create: { ownerId, otherId: userId, bringBlockedAt },
-        update: { bringBlockedAt },
-      });
-      if (parsed.data.bringBlocked) {
+      const { bringBlocked, ...requested } = parsed.data;
+      const now = new Date();
+      const current = await readSettings(fastify.prisma, ownerId, userId);
+      const blocking = bringBlocked === true;
+      const linked = blocking ? await linkedPerson(fastify.prisma, ownerId, userId) : false;
+      const data = {
+        ...withdrawalOf(current, Object.keys(requested) as RelationRitualShare[], now),
+        ...(bringBlocked === false ? { bringBlockedAt: null } : {}),
+        ...(blocking && linked ? { bringBlockedAt: now } : {}),
+      };
+
+      // UNE écriture : le retrait (qui n'exige aucun lien) et le Bring partent ensemble.
+      if (blocking && linked) {
+        await fastify.prisma.relationFeatureSetting.upsert({
+          where: { ownerId_otherId: { ownerId, otherId: userId } },
+          create: { ownerId, otherId: userId, ...data },
+          update: data,
+        });
         await stopBringsOnBlock(bringDepsOf(fastify, bringQuotaOf(fastify)), { blockerId: ownerId, blockedId: userId, scope: 'bring' })
           .catch((error: unknown) => logError(fastify.log, 'Bring not stopped after Bring block:', error));
+      } else if (Object.keys(data).length > 0) {
+        await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data });
       }
+      if (blocking && !linked) return sendNotFound(reply, 'Personne introuvable');
 
-      const served: RelationPersonSettings = { userId, bringBlocked: parsed.data.bringBlocked };
-      return sendSuccess(reply, served);
+      return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, ownerId, userId)));
     } catch (error) {
       logError(fastify.log, 'Update relation settings error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
