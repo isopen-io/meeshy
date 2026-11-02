@@ -92,6 +92,12 @@ fun ReelVideoSurface(
      * aucune copie durable sur l'appareil). Le défaut garde le comportement des réels et des stories.
      */
     cached: Boolean = true,
+    /**
+     * `false` : la surface joue son son SANS demander le focus audio — la scène l'a confié à une autre de ses vidéos
+     * (#14611). Deux surfaces audibles d'une même scène se le disputeraient : la seconde le prendrait, la première se
+     * mettrait en pause et l'hôte figerait la lecture.
+     */
+    holdsAudioFocus: Boolean = true,
 ) {
     val context = LocalContext.current
     val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
@@ -105,7 +111,7 @@ fun ReelVideoSurface(
                 else DefaultMediaSourceFactory(context),
             )
             .build().apply {
-            setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
+            setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted && holdsAudioFocus)
             // **La fenêtre est portée par le MediaItem, jamais par un `seekTo`
             // suivi d'une surveillance.** ExoPlayer coupe alors la source
             // lui-même : la position 0 du player EST le début de la fenêtre, la
@@ -135,10 +141,10 @@ fun ReelVideoSurface(
 
     // Le volume suit [muted] a chaud : le player est memoize par URL, donc la
     // valeur passee au constructeur ne refleterait jamais un toggle ulterieur.
-    LaunchedEffect(player, muted) {
+    LaunchedEffect(player, muted, holdsAudioFocus) {
         player?.volume = if (muted) 0f else 1f
         // Le focus suit le son : audible, la lecture le prend ; muet, elle le rend et ne le redemande pas.
-        player?.setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted)
+        player?.setAudioAttributes(VIDEO_AUDIO_ATTRIBUTES, !muted && holdsAudioFocus)
     }
 
     // Hors premier plan (ON_STOP : touche Accueil, autre app), la lecture se suspend et

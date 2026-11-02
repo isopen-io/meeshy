@@ -91,6 +91,13 @@ class ReelVideoSurfaceAudioFocusTest {
     }
 
     @Test
+    fun `une video audible dont la scene confie le focus a une autre joue sans le prendre`() {
+        compose.setContent { ReelVideoSurface(mediaUrl = clipUrl, isActive = true, muted = false, holdsAudioFocus = false) }
+        idleUntil { audioManager.lastAudioFocusRequest != null }
+        assertThat(audioManager.lastAudioFocusRequest).isNull()
+    }
+
+    @Test
     fun `couper le son rend le focus`() {
         var muted by mutableStateOf(false)
         compose.setContent { ReelVideoSurface(mediaUrl = clipUrl, isActive = true, muted = muted) }
